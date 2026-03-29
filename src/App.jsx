@@ -8,6 +8,7 @@ document.head.appendChild(fontLink);
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const SALES_PEOPLE = ['Arjun Mehta', 'Priya Sharma', 'Rahul Verma', 'Sneha Iyer', 'Karan Patel'];
+const BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
 const STATUSES = [
   'Quote Approval Pending',
@@ -65,12 +66,12 @@ const fmtTimestamp = (ts) => {
 
 // ── Seed data ───────────────────────────────────────────────────────────────
 const SEED_LEADS = [
-  { id: genId(), createdAt: '2026-03-15', assignedTo: 'Arjun Mehta', status: 'Quote Approval Pending', cartValue: 125000, cartItems: [{ name: 'Portland Cement 50kg', qty: 100, price: 1250 }], followUpDate: '2026-03-28', closureDate: '2026-04-10', remarks: [{ ts: '2026-03-15T10:30:00', author: 'Arjun Mehta', text: 'Client requested quote for bulk cement order' }] },
-  { id: genId(), createdAt: '2026-03-10', assignedTo: 'Priya Sharma', status: 'Request for Availability Check', cartValue: 340000, cartItems: [{ name: 'TMT Steel Bars 12mm', qty: 200, price: 1500 }, { name: 'Binding Wire', qty: 50, price: 800 }], followUpDate: '2026-03-25', closureDate: '2026-04-05', remarks: [{ ts: '2026-03-10T14:00:00', author: 'Priya Sharma', text: 'Large construction project - need availability check for steel' }] },
-  { id: genId(), createdAt: '2026-03-01', assignedTo: 'Rahul Verma', status: 'Order Placed', cartValue: 89000, cartItems: [{ name: 'AAC Blocks', qty: 500, price: 178 }], followUpDate: '2026-04-01', closureDate: '2026-04-08', remarks: [{ ts: '2026-03-01T09:00:00', author: 'Rahul Verma', text: 'Order confirmed, delivery scheduled for next week' }] },
-  { id: genId(), createdAt: '2026-02-20', assignedTo: 'Sneha Iyer', status: 'Delivered', cartValue: 215000, cartItems: [{ name: 'Ceramic Floor Tiles', qty: 300, price: 450 }, { name: 'Tile Adhesive 20kg', qty: 100, price: 650 }], followUpDate: '', closureDate: '2026-03-10', remarks: [{ ts: '2026-03-10T16:00:00', author: 'Sneha Iyer', text: 'Delivered and payment received' }] },
-  { id: genId(), createdAt: '2026-02-15', assignedTo: 'Karan Patel', status: 'Order Lost', cartValue: 78000, cartItems: [{ name: 'Plywood 18mm', qty: 40, price: 1950 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-28T11:00:00', author: 'Karan Patel', text: 'Client went with a competitor on price' }] },
-  { id: genId(), createdAt: '2026-03-20', assignedTo: 'Arjun Mehta', status: 'Refunded', cartValue: 45000, cartItems: [{ name: 'Primer 20L', qty: 10, price: 4500 }], followUpDate: '', closureDate: '2026-03-22', remarks: [{ ts: '2026-03-22T13:30:00', author: 'Arjun Mehta', text: 'Client cancelled, full refund issued' }] },
+  { id: genId(), createdAt: '2026-03-15', assignedTo: 'Arjun Mehta', branch: 'JP Nagar', status: 'Quote Approval Pending', cartValue: 125000, cartItems: [{ name: 'Portland Cement 50kg', qty: 100, price: 1250 }], followUpDate: '2026-03-28', closureDate: '2026-04-10', remarks: [{ ts: '2026-03-15T10:30:00', author: 'Arjun Mehta', text: 'Client requested quote for bulk cement order' }] },
+  { id: genId(), createdAt: '2026-03-10', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Request for Availability Check', cartValue: 340000, cartItems: [{ name: 'TMT Steel Bars 12mm', qty: 200, price: 1500 }, { name: 'Binding Wire', qty: 50, price: 800 }], followUpDate: '2026-03-25', closureDate: '2026-04-05', remarks: [{ ts: '2026-03-10T14:00:00', author: 'Priya Sharma', text: 'Large construction project - need availability check for steel' }] },
+  { id: genId(), createdAt: '2026-03-01', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Order Placed', cartValue: 89000, cartItems: [{ name: 'AAC Blocks', qty: 500, price: 178 }], followUpDate: '2026-04-01', closureDate: '2026-04-08', remarks: [{ ts: '2026-03-01T09:00:00', author: 'Rahul Verma', text: 'Order confirmed, delivery scheduled for next week' }] },
+  { id: genId(), createdAt: '2026-02-20', assignedTo: 'Sneha Iyer', branch: 'HQ', status: 'Delivered', cartValue: 215000, cartItems: [{ name: 'Ceramic Floor Tiles', qty: 300, price: 450 }, { name: 'Tile Adhesive 20kg', qty: 100, price: 650 }], followUpDate: '', closureDate: '2026-03-10', remarks: [{ ts: '2026-03-10T16:00:00', author: 'Sneha Iyer', text: 'Delivered and payment received' }] },
+  { id: genId(), createdAt: '2026-02-15', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Order Lost', cartValue: 78000, cartItems: [{ name: 'Plywood 18mm', qty: 40, price: 1950 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-28T11:00:00', author: 'Karan Patel', text: 'Client went with a competitor on price' }] },
+  { id: genId(), createdAt: '2026-03-20', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Refunded', cartValue: 45000, cartItems: [{ name: 'Primer 20L', qty: 10, price: 4500 }], followUpDate: '', closureDate: '2026-03-22', remarks: [{ ts: '2026-03-22T13:30:00', author: 'Arjun Mehta', text: 'Client cancelled, full refund issued' }] },
 ];
 
 // ── Components ──────────────────────────────────────────────────────────────
@@ -208,7 +209,7 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 function LeadModal({ lead, onSave, onClose }) {
   const isEdit = !!lead;
   const [form, setForm] = useState(() => lead ? { ...lead, cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
-    id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], status: STATUSES[0],
+    id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', remarks: [],
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
@@ -260,6 +261,11 @@ function LeadModal({ lead, onSave, onClose }) {
             <Field label="ASSIGNED TO">
               <select style={S.input} value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
                 {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="BRANCH">
+              <select style={S.input} value={form.branch} onChange={(e) => set('branch', e.target.value)}>
+                {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </Field>
             <Field label="STATUS">
@@ -405,6 +411,9 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [personFilter, setPersonFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [sortCol, setSortCol] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
   const [modalLead, setModalLead] = useState(null);
@@ -442,6 +451,9 @@ export default function App() {
   const filtered = leads.filter((l) => {
     if (statusFilter && l.status !== statusFilter) return false;
     if (personFilter && l.assignedTo !== personFilter) return false;
+    if (branchFilter && l.branch !== branchFilter) return false;
+    if (dateFrom && l.createdAt < dateFrom) return false;
+    if (dateTo && l.createdAt > dateTo) return false;
     if (search) {
       const q = search.toLowerCase();
       const matchId = l.id.toLowerCase().includes(q);
@@ -606,6 +618,15 @@ export default function App() {
               <option value="">All Salespeople</option>
               {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
+            <select style={{ ...S.input, width: 150 }} value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}>
+              <option value="">All Branches</option>
+              {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>FROM</span>
+            <input style={{ ...S.input, width: 140 }} type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF' }}>TO</span>
+            <input style={{ ...S.input, width: 140 }} type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            {(dateFrom || dateTo) && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear Dates</button>}
             <span style={{ fontSize: 12, color: '#6B7280' }}>{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
           <button style={S.primaryBtn} onClick={() => setShowAddModal(true)}>+ Add Lead</button>
@@ -620,6 +641,7 @@ export default function App() {
                   <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Date Added" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -646,6 +668,7 @@ export default function App() {
                         <span style={{ fontSize: 12 }}>{l.assignedTo}</span>
                       </div>
                     </td>
+                    <td style={{ ...S.td, fontSize: 12 }}>{l.branch || '\u2014'}</td>
                     <td style={S.td}>
                       <EditableStatus status={l.status} onCommit={(s) => updateStatus(l.id, s)} />
                     </td>
@@ -679,13 +702,13 @@ export default function App() {
                   </tr>
                 ))}
                 {sorted.length === 0 && (
-                  <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>No leads found</td></tr>
+                  <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>No leads found</td></tr>
                 )}
               </tbody>
               {filtered.length > 0 && (
                 <tfoot>
                   <tr style={{ background: '#FFF7F0' }}>
-                    <td colSpan={7} style={{ ...S.td, fontWeight: 600, fontSize: 12 }}>Total ({filtered.length} lead{filtered.length !== 1 ? 's' : ''})</td>
+                    <td colSpan={8} style={{ ...S.td, fontWeight: 600, fontSize: 12 }}>Total ({filtered.length} lead{filtered.length !== 1 ? 's' : ''})</td>
                     <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: '#F97316' }}>{fmtINR(filteredTotal)}</td>
                     <td style={S.td} />
                   </tr>
