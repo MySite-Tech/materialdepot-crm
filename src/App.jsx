@@ -208,7 +208,7 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 // ── Lead Modal ──────────────────────────────────────────────────────────────
 function LeadModal({ lead, onSave, onClose }) {
   const isEdit = !!lead;
-  const [form, setForm] = useState(() => lead ? { ...lead, cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
+  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
     id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', remarks: [],
   });
@@ -403,7 +403,12 @@ export default function App() {
   const [leads, setLeads] = useState(() => {
     try {
       const stored = localStorage.getItem(LS_KEY);
-      if (stored) { const parsed = JSON.parse(stored); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((l) => ({ ...l, branch: l.branch || BRANCHES[Math.floor(Math.random() * BRANCHES.length)] }));
+        }
+      }
     } catch (e) { /* ignore */ }
     return SEED_LEADS;
   });
