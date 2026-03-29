@@ -429,32 +429,8 @@ export default function App() {
   // Persist to localStorage
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(leads)); }, [leads]);
 
-  // Pipeline computations (always from ALL leads)
-  const pipelineTotal = leads.reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineActive = leads.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineWon = leads.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineLost = leads.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pctWon = pipelineTotal ? (pipelineWon / pipelineTotal) * 100 : 0;
-  const pctActive = pipelineTotal ? (pipelineActive / pipelineTotal) * 100 : 0;
-  const pctLost = pipelineTotal ? (pipelineLost / pipelineTotal) * 100 : 0;
-
-  // Stage summary (always from ALL leads)
-  const stageSummary = STATUSES.map((status) => {
-    const stageLeads = leads.filter((l) => l.status === status);
-    return { status, count: stageLeads.length, value: stageLeads.reduce((s, l) => s + (l.cartValue || 0), 0) };
-  });
-
-  // Per-status chips for pipeline panel
-  const statusChips = stageSummary.filter((s) => s.value > 0);
-
-  // Active lead counts for pipeline metrics
-  const activeCount = leads.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).length;
-  const wonCount = leads.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).length;
-  const lostCount = leads.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).length;
-
-  // Filtering
-  const filtered = leads.filter((l) => {
-    if (statusFilter && l.status !== statusFilter) return false;
+  // Base filtered leads (all filters except status — so pipeline & stage cards react to filters)
+  const baseFiltered = leads.filter((l) => {
     if (personFilter && l.assignedTo !== personFilter) return false;
     if (branchFilter && l.branch !== branchFilter) return false;
     if (dateFrom && l.createdAt < dateFrom) return false;
@@ -466,6 +442,35 @@ export default function App() {
       const matchItems = (l.cartItems || []).some((it) => it.name.toLowerCase().includes(q));
       if (!matchId && !matchPerson && !matchItems) return false;
     }
+    return true;
+  });
+
+  // Pipeline computations (from filtered leads, excluding status filter)
+  const pipelineTotal = baseFiltered.reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineActive = baseFiltered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineWon = baseFiltered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineLost = baseFiltered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pctWon = pipelineTotal ? (pipelineWon / pipelineTotal) * 100 : 0;
+  const pctActive = pipelineTotal ? (pipelineActive / pipelineTotal) * 100 : 0;
+  const pctLost = pipelineTotal ? (pipelineLost / pipelineTotal) * 100 : 0;
+
+  // Stage summary (from filtered leads)
+  const stageSummary = STATUSES.map((status) => {
+    const stageLeads = baseFiltered.filter((l) => l.status === status);
+    return { status, count: stageLeads.length, value: stageLeads.reduce((s, l) => s + (l.cartValue || 0), 0) };
+  });
+
+  // Per-status chips for pipeline panel
+  const statusChips = stageSummary.filter((s) => s.value > 0);
+
+  // Active lead counts for pipeline metrics
+  const activeCount = baseFiltered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).length;
+  const wonCount = baseFiltered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).length;
+  const lostCount = baseFiltered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).length;
+
+  // Filtering (full — applies status filter on top of baseFiltered)
+  const filtered = baseFiltered.filter((l) => {
+    if (statusFilter && l.status !== statusFilter) return false;
     return true;
   });
 
