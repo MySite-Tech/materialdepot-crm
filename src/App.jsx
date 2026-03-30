@@ -206,19 +206,27 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 }
 
 // ── Lead Modal ──────────────────────────────────────────────────────────────
-function LeadModal({ lead, onSave, onClose }) {
+function LeadModal({ lead, onSave, onClose, onAddRemark, initialTab }) {
   const isEdit = !!lead;
+  const [activeTab, setActiveTab] = useState(isEdit && initialTab === 'remarks' ? 'remarks' : 'details');
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
     id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', remarks: [],
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [fuPrompt, setFuPrompt] = useState(null);
+  const [remarkAuthor, setRemarkAuthor] = useState(lead ? lead.assignedTo : SALES_PEOPLE[0]);
+  const [remarkText, setRemarkText] = useState('');
+  const timelineRef = useRef(null);
 
   useEffect(() => {
     const total = form.cartItems.reduce((s, it) => s + (it.qty || 0) * (it.price || 0), 0);
     if (total > 0) setForm((f) => ({ ...f, cartValue: total }));
   }, [form.cartItems]);
+
+  useEffect(() => {
+    if (timelineRef.current) timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+  }, [form.remarks]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -243,14 +251,39 @@ function LeadModal({ lead, onSave, onClose }) {
 
   const handleSave = () => onSave(form);
 
+  const submitRemark = () => {
+    if (!remarkText.trim()) return;
+    const remark = { ts: new Date().toISOString(), author: remarkAuthor, text: remarkText.trim() };
+    setForm((f) => ({ ...f, remarks: [...(f.remarks || []), remark] }));
+    if (isEdit && onAddRemark) onAddRemark(remark);
+    setRemarkText('');
+  };
+
+  const handleRemarkKeyDown = (e) => {
+    if (e.ctrlKey && e.key === 'Enter') submitRemark();
+  };
+
+  const remarks = form.remarks || [];
+
   return (
     <div style={S.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...S.modalBox, maxWidth: 560 }}>
+      <div style={{ ...S.modalBox, maxWidth: 720 }}>
         <div style={S.modalHeader}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
+            {isEdit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9CA3AF' }}>{form.id}</span>}
+          </div>
           <button style={S.closeBtn} onClick={onClose}>&times;</button>
         </div>
-        <div style={{ padding: 20, maxHeight: '70vh', overflowY: 'auto' }}>
+
+        {/* Tabs */}
+        <div style={S.tabBar}>
+          <button style={activeTab === 'details' ? S.tabActive : S.tab} onClick={() => setActiveTab('details')}>Details</button>
+          {isEdit && <button style={activeTab === 'remarks' ? S.tabActive : S.tab} onClick={() => setActiveTab('remarks')}>Remarks{remarks.length > 0 ? ` (${remarks.length})` : ''}</button>}
+        </div>
+
+        {/* Details Tab */}
+        {activeTab === 'details' && <div style={{ padding: 20, maxHeight: '65vh', overflowY: 'auto' }}>
           <div style={S.formGrid}>
             <Field label="LEAD ID">
               <input style={{ ...S.input, fontFamily: "'JetBrains Mono', monospace", background: '#F3F4F6' }} value={form.id} readOnly />
@@ -293,7 +326,47 @@ function LeadModal({ lead, onSave, onClose }) {
             <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
             <button style={S.primaryBtn} onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
           </div>
-        </div>
+        </div>}
+
+        {/* Remarks Tab */}
+        {activeTab === 'remarks' && isEdit && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '65vh' }}>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB', fontSize: 12 }}>
+              <StatusBadge status={form.status} />
+              {form.followUpDate && <span style={{ marginLeft: 12, color: '#6B7280' }}>Follow-up: {fmtDate(form.followUpDate)}</span>}
+              {form.closureDate && <span style={{ marginLeft: 12, color: '#6B7280' }}>Closure: {fmtDate(form.closureDate)}</span>}
+            </div>
+            <div ref={timelineRef} style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              {remarks.length === 0 && <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', marginTop: 40 }}>No remarks yet</p>}
+              {remarks.map((r, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16, position: 'relative' }}>
+                  {i < remarks.length - 1 && <div style={{ position: 'absolute', left: 13, top: 32, bottom: -16, width: 1, background: '#E5E7EB' }} />}
+                  <Avatar name={r.author} size={28} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>{r.author}</span>
+                      <span style={{ color: '#9CA3AF', marginLeft: 8 }}>{fmtTimestamp(r.ts)}</span>
+                    </div>
+                    <div style={S.remarkBubble}>{r.text}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: 16, borderTop: '1px solid #E5E7EB' }}>
+              <select style={{ ...S.input, width: '100%', marginBottom: 8, fontSize: 12 }} value={remarkAuthor} onChange={(e) => setRemarkAuthor(e.target.value)}>
+                {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <textarea
+                style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
+                value={remarkText}
+                onChange={(e) => setRemarkText(e.target.value)}
+                onKeyDown={handleRemarkKeyDown}
+                placeholder="Add a remark... (Ctrl+Enter to submit)"
+              />
+              <button style={{ ...S.primaryBtn, width: '100%', marginTop: 8 }} disabled={!remarkText.trim()} onClick={submitRemark}>Add Remark</button>
+            </div>
+          </div>
+        )}
       </div>
       {fuPrompt && (
         <FollowUpRemarkPrompt
@@ -304,77 +377,6 @@ function LeadModal({ lead, onSave, onClose }) {
         />
       )}
     </div>
-  );
-}
-
-// ── Remarks Drawer ──────────────────────────────────────────────────────────
-function RemarksDrawer({ lead, onClose, onAddRemark }) {
-  const [author, setAuthor] = useState(lead.assignedTo);
-  const [text, setText] = useState('');
-  const timelineRef = useRef(null);
-
-  useEffect(() => {
-    if (timelineRef.current) timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
-  }, [lead.remarks]);
-
-  const submit = () => {
-    if (!text.trim()) return;
-    onAddRemark({ ts: new Date().toISOString(), author, text: text.trim() });
-    setText('');
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.ctrlKey && e.key === 'Enter') submit();
-  };
-
-  return (
-    <>
-      <div style={S.drawerBackdrop} onClick={onClose} />
-      <div style={S.drawer}>
-        <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
-        <div style={S.drawerHeader}>
-          <div>
-            <span style={{ fontWeight: 600, fontSize: 14, color: '#fff' }}>Remarks</span>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9CA3AF', marginLeft: 8 }}>{lead.id}</span>
-          </div>
-          <button style={S.closeBtn} onClick={onClose}>&times;</button>
-        </div>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', fontSize: 12 }}>
-          <StatusBadge status={lead.status} />
-          {lead.followUpDate && <span style={{ marginLeft: 12, color: '#6B7280' }}>Follow-up: {fmtDate(lead.followUpDate)}</span>}
-          {lead.closureDate && <span style={{ marginLeft: 12, color: '#6B7280' }}>Closure: {fmtDate(lead.closureDate)}</span>}
-        </div>
-        <div ref={timelineRef} style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-          {(!lead.remarks || lead.remarks.length === 0) && <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', marginTop: 40 }}>No remarks yet</p>}
-          {(lead.remarks || []).map((r, i) => (
-            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16, position: 'relative' }}>
-              {i < (lead.remarks || []).length - 1 && <div style={{ position: 'absolute', left: 13, top: 32, bottom: -16, width: 1, background: '#E5E7EB' }} />}
-              <Avatar name={r.author} size={28} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>{r.author}</span>
-                  <span style={{ color: '#9CA3AF', marginLeft: 8 }}>{fmtTimestamp(r.ts)}</span>
-                </div>
-                <div style={S.remarkBubble}>{r.text}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: 16, borderTop: '1px solid #E5E7EB' }}>
-          <select style={{ ...S.input, width: '100%', marginBottom: 8, fontSize: 12 }} value={author} onChange={(e) => setAuthor(e.target.value)}>
-            {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <textarea
-            style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Add a remark... (Ctrl+Enter to submit)"
-          />
-          <button style={{ ...S.primaryBtn, width: '100%', marginTop: 8 }} disabled={!text.trim()} onClick={submit}>Add Remark</button>
-        </div>
-      </div>
-    </>
   );
 }
 
@@ -423,7 +425,7 @@ export default function App() {
   const [sortDir, setSortDir] = useState('desc');
   const [modalLead, setModalLead] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [drawerLead, setDrawerLead] = useState(null);
+  const [modalTab, setModalTab] = useState('details');
   const [deleteLead, setDeleteLead] = useState(null);
 
   // Persist to localStorage
@@ -514,7 +516,6 @@ export default function App() {
 
   const addRemark = (leadId, remark) => {
     setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
-    setDrawerLead((d) => d && d.id === leadId ? { ...d, remarks: [...(d.remarks || []), remark] } : d);
   };
 
   const today = todayStr();
@@ -702,11 +703,11 @@ export default function App() {
                       {fmtINR(l.cartValue)}
                     </td>
                     <td style={{ ...S.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button style={S.actionBtn} title="Remarks" onClick={() => setDrawerLead(l)}>
+                      <button style={S.actionBtn} title="Edit" onClick={() => { setModalTab('details'); setModalLead(l); }}>Edit</button>
+                      <button style={S.actionBtn} title="Remarks" onClick={() => { setModalTab('remarks'); setModalLead(l); }}>
                         <span role="img" aria-label="remarks">{'\uD83D\uDCAC'}</span>
                         {(l.remarks || []).length > 0 && <span style={S.remarksBadge}>{l.remarks.length}</span>}
                       </button>
-                      <button style={S.actionBtn} title="Edit" onClick={() => setModalLead(l)}>Edit</button>
                       <button style={{ ...S.actionBtn, color: '#EF4444' }} title="Delete" onClick={() => setDeleteLead(l)}>{'\u2715'}</button>
                     </td>
                   </tr>
@@ -729,19 +730,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* Modals & Drawer */}
+      {/* Modals */}
       {(showAddModal || modalLead) && (
         <LeadModal
           lead={modalLead}
           onSave={saveLead}
           onClose={() => { setModalLead(null); setShowAddModal(false); }}
-        />
-      )}
-      {drawerLead && (
-        <RemarksDrawer
-          lead={leads.find((l) => l.id === drawerLead.id) || drawerLead}
-          onClose={() => setDrawerLead(null)}
-          onAddRemark={(remark) => addRemark(drawerLead.id, remark)}
+          onAddRemark={modalLead ? (remark) => addRemark(modalLead.id, remark) : undefined}
+          initialTab={modalTab}
         />
       )}
       {deleteLead && (
@@ -852,18 +848,18 @@ const S = {
     display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 16,
     background: '#fff', fontSize: 11,
   },
-  drawerBackdrop: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 900,
+  tabBar: {
+    display: 'flex', borderBottom: '1px solid #E5E7EB', background: '#FAFAFA',
   },
-  drawer: {
-    position: 'fixed', top: 0, right: 0, width: 420, height: '100vh', background: '#fff',
-    zIndex: 901, display: 'flex', flexDirection: 'column',
-    boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
-    animation: 'slideInRight 0.25s ease-out',
+  tab: {
+    padding: '10px 20px', fontSize: 13, fontWeight: 500, color: '#9CA3AF',
+    background: 'none', border: 'none', borderBottom: '2px solid transparent',
+    cursor: 'pointer',
   },
-  drawerHeader: {
-    background: '#1A1A1A', padding: '12px 16px',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  tabActive: {
+    padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#F97316',
+    background: 'none', border: 'none', borderBottom: '2px solid #F97316',
+    cursor: 'pointer',
   },
   remarkBubble: {
     background: '#FAFAFA', padding: '8px 12px', borderRadius: 8, fontSize: 13,
