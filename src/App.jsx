@@ -205,10 +205,9 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
   );
 }
 
-// ── Lead Modal ──────────────────────────────────────────────────────────────
-function LeadModal({ lead, onSave, onClose, onAddRemark, initialTab }) {
+// ── Lead Drawer (Edit + Remarks in single view) ────────────────────────────
+function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
   const isEdit = !!lead;
-  const [activeTab, setActiveTab] = useState(isEdit && initialTab === 'remarks' ? 'remarks' : 'details');
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
     id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', remarks: [],
@@ -238,8 +237,8 @@ function LeadModal({ lead, onSave, onClose, onAddRemark, initialTab }) {
     }
   };
 
-  const handleFuConfirm = (remarkText) => {
-    const remark = { ts: new Date().toISOString(), author: form.assignedTo, text: remarkText };
+  const handleFuConfirm = (text) => {
+    const remark = { ts: new Date().toISOString(), author: form.assignedTo, text };
     setForm((f) => ({
       ...f,
       followUpDate: fuPrompt.newDate,
@@ -266,107 +265,104 @@ function LeadModal({ lead, onSave, onClose, onAddRemark, initialTab }) {
   const remarks = form.remarks || [];
 
   return (
-    <div style={S.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...S.modalBox, maxWidth: 720 }}>
-        <div style={S.modalHeader}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
-            {isEdit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9CA3AF' }}>{form.id}</span>}
+    <>
+      <div style={S.drawerBackdrop} onClick={onClose} />
+      <div style={S.drawer}>
+        <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+        {/* Header */}
+        <div style={S.drawerHeader}>
+          <div>
+            <span style={{ fontWeight: 600, fontSize: 14, color: '#fff' }}>{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
+            {isEdit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9CA3AF', marginLeft: 8 }}>{form.id}</span>}
           </div>
           <button style={S.closeBtn} onClick={onClose}>&times;</button>
         </div>
 
-        {/* Tabs */}
-        <div style={S.tabBar}>
-          <button style={activeTab === 'details' ? S.tabActive : S.tab} onClick={() => setActiveTab('details')}>Details</button>
-          {isEdit && <button style={activeTab === 'remarks' ? S.tabActive : S.tab} onClick={() => setActiveTab('remarks')}>Remarks{remarks.length > 0 ? ` (${remarks.length})` : ''}</button>}
-        </div>
-
-        {/* Details Tab */}
-        {activeTab === 'details' && <div style={{ padding: 20, maxHeight: '65vh', overflowY: 'auto' }}>
-          <div style={S.formGrid}>
-            <Field label="LEAD ID">
-              <input style={{ ...S.input, fontFamily: "'JetBrains Mono', monospace", background: '#F3F4F6' }} value={form.id} readOnly />
-            </Field>
-            <Field label="CREATION DATE">
-              <input style={S.input} type="date" value={form.createdAt} onChange={(e) => set('createdAt', e.target.value)} />
-            </Field>
-            <Field label="ASSIGNED TO">
-              <select style={S.input} value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
-                {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </Field>
-            <Field label="BRANCH">
-              <select style={S.input} value={form.branch} onChange={(e) => set('branch', e.target.value)}>
-                {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </Field>
-            <Field label="STATUS">
-              <select style={S.input} value={form.status} onChange={(e) => set('status', e.target.value)}>
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="FOLLOW-UP DATE">
-              <input style={S.input} type="date" value={form.followUpDate} onChange={(e) => handleFollowUpChange(e.target.value)} />
-            </Field>
-            <Field label="CLOSURE EXPECTED">
-              <input style={S.input} type="date" value={form.closureDate} onChange={(e) => set('closureDate', e.target.value)} />
-            </Field>
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <label style={S.fieldLabel}>CART ITEMS</label>
-            <CartItemsEditor items={form.cartItems} onChange={(items) => set('cartItems', items)} />
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <Field label="CART VALUE (\u20B9)">
-              <input style={{ ...S.input, fontFamily: "'JetBrains Mono', monospace" }} type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
-            </Field>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
-            <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
-            <button style={S.primaryBtn} onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
-          </div>
-        </div>}
-
-        {/* Remarks Tab */}
-        {activeTab === 'remarks' && isEdit && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '65vh' }}>
-            <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB', fontSize: 12 }}>
-              <StatusBadge status={form.status} />
-              {form.followUpDate && <span style={{ marginLeft: 12, color: '#6B7280' }}>Follow-up: {fmtDate(form.followUpDate)}</span>}
-              {form.closureDate && <span style={{ marginLeft: 12, color: '#6B7280' }}>Closure: {fmtDate(form.closureDate)}</span>}
+        {/* Scrollable content: Details + Remarks together */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* Details Section */}
+          <div style={{ padding: 20 }}>
+            <div style={S.drawerSectionTitle}>Details</div>
+            <div style={S.formGridDrawer}>
+              <Field label="LEAD ID">
+                <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace", background: '#F3F4F6' }} value={form.id} readOnly />
+              </Field>
+              <Field label="CREATION DATE">
+                <input style={{ ...S.input, width: '100%' }} type="date" value={form.createdAt} onChange={(e) => set('createdAt', e.target.value)} />
+              </Field>
+              <Field label="ASSIGNED TO">
+                <select style={{ ...S.input, width: '100%' }} value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
+                  {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </Field>
+              <Field label="BRANCH">
+                <select style={{ ...S.input, width: '100%' }} value={form.branch} onChange={(e) => set('branch', e.target.value)}>
+                  {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </Field>
+              <Field label="STATUS">
+                <select style={{ ...S.input, width: '100%' }} value={form.status} onChange={(e) => set('status', e.target.value)}>
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="FOLLOW-UP DATE">
+                <input style={{ ...S.input, width: '100%' }} type="date" value={form.followUpDate} onChange={(e) => handleFollowUpChange(e.target.value)} />
+              </Field>
+              <Field label="CLOSURE EXPECTED">
+                <input style={{ ...S.input, width: '100%' }} type="date" value={form.closureDate} onChange={(e) => set('closureDate', e.target.value)} />
+              </Field>
+              <Field label="CART VALUE">
+                <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace" }} type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
+              </Field>
             </div>
-            <div ref={timelineRef} style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-              {remarks.length === 0 && <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', marginTop: 40 }}>No remarks yet</p>}
-              {remarks.map((r, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16, position: 'relative' }}>
-                  {i < remarks.length - 1 && <div style={{ position: 'absolute', left: 13, top: 32, bottom: -16, width: 1, background: '#E5E7EB' }} />}
-                  <Avatar name={r.author} size={28} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>{r.author}</span>
-                      <span style={{ color: '#9CA3AF', marginLeft: 8 }}>{fmtTimestamp(r.ts)}</span>
+            <div style={{ marginTop: 8 }}>
+              <label style={S.fieldLabel}>CART ITEMS</label>
+              <CartItemsEditor items={form.cartItems} onChange={(items) => set('cartItems', items)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
+              <button style={{ ...S.primaryBtn, flex: 1 }} onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
+            </div>
+          </div>
+
+          {/* Remarks Section */}
+          {isEdit && (
+            <div style={{ borderTop: '2px solid #E5E7EB' }}>
+              <div style={{ padding: '16px 20px 0 20px' }}>
+                <div style={S.drawerSectionTitle}>Remarks {remarks.length > 0 && <span style={{ color: '#9CA3AF', fontWeight: 400 }}>({remarks.length})</span>}</div>
+              </div>
+              <div ref={timelineRef} style={{ padding: '12px 20px' }}>
+                {remarks.length === 0 && <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No remarks yet</p>}
+                {remarks.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16, position: 'relative' }}>
+                    {i < remarks.length - 1 && <div style={{ position: 'absolute', left: 13, top: 32, bottom: -16, width: 1, background: '#E5E7EB' }} />}
+                    <Avatar name={r.author} size={28} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>{r.author}</span>
+                        <span style={{ color: '#9CA3AF', marginLeft: 8 }}>{fmtTimestamp(r.ts)}</span>
+                      </div>
+                      <div style={S.remarkBubble}>{r.text}</div>
                     </div>
-                    <div style={S.remarkBubble}>{r.text}</div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div style={{ padding: '0 20px 20px 20px' }}>
+                <select style={{ ...S.input, width: '100%', marginBottom: 8, fontSize: 12 }} value={remarkAuthor} onChange={(e) => setRemarkAuthor(e.target.value)}>
+                  {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <textarea
+                  style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
+                  value={remarkText}
+                  onChange={(e) => setRemarkText(e.target.value)}
+                  onKeyDown={handleRemarkKeyDown}
+                  placeholder="Add a remark... (Ctrl+Enter to submit)"
+                />
+                <button style={{ ...S.primaryBtn, width: '100%', marginTop: 8 }} disabled={!remarkText.trim()} onClick={submitRemark}>Add Remark</button>
+              </div>
             </div>
-            <div style={{ padding: 16, borderTop: '1px solid #E5E7EB' }}>
-              <select style={{ ...S.input, width: '100%', marginBottom: 8, fontSize: 12 }} value={remarkAuthor} onChange={(e) => setRemarkAuthor(e.target.value)}>
-                {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <textarea
-                style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
-                value={remarkText}
-                onChange={(e) => setRemarkText(e.target.value)}
-                onKeyDown={handleRemarkKeyDown}
-                placeholder="Add a remark... (Ctrl+Enter to submit)"
-              />
-              <button style={{ ...S.primaryBtn, width: '100%', marginTop: 8 }} disabled={!remarkText.trim()} onClick={submitRemark}>Add Remark</button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       {fuPrompt && (
         <FollowUpRemarkPrompt
@@ -376,7 +372,7 @@ function LeadModal({ lead, onSave, onClose, onAddRemark, initialTab }) {
           onCancel={() => setFuPrompt(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -423,9 +419,8 @@ export default function App() {
   const [dateTo, setDateTo] = useState('');
   const [sortCol, setSortCol] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
-  const [modalLead, setModalLead] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [modalTab, setModalTab] = useState('details');
+  const [drawerLead, setDrawerLead] = useState(null);
+  const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [deleteLead, setDeleteLead] = useState(null);
 
   // Persist to localStorage
@@ -501,8 +496,8 @@ export default function App() {
       if (idx >= 0) { const next = [...prev]; next[idx] = formData; return next; }
       return [...prev, formData];
     });
-    setModalLead(null);
-    setShowAddModal(false);
+    setDrawerLead(null);
+    setShowAddDrawer(false);
   };
 
   const removeLead = (id) => {
@@ -640,7 +635,7 @@ export default function App() {
             {(dateFrom || dateTo) && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear Dates</button>}
             <span style={{ fontSize: 12, color: '#6B7280' }}>{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
-          <button style={S.primaryBtn} onClick={() => setShowAddModal(true)}>+ Add Lead</button>
+          <button style={S.primaryBtn} onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
         </div>
 
         {/* Table */}
@@ -703,9 +698,8 @@ export default function App() {
                       {fmtINR(l.cartValue)}
                     </td>
                     <td style={{ ...S.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button style={S.actionBtn} title="Edit" onClick={() => { setModalTab('details'); setModalLead(l); }}>Edit</button>
-                      <button style={S.actionBtn} title="Remarks" onClick={() => { setModalTab('remarks'); setModalLead(l); }}>
-                        <span role="img" aria-label="remarks">{'\uD83D\uDCAC'}</span>
+                      <button style={S.actionBtn} title="Edit" onClick={() => setDrawerLead(l)}>
+                        Edit
                         {(l.remarks || []).length > 0 && <span style={S.remarksBadge}>{l.remarks.length}</span>}
                       </button>
                       <button style={{ ...S.actionBtn, color: '#EF4444' }} title="Delete" onClick={() => setDeleteLead(l)}>{'\u2715'}</button>
@@ -730,14 +724,13 @@ export default function App() {
         </div>
       </div>
 
-      {/* Modals */}
-      {(showAddModal || modalLead) && (
-        <LeadModal
-          lead={modalLead}
+      {/* Drawer */}
+      {(showAddDrawer || drawerLead) && (
+        <LeadDrawer
+          lead={drawerLead}
           onSave={saveLead}
-          onClose={() => { setModalLead(null); setShowAddModal(false); }}
-          onAddRemark={modalLead ? (remark) => addRemark(modalLead.id, remark) : undefined}
-          initialTab={modalTab}
+          onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
+          onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, remark) : undefined}
         />
       )}
       {deleteLead && (
@@ -804,6 +797,9 @@ const S = {
   formGrid: {
     display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px',
   },
+  formGridDrawer: {
+    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px',
+  },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
@@ -848,18 +844,22 @@ const S = {
     display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 16,
     background: '#fff', fontSize: 11,
   },
-  tabBar: {
-    display: 'flex', borderBottom: '1px solid #E5E7EB', background: '#FAFAFA',
+  drawerBackdrop: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 900,
   },
-  tab: {
-    padding: '10px 20px', fontSize: 13, fontWeight: 500, color: '#9CA3AF',
-    background: 'none', border: 'none', borderBottom: '2px solid transparent',
-    cursor: 'pointer',
+  drawer: {
+    position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff',
+    zIndex: 901, display: 'flex', flexDirection: 'column',
+    boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
+    animation: 'slideInRight 0.25s ease-out',
   },
-  tabActive: {
-    padding: '10px 20px', fontSize: 13, fontWeight: 600, color: '#F97316',
-    background: 'none', border: 'none', borderBottom: '2px solid #F97316',
-    cursor: 'pointer',
+  drawerHeader: {
+    background: '#1A1A1A', padding: '12px 16px',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  },
+  drawerSectionTitle: {
+    fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+    color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #F3F4F6',
   },
   remarkBubble: {
     background: '#FAFAFA', padding: '8px 12px', borderRadius: 8, fontSize: 13,
