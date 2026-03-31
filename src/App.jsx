@@ -782,7 +782,7 @@ export default function App() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [cartValueGt, setCartValueGt] = useState('');
-  const [sortCol, setSortCol] = useState('createdAt');
+  const [sortCol, setSortCol] = useState('latestVisit');
   const [sortDir, setSortDir] = useState('desc');
   const [drawerLead, setDrawerLead] = useState(null);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
@@ -795,8 +795,12 @@ export default function App() {
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
     if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    if (dateFrom && l.createdAt < dateFrom) return false;
-    if (dateTo && l.createdAt > dateTo) return false;
+    const visitDates = (l.visits || []).map((v) => v.date);
+    if (visitDates.length === 0) visitDates.push(l.createdAt || '');
+    const earliest = visitDates.sort()[0];
+    const latest = [...visitDates].sort().reverse()[0];
+    if (dateFrom && latest < dateFrom) return false;
+    if (dateTo && earliest > dateTo) return false;
     if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -840,6 +844,9 @@ export default function App() {
   });
 
   // Sorting
+  const getFirstVisit = (l) => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt || ''; };
+  const getLatestVisit = (l) => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt || ''; };
+
   const sorted = [...filtered].sort((a, b) => {
     let va, vb;
     if (sortCol === 'visitCount') {
@@ -847,6 +854,8 @@ export default function App() {
       vb = (b.visits || []).length;
       return sortDir === 'asc' ? va - vb : vb - va;
     }
+    if (sortCol === 'firstVisit') { va = getFirstVisit(a); vb = getFirstVisit(b); return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va); }
+    if (sortCol === 'latestVisit') { va = getLatestVisit(a); vb = getLatestVisit(b); return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va); }
     va = a[sortCol]; vb = b[sortCol];
     if (sortCol === 'cartValue') { va = va || 0; vb = vb || 0; return sortDir === 'asc' ? va - vb : vb - va; }
     if (va == null) va = ''; if (vb == null) vb = '';
@@ -895,8 +904,8 @@ export default function App() {
     setStatusFilter((prev) => prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]);
   }, []);
 
-  // Column count for colSpan: Lead ID, Client Name, Client Phone, Date Added, Assigned To, Branch, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 13
-  const COL_COUNT = 13;
+  // Column count for colSpan: Lead ID, Client Name, Client Phone, First Visit, Latest Visit, Assigned To, Branch, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 14
+  const COL_COUNT = 14;
 
   return (
     <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
@@ -1025,7 +1034,8 @@ export default function App() {
                   <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Date Added" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="First Visit" sortKey="firstVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="Latest Visit" sortKey="latestVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -1050,7 +1060,8 @@ export default function App() {
                     </td>
                     <td style={{ ...S.td, fontSize: 12 }}>{l.clientName || '\u2014'}</td>
                     <td style={{ ...S.td, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>{l.clientPhone || '\u2014'}</td>
-                    <td style={{ ...S.td, color: '#6B7280', fontSize: 12 }}>{fmtDate(l.createdAt)}</td>
+                    <td style={{ ...S.td, color: '#6B7280', fontSize: 12 }}>{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>
+                    <td style={{ ...S.td, color: '#6B7280', fontSize: 12 }}>{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>
                     <td style={S.td}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Avatar name={l.assignedTo} />
