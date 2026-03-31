@@ -523,7 +523,7 @@ export default function App() {
       <header style={S.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>material</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#F97316', marginLeft: -10 }}>depot</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#EAB308', marginLeft: -10 }}>depot</span>
           <span style={{ fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>Sales CRM</span>
         </div>
       </header>
@@ -539,7 +539,7 @@ export default function App() {
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF' }}>Active Pipeline</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: '#F97316' }}>{fmtINR(pipelineActive)}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: '#EAB308' }}>{fmtINR(pipelineActive)}</div>
               <div style={{ fontSize: 11, color: '#9CA3AF' }}>{activeCount} leads</div>
             </div>
             <div>
@@ -556,7 +556,7 @@ export default function App() {
           {/* Stacked bar */}
           <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', marginTop: 16, background: '#E5E7EB' }}>
             <div style={{ width: pctWon + '%', background: '#22C55E', transition: 'width 0.3s' }} />
-            <div style={{ width: pctActive + '%', background: '#F97316', transition: 'width 0.3s' }} />
+            <div style={{ width: pctActive + '%', background: '#EAB308', transition: 'width 0.3s' }} />
             <div style={{ width: pctLost + '%', background: '#9CA3AF', transition: 'width 0.3s' }} />
           </div>
           {/* Per-status chips */}
@@ -568,7 +568,7 @@ export default function App() {
                   onClick={() => setStatusFilter((f) => f === sc.status ? '' : sc.status)}
                   style={{
                     ...S.chip,
-                    border: statusFilter === sc.status ? '1px solid #F97316' : '1px solid #E5E7EB',
+                    border: statusFilter === sc.status ? '1px solid #EAB308' : '1px solid #E5E7EB',
                     cursor: 'pointer',
                   }}
                 >
@@ -592,12 +592,12 @@ export default function App() {
                 onClick={() => setStatusFilter((f) => f === ss.status ? '' : ss.status)}
                 style={{
                   ...S.stageCard,
-                  borderColor: active ? '#F97316' : '#E5E7EB',
+                  borderColor: active ? '#EAB308' : '#E5E7EB',
                   cursor: 'pointer',
                   flex: '1 0 140px',
                 }}
               >
-                <div style={{ fontSize: 24, fontWeight: 700, color: active ? '#F97316' : '#374151' }}>{ss.count}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: active ? '#EAB308' : '#374151' }}>{ss.count}</div>
                 <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', marginTop: 2 }}>{ss.status}</div>
                 {ss.value > 0 && (
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: STATUS_COLORS[ss.status], marginTop: 4 }}>{fmtINR(ss.value)}</div>
@@ -714,7 +714,7 @@ export default function App() {
                 <tfoot>
                   <tr style={{ background: '#FFF7F0' }}>
                     <td colSpan={8} style={{ ...S.td, fontWeight: 600, fontSize: 12 }}>Total ({filtered.length} lead{filtered.length !== 1 ? 's' : ''})</td>
-                    <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: '#F97316' }}>{fmtINR(filteredTotal)}</td>
+                    <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: '#EAB308' }}>{fmtINR(filteredTotal)}</td>
                     <td style={S.td} />
                   </tr>
                 </tfoot>
@@ -782,7 +782,7 @@ const S = {
     outline: 'none',
   },
   avatar: {
-    background: '#F97316', color: '#fff', borderRadius: '50%', display: 'inline-flex',
+    background: '#EAB308', color: '#fff', borderRadius: '50%', display: 'inline-flex',
     alignItems: 'center', justifyContent: 'center', fontWeight: 600, flexShrink: 0,
   },
   input: {
@@ -817,7 +817,7 @@ const S = {
     lineHeight: 1,
   },
   primaryBtn: {
-    background: '#F97316', color: '#fff', border: 'none', padding: '8px 20px',
+    background: '#EAB308', color: '#fff', border: 'none', padding: '8px 20px',
     borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
   },
   cancelBtn: {
@@ -829,14 +829,14 @@ const S = {
     width: 28, lineHeight: 1,
   },
   addItemLink: {
-    color: '#F97316', fontSize: 12, fontWeight: 600, background: 'none', border: 'none',
+    color: '#EAB308', fontSize: 12, fontWeight: 600, background: 'none', border: 'none',
   },
   actionBtn: {
     background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px',
     fontSize: 13, color: '#374151', position: 'relative',
   },
   remarksBadge: {
-    position: 'absolute', top: -2, right: -4, background: '#F97316', color: '#fff',
+    position: 'absolute', top: -2, right: -4, background: '#EAB308', color: '#fff',
     fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 16, height: 16,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   },
