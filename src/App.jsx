@@ -28,6 +28,17 @@ const STATUS_COLORS = {
   'Order Lost': '#9CA3AF',
 };
 
+const ORDER_LOST_REASONS = [
+  'Pricing Issue',
+  'Credit Issue',
+  'Order Closed Already',
+  'Cash/Non GST Issue',
+  'Delayed Estimate',
+  'Sample/Material Not Approved',
+  'Enquiry Invalid',
+  'Enquiry Cancelled',
+];
+
 const PIPELINE_BUCKETS = {
   Active: ['Quote Approval Pending', 'Request for Availability Check', 'Order Placed'],
   Won: ['Delivered'],
@@ -71,7 +82,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-03-10', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Request for Availability Check', cartValue: 340000, cartItems: [{ name: 'TMT Steel Bars 12mm', qty: 200, price: 1500 }, { name: 'Binding Wire', qty: 50, price: 800 }], followUpDate: '2026-03-25', closureDate: '2026-04-05', remarks: [{ ts: '2026-03-10T14:00:00', author: 'Priya Sharma', text: 'Large construction project - need availability check for steel' }] },
   { id: genId(), createdAt: '2026-03-01', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Order Placed', cartValue: 89000, cartItems: [{ name: 'AAC Blocks', qty: 500, price: 178 }], followUpDate: '2026-04-01', closureDate: '2026-04-08', remarks: [{ ts: '2026-03-01T09:00:00', author: 'Rahul Verma', text: 'Order confirmed, delivery scheduled for next week' }] },
   { id: genId(), createdAt: '2026-02-20', assignedTo: 'Sneha Iyer', branch: 'HQ', status: 'Delivered', cartValue: 215000, cartItems: [{ name: 'Ceramic Floor Tiles', qty: 300, price: 450 }, { name: 'Tile Adhesive 20kg', qty: 100, price: 650 }], followUpDate: '', closureDate: '2026-03-10', remarks: [{ ts: '2026-03-10T16:00:00', author: 'Sneha Iyer', text: 'Delivered and payment received' }] },
-  { id: genId(), createdAt: '2026-02-15', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Order Lost', cartValue: 78000, cartItems: [{ name: 'Plywood 18mm', qty: 40, price: 1950 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-28T11:00:00', author: 'Karan Patel', text: 'Client went with a competitor on price' }] },
+  { id: genId(), createdAt: '2026-02-15', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Order Lost', lostReason: 'Pricing Issue', cartValue: 78000, cartItems: [{ name: 'Plywood 18mm', qty: 40, price: 1950 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-28T11:00:00', author: 'Karan Patel', text: 'Client went with a competitor on price' }] },
   { id: genId(), createdAt: '2026-03-20', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Refunded', cartValue: 45000, cartItems: [{ name: 'Primer 20L', qty: 10, price: 4500 }], followUpDate: '', closureDate: '2026-03-22', remarks: [{ ts: '2026-03-22T13:30:00', author: 'Arjun Mehta', text: 'Client cancelled, full refund issued' }] },
   { id: genId(), createdAt: '2026-03-18', assignedTo: 'Rahul Verma', branch: 'JP Nagar', status: 'Quote Approval Pending', cartValue: 267000, cartItems: [{ name: 'TMT Steel Bars 16mm', qty: 150, price: 1780 }], followUpDate: '2026-03-30', closureDate: '2026-04-12', remarks: [{ ts: '2026-03-18T09:15:00', author: 'Rahul Verma', text: 'Builder needs 16mm bars for commercial project' }] },
   { id: genId(), createdAt: '2026-03-17', assignedTo: 'Sneha Iyer', branch: 'Whitefield', status: 'Order Placed', cartValue: 156000, cartItems: [{ name: 'River Sand (per ton)', qty: 30, price: 3200 }, { name: 'M-Sand (per ton)', qty: 20, price: 2400 }], followUpDate: '2026-03-29', closureDate: '2026-04-05', remarks: [{ ts: '2026-03-17T11:00:00', author: 'Sneha Iyer', text: 'Sand delivery for residential plot - Sarjapur Road' }] },
@@ -80,7 +91,7 @@ const SEED_LEADS = [
   // 11-20
   { id: genId(), createdAt: '2026-03-13', assignedTo: 'Priya Sharma', branch: 'JP Nagar', status: 'Quote Approval Pending', cartValue: 198000, cartItems: [{ name: 'PPC Cement 50kg', qty: 120, price: 1150 }, { name: 'Concrete Mixer Rental', qty: 5, price: 12000 }], followUpDate: '2026-03-27', closureDate: '2026-04-08', remarks: [{ ts: '2026-03-13T14:30:00', author: 'Priya Sharma', text: 'Apartment complex project, client comparing prices' }] },
   { id: genId(), createdAt: '2026-03-12', assignedTo: 'Rahul Verma', branch: 'Whitefield', status: 'Delivered', cartValue: 73500, cartItems: [{ name: 'Electrical Conduit Pipes 25mm', qty: 500, price: 95 }, { name: 'Junction Boxes', qty: 200, price: 130 }], followUpDate: '', closureDate: '2026-03-20', remarks: [{ ts: '2026-03-20T12:00:00', author: 'Rahul Verma', text: 'Electrical supplies delivered for 3BHK renovation' }] },
-  { id: genId(), createdAt: '2026-03-11', assignedTo: 'Sneha Iyer', branch: 'Yelankha', status: 'Order Lost', cartValue: 510000, cartItems: [{ name: 'Structural Steel I-Beam', qty: 20, price: 25500 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-03-18T09:30:00', author: 'Sneha Iyer', text: 'Lost to local distributor with lower delivery charges' }] },
+  { id: genId(), createdAt: '2026-03-11', assignedTo: 'Sneha Iyer', branch: 'Yelankha', status: 'Order Lost', lostReason: 'Pricing Issue', cartValue: 510000, cartItems: [{ name: 'Structural Steel I-Beam', qty: 20, price: 25500 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-03-18T09:30:00', author: 'Sneha Iyer', text: 'Lost to local distributor with lower delivery charges' }] },
   { id: genId(), createdAt: '2026-03-09', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Order Placed', cartValue: 164000, cartItems: [{ name: 'Exterior Emulsion Paint 20L', qty: 20, price: 5200 }, { name: 'Paint Rollers & Brushes Kit', qty: 20, price: 3000 }], followUpDate: '2026-03-22', closureDate: '2026-04-01', remarks: [{ ts: '2026-03-09T16:00:00', author: 'Karan Patel', text: 'Painting contractor order for apartment complex' }] },
   { id: genId(), createdAt: '2026-03-08', assignedTo: 'Arjun Mehta', branch: 'JP Nagar', status: 'Delivered', cartValue: 287000, cartItems: [{ name: 'Granite Slab Black Galaxy', qty: 50, price: 4200 }, { name: 'Marble White Makrana', qty: 25, price: 3280 }], followUpDate: '', closureDate: '2026-03-18', remarks: [{ ts: '2026-03-18T10:30:00', author: 'Arjun Mehta', text: 'Stone delivered for kitchen countertops project' }] },
   { id: genId(), createdAt: '2026-03-07', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Quote Approval Pending', cartValue: 445000, cartItems: [{ name: 'Ready Mix Concrete M25', qty: 50, price: 5500 }, { name: 'Ready Mix Concrete M30', qty: 30, price: 6000 }], followUpDate: '2026-03-21', closureDate: '2026-04-01', remarks: [{ ts: '2026-03-07T08:45:00', author: 'Priya Sharma', text: 'Foundation pour for commercial building - urgent quote needed' }] },
@@ -91,7 +102,7 @@ const SEED_LEADS = [
   // 21-30
   { id: genId(), createdAt: '2026-03-02', assignedTo: 'Priya Sharma', branch: 'Yelankha', status: 'Quote Approval Pending', cartValue: 520000, cartItems: [{ name: 'Aluminium Windows 4x3', qty: 30, price: 12500 }, { name: 'Aluminium Sliding Doors', qty: 8, price: 18500 }], followUpDate: '2026-03-16', closureDate: '2026-03-30', remarks: [{ ts: '2026-03-02T10:00:00', author: 'Priya Sharma', text: 'Window and door order for new apartment block' }] },
   { id: genId(), createdAt: '2026-02-28', assignedTo: 'Rahul Verma', branch: 'HQ', status: 'Order Placed', cartValue: 234000, cartItems: [{ name: 'Gypsum Board 12mm', qty: 200, price: 650 }, { name: 'GI Channel & Track', qty: 300, price: 347 }], followUpDate: '2026-03-14', closureDate: '2026-03-22', remarks: [{ ts: '2026-02-28T13:00:00', author: 'Rahul Verma', text: 'False ceiling material for IT office fit-out' }] },
-  { id: genId(), createdAt: '2026-02-27', assignedTo: 'Sneha Iyer', branch: 'JP Nagar', status: 'Order Lost', cartValue: 187000, cartItems: [{ name: 'Hardwood Door Frames', qty: 15, price: 8500 }, { name: 'Flush Doors', qty: 15, price: 3967 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-03-05T10:00:00', author: 'Sneha Iyer', text: 'Client found cheaper alternative at local timber market' }] },
+  { id: genId(), createdAt: '2026-02-27', assignedTo: 'Sneha Iyer', branch: 'JP Nagar', status: 'Order Lost', lostReason: 'Pricing Issue', cartValue: 187000, cartItems: [{ name: 'Hardwood Door Frames', qty: 15, price: 8500 }, { name: 'Flush Doors', qty: 15, price: 3967 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-03-05T10:00:00', author: 'Sneha Iyer', text: 'Client found cheaper alternative at local timber market' }] },
   { id: genId(), createdAt: '2026-02-26', assignedTo: 'Karan Patel', branch: 'Whitefield', status: 'Delivered', cartValue: 98000, cartItems: [{ name: 'Wire Mesh 4mm', qty: 100, price: 580 }, { name: 'Binding Wire 20 gauge', qty: 100, price: 400 }], followUpDate: '', closureDate: '2026-03-08', remarks: [{ ts: '2026-03-08T11:30:00', author: 'Karan Patel', text: 'Mesh and wire delivered for slab reinforcement' }] },
   { id: genId(), createdAt: '2026-02-25', assignedTo: 'Arjun Mehta', branch: 'Yelankha', status: 'Request for Availability Check', cartValue: 367000, cartItems: [{ name: 'Solid Concrete Blocks 6 inch', qty: 2000, price: 55 }, { name: 'Solid Concrete Blocks 8 inch', qty: 2000, price: 72 }, { name: 'Portland Cement 50kg', qty: 80, price: 1250 }], followUpDate: '2026-03-10', closureDate: '2026-03-20', remarks: [{ ts: '2026-02-25T08:30:00', author: 'Arjun Mehta', text: 'Large block order for warehouse construction' }] },
   { id: genId(), createdAt: '2026-02-24', assignedTo: 'Priya Sharma', branch: 'HQ', status: 'Refunded', cartValue: 34500, cartItems: [{ name: 'Wood Primer 4L', qty: 15, price: 2300 }], followUpDate: '', closureDate: '2026-03-01', remarks: [{ ts: '2026-03-01T15:30:00', author: 'Priya Sharma', text: 'Product quality issue reported, full refund processed' }] },
@@ -100,7 +111,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-02-21', assignedTo: 'Karan Patel', branch: 'Yelankha', status: 'Order Placed', cartValue: 178500, cartItems: [{ name: 'Interior Emulsion Paint 20L', qty: 15, price: 4200 }, { name: 'Putty 40kg', qty: 50, price: 2310 }], followUpDate: '2026-03-07', closureDate: '2026-03-15', remarks: [{ ts: '2026-02-21T14:30:00', author: 'Karan Patel', text: 'Interior painting supplies for school renovation' }] },
   { id: genId(), createdAt: '2026-02-19', assignedTo: 'Arjun Mehta', branch: 'HQ', status: 'Delivered', cartValue: 567000, cartItems: [{ name: 'TMT Steel Bars 20mm', qty: 300, price: 1890 }], followUpDate: '', closureDate: '2026-03-02', remarks: [{ ts: '2026-03-02T10:00:00', author: 'Arjun Mehta', text: 'Heavy gauge steel delivered for bridge reinforcement project' }] },
   // 31-40
-  { id: genId(), createdAt: '2026-02-18', assignedTo: 'Priya Sharma', branch: 'JP Nagar', status: 'Order Lost', cartValue: 145000, cartItems: [{ name: 'Glass Wool Insulation', qty: 100, price: 850 }, { name: 'Aluminium Foil Tape', qty: 200, price: 300 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-25T09:00:00', author: 'Priya Sharma', text: 'Project delayed indefinitely, client cancelled inquiry' }] },
+  { id: genId(), createdAt: '2026-02-18', assignedTo: 'Priya Sharma', branch: 'JP Nagar', status: 'Order Lost', lostReason: 'Enquiry Cancelled', cartValue: 145000, cartItems: [{ name: 'Glass Wool Insulation', qty: 100, price: 850 }, { name: 'Aluminium Foil Tape', qty: 200, price: 300 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-25T09:00:00', author: 'Priya Sharma', text: 'Project delayed indefinitely, client cancelled inquiry' }] },
   { id: genId(), createdAt: '2026-02-17', assignedTo: 'Rahul Verma', branch: 'Whitefield', status: 'Request for Availability Check', cartValue: 412000, cartItems: [{ name: 'Pre-fabricated Steel Trusses', qty: 10, price: 41200 }], followUpDate: '2026-03-03', closureDate: '2026-03-15', remarks: [{ ts: '2026-02-17T15:00:00', author: 'Rahul Verma', text: 'Industrial shed project - checking truss availability with supplier' }] },
   { id: genId(), createdAt: '2026-02-16', assignedTo: 'Sneha Iyer', branch: 'Yelankha', status: 'Quote Approval Pending', cartValue: 234500, cartItems: [{ name: 'Laminate Flooring', qty: 200, price: 890 }, { name: 'Underlay Foam 3mm', qty: 200, price: 283 }], followUpDate: '2026-03-02', closureDate: '2026-03-12', remarks: [{ ts: '2026-02-16T11:00:00', author: 'Sneha Iyer', text: 'Office renovation - laminate for 3 floors' }] },
   { id: genId(), createdAt: '2026-02-14', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Delivered', cartValue: 189000, cartItems: [{ name: 'Bathroom Tiles Designer', qty: 150, price: 780 }, { name: 'Shower Panel SS', qty: 10, price: 7200 }], followUpDate: '', closureDate: '2026-02-28', remarks: [{ ts: '2026-02-28T16:00:00', author: 'Karan Patel', text: 'Premium bathroom fittings delivered for luxury villa' }] },
@@ -108,7 +119,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-02-12', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Refunded', cartValue: 56000, cartItems: [{ name: 'Weatherproof Exterior Paint 20L', qty: 8, price: 7000 }], followUpDate: '', closureDate: '2026-02-20', remarks: [{ ts: '2026-02-20T13:00:00', author: 'Priya Sharma', text: 'Color mismatch with sample, refund processed' }] },
   { id: genId(), createdAt: '2026-02-11', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Delivered', cartValue: 678000, cartItems: [{ name: 'Reinforcement Steel Bundle', qty: 15, price: 32000 }, { name: 'Portland Cement 50kg', qty: 200, price: 1140 }], followUpDate: '', closureDate: '2026-02-25', remarks: [{ ts: '2026-02-25T09:30:00', author: 'Rahul Verma', text: 'Full material delivered for multi-story residential project' }] },
   { id: genId(), createdAt: '2026-02-10', assignedTo: 'Sneha Iyer', branch: 'HQ', status: 'Quote Approval Pending', cartValue: 123000, cartItems: [{ name: 'Electrical Wires 2.5sqmm', qty: 50, price: 1460 }, { name: 'MCB Distribution Board', qty: 10, price: 5000 }], followUpDate: '2026-02-24', closureDate: '2026-03-05', remarks: [{ ts: '2026-02-10T10:30:00', author: 'Sneha Iyer', text: 'Electrical fitout quote for commercial space' }] },
-  { id: genId(), createdAt: '2026-02-09', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Order Lost', cartValue: 245000, cartItems: [{ name: 'Modular Kitchen Cabinet Set', qty: 3, price: 65000 }, { name: 'Granite Kitchen Counter', qty: 3, price: 16667 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-18T11:00:00', author: 'Karan Patel', text: 'Client chose a modular kitchen specialist instead' }] },
+  { id: genId(), createdAt: '2026-02-09', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Order Lost', lostReason: 'Sample/Material Not Approved', cartValue: 245000, cartItems: [{ name: 'Modular Kitchen Cabinet Set', qty: 3, price: 65000 }, { name: 'Granite Kitchen Counter', qty: 3, price: 16667 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-18T11:00:00', author: 'Karan Patel', text: 'Client chose a modular kitchen specialist instead' }] },
   { id: genId(), createdAt: '2026-02-08', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Order Placed', cartValue: 87000, cartItems: [{ name: 'Cement Board 8mm', qty: 100, price: 520 }, { name: 'Self-drilling Screws Box', qty: 50, price: 340 }], followUpDate: '2026-02-22', closureDate: '2026-03-01', remarks: [{ ts: '2026-02-08T16:00:00', author: 'Arjun Mehta', text: 'Partition wall material for co-working space' }] },
   // 41-50
   { id: genId(), createdAt: '2026-02-07', assignedTo: 'Priya Sharma', branch: 'Yelankha', status: 'Delivered', cartValue: 345000, cartItems: [{ name: 'UPVC Windows 5x4', qty: 20, price: 11500 }, { name: 'UPVC Door Frame', qty: 10, price: 11500 }], followUpDate: '', closureDate: '2026-02-20', remarks: [{ ts: '2026-02-20T14:00:00', author: 'Priya Sharma', text: 'UPVC installation completed at Electronic City villa' }] },
@@ -116,7 +127,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-02-05', assignedTo: 'Sneha Iyer', branch: 'JP Nagar', status: 'Quote Approval Pending', cartValue: 567000, cartItems: [{ name: 'Italian Marble Tiles', qty: 200, price: 2100 }, { name: 'Epoxy Grouting', qty: 100, price: 470 }, { name: 'Tile Spacers & Levellers', qty: 50, price: 560 }], followUpDate: '2026-02-19', closureDate: '2026-03-01', remarks: [{ ts: '2026-02-05T13:30:00', author: 'Sneha Iyer', text: 'Premium villa project wants Italian marble for all floors' }] },
   { id: genId(), createdAt: '2026-02-04', assignedTo: 'Karan Patel', branch: 'Whitefield', status: 'Order Placed', cartValue: 145000, cartItems: [{ name: 'MS Railing Pipe 2 inch', qty: 100, price: 950 }, { name: 'SS Railing Accessories', qty: 50, price: 1000 }], followUpDate: '2026-02-18', closureDate: '2026-02-25', remarks: [{ ts: '2026-02-04T10:00:00', author: 'Karan Patel', text: 'Staircase railing material for 4-floor building' }] },
   { id: genId(), createdAt: '2026-02-03', assignedTo: 'Arjun Mehta', branch: 'Yelankha', status: 'Delivered', cartValue: 234000, cartItems: [{ name: 'Solid Wood Doors', qty: 12, price: 14500 }, { name: 'Door Hardware Set', qty: 12, price: 5000 }], followUpDate: '', closureDate: '2026-02-18', remarks: [{ ts: '2026-02-18T11:30:00', author: 'Arjun Mehta', text: 'Premium teak doors delivered and installed' }] },
-  { id: genId(), createdAt: '2026-02-02', assignedTo: 'Priya Sharma', branch: 'HQ', status: 'Order Lost', cartValue: 89000, cartItems: [{ name: 'Corrugated Metal Sheets', qty: 60, price: 1483 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-10T14:30:00', author: 'Priya Sharma', text: 'Budget constraints - client postponed the project' }] },
+  { id: genId(), createdAt: '2026-02-02', assignedTo: 'Priya Sharma', branch: 'HQ', status: 'Order Lost', lostReason: 'Credit Issue', cartValue: 89000, cartItems: [{ name: 'Corrugated Metal Sheets', qty: 60, price: 1483 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-10T14:30:00', author: 'Priya Sharma', text: 'Budget constraints - client postponed the project' }] },
   { id: genId(), createdAt: '2026-02-01', assignedTo: 'Rahul Verma', branch: 'JP Nagar', status: 'Refunded', cartValue: 78500, cartItems: [{ name: 'Bathroom Vanity Unit', qty: 5, price: 15700 }], followUpDate: '', closureDate: '2026-02-12', remarks: [{ ts: '2026-02-12T10:00:00', author: 'Rahul Verma', text: 'Size mismatch with client bathroom dimensions, refund issued' }] },
   { id: genId(), createdAt: '2026-01-31', assignedTo: 'Sneha Iyer', branch: 'Whitefield', status: 'Delivered', cartValue: 890000, cartItems: [{ name: 'Structural Steel Columns', qty: 25, price: 28000 }, { name: 'Base Plates & Anchor Bolts', qty: 25, price: 7600 }], followUpDate: '', closureDate: '2026-02-15', remarks: [{ ts: '2026-02-15T08:00:00', author: 'Sneha Iyer', text: 'Steel structure for warehouse delivered on schedule' }] },
   { id: genId(), createdAt: '2026-01-30', assignedTo: 'Karan Patel', branch: 'Yelankha', status: 'Request for Availability Check', cartValue: 156000, cartItems: [{ name: 'SWR Pipes 110mm', qty: 100, price: 890 }, { name: 'SWR Fittings Assorted', qty: 80, price: 838 }], followUpDate: '2026-02-13', closureDate: '2026-02-22', remarks: [{ ts: '2026-01-30T15:30:00', author: 'Karan Patel', text: 'Soil and waste pipe system for apartment block' }] },
@@ -125,13 +136,13 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-01-28', assignedTo: 'Priya Sharma', branch: 'JP Nagar', status: 'Delivered', cartValue: 167000, cartItems: [{ name: 'Ceramic Roof Tiles', qty: 500, price: 210 }, { name: 'Ridge Tiles', qty: 100, price: 620 }], followUpDate: '', closureDate: '2026-02-10', remarks: [{ ts: '2026-02-10T12:00:00', author: 'Priya Sharma', text: 'Roofing tiles installed for heritage-style bungalow' }] },
   { id: genId(), createdAt: '2026-01-27', assignedTo: 'Rahul Verma', branch: 'Whitefield', status: 'Order Placed', cartValue: 256000, cartItems: [{ name: 'Precast Compound Wall', qty: 30, price: 6500 }, { name: 'Compound Wall Pillars', qty: 31, price: 1613 }], followUpDate: '2026-02-10', closureDate: '2026-02-18', remarks: [{ ts: '2026-01-27T14:00:00', author: 'Rahul Verma', text: 'Boundary wall for factory premises' }] },
   { id: genId(), createdAt: '2026-01-26', assignedTo: 'Sneha Iyer', branch: 'Yelankha', status: 'Refunded', cartValue: 43000, cartItems: [{ name: 'Epoxy Floor Paint 20L', qty: 5, price: 8600 }], followUpDate: '', closureDate: '2026-02-05', remarks: [{ ts: '2026-02-05T11:00:00', author: 'Sneha Iyer', text: 'Client changed floor plan, no longer needs epoxy coating' }] },
-  { id: genId(), createdAt: '2026-01-25', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Order Lost', cartValue: 312000, cartItems: [{ name: 'Elevator Lift Package', qty: 1, price: 312000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-01T09:30:00', author: 'Karan Patel', text: 'Client directly contacted the elevator manufacturer' }] },
+  { id: genId(), createdAt: '2026-01-25', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Order Lost', lostReason: 'Enquiry Invalid', cartValue: 312000, cartItems: [{ name: 'Elevator Lift Package', qty: 1, price: 312000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-02-01T09:30:00', author: 'Karan Patel', text: 'Client directly contacted the elevator manufacturer' }] },
   { id: genId(), createdAt: '2026-01-24', assignedTo: 'Arjun Mehta', branch: 'JP Nagar', status: 'Delivered', cartValue: 198000, cartItems: [{ name: 'Plumbing PVC Pipes 4 inch', qty: 100, price: 780 }, { name: 'Plumbing Fittings Kit', qty: 50, price: 2400 }], followUpDate: '', closureDate: '2026-02-08', remarks: [{ ts: '2026-02-08T14:00:00', author: 'Arjun Mehta', text: 'Complete plumbing material delivered for row house project' }] },
   { id: genId(), createdAt: '2026-01-23', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Request for Availability Check', cartValue: 534000, cartItems: [{ name: 'ACP Cladding Sheets', qty: 100, price: 3200 }, { name: 'ACP Fixing Channels', qty: 100, price: 2140 }], followUpDate: '2026-02-06', closureDate: '2026-02-16', remarks: [{ ts: '2026-01-23T10:00:00', author: 'Priya Sharma', text: 'Facade cladding for office building exterior' }] },
   { id: genId(), createdAt: '2026-01-22', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Quote Approval Pending', cartValue: 189000, cartItems: [{ name: 'Clay Hollow Bricks', qty: 3000, price: 42 }, { name: 'Cement Mortar Mix', qty: 100, price: 630 }], followUpDate: '2026-02-05', closureDate: '2026-02-15', remarks: [{ ts: '2026-01-22T13:30:00', author: 'Rahul Verma', text: 'Non-load bearing walls for commercial complex' }] },
   { id: genId(), createdAt: '2026-01-21', assignedTo: 'Sneha Iyer', branch: 'HQ', status: 'Order Placed', cartValue: 267000, cartItems: [{ name: 'Split AC 1.5 Ton', qty: 10, price: 18500 }, { name: 'AC Copper Piping Kit', qty: 10, price: 8200 }], followUpDate: '2026-02-04', closureDate: '2026-02-12', remarks: [{ ts: '2026-01-21T11:00:00', author: 'Sneha Iyer', text: 'HVAC order for new office space fitout' }] },
   { id: genId(), createdAt: '2026-01-20', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Delivered', cartValue: 456000, cartItems: [{ name: 'Teak Wood Planks', qty: 50, price: 6500 }, { name: 'Sal Wood Beams', qty: 30, price: 5200 }], followUpDate: '', closureDate: '2026-02-05', remarks: [{ ts: '2026-02-05T15:00:00', author: 'Karan Patel', text: 'Premium timber delivered for custom furniture workshop' }] },
-  { id: genId(), createdAt: '2026-01-19', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Order Lost', cartValue: 178000, cartItems: [{ name: 'Bamboo Decking', qty: 100, price: 1280 }, { name: 'Deck Fasteners', qty: 50, price: 1040 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-28T16:00:00', author: 'Arjun Mehta', text: 'Client switched to composite decking from another vendor' }] },
+  { id: genId(), createdAt: '2026-01-19', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Order Lost', lostReason: 'Delayed Estimate', cartValue: 178000, cartItems: [{ name: 'Bamboo Decking', qty: 100, price: 1280 }, { name: 'Deck Fasteners', qty: 50, price: 1040 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-28T16:00:00', author: 'Arjun Mehta', text: 'Client switched to composite decking from another vendor' }] },
   // 61-70
   { id: genId(), createdAt: '2026-01-18', assignedTo: 'Priya Sharma', branch: 'Yelankha', status: 'Delivered', cartValue: 312000, cartItems: [{ name: 'Interlocking Pavers', qty: 1000, price: 180 }, { name: 'Paver Base Material', qty: 50, price: 2640 }], followUpDate: '', closureDate: '2026-02-01', remarks: [{ ts: '2026-02-01T10:00:00', author: 'Priya Sharma', text: 'Driveway paving completed for gated community' }] },
   { id: genId(), createdAt: '2026-01-17', assignedTo: 'Rahul Verma', branch: 'HQ', status: 'Quote Approval Pending', cartValue: 745000, cartItems: [{ name: 'Structural Glazing System', qty: 50, price: 12500 }, { name: 'Silicone Sealant Industrial', qty: 100, price: 1200 }], followUpDate: '2026-01-31', closureDate: '2026-02-10', remarks: [{ ts: '2026-01-17T14:00:00', author: 'Rahul Verma', text: 'Glass facade for 5-story commercial tower' }] },
@@ -142,7 +153,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-01-12', assignedTo: 'Rahul Verma', branch: 'JP Nagar', status: 'Quote Approval Pending', cartValue: 456000, cartItems: [{ name: 'Pre-stressed Concrete Slabs', qty: 30, price: 12000 }, { name: 'Slab Lifting Anchors', qty: 60, price: 1600 }], followUpDate: '2026-01-26', closureDate: '2026-02-05', remarks: [{ ts: '2026-01-12T15:00:00', author: 'Rahul Verma', text: 'Precast slab system for industrial warehouse' }] },
   { id: genId(), createdAt: '2026-01-11', assignedTo: 'Sneha Iyer', branch: 'Whitefield', status: 'Delivered', cartValue: 123000, cartItems: [{ name: 'Ceiling Fan Industrial', qty: 30, price: 2800 }, { name: 'LED Panel Light 2x2', qty: 50, price: 780 }], followUpDate: '', closureDate: '2026-01-25', remarks: [{ ts: '2026-01-25T13:00:00', author: 'Sneha Iyer', text: 'Electrical fixtures installed in new office space' }] },
   { id: genId(), createdAt: '2026-01-10', assignedTo: 'Karan Patel', branch: 'Yelankha', status: 'Order Placed', cartValue: 189000, cartItems: [{ name: 'WPC Door Frames', qty: 20, price: 6500 }, { name: 'WPC Boards 18mm', qty: 30, price: 1967 }], followUpDate: '2026-01-24', closureDate: '2026-02-01', remarks: [{ ts: '2026-01-10T10:00:00', author: 'Karan Patel', text: 'Termite-proof door frames for residential complex' }] },
-  { id: genId(), createdAt: '2026-01-09', assignedTo: 'Arjun Mehta', branch: 'HQ', status: 'Order Lost', cartValue: 234000, cartItems: [{ name: 'Prefab Portable Cabin', qty: 2, price: 117000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-18T14:30:00', author: 'Arjun Mehta', text: 'Client found used portable cabins at lower cost' }] },
+  { id: genId(), createdAt: '2026-01-09', assignedTo: 'Arjun Mehta', branch: 'HQ', status: 'Order Lost', lostReason: 'Pricing Issue', cartValue: 234000, cartItems: [{ name: 'Prefab Portable Cabin', qty: 2, price: 117000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-18T14:30:00', author: 'Arjun Mehta', text: 'Client found used portable cabins at lower cost' }] },
   // 71-80
   { id: genId(), createdAt: '2026-01-08', assignedTo: 'Priya Sharma', branch: 'JP Nagar', status: 'Delivered', cartValue: 345000, cartItems: [{ name: 'SS Water Tank 5000L', qty: 3, price: 78000 }, { name: 'Tank Stand MS', qty: 3, price: 37000 }], followUpDate: '', closureDate: '2026-01-22', remarks: [{ ts: '2026-01-22T09:00:00', author: 'Priya Sharma', text: 'Water storage tanks installed for apartment building' }] },
   { id: genId(), createdAt: '2026-01-07', assignedTo: 'Rahul Verma', branch: 'Whitefield', status: 'Refunded', cartValue: 89000, cartItems: [{ name: 'Anti-skid Floor Tiles', qty: 200, price: 445 }], followUpDate: '', closureDate: '2026-01-18', remarks: [{ ts: '2026-01-18T15:00:00', author: 'Rahul Verma', text: 'Tiles did not match the anti-skid rating specified, refund issued' }] },
@@ -150,7 +161,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2026-01-05', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Order Placed', cartValue: 234000, cartItems: [{ name: 'Terracotta Jali Blocks', qty: 500, price: 280 }, { name: 'Sandstone Cladding', qty: 100, price: 940 }], followUpDate: '2026-01-19', closureDate: '2026-01-28', remarks: [{ ts: '2026-01-05T14:00:00', author: 'Karan Patel', text: 'Decorative facade elements for boutique hotel' }] },
   { id: genId(), createdAt: '2026-01-04', assignedTo: 'Arjun Mehta', branch: 'JP Nagar', status: 'Delivered', cartValue: 156000, cartItems: [{ name: 'Concrete Pavers Hexagonal', qty: 800, price: 120 }, { name: 'Edge Restraints', qty: 100, price: 600 }], followUpDate: '', closureDate: '2026-01-18', remarks: [{ ts: '2026-01-18T16:30:00', author: 'Arjun Mehta', text: 'Hexagonal paver driveway completed' }] },
   { id: genId(), createdAt: '2026-01-03', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Request for Availability Check', cartValue: 412000, cartItems: [{ name: 'Engineered Wood Flooring', qty: 150, price: 1800 }, { name: 'Floor Skirting', qty: 100, price: 1420 }], followUpDate: '2026-01-17', closureDate: '2026-01-27', remarks: [{ ts: '2026-01-03T11:00:00', author: 'Priya Sharma', text: 'Premium wood flooring for penthouse apartments' }] },
-  { id: genId(), createdAt: '2026-01-02', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Order Lost', cartValue: 567000, cartItems: [{ name: 'Central AC Package 5TR', qty: 2, price: 245000 }, { name: 'Ducting Material', qty: 1, price: 77000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-12T09:00:00', author: 'Rahul Verma', text: 'Lost to HVAC specialist dealer with better AMC terms' }] },
+  { id: genId(), createdAt: '2026-01-02', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Order Lost', lostReason: 'Cash/Non GST Issue', cartValue: 567000, cartItems: [{ name: 'Central AC Package 5TR', qty: 2, price: 245000 }, { name: 'Ducting Material', qty: 1, price: 77000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-12T09:00:00', author: 'Rahul Verma', text: 'Lost to HVAC specialist dealer with better AMC terms' }] },
   { id: genId(), createdAt: '2026-01-01', assignedTo: 'Sneha Iyer', branch: 'HQ', status: 'Delivered', cartValue: 289000, cartItems: [{ name: 'Mosaic Tiles Designer', qty: 300, price: 650 }, { name: 'Swimming Pool Tiles', qty: 200, price: 475 }], followUpDate: '', closureDate: '2026-01-15', remarks: [{ ts: '2026-01-15T10:30:00', author: 'Sneha Iyer', text: 'Pool and garden area tiling completed at farmhouse' }] },
   { id: genId(), createdAt: '2025-12-31', assignedTo: 'Karan Patel', branch: 'JP Nagar', status: 'Quote Approval Pending', cartValue: 345000, cartItems: [{ name: 'SS Railing System', qty: 50, price: 4500 }, { name: 'Glass Panels 10mm', qty: 25, price: 4800 }], followUpDate: '2026-01-14', closureDate: '2026-01-24', remarks: [{ ts: '2025-12-31T08:00:00', author: 'Karan Patel', text: 'Glass and steel railing for duplex staircase' }] },
   { id: genId(), createdAt: '2025-12-30', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Order Placed', cartValue: 178000, cartItems: [{ name: 'Rockwool Insulation 50mm', qty: 100, price: 1180 }, { name: 'Vapour Barrier Film', qty: 50, price: 1240 }], followUpDate: '2026-01-13', closureDate: '2026-01-22', remarks: [{ ts: '2025-12-30T13:00:00', author: 'Arjun Mehta', text: 'Thermal insulation for cold storage facility' }] },
@@ -160,7 +171,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2025-12-27', assignedTo: 'Sneha Iyer', branch: 'JP Nagar', status: 'Order Placed', cartValue: 567000, cartItems: [{ name: 'MS Structural Steel', qty: 10, price: 45000 }, { name: 'Welding Electrodes Box', qty: 20, price: 5850 }], followUpDate: '2026-01-10', closureDate: '2026-01-20', remarks: [{ ts: '2025-12-27T15:00:00', author: 'Sneha Iyer', text: 'Steel structure for factory mezzanine floor' }] },
   { id: genId(), createdAt: '2025-12-26', assignedTo: 'Karan Patel', branch: 'Whitefield', status: 'Quote Approval Pending', cartValue: 234000, cartItems: [{ name: 'Wooden Acoustic Panels', qty: 100, price: 1540 }, { name: 'Acoustic Foam Tiles', qty: 100, price: 800 }], followUpDate: '2026-01-09', closureDate: '2026-01-19', remarks: [{ ts: '2025-12-26T10:00:00', author: 'Karan Patel', text: 'Sound treatment material for recording studio' }] },
   { id: genId(), createdAt: '2025-12-25', assignedTo: 'Arjun Mehta', branch: 'Yelankha', status: 'Delivered', cartValue: 789000, cartItems: [{ name: 'Precast Boundary Wall Panel', qty: 40, price: 15000 }, { name: 'Precast Pillar', qty: 41, price: 4854 }], followUpDate: '', closureDate: '2026-01-10', remarks: [{ ts: '2026-01-10T09:00:00', author: 'Arjun Mehta', text: 'Precast compound wall erected for industrial plot' }] },
-  { id: genId(), createdAt: '2025-12-24', assignedTo: 'Priya Sharma', branch: 'HQ', status: 'Order Lost', cartValue: 123000, cartItems: [{ name: 'Cement Board Siding', qty: 80, price: 1538 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-03T10:00:00', author: 'Priya Sharma', text: 'Client opted for traditional plastering instead' }] },
+  { id: genId(), createdAt: '2025-12-24', assignedTo: 'Priya Sharma', branch: 'HQ', status: 'Order Lost', lostReason: 'Sample/Material Not Approved', cartValue: 123000, cartItems: [{ name: 'Cement Board Siding', qty: 80, price: 1538 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2026-01-03T10:00:00', author: 'Priya Sharma', text: 'Client opted for traditional plastering instead' }] },
   { id: genId(), createdAt: '2025-12-23', assignedTo: 'Rahul Verma', branch: 'JP Nagar', status: 'Request for Availability Check', cartValue: 345000, cartItems: [{ name: 'Granite Cobblestones', qty: 500, price: 450 }, { name: 'Landscaping Pebbles (per ton)', qty: 10, price: 12000 }], followUpDate: '2026-01-06', closureDate: '2026-01-16', remarks: [{ ts: '2025-12-23T13:30:00', author: 'Rahul Verma', text: 'Landscape material for resort entrance pathway' }] },
   { id: genId(), createdAt: '2025-12-22', assignedTo: 'Sneha Iyer', branch: 'Whitefield', status: 'Order Placed', cartValue: 456000, cartItems: [{ name: 'DG Set 125 KVA', qty: 1, price: 456000 }], followUpDate: '2026-01-05', closureDate: '2026-01-15', remarks: [{ ts: '2025-12-22T14:00:00', author: 'Sneha Iyer', text: 'Backup power generator for apartment complex' }] },
   { id: genId(), createdAt: '2025-12-21', assignedTo: 'Karan Patel', branch: 'Yelankha', status: 'Delivered', cartValue: 178000, cartItems: [{ name: 'PVC False Ceiling Panels', qty: 300, price: 380 }, { name: 'Ceiling Grid System', qty: 100, price: 640 }], followUpDate: '', closureDate: '2026-01-05', remarks: [{ ts: '2026-01-05T11:30:00', author: 'Karan Patel', text: 'PVC ceiling installed in hospital OPD area' }] },
@@ -169,7 +180,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2025-12-19', assignedTo: 'Priya Sharma', branch: 'JP Nagar', status: 'Delivered', cartValue: 234000, cartItems: [{ name: 'Scaffolding Set (per floor)', qty: 4, price: 45000 }, { name: 'Safety Nets', qty: 10, price: 5400 }], followUpDate: '', closureDate: '2026-01-02', remarks: [{ ts: '2026-01-02T08:00:00', author: 'Priya Sharma', text: 'Scaffolding and safety equipment for building renovation' }] },
   { id: genId(), createdAt: '2025-12-18', assignedTo: 'Rahul Verma', branch: 'Whitefield', status: 'Quote Approval Pending', cartValue: 567000, cartItems: [{ name: 'Curtain Wall System', qty: 20, price: 22000 }, { name: 'Thermal Break Profiles', qty: 40, price: 3175 }], followUpDate: '2026-01-01', closureDate: '2026-01-11', remarks: [{ ts: '2025-12-18T10:00:00', author: 'Rahul Verma', text: 'Curtain wall quote for tech park building' }] },
   { id: genId(), createdAt: '2025-12-17', assignedTo: 'Sneha Iyer', branch: 'Yelankha', status: 'Order Placed', cartValue: 145000, cartItems: [{ name: 'GI Square Tubes', qty: 100, price: 950 }, { name: 'MS Flat Bar', qty: 100, price: 500 }], followUpDate: '2025-12-31', closureDate: '2026-01-08', remarks: [{ ts: '2025-12-17T15:30:00', author: 'Sneha Iyer', text: 'Metal fabrication material for gate and grills' }] },
-  { id: genId(), createdAt: '2025-12-16', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Order Lost', cartValue: 890000, cartItems: [{ name: 'Modular OT Panel System', qty: 2, price: 445000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2025-12-26T09:00:00', author: 'Karan Patel', text: 'Hospital went with specialized OT infrastructure vendor' }] },
+  { id: genId(), createdAt: '2025-12-16', assignedTo: 'Karan Patel', branch: 'HQ', status: 'Order Lost', lostReason: 'Order Closed Already', cartValue: 890000, cartItems: [{ name: 'Modular OT Panel System', qty: 2, price: 445000 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2025-12-26T09:00:00', author: 'Karan Patel', text: 'Hospital went with specialized OT infrastructure vendor' }] },
   { id: genId(), createdAt: '2025-12-15', assignedTo: 'Arjun Mehta', branch: 'JP Nagar', status: 'Delivered', cartValue: 345000, cartItems: [{ name: 'Weathering Steel Plates', qty: 20, price: 12500 }, { name: 'Corten Steel Panels', qty: 15, price: 7000 }], followUpDate: '', closureDate: '2025-12-30', remarks: [{ ts: '2025-12-30T12:00:00', author: 'Arjun Mehta', text: 'Decorative steel panels for building entrance facade' }] },
   { id: genId(), createdAt: '2025-12-14', assignedTo: 'Priya Sharma', branch: 'Whitefield', status: 'Request for Availability Check', cartValue: 234000, cartItems: [{ name: 'Calcium Silicate Board', qty: 200, price: 750 }, { name: 'Fire Stop Sealant', qty: 50, price: 1180 }], followUpDate: '2025-12-28', closureDate: '2026-01-07', remarks: [{ ts: '2025-12-14T11:00:00', author: 'Priya Sharma', text: 'Fire-rated partition material for server room' }] },
   { id: genId(), createdAt: '2025-12-13', assignedTo: 'Rahul Verma', branch: 'Yelankha', status: 'Delivered', cartValue: 178000, cartItems: [{ name: 'Rubber Flooring Tiles', qty: 200, price: 650 }, { name: 'Rubber Adhesive 20L', qty: 10, price: 4800 }], followUpDate: '', closureDate: '2025-12-28', remarks: [{ ts: '2025-12-28T14:30:00', author: 'Rahul Verma', text: 'Gym rubber flooring installed at sports complex' }] },
@@ -178,7 +189,7 @@ const SEED_LEADS = [
   { id: genId(), createdAt: '2025-12-10', assignedTo: 'Arjun Mehta', branch: 'Whitefield', status: 'Delivered', cartValue: 523000, cartItems: [{ name: 'Tremix Flooring Material', qty: 100, price: 3500 }, { name: 'Expansion Joint Filler', qty: 50, price: 1460 }], followUpDate: '', closureDate: '2025-12-25', remarks: [{ ts: '2025-12-25T10:00:00', author: 'Arjun Mehta', text: 'Industrial tremix flooring completed for warehouse' }] },
   // 101-110
   { id: genId(), createdAt: '2025-12-09', assignedTo: 'Priya Sharma', branch: 'Yelankha', status: 'Refunded', cartValue: 56000, cartItems: [{ name: 'Texture Paint 20L', qty: 8, price: 7000 }], followUpDate: '', closureDate: '2025-12-20', remarks: [{ ts: '2025-12-20T15:00:00', author: 'Priya Sharma', text: 'Texture effect not as shown in catalog, refund issued' }] },
-  { id: genId(), createdAt: '2025-12-08', assignedTo: 'Rahul Verma', branch: 'HQ', status: 'Order Lost', cartValue: 345000, cartItems: [{ name: 'Automatic Sliding Gate', qty: 2, price: 125000 }, { name: 'Gate Motor Kit', qty: 2, price: 47500 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2025-12-18T09:30:00', author: 'Rahul Verma', text: 'Client went with local fabricator for manual gates' }] },
+  { id: genId(), createdAt: '2025-12-08', assignedTo: 'Rahul Verma', branch: 'HQ', status: 'Order Lost', lostReason: 'Enquiry Cancelled', cartValue: 345000, cartItems: [{ name: 'Automatic Sliding Gate', qty: 2, price: 125000 }, { name: 'Gate Motor Kit', qty: 2, price: 47500 }], followUpDate: '', closureDate: '', remarks: [{ ts: '2025-12-18T09:30:00', author: 'Rahul Verma', text: 'Client went with local fabricator for manual gates' }] },
   { id: genId(), createdAt: '2025-12-07', assignedTo: 'Sneha Iyer', branch: 'JP Nagar', status: 'Delivered', cartValue: 189000, cartItems: [{ name: 'Geomembrane HDPE', qty: 500, price: 250 }, { name: 'Geocomposite Drain', qty: 100, price: 640 }], followUpDate: '', closureDate: '2025-12-22', remarks: [{ ts: '2025-12-22T11:00:00', author: 'Sneha Iyer', text: 'Waterproofing membrane for underground parking' }] },
   { id: genId(), createdAt: '2025-12-06', assignedTo: 'Karan Patel', branch: 'Whitefield', status: 'Quote Approval Pending', cartValue: 456000, cartItems: [{ name: 'Composite Decking WPC', qty: 200, price: 1500 }, { name: 'Deck Railing System', qty: 50, price: 3120 }], followUpDate: '2025-12-20', closureDate: '2025-12-30', remarks: [{ ts: '2025-12-06T14:00:00', author: 'Karan Patel', text: 'Rooftop terrace decking for luxury penthouse' }] },
   { id: genId(), createdAt: '2025-12-05', assignedTo: 'Arjun Mehta', branch: 'Yelankha', status: 'Request for Availability Check', cartValue: 678000, cartItems: [{ name: 'VRF AC System 20TR', qty: 1, price: 520000 }, { name: 'AC Ducting & Grills', qty: 1, price: 158000 }], followUpDate: '2025-12-19', closureDate: '2025-12-30', remarks: [{ ts: '2025-12-05T10:30:00', author: 'Arjun Mehta', text: 'Central AC system for new office tower' }] },
@@ -204,14 +215,34 @@ function StatusBadge({ status }) {
   );
 }
 
-function EditableStatus({ status, onCommit }) {
+function EditableStatus({ status, lostReason, onCommit }) {
   const [editing, setEditing] = useState(false);
+  const [pendingLost, setPendingLost] = useState(false);
+
+  if (pendingLost) {
+    return (
+      <select
+        autoFocus
+        value=""
+        onChange={(e) => { onCommit('Order Lost', e.target.value); setPendingLost(false); setEditing(false); }}
+        onBlur={() => { setPendingLost(false); setEditing(false); }}
+        style={{ ...S.statusSelect, borderColor: '#EF4444' }}
+      >
+        <option value="" disabled>Select reason...</option>
+        {ORDER_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+      </select>
+    );
+  }
+
   if (editing) {
     return (
       <select
         autoFocus
         value={status}
-        onChange={(e) => { onCommit(e.target.value); setEditing(false); }}
+        onChange={(e) => {
+          if (e.target.value === 'Order Lost') { setPendingLost(true); }
+          else { onCommit(e.target.value); setEditing(false); }
+        }}
         onBlur={() => setEditing(false)}
         style={S.statusSelect}
       >
@@ -219,7 +250,12 @@ function EditableStatus({ status, onCommit }) {
       </select>
     );
   }
-  return <span onDoubleClick={() => setEditing(true)}><StatusBadge status={status} /></span>;
+  return (
+    <span onDoubleClick={() => setEditing(true)}>
+      <StatusBadge status={status} />
+      {status === 'Order Lost' && lostReason && <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{lostReason}</div>}
+    </span>
+  );
 }
 
 function Field({ label, children }) {
@@ -318,9 +354,9 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 // ── Lead Drawer (Edit + Remarks in single view) ────────────────────────────
 function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
   const isEdit = !!lead;
-  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
+  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [] } : {
     id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], branch: BRANCHES[0], status: STATUSES[0],
-    cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', remarks: [],
+    cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', lostReason: '', remarks: [],
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [fuPrompt, setFuPrompt] = useState(null);
@@ -411,10 +447,18 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 </select>
               </Field>
               <Field label="STATUS">
-                <select style={{ ...S.input, width: '100%' }} value={form.status} onChange={(e) => set('status', e.target.value)}>
+                <select style={{ ...S.input, width: '100%' }} value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
+              {form.status === 'Order Lost' && (
+                <Field label="LOST REASON">
+                  <select style={{ ...S.input, width: '100%', borderColor: !form.lostReason ? '#EF4444' : undefined }} value={form.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)}>
+                    <option value="" disabled>Select reason...</option>
+                    {ORDER_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </Field>
+              )}
               <Field label="FOLLOW-UP DATE">
                 <input style={{ ...S.input, width: '100%' }} type="date" value={form.followUpDate} onChange={(e) => handleFollowUpChange(e.target.value)} />
               </Field>
@@ -615,8 +659,8 @@ export default function App() {
     setDeleteLead(null);
   };
 
-  const updateStatus = (id, newStatus) => {
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status: newStatus } : l));
+  const updateStatus = (id, newStatus, lostReason) => {
+    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '' } : l));
   };
 
   const addRemark = (leadId, remark) => {
@@ -786,7 +830,7 @@ export default function App() {
                     </td>
                     <td style={{ ...S.td, fontSize: 12 }}>{l.branch || '\u2014'}</td>
                     <td style={S.td}>
-                      <EditableStatus status={l.status} onCommit={(s) => updateStatus(l.id, s)} />
+                      <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>
                     <td style={{ ...S.td, fontSize: 12, maxWidth: 160 }}>
                       {(l.cartItems || []).slice(0, 2).map((it, i) => (
