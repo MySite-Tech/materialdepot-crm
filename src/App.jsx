@@ -394,7 +394,13 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
     setFuPrompt(null);
   };
 
-  const handleSave = () => onSave(form);
+  const handleSave = () => {
+    if (form.status === 'Order Lost' && !form.lostReason) {
+      alert('Please select a reason for marking this lead as Order Lost.');
+      return;
+    }
+    onSave(form);
+  };
 
   const submitRemark = () => {
     if (!remarkText.trim()) return;
