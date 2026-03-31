@@ -369,6 +369,70 @@ function MultiSelect({ options, selected, onChange, label }) {
   );
 }
 
+function DateRangePicker({ dateFrom, dateTo, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const hasRange = dateFrom || dateTo;
+  const display = !hasRange
+    ? 'Date Range'
+    : dateFrom && dateTo
+      ? `${fmtDate(dateFrom)} \u2013 ${fmtDate(dateTo)}`
+      : dateFrom
+        ? `From ${fmtDate(dateFrom)}`
+        : `Until ${fmtDate(dateTo)}`;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        style={{ ...S.input, width: 'auto', minWidth: 150, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, background: '#fff', textAlign: 'left' }}
+        onClick={() => setOpen(!open)}
+      >
+        <span style={{ flex: 1, fontSize: 12, color: hasRange ? '#374151' : '#9CA3AF' }}>{display}</span>
+        <span style={{ fontSize: 10, color: '#9CA3AF' }}>{open ? '\u25B2' : '\u25BC'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 100,
+          background: '#fff', border: '1px solid #E5E7EB', borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: 12, marginTop: 2, minWidth: 220,
+        }}>
+          <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', display: 'block', marginBottom: 4 }}>From</label>
+          <input
+            style={{ ...S.input, width: '100%', marginBottom: 10 }}
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => onChange(e.target.value, dateTo)}
+          />
+          <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', display: 'block', marginBottom: 4 }}>To</label>
+          <input
+            style={{ ...S.input, width: '100%', marginBottom: 10 }}
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => onChange(dateFrom, e.target.value)}
+          />
+          {hasRange && (
+            <button
+              style={{ ...S.cancelBtn, width: '100%', padding: '6px 10px', fontSize: 11 }}
+              onClick={() => { onChange('', ''); setOpen(false); }}
+            >Clear Dates</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Cart Items Editor ───────────────────────────────────────────────────────
 function CartItemsEditor({ items, onChange }) {
   const update = (idx, field, value) => {
@@ -727,17 +791,12 @@ export default function App() {
   // Persist to localStorage
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(leads)); }, [leads]);
 
-  // Date validation
-  const dateRangeInvalid = dateFrom && dateTo && dateFrom > dateTo;
-
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
     if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    if (!dateRangeInvalid) {
-      if (dateFrom && l.createdAt < dateFrom) return false;
-      if (dateTo && l.createdAt > dateTo) return false;
-    }
+    if (dateFrom && l.createdAt < dateFrom) return false;
+    if (dateTo && l.createdAt > dateTo) return false;
     if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -941,23 +1000,7 @@ export default function App() {
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
             <MultiSelect options={SALES_PEOPLE} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
             <MultiSelect options={BRANCHES} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>FROM</span>
-            <input
-              style={{ ...S.input, width: 140, borderColor: dateRangeInvalid ? '#EF4444' : undefined }}
-              type="date"
-              value={dateFrom}
-              max={dateTo || undefined}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF' }}>TO</span>
-            <input
-              style={{ ...S.input, width: 140, borderColor: dateRangeInvalid ? '#EF4444' : undefined }}
-              type="date"
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-            {(dateFrom || dateTo) && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear Dates</button>}
+            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
             <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>{'\u20B9'} &gt;</span>
             <input
               style={{ ...S.input, width: 130, fontFamily: "'JetBrains Mono', monospace" }}
