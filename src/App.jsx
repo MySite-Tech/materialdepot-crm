@@ -717,8 +717,7 @@ export default function App() {
   const [branchFilter, setBranchFilter] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [cartValueMin, setCartValueMin] = useState('');
-  const [cartValueMax, setCartValueMax] = useState('');
+  const [cartValueGt, setCartValueGt] = useState('');
   const [sortCol, setSortCol] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
   const [drawerLead, setDrawerLead] = useState(null);
@@ -730,8 +729,6 @@ export default function App() {
 
   // Date validation
   const dateRangeInvalid = dateFrom && dateTo && dateFrom > dateTo;
-  // Cart value validation
-  const cartRangeInvalid = cartValueMin !== '' && cartValueMax !== '' && Number(cartValueMin) > Number(cartValueMax);
 
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
@@ -741,10 +738,7 @@ export default function App() {
       if (dateFrom && l.createdAt < dateFrom) return false;
       if (dateTo && l.createdAt > dateTo) return false;
     }
-    if (!cartRangeInvalid) {
-      if (cartValueMin !== '' && (l.cartValue || 0) < Number(cartValueMin)) return false;
-      if (cartValueMax !== '' && (l.cartValue || 0) > Number(cartValueMax)) return false;
-    }
+    if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
     if (search) {
       const q = search.toLowerCase();
       const matchId = l.id.toLowerCase().includes(q);
@@ -964,25 +958,16 @@ export default function App() {
               onChange={(e) => setDateTo(e.target.value)}
             />
             {(dateFrom || dateTo) && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear Dates</button>}
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>MIN \u20B9</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>VALUE &gt;</span>
             <input
-              style={{ ...S.input, width: 100, fontFamily: "'JetBrains Mono', monospace", borderColor: cartRangeInvalid ? '#EF4444' : undefined }}
+              style={{ ...S.input, width: 120, fontFamily: "'JetBrains Mono', monospace" }}
               type="number"
               min="0"
-              placeholder="0"
-              value={cartValueMin}
-              onChange={(e) => setCartValueMin(e.target.value)}
+              placeholder="\u20B9 0"
+              value={cartValueGt}
+              onChange={(e) => setCartValueGt(e.target.value)}
             />
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF' }}>MAX \u20B9</span>
-            <input
-              style={{ ...S.input, width: 100, fontFamily: "'JetBrains Mono', monospace", borderColor: cartRangeInvalid ? '#EF4444' : undefined }}
-              type="number"
-              min="0"
-              placeholder="\u221E"
-              value={cartValueMax}
-              onChange={(e) => setCartValueMax(e.target.value)}
-            />
-            {(cartValueMin || cartValueMax) && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setCartValueMin(''); setCartValueMax(''); }}>Clear Value</button>}
+            {cartValueGt !== '' && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setCartValueGt(''); }}>Clear</button>}
             <span style={{ fontSize: 12, color: '#6B7280' }}>{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
           <button style={S.primaryBtn} onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
