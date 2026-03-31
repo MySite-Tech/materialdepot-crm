@@ -958,14 +958,14 @@ export default function App() {
               onChange={(e) => setDateTo(e.target.value)}
             />
             {(dateFrom || dateTo) && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear Dates</button>}
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>VALUE &gt;</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>{'\u20B9'} &gt;</span>
             <input
-              style={{ ...S.input, width: 120, fontFamily: "'JetBrains Mono', monospace" }}
-              type="number"
-              min="0"
-              placeholder="\u20B9 0"
-              value={cartValueGt}
-              onChange={(e) => setCartValueGt(e.target.value)}
+              style={{ ...S.input, width: 130, fontFamily: "'JetBrains Mono', monospace" }}
+              type="text"
+              inputMode="numeric"
+              placeholder="0"
+              value={cartValueGt ? Number(cartValueGt).toLocaleString('en-IN') : ''}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setCartValueGt(v); }}
             />
             {cartValueGt !== '' && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setCartValueGt(''); }}>Clear</button>}
             <span style={{ fontSize: 12, color: '#6B7280' }}>{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
