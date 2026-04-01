@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
+import { supabase, fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const SALES_PEOPLE = ['Arjun Mehta', 'Priya Sharma', 'Rahul Verma', 'Sneha Iyer', 'Karan Patel'];
@@ -867,19 +868,18 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
 // ── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [leads, setLeads] = useState(SEED_LEADS);
-  const [hydrated, setHydrated] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setLeads(parsed.map((l) => ({ ...l, branch: l.branch || BRANCHES[0], visits: l.visits || [], clientName: l.clientName || '', clientPhone: l.clientPhone || '' })));
-        }
+    fetchLeads().then((dbLeads) => {
+      if (dbLeads.length > 0) {
+        setLeads(dbLeads);
+      } else {
+        // Seed the database with demo data on first load
+        upsertLeads(SEED_LEADS).then(() => setLeads(SEED_LEADS)).catch(() => {});
       }
-    } catch (e) { /* ignore */ }
-    setHydrated(true);
+      setDbReady(true);
+    }).catch(() => setDbReady(true));
   }, []);
 
   const [search, setSearch] = useState('');
@@ -902,7 +902,7 @@ export default function App() {
   const csvFileRef = useRef(null);
 
   // Persist to localStorage
-  useEffect(() => { if (hydrated) localStorage.setItem(LS_KEY, JSON.stringify(leads)); }, [leads, hydrated]);
+  // No more localStorage — data is persisted to Supabase on each operation
 
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
@@ -985,57 +985,72 @@ export default function App() {
 
   const filteredTotal = filtered.reduce((s, l) => s + (l.cartValue || 0), 0);
 
-  // Lead CRUD
+  // Lead CRUD — optimistic state update + async Supabase persist
   const saveLead = (formData) => {
     setLeads((prev) => {
       const idx = prev.findIndex((l) => l.id === formData.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = formData; return next; }
       return [...prev, formData];
     });
+    upsertLead(formData).catch((e) => console.error('Save failed:', e));
     setDrawerLead(null);
     setShowAddDrawer(false);
   };
 
   const removeLead = (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
+    deleteLeadDb(id).catch((e) => console.error('Delete failed:', e));
     setDeleteLead(null);
   };
 
   const updateStatus = (id, newStatus, lostReason) => {
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '' } : l));
+    setLeads((prev) => {
+      const updated = prev.map((l) => l.id === id ? { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '' } : l);
+      const lead = updated.find((l) => l.id === id);
+      if (lead) upsertLead(lead).catch((e) => console.error('Status update failed:', e));
+      return updated;
+    });
   };
 
   const addRemark = (leadId, remark) => {
-    setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
+    setLeads((prev) => {
+      const updated = prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l);
+      const lead = updated.find((l) => l.id === leadId);
+      if (lead) upsertLead(lead).catch((e) => console.error('Remark save failed:', e));
+      return updated;
+    });
   };
 
   const handleDateEditSave = (newDate, remarkText) => {
     if (!dateEditPopup) return;
     const { leadId, field } = dateEditPopup;
-    setLeads((prev) => prev.map((l) => {
-      if (l.id !== leadId) return l;
-      const updated = { ...l, [field]: newDate };
-      // Auto-update closure date if follow-up exceeds it
-      if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
-        updated.closureDate = newDate;
-      }
-      // Reject closure date less than follow-up
-      if (field === 'closureDate' && l.followUpDate && newDate && newDate < l.followUpDate) {
-        return l; // don't update
-      }
-      const remarks = [...(l.remarks || [])];
-      if (remarkText) {
-        const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
-        const oldDate = l[field];
-        const text = label + ' date changed' + (oldDate ? ' from ' + fmtDate(oldDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText;
-        remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text });
-      }
-      if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
-        remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text: 'Closure date auto-updated from ' + fmtDate(l.closureDate) + ' to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
-      }
-      updated.remarks = remarks;
+    setLeads((prev) => {
+      const updated = prev.map((l) => {
+        if (l.id !== leadId) return l;
+        const u = { ...l, [field]: newDate };
+        if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
+          u.closureDate = newDate;
+        }
+        if (field === 'closureDate' && l.followUpDate && newDate && newDate < l.followUpDate) {
+          return l;
+        }
+        const remarks = [...(l.remarks || [])];
+        if (remarkText) {
+          const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
+          const oldDate = l[field];
+          const text = label + ' date changed' + (oldDate ? ' from ' + fmtDate(oldDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText;
+          remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text });
+        }
+        if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
+          remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text: 'Closure date auto-updated from ' + fmtDate(l.closureDate) + ' to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
+        }
+        u.remarks = remarks;
+        return u;
+      });
+      const lead = updated.find((l) => l.id === leadId);
+      if (lead) upsertLead(lead).catch((e) => console.error('Date edit save failed:', e));
       return updated;
-    }));
+    });
     setDateEditPopup(null);
   };
 
@@ -1217,6 +1232,7 @@ export default function App() {
       clientPhone: row.clientPhone,
     }));
     setLeads((prev) => [...prev, ...newLeads]);
+    upsertLeads(newLeads).catch((e) => console.error('CSV import failed:', e));
     setCsvImportCount(newLeads.length);
     setCsvPreview(null);
     setCsvSelected(new Set());
@@ -1245,7 +1261,13 @@ export default function App() {
         </div>
         <button
           className="bg-transparent border border-[#444] rounded text-gray-400 text-[11px] py-1 px-2.5 cursor-pointer"
-          onClick={() => { if (window.confirm('Reset all data to 105 demo leads? This will erase your current data.')) { localStorage.removeItem(LS_KEY); setLeads(SEED_LEADS); } }}
+          onClick={() => {
+            if (window.confirm('Reset all data to 105 demo leads? This will erase your current data.')) {
+              setLeads(SEED_LEADS);
+              // Clear Supabase and re-seed
+              supabase.from('leads').delete().neq('id', '').then(() => upsertLeads(SEED_LEADS)).catch((e) => console.error('Reset failed:', e));
+            }
+          }}
         >Reset Demo Data</button>
       </header>
 
