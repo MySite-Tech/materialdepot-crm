@@ -2043,7 +2043,6 @@ export default function App() {
                         Edit
                         {(l.remarks || []).length > 0 && <span className="absolute -top-0.5 -right-1 bg-[#EAB308] text-white text-[9px] font-bold rounded-full w-4 h-4 inline-flex items-center justify-center">{l.remarks.length}</span>}
                       </button>
-                      <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-red-500 relative" title="Delete" onClick={() => setDeleteLead(l)}>{'\u2715'}</button>
                     </td>
                   </tr>
                 ))}
@@ -2089,13 +2088,6 @@ export default function App() {
               upsertLead(updatedLead).catch((e) => console.error('Drawer date save failed:', e));
             });
           }}
-        />
-      )}
-      {deleteLead && (
-        <DeleteConfirm
-          leadId={deleteLead.id}
-          onConfirm={() => removeLead(deleteLead.id)}
-          onCancel={() => setDeleteLead(null)}
         />
       )}
 
