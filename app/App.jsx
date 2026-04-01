@@ -1,10 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+'use client';
 
-// ── Font injection ──────────────────────────────────────────────────────────
-const fontLink = document.createElement('link');
-fontLink.rel = 'stylesheet';
-fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap';
-document.head.appendChild(fontLink);
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const SALES_PEOPLE = ['Arjun Mehta', 'Priya Sharma', 'Rahul Verma', 'Sneha Iyer', 'Karan Patel'];
