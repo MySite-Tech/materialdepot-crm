@@ -1190,12 +1190,16 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
       {/* Header */}
-      <header style={S.header}>
+      <header style={{ ...S.header, justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>material</span>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#EAB308', marginLeft: -10 }}>depot</span>
           <span style={{ fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>Sales CRM</span>
         </div>
+        <button
+          style={{ background: 'none', border: '1px solid #444', borderRadius: 4, color: '#9CA3AF', fontSize: 11, padding: '4px 10px', cursor: 'pointer' }}
+          onClick={() => { if (window.confirm('Reset all data to 105 demo leads? This will erase your current data.')) { localStorage.removeItem(LS_KEY); setLeads(SEED_LEADS); } }}
+        >Reset Demo Data</button>
       </header>
 
       <div style={{ padding: '16px 24px' }}>
