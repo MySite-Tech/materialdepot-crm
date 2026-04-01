@@ -313,39 +313,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
   );
 }
 
-// ── Cart Items Editor ───────────────────────────────────────────────────────
-function CartItemsEditor({ items, onChange }) {
-  const update = (idx, field, value) => {
-    const next = items.map((it, i) => i === idx ? { ...it, [field]: field === 'name' ? value : Number(value) || 0 } : it);
-    onChange(next);
-  };
-  const remove = (idx) => onChange(items.filter((_, i) => i !== idx));
-  const add = () => onChange([...items, { name: '', qty: 1, price: 0 }]);
-  const total = items.reduce((s, it) => s + (it.qty || 0) * (it.price || 0), 0);
-
-  return (
-    <div>
-      <div className="flex gap-2 mb-1">
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 flex-[3]">ITEM NAME</span>
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 flex-1 text-center">QTY</span>
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 flex-[1.5] text-right">RATE (\u20B9)</span>
-        <span className="w-7" />
-      </div>
-      {items.map((it, i) => (
-        <div key={i} className="flex gap-2 mb-1.5 items-center">
-          <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans flex-[3]" value={it.name} placeholder="Item name" onChange={(e) => update(i, 'name', e.target.value)} />
-          <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans flex-1 text-center" type="number" min="1" value={it.qty} onChange={(e) => update(i, 'qty', e.target.value)} />
-          <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans flex-[1.5] text-right" type="number" min="0" value={it.price} onChange={(e) => update(i, 'price', e.target.value)} />
-          <button className="bg-transparent border-none text-red-500 text-lg cursor-pointer w-7 leading-none" onClick={() => remove(i)} title="Remove">&times;</button>
-        </div>
-      ))}
-      <div className="flex justify-between items-center mt-2">
-        <span className="text-[#EAB308] text-xs font-semibold cursor-pointer" onClick={add}>+ Add Item</span>
-        <span className="font-mono font-semibold text-[13px]">Subtotal: {fmtINR(total)}</span>
-      </div>
-    </div>
-  );
-}
+// CartItemsEditor removed — cart items are now simple text
 
 // ── Follow-up Remark Prompt ─────────────────────────────────────────────────
 function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
@@ -384,9 +352,9 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark, onImmediateSave }) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
-  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
+  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: Array.isArray(lead.cartItems) ? lead.cartItems : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
     id: genId(), createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
-    cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', lostReason: '', remarks: [],
+    cartValue: 0, cartItems: '', followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
     clientType: '', propertyType: '', architectInvolved: false,
   });
@@ -398,10 +366,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
   const [visitChannel, setVisitChannel] = useState(VISIT_CHANNELS[0]);
   const timelineRef = useRef(null);
 
-  useEffect(() => {
-    const total = form.cartItems.reduce((s, it) => s + (it.qty || 0) * (it.price || 0), 0);
-    if (total > 0) setForm((f) => ({ ...f, cartValue: total }));
-  }, [form.cartItems]);
+  // Cart value is independent — no auto-calculation
 
   useEffect(() => {
     if (timelineRef.current) timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
@@ -473,7 +438,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
       date: todayStr(),
       channel: visitChannel,
       loggedBy: currentUserName,
-      cartSnapshot: form.cartItems.map((it) => ({ name: it.name, qty: it.qty, price: it.price })),
+      cartSnapshot: typeof form.cartItems === 'string' ? form.cartItems : (Array.isArray(form.cartItems) ? form.cartItems.map(i => typeof i === 'string' ? i : i.name).join(', ') : ''),
     };
     setForm((f) => ({ ...f, visits: [...(f.visits || []), visit] }));
   };
@@ -570,12 +535,25 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
                 </div>
               </Field>
               <Field label="CART VALUE">
-                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono" type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
+                <input
+                  className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={form.cartValue ? Number(form.cartValue).toLocaleString('en-IN') : ''}
+                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); set('cartValue', v ? Number(v) : 0); }}
+                />
               </Field>
             </div>
             <div className="mt-2">
               <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">CART ITEMS</label>
-              <CartItemsEditor items={form.cartItems} onChange={(items) => set('cartItems', items)} />
+              <input
+                className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full"
+                placeholder="e.g. Portland Cement, TMT Steel Bars, Tiles"
+                value={Array.isArray(form.cartItems) ? (typeof form.cartItems[0] === 'string' ? form.cartItems.join(', ') : form.cartItems.map(i => i.name || i).join(', ')) : (form.cartItems || '')}
+                onChange={(e) => set('cartItems', e.target.value)}
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Comma-separated list of items</p>
             </div>
             <div className="flex gap-2 mt-4">
               <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onClose}>Cancel</button>
@@ -633,10 +611,10 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
                       <span className="text-xs font-semibold">{fmtDate(v.date)}</span>
                       <span className="text-[11px] bg-[#EAB30818] text-amber-700 px-2 py-0.5 rounded-[10px] font-medium">{v.channel}</span>
                     </div>
-                    {v.cartSnapshot && v.cartSnapshot.length > 0 ? (
+                    {v.cartSnapshot && (typeof v.cartSnapshot === 'string' ? v.cartSnapshot : (Array.isArray(v.cartSnapshot) && v.cartSnapshot.length > 0)) ? (
                       <div className="text-[11px] text-gray-500">
-                        {v.cartSnapshot.map((c, ci) => (
-                          <div key={ci}>{c.name} x{c.qty} @ {fmtINR(c.price)}</div>
+                        {typeof v.cartSnapshot === 'string' ? v.cartSnapshot : v.cartSnapshot.map((c, ci) => (
+                          <div key={ci}>{typeof c === 'string' ? c : `${c.name} x${c.qty}`}</div>
                         ))}
                       </div>
                     ) : (
@@ -1279,7 +1257,8 @@ export default function App() {
       const q = search.toLowerCase();
       const matchId = l.id.toLowerCase().includes(q);
       const matchPerson = l.assignedTo.toLowerCase().includes(q);
-      const matchItems = (l.cartItems || []).some((it) => it.name.toLowerCase().includes(q));
+      const cartStr = typeof l.cartItems === 'string' ? l.cartItems : Array.isArray(l.cartItems) ? l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(' ') : '';
+      const matchItems = cartStr.toLowerCase().includes(q);
       const matchClient = (l.clientName || '').toLowerCase().includes(q);
       const matchPhone = (l.clientPhone || '').includes(q);
       if (!matchId && !matchPerson && !matchItems && !matchClient && !matchPhone) return false;
@@ -1427,8 +1406,8 @@ export default function App() {
   const downloadCsvTemplate = () => {
     const rows = [
       CSV_HEADERS.join(','),
-      'MD-ABC123,Vikram Rao,9876543210,15/03/2026,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,10/04/2026,20/04/2026,Client requested bulk quote|15/03/2026|Arjun Mehta,15/03/2026|Website|Portland Cement 50kg:100:1250;18/03/2026|JP Nagar Centre|,Home Owner,Apartment,yes',
-      'MD-DEF456,Anita Deshmukh,9845012345,10/03/2026,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,300000,05/04/2026,,,,Commercial Owner,Commercial,no',
+      '"MD-ABC123",Vikram Rao,9876543210,15/03/2026,Arjun Mehta,JP Nagar,Quote Approval Pending,,"Portland Cement 50kg, Binding Wire, Sand","1,65,000",10/04/2026,20/04/2026,Client requested bulk quote|15/03/2026|Arjun Mehta,15/03/2026|Website;18/03/2026|JP Nagar Centre,Home Owner,Apartment,yes',
+      '"MD-DEF456",Anita Deshmukh,9845012345,10/03/2026,Priya Sharma,Whitefield,Order Lost,Pricing Issue,"TMT Steel Bars, Cement","3,00,000",05/04/2026,,,,Commercial Owner,Commercial,no',
     ];
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1514,26 +1493,12 @@ export default function App() {
           if (lostReason) errors.push('Row ' + rowNum + ': Lost Reason should be empty when Status is not "Order Lost"');
         }
 
-        // Parse cart items
-        let cartItems = [];
-        if (cartItemsStr) {
-          const parts = cartItemsStr.split(';');
-          for (const part of parts) {
-            if (!part.trim()) continue;
-            const segs = part.split(':');
-            if (segs.length !== 3) { errors.push('Row ' + rowNum + ': Cart item "' + part + '" must be in format ItemName:Qty:Price'); continue; }
-            const [name, qtyStr, priceStr] = segs;
-            const qty = Number(qtyStr);
-            const price = Number(priceStr);
-            if (!name.trim()) { errors.push('Row ' + rowNum + ': Cart item name cannot be empty'); continue; }
-            if (isNaN(qty) || qty <= 0) { errors.push('Row ' + rowNum + ': Cart item qty "' + qtyStr + '" must be a positive number'); continue; }
-            if (isNaN(price) || price < 0) { errors.push('Row ' + rowNum + ': Cart item price "' + priceStr + '" must be a non-negative number'); continue; }
-            cartItems.push({ name: name.trim(), qty, price });
-          }
-        }
+        // Parse cart items — simple comma or semicolon separated text
+        const cartItems = cartItemsStr ? cartItemsStr.split(/[;,]/).map(s => s.trim()).filter(Boolean).join(', ') : '';
 
-        let cartValue = cartValueStr ? Number(cartValueStr) : cartItems.reduce((s, i) => s + i.qty * i.price, 0);
-        if (cartValueStr && isNaN(Number(cartValueStr))) errors.push('Row ' + rowNum + ': Cart Value must be a number');
+        const cartValueClean = cartValueStr ? cartValueStr.replace(/[^0-9]/g, '') : '';
+        let cartValue = cartValueClean ? Number(cartValueClean) : 0;
+        if (cartValueStr && !cartValueClean && cartValueStr.trim()) errors.push('Row ' + rowNum + ': Cart Value must be a number');
 
         if (followUpDate && !isValidCsvDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be DD/MM/YYYY format');
         if (closureDate && !isValidCsvDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be DD/MM/YYYY format');
@@ -1823,13 +1788,10 @@ export default function App() {
                     {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>}
-                    {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[160px]">
-                      {(l.cartItems || []).slice(0, 2).map((it, i) => (
-                        <div key={i} className="whitespace-nowrap overflow-hidden text-ellipsis">
-                          {it.name} x{it.qty}
-                        </div>
-                      ))}
-                      {(l.cartItems || []).length > 2 && <span className="text-gray-400 text-[11px]">+{l.cartItems.length - 2} more</span>}
+                    {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[200px]">
+                      <span className="whitespace-nowrap overflow-hidden text-ellipsis block">
+                        {typeof l.cartItems === 'string' ? (l.cartItems || '\u2014') : Array.isArray(l.cartItems) ? (l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(', ') || '\u2014') : '\u2014'}
+                      </span>
                     </td>}
                     {isColVisible('followUpDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
                       {l.followUpDate ? (
@@ -2003,7 +1965,7 @@ export default function App() {
                         <td className="px-3 py-2.5 text-[13px] align-middle">{row.branch}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle"><StatusBadge status={row.status} /></td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-[11px] max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap">
-                          {row.cartItems.map((c) => c.name).join('; ') || '\u2014'}
+                          {(typeof row.cartItems === 'string' ? row.cartItems : Array.isArray(row.cartItems) ? row.cartItems.join(', ') : '') || '\u2014'}
                         </td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono text-[11px]">{fmtINR(row.cartValue)}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.remarks.length || '\u2014'}</td>
