@@ -17,6 +17,7 @@
 }
 .rdp-compact .rdp-months {
   display: flex;
+  flex-wrap: nowrap;
   gap: 12px;
 }
 .rdp-compact .rdp-month_caption {
