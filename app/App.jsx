@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb } from '../lib/supabase';
+import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -377,15 +377,16 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 }
 
 // ── Lead Drawer (Edit + Remarks + Visit History in single view) ─────────────
-function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
+function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark }) {
   const isEdit = !!lead;
+  const currentUserName = currentUser ? currentUser.name : '';
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [] } : {
-    id: genId(), createdAt: todayStr(), assignedTo: '', branch: BRANCHES[0], status: STATUSES[0],
+    id: genId(), createdAt: todayStr(), assignedTo: currentUserName, branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
-  const [remarkAuthor, setRemarkAuthor] = useState(lead ? lead.assignedTo : '');
+  const [remarkAuthor, setRemarkAuthor] = useState(currentUserName);
   const [closureDateWarning, setClosureDateWarning] = useState('');
   const [drawerDatePopup, setDrawerDatePopup] = useState(null); // 'followUpDate' | 'closureDate' | null
   const [remarkText, setRemarkText] = useState('');
@@ -410,7 +411,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
       if (isEdit && origFollowUpDate.current && newDate !== origFollowUpDate.current) {
         // Auto-add remark for follow-up change
         const remarkObj = remarkText
-          ? { ts: new Date().toISOString(), author: form.assignedTo, text: 'Follow-up date changed from ' + fmtDate(origFollowUpDate.current) + ' to ' + fmtDate(newDate) + ': ' + remarkText }
+          ? { ts: new Date().toISOString(), author: currentUserName, text: 'Follow-up date changed from ' + fmtDate(origFollowUpDate.current) + ' to ' + fmtDate(newDate) + ': ' + remarkText }
           : null;
         setForm((f) => {
           const updated = { ...f, followUpDate: newDate };
@@ -428,7 +429,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
       }
     } else {
       if (remarkText) {
-        const remarkObj = { ts: new Date().toISOString(), author: form.assignedTo, text: 'Closure date changed' + (form.closureDate ? ' from ' + fmtDate(form.closureDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText };
+        const remarkObj = { ts: new Date().toISOString(), author: currentUserName, text: 'Closure date changed' + (form.closureDate ? ' from ' + fmtDate(form.closureDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText };
         setForm((f) => ({ ...f, closureDate: newDate, remarks: [...(f.remarks || []), remarkObj] }));
       } else {
         set('closureDate', newDate);
@@ -465,6 +466,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
     const visit = {
       date: todayStr(),
       channel: visitChannel,
+      loggedBy: currentUserName,
       cartSnapshot: form.cartItems.map((it) => ({ name: it.name, qty: it.qty, price: it.price })),
     };
     setForm((f) => ({ ...f, visits: [...(f.visits || []), visit] }));
@@ -739,17 +741,109 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
   );
 }
 
+// ── Login Screen ──────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const user = await loginWithCode(code.trim());
+      if (user) {
+        onLogin(user);
+      } else {
+        setError('Invalid code');
+      }
+    } catch {
+      setError('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
+      <header className="h-12 bg-[#1A1A1A] flex items-center px-6">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-white">material</span>
+          <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
+          <span className="text-xs text-gray-400 ml-2">Sales CRM</span>
+        </div>
+      </header>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-[0_4px_12px_rgba(0,0,0,0.08)] w-[360px] p-8">
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <span className="text-lg font-bold text-[#1A1A1A]">material</span>
+              <span className="text-lg font-bold text-[#EAB308] -ml-1.5">depot</span>
+            </div>
+            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Sales CRM Login</p>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Enter your unique code</label>
+            <input
+              className="px-2.5 py-2.5 text-[15px] border border-gray-200 rounded-md outline-none font-mono w-full text-center tracking-[0.3em] focus:border-[#EAB308]"
+              type="text"
+              value={code}
+              onChange={(e) => { setCode(e.target.value); setError(''); }}
+              placeholder="0000"
+              maxLength={10}
+              autoFocus
+            />
+            {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading || !code.trim()}
+              className={`bg-[#EAB308] text-white border-none px-5 py-2.5 rounded-md text-[13px] font-semibold cursor-pointer w-full mt-4 ${loading || !code.trim() ? 'opacity-50' : 'opacity-100'}`}
+            >
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userLoaded, setUserLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('materialdepot_user');
+      if (stored) setCurrentUser(JSON.parse(stored));
+    } catch {}
+    setUserLoaded(true);
+  }, []);
+
+  const handleLogin = (user) => {
+    const userData = { id: user.id, name: user.name, code: user.code, role: user.role };
+    setCurrentUser(userData);
+    localStorage.setItem('materialdepot_user', JSON.stringify(userData));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('materialdepot_user');
+  };
+
   const [leads, setLeads] = useState([]);
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
+    if (!currentUser) return;
     fetchLeads().then((dbLeads) => {
       setLeads(dbLeads);
       setDbReady(true);
     }).catch(() => setDbReady(true));
-  }, []);
+  }, [currentUser]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState([]);
@@ -873,8 +967,13 @@ export default function App() {
   };
 
   const updateStatus = (id, newStatus, lostReason) => {
+    const userName = currentUser ? currentUser.name : '';
     setLeads((prev) => {
-      const updated = prev.map((l) => l.id === id ? { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '' } : l);
+      const updated = prev.map((l) => {
+        if (l.id !== id) return l;
+        const remark = { ts: new Date().toISOString(), author: userName, text: 'Status changed from ' + l.status + ' to ' + newStatus + (lostReason ? ' (' + lostReason + ')' : '') };
+        return { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '', remarks: [...(l.remarks || []), remark] };
+      });
       const lead = updated.find((l) => l.id === id);
       if (lead) upsertLead(lead).catch((e) => console.error('Status update failed:', e));
       return updated;
@@ -893,6 +992,7 @@ export default function App() {
   const handleDateEditSave = (newDate, remarkText) => {
     if (!dateEditPopup) return;
     const { leadId, field } = dateEditPopup;
+    const userName = currentUser ? currentUser.name : '';
     setLeads((prev) => {
       const updated = prev.map((l) => {
         if (l.id !== leadId) return l;
@@ -908,10 +1008,10 @@ export default function App() {
           const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
           const oldDate = l[field];
           const text = label + ' date changed' + (oldDate ? ' from ' + fmtDate(oldDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText;
-          remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text });
+          remarks.push({ ts: new Date().toISOString(), author: userName, text });
         }
         if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
-          remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text: 'Closure date auto-updated from ' + fmtDate(l.closureDate) + ' to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
+          remarks.push({ ts: new Date().toISOString(), author: userName, text: 'Closure date auto-updated from ' + fmtDate(l.closureDate) + ' to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
         }
         u.remarks = remarks;
         return u;
@@ -1118,6 +1218,9 @@ export default function App() {
   // Column count for colSpan: Lead ID, Client Name, Client Phone, First Visit, Latest Visit, Assigned To, Branch, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 14
   const COL_COUNT = 14;
 
+  if (!userLoaded) return null;
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
+
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       {/* Header */}
@@ -1126,6 +1229,15 @@ export default function App() {
           <span className="text-sm font-bold text-white">material</span>
           <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
           <span className="text-xs text-gray-400 ml-2">Sales CRM</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-300">{currentUser.name}</span>
+          <button
+            className="bg-transparent border border-gray-600 text-gray-400 text-[11px] px-2.5 py-1 rounded cursor-pointer hover:text-white hover:border-gray-400"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
         </div>
       </header>
 
@@ -1338,6 +1450,7 @@ export default function App() {
       {(showAddDrawer || drawerLead) && (
         <LeadDrawer
           lead={drawerLead}
+          currentUser={currentUser}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, remark) : undefined}
