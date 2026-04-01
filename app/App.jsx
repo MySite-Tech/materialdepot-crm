@@ -416,6 +416,10 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
   };
 
   const handleSave = () => {
+    if (form.clientPhone && !/^\d{10}$/.test(form.clientPhone)) {
+      alert('Phone number must be exactly 10 digits.');
+      return;
+    }
     if (form.status === 'Order Lost' && !form.lostReason) {
       alert('Please select a reason for marking this lead as Order Lost.');
       return;
@@ -482,7 +486,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
                 <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientName || ''} placeholder="Client name" onChange={(e) => set('clientName', e.target.value)} />
               </Field>
               <Field label="CLIENT PHONE">
-                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientPhone || ''} placeholder="10-digit phone" onChange={(e) => set('clientPhone', e.target.value)} />
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono" value={form.clientPhone || ''} placeholder="10-digit phone" maxLength={10} inputMode="numeric" onChange={(e) => set('clientPhone', e.target.value.replace(/[^0-9]/g, ''))} />
               </Field>
               <Field label="ASSIGNED TO">
                 <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} placeholder="Enter name" onChange={(e) => set('assignedTo', e.target.value)} />
