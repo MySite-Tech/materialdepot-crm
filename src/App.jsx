@@ -550,6 +550,10 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
       alert('Please select a reason for marking this lead as Order Lost.');
       return;
     }
+    if (form.followUpDate && form.closureDate && form.closureDate < form.followUpDate) {
+      alert('Closure date cannot be earlier than follow-up date.');
+      return;
+    }
     onSave(form);
   };
 
@@ -740,6 +744,75 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
   );
 }
 
+// ── Date Edit Popup (Follow-up / Closure) ──────────────────────────────────
+function DateEditPopup({ field, currentDate, followUpDate, closureDate, assignedTo, onSave, onCancel }) {
+  const label = field === 'followUpDate' ? 'Follow-up Date' : 'Closure Date';
+  const [newDate, setNewDate] = useState(currentDate || '');
+  const [remark, setRemark] = useState('');
+  const [warning, setWarning] = useState('');
+
+  const validate = (date) => {
+    if (field === 'closureDate' && followUpDate && date && date < followUpDate) {
+      return 'Closure date cannot be earlier than follow-up date (' + fmtDate(followUpDate) + ')';
+    }
+    if (field === 'followUpDate' && closureDate && date && closureDate < date) {
+      return 'Follow-up date cannot be later than closure date (' + fmtDate(closureDate) + ')';
+    }
+    return '';
+  };
+
+  const handleDateChange = (d) => {
+    setNewDate(d);
+    setWarning(validate(d));
+  };
+
+  const handleSave = () => {
+    const w = validate(newDate);
+    if (w) { setWarning(w); return; }
+    onSave(newDate, remark.trim());
+  };
+
+  return (
+    <div style={S.overlay} onClick={onCancel}>
+      <div style={{ ...S.modalBox, maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <div style={S.modalHeader}>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Update {label}</span>
+          <button style={S.closeBtn} onClick={onCancel}>&times;</button>
+        </div>
+        <div style={{ padding: 20 }}>
+          {currentDate && (
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10 }}>
+              Current: <span style={{ fontWeight: 600, color: '#374151' }}>{fmtDate(currentDate)}</span>
+            </div>
+          )}
+          <label style={S.fieldLabel}>NEW DATE</label>
+          <input
+            style={{ ...S.input, width: '100%', marginBottom: 4, borderColor: warning ? '#EF4444' : undefined }}
+            type="date"
+            value={newDate}
+            onChange={(e) => handleDateChange(e.target.value)}
+            autoFocus
+          />
+          {warning && <div style={{ fontSize: 11, color: '#EF4444', marginBottom: 8 }}>{warning}</div>}
+          <div style={{ marginTop: 8 }}>
+            <label style={S.fieldLabel}>REMARK (OPTIONAL)</label>
+            <textarea
+              style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              placeholder={'Reason for changing ' + label.toLowerCase() + '...'}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
+            <button style={{ ...S.primaryBtn, flex: 1, opacity: warning ? 0.5 : 1 }} disabled={!!warning} onClick={handleSave}>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Delete Confirmation ─────────────────────────────────────────────────────
 function DeleteConfirm({ leadId, onConfirm, onCancel }) {
   return (
@@ -787,6 +860,7 @@ export default function App() {
   const [drawerLead, setDrawerLead] = useState(null);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [deleteLead, setDeleteLead] = useState(null);
+  const [dateEditPopup, setDateEditPopup] = useState(null);
   const [csvPreview, setCsvPreview] = useState(null);
   const [csvErrors, setCsvErrors] = useState(null);
   const [csvSelected, setCsvSelected] = useState(new Set());
@@ -899,6 +973,23 @@ export default function App() {
 
   const addRemark = (leadId, remark) => {
     setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
+  };
+
+  const handleDateEditSave = (newDate, remarkText) => {
+    if (!dateEditPopup) return;
+    const { leadId, field } = dateEditPopup;
+    setLeads((prev) => prev.map((l) => {
+      if (l.id !== leadId) return l;
+      const updated = { ...l, [field]: newDate };
+      if (remarkText) {
+        const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
+        const oldDate = l[field];
+        const text = label + ' date changed' + (oldDate ? ' from ' + fmtDate(oldDate) : '') + ' to ' + fmtDate(newDate) + (remarkText ? ': ' + remarkText : '');
+        updated.remarks = [...(l.remarks || []), { ts: new Date().toISOString(), author: l.assignedTo, text }];
+      }
+      return updated;
+    }));
+    setDateEditPopup(null);
   };
 
   // ── CSV helpers ──────────────────────────────────────────────────────────
@@ -1274,14 +1365,18 @@ export default function App() {
                       ))}
                       {(l.cartItems || []).length > 2 && <span style={{ color: '#9CA3AF', fontSize: 11 }}>+{l.cartItems.length - 2} more</span>}
                     </td>
-                    <td style={S.td}>
+                    <td style={{ ...S.td, cursor: 'pointer' }} onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
                       {l.followUpDate ? (
-                        <span style={{ fontWeight: isOverdue(l) ? 700 : 400, color: isOverdue(l) ? '#EF4444' : '#374151', fontSize: 12 }}>
+                        <span style={{ fontWeight: isOverdue(l) ? 700 : 400, color: isOverdue(l) ? '#EF4444' : '#374151', fontSize: 12, borderBottom: '1px dashed #D1D5DB' }}>
                           {isOverdue(l) && '\u26A0 '}{fmtDate(l.followUpDate)}
                         </span>
-                      ) : '\u2014'}
+                      ) : <span style={{ color: '#9CA3AF', fontSize: 11, borderBottom: '1px dashed #D1D5DB' }}>+ Set date</span>}
                     </td>
-                    <td style={{ ...S.td, fontSize: 12, color: '#6B7280' }}>{fmtDate(l.closureDate)}</td>
+                    <td style={{ ...S.td, cursor: 'pointer' }} onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
+                      {l.closureDate ? (
+                        <span style={{ fontSize: 12, color: '#6B7280', borderBottom: '1px dashed #D1D5DB' }}>{fmtDate(l.closureDate)}</span>
+                      ) : <span style={{ color: '#9CA3AF', fontSize: 11, borderBottom: '1px dashed #D1D5DB' }}>+ Set date</span>}
+                    </td>
                     <td style={{ ...S.td, textAlign: 'center' }}>
                       {(l.visits || []).length > 0 ? (
                         <span style={S.visitBadge}>{(l.visits || []).length}</span>
@@ -1335,6 +1430,23 @@ export default function App() {
           onCancel={() => setDeleteLead(null)}
         />
       )}
+
+      {/* Date Edit Popup */}
+      {dateEditPopup && (() => {
+        const lead = leads.find((l) => l.id === dateEditPopup.leadId);
+        if (!lead) return null;
+        return (
+          <DateEditPopup
+            field={dateEditPopup.field}
+            currentDate={lead[dateEditPopup.field]}
+            followUpDate={lead.followUpDate}
+            closureDate={lead.closureDate}
+            assignedTo={lead.assignedTo}
+            onSave={handleDateEditSave}
+            onCancel={() => setDateEditPopup(null)}
+          />
+        );
+      })()}
 
       {/* CSV Error Modal */}
       {csvErrors && (
