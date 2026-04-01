@@ -513,6 +513,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [fuPrompt, setFuPrompt] = useState(null);
   const [remarkAuthor, setRemarkAuthor] = useState(lead ? lead.assignedTo : SALES_PEOPLE[0]);
+  const [closureDateWarning, setClosureDateWarning] = useState('');
   const [remarkText, setRemarkText] = useState('');
   const [visitChannel, setVisitChannel] = useState(VISIT_CHANNELS[0]);
   const timelineRef = useRef(null);
@@ -542,9 +543,11 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
 
   const handleClosureDateChange = (newDate) => {
     if (newDate && form.followUpDate && newDate < form.followUpDate) {
-      alert('Closure date cannot be earlier than follow-up date (' + fmtDate(form.followUpDate) + ')');
+      setClosureDateWarning('Closure date cannot be earlier than follow-up date (' + fmtDate(form.followUpDate) + ')');
+      setTimeout(() => setClosureDateWarning(''), 4000);
       return;
     }
+    setClosureDateWarning('');
     set('closureDate', newDate);
   };
 
@@ -565,7 +568,8 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
       return;
     }
     if (form.followUpDate && form.closureDate && form.closureDate < form.followUpDate) {
-      alert('Closure date cannot be earlier than follow-up date.');
+      setClosureDateWarning('Closure date cannot be earlier than follow-up date (' + fmtDate(form.followUpDate) + ')');
+      setTimeout(() => setClosureDateWarning(''), 4000);
       return;
     }
     onSave(form);
@@ -654,7 +658,8 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 <input style={{ ...S.input, width: '100%' }} type="date" value={form.followUpDate} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleFollowUpChange(e.target.value)} />
               </Field>
               <Field label="CLOSURE EXPECTED">
-                <input style={{ ...S.input, width: '100%' }} type="date" value={form.closureDate} min={form.followUpDate || undefined} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleClosureDateChange(e.target.value)} />
+                <input style={{ ...S.input, width: '100%', borderColor: closureDateWarning ? '#EF4444' : undefined }} type="date" value={form.closureDate} min={form.followUpDate || undefined} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleClosureDateChange(e.target.value)} />
+                {closureDateWarning && <div style={{ fontSize: 11, color: '#EF4444', marginTop: 2 }}>{closureDateWarning}</div>}
               </Field>
               <Field label="CART VALUE">
                 <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace" }} type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
