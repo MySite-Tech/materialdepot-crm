@@ -787,6 +787,11 @@ export default function App() {
   const [drawerLead, setDrawerLead] = useState(null);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [deleteLead, setDeleteLead] = useState(null);
+  const [csvPreview, setCsvPreview] = useState(null);
+  const [csvErrors, setCsvErrors] = useState(null);
+  const [csvSelected, setCsvSelected] = useState(new Set());
+  const [csvImportCount, setCsvImportCount] = useState(null);
+  const csvFileRef = useRef(null);
 
   // Persist to localStorage
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(leads)); }, [leads]);
@@ -894,6 +899,147 @@ export default function App() {
 
   const addRemark = (leadId, remark) => {
     setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
+  };
+
+  // ── CSV helpers ──────────────────────────────────────────────────────────
+  const CSV_HEADERS = ['Client Name','Client Phone','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date'];
+
+  const downloadCsvTemplate = () => {
+    const rows = [
+      CSV_HEADERS.join(','),
+      'Vikram Rao,9876543210,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,2026-04-10,2026-04-20',
+      'Anita Deshmukh,9845012345,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,,2026-04-05,',
+    ];
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'materialdepot_crm_template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseCsvLine = (line) => {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && i + 1 < line.length && line[i + 1] === '"') {
+          current += '"'; i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') { inQuotes = true; }
+        else if (ch === ',') { fields.push(current.trim()); current = ''; }
+        else { current += ch; }
+      }
+    }
+    fields.push(current.trim());
+    return fields;
+  };
+
+  const isValidDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + 'T00:00:00').getTime());
+
+  const handleCsvFile = (e) => {
+    const file = e.target.files?.[0];
+    if (csvFileRef.current) csvFileRef.current.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      let text = ev.target.result;
+      // Strip BOM
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+      if (lines.length === 0) { setCsvErrors(['File is empty.']); return; }
+      // Validate header
+      const headerFields = parseCsvLine(lines[0]);
+      const headerMatch = CSV_HEADERS.every((h, i) => (headerFields[i] || '').trim().toLowerCase() === h.toLowerCase());
+      if (!headerMatch) { setCsvErrors(['Header row does not match expected format. Expected: ' + CSV_HEADERS.join(', ')]); return; }
+      if (lines.length < 2) { setCsvErrors(['File contains only headers and no data rows.']); return; }
+
+      const errors = [];
+      const parsed = [];
+
+      for (let r = 1; r < lines.length; r++) {
+        const rowNum = r + 1;
+        const fields = parseCsvLine(lines[r]);
+        if (fields.length < 10) { errors.push('Row ' + rowNum + ': Expected 10 columns, got ' + fields.length); continue; }
+
+        const [clientName, clientPhone, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate] = fields;
+
+        if (!clientName) errors.push('Row ' + rowNum + ': Client Name is required');
+        if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
+        if (!SALES_PEOPLE.includes(assignedTo)) errors.push('Row ' + rowNum + ': Assigned To "' + assignedTo + '" is not a valid salesperson');
+        if (!BRANCHES.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
+        if (!STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
+
+        if (status === 'Order Lost') {
+          if (!ORDER_LOST_REASONS.includes(lostReason)) errors.push('Row ' + rowNum + ': Lost Reason "' + lostReason + '" is required and must be valid when Status is "Order Lost"');
+        } else {
+          if (lostReason) errors.push('Row ' + rowNum + ': Lost Reason should be empty when Status is not "Order Lost"');
+        }
+
+        // Parse cart items
+        let cartItems = [];
+        if (cartItemsStr) {
+          const parts = cartItemsStr.split(';');
+          for (const part of parts) {
+            const segs = part.split(':');
+            if (segs.length !== 3) { errors.push('Row ' + rowNum + ': Cart item "' + part + '" must be in format ItemName:Qty:Price'); continue; }
+            const [name, qtyStr, priceStr] = segs;
+            const qty = Number(qtyStr);
+            const price = Number(priceStr);
+            if (!name.trim()) { errors.push('Row ' + rowNum + ': Cart item name cannot be empty'); continue; }
+            if (isNaN(qty) || qty <= 0) { errors.push('Row ' + rowNum + ': Cart item qty "' + qtyStr + '" must be a positive number'); continue; }
+            if (isNaN(price) || price < 0) { errors.push('Row ' + rowNum + ': Cart item price "' + priceStr + '" must be a non-negative number'); continue; }
+            cartItems.push({ name: name.trim(), qty, price });
+          }
+        }
+
+        let cartValue = cartValueStr ? Number(cartValueStr) : cartItems.reduce((s, i) => s + i.qty * i.price, 0);
+        if (cartValueStr && isNaN(Number(cartValueStr))) errors.push('Row ' + rowNum + ': Cart Value must be a number');
+
+        if (followUpDate && !isValidDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be YYYY-MM-DD format');
+        if (closureDate && !isValidDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be YYYY-MM-DD format');
+
+        parsed.push({ clientName, clientPhone, assignedTo, branch, status, lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '' });
+      }
+
+      if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
+      else {
+        setCsvPreview(parsed);
+        setCsvSelected(new Set(parsed.map((_, i) => i)));
+        setCsvErrors(null);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const importCsvLeads = () => {
+    const newLeads = csvPreview.filter((_, i) => csvSelected.has(i)).map((row) => ({
+      id: genId(),
+      createdAt: todayStr(),
+      assignedTo: row.assignedTo,
+      branch: row.branch,
+      status: row.status,
+      lostReason: row.lostReason,
+      cartValue: row.cartValue,
+      cartItems: row.cartItems,
+      followUpDate: row.followUpDate,
+      closureDate: row.closureDate,
+      remarks: [],
+      visits: [],
+      clientName: row.clientName,
+      clientPhone: row.clientPhone,
+    }));
+    setLeads((prev) => [...prev, ...newLeads]);
+    setCsvImportCount(newLeads.length);
+    setCsvPreview(null);
+    setCsvSelected(new Set());
+    setTimeout(() => setCsvImportCount(null), 3000);
   };
 
   const today = todayStr();
@@ -1022,7 +1168,12 @@ export default function App() {
             {cartValueGt !== '' && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setCartValueGt(''); }}>Clear</button>}
             <span style={{ fontSize: 12, color: '#6B7280' }}>{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
-          <button style={S.primaryBtn} onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button style={S.cancelBtn} onClick={downloadCsvTemplate}>Download Template</button>
+            <button style={S.cancelBtn} onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
+            <input ref={csvFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvFile} />
+            <button style={S.primaryBtn} onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
+          </div>
         </div>
 
         {/* Table */}
@@ -1140,6 +1291,110 @@ export default function App() {
           onConfirm={() => removeLead(deleteLead.id)}
           onCancel={() => setDeleteLead(null)}
         />
+      )}
+
+      {/* CSV Error Modal */}
+      {csvErrors && (
+        <div style={S.overlay}>
+          <div style={{ ...S.modalBox, maxWidth: 540 }}>
+            <div style={S.modalHeader}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>CSV Validation Errors</span>
+              <button style={S.closeBtn} onClick={() => setCsvErrors(null)}>&times;</button>
+            </div>
+            <div style={{ padding: 20, maxHeight: 400, overflowY: 'auto' }}>
+              <p style={{ fontSize: 13, marginBottom: 12, color: '#EF4444', fontWeight: 600 }}>
+                {csvErrors.length} error{csvErrors.length !== 1 ? 's' : ''} found. No leads were imported.
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, lineHeight: 1.8, color: '#374151' }}>
+                {csvErrors.map((err, i) => <li key={i}>{err}</li>)}
+              </ul>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #E5E7EB', textAlign: 'right' }}>
+              <button style={S.cancelBtn} onClick={() => setCsvErrors(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Preview Modal */}
+      {csvPreview && (
+        <div style={S.overlay}>
+          <div style={{ ...S.modalBox, maxWidth: 900 }}>
+            <div style={S.modalHeader}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Review CSV Import</span>
+              <button style={S.closeBtn} onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>&times;</button>
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              <p style={{ fontSize: 13, marginBottom: 12, color: '#374151' }}>
+                <strong>{csvPreview.length}</strong> lead{csvPreview.length !== 1 ? 's' : ''} ready to import
+              </p>
+              <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#FAFAFA', position: 'sticky', top: 0 }}>
+                      <th style={{ ...S.th, width: 32 }}>
+                        <input type="checkbox" checked={csvSelected.size === csvPreview.length} onChange={(e) => {
+                          if (e.target.checked) setCsvSelected(new Set(csvPreview.map((_, i) => i)));
+                          else setCsvSelected(new Set());
+                        }} />
+                      </th>
+                      <th style={S.th}>Row#</th>
+                      <th style={S.th}>Client Name</th>
+                      <th style={S.th}>Phone</th>
+                      <th style={S.th}>Assigned To</th>
+                      <th style={S.th}>Branch</th>
+                      <th style={S.th}>Status</th>
+                      <th style={S.th}>Cart Items</th>
+                      <th style={{ ...S.th, textAlign: 'right' }}>Cart Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvPreview.map((row, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #F3F4F6', background: csvSelected.has(i) ? '#fff' : '#F9FAFB' }}>
+                        <td style={{ ...S.td, width: 32 }}>
+                          <input type="checkbox" checked={csvSelected.has(i)} onChange={() => {
+                            setCsvSelected((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(i)) next.delete(i); else next.add(i);
+                              return next;
+                            });
+                          }} />
+                        </td>
+                        <td style={S.td}>{i + 2}</td>
+                        <td style={S.td}>{row.clientName}</td>
+                        <td style={{ ...S.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{row.clientPhone}</td>
+                        <td style={S.td}>{row.assignedTo}</td>
+                        <td style={S.td}>{row.branch}</td>
+                        <td style={S.td}><StatusBadge status={row.status} /></td>
+                        <td style={{ ...S.td, fontSize: 11, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {row.cartItems.map((c) => c.name).join('; ') || '\u2014'}
+                        </td>
+                        <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{fmtINR(row.cartValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #E5E7EB', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button style={S.cancelBtn} onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>Cancel</button>
+              <button style={{ ...S.primaryBtn, opacity: csvSelected.size === 0 ? 0.5 : 1 }} disabled={csvSelected.size === 0} onClick={importCsvLeads}>
+                Import Selected ({csvSelected.size})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV import confirmation toast */}
+      {csvImportCount != null && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1A1A1A', color: '#fff', padding: '10px 24px', borderRadius: 8,
+          fontSize: 13, fontWeight: 600, zIndex: 1100, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        }}>
+          Successfully imported {csvImportCount} lead{csvImportCount !== 1 ? 's' : ''}
+        </div>
       )}
     </div>
   );
