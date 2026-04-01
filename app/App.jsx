@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch } from '../lib/supabase';
+import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -764,6 +764,7 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
 // ── Login Screen ──────────────────────────────────────────────────────────
 // ── Admin Dashboard ────────────────────────────────────────────────────────
 function AdminDashboard({ onBack }) {
+  const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [branchList, setBranchList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -775,6 +776,8 @@ function AdminDashboard({ onBack }) {
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
   const [editRole, setEditRole] = useState('');
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchUsers(), fetchBranches().catch(() => [])]).then(([userData, branchData]) => {
@@ -783,6 +786,15 @@ function AdminDashboard({ onBack }) {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  const loadLogs = () => {
+    setLogsLoading(true);
+    fetchActivityLogs(200).then((data) => { setLogs(data); setLogsLoading(false); }).catch(() => setLogsLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === 'logs') loadLogs();
+  }, [activeTab]);
 
   const handleAdd = async () => {
     if (!newName.trim() || !newCode.trim()) { setError('Name and code are required'); return; }
@@ -824,6 +836,20 @@ function AdminDashboard({ onBack }) {
     }
   };
 
+  const getActionBadge = (action) => {
+    if (action.includes('created') || action === 'csv_imported') return 'bg-green-100 text-green-700';
+    if (action.includes('updated') || action.includes('remark')) return 'bg-blue-100 text-blue-700';
+    if (action.includes('status') || action.includes('date')) return 'bg-amber-100 text-amber-700';
+    if (action.includes('deleted')) return 'bg-red-100 text-red-700';
+    return 'bg-gray-100 text-gray-600';
+  };
+
+  const tabs = [
+    { key: 'users', label: 'Users' },
+    { key: 'branches', label: 'Branches' },
+    { key: 'logs', label: 'Logs' },
+  ];
+
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
       <header className="h-12 bg-[#1A1A1A] flex items-center px-6 justify-between">
@@ -835,98 +861,174 @@ function AdminDashboard({ onBack }) {
         <button className="bg-transparent border border-gray-600 text-gray-400 text-[11px] px-2.5 py-1 rounded cursor-pointer hover:text-white hover:border-gray-400" onClick={onBack}>Back to Login</button>
       </header>
 
-      <div className="max-w-3xl mx-auto w-full px-6 py-8">
-        <h1 className="text-lg font-bold text-gray-800 mb-6">User Management</h1>
-
-        {/* Add User Form */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Add New User</h2>
-          <div className="flex gap-3 items-end flex-wrap">
-            <div className="flex-1 min-w-[150px]">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Name</label>
-              <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name" />
-            </div>
-            <div className="w-[100px]">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Code</label>
-              <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-full text-center" value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="0000" maxLength={10} />
-            </div>
-            <div className="w-[130px]">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
-              <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-                <option value="sales">Sales</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
-                <option value="superadmin">Super Admin</option>
-              </select>
-            </div>
-            <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={handleAdd}>Add User</button>
-          </div>
-          {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+      {/* Tab Bar */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-4xl mx-auto w-full px-6 flex gap-0">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-3 text-[13px] font-semibold border-b-2 cursor-pointer bg-transparent ${activeTab === tab.key ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {/* Users Table */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-[#FAFAFA]">
-                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Name</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Code</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Role</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
-                    {editId === u.id ? (
-                      <>
-                        <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editName} onChange={(e) => setEditName(e.target.value)} /></td>
-                        <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editCode} onChange={(e) => setEditCode(e.target.value)} /></td>
-                        <td className="px-4 py-2">
-                          <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
-                            <option value="sales">Sales</option>
-                            <option value="manager">Manager</option>
-                            <option value="admin">Admin</option>
-                            <option value="superadmin">Super Admin</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-2 text-center whitespace-nowrap">
-                          <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveEdit}>Save</button>
-                          <button className="text-gray-400 text-xs cursor-pointer bg-transparent border-none" onClick={() => setEditId(null)}>Cancel</button>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-4 py-2.5 text-[13px] font-medium">{u.name}</td>
-                        <td className="px-4 py-2.5 text-[13px] font-mono">{u.code}</td>
-                        <td className="px-4 py-2.5">
-                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                          <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
-                          <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDelete(u.id, u.name)}>Delete</button>
-                        </td>
-                      </>
+      <div className="max-w-4xl mx-auto w-full px-6 py-8">
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <>
+            <h1 className="text-lg font-bold text-gray-800 mb-6">User Management</h1>
+
+            {/* Add User Form */}
+            <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Add New User</h2>
+              <div className="flex gap-3 items-end flex-wrap">
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Name</label>
+                  <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name" />
+                </div>
+                <div className="w-[100px]">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Code</label>
+                  <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-full text-center" value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="0000" maxLength={10} />
+                </div>
+                <div className="w-[130px]">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
+                  <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                    <option value="sales">Sales</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                    <option value="superadmin">Super Admin</option>
+                  </select>
+                </div>
+                <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={handleAdd}>Add User</button>
+              </div>
+              {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+            </div>
+
+            {/* Users Table */}
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {loading ? (
+                <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
+              ) : (
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-[#FAFAFA]">
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Name</th>
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Code</th>
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Role</th>
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
+                        {editId === u.id ? (
+                          <>
+                            <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editName} onChange={(e) => setEditName(e.target.value)} /></td>
+                            <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editCode} onChange={(e) => setEditCode(e.target.value)} /></td>
+                            <td className="px-4 py-2">
+                              <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                                <option value="sales">Sales</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                                <option value="superadmin">Super Admin</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-2 text-center whitespace-nowrap">
+                              <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveEdit}>Save</button>
+                              <button className="text-gray-400 text-xs cursor-pointer bg-transparent border-none" onClick={() => setEditId(null)}>Cancel</button>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-2.5 text-[13px] font-medium">{u.name}</td>
+                            <td className="px-4 py-2.5 text-[13px] font-mono">{u.code}</td>
+                            <td className="px-4 py-2.5">
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                              <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
+                              <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDelete(u.id, u.name)}>Delete</button>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                    {users.length === 0 && (
+                      <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
                     )}
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <p className="text-xs text-gray-400 mt-4 text-center">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-4 text-center">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+          </>
+        )}
 
-        {/* Branch Management */}
-        <h1 className="text-lg font-bold text-gray-800 mt-10 mb-6">Branch Management</h1>
-        <BranchManager branches={branchList} setBranches={setBranchList} />
+        {/* Branches Tab */}
+        {activeTab === 'branches' && (
+          <>
+            <h1 className="text-lg font-bold text-gray-800 mb-6">Branch Management</h1>
+            <BranchManager branches={branchList} setBranches={setBranchList} />
+          </>
+        )}
+
+        {/* Logs Tab */}
+        {activeTab === 'logs' && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-lg font-bold text-gray-800">Activity Logs</h1>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">{logs.length} log entries</span>
+                <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:border-gray-300" onClick={loadLogs}>Refresh</button>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {logsLoading ? (
+                <div className="p-8 text-center text-gray-400 text-sm">Loading logs...</div>
+              ) : (
+                <div className="max-h-[600px] overflow-y-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-[#FAFAFA] sticky top-0">
+                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Time</th>
+                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">User</th>
+                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Action</th>
+                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Entity</th>
+                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map((log) => (
+                        <tr key={log.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
+                          <td className="px-4 py-2.5 text-[12px] text-gray-500 whitespace-nowrap">{fmtTimestamp(log.created_at)}</td>
+                          <td className="px-4 py-2.5 text-[13px] font-medium">{log.user_name}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`inline-block px-2 py-0.5 rounded-xl text-[11px] font-semibold ${getActionBadge(log.action)}`}>
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-[12px] text-gray-500">
+                            {log.entity_type}{log.entity_id ? ` / ${log.entity_id}` : ''}
+                          </td>
+                          <td className="px-4 py-2.5 text-[12px] text-gray-500 max-w-[250px] truncate">{log.details || '\u2014'}</td>
+                        </tr>
+                      ))}
+                      {logs.length === 0 && (
+                        <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm">No log entries found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1147,9 +1249,13 @@ export default function App() {
     const userData = { id: user.id, name: user.name, code: user.code, role: user.role };
     setCurrentUser(userData);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
+    logActivity({ userId: user.id, userName: user.name, action: 'user_login', entityType: 'user', entityId: user.id, details: user.name + ' logged in' }).catch(console.error);
   };
 
   const handleLogout = () => {
+    if (currentUser) {
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'user_logout', entityType: 'user', entityId: currentUser.id, details: currentUser.name + ' logged out' }).catch(console.error);
+    }
     setCurrentUser(null);
     localStorage.removeItem('materialdepot_user');
   };
@@ -1327,24 +1433,38 @@ export default function App() {
 
   // Lead CRUD — optimistic state update + async Supabase persist
   const saveLead = (formData) => {
+    const isNew = !leads.some((l) => l.id === formData.id);
     setLeads((prev) => {
       const idx = prev.findIndex((l) => l.id === formData.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = formData; return next; }
       return [...prev, formData];
     });
     upsertLead(formData).catch((e) => console.error('Save failed:', e));
+    if (currentUser) {
+      if (isNew) {
+        logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'created_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
+      } else {
+        logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'updated_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
+      }
+    }
     setDrawerLead(null);
     setShowAddDrawer(false);
   };
 
   const removeLead = (id) => {
+    const lead = leads.find((l) => l.id === id);
     setLeads((prev) => prev.filter((l) => l.id !== id));
     deleteLeadDb(id).catch((e) => console.error('Delete failed:', e));
+    if (currentUser) {
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'deleted_lead', entityType: 'lead', entityId: id, details: lead ? lead.clientName : '' }).catch(console.error);
+    }
     setDeleteLead(null);
   };
 
   const updateStatus = (id, newStatus, lostReason) => {
     const userName = currentUser ? currentUser.name : '';
+    const oldLead = leads.find((l) => l.id === id);
+    const oldStatus = oldLead ? oldLead.status : '';
     setLeads((prev) => {
       const updated = prev.map((l) => {
         if (l.id !== id) return l;
@@ -1355,6 +1475,9 @@ export default function App() {
       if (lead) upsertLead(lead).catch((e) => console.error('Status update failed:', e));
       return updated;
     });
+    if (currentUser) {
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' \u2192 ' + newStatus }).catch(console.error);
+    }
   };
 
   const addRemark = (leadId, remark) => {
@@ -1364,6 +1487,9 @@ export default function App() {
       if (lead) upsertLead(lead).catch((e) => console.error('Remark save failed:', e));
       return updated;
     });
+    if (currentUser) {
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'added_remark', entityType: 'lead', entityId: leadId, details: remark.text ? remark.text.substring(0, 100) : '' }).catch(console.error);
+    }
   };
 
   const handleDateEditSave = (newDate, remarkText) => {
@@ -1397,6 +1523,9 @@ export default function App() {
       if (lead) upsertLead(lead).catch((e) => console.error('Date edit save failed:', e));
       return updated;
     });
+    if (currentUser) {
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'date_changed', entityType: 'lead', entityId: leadId, details: field + ' set to ' + newDate }).catch(console.error);
+    }
     setDateEditPopup(null);
   };
 
@@ -1586,6 +1715,9 @@ export default function App() {
     }));
     setLeads((prev) => [...prev, ...newLeads]);
     upsertLeads(newLeads).catch((e) => console.error('CSV import failed:', e));
+    if (currentUser) {
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'csv_imported', entityType: 'lead', entityId: null, details: newLeads.length + ' leads imported' }).catch(console.error);
+    }
     setCsvImportCount(newLeads.length);
     setCsvPreview(null);
     setCsvSelected(new Set());
