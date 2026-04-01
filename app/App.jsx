@@ -377,7 +377,7 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 }
 
 // ── Lead Drawer (Edit + Remarks + Visit History in single view) ─────────────
-function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark }) {
+function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark, onImmediateSave }) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [] } : {
@@ -428,6 +428,12 @@ function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark }) {
 
       updated.remarks = remarks;
       if (field === 'followUpDate') origFollowUpDate.current = newDate;
+
+      // Immediately persist to Supabase for existing leads
+      if (isEdit && onImmediateSave) {
+        onImmediateSave(updated);
+      }
+
       return updated;
     });
   };
@@ -1642,6 +1648,10 @@ export default function App() {
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, remark) : undefined}
+          onImmediateSave={(updatedLead) => {
+            setLeads((prev) => prev.map((l) => l.id === updatedLead.id ? updatedLead : l));
+            upsertLead(updatedLead).catch((e) => console.error('Drawer date save failed:', e));
+          }}
         />
       )}
       {deleteLead && (
