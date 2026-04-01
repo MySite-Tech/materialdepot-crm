@@ -511,9 +511,9 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
     clientName: '', clientPhone: '', visits: [],
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
-  const [fuPrompt, setFuPrompt] = useState(null);
   const [remarkAuthor, setRemarkAuthor] = useState(lead ? lead.assignedTo : SALES_PEOPLE[0]);
   const [closureDateWarning, setClosureDateWarning] = useState('');
+  const [drawerDatePopup, setDrawerDatePopup] = useState(null); // 'followUpDate' | 'closureDate' | null
   const [remarkText, setRemarkText] = useState('');
   const [visitChannel, setVisitChannel] = useState(VISIT_CHANNELS[0]);
   const timelineRef = useRef(null);
@@ -529,37 +529,37 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleFollowUpChange = (newDate) => {
-    if (isEdit && origFollowUpDate.current && newDate !== origFollowUpDate.current) {
-      setFuPrompt({ oldDate: origFollowUpDate.current, newDate });
+  const handleDrawerDateSave = (newDate, remarkText) => {
+    const field = drawerDatePopup;
+    setDrawerDatePopup(null);
+    if (field === 'followUpDate') {
+      if (isEdit && origFollowUpDate.current && newDate !== origFollowUpDate.current) {
+        // Auto-add remark for follow-up change
+        const remarkObj = remarkText
+          ? { ts: new Date().toISOString(), author: form.assignedTo, text: 'Follow-up date changed from ' + fmtDate(origFollowUpDate.current) + ' to ' + fmtDate(newDate) + ': ' + remarkText }
+          : null;
+        setForm((f) => {
+          const updated = { ...f, followUpDate: newDate };
+          if (newDate && f.closureDate && newDate > f.closureDate) updated.closureDate = newDate;
+          if (remarkObj) updated.remarks = [...(f.remarks || []), remarkObj];
+          return updated;
+        });
+        origFollowUpDate.current = newDate;
+      } else {
+        setForm((f) => {
+          const updated = { ...f, followUpDate: newDate };
+          if (newDate && f.closureDate && newDate > f.closureDate) updated.closureDate = newDate;
+          return updated;
+        });
+      }
     } else {
-      setForm((f) => {
-        const updated = { ...f, followUpDate: newDate };
-        if (newDate && f.closureDate && newDate > f.closureDate) updated.closureDate = newDate;
-        return updated;
-      });
+      if (remarkText) {
+        const remarkObj = { ts: new Date().toISOString(), author: form.assignedTo, text: 'Closure date changed' + (form.closureDate ? ' from ' + fmtDate(form.closureDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText };
+        setForm((f) => ({ ...f, closureDate: newDate, remarks: [...(f.remarks || []), remarkObj] }));
+      } else {
+        set('closureDate', newDate);
+      }
     }
-  };
-
-  const handleClosureDateChange = (newDate) => {
-    if (newDate && form.followUpDate && newDate < form.followUpDate) {
-      setClosureDateWarning('Closure date cannot be earlier than follow-up date (' + fmtDate(form.followUpDate) + ')');
-      setTimeout(() => setClosureDateWarning(''), 4000);
-      return;
-    }
-    setClosureDateWarning('');
-    set('closureDate', newDate);
-  };
-
-  const handleFuConfirm = (text) => {
-    const remark = { ts: new Date().toISOString(), author: form.assignedTo, text };
-    setForm((f) => {
-      const updated = { ...f, followUpDate: fuPrompt.newDate, remarks: [...(f.remarks || []), remark] };
-      if (fuPrompt.newDate && f.closureDate && fuPrompt.newDate > f.closureDate) updated.closureDate = fuPrompt.newDate;
-      return updated;
-    });
-    origFollowUpDate.current = fuPrompt.newDate;
-    setFuPrompt(null);
   };
 
   const handleSave = () => {
@@ -655,11 +655,22 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 </Field>
               )}
               <Field label="FOLLOW-UP DATE">
-                <input style={{ ...S.input, width: '100%' }} type="date" value={form.followUpDate} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleFollowUpChange(e.target.value)} />
+                <div
+                  style={{ ...S.input, width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}
+                  onClick={() => setDrawerDatePopup('followUpDate')}
+                >
+                  <span style={{ fontSize: 13, color: form.followUpDate ? '#374151' : '#9CA3AF' }}>{form.followUpDate ? fmtDate(form.followUpDate) : 'Click to set date'}</span>
+                  {form.followUpDate && <span style={{ fontSize: 11, color: '#9CA3AF', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); set('followUpDate', ''); }}>{'\u2715'}</span>}
+                </div>
               </Field>
               <Field label="CLOSURE EXPECTED">
-                <input style={{ ...S.input, width: '100%', borderColor: closureDateWarning ? '#EF4444' : undefined }} type="date" value={form.closureDate} min={form.followUpDate || undefined} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleClosureDateChange(e.target.value)} />
-                {closureDateWarning && <div style={{ fontSize: 11, color: '#EF4444', marginTop: 2 }}>{closureDateWarning}</div>}
+                <div
+                  style={{ ...S.input, width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}
+                  onClick={() => setDrawerDatePopup('closureDate')}
+                >
+                  <span style={{ fontSize: 13, color: form.closureDate ? '#374151' : '#9CA3AF' }}>{form.closureDate ? fmtDate(form.closureDate) : 'Click to set date'}</span>
+                  {form.closureDate && <span style={{ fontSize: 11, color: '#9CA3AF', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); set('closureDate', ''); }}>{'\u2715'}</span>}
+                </div>
               </Field>
               <Field label="CART VALUE">
                 <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace" }} type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
@@ -751,12 +762,15 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
           )}
         </div>
       </div>
-      {fuPrompt && (
-        <FollowUpRemarkPrompt
-          oldDate={fuPrompt.oldDate}
-          newDate={fuPrompt.newDate}
-          onConfirm={handleFuConfirm}
-          onCancel={() => setFuPrompt(null)}
+      {drawerDatePopup && (
+        <DateEditPopup
+          field={drawerDatePopup}
+          currentDate={form[drawerDatePopup]}
+          followUpDate={form.followUpDate}
+          closureDate={form.closureDate}
+          assignedTo={form.assignedTo}
+          onSave={handleDrawerDateSave}
+          onCancel={() => setDrawerDatePopup(null)}
         />
       )}
     </>
