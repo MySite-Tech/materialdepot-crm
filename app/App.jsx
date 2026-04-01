@@ -1683,6 +1683,13 @@ export default function App() {
         parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved });
       }
 
+      // Check for duplicate Lead IDs within the CSV
+      const idCounts = {};
+      parsed.forEach((p) => { idCounts[p.leadId] = (idCounts[p.leadId] || 0) + 1; });
+      Object.entries(idCounts).forEach(([id, count]) => {
+        if (count > 1) errors.push('Duplicate Lead ID "' + id + '" appears ' + count + ' times');
+      });
+
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
       else {
         setCsvPreview(parsed);
