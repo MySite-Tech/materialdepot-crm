@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode } from '../lib/supabase';
+import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -742,7 +742,168 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
 }
 
 // ── Login Screen ──────────────────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
+// ── Admin Dashboard ────────────────────────────────────────────────────────
+function AdminDashboard({ onBack }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState('');
+  const [newCode, setNewCode] = useState('');
+  const [newRole, setNewRole] = useState('sales');
+  const [error, setError] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editRole, setEditRole] = useState('');
+
+  useEffect(() => {
+    fetchUsers().then((data) => { setUsers(data); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const handleAdd = async () => {
+    if (!newName.trim() || !newCode.trim()) { setError('Name and code are required'); return; }
+    if (users.some((u) => u.code === newCode.trim())) { setError('Code already exists'); return; }
+    setError('');
+    try {
+      const user = await addUser({ name: newName.trim(), code: newCode.trim(), role: newRole });
+      setUsers((prev) => [...prev, user]);
+      setNewName(''); setNewCode(''); setNewRole('sales');
+    } catch (e) {
+      setError(e.message || 'Failed to add user');
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`Delete user "${name}"?`)) return;
+    try {
+      await deleteUser(id);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete user');
+    }
+  };
+
+  const startEdit = (u) => {
+    setEditId(u.id); setEditName(u.name); setEditCode(u.code); setEditRole(u.role);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editName.trim() || !editCode.trim()) { setError('Name and code are required'); return; }
+    if (users.some((u) => u.code === editCode.trim() && u.id !== editId)) { setError('Code already exists'); return; }
+    setError('');
+    try {
+      await updateUser(editId, { name: editName.trim(), code: editCode.trim(), role: editRole });
+      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), code: editCode.trim(), role: editRole } : u));
+      setEditId(null);
+    } catch (e) {
+      setError(e.message || 'Failed to update user');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
+      <header className="h-12 bg-[#1A1A1A] flex items-center px-6 justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-white">material</span>
+          <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
+          <span className="text-xs text-gray-400 ml-2">Super Admin</span>
+        </div>
+        <button className="bg-transparent border border-gray-600 text-gray-400 text-[11px] px-2.5 py-1 rounded cursor-pointer hover:text-white hover:border-gray-400" onClick={onBack}>Back to Login</button>
+      </header>
+
+      <div className="max-w-3xl mx-auto w-full px-6 py-8">
+        <h1 className="text-lg font-bold text-gray-800 mb-6">User Management</h1>
+
+        {/* Add User Form */}
+        <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Add New User</h2>
+          <div className="flex gap-3 items-end flex-wrap">
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Name</label>
+              <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name" />
+            </div>
+            <div className="w-[100px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Code</label>
+              <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-full text-center" value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="0000" maxLength={10} />
+            </div>
+            <div className="w-[130px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
+              <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                <option value="sales">Sales</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+                <option value="superadmin">Super Admin</option>
+              </select>
+            </div>
+            <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={handleAdd}>Add User</button>
+          </div>
+          {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+        </div>
+
+        {/* Users Table */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-[#FAFAFA]">
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Name</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Code</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Role</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
+                    {editId === u.id ? (
+                      <>
+                        <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editName} onChange={(e) => setEditName(e.target.value)} /></td>
+                        <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editCode} onChange={(e) => setEditCode(e.target.value)} /></td>
+                        <td className="px-4 py-2">
+                          <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                            <option value="sales">Sales</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                            <option value="superadmin">Super Admin</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-2 text-center whitespace-nowrap">
+                          <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveEdit}>Save</button>
+                          <button className="text-gray-400 text-xs cursor-pointer bg-transparent border-none" onClick={() => setEditId(null)}>Cancel</button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-2.5 text-[13px] font-medium">{u.name}</td>
+                        <td className="px-4 py-2.5 text-[13px] font-mono">{u.code}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                          <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
+                          <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDelete(u.id, u.name)}>Delete</button>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mt-4 text-center">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin, onAdmin }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -756,6 +917,26 @@ function LoginScreen({ onLogin }) {
       const user = await loginWithCode(code.trim());
       if (user) {
         onLogin(user);
+      } else {
+        setError('Invalid code');
+      }
+    } catch {
+      setError('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdminAccess = async () => {
+    if (!code.trim()) { setError('Enter your admin code first'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const user = await loginWithCode(code.trim());
+      if (user && user.role === 'superadmin') {
+        onAdmin();
+      } else if (user) {
+        setError('Access denied. Super Admin code required.');
       } else {
         setError('Invalid code');
       }
@@ -796,13 +977,23 @@ function LoginScreen({ onLogin }) {
               autoFocus
             />
             {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading || !code.trim()}
-              className={`bg-[#EAB308] text-white border-none px-5 py-2.5 rounded-md text-[13px] font-semibold cursor-pointer w-full mt-4 ${loading || !code.trim() ? 'opacity-50' : 'opacity-100'}`}
-            >
-              {loading ? 'Logging in...' : 'Login'}
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="submit"
+                disabled={loading || !code.trim()}
+                className={`bg-[#EAB308] text-white border-none px-5 py-2.5 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${loading || !code.trim() ? 'opacity-50' : 'opacity-100'}`}
+              >
+                {loading ? 'Logging in...' : 'Login'}
+              </button>
+              <button
+                type="button"
+                disabled={loading || !code.trim()}
+                onClick={handleAdminAccess}
+                className={`bg-white text-gray-600 border border-gray-200 px-4 py-2.5 rounded-md text-[13px] font-medium cursor-pointer ${loading || !code.trim() ? 'opacity-50' : 'opacity-100'}`}
+              >
+                Admin
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -814,6 +1005,7 @@ function LoginScreen({ onLogin }) {
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userLoaded, setUserLoaded] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
     try {
@@ -1219,7 +1411,8 @@ export default function App() {
   const COL_COUNT = 14;
 
   if (!userLoaded) return null;
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
+  if (showAdmin) return <AdminDashboard onBack={() => setShowAdmin(false)} />;
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} onAdmin={() => setShowAdmin(true)} />;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
