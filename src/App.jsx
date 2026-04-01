@@ -902,13 +902,13 @@ export default function App() {
   };
 
   // ── CSV helpers ──────────────────────────────────────────────────────────
-  const CSV_HEADERS = ['Client Name','Client Phone','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date'];
+  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits'];
 
   const downloadCsvTemplate = () => {
     const rows = [
       CSV_HEADERS.join(','),
-      'Vikram Rao,9876543210,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,2026-04-10,2026-04-20',
-      'Anita Deshmukh,9845012345,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,,2026-04-05,',
+      'MD-ABC123,Vikram Rao,9876543210,2026-03-15,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,2026-04-10,2026-04-20,Client requested bulk quote|2026-03-15|Arjun Mehta,2026-03-15|Website|Portland Cement 50kg:100:1250;2026-03-18|JP Nagar Centre|',
+      'MD-DEF456,Anita Deshmukh,9845012345,2026-03-10,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,300000,2026-04-05,,,',
     ];
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -966,19 +966,23 @@ export default function App() {
       for (let r = 1; r < lines.length; r++) {
         const rowNum = r + 1;
         const fields = parseCsvLine(lines[r]);
-        if (fields.length < 10) { errors.push('Row ' + rowNum + ': Expected 10 columns, got ' + fields.length); continue; }
+        if (fields.length < 14) { errors.push('Row ' + rowNum + ': Expected 14 columns, got ' + fields.length); continue; }
 
-        const [clientName, clientPhone, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate] = fields;
+        const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr] = fields;
 
-        if (!clientName) errors.push('Row ' + rowNum + ': Client Name is required');
+        // Compulsory fields
+        if (!leadId) errors.push('Row ' + rowNum + ': Lead ID is required');
         if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
-        if (!SALES_PEOPLE.includes(assignedTo)) errors.push('Row ' + rowNum + ': Assigned To "' + assignedTo + '" is not a valid salesperson');
-        if (!BRANCHES.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
-        if (!STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
+
+        // Optional field validation (only validate if provided)
+        if (createdDate && !isValidDate(createdDate)) errors.push('Row ' + rowNum + ': Created Date "' + createdDate + '" must be YYYY-MM-DD format');
+        if (assignedTo && !SALES_PEOPLE.includes(assignedTo)) errors.push('Row ' + rowNum + ': Assigned To "' + assignedTo + '" is not a valid salesperson');
+        if (branch && !BRANCHES.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
+        if (status && !STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
 
         if (status === 'Order Lost') {
-          if (!ORDER_LOST_REASONS.includes(lostReason)) errors.push('Row ' + rowNum + ': Lost Reason "' + lostReason + '" is required and must be valid when Status is "Order Lost"');
-        } else {
+          if (lostReason && !ORDER_LOST_REASONS.includes(lostReason)) errors.push('Row ' + rowNum + ': Lost Reason "' + lostReason + '" is not a valid reason');
+        } else if (status) {
           if (lostReason) errors.push('Row ' + rowNum + ': Lost Reason should be empty when Status is not "Order Lost"');
         }
 
@@ -987,6 +991,7 @@ export default function App() {
         if (cartItemsStr) {
           const parts = cartItemsStr.split(';');
           for (const part of parts) {
+            if (!part.trim()) continue;
             const segs = part.split(':');
             if (segs.length !== 3) { errors.push('Row ' + rowNum + ': Cart item "' + part + '" must be in format ItemName:Qty:Price'); continue; }
             const [name, qtyStr, priceStr] = segs;
@@ -1005,7 +1010,45 @@ export default function App() {
         if (followUpDate && !isValidDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be YYYY-MM-DD format');
         if (closureDate && !isValidDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be YYYY-MM-DD format');
 
-        parsed.push({ clientName, clientPhone, assignedTo, branch, status, lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '' });
+        // Parse remarks: "text|date|author;text|date|author"
+        let remarks = [];
+        if (remarksStr) {
+          const remarkParts = remarksStr.split(';');
+          for (const rp of remarkParts) {
+            if (!rp.trim()) continue;
+            const segs = rp.split('|');
+            if (segs.length >= 3) {
+              remarks.push({ text: segs[0].trim(), ts: (segs[1].trim() || todayStr()) + 'T10:00:00', author: segs[2].trim() });
+            } else if (segs.length >= 1 && segs[0].trim()) {
+              remarks.push({ text: segs[0].trim(), ts: todayStr() + 'T10:00:00', author: assignedTo || SALES_PEOPLE[0] });
+            }
+          }
+        }
+
+        // Parse visits: "date|channel|cartSnapshot;date|channel|cartSnapshot"
+        let visits = [];
+        if (visitsStr) {
+          const visitParts = visitsStr.split(';');
+          for (const vp of visitParts) {
+            if (!vp.trim()) continue;
+            const segs = vp.split('|');
+            const vDate = (segs[0] || '').trim();
+            const vChannel = (segs[1] || '').trim();
+            if (vDate && !isValidDate(vDate)) { errors.push('Row ' + rowNum + ': Visit date "' + vDate + '" must be YYYY-MM-DD format'); continue; }
+            if (vChannel && !VISIT_CHANNELS.includes(vChannel)) { errors.push('Row ' + rowNum + ': Visit channel "' + vChannel + '" is not valid'); continue; }
+            let vCart = [];
+            if (segs[2]) {
+              for (const ci of segs[2].split(',')) {
+                if (!ci.trim()) continue;
+                const cs = ci.split(':');
+                if (cs.length === 3) vCart.push({ name: cs[0].trim(), qty: Number(cs[1]) || 0, price: Number(cs[2]) || 0 });
+              }
+            }
+            visits.push({ date: vDate || todayStr(), channel: vChannel || VISIT_CHANNELS[0], cartSnapshot: vCart });
+          }
+        }
+
+        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: createdDate || todayStr(), assignedTo: assignedTo || SALES_PEOPLE[0], branch: branch || BRANCHES[0], status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '', remarks, visits });
       }
 
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
@@ -1020,8 +1063,8 @@ export default function App() {
 
   const importCsvLeads = () => {
     const newLeads = csvPreview.filter((_, i) => csvSelected.has(i)).map((row) => ({
-      id: genId(),
-      createdAt: todayStr(),
+      id: row.leadId,
+      createdAt: row.createdAt,
       assignedTo: row.assignedTo,
       branch: row.branch,
       status: row.status,
@@ -1030,8 +1073,8 @@ export default function App() {
       cartItems: row.cartItems,
       followUpDate: row.followUpDate,
       closureDate: row.closureDate,
-      remarks: [],
-      visits: [],
+      remarks: row.remarks,
+      visits: row.visits,
       clientName: row.clientName,
       clientPhone: row.clientPhone,
     }));
@@ -1319,7 +1362,7 @@ export default function App() {
       {/* CSV Preview Modal */}
       {csvPreview && (
         <div style={S.overlay}>
-          <div style={{ ...S.modalBox, maxWidth: 900 }}>
+          <div style={{ ...S.modalBox, maxWidth: 1100 }}>
             <div style={S.modalHeader}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>Review CSV Import</span>
               <button style={S.closeBtn} onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>&times;</button>
@@ -1339,13 +1382,17 @@ export default function App() {
                         }} />
                       </th>
                       <th style={S.th}>Row#</th>
+                      <th style={S.th}>Lead ID</th>
                       <th style={S.th}>Client Name</th>
                       <th style={S.th}>Phone</th>
+                      <th style={S.th}>Created</th>
                       <th style={S.th}>Assigned To</th>
                       <th style={S.th}>Branch</th>
                       <th style={S.th}>Status</th>
                       <th style={S.th}>Cart Items</th>
                       <th style={{ ...S.th, textAlign: 'right' }}>Cart Value</th>
+                      <th style={{ ...S.th, textAlign: 'center' }}>Remarks</th>
+                      <th style={{ ...S.th, textAlign: 'center' }}>Visits</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1361,8 +1408,10 @@ export default function App() {
                           }} />
                         </td>
                         <td style={S.td}>{i + 2}</td>
-                        <td style={S.td}>{row.clientName}</td>
+                        <td style={S.td}><span style={S.leadIdChip}>{row.leadId}</span></td>
+                        <td style={S.td}>{row.clientName || '\u2014'}</td>
                         <td style={{ ...S.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{row.clientPhone}</td>
+                        <td style={{ ...S.td, fontSize: 11, color: '#6B7280' }}>{fmtDate(row.createdAt)}</td>
                         <td style={S.td}>{row.assignedTo}</td>
                         <td style={S.td}>{row.branch}</td>
                         <td style={S.td}><StatusBadge status={row.status} /></td>
@@ -1370,6 +1419,8 @@ export default function App() {
                           {row.cartItems.map((c) => c.name).join('; ') || '\u2014'}
                         </td>
                         <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{fmtINR(row.cartValue)}</td>
+                        <td style={{ ...S.td, textAlign: 'center', fontSize: 11 }}>{row.remarks.length || '\u2014'}</td>
+                        <td style={{ ...S.td, textAlign: 'center', fontSize: 11 }}>{row.visits.length || '\u2014'}</td>
                       </tr>
                     ))}
                   </tbody>
