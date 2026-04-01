@@ -1372,18 +1372,24 @@ export default function App() {
     return true;
   });
 
-  // Pipeline computations (from filtered leads, excluding status filter)
-  const pipelineTotal = baseFiltered.reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineActive = baseFiltered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineWon = baseFiltered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineLost = baseFiltered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  // Filtering (full -- applies all filters including status)
+  const filtered = baseFiltered.filter((l) => {
+    if (statusFilter.length > 0 && !statusFilter.includes(l.status)) return false;
+    return true;
+  });
+
+  // Pipeline computations (from fully filtered leads)
+  const pipelineTotal = filtered.reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineActive = filtered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineWon = filtered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineLost = filtered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
   const pctWon = pipelineTotal ? (pipelineWon / pipelineTotal) * 100 : 0;
   const pctActive = pipelineTotal ? (pipelineActive / pipelineTotal) * 100 : 0;
   const pctLost = pipelineTotal ? (pipelineLost / pipelineTotal) * 100 : 0;
 
-  // Stage summary (from filtered leads)
+  // Stage summary
   const stageSummary = STATUSES.map((status) => {
-    const stageLeads = baseFiltered.filter((l) => l.status === status);
+    const stageLeads = filtered.filter((l) => l.status === status);
     return { status, count: stageLeads.length, value: stageLeads.reduce((s, l) => s + (l.cartValue || 0), 0) };
   });
 
@@ -1391,15 +1397,9 @@ export default function App() {
   const statusChips = stageSummary.filter((s) => s.value > 0);
 
   // Active lead counts for pipeline metrics
-  const activeCount = baseFiltered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).length;
-  const wonCount = baseFiltered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).length;
-  const lostCount = baseFiltered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).length;
-
-  // Filtering (full -- applies status filter on top of baseFiltered)
-  const filtered = baseFiltered.filter((l) => {
-    if (statusFilter.length > 0 && !statusFilter.includes(l.status)) return false;
-    return true;
-  });
+  const activeCount = filtered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).length;
+  const wonCount = filtered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).length;
+  const lostCount = filtered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).length;
 
   // Sorting
   const getFirstVisit = (l) => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt || ''; };
@@ -1429,7 +1429,7 @@ export default function App() {
     else { setSortCol(col); setSortDir('asc'); }
   };
 
-  const filteredTotal = filtered.reduce((s, l) => s + (l.cartValue || 0), 0);
+  const filteredTotal = pipelineTotal; // same as pipelineTotal since both use filtered
 
   // Lead CRUD — optimistic state update + async Supabase persist
   const saveLead = (formData) => {
@@ -1785,7 +1785,7 @@ export default function App() {
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Total Pipeline Value</div>
               <div className="font-mono text-[22px] font-bold text-black">{fmtINR(pipelineTotal)}</div>
-              <div className="text-[11px] text-gray-400">{leads.length} leads</div>
+              <div className="text-[11px] text-gray-400">{filtered.length} leads</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Active Pipeline</div>
