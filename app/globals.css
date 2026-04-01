@@ -9,3 +9,49 @@
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
+
+/* Date range calendar picker */
+.rdp-compact {
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+}
+.rdp-compact .rdp-months {
+  display: flex;
+  gap: 12px;
+}
+.rdp-compact .rdp-month_caption {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px 8px;
+}
+.rdp-compact .rdp-weekday {
+  font-size: 10px;
+  color: #9CA3AF;
+  font-weight: 500;
+}
+.rdp-compact .rdp-day {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+.rdp-compact .rdp-day_button {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+.rdp-compact .rdp-today {
+  font-weight: 700;
+  color: #EAB308;
+}
+.rdp-compact .rdp-selected .rdp-day_button {
+  background: #EAB308;
+  color: #fff;
+}
+.rdp-compact .rdp-range_middle .rdp-day_button {
+  background: #FEF9C3;
+  color: #374151;
+}
+.rdp-compact .rdp-chevron {
+  width: 14px;
+  height: 14px;
+}
