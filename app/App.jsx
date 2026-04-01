@@ -59,6 +59,37 @@ const genId = () => {
   return `MD-${r}`;
 };
 
+// Smart merge: only overwrite fields that have non-empty new values, append remarks
+const mergeLead = (existing, incoming) => {
+  const merged = { ...existing };
+  const fields = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType'];
+  for (const f of fields) {
+    const val = incoming[f];
+    if (val !== undefined && val !== null && val !== '') merged[f] = val;
+  }
+  // Cart value: update only if incoming is non-zero
+  if (incoming.cartValue && incoming.cartValue > 0) merged.cartValue = incoming.cartValue;
+  // Architect involved: update if explicitly set
+  if (incoming.architectInvolved !== undefined) merged.architectInvolved = incoming.architectInvolved;
+  // Remarks: append, never remove — deduplicate by ts+text
+  const existingRemarks = existing.remarks || [];
+  const incomingRemarks = incoming.remarks || [];
+  const allRemarks = [...existingRemarks];
+  for (const r of incomingRemarks) {
+    if (!allRemarks.some((er) => er.ts === r.ts && er.text === r.text)) allRemarks.push(r);
+  }
+  merged.remarks = allRemarks;
+  // Visits: append, deduplicate by date+channel
+  const existingVisits = existing.visits || [];
+  const incomingVisits = incoming.visits || [];
+  const allVisits = [...existingVisits];
+  for (const v of incomingVisits) {
+    if (!allVisits.some((ev) => ev.date === v.date && ev.channel === v.channel)) allVisits.push(v);
+  }
+  merged.visits = allVisits;
+  return merged;
+};
+
 const fmtINR = (n) => {
   if (n == null || isNaN(n)) return '\u20B90';
   return '\u20B9' + Number(n).toLocaleString('en-IN');
@@ -1448,13 +1479,15 @@ export default function App() {
 
   // Lead CRUD — optimistic state update + async Supabase persist
   const saveLead = (formData) => {
-    const isNew = !leads.some((l) => l.id === formData.id);
+    const existing = leads.find((l) => l.id === formData.id && l.clientPhone === formData.clientPhone) || leads.find((l) => l.id === formData.id);
+    const isNew = !existing;
+    const finalData = existing ? mergeLead(existing, formData) : formData;
     setLeads((prev) => {
-      const idx = prev.findIndex((l) => l.id === formData.id);
-      if (idx >= 0) { const next = [...prev]; next[idx] = formData; return next; }
-      return [...prev, formData];
+      const idx = prev.findIndex((l) => l.id === finalData.id);
+      if (idx >= 0) { const next = [...prev]; next[idx] = finalData; return next; }
+      return [...prev, finalData];
     });
-    upsertLead(formData).catch((e) => console.error('Save failed:', e));
+    upsertLead(finalData).catch((e) => console.error('Save failed:', e));
     if (currentUser) {
       if (isNew) {
         logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'created_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
@@ -1753,17 +1786,26 @@ export default function App() {
       propertyType: row.propertyType || '',
       architectInvolved: row.architectInvolved || false,
     }));
-    // Merge with existing leads: update if ID matches, add if new
+    // Smart merge: only update non-empty fields, append remarks
     setLeads((prev) => {
-      const existingIds = new Set(prev.map((l) => l.id));
-      const updated = prev.map((l) => {
-        const match = newLeads.find((n) => n.id === l.id);
-        return match ? { ...l, ...match } : l;
-      });
-      const brandNew = newLeads.filter((n) => !existingIds.has(n.id));
-      return [...updated, ...brandNew];
+      const updated = [...prev];
+      const toUpsert = [];
+      for (const incoming of newLeads) {
+        const existIdx = updated.findIndex((l) => l.id === incoming.id && l.clientPhone === incoming.clientPhone) >= 0
+          ? updated.findIndex((l) => l.id === incoming.id && l.clientPhone === incoming.clientPhone)
+          : updated.findIndex((l) => l.id === incoming.id);
+        if (existIdx >= 0) {
+          updated[existIdx] = mergeLead(updated[existIdx], incoming);
+          toUpsert.push(updated[existIdx]);
+        } else {
+          updated.push(incoming);
+          toUpsert.push(incoming);
+        }
+      }
+      // Upsert merged leads to Supabase
+      upsertLeads(toUpsert).then(() => console.log('CSV import to Supabase successful:', toUpsert.length, 'leads')).catch((e) => { console.error('CSV import failed:', e); alert('Import saved locally but failed to sync to database: ' + (e.message || e)); });
+      return updated;
     });
-    upsertLeads(newLeads).then(() => console.log('CSV import to Supabase successful:', newLeads.length, 'leads')).catch((e) => { console.error('CSV import failed:', e); alert('Import saved locally but failed to sync to database: ' + (e.message || e)); });
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'csv_imported', entityType: 'lead', entityId: null, details: newLeads.length + ' leads imported' }).catch(console.error);
     }
