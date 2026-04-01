@@ -411,6 +411,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
             type="date"
             value={dateFrom}
             max={dateTo || undefined}
+            onKeyDown={(e) => e.preventDefault()}
             onChange={(e) => onChange(e.target.value, dateTo)}
           />
           <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', display: 'block', marginBottom: 4 }}>To</label>
@@ -419,6 +420,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
             type="date"
             value={dateTo}
             min={dateFrom || undefined}
+            onKeyDown={(e) => e.preventDefault()}
             onChange={(e) => onChange(dateFrom, e.target.value)}
           />
           {hasRange && (
@@ -530,17 +532,29 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
     if (isEdit && origFollowUpDate.current && newDate !== origFollowUpDate.current) {
       setFuPrompt({ oldDate: origFollowUpDate.current, newDate });
     } else {
-      set('followUpDate', newDate);
+      setForm((f) => {
+        const updated = { ...f, followUpDate: newDate };
+        if (newDate && f.closureDate && newDate > f.closureDate) updated.closureDate = newDate;
+        return updated;
+      });
     }
+  };
+
+  const handleClosureDateChange = (newDate) => {
+    if (newDate && form.followUpDate && newDate < form.followUpDate) {
+      alert('Closure date cannot be earlier than follow-up date (' + fmtDate(form.followUpDate) + ')');
+      return;
+    }
+    set('closureDate', newDate);
   };
 
   const handleFuConfirm = (text) => {
     const remark = { ts: new Date().toISOString(), author: form.assignedTo, text };
-    setForm((f) => ({
-      ...f,
-      followUpDate: fuPrompt.newDate,
-      remarks: [...(f.remarks || []), remark],
-    }));
+    setForm((f) => {
+      const updated = { ...f, followUpDate: fuPrompt.newDate, remarks: [...(f.remarks || []), remark] };
+      if (fuPrompt.newDate && f.closureDate && fuPrompt.newDate > f.closureDate) updated.closureDate = fuPrompt.newDate;
+      return updated;
+    });
     origFollowUpDate.current = fuPrompt.newDate;
     setFuPrompt(null);
   };
@@ -605,7 +619,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace", background: '#F3F4F6' }} value={form.id} readOnly />
               </Field>
               <Field label="CREATION DATE">
-                <input style={{ ...S.input, width: '100%' }} type="date" value={form.createdAt} onChange={(e) => set('createdAt', e.target.value)} />
+                <input style={{ ...S.input, width: '100%' }} type="date" value={form.createdAt} onKeyDown={(e) => e.preventDefault()} onChange={(e) => set('createdAt', e.target.value)} />
               </Field>
               <Field label="CLIENT NAME">
                 <input style={{ ...S.input, width: '100%' }} value={form.clientName || ''} placeholder="Client name" onChange={(e) => set('clientName', e.target.value)} />
@@ -637,10 +651,10 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 </Field>
               )}
               <Field label="FOLLOW-UP DATE">
-                <input style={{ ...S.input, width: '100%' }} type="date" value={form.followUpDate} onChange={(e) => handleFollowUpChange(e.target.value)} />
+                <input style={{ ...S.input, width: '100%' }} type="date" value={form.followUpDate} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleFollowUpChange(e.target.value)} />
               </Field>
               <Field label="CLOSURE EXPECTED">
-                <input style={{ ...S.input, width: '100%' }} type="date" value={form.closureDate} onChange={(e) => set('closureDate', e.target.value)} />
+                <input style={{ ...S.input, width: '100%' }} type="date" value={form.closureDate} min={form.followUpDate || undefined} onKeyDown={(e) => e.preventDefault()} onChange={(e) => handleClosureDateChange(e.target.value)} />
               </Field>
               <Field label="CART VALUE">
                 <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace" }} type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
@@ -750,13 +764,15 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
   const [newDate, setNewDate] = useState(currentDate || '');
   const [remark, setRemark] = useState('');
   const [warning, setWarning] = useState('');
+  const [autoUpdateNote, setAutoUpdateNote] = useState('');
 
   const validate = (date) => {
+    setAutoUpdateNote('');
     if (field === 'closureDate' && followUpDate && date && date < followUpDate) {
       return 'Closure date cannot be earlier than follow-up date (' + fmtDate(followUpDate) + ')';
     }
-    if (field === 'followUpDate' && closureDate && date && closureDate < date) {
-      return 'Follow-up date cannot be later than closure date (' + fmtDate(closureDate) + ')';
+    if (field === 'followUpDate' && closureDate && date && date > closureDate) {
+      setAutoUpdateNote('Closure date will be automatically updated to ' + fmtDate(date));
     }
     return '';
   };
@@ -790,10 +806,12 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
             style={{ ...S.input, width: '100%', marginBottom: 4, borderColor: warning ? '#EF4444' : undefined }}
             type="date"
             value={newDate}
+            onKeyDown={(e) => e.preventDefault()}
             onChange={(e) => handleDateChange(e.target.value)}
             autoFocus
           />
           {warning && <div style={{ fontSize: 11, color: '#EF4444', marginBottom: 8 }}>{warning}</div>}
+          {autoUpdateNote && <div style={{ fontSize: 11, color: '#EAB308', marginBottom: 8 }}>{autoUpdateNote}</div>}
           <div style={{ marginTop: 8 }}>
             <label style={S.fieldLabel}>REMARK (OPTIONAL)</label>
             <textarea
@@ -981,12 +999,25 @@ export default function App() {
     setLeads((prev) => prev.map((l) => {
       if (l.id !== leadId) return l;
       const updated = { ...l, [field]: newDate };
+      // Auto-update closure date if follow-up exceeds it
+      if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
+        updated.closureDate = newDate;
+      }
+      // Reject closure date less than follow-up
+      if (field === 'closureDate' && l.followUpDate && newDate && newDate < l.followUpDate) {
+        return l; // don't update
+      }
+      const remarks = [...(l.remarks || [])];
       if (remarkText) {
         const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
         const oldDate = l[field];
-        const text = label + ' date changed' + (oldDate ? ' from ' + fmtDate(oldDate) : '') + ' to ' + fmtDate(newDate) + (remarkText ? ': ' + remarkText : '');
-        updated.remarks = [...(l.remarks || []), { ts: new Date().toISOString(), author: l.assignedTo, text }];
+        const text = label + ' date changed' + (oldDate ? ' from ' + fmtDate(oldDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText;
+        remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text });
       }
+      if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
+        remarks.push({ ts: new Date().toISOString(), author: l.assignedTo, text: 'Closure date auto-updated from ' + fmtDate(l.closureDate) + ' to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
+      }
+      updated.remarks = remarks;
       return updated;
     }));
     setDateEditPopup(null);
