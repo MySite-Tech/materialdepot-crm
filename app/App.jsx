@@ -1714,7 +1714,7 @@ export default function App() {
       architectInvolved: row.architectInvolved || false,
     }));
     setLeads((prev) => [...prev, ...newLeads]);
-    upsertLeads(newLeads).catch((e) => console.error('CSV import failed:', e));
+    upsertLeads(newLeads).then(() => console.log('CSV import to Supabase successful:', newLeads.length, 'leads')).catch((e) => { console.error('CSV import failed:', e); alert('Import saved locally but failed to sync to database: ' + (e.message || e)); });
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'csv_imported', entityType: 'lead', entityId: null, details: newLeads.length + ' leads imported' }).catch(console.error);
     }
