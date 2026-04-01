@@ -217,7 +217,7 @@ const SEED_LEADS = [
 function Avatar({ name, size = 24 }) {
   const initial = name ? name.charAt(0).toUpperCase() : '?';
   return (
-    <div style={{ ...S.avatar, width: size, height: size, fontSize: size * 0.45, lineHeight: size + 'px' }}>
+    <div className="bg-[#EAB308] text-white rounded-full inline-flex items-center justify-center font-semibold shrink-0" style={{ width: size, height: size, fontSize: size * 0.45, lineHeight: size + 'px' }}>
       {initial}
     </div>
   );
@@ -226,7 +226,7 @@ function Avatar({ name, size = 24 }) {
 function StatusBadge({ status }) {
   const color = STATUS_COLORS[status] || '#9CA3AF';
   return (
-    <span style={{ ...S.statusBadge, background: color + '18', color, borderColor: color + '40' }}>
+    <span className="inline-block px-2 py-0.5 rounded-xl text-[11px] font-semibold border whitespace-nowrap" style={{ background: color + '18', color, borderColor: color + '40' }}>
       {status}
     </span>
   );
@@ -243,7 +243,7 @@ function EditableStatus({ status, lostReason, onCommit }) {
         value=""
         onChange={(e) => { onCommit('Order Lost', e.target.value); setPendingLost(false); setEditing(false); }}
         onBlur={() => { setPendingLost(false); setEditing(false); }}
-        style={{ ...S.statusSelect, borderColor: '#EF4444' }}
+        className="py-1 px-2 text-xs border border-red-500 rounded-md outline-none"
       >
         <option value="" disabled>Select reason...</option>
         {ORDER_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -261,7 +261,7 @@ function EditableStatus({ status, lostReason, onCommit }) {
           else { onCommit(e.target.value); setEditing(false); }
         }}
         onBlur={() => setEditing(false)}
-        style={S.statusSelect}
+        className="py-1 px-2 text-xs border border-gray-200 rounded-md outline-none"
       >
         {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
@@ -270,30 +270,30 @@ function EditableStatus({ status, lostReason, onCommit }) {
   return (
     <span onDoubleClick={() => setEditing(true)}>
       <StatusBadge status={status} />
-      {status === 'Order Lost' && lostReason && <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{lostReason}</div>}
+      {status === 'Order Lost' && lostReason && <div className="text-[10px] text-gray-400 mt-0.5">{lostReason}</div>}
     </span>
   );
 }
 
 function Field({ label, children }) {
   return (
-    <div style={S.field}>
-      <label style={S.fieldLabel}>{label}</label>
+    <div className="mb-3">
+      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</label>
       {children}
     </div>
   );
 }
 
-function Th({ label, sortKey, sortCol, sortDir, onSort, style }) {
+function Th({ label, sortKey, sortCol, sortDir, onSort, className: extraClass }) {
   const active = sortCol === sortKey;
   return (
     <th
-      style={{ ...S.th, cursor: sortKey ? 'pointer' : 'default', ...style }}
+      className={`px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none ${sortKey ? 'cursor-pointer' : 'cursor-default'} ${extraClass || ''}`}
       onClick={() => sortKey && onSort(sortKey)}
     >
       {label}
       {sortKey && (
-        <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3 }}>
+        <span className={`ml-1 ${active ? 'opacity-100' : 'opacity-30'}`}>
           {active ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u21D5'}
         </span>
       )}
@@ -325,36 +325,26 @@ function MultiSelect({ options, selected, onChange, label }) {
   const display = selected.length === 0 ? label : selected.length === 1 ? selected[0] : `${selected.length} selected`;
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={ref} className="relative inline-block">
       <button
-        style={{ ...S.input, width: 'auto', minWidth: 150, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, background: '#fff', textAlign: 'left' }}
+        className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-auto min-w-[150px] cursor-pointer flex items-center gap-1.5 bg-white text-left"
         onClick={() => setOpen(!open)}
       >
-        <span style={{ flex: 1, fontSize: 13 }}>{display}</span>
-        <span style={{ fontSize: 10, color: '#9CA3AF' }}>{open ? '\u25B2' : '\u25BC'}</span>
+        <span className="flex-1 text-[13px]">{display}</span>
+        <span className="text-[10px] text-gray-400">{open ? '\u25B2' : '\u25BC'}</span>
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 100,
-          background: '#fff', border: '1px solid #E5E7EB', borderRadius: 6,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 260, overflowY: 'auto',
-          minWidth: '100%', marginTop: 2,
-        }}>
+        <div className="absolute top-full left-0 z-[100] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto min-w-full mt-0.5">
           {options.map((opt) => (
             <label
               key={opt}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-                cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+              className="flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs whitespace-nowrap hover:bg-gray-50"
             >
               <input
                 type="checkbox"
                 checked={selected.includes(opt)}
                 onChange={() => toggle(opt)}
-                style={{ accentColor: '#EAB308' }}
+                className="accent-[#EAB308]"
               />
               {opt}
             </label>
@@ -387,32 +377,28 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
         : `Until ${fmtDate(dateTo)}`;
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={ref} className="relative inline-block">
       <button
-        style={{ ...S.input, width: 'auto', minWidth: 150, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, background: '#fff', textAlign: 'left' }}
+        className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-auto min-w-[150px] cursor-pointer flex items-center gap-1.5 bg-white text-left"
         onClick={() => setOpen(!open)}
       >
-        <span style={{ flex: 1, fontSize: 12, color: hasRange ? '#374151' : '#9CA3AF' }}>{display}</span>
-        <span style={{ fontSize: 10, color: '#9CA3AF' }}>{open ? '\u25B2' : '\u25BC'}</span>
+        <span className={`flex-1 text-xs ${hasRange ? 'text-gray-700' : 'text-gray-400'}`}>{display}</span>
+        <span className="text-[10px] text-gray-400">{open ? '\u25B2' : '\u25BC'}</span>
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 100,
-          background: '#fff', border: '1px solid #E5E7EB', borderRadius: 6,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: 12, marginTop: 2, minWidth: 220,
-        }}>
-          <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', display: 'block', marginBottom: 4 }}>From</label>
+        <div className="absolute top-full left-0 z-[100] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] p-3 mt-0.5 min-w-[220px]">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">From</label>
           <input
-            style={{ ...S.input, width: '100%', marginBottom: 10 }}
+            className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full mb-2.5"
             type="date"
             value={dateFrom}
             max={dateTo || undefined}
             onKeyDown={(e) => e.preventDefault()}
             onChange={(e) => onChange(e.target.value, dateTo)}
           />
-          <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', display: 'block', marginBottom: 4 }}>To</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">To</label>
           <input
-            style={{ ...S.input, width: '100%', marginBottom: 10 }}
+            className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full mb-2.5"
             type="date"
             value={dateTo}
             min={dateFrom || undefined}
@@ -421,7 +407,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
           />
           {hasRange && (
             <button
-              style={{ ...S.cancelBtn, width: '100%', padding: '6px 10px', fontSize: 11 }}
+              className="bg-white text-gray-700 border border-gray-200 w-full py-1.5 px-2.5 rounded-md text-[11px] font-medium cursor-pointer"
               onClick={() => { onChange('', ''); setOpen(false); }}
             >Clear Dates</button>
           )}
@@ -443,23 +429,23 @@ function CartItemsEditor({ items, onChange }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-        <span style={{ ...S.fieldLabel, flex: 3 }}>ITEM NAME</span>
-        <span style={{ ...S.fieldLabel, flex: 1, textAlign: 'center' }}>QTY</span>
-        <span style={{ ...S.fieldLabel, flex: 1.5, textAlign: 'right' }}>RATE (\u20B9)</span>
-        <span style={{ width: 28 }} />
+      <div className="flex gap-2 mb-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 flex-[3]">ITEM NAME</span>
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 flex-1 text-center">QTY</span>
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 flex-[1.5] text-right">RATE (\u20B9)</span>
+        <span className="w-7" />
       </div>
       {items.map((it, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-          <input style={{ ...S.input, flex: 3 }} value={it.name} placeholder="Item name" onChange={(e) => update(i, 'name', e.target.value)} />
-          <input style={{ ...S.input, flex: 1, textAlign: 'center' }} type="number" min="1" value={it.qty} onChange={(e) => update(i, 'qty', e.target.value)} />
-          <input style={{ ...S.input, flex: 1.5, textAlign: 'right' }} type="number" min="0" value={it.price} onChange={(e) => update(i, 'price', e.target.value)} />
-          <button style={S.removeBtn} onClick={() => remove(i)} title="Remove">&times;</button>
+        <div key={i} className="flex gap-2 mb-1.5 items-center">
+          <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans flex-[3]" value={it.name} placeholder="Item name" onChange={(e) => update(i, 'name', e.target.value)} />
+          <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans flex-1 text-center" type="number" min="1" value={it.qty} onChange={(e) => update(i, 'qty', e.target.value)} />
+          <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans flex-[1.5] text-right" type="number" min="0" value={it.price} onChange={(e) => update(i, 'price', e.target.value)} />
+          <button className="bg-transparent border-none text-red-500 text-lg cursor-pointer w-7 leading-none" onClick={() => remove(i)} title="Remove">&times;</button>
         </div>
       ))}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <span style={{ ...S.addItemLink, cursor: 'pointer' }} onClick={add}>+ Add Item</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 13 }}>Subtotal: {fmtINR(total)}</span>
+      <div className="flex justify-between items-center mt-2">
+        <span className="text-[#EAB308] text-xs font-semibold cursor-pointer" onClick={add}>+ Add Item</span>
+        <span className="font-mono font-semibold text-[13px]">Subtotal: {fmtINR(total)}</span>
       </div>
     </div>
   );
@@ -469,28 +455,28 @@ function CartItemsEditor({ items, onChange }) {
 function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
   const [text, setText] = useState('');
   return (
-    <div style={S.overlay}>
-      <div style={{ ...S.modalBox, maxWidth: 400 }}>
-        <div style={S.modalHeader}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Follow-up Date Changed</span>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
+      <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[400px]">
+        <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
+          <span className="font-semibold text-sm">Follow-up Date Changed</span>
         </div>
-        <div style={{ padding: 20 }}>
-          <p style={{ marginBottom: 12, fontSize: 13 }}>
-            <span style={{ color: '#9CA3AF' }}>{fmtDate(oldDate)}</span>
+        <div className="p-5">
+          <p className="mb-3 text-[13px]">
+            <span className="text-gray-400">{fmtDate(oldDate)}</span>
             {' \u2192 '}
-            <span style={{ fontWeight: 600 }}>{fmtDate(newDate)}</span>
+            <span className="font-semibold">{fmtDate(newDate)}</span>
           </p>
-          <label style={S.fieldLabel}>REASON FOR CHANGE *</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">REASON FOR CHANGE *</label>
           <textarea
-            style={{ ...S.input, width: '100%', minHeight: 80, marginTop: 4, resize: 'vertical' }}
+            className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full min-h-[80px] mt-1 resize-y"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter reason for changing follow-up date..."
             autoFocus
           />
-          <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-            <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-            <button style={{ ...S.primaryBtn, opacity: text.trim() ? 1 : 0.5 }} disabled={!text.trim()} onClick={() => onConfirm(text.trim())}>Confirm</button>
+          <div className="flex gap-2 mt-4 justify-end">
+            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
+            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer ${text.trim() ? 'opacity-100' : 'opacity-50'}`} disabled={!text.trim()} onClick={() => onConfirm(text.trim())}>Confirm</button>
           </div>
         </div>
       </div>
@@ -597,54 +583,53 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
 
   return (
     <>
-      <div style={S.drawerBackdrop} onClick={onClose} />
-      <div style={S.drawer}>
-        <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+      <div className="fixed inset-0 bg-black/30 z-[900]" onClick={onClose} />
+      <div className="fixed top-0 right-0 w-[480px] h-screen bg-white z-[901] flex flex-col shadow-[-4px_0_20px_rgba(0,0,0,0.1)] animate-[slideInRight_0.25s_ease-out]">
         {/* Header */}
-        <div style={S.drawerHeader}>
+        <div className="bg-[#1A1A1A] px-4 py-3 flex justify-between items-center">
           <div>
-            <span style={{ fontWeight: 600, fontSize: 14, color: '#fff' }}>{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
-            {isEdit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9CA3AF', marginLeft: 8 }}>{form.id}</span>}
+            <span className="font-semibold text-sm text-white">{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
+            {isEdit && <span className="font-mono text-[11px] text-gray-400 ml-2">{form.id}</span>}
           </div>
-          <button style={S.closeBtn} onClick={onClose}>&times;</button>
+          <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={onClose}>&times;</button>
         </div>
 
         {/* Scrollable content: Details + Remarks + Visits together */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="flex-1 overflow-y-auto">
           {/* Details Section */}
-          <div style={{ padding: 20 }}>
-            <div style={S.drawerSectionTitle}>Details</div>
-            <div style={S.formGridDrawer}>
+          <div className="p-5">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">Details</div>
+            <div className="grid grid-cols-2 gap-x-3">
               <Field label="LEAD ID">
-                <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace", background: '#F3F4F6' }} value={form.id} readOnly />
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono bg-gray-100" value={form.id} readOnly />
               </Field>
               <Field label="CREATION DATE">
-                <input style={{ ...S.input, width: '100%' }} type="date" value={form.createdAt} onKeyDown={(e) => e.preventDefault()} onChange={(e) => set('createdAt', e.target.value)} />
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" type="date" value={form.createdAt} onKeyDown={(e) => e.preventDefault()} onChange={(e) => set('createdAt', e.target.value)} />
               </Field>
               <Field label="CLIENT NAME">
-                <input style={{ ...S.input, width: '100%' }} value={form.clientName || ''} placeholder="Client name" onChange={(e) => set('clientName', e.target.value)} />
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientName || ''} placeholder="Client name" onChange={(e) => set('clientName', e.target.value)} />
               </Field>
               <Field label="CLIENT PHONE">
-                <input style={{ ...S.input, width: '100%' }} value={form.clientPhone || ''} placeholder="10-digit phone" onChange={(e) => set('clientPhone', e.target.value)} />
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientPhone || ''} placeholder="10-digit phone" onChange={(e) => set('clientPhone', e.target.value)} />
               </Field>
               <Field label="ASSIGNED TO">
-                <select style={{ ...S.input, width: '100%' }} value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
                   {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
               <Field label="BRANCH">
-                <select style={{ ...S.input, width: '100%' }} value={form.branch} onChange={(e) => set('branch', e.target.value)}>
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
                   {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </Field>
               <Field label="STATUS">
-                <select style={{ ...S.input, width: '100%' }} value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
               {form.status === 'Order Lost' && (
                 <Field label="LOST REASON">
-                  <select style={{ ...S.input, width: '100%', borderColor: !form.lostReason ? '#EF4444' : undefined }} value={form.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)}>
+                  <select className={`px-2.5 py-2 text-[13px] border rounded-md outline-none font-sans w-full ${!form.lostReason ? 'border-red-500' : 'border-gray-200'}`} value={form.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)}>
                     <option value="" disabled>Select reason...</option>
                     {ORDER_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
@@ -652,106 +637,106 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
               )}
               <Field label="FOLLOW-UP DATE">
                 <div
-                  style={{ ...S.input, width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}
+                  className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full cursor-pointer flex items-center justify-between bg-white"
                   onClick={() => setDrawerDatePopup('followUpDate')}
                 >
-                  <span style={{ fontSize: 13, color: form.followUpDate ? '#374151' : '#9CA3AF' }}>{form.followUpDate ? fmtDate(form.followUpDate) : 'Click to set date'}</span>
-                  {form.followUpDate && <span style={{ fontSize: 11, color: '#9CA3AF', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); set('followUpDate', ''); }}>{'\u2715'}</span>}
+                  <span className={`text-[13px] ${form.followUpDate ? 'text-gray-700' : 'text-gray-400'}`}>{form.followUpDate ? fmtDate(form.followUpDate) : 'Click to set date'}</span>
+                  {form.followUpDate && <span className="text-[11px] text-gray-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); set('followUpDate', ''); }}>{'\u2715'}</span>}
                 </div>
               </Field>
               <Field label="CLOSURE EXPECTED">
                 <div
-                  style={{ ...S.input, width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}
+                  className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full cursor-pointer flex items-center justify-between bg-white"
                   onClick={() => setDrawerDatePopup('closureDate')}
                 >
-                  <span style={{ fontSize: 13, color: form.closureDate ? '#374151' : '#9CA3AF' }}>{form.closureDate ? fmtDate(form.closureDate) : 'Click to set date'}</span>
-                  {form.closureDate && <span style={{ fontSize: 11, color: '#9CA3AF', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); set('closureDate', ''); }}>{'\u2715'}</span>}
+                  <span className={`text-[13px] ${form.closureDate ? 'text-gray-700' : 'text-gray-400'}`}>{form.closureDate ? fmtDate(form.closureDate) : 'Click to set date'}</span>
+                  {form.closureDate && <span className="text-[11px] text-gray-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); set('closureDate', ''); }}>{'\u2715'}</span>}
                 </div>
               </Field>
               <Field label="CART VALUE">
-                <input style={{ ...S.input, width: '100%', fontFamily: "'JetBrains Mono', monospace" }} type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono" type="number" min="0" value={form.cartValue} onChange={(e) => set('cartValue', Number(e.target.value) || 0)} />
               </Field>
             </div>
-            <div style={{ marginTop: 8 }}>
-              <label style={S.fieldLabel}>CART ITEMS</label>
+            <div className="mt-2">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">CART ITEMS</label>
               <CartItemsEditor items={form.cartItems} onChange={(items) => set('cartItems', items)} />
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
-              <button style={{ ...S.primaryBtn, flex: 1 }} onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
+            <div className="flex gap-2 mt-4">
+              <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onClose}>Cancel</button>
+              <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1" onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
             </div>
           </div>
 
           {/* Remarks Section */}
           {isEdit && (
-            <div style={{ borderTop: '2px solid #E5E7EB' }}>
-              <div style={{ padding: '16px 20px 0 20px' }}>
-                <div style={S.drawerSectionTitle}>Remarks {remarks.length > 0 && <span style={{ color: '#9CA3AF', fontWeight: 400 }}>({remarks.length})</span>}</div>
+            <div className="border-t-2 border-gray-200">
+              <div className="pt-4 px-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">Remarks {remarks.length > 0 && <span className="text-gray-400 font-normal">({remarks.length})</span>}</div>
               </div>
-              <div ref={timelineRef} style={{ padding: '12px 20px' }}>
-                {remarks.length === 0 && <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No remarks yet</p>}
+              <div ref={timelineRef} className="px-5 py-3">
+                {remarks.length === 0 && <p className="text-gray-400 text-[13px] text-center py-5">No remarks yet</p>}
                 {remarks.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16, position: 'relative' }}>
-                    {i < remarks.length - 1 && <div style={{ position: 'absolute', left: 13, top: 32, bottom: -16, width: 1, background: '#E5E7EB' }} />}
+                  <div key={i} className="flex gap-2.5 mb-4 relative">
+                    {i < remarks.length - 1 && <div className="absolute left-[13px] top-8 -bottom-4 w-px bg-gray-200" />}
                     <Avatar name={r.author} size={28} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600 }}>{r.author}</span>
-                        <span style={{ color: '#9CA3AF', marginLeft: 8 }}>{fmtTimestamp(r.ts)}</span>
+                    <div className="flex-1">
+                      <div className="text-xs mb-1">
+                        <span className="font-semibold">{r.author}</span>
+                        <span className="text-gray-400 ml-2">{fmtTimestamp(r.ts)}</span>
                       </div>
-                      <div style={S.remarkBubble}>{r.text}</div>
+                      <div className="bg-[#FAFAFA] px-3 py-2 rounded-lg text-[13px] leading-relaxed border border-gray-200">{r.text}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div style={{ padding: '0 20px 20px 20px' }}>
-                <select style={{ ...S.input, width: '100%', marginBottom: 8, fontSize: 12 }} value={remarkAuthor} onChange={(e) => setRemarkAuthor(e.target.value)}>
+              <div className="px-5 pb-5">
+                <select className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full mb-2" value={remarkAuthor} onChange={(e) => setRemarkAuthor(e.target.value)}>
                   {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
                 <textarea
-                  style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
+                  className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[60px] resize-y"
                   value={remarkText}
                   onChange={(e) => setRemarkText(e.target.value)}
                   onKeyDown={handleRemarkKeyDown}
                   placeholder="Add a remark... (Ctrl+Enter to submit)"
                 />
-                <button style={{ ...S.primaryBtn, width: '100%', marginTop: 8 }} disabled={!remarkText.trim()} onClick={submitRemark}>Add Remark</button>
+                <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer w-full mt-2" disabled={!remarkText.trim()} onClick={submitRemark}>Add Remark</button>
               </div>
             </div>
           )}
 
           {/* Visit History Section */}
           {isEdit && (
-            <div style={{ borderTop: '2px solid #E5E7EB' }}>
-              <div style={{ padding: '16px 20px 0 20px' }}>
-                <div style={S.drawerSectionTitle}>Visit History {visits.length > 0 && <span style={{ color: '#9CA3AF', fontWeight: 400 }}>({visits.length})</span>}</div>
+            <div className="border-t-2 border-gray-200">
+              <div className="pt-4 px-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">Visit History {visits.length > 0 && <span className="text-gray-400 font-normal">({visits.length})</span>}</div>
               </div>
-              <div style={{ padding: '0 20px 12px 20px' }}>
-                {visits.length === 0 && <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No visits recorded</p>}
+              <div className="px-5 pb-3">
+                {visits.length === 0 && <p className="text-gray-400 text-[13px] text-center py-5">No visits recorded</p>}
                 {visits.map((v, i) => (
-                  <div key={i} style={{ marginBottom: 12, border: '1px solid #E5E7EB', borderRadius: 6, padding: 10, background: '#FAFAFA' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(v.date)}</span>
-                      <span style={{ fontSize: 11, background: '#EAB30818', color: '#B45309', padding: '2px 8px', borderRadius: 10, fontWeight: 500 }}>{v.channel}</span>
+                  <div key={i} className="mb-3 border border-gray-200 rounded-md p-2.5 bg-[#FAFAFA]">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs font-semibold">{fmtDate(v.date)}</span>
+                      <span className="text-[11px] bg-[#EAB30818] text-amber-700 px-2 py-0.5 rounded-[10px] font-medium">{v.channel}</span>
                     </div>
                     {v.cartSnapshot && v.cartSnapshot.length > 0 ? (
-                      <div style={{ fontSize: 11, color: '#6B7280' }}>
+                      <div className="text-[11px] text-gray-500">
                         {v.cartSnapshot.map((c, ci) => (
                           <div key={ci}>{c.name} x{c.qty} @ {fmtINR(c.price)}</div>
                         ))}
                       </div>
                     ) : (
-                      <div style={{ fontSize: 11, color: '#9CA3AF' }}>No cart items at this visit</div>
+                      <div className="text-[11px] text-gray-400">No cart items at this visit</div>
                     )}
                   </div>
                 ))}
               </div>
-              <div style={{ padding: '0 20px 20px 20px' }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select style={{ ...S.input, flex: 1, fontSize: 12 }} value={visitChannel} onChange={(e) => setVisitChannel(e.target.value)}>
+              <div className="px-5 pb-5">
+                <div className="flex gap-2 items-center">
+                  <select className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans flex-1" value={visitChannel} onChange={(e) => setVisitChannel(e.target.value)}>
                     {VISIT_CHANNELS.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
                   </select>
-                  <button style={{ ...S.primaryBtn, whiteSpace: 'nowrap' }} onClick={logVisit}>Log Visit</button>
+                  <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={logVisit}>Log Visit</button>
                 </div>
               </div>
             </div>
@@ -804,41 +789,41 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
   };
 
   return (
-    <div style={S.overlay} onClick={onCancel}>
-      <div style={{ ...S.modalBox, maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Update {label}</span>
-          <button style={S.closeBtn} onClick={onCancel}>&times;</button>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]" onClick={onCancel}>
+      <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[380px]" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
+          <span className="font-semibold text-sm">Update {label}</span>
+          <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={onCancel}>&times;</button>
         </div>
-        <div style={{ padding: 20 }}>
+        <div className="p-5">
           {currentDate && (
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10 }}>
-              Current: <span style={{ fontWeight: 600, color: '#374151' }}>{fmtDate(currentDate)}</span>
+            <div className="text-xs text-gray-400 mb-2.5">
+              Current: <span className="font-semibold text-gray-700">{fmtDate(currentDate)}</span>
             </div>
           )}
-          <label style={S.fieldLabel}>NEW DATE</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">NEW DATE</label>
           <input
-            style={{ ...S.input, width: '100%', marginBottom: 4, borderColor: warning ? '#EF4444' : undefined }}
+            className={`px-2.5 py-2 text-[13px] border rounded-md outline-none font-sans w-full mb-1 ${warning ? 'border-red-500' : 'border-gray-200'}`}
             type="date"
             value={newDate}
             onKeyDown={(e) => e.preventDefault()}
             onChange={(e) => handleDateChange(e.target.value)}
             autoFocus
           />
-          {warning && <div style={{ fontSize: 11, color: '#EF4444', marginBottom: 8 }}>{warning}</div>}
-          {autoUpdateNote && <div style={{ fontSize: 11, color: '#EAB308', marginBottom: 8 }}>{autoUpdateNote}</div>}
-          <div style={{ marginTop: 8 }}>
-            <label style={S.fieldLabel}>REMARK (OPTIONAL)</label>
+          {warning && <div className="text-[11px] text-red-500 mb-2">{warning}</div>}
+          {autoUpdateNote && <div className="text-[11px] text-[#EAB308] mb-2">{autoUpdateNote}</div>}
+          <div className="mt-2">
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">REMARK (OPTIONAL)</label>
             <textarea
-              style={{ ...S.input, width: '100%', minHeight: 60, resize: 'vertical', fontSize: 12 }}
+              className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[60px] resize-y"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
               placeholder={'Reason for changing ' + label.toLowerCase() + '...'}
             />
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-            <button style={{ ...S.primaryBtn, flex: 1, opacity: warning ? 0.5 : 1 }} disabled={!!warning} onClick={handleSave}>Save</button>
+          <div className="flex gap-2 mt-4">
+            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
+            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${warning ? 'opacity-50' : 'opacity-100'}`} disabled={!!warning} onClick={handleSave}>Save</button>
           </div>
         </div>
       </div>
@@ -849,16 +834,16 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
 // ── Delete Confirmation ─────────────────────────────────────────────────────
 function DeleteConfirm({ leadId, onConfirm, onCancel }) {
   return (
-    <div style={S.overlay}>
-      <div style={{ ...S.modalBox, maxWidth: 360 }}>
-        <div style={S.modalHeader}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Delete Lead</span>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
+      <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[360px]">
+        <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
+          <span className="font-semibold text-sm">Delete Lead</span>
         </div>
-        <div style={{ padding: 20, textAlign: 'center' }}>
-          <p style={{ marginBottom: 16, fontSize: 13 }}>Are you sure you want to delete lead <strong>{leadId}</strong>? This action cannot be undone.</p>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-            <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-            <button style={{ ...S.primaryBtn, background: '#EF4444' }} onClick={onConfirm}>Delete</button>
+        <div className="p-5 text-center">
+          <p className="mb-4 text-[13px]">Are you sure you want to delete lead <strong>{leadId}</strong>? This action cannot be undone.</p>
+          <div className="flex gap-2 justify-center">
+            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
+            <button className="bg-red-500 text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={onConfirm}>Delete</button>
           </div>
         </div>
       </div>
@@ -1234,68 +1219,64 @@ export default function App() {
   const COL_COUNT = 14;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
+    <div className="min-h-screen bg-[#FAFAFA]">
       {/* Header */}
-      <header style={{ ...S.header, justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>material</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#EAB308', marginLeft: -10 }}>depot</span>
-          <span style={{ fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>Sales CRM</span>
+      <header className="sticky top-0 z-[900] h-12 bg-[#1A1A1A] flex items-center px-6 justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-white">material</span>
+          <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
+          <span className="text-xs text-gray-400 ml-2">Sales CRM</span>
         </div>
         <button
-          style={{ background: 'none', border: '1px solid #444', borderRadius: 4, color: '#9CA3AF', fontSize: 11, padding: '4px 10px', cursor: 'pointer' }}
+          className="bg-transparent border border-[#444] rounded text-gray-400 text-[11px] py-1 px-2.5 cursor-pointer"
           onClick={() => { if (window.confirm('Reset all data to 105 demo leads? This will erase your current data.')) { localStorage.removeItem(LS_KEY); setLeads(SEED_LEADS); } }}
         >Reset Demo Data</button>
       </header>
 
-      <div style={{ padding: '16px 24px' }}>
+      <div className="px-6 py-4">
         {/* Pipeline Revenue Summary */}
-        <div style={S.pipelineCard}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div className="bg-white rounded-lg px-6 py-4 border border-gray-200">
+          <div className="flex justify-between flex-wrap gap-4">
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF' }}>Total Pipeline Value</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 700, color: '#000' }}>{fmtINR(pipelineTotal)}</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF' }}>{leads.length} leads</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Total Pipeline Value</div>
+              <div className="font-mono text-[22px] font-bold text-black">{fmtINR(pipelineTotal)}</div>
+              <div className="text-[11px] text-gray-400">{leads.length} leads</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF' }}>Active Pipeline</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: '#EAB308' }}>{fmtINR(pipelineActive)}</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF' }}>{activeCount} leads</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Active Pipeline</div>
+              <div className="font-mono text-lg font-bold text-[#EAB308]">{fmtINR(pipelineActive)}</div>
+              <div className="text-[11px] text-gray-400">{activeCount} leads</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF' }}>Won</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: '#15803D' }}>{fmtINR(pipelineWon)}</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF' }}>{wonCount} leads</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Won</div>
+              <div className="font-mono text-lg font-bold text-green-700">{fmtINR(pipelineWon)}</div>
+              <div className="text-[11px] text-gray-400">{wonCount} leads</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF' }}>Lost / Refunded</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: '#9CA3AF' }}>{fmtINR(pipelineLost)}</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF' }}>{lostCount} leads</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Lost / Refunded</div>
+              <div className="font-mono text-lg font-bold text-gray-400">{fmtINR(pipelineLost)}</div>
+              <div className="text-[11px] text-gray-400">{lostCount} leads</div>
             </div>
           </div>
           {/* Stacked bar */}
-          <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', marginTop: 16, background: '#E5E7EB' }}>
-            <div style={{ width: pctWon + '%', background: '#22C55E', transition: 'width 0.3s' }} />
-            <div style={{ width: pctActive + '%', background: '#EAB308', transition: 'width 0.3s' }} />
-            <div style={{ width: pctLost + '%', background: '#9CA3AF', transition: 'width 0.3s' }} />
+          <div className="flex h-1.5 rounded-sm overflow-hidden mt-4 bg-gray-200">
+            <div className="bg-green-500 transition-[width] duration-300" style={{ width: pctWon + '%' }} />
+            <div className="bg-[#EAB308] transition-[width] duration-300" style={{ width: pctActive + '%' }} />
+            <div className="bg-gray-400 transition-[width] duration-300" style={{ width: pctLost + '%' }} />
           </div>
           {/* Per-status chips */}
           {statusChips.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            <div className="flex flex-wrap gap-2 mt-3">
               {statusChips.map((sc) => (
                 <span
                   key={sc.status}
                   onClick={() => toggleStatusFilter(sc.status)}
-                  style={{
-                    ...S.chip,
-                    border: statusFilter.includes(sc.status) ? '1px solid #EAB308' : '1px solid #E5E7EB',
-                    cursor: 'pointer',
-                  }}
+                  className={`inline-flex items-center px-2.5 py-1 rounded-2xl bg-white text-[11px] cursor-pointer border ${statusFilter.includes(sc.status) ? 'border-[#EAB308]' : 'border-gray-200'}`}
                 >
-                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: STATUS_COLORS[sc.status], marginRight: 6 }} />
-                  <span style={{ fontSize: 11 }}>{sc.status}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, marginLeft: 6 }}>{fmtINR(sc.value)}</span>
-                  <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 4 }}>({sc.count})</span>
+                  <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: STATUS_COLORS[sc.status] }} />
+                  <span className="text-[11px]">{sc.status}</span>
+                  <span className="font-mono text-[11px] font-semibold ml-1.5">{fmtINR(sc.value)}</span>
+                  <span className="text-[10px] text-gray-400 ml-1">({sc.count})</span>
                 </span>
               ))}
             </div>
@@ -1303,24 +1284,19 @@ export default function App() {
         </div>
 
         {/* Stage Cards */}
-        <div style={{ display: 'flex', gap: 12, marginTop: 12, overflowX: 'auto', paddingBottom: 4 }}>
+        <div className="flex gap-3 mt-3 overflow-x-auto pb-1">
           {stageSummary.map((ss) => {
             const active = statusFilter.includes(ss.status);
             return (
               <div
                 key={ss.status}
                 onClick={() => toggleStatusFilter(ss.status)}
-                style={{
-                  ...S.stageCard,
-                  borderColor: active ? '#EAB308' : '#E5E7EB',
-                  cursor: 'pointer',
-                  flex: '1 0 140px',
-                }}
+                className={`bg-white rounded-lg px-4 py-3 border-[1.5px] text-center min-w-[130px] cursor-pointer flex-[1_0_140px] ${active ? 'border-[#EAB308]' : 'border-gray-200'}`}
               >
-                <div style={{ fontSize: 24, fontWeight: 700, color: active ? '#EAB308' : '#374151' }}>{ss.count}</div>
-                <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', marginTop: 2 }}>{ss.status}</div>
+                <div className={`text-2xl font-bold ${active ? 'text-[#EAB308]' : 'text-gray-700'}`}>{ss.count}</div>
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">{ss.status}</div>
                 {ss.value > 0 && (
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: STATUS_COLORS[ss.status], marginTop: 4 }}>{fmtINR(ss.value)}</div>
+                  <div className="font-mono text-[11px] font-semibold mt-1" style={{ color: STATUS_COLORS[ss.status] }}>{fmtINR(ss.value)}</div>
                 )}
               </div>
             );
@@ -1328,10 +1304,10 @@ export default function App() {
         </div>
 
         {/* Toolbar */}
-        <div style={S.toolbar}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+        <div className="flex justify-between items-center py-3 gap-3 flex-wrap">
+          <div className="flex gap-2 items-center flex-wrap flex-1">
             <input
-              style={{ ...S.input, width: 220 }}
+              className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[220px]"
               placeholder="Search leads..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1340,32 +1316,32 @@ export default function App() {
             <MultiSelect options={SALES_PEOPLE} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
             <MultiSelect options={BRANCHES} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
             <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', marginLeft: 4 }}>{'\u20B9'} &gt;</span>
+            <span className="text-[10px] font-semibold text-gray-400 ml-1">{'\u20B9'} &gt;</span>
             <input
-              style={{ ...S.input, width: 130, fontFamily: "'JetBrains Mono', monospace" }}
+              className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[130px] font-mono"
               type="text"
               inputMode="numeric"
               placeholder="0"
               value={cartValueGt ? Number(cartValueGt).toLocaleString('en-IN') : ''}
               onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setCartValueGt(v); }}
             />
-            {cartValueGt !== '' && <button style={{ ...S.cancelBtn, padding: '6px 10px', fontSize: 11 }} onClick={() => { setCartValueGt(''); }}>Clear</button>}
-            <span style={{ fontSize: 12, color: '#6B7280' }}>{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
+            {cartValueGt !== '' && <button className="bg-white text-gray-700 border border-gray-200 py-1.5 px-2.5 rounded-md text-[11px] font-medium cursor-pointer" onClick={() => { setCartValueGt(''); }}>Clear</button>}
+            <span className="text-xs text-gray-500">{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button style={S.cancelBtn} onClick={downloadCsvTemplate}>Download Template</button>
-            <button style={S.cancelBtn} onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
-            <input ref={csvFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvFile} />
-            <button style={S.primaryBtn} onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
+          <div className="flex gap-2 items-center">
+            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={downloadCsvTemplate}>Download Template</button>
+            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
+            <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+            <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
           </div>
         </div>
 
         {/* Table */}
-        <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
               <thead>
-                <tr style={{ background: '#FAFAFA' }}>
+                <tr className="bg-[#FAFAFA]">
                   <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -1377,85 +1353,83 @@ export default function App() {
                   <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Closure Date" sortKey="closureDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Visits" sortKey="visitCount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ textAlign: 'center' }} />
-                  <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ textAlign: 'right' }} />
-                  <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ textAlign: 'center' }} />
+                  <Th label="Visits" sortKey="visitCount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
+                  <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                  <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((l) => (
                   <tr
                     key={l.id}
-                    style={{ borderTop: '1px solid #E5E7EB' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#FFFAF7'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
+                    className="border-t border-gray-200 hover:bg-[#FFFAF7]"
                   >
-                    <td style={S.td}>
-                      <span style={S.leadIdChip}>{l.id}</span>
+                    <td className="px-3 py-2.5 text-[13px] align-middle">
+                      <span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded">{l.id}</span>
                     </td>
-                    <td style={{ ...S.td, fontSize: 12 }}>{l.clientName || '\u2014'}</td>
-                    <td style={{ ...S.td, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>{l.clientPhone || '\u2014'}</td>
-                    <td style={{ ...S.td, color: '#6B7280', fontSize: 12 }}>{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>
-                    <td style={{ ...S.td, color: '#6B7280', fontSize: 12 }}>{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>
-                    <td style={S.td}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle">
+                      <div className="flex items-center gap-1.5">
                         <Avatar name={l.assignedTo} />
-                        <span style={{ fontSize: 12 }}>{l.assignedTo}</span>
+                        <span className="text-xs">{l.assignedTo}</span>
                       </div>
                     </td>
-                    <td style={{ ...S.td, fontSize: 12 }}>{l.branch || '\u2014'}</td>
-                    <td style={S.td}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.branch || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle">
                       <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>
-                    <td style={{ ...S.td, fontSize: 12, maxWidth: 160 }}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[160px]">
                       {(l.cartItems || []).slice(0, 2).map((it, i) => (
-                        <div key={i} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div key={i} className="whitespace-nowrap overflow-hidden text-ellipsis">
                           {it.name} x{it.qty}
                         </div>
                       ))}
-                      {(l.cartItems || []).length > 2 && <span style={{ color: '#9CA3AF', fontSize: 11 }}>+{l.cartItems.length - 2} more</span>}
+                      {(l.cartItems || []).length > 2 && <span className="text-gray-400 text-[11px]">+{l.cartItems.length - 2} more</span>}
                     </td>
-                    <td style={{ ...S.td, cursor: 'pointer' }} onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
                       {l.followUpDate ? (
-                        <span style={{ fontWeight: isOverdue(l) ? 700 : 400, color: isOverdue(l) ? '#EF4444' : '#374151', fontSize: 12, borderBottom: '1px dashed #D1D5DB' }}>
+                        <span className={`text-xs border-b border-dashed border-gray-300 ${isOverdue(l) ? 'font-bold text-red-500' : 'font-normal text-gray-700'}`}>
                           {isOverdue(l) && '\u26A0 '}{fmtDate(l.followUpDate)}
                         </span>
-                      ) : <span style={{ color: '#9CA3AF', fontSize: 11, borderBottom: '1px dashed #D1D5DB' }}>+ Set date</span>}
+                      ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
                     </td>
-                    <td style={{ ...S.td, cursor: 'pointer' }} onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
                       {l.closureDate ? (
-                        <span style={{ fontSize: 12, color: '#6B7280', borderBottom: '1px dashed #D1D5DB' }}>{fmtDate(l.closureDate)}</span>
-                      ) : <span style={{ color: '#9CA3AF', fontSize: 11, borderBottom: '1px dashed #D1D5DB' }}>+ Set date</span>}
+                        <span className="text-xs text-gray-500 border-b border-dashed border-gray-300">{fmtDate(l.closureDate)}</span>
+                      ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
                     </td>
-                    <td style={{ ...S.td, textAlign: 'center' }}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-center">
                       {(l.visits || []).length > 0 ? (
-                        <span style={S.visitBadge}>{(l.visits || []).length}</span>
+                        <span className="inline-flex items-center justify-center bg-[#3B82F618] text-blue-500 font-bold text-[11px] rounded-full w-[22px] h-[22px] border border-[#3B82F640]">{(l.visits || []).length}</span>
                       ) : (
-                        <span style={{ color: '#9CA3AF', fontSize: 11 }}>0</span>
+                        <span className="text-gray-400 text-[11px]">0</span>
                       )}
                     </td>
-                    <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13 }}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
                       {fmtINR(l.cartValue)}
                     </td>
-                    <td style={{ ...S.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button style={S.actionBtn} title="Edit" onClick={() => setDrawerLead(l)}>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-center whitespace-nowrap">
+                      <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-gray-700 relative" title="Edit" onClick={() => setDrawerLead(l)}>
                         Edit
-                        {(l.remarks || []).length > 0 && <span style={S.remarksBadge}>{l.remarks.length}</span>}
+                        {(l.remarks || []).length > 0 && <span className="absolute -top-0.5 -right-1 bg-[#EAB308] text-white text-[9px] font-bold rounded-full w-4 h-4 inline-flex items-center justify-center">{l.remarks.length}</span>}
                       </button>
-                      <button style={{ ...S.actionBtn, color: '#EF4444' }} title="Delete" onClick={() => setDeleteLead(l)}>{'\u2715'}</button>
+                      <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-red-500 relative" title="Delete" onClick={() => setDeleteLead(l)}>{'\u2715'}</button>
                     </td>
                   </tr>
                 ))}
                 {sorted.length === 0 && (
-                  <tr><td colSpan={COL_COUNT} style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>No leads found</td></tr>
+                  <tr><td colSpan={COL_COUNT} className="p-10 text-center text-gray-400">No leads found</td></tr>
                 )}
               </tbody>
               {filtered.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#FFF7F0' }}>
-                    <td colSpan={COL_COUNT - 2} style={{ ...S.td, fontWeight: 600, fontSize: 12 }}>Total ({filtered.length} lead{filtered.length !== 1 ? 's' : ''})</td>
-                    <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: '#EAB308' }}>{fmtINR(filteredTotal)}</td>
-                    <td style={S.td} />
+                  <tr className="bg-[#FFF7F0]">
+                    <td colSpan={COL_COUNT - 2} className="px-3 py-2.5 text-[13px] align-middle font-semibold text-xs">Total ({filtered.length} lead{filtered.length !== 1 ? 's' : ''})</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold text-[#EAB308]">{fmtINR(filteredTotal)}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle" />
                   </tr>
                 </tfoot>
               )}
@@ -1500,22 +1474,22 @@ export default function App() {
 
       {/* CSV Error Modal */}
       {csvErrors && (
-        <div style={S.overlay}>
-          <div style={{ ...S.modalBox, maxWidth: 540 }}>
-            <div style={S.modalHeader}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>CSV Validation Errors</span>
-              <button style={S.closeBtn} onClick={() => setCsvErrors(null)}>&times;</button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
+          <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[540px]">
+            <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
+              <span className="font-semibold text-sm">CSV Validation Errors</span>
+              <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={() => setCsvErrors(null)}>&times;</button>
             </div>
-            <div style={{ padding: 20, maxHeight: 400, overflowY: 'auto' }}>
-              <p style={{ fontSize: 13, marginBottom: 12, color: '#EF4444', fontWeight: 600 }}>
+            <div className="p-5 max-h-[400px] overflow-y-auto">
+              <p className="text-[13px] mb-3 text-red-500 font-semibold">
                 {csvErrors.length} error{csvErrors.length !== 1 ? 's' : ''} found. No leads were imported.
               </p>
-              <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, lineHeight: 1.8, color: '#374151' }}>
+              <ul className="m-0 pl-5 text-xs leading-[1.8] text-gray-700">
                 {csvErrors.map((err, i) => <li key={i}>{err}</li>)}
               </ul>
             </div>
-            <div style={{ padding: '12px 20px', borderTop: '1px solid #E5E7EB', textAlign: 'right' }}>
-              <button style={S.cancelBtn} onClick={() => setCsvErrors(null)}>Close</button>
+            <div className="px-5 py-3 border-t border-gray-200 text-right">
+              <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => setCsvErrors(null)}>Close</button>
             </div>
           </div>
         </div>
@@ -1523,44 +1497,44 @@ export default function App() {
 
       {/* CSV Preview Modal */}
       {csvPreview && (
-        <div style={S.overlay}>
-          <div style={{ ...S.modalBox, maxWidth: 1100 }}>
-            <div style={S.modalHeader}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>Review CSV Import</span>
-              <button style={S.closeBtn} onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>&times;</button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
+          <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[1100px]">
+            <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
+              <span className="font-semibold text-sm">Review CSV Import</span>
+              <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>&times;</button>
             </div>
-            <div style={{ padding: '16px 20px' }}>
-              <p style={{ fontSize: 13, marginBottom: 12, color: '#374151' }}>
+            <div className="px-5 py-4">
+              <p className="text-[13px] mb-3 text-gray-700">
                 <strong>{csvPreview.length}</strong> lead{csvPreview.length !== 1 ? 's' : ''} ready to import
               </p>
-              <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid #E5E7EB', borderRadius: 6 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <div className="max-h-[350px] overflow-y-auto border border-gray-200 rounded-md">
+                <table className="w-full border-collapse text-xs">
                   <thead>
-                    <tr style={{ background: '#FAFAFA', position: 'sticky', top: 0 }}>
-                      <th style={{ ...S.th, width: 32 }}>
+                    <tr className="bg-[#FAFAFA] sticky top-0">
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none w-8">
                         <input type="checkbox" checked={csvSelected.size === csvPreview.length} onChange={(e) => {
                           if (e.target.checked) setCsvSelected(new Set(csvPreview.map((_, i) => i)));
                           else setCsvSelected(new Set());
                         }} />
                       </th>
-                      <th style={S.th}>Row#</th>
-                      <th style={S.th}>Lead ID</th>
-                      <th style={S.th}>Client Name</th>
-                      <th style={S.th}>Phone</th>
-                      <th style={S.th}>Created</th>
-                      <th style={S.th}>Assigned To</th>
-                      <th style={S.th}>Branch</th>
-                      <th style={S.th}>Status</th>
-                      <th style={S.th}>Cart Items</th>
-                      <th style={{ ...S.th, textAlign: 'right' }}>Cart Value</th>
-                      <th style={{ ...S.th, textAlign: 'center' }}>Remarks</th>
-                      <th style={{ ...S.th, textAlign: 'center' }}>Visits</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Row#</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Lead ID</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Client Name</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Phone</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Created</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Assigned To</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Branch</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Status</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Cart Items</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-right whitespace-nowrap select-none">Cart Value</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center whitespace-nowrap select-none">Remarks</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center whitespace-nowrap select-none">Visits</th>
                     </tr>
                   </thead>
                   <tbody>
                     {csvPreview.map((row, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid #F3F4F6', background: csvSelected.has(i) ? '#fff' : '#F9FAFB' }}>
-                        <td style={{ ...S.td, width: 32 }}>
+                      <tr key={i} className={`border-t border-gray-100 ${csvSelected.has(i) ? 'bg-white' : 'bg-gray-50'}`}>
+                        <td className="px-3 py-2.5 text-[13px] align-middle w-8">
                           <input type="checkbox" checked={csvSelected.has(i)} onChange={() => {
                             setCsvSelected((prev) => {
                               const next = new Set(prev);
@@ -1569,29 +1543,29 @@ export default function App() {
                             });
                           }} />
                         </td>
-                        <td style={S.td}>{i + 2}</td>
-                        <td style={S.td}><span style={S.leadIdChip}>{row.leadId}</span></td>
-                        <td style={S.td}>{row.clientName || '\u2014'}</td>
-                        <td style={{ ...S.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{row.clientPhone}</td>
-                        <td style={{ ...S.td, fontSize: 11, color: '#6B7280' }}>{fmtDate(row.createdAt)}</td>
-                        <td style={S.td}>{row.assignedTo}</td>
-                        <td style={S.td}>{row.branch}</td>
-                        <td style={S.td}><StatusBadge status={row.status} /></td>
-                        <td style={{ ...S.td, fontSize: 11, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <td className="px-3 py-2.5 text-[13px] align-middle">{i + 2}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle"><span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded">{row.leadId}</span></td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle">{row.clientName || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle font-mono text-[11px]">{row.clientPhone}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px] text-gray-500">{fmtDate(row.createdAt)}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle">{row.assignedTo}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle">{row.branch}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle"><StatusBadge status={row.status} /></td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px] max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap">
                           {row.cartItems.map((c) => c.name).join('; ') || '\u2014'}
                         </td>
-                        <td style={{ ...S.td, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{fmtINR(row.cartValue)}</td>
-                        <td style={{ ...S.td, textAlign: 'center', fontSize: 11 }}>{row.remarks.length || '\u2014'}</td>
-                        <td style={{ ...S.td, textAlign: 'center', fontSize: 11 }}>{row.visits.length || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono text-[11px]">{fmtINR(row.cartValue)}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.remarks.length || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.visits.length || '\u2014'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-            <div style={{ padding: '12px 20px', borderTop: '1px solid #E5E7EB', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button style={S.cancelBtn} onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>Cancel</button>
-              <button style={{ ...S.primaryBtn, opacity: csvSelected.size === 0 ? 0.5 : 1 }} disabled={csvSelected.size === 0} onClick={importCsvLeads}>
+            <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+              <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => { setCsvPreview(null); setCsvSelected(new Set()); }}>Cancel</button>
+              <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer ${csvSelected.size === 0 ? 'opacity-50' : 'opacity-100'}`} disabled={csvSelected.size === 0} onClick={importCsvLeads}>
                 Import Selected ({csvSelected.size})
               </button>
             </div>
@@ -1601,11 +1575,7 @@ export default function App() {
 
       {/* CSV import confirmation toast */}
       {csvImportCount != null && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#1A1A1A', color: '#fff', padding: '10px 24px', borderRadius: 8,
-          fontSize: 13, fontWeight: 600, zIndex: 1100, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-        }}>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#1A1A1A] text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold z-[1100] shadow-[0_4px_12px_rgba(0,0,0,0.2)]">
           Successfully imported {csvImportCount} lead{csvImportCount !== 1 ? 's' : ''}
         </div>
       )}
@@ -1613,130 +1583,3 @@ export default function App() {
   );
 }
 
-// ── Styles ──────────────────────────────────────────────────────────────────
-const S = {
-  header: {
-    position: 'sticky', top: 0, zIndex: 900, height: 48, background: '#1A1A1A',
-    display: 'flex', alignItems: 'center', padding: '0 24px',
-  },
-  pipelineCard: {
-    background: '#fff', borderRadius: 8, padding: '16px 24px', border: '1px solid #E5E7EB',
-  },
-  stageCard: {
-    background: '#fff', borderRadius: 8, padding: '12px 16px', border: '1.5px solid #E5E7EB',
-    textAlign: 'center', minWidth: 130,
-  },
-  toolbar: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '12px 0', gap: 12, flexWrap: 'wrap',
-  },
-  th: {
-    padding: '10px 12px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-    letterSpacing: '0.06em', color: '#9CA3AF', textAlign: 'left', whiteSpace: 'nowrap',
-    userSelect: 'none',
-  },
-  td: {
-    padding: '10px 12px', fontSize: 13, verticalAlign: 'middle',
-  },
-  leadIdChip: {
-    fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
-    background: '#F3F4F6', padding: '2px 8px', borderRadius: 4,
-  },
-  statusBadge: {
-    display: 'inline-block', padding: '2px 8px', borderRadius: 12,
-    fontSize: 11, fontWeight: 600, border: '1px solid', whiteSpace: 'nowrap',
-  },
-  statusSelect: {
-    padding: '4px 8px', fontSize: 12, border: '1px solid #E5E7EB', borderRadius: 6,
-    outline: 'none',
-  },
-  avatar: {
-    background: '#EAB308', color: '#fff', borderRadius: '50%', display: 'inline-flex',
-    alignItems: 'center', justifyContent: 'center', fontWeight: 600, flexShrink: 0,
-  },
-  input: {
-    padding: '8px 10px', fontSize: 13, border: '1px solid #E5E7EB', borderRadius: 6,
-    outline: 'none', fontFamily: "'Inter', sans-serif",
-  },
-  field: { marginBottom: 12 },
-  fieldLabel: {
-    display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-    letterSpacing: '0.06em', color: '#9CA3AF', marginBottom: 4,
-  },
-  formGrid: {
-    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px',
-  },
-  formGridDrawer: {
-    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px',
-  },
-  overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-  },
-  modalBox: {
-    background: '#fff', borderRadius: 8, overflow: 'hidden', width: '90%',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-  },
-  modalHeader: {
-    background: '#1A1A1A', color: '#fff', padding: '12px 20px',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  },
-  closeBtn: {
-    background: 'none', border: 'none', color: '#9CA3AF', fontSize: 20, cursor: 'pointer',
-    lineHeight: 1,
-  },
-  primaryBtn: {
-    background: '#EAB308', color: '#fff', border: 'none', padding: '8px 20px',
-    borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-  },
-  cancelBtn: {
-    background: '#fff', color: '#374151', border: '1px solid #E5E7EB', padding: '8px 20px',
-    borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-  },
-  removeBtn: {
-    background: 'none', border: 'none', color: '#EF4444', fontSize: 18, cursor: 'pointer',
-    width: 28, lineHeight: 1,
-  },
-  addItemLink: {
-    color: '#EAB308', fontSize: 12, fontWeight: 600, background: 'none', border: 'none',
-  },
-  actionBtn: {
-    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px',
-    fontSize: 13, color: '#374151', position: 'relative',
-  },
-  remarksBadge: {
-    position: 'absolute', top: -2, right: -4, background: '#EAB308', color: '#fff',
-    fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 16, height: 16,
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  },
-  visitBadge: {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    background: '#3B82F618', color: '#3B82F6', fontWeight: 700, fontSize: 11,
-    borderRadius: '50%', width: 22, height: 22, border: '1px solid #3B82F640',
-  },
-  chip: {
-    display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 16,
-    background: '#fff', fontSize: 11,
-  },
-  drawerBackdrop: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 900,
-  },
-  drawer: {
-    position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff',
-    zIndex: 901, display: 'flex', flexDirection: 'column',
-    boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
-    animation: 'slideInRight 0.25s ease-out',
-  },
-  drawerHeader: {
-    background: '#1A1A1A', padding: '12px 16px',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  },
-  drawerSectionTitle: {
-    fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
-    color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #F3F4F6',
-  },
-  remarkBubble: {
-    background: '#FAFAFA', padding: '8px 12px', borderRadius: 8, fontSize: 13,
-    lineHeight: 1.5, border: '1px solid #E5E7EB',
-  },
-};
