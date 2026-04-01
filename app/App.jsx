@@ -680,6 +680,19 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
   const [warning, setWarning] = useState('');
   const [autoUpdateNote, setAutoUpdateNote] = useState('');
 
+  const toDateObj = (s) => {
+    if (!s) return undefined;
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const toStr = (d) => {
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   const validate = (date) => {
     setAutoUpdateNote('');
     if (field === 'closureDate' && followUpDate && date && date < followUpDate) {
@@ -691,9 +704,10 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
     return '';
   };
 
-  const handleDateChange = (d) => {
-    setNewDate(d);
-    setWarning(validate(d));
+  const handleDateSelect = (date) => {
+    const dateStr = toStr(date);
+    setNewDate(dateStr);
+    setWarning(validate(dateStr));
   };
 
   const handleSave = () => {
@@ -709,35 +723,39 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
           <span className="font-semibold text-sm">Update {label}</span>
           <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={onCancel}>&times;</button>
         </div>
-        <div className="p-5">
+        <div className="p-4">
           {currentDate && (
-            <div className="text-xs text-gray-400 mb-2.5">
+            <div className="text-xs text-gray-400 mb-2">
               Current: <span className="font-semibold text-gray-700">{fmtDate(currentDate)}</span>
             </div>
           )}
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">NEW DATE</label>
-          <input
-            className={`px-2.5 py-2 text-[13px] border rounded-md outline-none font-sans w-full mb-1 ${warning ? 'border-red-500' : 'border-gray-200'}`}
-            type="date"
-            value={newDate}
-            onKeyDown={(e) => e.preventDefault()}
-            onChange={(e) => handleDateChange(e.target.value)}
-            autoFocus
-          />
-          {warning && <div className="text-[11px] text-red-500 mb-2">{warning}</div>}
-          {autoUpdateNote && <div className="text-[11px] text-[#EAB308] mb-2">{autoUpdateNote}</div>}
+          {newDate && newDate !== currentDate && (
+            <div className="text-xs text-[#EAB308] mb-2">
+              New: <span className="font-semibold">{fmtDate(newDate)}</span>
+            </div>
+          )}
+          <div className="flex justify-center">
+            <DayPicker
+              className="rdp-compact"
+              mode="single"
+              selected={toDateObj(newDate)}
+              onSelect={handleDateSelect}
+            />
+          </div>
+          {warning && <div className="text-[11px] text-red-500 mt-1 mb-1">{warning}</div>}
+          {autoUpdateNote && <div className="text-[11px] text-[#EAB308] mt-1 mb-1">{autoUpdateNote}</div>}
           <div className="mt-2">
             <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">REMARK (OPTIONAL)</label>
             <textarea
-              className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[60px] resize-y"
+              className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[50px] resize-y"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
               placeholder={'Reason for changing ' + label.toLowerCase() + '...'}
             />
           </div>
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-2 mt-3">
             <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
-            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${warning ? 'opacity-50' : 'opacity-100'}`} disabled={!!warning} onClick={handleSave}>Save</button>
+            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${warning || !newDate ? 'opacity-50' : 'opacity-100'}`} disabled={!!warning || !newDate} onClick={handleSave}>Save</button>
           </div>
         </div>
       </div>
