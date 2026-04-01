@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
+import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -1481,12 +1481,13 @@ export default function App() {
   };
 
   const addRemark = (leadId, remark) => {
-    setLeads((prev) => {
-      const updated = prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l);
-      const lead = updated.find((l) => l.id === leadId);
-      if (lead) upsertLead(lead).catch((e) => console.error('Remark save failed:', e));
-      return updated;
-    });
+    // Optimistic local update
+    setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
+    // Concurrent-safe: fetch latest from DB, append, save
+    appendRemarkToLead(leadId, remark).then((latestRemarks) => {
+      // Sync local state with DB truth
+      setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: latestRemarks } : l));
+    }).catch((e) => console.error('Remark save failed:', e));
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'added_remark', entityType: 'lead', entityId: leadId, details: remark.text ? remark.text.substring(0, 100) : '' }).catch(console.error);
     }
@@ -1520,7 +1521,21 @@ export default function App() {
         return u;
       });
       const lead = updated.find((l) => l.id === leadId);
-      if (lead) upsertLead(lead).catch((e) => console.error('Date edit save failed:', e));
+      if (lead) {
+        // Fetch latest from DB, merge remarks, then save
+        fetchLead(leadId).then((dbLead) => {
+          const mergedRemarks = [...(dbLead.remarks || [])];
+          // Add new remarks that aren't in DB yet
+          (lead.remarks || []).forEach((r) => {
+            if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
+          });
+          const merged = { ...lead, remarks: mergedRemarks };
+          upsertLead(merged).catch((e) => console.error('Date edit save failed:', e));
+          setLeads((p) => p.map((l) => l.id === leadId ? merged : l));
+        }).catch(() => {
+          upsertLead(lead).catch((e) => console.error('Date edit save failed:', e));
+        });
+      }
       return updated;
     });
     if (currentUser) {
@@ -2004,7 +2019,18 @@ export default function App() {
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, remark) : undefined}
           onImmediateSave={(updatedLead) => {
             setLeads((prev) => prev.map((l) => l.id === updatedLead.id ? updatedLead : l));
-            upsertLead(updatedLead).catch((e) => console.error('Drawer date save failed:', e));
+            // Fetch latest from DB, merge remarks to avoid overwriting concurrent changes
+            fetchLead(updatedLead.id).then((dbLead) => {
+              const mergedRemarks = [...(dbLead.remarks || [])];
+              (updatedLead.remarks || []).forEach((r) => {
+                if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
+              });
+              const merged = { ...updatedLead, remarks: mergedRemarks };
+              upsertLead(merged).catch((e) => console.error('Drawer date save failed:', e));
+              setLeads((p) => p.map((l) => l.id === merged.id ? merged : l));
+            }).catch(() => {
+              upsertLead(updatedLead).catch((e) => console.error('Drawer date save failed:', e));
+            });
           }}
         />
       )}
