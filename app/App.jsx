@@ -1683,17 +1683,20 @@ export default function App() {
         parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved });
       }
 
-      // Check for duplicate Lead IDs within the CSV
-      const idCounts = {};
-      parsed.forEach((p) => { idCounts[p.leadId] = (idCounts[p.leadId] || 0) + 1; });
-      Object.entries(idCounts).forEach(([id, count]) => {
-        if (count > 1) errors.push('Duplicate Lead ID "' + id + '" appears ' + count + ' times');
-      });
-
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
       else {
-        setCsvPreview(parsed);
-        setCsvSelected(new Set(parsed.map((_, i) => i)));
+        // Deduplicate: if Lead ID + Phone match, keep the latest (last) entry
+        const dedupeMap = new Map();
+        parsed.forEach((p) => {
+          const key = p.leadId + '|' + p.clientPhone;
+          dedupeMap.set(key, p);
+        });
+        const deduped = [...dedupeMap.values()];
+        if (deduped.length < parsed.length) {
+          console.log('CSV deduplication: ' + parsed.length + ' rows → ' + deduped.length + ' unique (by Lead ID + Phone)');
+        }
+        setCsvPreview(deduped);
+        setCsvSelected(new Set(deduped.map((_, i) => i)));
         setCsvErrors(null);
       }
     };
@@ -1720,7 +1723,16 @@ export default function App() {
       propertyType: row.propertyType || '',
       architectInvolved: row.architectInvolved || false,
     }));
-    setLeads((prev) => [...prev, ...newLeads]);
+    // Merge with existing leads: update if ID matches, add if new
+    setLeads((prev) => {
+      const existingIds = new Set(prev.map((l) => l.id));
+      const updated = prev.map((l) => {
+        const match = newLeads.find((n) => n.id === l.id);
+        return match ? { ...l, ...match } : l;
+      });
+      const brandNew = newLeads.filter((n) => !existingIds.has(n.id));
+      return [...updated, ...brandNew];
+    });
     upsertLeads(newLeads).then(() => console.log('CSV import to Supabase successful:', newLeads.length, 'leads')).catch((e) => { console.error('CSV import failed:', e); alert('Import saved locally but failed to sync to database: ' + (e.message || e)); });
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'csv_imported', entityType: 'lead', entityId: null, details: newLeads.length + ' leads imported' }).catch(console.error);
