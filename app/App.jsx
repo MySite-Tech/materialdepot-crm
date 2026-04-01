@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser } from '../lib/supabase';
+import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
-const BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
+const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
 const STATUSES = [
   'Quote Approval Pending',
@@ -381,11 +381,11 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 }
 
 // ── Lead Drawer (Edit + Remarks + Visit History in single view) ─────────────
-function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark, onImmediateSave }) {
+function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark, onImmediateSave }) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
-  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
-    id: genId(), createdAt: todayStr(), assignedTo: currentUserName, branch: BRANCHES[0], status: STATUSES[0],
+  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
+    id: genId(), createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
     clientType: '', propertyType: '', architectInvolved: false,
@@ -517,7 +517,7 @@ function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark, onImmedia
               </Field>
               <Field label="BRANCH">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
-                  {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+                  {branches.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </Field>
               <Field label="CLIENT TYPE">
@@ -787,6 +787,7 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
 // ── Admin Dashboard ────────────────────────────────────────────────────────
 function AdminDashboard({ onBack }) {
   const [users, setUsers] = useState([]);
+  const [branchList, setBranchList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [newCode, setNewCode] = useState('');
@@ -798,7 +799,11 @@ function AdminDashboard({ onBack }) {
   const [editRole, setEditRole] = useState('');
 
   useEffect(() => {
-    fetchUsers().then((data) => { setUsers(data); setLoading(false); }).catch(() => setLoading(false));
+    Promise.all([fetchUsers(), fetchBranches().catch(() => [])]).then(([userData, branchData]) => {
+      setUsers(userData);
+      setBranchList(branchData);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   const handleAdd = async () => {
@@ -940,8 +945,111 @@ function AdminDashboard({ onBack }) {
           )}
         </div>
         <p className="text-xs text-gray-400 mt-4 text-center">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+
+        {/* Branch Management */}
+        <h1 className="text-lg font-bold text-gray-800 mt-10 mb-6">Branch Management</h1>
+        <BranchManager branches={branchList} setBranches={setBranchList} />
       </div>
     </div>
+  );
+}
+
+function BranchManager({ branches, setBranches }) {
+  const [newBranch, setNewBranch] = useState('');
+  const [editBranchId, setEditBranchId] = useState(null);
+  const [editBranchName, setEditBranchName] = useState('');
+  const [branchError, setBranchError] = useState('');
+
+  const handleAddBranch = async () => {
+    const name = newBranch.trim();
+    if (!name) { setBranchError('Branch name is required'); return; }
+    if (branches.some((b) => b.name.toLowerCase() === name.toLowerCase())) { setBranchError('Branch already exists'); return; }
+    setBranchError('');
+    try {
+      const b = await addBranch(name);
+      setBranches((prev) => [...prev, b]);
+      setNewBranch('');
+    } catch (e) {
+      setBranchError(e.message || 'Failed to add branch');
+    }
+  };
+
+  const handleDeleteBranch = async (id, name) => {
+    if (!window.confirm(`Delete branch "${name}"?`)) return;
+    try {
+      await deleteBranch(id);
+      setBranches((prev) => prev.filter((b) => b.id !== id));
+    } catch (e) {
+      setBranchError(e.message || 'Failed to delete branch');
+    }
+  };
+
+  const handleSaveBranch = async () => {
+    const name = editBranchName.trim();
+    if (!name) { setBranchError('Branch name is required'); return; }
+    if (branches.some((b) => b.name.toLowerCase() === name.toLowerCase() && b.id !== editBranchId)) { setBranchError('Branch already exists'); return; }
+    setBranchError('');
+    try {
+      await updateBranch(editBranchId, name);
+      setBranches((prev) => prev.map((b) => b.id === editBranchId ? { ...b, name } : b));
+      setEditBranchId(null);
+    } catch (e) {
+      setBranchError(e.message || 'Failed to update branch');
+    }
+  };
+
+  return (
+    <>
+      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Add New Branch</h2>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Branch Name</label>
+            <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newBranch} onChange={(e) => setNewBranch(e.target.value)} placeholder="e.g. Koramangala" onKeyDown={(e) => { if (e.key === 'Enter') handleAddBranch(); }} />
+          </div>
+          <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={handleAddBranch}>Add Branch</button>
+        </div>
+        {branchError && <p className="text-red-500 text-xs mt-2">{branchError}</p>}
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-[#FAFAFA]">
+              <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Branch Name</th>
+              <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center w-[120px]">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {branches.map((b) => (
+              <tr key={b.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
+                {editBranchId === b.id ? (
+                  <>
+                    <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editBranchName} onChange={(e) => setEditBranchName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveBranch(); }} autoFocus /></td>
+                    <td className="px-4 py-2 text-center whitespace-nowrap">
+                      <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveBranch}>Save</button>
+                      <button className="text-gray-400 text-xs cursor-pointer bg-transparent border-none" onClick={() => setEditBranchId(null)}>Cancel</button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-4 py-2.5 text-[13px] font-medium">{b.name}</td>
+                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                      <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => { setEditBranchId(b.id); setEditBranchName(b.name); setBranchError(''); }}>Edit</button>
+                      <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDeleteBranch(b.id, b.name)}>Delete</button>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+            {branches.length === 0 && (
+              <tr><td colSpan={2} className="p-8 text-center text-gray-400 text-sm">No branches found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-gray-400 mt-4 mb-8 text-center">{branches.length} branch{branches.length !== 1 ? 'es' : ''} total</p>
+    </>
   );
 }
 
@@ -1069,12 +1177,17 @@ export default function App() {
   };
 
   const [leads, setLeads] = useState([]);
+  const [branches, setBranches] = useState(DEFAULT_BRANCHES);
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchLeads().then((dbLeads) => {
+    Promise.all([
+      fetchLeads(),
+      fetchBranches().catch(() => []),
+    ]).then(([dbLeads, dbBranches]) => {
       setLeads(dbLeads);
+      if (dbBranches.length > 0) setBranches(dbBranches.map((b) => b.name));
       setDbReady(true);
     }).catch(() => setDbReady(true));
   }, [currentUser]);
@@ -1383,7 +1496,7 @@ export default function App() {
 
         // Optional field validation (only validate if provided)
         if (createdDate && !isValidDate(createdDate)) errors.push('Row ' + rowNum + ': Created Date "' + createdDate + '" must be YYYY-MM-DD format');
-        if (branch && !BRANCHES.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
+        if (branch && !branches.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
         if (status && !STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
 
         if (status === 'Order Lost') {
@@ -1620,7 +1733,7 @@ export default function App() {
             />
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
             <MultiSelect options={[...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort()} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
-            <MultiSelect options={BRANCHES} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
+            <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
             <DateRangePicker label="Created Date" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
             <DateRangePicker label="Follow-up Date" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
             <DateRangePicker label="Closure Date" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
@@ -1762,6 +1875,7 @@ export default function App() {
         <LeadDrawer
           lead={drawerLead}
           currentUser={currentUser}
+          branches={branches}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, remark) : undefined}
