@@ -45,6 +45,9 @@ const PIPELINE_BUCKETS = {
 
 const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre', 'Yelankha Centre', 'HQ Showroom', 'Phone Call'];
 
+const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'Carpenter', 'Builder'];
+const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
+
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -236,7 +239,7 @@ function MultiSelect({ options, selected, onChange, label }) {
   );
 }
 
-function DateRangePicker({ dateFrom, dateTo, onChange }) {
+function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -249,8 +252,9 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
   }, []);
 
   const hasRange = dateFrom || dateTo;
+  const displayLabel = pickerLabel || 'Date Range';
   const display = !hasRange
-    ? 'Date Range'
+    ? displayLabel
     : dateFrom && dateTo
       ? `${fmtDate(dateFrom)} \u2013 ${fmtDate(dateTo)}`
       : dateFrom
@@ -380,10 +384,11 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark, onImmediateSave }) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
-  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [] } : {
+  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
     id: genId(), createdAt: todayStr(), assignedTo: currentUserName, branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
+    clientType: '', propertyType: '', architectInvolved: false,
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [remarkAuthor, setRemarkAuthor] = useState(currentUserName);
@@ -514,6 +519,24 @@ function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark, onImmedia
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
                   {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
+              </Field>
+              <Field label="CLIENT TYPE">
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientType || ''} onChange={(e) => set('clientType', e.target.value)}>
+                  <option value="">Select...</option>
+                  {CLIENT_TYPES.map((ct) => <option key={ct} value={ct}>{ct}</option>)}
+                </select>
+              </Field>
+              <Field label="PROPERTY TYPE">
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.propertyType || ''} onChange={(e) => set('propertyType', e.target.value)}>
+                  <option value="">Select...</option>
+                  {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+                </select>
+              </Field>
+              <Field label="ARCHITECT/DESIGNER INVOLVED">
+                <label className="flex items-center gap-2 px-2.5 py-2 text-[13px] cursor-pointer">
+                  <input type="checkbox" checked={!!form.architectInvolved} onChange={(e) => set('architectInvolved', e.target.checked)} className="accent-[#EAB308]" />
+                  <span className="text-[13px]">{form.architectInvolved ? 'Yes' : 'No'}</span>
+                </label>
               </Field>
               <Field label="STATUS">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
@@ -1042,8 +1065,12 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState([]);
   const [personFilter, setPersonFilter] = useState([]);
   const [branchFilter, setBranchFilter] = useState([]);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [createdDateFrom, setCreatedDateFrom] = useState('');
+  const [createdDateTo, setCreatedDateTo] = useState('');
+  const [followUpDateFrom, setFollowUpDateFrom] = useState('');
+  const [followUpDateTo, setFollowUpDateTo] = useState('');
+  const [closureDateFrom, setClosureDateFrom] = useState('');
+  const [closureDateTo, setClosureDateTo] = useState('');
   const [cartValueGt, setCartValueGt] = useState('');
   const [sortCol, setSortCol] = useState('latestVisit');
   const [sortDir, setSortDir] = useState('desc');
@@ -1064,12 +1091,21 @@ export default function App() {
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
     if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    const visitDates = (l.visits || []).map((v) => v.date);
-    if (visitDates.length === 0) visitDates.push(l.createdAt || '');
-    const earliest = visitDates.sort()[0];
-    const latest = [...visitDates].sort().reverse()[0];
-    if (dateFrom && latest < dateFrom) return false;
-    if (dateTo && earliest > dateTo) return false;
+    // Created date filter
+    if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
+    if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
+    // Follow-up date filter
+    if (followUpDateFrom || followUpDateTo) {
+      if (!l.followUpDate) return false;
+      if (followUpDateFrom && l.followUpDate < followUpDateFrom) return false;
+      if (followUpDateTo && l.followUpDate > followUpDateTo) return false;
+    }
+    // Closure date filter
+    if (closureDateFrom || closureDateTo) {
+      if (!l.closureDate) return false;
+      if (closureDateFrom && l.closureDate < closureDateFrom) return false;
+      if (closureDateTo && l.closureDate > closureDateTo) return false;
+    }
     if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -1127,6 +1163,7 @@ export default function App() {
     if (sortCol === 'latestVisit') { va = getLatestVisit(a); vb = getLatestVisit(b); return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va); }
     va = a[sortCol]; vb = b[sortCol];
     if (sortCol === 'cartValue') { va = va || 0; vb = vb || 0; return sortDir === 'asc' ? va - vb : vb - va; }
+    if (sortCol === 'architectInvolved') { va = va ? 1 : 0; vb = vb ? 1 : 0; return sortDir === 'asc' ? va - vb : vb - va; }
     if (va == null) va = ''; if (vb == null) vb = '';
     if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb || '').toLowerCase(); }
     if (va < vb) return sortDir === 'asc' ? -1 : 1;
@@ -1217,13 +1254,13 @@ export default function App() {
   };
 
   // ── CSV helpers ──────────────────────────────────────────────────────────
-  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits'];
+  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved'];
 
   const downloadCsvTemplate = () => {
     const rows = [
       CSV_HEADERS.join(','),
-      'MD-ABC123,Vikram Rao,9876543210,2026-03-15,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,2026-04-10,2026-04-20,Client requested bulk quote|2026-03-15|Arjun Mehta,2026-03-15|Website|Portland Cement 50kg:100:1250;2026-03-18|JP Nagar Centre|',
-      'MD-DEF456,Anita Deshmukh,9845012345,2026-03-10,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,300000,2026-04-05,,,',
+      'MD-ABC123,Vikram Rao,9876543210,2026-03-15,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,2026-04-10,2026-04-20,Client requested bulk quote|2026-03-15|Arjun Mehta,2026-03-15|Website|Portland Cement 50kg:100:1250;2026-03-18|JP Nagar Centre|,Home Owner,Apartment,yes',
+      'MD-DEF456,Anita Deshmukh,9845012345,2026-03-10,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,300000,2026-04-05,,,,Commercial Owner,Commercial,no',
     ];
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1281,9 +1318,9 @@ export default function App() {
       for (let r = 1; r < lines.length; r++) {
         const rowNum = r + 1;
         const fields = parseCsvLine(lines[r]);
-        if (fields.length < 14) { errors.push('Row ' + rowNum + ': Expected 14 columns, got ' + fields.length); continue; }
+        if (fields.length < 14) { errors.push('Row ' + rowNum + ': Expected at least 14 columns, got ' + fields.length); continue; }
 
-        const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr] = fields;
+        const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr] = fields;
 
         // Compulsory fields
         if (!leadId) errors.push('Row ' + rowNum + ': Lead ID is required');
@@ -1324,6 +1361,15 @@ export default function App() {
         if (followUpDate && !isValidDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be YYYY-MM-DD format');
         if (closureDate && !isValidDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be YYYY-MM-DD format');
 
+        // Validate new fields
+        const clientType = (clientTypeStr || '').trim();
+        const propertyType = (propertyTypeStr || '').trim();
+        const architectInvolvedRaw = (architectInvolvedStr || '').trim().toLowerCase();
+        if (clientType && !CLIENT_TYPES.includes(clientType)) errors.push('Row ' + rowNum + ': Client Type "' + clientType + '" is not valid. Must be one of: ' + CLIENT_TYPES.join(', '));
+        if (propertyType && !PROPERTY_TYPES.includes(propertyType)) errors.push('Row ' + rowNum + ': Property Type "' + propertyType + '" is not valid. Must be one of: ' + PROPERTY_TYPES.join(', '));
+        if (architectInvolvedRaw && !['true', 'false', 'yes', 'no'].includes(architectInvolvedRaw)) errors.push('Row ' + rowNum + ': Architect/Designer Involved "' + architectInvolvedStr + '" must be true/false/yes/no or empty');
+        const architectInvolved = ['true', 'yes'].includes(architectInvolvedRaw);
+
         // Parse remarks: "text|date|author;text|date|author"
         let remarks = [];
         if (remarksStr) {
@@ -1362,7 +1408,7 @@ export default function App() {
           }
         }
 
-        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: createdDate || todayStr(), assignedTo: assignedTo || '', branch: branch || BRANCHES[0], status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '', remarks, visits });
+        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: createdDate || todayStr(), assignedTo: assignedTo || '', branch: branch || BRANCHES[0], status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '', remarks, visits, clientType, propertyType, architectInvolved });
       }
 
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
@@ -1391,6 +1437,9 @@ export default function App() {
       visits: row.visits,
       clientName: row.clientName,
       clientPhone: row.clientPhone,
+      clientType: row.clientType || '',
+      propertyType: row.propertyType || '',
+      architectInvolved: row.architectInvolved || false,
     }));
     setLeads((prev) => [...prev, ...newLeads]);
     upsertLeads(newLeads).catch((e) => console.error('CSV import failed:', e));
@@ -1408,8 +1457,8 @@ export default function App() {
     setStatusFilter((prev) => prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]);
   }, []);
 
-  // Column count for colSpan: Lead ID, Client Name, Client Phone, First Visit, Latest Visit, Assigned To, Branch, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 14
-  const COL_COUNT = 14;
+  // Column count for colSpan: Lead ID, Client Name, Client Phone, Created, First Visit, Latest Visit, Assigned To, Branch, Client Type, Property Type, Architect/Designer, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 18
+  const COL_COUNT = 18;
 
   if (!userLoaded) return null;
   if (showAdmin) return <AdminDashboard onBack={() => setShowAdmin(false)} />;
@@ -1517,7 +1566,9 @@ export default function App() {
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
             <MultiSelect options={[...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort()} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
             <MultiSelect options={BRANCHES} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
-            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+            <DateRangePicker label="Created Date" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
+            <DateRangePicker label="Follow-up Date" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
+            <DateRangePicker label="Closure Date" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
             <span className="text-[10px] font-semibold text-gray-400 ml-1">{'\u20B9'} &gt;</span>
             <input
               className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[130px] font-mono"
@@ -1547,10 +1598,14 @@ export default function App() {
                   <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="Created" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="First Visit" sortKey="firstVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Latest Visit" sortKey="latestVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="Client Type" sortKey="clientType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="Property Type" sortKey="propertyType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                  <Th label="Architect/Designer" sortKey="architectInvolved" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -1571,6 +1626,7 @@ export default function App() {
                     </td>
                     <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '\u2014'}</td>
                     <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(l.createdAt)}</td>
                     <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>
                     <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>
                     <td className="px-3 py-2.5 text-[13px] align-middle">
@@ -1580,6 +1636,11 @@ export default function App() {
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.branch || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientType || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.propertyType || '\u2014'}</td>
+                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">
+                      {l.architectInvolved == null ? '\u2014' : l.architectInvolved ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}
+                    </td>
                     <td className="px-3 py-2.5 text-[13px] align-middle">
                       <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>
@@ -1736,6 +1797,9 @@ export default function App() {
                       <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-right whitespace-nowrap select-none">Cart Value</th>
                       <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center whitespace-nowrap select-none">Remarks</th>
                       <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center whitespace-nowrap select-none">Visits</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Client Type</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap select-none">Property Type</th>
+                      <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center whitespace-nowrap select-none">Architect</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1764,6 +1828,9 @@ export default function App() {
                         <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono text-[11px]">{fmtINR(row.cartValue)}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.remarks.length || '\u2014'}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.visits.length || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px]">{row.clientType || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px]">{row.propertyType || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.architectInvolved ? 'Yes' : 'No'}</td>
                       </tr>
                     ))}
                   </tbody>
