@@ -1427,8 +1427,8 @@ export default function App() {
   const downloadCsvTemplate = () => {
     const rows = [
       CSV_HEADERS.join(','),
-      'MD-ABC123,Vikram Rao,9876543210,2026-03-15,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,2026-04-10,2026-04-20,Client requested bulk quote|2026-03-15|Arjun Mehta,2026-03-15|Website|Portland Cement 50kg:100:1250;2026-03-18|JP Nagar Centre|,Home Owner,Apartment,yes',
-      'MD-DEF456,Anita Deshmukh,9845012345,2026-03-10,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,300000,2026-04-05,,,,Commercial Owner,Commercial,no',
+      'MD-ABC123,Vikram Rao,9876543210,15/03/2026,Arjun Mehta,JP Nagar,Quote Approval Pending,,Portland Cement 50kg:100:1250;Binding Wire:50:800,165000,10/04/2026,20/04/2026,Client requested bulk quote|15/03/2026|Arjun Mehta,15/03/2026|Website|Portland Cement 50kg:100:1250;18/03/2026|JP Nagar Centre|,Home Owner,Apartment,yes',
+      'MD-DEF456,Anita Deshmukh,9845012345,10/03/2026,Priya Sharma,Whitefield,Order Lost,Pricing Issue,TMT Steel Bars 12mm:200:1500,300000,05/04/2026,,,,Commercial Owner,Commercial,no',
     ];
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1461,7 +1461,16 @@ export default function App() {
     return fields;
   };
 
-  const isValidDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + 'T00:00:00').getTime());
+  // Accept DD/MM/YYYY format and convert to YYYY-MM-DD
+  const parseDDMMYYYY = (d) => {
+    if (!d) return '';
+    const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return null; // invalid format
+    const iso = `${m[3]}-${m[2]}-${m[1]}`;
+    if (isNaN(new Date(iso + 'T00:00:00').getTime())) return null;
+    return iso;
+  };
+  const isValidCsvDate = (d) => parseDDMMYYYY(d) !== null;
 
   const handleCsvFile = (e) => {
     const file = e.target.files?.[0];
@@ -1495,7 +1504,7 @@ export default function App() {
         if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
 
         // Optional field validation (only validate if provided)
-        if (createdDate && !isValidDate(createdDate)) errors.push('Row ' + rowNum + ': Created Date "' + createdDate + '" must be YYYY-MM-DD format');
+        if (createdDate && !isValidCsvDate(createdDate)) errors.push('Row ' + rowNum + ': Created Date "' + createdDate + '" must be DD/MM/YYYY format');
         if (branch && !branches.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
         if (status && !STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
 
@@ -1526,8 +1535,8 @@ export default function App() {
         let cartValue = cartValueStr ? Number(cartValueStr) : cartItems.reduce((s, i) => s + i.qty * i.price, 0);
         if (cartValueStr && isNaN(Number(cartValueStr))) errors.push('Row ' + rowNum + ': Cart Value must be a number');
 
-        if (followUpDate && !isValidDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be YYYY-MM-DD format');
-        if (closureDate && !isValidDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be YYYY-MM-DD format');
+        if (followUpDate && !isValidCsvDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be DD/MM/YYYY format');
+        if (closureDate && !isValidCsvDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be DD/MM/YYYY format');
 
         // Validate new fields
         const clientType = (clientTypeStr || '').trim();
@@ -1546,7 +1555,8 @@ export default function App() {
             if (!rp.trim()) continue;
             const segs = rp.split('|');
             if (segs.length >= 3) {
-              remarks.push({ text: segs[0].trim(), ts: (segs[1].trim() || todayStr()) + 'T10:00:00', author: segs[2].trim() });
+              const remarkDate = segs[1].trim() ? (parseDDMMYYYY(segs[1].trim()) || segs[1].trim()) : todayStr();
+              remarks.push({ text: segs[0].trim(), ts: remarkDate + 'T10:00:00', author: segs[2].trim() });
             } else if (segs.length >= 1 && segs[0].trim()) {
               remarks.push({ text: segs[0].trim(), ts: todayStr() + 'T10:00:00', author: assignedTo || '' });
             }
@@ -1562,7 +1572,7 @@ export default function App() {
             const segs = vp.split('|');
             const vDate = (segs[0] || '').trim();
             const vChannel = (segs[1] || '').trim();
-            if (vDate && !isValidDate(vDate)) { errors.push('Row ' + rowNum + ': Visit date "' + vDate + '" must be YYYY-MM-DD format'); continue; }
+            if (vDate && !isValidCsvDate(vDate)) { errors.push('Row ' + rowNum + ': Visit date "' + vDate + '" must be DD/MM/YYYY format'); continue; }
             if (vChannel && !VISIT_CHANNELS.includes(vChannel)) { errors.push('Row ' + rowNum + ': Visit channel "' + vChannel + '" is not valid'); continue; }
             let vCart = [];
             if (segs[2]) {
@@ -1572,11 +1582,11 @@ export default function App() {
                 if (cs.length === 3) vCart.push({ name: cs[0].trim(), qty: Number(cs[1]) || 0, price: Number(cs[2]) || 0 });
               }
             }
-            visits.push({ date: vDate || todayStr(), channel: vChannel || VISIT_CHANNELS[0], cartSnapshot: vCart });
+            visits.push({ date: (vDate ? parseDDMMYYYY(vDate) : null) || todayStr(), channel: vChannel || VISIT_CHANNELS[0], cartSnapshot: vCart });
           }
         }
 
-        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: createdDate || todayStr(), assignedTo: assignedTo || '', branch: branch || BRANCHES[0], status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '', remarks, visits, clientType, propertyType, architectInvolved });
+        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved });
       }
 
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
