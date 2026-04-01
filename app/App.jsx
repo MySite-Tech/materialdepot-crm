@@ -1084,6 +1084,43 @@ export default function App() {
   const [csvImportCount, setCsvImportCount] = useState(null);
   const csvFileRef = useRef(null);
 
+  // Column visibility
+  const ALL_COLUMNS = [
+    { key: 'id', label: 'Lead ID' },
+    { key: 'clientName', label: 'Client Name' },
+    { key: 'clientPhone', label: 'Client Phone' },
+    { key: 'createdAt', label: 'Created' },
+    { key: 'firstVisit', label: 'First Visit' },
+    { key: 'latestVisit', label: 'Latest Visit' },
+    { key: 'assignedTo', label: 'Assigned To' },
+    { key: 'branch', label: 'Branch' },
+    { key: 'clientType', label: 'Client Type' },
+    { key: 'propertyType', label: 'Property Type' },
+    { key: 'architectInvolved', label: 'Architect/Designer' },
+    { key: 'status', label: 'Status' },
+    { key: 'cartItems', label: 'Cart Items' },
+    { key: 'followUpDate', label: 'Follow-up' },
+    { key: 'closureDate', label: 'Closure Date' },
+    { key: 'visitCount', label: 'Visits' },
+    { key: 'cartValue', label: 'Cart Value' },
+  ];
+  const [visibleCols, setVisibleCols] = useState(() => {
+    if (typeof window === 'undefined') return ALL_COLUMNS.map((c) => c.key);
+    try {
+      const stored = localStorage.getItem('materialdepot_cols');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return ALL_COLUMNS.map((c) => c.key);
+  });
+  const isColVisible = (key) => visibleCols.includes(key);
+  const toggleCol = (key) => {
+    setVisibleCols((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      localStorage.setItem('materialdepot_cols', JSON.stringify(next));
+      return next;
+    });
+  };
+
   // Persist to localStorage
   // No more localStorage — data is persisted to Supabase on each operation
 
@@ -1458,7 +1495,7 @@ export default function App() {
   }, []);
 
   // Column count for colSpan: Lead ID, Client Name, Client Phone, Created, First Visit, Latest Visit, Assigned To, Branch, Client Type, Property Type, Architect/Designer, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 18
-  const COL_COUNT = 18;
+  const COL_COUNT = visibleCols.length + 1; // +1 for Actions column (always visible)
 
   if (!userLoaded) return null;
   if (showAdmin) return <AdminDashboard onBack={() => setShowAdmin(false)} />;
@@ -1582,6 +1619,7 @@ export default function App() {
             <span className="text-xs text-gray-500">{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="flex gap-2 items-center">
+            <MultiSelect options={ALL_COLUMNS.map((c) => c.label)} selected={ALL_COLUMNS.filter((c) => isColVisible(c.key)).map((c) => c.label)} onChange={(labels) => { const keys = ALL_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key); setVisibleCols(keys); localStorage.setItem('materialdepot_cols', JSON.stringify(keys)); }} label="Columns" />
             <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={downloadCsvTemplate}>Download Template</button>
             <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
             <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
@@ -1595,23 +1633,23 @@ export default function App() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-[#FAFAFA]">
-                  <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Created" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="First Visit" sortKey="firstVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Latest Visit" sortKey="latestVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Client Type" sortKey="clientType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Property Type" sortKey="propertyType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Architect/Designer" sortKey="architectInvolved" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Closure Date" sortKey="closureDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="Visits" sortKey="visitCount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
-                  <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                  {isColVisible('id') && <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('clientName') && <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('clientPhone') && <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('createdAt') && <Th label="Created" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('firstVisit') && <Th label="First Visit" sortKey="firstVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('latestVisit') && <Th label="Latest Visit" sortKey="latestVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('assignedTo') && <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('branch') && <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('clientType') && <Th label="Client Type" sortKey="clientType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('propertyType') && <Th label="Property Type" sortKey="propertyType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('architectInvolved') && <Th label="Architect/Designer" sortKey="architectInvolved" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('status') && <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('cartItems') && <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('followUpDate') && <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('closureDate') && <Th label="Closure Date" sortKey="closureDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('visitCount') && <Th label="Visits" sortKey="visitCount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />}
+                  {isColVisible('cartValue') && <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />}
                   <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
                 </tr>
               </thead>
@@ -1621,59 +1659,59 @@ export default function App() {
                     key={l.id}
                     className="border-t border-gray-200 hover:bg-[#FFFAF7]"
                   >
-                    <td className="px-3 py-2.5 text-[13px] align-middle">
+                    {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded">{l.id}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '\u2014'}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '\u2014'}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(l.createdAt)}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle">
+                    </td>}
+                    {isColVisible('clientName') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '\u2014'}</td>}
+                    {isColVisible('clientPhone') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '\u2014'}</td>}
+                    {isColVisible('createdAt') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(l.createdAt)}</td>}
+                    {isColVisible('firstVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>}
+                    {isColVisible('latestVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>}
+                    {isColVisible('assignedTo') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <div className="flex items-center gap-1.5">
                         <Avatar name={l.assignedTo} />
                         <span className="text-xs">{l.assignedTo}</span>
                       </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.branch || '\u2014'}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientType || '\u2014'}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.propertyType || '\u2014'}</td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs">
+                    </td>}
+                    {isColVisible('branch') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.branch || '\u2014'}</td>}
+                    {isColVisible('clientType') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientType || '\u2014'}</td>}
+                    {isColVisible('propertyType') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.propertyType || '\u2014'}</td>}
+                    {isColVisible('architectInvolved') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">
                       {l.architectInvolved == null ? '\u2014' : l.architectInvolved ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle">
+                    </td>}
+                    {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[160px]">
+                    </td>}
+                    {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[160px]">
                       {(l.cartItems || []).slice(0, 2).map((it, i) => (
                         <div key={i} className="whitespace-nowrap overflow-hidden text-ellipsis">
                           {it.name} x{it.qty}
                         </div>
                       ))}
                       {(l.cartItems || []).length > 2 && <span className="text-gray-400 text-[11px]">+{l.cartItems.length - 2} more</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
+                    </td>}
+                    {isColVisible('followUpDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
                       {l.followUpDate ? (
                         <span className={`text-xs border-b border-dashed border-gray-300 ${isOverdue(l) ? 'font-bold text-red-500' : 'font-normal text-gray-700'}`}>
                           {isOverdue(l) && '\u26A0 '}{fmtDate(l.followUpDate)}
                         </span>
                       ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
+                    </td>}
+                    {isColVisible('closureDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
                       {l.closureDate ? (
                         <span className="text-xs text-gray-500 border-b border-dashed border-gray-300">{fmtDate(l.closureDate)}</span>
                       ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-center">
+                    </td>}
+                    {isColVisible('visitCount') && <td className="px-3 py-2.5 text-[13px] align-middle text-center">
                       {(l.visits || []).length > 0 ? (
                         <span className="inline-flex items-center justify-center bg-[#3B82F618] text-blue-500 font-bold text-[11px] rounded-full w-[22px] h-[22px] border border-[#3B82F640]">{(l.visits || []).length}</span>
                       ) : (
                         <span className="text-gray-400 text-[11px]">0</span>
                       )}
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
+                    </td>}
+                    {isColVisible('cartValue') && <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
                       {fmtINR(l.cartValue)}
-                    </td>
+                    </td>}
                     <td className="px-3 py-2.5 text-[13px] align-middle text-center whitespace-nowrap">
                       <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-gray-700 relative" title="Edit" onClick={() => setDrawerLead(l)}>
                         Edit
