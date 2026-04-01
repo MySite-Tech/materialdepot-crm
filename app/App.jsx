@@ -407,34 +407,29 @@ function LeadDrawer({ lead, currentUser, onSave, onClose, onAddRemark }) {
   const handleDrawerDateSave = (newDate, remarkText) => {
     const field = drawerDatePopup;
     setDrawerDatePopup(null);
-    if (field === 'followUpDate') {
-      if (isEdit && origFollowUpDate.current && newDate !== origFollowUpDate.current) {
-        // Auto-add remark for follow-up change
-        const remarkObj = remarkText
-          ? { ts: new Date().toISOString(), author: currentUserName, text: 'Follow-up date changed from ' + fmtDate(origFollowUpDate.current) + ' to ' + fmtDate(newDate) + ': ' + remarkText }
-          : null;
-        setForm((f) => {
-          const updated = { ...f, followUpDate: newDate };
-          if (newDate && f.closureDate && newDate > f.closureDate) updated.closureDate = newDate;
-          if (remarkObj) updated.remarks = [...(f.remarks || []), remarkObj];
-          return updated;
-        });
-        origFollowUpDate.current = newDate;
-      } else {
-        setForm((f) => {
-          const updated = { ...f, followUpDate: newDate };
-          if (newDate && f.closureDate && newDate > f.closureDate) updated.closureDate = newDate;
-          return updated;
-        });
+
+    setForm((f) => {
+      const updated = { ...f, [field]: newDate };
+      const remarks = [...(f.remarks || [])];
+
+      // Auto-update closure if follow-up exceeds it
+      if (field === 'followUpDate' && newDate && f.closureDate && newDate > f.closureDate) {
+        updated.closureDate = newDate;
+        remarks.push({ ts: new Date().toISOString(), author: currentUserName, text: 'Closure date auto-updated to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
       }
-    } else {
+
+      // Add remark if provided
       if (remarkText) {
-        const remarkObj = { ts: new Date().toISOString(), author: currentUserName, text: 'Closure date changed' + (form.closureDate ? ' from ' + fmtDate(form.closureDate) : '') + ' to ' + fmtDate(newDate) + ': ' + remarkText };
-        setForm((f) => ({ ...f, closureDate: newDate, remarks: [...(f.remarks || []), remarkObj] }));
-      } else {
-        set('closureDate', newDate);
+        const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
+        const oldDate = f[field];
+        const text = label + ' date ' + (oldDate ? 'changed from ' + fmtDate(oldDate) + ' to ' : 'set to ') + fmtDate(newDate) + ': ' + remarkText;
+        remarks.push({ ts: new Date().toISOString(), author: currentUserName, text });
       }
-    }
+
+      updated.remarks = remarks;
+      if (field === 'followUpDate') origFollowUpDate.current = newDate;
+      return updated;
+    });
   };
 
   const handleSave = () => {
