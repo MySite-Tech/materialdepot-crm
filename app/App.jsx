@@ -6,7 +6,6 @@ import 'react-day-picker/style.css';
 import { fetchLeads, upsertLead, upsertLeads, deleteLead as deleteLeadDb } from '../lib/supabase';
 
 // ── Constants ───────────────────────────────────────────────────────────────
-const SALES_PEOPLE = ['Arjun Mehta', 'Priya Sharma', 'Rahul Verma', 'Sneha Iyer', 'Karan Patel'];
 const BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
 const STATUSES = [
@@ -381,12 +380,12 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
   const isEdit = !!lead;
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || BRANCHES[0], lostReason: lead.lostReason || '', cartItems: lead.cartItems ? lead.cartItems.map(i => ({ ...i })) : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [] } : {
-    id: genId(), createdAt: todayStr(), assignedTo: SALES_PEOPLE[0], branch: BRANCHES[0], status: STATUSES[0],
+    id: genId(), createdAt: todayStr(), assignedTo: '', branch: BRANCHES[0], status: STATUSES[0],
     cartValue: 0, cartItems: [], followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
-  const [remarkAuthor, setRemarkAuthor] = useState(lead ? lead.assignedTo : SALES_PEOPLE[0]);
+  const [remarkAuthor, setRemarkAuthor] = useState(lead ? lead.assignedTo : '');
   const [closureDateWarning, setClosureDateWarning] = useState('');
   const [drawerDatePopup, setDrawerDatePopup] = useState(null); // 'followUpDate' | 'closureDate' | null
   const [remarkText, setRemarkText] = useState('');
@@ -506,9 +505,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientPhone || ''} placeholder="10-digit phone" onChange={(e) => set('clientPhone', e.target.value)} />
               </Field>
               <Field label="ASSIGNED TO">
-                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
-                  {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} placeholder="Enter name" onChange={(e) => set('assignedTo', e.target.value)} />
               </Field>
               <Field label="BRANCH">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
@@ -583,9 +580,7 @@ function LeadDrawer({ lead, onSave, onClose, onAddRemark }) {
                 ))}
               </div>
               <div className="px-5 pb-5">
-                <select className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full mb-2" value={remarkAuthor} onChange={(e) => setRemarkAuthor(e.target.value)}>
-                  {SALES_PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <input className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full mb-2" value={remarkAuthor} placeholder="Author name" onChange={(e) => setRemarkAuthor(e.target.value)} />
                 <textarea
                   className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[60px] resize-y"
                   value={remarkText}
@@ -1003,7 +998,6 @@ export default function App() {
 
         // Optional field validation (only validate if provided)
         if (createdDate && !isValidDate(createdDate)) errors.push('Row ' + rowNum + ': Created Date "' + createdDate + '" must be YYYY-MM-DD format');
-        if (assignedTo && !SALES_PEOPLE.includes(assignedTo)) errors.push('Row ' + rowNum + ': Assigned To "' + assignedTo + '" is not a valid salesperson');
         if (branch && !BRANCHES.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
         if (status && !STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
 
@@ -1047,7 +1041,7 @@ export default function App() {
             if (segs.length >= 3) {
               remarks.push({ text: segs[0].trim(), ts: (segs[1].trim() || todayStr()) + 'T10:00:00', author: segs[2].trim() });
             } else if (segs.length >= 1 && segs[0].trim()) {
-              remarks.push({ text: segs[0].trim(), ts: todayStr() + 'T10:00:00', author: assignedTo || SALES_PEOPLE[0] });
+              remarks.push({ text: segs[0].trim(), ts: todayStr() + 'T10:00:00', author: assignedTo || '' });
             }
           }
         }
@@ -1075,7 +1069,7 @@ export default function App() {
           }
         }
 
-        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: createdDate || todayStr(), assignedTo: assignedTo || SALES_PEOPLE[0], branch: branch || BRANCHES[0], status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '', remarks, visits });
+        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: createdDate || todayStr(), assignedTo: assignedTo || '', branch: branch || BRANCHES[0], status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate || '', closureDate: closureDate || '', remarks, visits });
       }
 
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
@@ -1215,7 +1209,7 @@ export default function App() {
               onChange={(e) => setSearch(e.target.value)}
             />
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
-            <MultiSelect options={SALES_PEOPLE} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
+            <MultiSelect options={[...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort()} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
             <MultiSelect options={BRANCHES} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
             <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
             <span className="text-[10px] font-semibold text-gray-400 ml-1">{'\u20B9'} &gt;</span>
