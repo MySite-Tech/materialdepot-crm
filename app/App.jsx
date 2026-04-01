@@ -595,7 +595,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
               <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">CART ITEMS</label>
               <input
                 className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full"
-                placeholder="e.g. Portland Cement, TMT Steel Bars, Tiles"
+                placeholder="e.g. Tiles, Laminates, Wall Panels, Plywood"
                 value={Array.isArray(form.cartItems) ? (typeof form.cartItems[0] === 'string' ? form.cartItems.join(', ') : form.cartItems.map(i => i.name || i).join(', ')) : (form.cartItems || '')}
                 onChange={(e) => set('cartItems', e.target.value)}
               />
