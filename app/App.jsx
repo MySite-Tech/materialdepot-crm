@@ -353,7 +353,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: Array.isArray(lead.cartItems) ? lead.cartItems : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
-    id: genId(), createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
+    id: '', createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
     cartValue: 0, cartItems: '', followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
     clientType: '', propertyType: '', architectInvolved: false,
@@ -416,6 +416,10 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
   };
 
   const handleSave = () => {
+    if (!form.id.trim()) {
+      alert('Lead ID is required.');
+      return;
+    }
     if (form.clientPhone && !/^\d{10}$/.test(form.clientPhone)) {
       alert('Phone number must be exactly 10 digits.');
       return;
@@ -477,7 +481,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
             <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">Details</div>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="LEAD ID">
-                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono bg-gray-100" value={form.id} readOnly />
+                <input className={`px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono ${isEdit ? 'bg-gray-100' : 'bg-white'}`} value={form.id} readOnly={isEdit} placeholder="Enter Lead ID" onChange={isEdit ? undefined : (e) => set('id', e.target.value)} />
               </Field>
               <Field label="CREATION DATE">
                 <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" type="date" value={form.createdAt} onKeyDown={(e) => e.preventDefault()} onChange={(e) => set('createdAt', e.target.value)} />
