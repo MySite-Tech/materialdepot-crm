@@ -867,18 +867,21 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
 
 // ── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [leads, setLeads] = useState(() => {
+  const [leads, setLeads] = useState(SEED_LEADS);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(LS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((l) => ({ ...l, branch: l.branch || BRANCHES[0], visits: l.visits || [], clientName: l.clientName || '', clientPhone: l.clientPhone || '' }));
+          setLeads(parsed.map((l) => ({ ...l, branch: l.branch || BRANCHES[0], visits: l.visits || [], clientName: l.clientName || '', clientPhone: l.clientPhone || '' })));
         }
       }
     } catch (e) { /* ignore */ }
-    return SEED_LEADS;
-  });
+    setHydrated(true);
+  }, []);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState([]);
@@ -900,7 +903,7 @@ export default function App() {
   const csvFileRef = useRef(null);
 
   // Persist to localStorage
-  useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(leads)); }, [leads]);
+  useEffect(() => { if (hydrated) localStorage.setItem(LS_KEY, JSON.stringify(leads)); }, [leads, hydrated]);
 
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
