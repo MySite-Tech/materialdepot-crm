@@ -366,6 +366,13 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
   const [visitChannel, setVisitChannel] = useState(VISIT_CHANNELS[0]);
   const timelineRef = useRef(null);
 
+  // Sync remarks and visits from parent when DB updates
+  useEffect(() => {
+    if (lead) {
+      setForm((f) => ({ ...f, remarks: lead.remarks || [], visits: lead.visits || [] }));
+    }
+  }, [lead?.remarks, lead?.visits]);
+
   // Cart value is independent — no auto-calculation
 
   useEffect(() => {
@@ -2011,7 +2018,7 @@ export default function App() {
       {/* Drawer */}
       {(showAddDrawer || drawerLead) && (
         <LeadDrawer
-          lead={drawerLead}
+          lead={drawerLead ? (leads.find((l) => l.id === drawerLead.id) || drawerLead) : null}
           currentUser={currentUser}
           branches={branches}
           onSave={saveLead}
