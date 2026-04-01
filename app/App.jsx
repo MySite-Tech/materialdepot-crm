@@ -378,8 +378,18 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
         ? `From ${fmtDate(dateFrom)}`
         : `Until ${fmtDate(dateTo)}`;
 
-  const toDateObj = (s) => s ? new Date(s + 'T00:00:00') : undefined;
-  const toStr = (d) => d ? d.toISOString().slice(0, 10) : '';
+  const toDateObj = (s) => {
+    if (!s) return undefined;
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const toStr = (d) => {
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
   const selected = (dateFrom || dateTo) ? { from: toDateObj(dateFrom), to: toDateObj(dateTo) } : undefined;
 
@@ -398,27 +408,15 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
         <span className="text-[10px] text-gray-400">{open ? '\u25B2' : '\u25BC'}</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-[100] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] mt-0.5">
+        <div className="absolute top-full left-0 z-[100] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] mt-0.5 p-3">
           <DayPicker
             mode="range"
             selected={selected}
             onSelect={handleSelect}
             numberOfMonths={2}
-            style={{ fontSize: 13 }}
-            styles={{
-              months: { display: 'flex', gap: 16 },
-              caption_label: { fontSize: 13, fontWeight: 600 },
-              day: { width: 32, height: 32, fontSize: 12 },
-              head_cell: { fontSize: 11, color: '#9CA3AF', fontWeight: 500 },
-            }}
-            modifiersStyles={{
-              selected: { background: '#EAB308', color: '#fff' },
-              range_middle: { background: '#FEF9C3', color: '#374151' },
-              today: { fontWeight: 700, color: '#EAB308' },
-            }}
           />
           {hasRange && (
-            <div className="px-3 pb-3">
+            <div className="mt-2">
               <button
                 className="bg-white text-gray-700 border border-gray-200 w-full py-1.5 px-2.5 rounded-md text-[11px] font-medium cursor-pointer"
                 onClick={() => { onChange('', ''); setOpen(false); }}
