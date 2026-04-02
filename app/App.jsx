@@ -35,6 +35,7 @@ const ORDER_LOST_REASONS = [
   'Sample/Material Not Approved',
   'Enquiry Invalid',
   'Enquiry Cancelled',
+  'Availibility Issues',
 ];
 
 const PIPELINE_BUCKETS = {
