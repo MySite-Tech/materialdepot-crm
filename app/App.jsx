@@ -1339,6 +1339,8 @@ export default function App() {
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [deleteLead, setDeleteLead] = useState(null);
   const [dateEditPopup, setDateEditPopup] = useState(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   const [csvPreview, setCsvPreview] = useState(null);
   const [csvErrors, setCsvErrors] = useState(null);
   const [csvSelected, setCsvSelected] = useState(new Set());
@@ -1473,7 +1475,16 @@ export default function App() {
   const handleSort = (col) => {
     if (sortCol === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('asc'); }
+    setPage(0);
   };
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [search, statusFilter, personFilter, branchFilter, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, closureDateFrom, closureDateTo, cartValueGt]);
+
+  // Pagination
+  const totalPages = Math.ceil(sorted.length / pageSize) || 1;
+  const safePage = Math.min(page, totalPages - 1);
+  const paginatedRows = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const filteredTotal = pipelineTotal; // same as pipelineTotal since both use filtered
 
@@ -1958,9 +1969,9 @@ export default function App() {
 
         {/* Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[calc(100vh-340px)] overflow-y-auto">
             <table className="w-full border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-[#FAFAFA]">
                   {isColVisible('id') && <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('clientName') && <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
@@ -1983,7 +1994,7 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((l) => (
+                {paginatedRows.map((l) => (
                   <tr
                     key={l.id}
                     className="border-t border-gray-200 hover:bg-[#FFFAF7]"
@@ -2046,7 +2057,7 @@ export default function App() {
                     </td>
                   </tr>
                 ))}
-                {sorted.length === 0 && (
+                {paginatedRows.length === 0 && (
                   <tr><td colSpan={COL_COUNT} className="p-10 text-center text-gray-400">No leads found</td></tr>
                 )}
               </tbody>
@@ -2062,6 +2073,31 @@ export default function App() {
             </table>
           </div>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-3 px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Rows per page:</span>
+              <select className="px-2 py-1 text-xs border border-gray-200 rounded outline-none" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+              <span className="text-xs text-gray-400 ml-2">
+                {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, sorted.length)} of {sorted.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default hover:bg-gray-50" disabled={safePage === 0} onClick={() => setPage(0)}>First</button>
+              <button className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default hover:bg-gray-50" disabled={safePage === 0} onClick={() => setPage((p) => p - 1)}>Prev</button>
+              <span className="text-xs text-gray-600 px-2">Page {safePage + 1} of {totalPages}</span>
+              <button className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default hover:bg-gray-50" disabled={safePage >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Next</button>
+              <button className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default hover:bg-gray-50" disabled={safePage >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>Last</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Drawer */}
