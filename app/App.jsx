@@ -735,9 +735,12 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
     setWarning(validate(dateStr));
   };
 
+  const remarkRequired = newDate && newDate !== currentDate;
+
   const handleSave = () => {
     const w = validate(newDate);
     if (w) { setWarning(w); return; }
+    if (remarkRequired && !remark.trim()) { setWarning('Remark is required when changing the date.'); return; }
     onSave(newDate, remark.trim());
   };
 
@@ -770,17 +773,22 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
           {warning && <div className="text-[11px] text-red-500 mt-1 mb-1">{warning}</div>}
           {autoUpdateNote && <div className="text-[11px] text-[#EAB308] mt-1 mb-1">{autoUpdateNote}</div>}
           <div className="mt-2">
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">REMARK (OPTIONAL)</label>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: remarkRequired ? '#EF4444' : '#9CA3AF' }}>
+              REMARK {remarkRequired ? <span className="text-red-500">* REQUIRED</span> : '(OPTIONAL)'}
+            </label>
             <textarea
-              className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[50px] resize-y"
+              className={`px-2.5 py-2 text-xs rounded-md outline-none font-sans w-full min-h-[50px] resize-y border ${remarkRequired && !remark.trim() ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
               value={remark}
-              onChange={(e) => setRemark(e.target.value)}
+              onChange={(e) => { setRemark(e.target.value); if (warning === 'Remark is required when changing the date.') setWarning(''); }}
               placeholder={'Reason for changing ' + label.toLowerCase() + '...'}
             />
+            {remarkRequired && !remark.trim() && (
+              <div className="text-[10px] text-red-500 mt-0.5">Please enter a reason for this date change.</div>
+            )}
           </div>
           <div className="flex gap-2 mt-3">
             <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
-            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${warning || !newDate ? 'opacity-50' : 'opacity-100'}`} disabled={!!warning || !newDate} onClick={handleSave}>Save</button>
+            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${warning || !newDate || (remarkRequired && !remark.trim()) ? 'opacity-50' : 'opacity-100'}`} disabled={!!warning || !newDate || (remarkRequired && !remark.trim())} onClick={handleSave}>Save</button>
           </div>
         </div>
       </div>
