@@ -1494,7 +1494,7 @@ export default function App() {
     const isNew = !existing;
     const finalData = existing ? mergeLead(existing, formData) : formData;
     setLeads((prev) => {
-      const idx = prev.findIndex((l) => l.id === finalData.id);
+      const idx = prev.findIndex((l) => l.id === finalData.id && l.clientPhone === finalData.clientPhone);
       if (idx >= 0) { const next = [...prev]; next[idx] = finalData; return next; }
       return [...prev, finalData];
     });
@@ -1512,8 +1512,8 @@ export default function App() {
 
   const removeLead = (id) => {
     const lead = leads.find((l) => l.id === id);
-    setLeads((prev) => prev.filter((l) => l.id !== id));
-    deleteLeadDb(id).catch((e) => console.error('Delete failed:', e));
+    setLeads((prev) => prev.filter((l) => !(l.id === id && l.clientPhone === (lead ? lead.clientPhone : ''))));
+    deleteLeadDb(id, lead ? lead.clientPhone : '').catch((e) => console.error('Delete failed:', e));
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'deleted_lead', entityType: 'lead', entityId: id, details: lead ? lead.clientName : '' }).catch(console.error);
     }
@@ -1539,13 +1539,13 @@ export default function App() {
     }
   };
 
-  const addRemark = (leadId, remark) => {
+  const addRemark = (leadId, clientPhone, remark) => {
     // Optimistic local update
-    setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
+    setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
     // Concurrent-safe: fetch latest from DB, append, save
-    appendRemarkToLead(leadId, remark).then((latestRemarks) => {
+    appendRemarkToLead(leadId, clientPhone, remark).then((latestRemarks) => {
       // Sync local state with DB truth
-      setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, remarks: latestRemarks } : l));
+      setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: latestRemarks } : l));
     }).catch((e) => console.error('Remark save failed:', e));
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'added_remark', entityType: 'lead', entityId: leadId, details: remark.text ? remark.text.substring(0, 100) : '' }).catch(console.error);
@@ -1555,10 +1555,11 @@ export default function App() {
   const handleDateEditSave = (newDate, remarkText) => {
     if (!dateEditPopup) return;
     const { leadId, field } = dateEditPopup;
+    const leadPhone = (leads.find((l) => l.id === leadId) || {}).clientPhone || '';
     const userName = currentUser ? currentUser.name : '';
     setLeads((prev) => {
       const updated = prev.map((l) => {
-        if (l.id !== leadId) return l;
+        if (!(l.id === leadId && l.clientPhone === leadPhone)) return l;
         const u = { ...l, [field]: newDate };
         if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
           u.closureDate = newDate;
@@ -1579,10 +1580,10 @@ export default function App() {
         u.remarks = remarks;
         return u;
       });
-      const lead = updated.find((l) => l.id === leadId);
+      const lead = updated.find((l) => l.id === leadId && l.clientPhone === leadPhone);
       if (lead) {
         // Fetch latest from DB, merge remarks, then save
-        fetchLead(leadId).then((dbLead) => {
+        fetchLead(leadId, leadPhone).then((dbLead) => {
           const mergedRemarks = [...(dbLead.remarks || [])];
           // Add new remarks that aren't in DB yet
           (lead.remarks || []).forEach((r) => {
@@ -1590,7 +1591,7 @@ export default function App() {
           });
           const merged = { ...lead, remarks: mergedRemarks };
           upsertLead(merged).catch((e) => console.error('Date edit save failed:', e));
-          setLeads((p) => p.map((l) => l.id === leadId ? merged : l));
+          setLeads((p) => p.map((l) => (l.id === leadId && l.clientPhone === leadPhone) ? merged : l));
         }).catch(() => {
           upsertLead(lead).catch((e) => console.error('Date edit save failed:', e));
         });
@@ -2108,18 +2109,18 @@ export default function App() {
           branches={branches}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
-          onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, remark) : undefined}
+          onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, drawerLead.clientPhone, remark) : undefined}
           onImmediateSave={(updatedLead) => {
-            setLeads((prev) => prev.map((l) => l.id === updatedLead.id ? updatedLead : l));
+            setLeads((prev) => prev.map((l) => (l.id === updatedLead.id && l.clientPhone === updatedLead.clientPhone) ? updatedLead : l));
             // Fetch latest from DB, merge remarks to avoid overwriting concurrent changes
-            fetchLead(updatedLead.id).then((dbLead) => {
+            fetchLead(updatedLead.id, updatedLead.clientPhone).then((dbLead) => {
               const mergedRemarks = [...(dbLead.remarks || [])];
               (updatedLead.remarks || []).forEach((r) => {
                 if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
               });
               const merged = { ...updatedLead, remarks: mergedRemarks };
               upsertLead(merged).catch((e) => console.error('Drawer date save failed:', e));
-              setLeads((p) => p.map((l) => l.id === merged.id ? merged : l));
+              setLeads((p) => p.map((l) => (l.id === merged.id && l.clientPhone === merged.clientPhone) ? merged : l));
             }).catch(() => {
               upsertLead(updatedLead).catch((e) => console.error('Drawer date save failed:', e));
             });
