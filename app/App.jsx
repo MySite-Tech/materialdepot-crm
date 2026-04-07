@@ -36,6 +36,7 @@ const ORDER_LOST_REASONS = [
   'Enquiry Invalid',
   'Enquiry Cancelled',
   'Availibility Issues',
+  'Not Responding',
 ];
 
 const PIPELINE_BUCKETS = {
@@ -1356,6 +1357,12 @@ export default function App() {
   const [csvImportCount, setCsvImportCount] = useState(null);
   const csvFileRef = useRef(null);
 
+  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
+  const showSaveError = (msg = 'Failed to save. Please log out and log back in, then try again.') => {
+    setSaveErrorMsg(msg);
+    setTimeout(() => setSaveErrorMsg(null), 8000);
+  };
+
   // Column visibility
   const ALL_COLUMNS = [
     { key: 'id', label: 'Lead ID' },
@@ -1395,6 +1402,31 @@ export default function App() {
 
   // Persist to localStorage
   // No more localStorage — data is persisted to Supabase on each operation
+
+  // BM options: derived from leads filtered by branch + dates + search + cart (not by personFilter itself)
+  const bmFilteredLeads = leads.filter((l) => {
+    if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
+    if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
+    if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
+    if (followUpDateFrom || followUpDateTo) {
+      if (!l.followUpDate) return false;
+      if (followUpDateFrom && l.followUpDate < followUpDateFrom) return false;
+      if (followUpDateTo && l.followUpDate > followUpDateTo) return false;
+    }
+    if (closureDateFrom || closureDateTo) {
+      if (!l.closureDate) return false;
+      if (closureDateFrom && l.closureDate < closureDateFrom) return false;
+      if (closureDateTo && l.closureDate > closureDateTo) return false;
+    }
+    if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!l.id.toLowerCase().includes(q) && !l.assignedTo.toLowerCase().includes(q) &&
+          !(l.clientName || '').toLowerCase().includes(q) && !(l.clientPhone || '').includes(q)) return false;
+    }
+    return true;
+  });
+  const availableBMs = [...new Set(bmFilteredLeads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
@@ -1507,7 +1539,7 @@ export default function App() {
       if (idx >= 0) { const next = [...prev]; next[idx] = finalData; return next; }
       return [...prev, finalData];
     });
-    upsertLead(finalData).catch((e) => console.error('Save failed:', e));
+    upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });
     if (currentUser) {
       if (isNew) {
         logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'created_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
@@ -1599,10 +1631,10 @@ export default function App() {
             if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
           });
           const merged = { ...lead, remarks: mergedRemarks };
-          upsertLead(merged).catch((e) => console.error('Date edit save failed:', e));
+          upsertLead(merged).catch((e) => { console.error('Date edit save failed:', e); showSaveError(); });
           setLeads((p) => p.map((l) => (l.id === leadId && l.clientPhone === leadPhone) ? merged : l));
         }).catch(() => {
-          upsertLead(lead).catch((e) => console.error('Date edit save failed:', e));
+          upsertLead(lead).catch((e) => { console.error('Date edit save failed:', e); showSaveError(); });
         });
       }
       return updated;
@@ -1951,7 +1983,7 @@ export default function App() {
               onChange={(e) => setSearch(e.target.value)}
             />
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
-            <MultiSelect options={[...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort()} selected={personFilter} onChange={setPersonFilter} label="All Salespeople" />
+            <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="All Salespeople" />
             <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
             <DateRangePicker label="Created Date" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
             <DateRangePicker label="Follow-up Date" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
@@ -2128,10 +2160,10 @@ export default function App() {
                 if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
               });
               const merged = { ...updatedLead, remarks: mergedRemarks };
-              upsertLead(merged).catch((e) => console.error('Drawer date save failed:', e));
+              upsertLead(merged).catch((e) => { console.error('Drawer date save failed:', e); showSaveError(); });
               setLeads((p) => p.map((l) => (l.id === merged.id && l.clientPhone === merged.clientPhone) ? merged : l));
             }).catch(() => {
-              upsertLead(updatedLead).catch((e) => console.error('Drawer date save failed:', e));
+              upsertLead(updatedLead).catch((e) => { console.error('Drawer date save failed:', e); showSaveError(); });
             });
           }}
         />
@@ -2265,6 +2297,18 @@ export default function App() {
       {csvImportCount != null && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#1A1A1A] text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold z-[1100] shadow-[0_4px_12px_rgba(0,0,0,0.2)]">
           Successfully imported {csvImportCount} lead{csvImportCount !== 1 ? 's' : ''}
+        </div>
+      )}
+      {/* Save error toast */}
+      {saveErrorMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-600 text-white px-5 py-3 rounded-lg text-[13px] font-semibold z-[1100] shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center gap-4">
+          <span>⚠ {saveErrorMsg}</span>
+          <button
+            onClick={handleLogout}
+            className="bg-white text-red-600 px-3 py-1 rounded text-[12px] font-bold cursor-pointer border-none shrink-0"
+          >
+            Log out
+          </button>
         </div>
       )}
     </div>
