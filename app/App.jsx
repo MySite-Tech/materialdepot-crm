@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
+import Dashboard from './Dashboard';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -40,8 +41,8 @@ const ORDER_LOST_REASONS = [
 ];
 
 const PIPELINE_BUCKETS = {
-  Active: ['Quote Approval Pending', 'Request for Availability Check', 'Order Placed'],
-  Won: ['Delivered'],
+  Active: ['Quote Approval Pending', 'Request for Availability Check', ''],
+  Won: ['Delivered', 'Order Placed'],
   Lost: ['Refunded', 'Order Lost'],
 };
 
@@ -1292,6 +1293,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [mainTab, setMainTab] = useState('leads'); // 'leads' | 'dashboard'
+  const [dashLogs, setDashLogs] = useState([]);
 
   useEffect(() => {
     try {
@@ -1331,6 +1334,12 @@ export default function App() {
       setDbReady(true);
     }).catch(() => setDbReady(true));
   }, [currentUser]);
+
+  useEffect(() => {
+    if (mainTab === 'dashboard' && dashLogs.length === 0) {
+      fetchActivityLogs(500).then(setDashLogs).catch(() => {});
+    }
+  }, [mainTab]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState([]);
@@ -1903,7 +1912,24 @@ export default function App() {
         </div>
       </header>
 
-      <div className="px-6 py-4">
+      {/* Main Tab Nav */}
+      <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
+        {[{ key: 'leads', label: 'Leads' }, { key: 'dashboard', label: 'Dashboard' }].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setMainTab(t.key)}
+            className={`px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors ${mainTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mainTab === 'dashboard' && (
+        <Dashboard leads={leads} logs={dashLogs} branches={branches} />
+      )}
+
+      {mainTab === 'leads' && <div className="px-6 py-4">
         {/* Pipeline Revenue Summary */}
         <div className="bg-white rounded-lg px-6 py-4 border border-gray-200">
           <div className="flex justify-between flex-wrap gap-4">
@@ -2140,7 +2166,7 @@ export default function App() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Drawer */}
       {(showAddDrawer || drawerLead) && (
