@@ -502,7 +502,7 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-[900]" onClick={onClose} />
-      <div className="fixed top-0 right-0 w-[480px] h-screen bg-white z-[901] flex flex-col shadow-[-4px_0_20px_rgba(0,0,0,0.1)] animate-[slideInRight_0.25s_ease-out]">
+      <div className="fixed top-0 right-0 w-full sm:w-[480px] h-screen bg-white z-[901] flex flex-col shadow-[-4px_0_20px_rgba(0,0,0,0.1)] animate-[slideInRight_0.25s_ease-out]">
         {/* Header */}
         <div className="bg-[#1A1A1A] px-4 py-3 flex justify-between items-center">
           <div>
@@ -1943,7 +1943,7 @@ export default function App() {
         <Dashboard leads={leads} logs={dashLogs} branches={branches} />
       )}
 
-      {mainTab === 'leads' && <div className="px-6 py-4">
+      {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         {/* Pipeline Revenue Summary */}
         <div className="bg-white rounded-lg px-6 py-4 border border-gray-200">
           <div className="flex justify-between flex-wrap gap-4">
@@ -2015,7 +2015,7 @@ export default function App() {
 
         {/* Toolbar */}
         <div className="flex justify-between items-center py-3 gap-3 flex-wrap">
-          <div className="flex gap-2 items-center flex-wrap flex-1">
+          <div className="flex gap-2 items-center flex-1 overflow-x-auto pb-1 sm:flex-wrap sm:pb-0 [&::-webkit-scrollbar]:hidden">
             <input
               className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[220px]"
               placeholder="Search leads..."
@@ -2051,16 +2051,48 @@ export default function App() {
             <span className="text-xs text-gray-500">{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="flex gap-2 items-center">
-            <MultiSelect options={ALL_COLUMNS.map((c) => c.label)} selected={ALL_COLUMNS.filter((c) => isColVisible(c.key)).map((c) => c.label)} onChange={(labels) => { const keys = ALL_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key); setVisibleCols(keys); localStorage.setItem('materialdepot_cols', JSON.stringify(keys)); }} label="Columns" />
-            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={downloadCsvTemplate}>Download Template</button>
-            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
+            <div className="hidden sm:flex gap-2 items-center">
+              <MultiSelect options={ALL_COLUMNS.map((c) => c.label)} selected={ALL_COLUMNS.filter((c) => isColVisible(c.key)).map((c) => c.label)} onChange={(labels) => { const keys = ALL_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key); setVisibleCols(keys); localStorage.setItem('materialdepot_cols', JSON.stringify(keys)); }} label="Columns" />
+              <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={downloadCsvTemplate}>Download Template</button>
+              <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
+              <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+            </div>
             <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
-            <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
+            <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        {/* Mobile card list */}
+        <div className="sm:hidden flex flex-col gap-2">
+          {paginatedRows.length === 0 && <div className="text-center text-gray-400 py-10 text-sm">No leads found</div>}
+          {paginatedRows.map((l) => (
+            <div key={l.id} className="bg-white rounded-lg border border-gray-200 px-4 py-3" onClick={() => setDrawerLead(l)}>
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-[14px] truncate">{l.clientName || '—'}</div>
+                  <div className="font-mono text-[11px] text-gray-400">{l.clientPhone || '—'}</div>
+                </div>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 mt-0.5" style={{ background: (STATUS_COLORS[l.status] || '#9CA3AF') + '20', color: STATUS_COLORS[l.status] || '#9CA3AF' }}>{l.status}</span>
+              </div>
+              <div className="flex gap-3 mt-2 text-[11px] text-gray-500 flex-wrap">
+                {l.followUpDate && <span className={isOverdue(l) ? 'text-red-500 font-semibold' : ''}>{isOverdue(l) ? '⚠ ' : ''}Follow-up: {fmtDate(l.followUpDate)}</span>}
+                {!l.followUpDate && <span className="text-gray-300">No follow-up date</span>}
+                {l.closureDate && <span>Closure: {fmtDate(l.closureDate)}</span>}
+                {l.cartValue > 0 && <span className="font-mono font-semibold text-gray-700">{fmtINR(l.cartValue)}</span>}
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <div className="flex items-center gap-1.5">
+                  <Avatar name={l.assignedTo} size={18} />
+                  <span className="text-[11px] text-gray-500">{l.assignedTo}</span>
+                </div>
+                <span className="text-[11px] text-gray-400">{l.branch}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden sm:block bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto max-h-[calc(100vh-340px)] overflow-y-auto">
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
