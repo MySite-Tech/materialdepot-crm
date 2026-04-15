@@ -387,7 +387,7 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 }
 
 // ── Lead Drawer (Edit + Remarks + Visit History in single view) ─────────────
-function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark, onImmediateSave }) {
+function LeadDrawer({ lead, currentUser, branches, users, onSave, onClose, onAddRemark, onImmediateSave }) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: Array.isArray(lead.cartItems) ? lead.cartItems : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
@@ -531,7 +531,12 @@ function LeadDrawer({ lead, currentUser, branches, onSave, onClose, onAddRemark,
                 <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono" value={form.clientPhone || ''} placeholder="10-digit phone" maxLength={10} inputMode="numeric" onChange={(e) => set('clientPhone', e.target.value.replace(/[^0-9]/g, ''))} />
               </Field>
               <Field label="ASSIGNED TO">
-                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} placeholder="Enter name" onChange={(e) => set('assignedTo', e.target.value)} />
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
+                  {form.assignedTo && !users.some((u) => u.name === form.assignedTo) && (
+                    <option value={form.assignedTo}>{form.assignedTo}</option>
+                  )}
+                  {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                </select>
               </Field>
               <Field label="BRANCH">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
@@ -1353,6 +1358,7 @@ export default function App() {
 
   const [leads, setLeads] = useState([]);
   const [branches, setBranches] = useState(DEFAULT_BRANCHES);
+  const [crmUsers, setCrmUsers] = useState([]);
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
@@ -1360,9 +1366,11 @@ export default function App() {
     Promise.all([
       fetchLeads(),
       fetchBranches().catch(() => []),
-    ]).then(([dbLeads, dbBranches]) => {
+      fetchUsers().catch(() => []),
+    ]).then(([dbLeads, dbBranches, dbUsers]) => {
       setLeads(dbLeads);
       if (dbBranches.length > 0) setBranches(dbBranches.map((b) => b.name));
+      setCrmUsers(dbUsers);
       setDbReady(true);
     }).catch(() => setDbReady(true));
   }, [currentUser]);
@@ -2271,6 +2279,7 @@ export default function App() {
           lead={drawerLead ? (leads.find((l) => l.id === drawerLead.id) || drawerLead) : null}
           currentUser={currentUser}
           branches={branches}
+          users={crmUsers}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, drawerLead.clientPhone, remark) : undefined}
