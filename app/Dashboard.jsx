@@ -43,13 +43,15 @@ const LOST_COLORS = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6','#8B5CF6'
 const STATUS_COLORS = {
   'Quote Approval Pending':        '#3B82F6',
   'Request for Availability Check':'#8B5CF6',
+  'Site Visit':                    '#A855F7',
   'Order Placed':                  '#EAB308',
+  'Partly Placed':                 '#FB923C',
   'Delivered':                     '#22C55E',
   'Order Lost':                    '#EF4444',
   'Refunded':                      '#F97316',
 };
 const DEFAULT_STATUS_COLOR = '#9CA3AF';
-const PIPELINE_STATUSES = ['Quote Approval Pending', 'Request for Availability Check', ''];
+const PIPELINE_STATUSES = ['Quote Approval Pending', 'Request for Availability Check', 'Site Visit', ''];
 const EDIT_ACTIONS = ['updated_lead', 'date_changed', 'added_remark', 'status_changed'];
 
 // ── Tooltip components ────────────────────────────────────────────────────────

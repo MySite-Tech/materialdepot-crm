@@ -12,7 +12,9 @@ const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 const STATUSES = [
   'Quote Approval Pending',
   'Request for Availability Check',
+  'Site Visit',
   'Order Placed',
+  'Partly Placed',
   'Delivered',
   'Refunded',
   'Order Lost',
@@ -21,7 +23,9 @@ const STATUSES = [
 const STATUS_COLORS = {
   'Quote Approval Pending': '#F59E0B',
   'Request for Availability Check': '#3B82F6',
+  'Site Visit': '#A855F7',
   'Order Placed': '#F97316',
+  'Partly Placed': '#FB923C',
   'Delivered': '#22C55E',
   'Refunded': '#EF4444',
   'Order Lost': '#9CA3AF',
@@ -41,8 +45,8 @@ const ORDER_LOST_REASONS = [
 ];
 
 const PIPELINE_BUCKETS = {
-  Active: ['Quote Approval Pending', 'Request for Availability Check', ''],
-  Won: ['Delivered', 'Order Placed'],
+  Active: ['Quote Approval Pending', 'Request for Availability Check', 'Site Visit', ''],
+  Won: ['Delivered', 'Order Placed', 'Partly Placed'],
   Lost: ['Refunded', 'Order Lost'],
 };
 
@@ -1352,6 +1356,7 @@ export default function App() {
   const [closureDateFrom, setClosureDateFrom] = useState('');
   const [closureDateTo, setClosureDateTo] = useState('');
   const [cartValueGt, setCartValueGt] = useState('');
+  const [taskFilter, setTaskFilter] = useState('');
   const [sortCol, setSortCol] = useState('latestVisit');
   const [sortDir, setSortDir] = useState('desc');
   const [drawerLead, setDrawerLead] = useState(null);
@@ -1457,6 +1462,15 @@ export default function App() {
       if (closureDateTo && l.closureDate > closureDateTo) return false;
     }
     if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
+    // Task quick filters
+    if (taskFilter === 'followup_pending' && l.followUpDate) return false;
+    if (taskFilter === 'closure_pending' && l.closureDate) return false;
+    if (taskFilter === 'overdue') {
+      const today = todayStr();
+      const followUpOverdue = l.followUpDate && l.followUpDate < today;
+      const closureOverdue = l.closureDate && l.closureDate < today;
+      if (!followUpOverdue && !closureOverdue) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       const matchId = l.id.toLowerCase().includes(q);
@@ -2024,6 +2038,16 @@ export default function App() {
               onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setCartValueGt(v); }}
             />
             {cartValueGt !== '' && <button className="bg-white text-gray-700 border border-gray-200 py-1.5 px-2.5 rounded-md text-[11px] font-medium cursor-pointer" onClick={() => { setCartValueGt(''); }}>Clear</button>}
+            <select
+              className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans bg-white cursor-pointer"
+              value={taskFilter}
+              onChange={(e) => setTaskFilter(e.target.value)}
+            >
+              <option value="">All Tasks</option>
+              <option value="followup_pending">Follow-up Date Pending</option>
+              <option value="closure_pending">Closure Date Pending</option>
+              <option value="overdue">Overdue Tasks</option>
+            </select>
             <span className="text-xs text-gray-500">{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="flex gap-2 items-center">
