@@ -1473,7 +1473,7 @@ export default function App() {
   const availableBMs = [...new Set(bmFilteredLeads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
   // Branches this user is allowed to see (empty = no restriction, admins always unrestricted)
-  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+  const isAdminUser = currentUser?.role === 'superadmin';
   const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
 
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
