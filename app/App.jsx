@@ -2279,7 +2279,7 @@ export default function App() {
           lead={drawerLead ? (leads.find((l) => l.id === drawerLead.id) || drawerLead) : null}
           currentUser={currentUser}
           branches={branches}
-          users={crmUsers.length > 0 ? crmUsers : availableBMs.map(name => ({ id: name, name }))}
+          users={availableBMs.map(name => ({ id: name, name }))}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, drawerLead.clientPhone, remark) : undefined}
