@@ -837,6 +837,7 @@ function AdminDashboard({ onBack }) {
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
   const [editRole, setEditRole] = useState('');
+  const [editBranches, setEditBranches] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
@@ -881,7 +882,7 @@ function AdminDashboard({ onBack }) {
   };
 
   const startEdit = (u) => {
-    setEditId(u.id); setEditName(u.name); setEditCode(u.code); setEditRole(u.role);
+    setEditId(u.id); setEditName(u.name); setEditCode(u.code); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
   };
 
   const handleSaveEdit = async () => {
@@ -890,7 +891,8 @@ function AdminDashboard({ onBack }) {
     setError('');
     try {
       await updateUser(editId, { name: editName.trim(), code: editCode.trim(), role: editRole });
-      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), code: editCode.trim(), role: editRole } : u));
+      await updateUserBranches(editId, editBranches);
+      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), code: editCode.trim(), role: editRole, allowedBranches: editBranches } : u));
       setEditId(null);
     } catch (e) {
       setError(e.message || 'Failed to update user');
@@ -980,6 +982,7 @@ function AdminDashboard({ onBack }) {
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Name</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Code</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Role</th>
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Branch Access</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">Actions</th>
                     </tr>
                   </thead>
@@ -998,6 +1001,21 @@ function AdminDashboard({ onBack }) {
                                 <option value="superadmin">Super Admin</option>
                               </select>
                             </td>
+                            <td className="px-4 py-2">
+                              <div className="flex flex-wrap gap-1.5">
+                                {branchList.map((b) => (
+                                  <label key={b.id} className="flex items-center gap-1 cursor-pointer text-[11px] text-gray-600">
+                                    <input
+                                      type="checkbox"
+                                      className="accent-[#EAB308]"
+                                      checked={editBranches.includes(b.name)}
+                                      onChange={() => setEditBranches((prev) => prev.includes(b.name) ? prev.filter((x) => x !== b.name) : [...prev, b.name])}
+                                    />
+                                    {b.name}
+                                  </label>
+                                ))}
+                              </div>
+                            </td>
                             <td className="px-4 py-2 text-center whitespace-nowrap">
                               <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveEdit}>Save</button>
                               <button className="text-gray-400 text-xs cursor-pointer bg-transparent border-none" onClick={() => setEditId(null)}>Cancel</button>
@@ -1012,6 +1030,12 @@ function AdminDashboard({ onBack }) {
                                 {u.role}
                               </span>
                             </td>
+                            <td className="px-4 py-2.5">
+                              {(u.allowedBranches || []).length === 0
+                                ? <span className="text-[11px] text-gray-400">All branches</span>
+                                : <div className="flex flex-wrap gap-1">{(u.allowedBranches).map((b) => <span key={b} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">{b}</span>)}</div>
+                              }
+                            </td>
                             <td className="px-4 py-2.5 text-center whitespace-nowrap">
                               <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
                               <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDelete(u.id, u.name)}>Delete</button>
@@ -1021,7 +1045,7 @@ function AdminDashboard({ onBack }) {
                       </tr>
                     ))}
                     {users.length === 0 && (
-                      <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
+                      <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1035,12 +1059,7 @@ function AdminDashboard({ onBack }) {
         {activeTab === 'branches' && (
           <>
             <h1 className="text-lg font-bold text-gray-800 mb-6">Branch Management</h1>
-            <BranchManager
-              branches={branchList}
-              setBranches={setBranchList}
-              users={users}
-              setUsers={setUsers}
-            />
+            <BranchManager branches={branchList} setBranches={setBranchList} />
           </>
         )}
 
@@ -1100,25 +1119,11 @@ function AdminDashboard({ onBack }) {
   );
 }
 
-function BranchManager({ branches, setBranches, users, setUsers }) {
+function BranchManager({ branches, setBranches }) {
   const [newBranch, setNewBranch] = useState('');
   const [editBranchId, setEditBranchId] = useState(null);
   const [editBranchName, setEditBranchName] = useState('');
   const [branchError, setBranchError] = useState('');
-  const [accessError, setAccessError] = useState('');
-
-  const toggleUserBranch = async (user, branchName) => {
-    const current = user.allowedBranches || [];
-    const updated = current.includes(branchName)
-      ? current.filter((b) => b !== branchName)
-      : [...current, branchName];
-    try {
-      await updateUserBranches(user.id, updated);
-      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, allowedBranches: updated, allowed_branches: updated } : u));
-    } catch (e) {
-      setAccessError(e.message || 'Failed to update branch access');
-    }
-  };
 
   const handleAddBranch = async () => {
     const name = newBranch.trim();
@@ -1209,47 +1214,6 @@ function BranchManager({ branches, setBranches, users, setUsers }) {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-4 mb-8 text-center">{branches.length} branch{branches.length !== 1 ? 'es' : ''} total</p>
-
-      {/* User Branch Access */}
-      <h2 className="text-lg font-bold text-gray-800 mt-8 mb-4">User Branch Access</h2>
-      <p className="text-xs text-gray-400 mb-4">Assign branches to users. Users with assigned branches will only see leads from those branches. Leave all unchecked for unrestricted access.</p>
-      {accessError && <p className="text-red-500 text-xs mb-3">{accessError}</p>}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-[#FAFAFA]">
-              <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">User</th>
-              {branches.map((b) => (
-                <th key={b.id} className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">{b.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
-                <td className="px-4 py-2.5">
-                  <div className="text-[13px] font-medium">{u.name}</div>
-                  <div className="text-[11px] text-gray-400">{u.role}</div>
-                </td>
-                {branches.map((b) => (
-                  <td key={b.id} className="px-3 py-2.5 text-center">
-                    <input
-                      type="checkbox"
-                      className="accent-[#EAB308] w-4 h-4 cursor-pointer"
-                      checked={(u.allowedBranches || []).includes(b.name)}
-                      onChange={() => toggleUserBranch(u, b.name)}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr><td colSpan={branches.length + 1} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-gray-400 mt-3 mb-8">✓ = has access to that branch's leads</p>
     </>
   );
 }
