@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
+import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
 import Dashboard from './Dashboard';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -1035,7 +1035,12 @@ function AdminDashboard({ onBack }) {
         {activeTab === 'branches' && (
           <>
             <h1 className="text-lg font-bold text-gray-800 mb-6">Branch Management</h1>
-            <BranchManager branches={branchList} setBranches={setBranchList} />
+            <BranchManager
+              branches={branchList}
+              setBranches={setBranchList}
+              users={users}
+              setUsers={setUsers}
+            />
           </>
         )}
 
@@ -1095,11 +1100,25 @@ function AdminDashboard({ onBack }) {
   );
 }
 
-function BranchManager({ branches, setBranches }) {
+function BranchManager({ branches, setBranches, users, setUsers }) {
   const [newBranch, setNewBranch] = useState('');
   const [editBranchId, setEditBranchId] = useState(null);
   const [editBranchName, setEditBranchName] = useState('');
   const [branchError, setBranchError] = useState('');
+  const [accessError, setAccessError] = useState('');
+
+  const toggleUserBranch = async (user, branchName) => {
+    const current = user.allowedBranches || [];
+    const updated = current.includes(branchName)
+      ? current.filter((b) => b !== branchName)
+      : [...current, branchName];
+    try {
+      await updateUserBranches(user.id, updated);
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, allowedBranches: updated, allowed_branches: updated } : u));
+    } catch (e) {
+      setAccessError(e.message || 'Failed to update branch access');
+    }
+  };
 
   const handleAddBranch = async () => {
     const name = newBranch.trim();
@@ -1190,6 +1209,47 @@ function BranchManager({ branches, setBranches }) {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-4 mb-8 text-center">{branches.length} branch{branches.length !== 1 ? 'es' : ''} total</p>
+
+      {/* User Branch Access */}
+      <h2 className="text-lg font-bold text-gray-800 mt-8 mb-4">User Branch Access</h2>
+      <p className="text-xs text-gray-400 mb-4">Assign branches to users. Users with assigned branches will only see leads from those branches. Leave all unchecked for unrestricted access.</p>
+      {accessError && <p className="text-red-500 text-xs mb-3">{accessError}</p>}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-[#FAFAFA]">
+              <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">User</th>
+              {branches.map((b) => (
+                <th key={b.id} className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">{b.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
+                <td className="px-4 py-2.5">
+                  <div className="text-[13px] font-medium">{u.name}</div>
+                  <div className="text-[11px] text-gray-400">{u.role}</div>
+                </td>
+                {branches.map((b) => (
+                  <td key={b.id} className="px-3 py-2.5 text-center">
+                    <input
+                      type="checkbox"
+                      className="accent-[#EAB308] w-4 h-4 cursor-pointer"
+                      checked={(u.allowedBranches || []).includes(b.name)}
+                      onChange={() => toggleUserBranch(u, b.name)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr><td colSpan={branches.length + 1} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-gray-400 mt-3 mb-8">✓ = has access to that branch's leads</p>
     </>
   );
 }
@@ -1419,7 +1479,9 @@ export default function App() {
 
   // BM options: derived from leads filtered by branch + dates + search + cart (not by personFilter itself)
   const bmFilteredLeads = leads.filter((l) => {
-    if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
+    if (userAllowedBranches.length > 0) {
+      if (!userAllowedBranches.includes(l.branch)) return false;
+    } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
     if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
     if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
     if (followUpDateFrom || followUpDateTo) {
@@ -1442,10 +1504,16 @@ export default function App() {
   });
   const availableBMs = [...new Set(bmFilteredLeads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
+  // Branches this user is allowed to see (empty = no restriction)
+  const userAllowedBranches = currentUser?.allowedBranches || [];
+
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
-    if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
+    // Branch restriction: user-level takes priority, then filter bar
+    if (userAllowedBranches.length > 0) {
+      if (!userAllowedBranches.includes(l.branch)) return false;
+    } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
     // Created date filter
     if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
     if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
@@ -2024,7 +2092,11 @@ export default function App() {
             />
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
             <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="All Salespeople" />
-            <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
+            {userAllowedBranches.length > 0 ? (
+              <span className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 whitespace-nowrap">{userAllowedBranches.join(', ')}</span>
+            ) : (
+              <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
+            )}
             <DateRangePicker label="Created Date" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
             <DateRangePicker label="Follow-up Date" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
             <DateRangePicker label="Closure Date" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
