@@ -1327,13 +1327,17 @@ export default function App() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem('materialdepot_user');
-      if (stored) setCurrentUser(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Ensure allowedBranches always exists (handles old stored sessions)
+        setCurrentUser({ ...parsed, allowedBranches: parsed.allowedBranches || [] });
+      }
     } catch {}
     setUserLoaded(true);
   }, []);
 
   const handleLogin = (user) => {
-    const userData = { id: user.id, name: user.name, code: user.code, role: user.role };
+    const userData = { id: user.id, name: user.name, code: user.code, role: user.role, allowedBranches: user.allowedBranches || [] };
     setCurrentUser(userData);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
     logActivity({ userId: user.id, userName: user.name, action: 'user_login', entityType: 'user', entityId: user.id, details: user.name + ' logged in' }).catch(console.error);
