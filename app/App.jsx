@@ -1445,6 +1445,10 @@ export default function App() {
   // Persist to localStorage
   // No more localStorage — data is persisted to Supabase on each operation
 
+  // Branches this user is allowed to see (empty = no restriction, superadmin always unrestricted)
+  const isAdminUser = currentUser?.role === 'superadmin';
+  const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
+
   // BM options: derived from leads filtered by branch + dates + search + cart (not by personFilter itself)
   const bmFilteredLeads = leads.filter((l) => {
     if (userAllowedBranches.length > 0) {
@@ -1471,10 +1475,6 @@ export default function App() {
     return true;
   });
   const availableBMs = [...new Set(bmFilteredLeads.map((l) => l.assignedTo).filter(Boolean))].sort();
-
-  // Branches this user is allowed to see (empty = no restriction, admins always unrestricted)
-  const isAdminUser = currentUser?.role === 'superadmin';
-  const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
 
   // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
