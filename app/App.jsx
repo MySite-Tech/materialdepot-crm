@@ -256,7 +256,7 @@ function MultiSelect({ options, selected, onChange, label }) {
         <span className="text-[10px] text-gray-400">{open ? '\u25B2' : '\u25BC'}</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-[100] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto min-w-full mt-0.5">
+        <div className="absolute top-full left-0 z-[999] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto min-w-full mt-0.5">
           {options.map((opt) => (
             <label
               key={opt}
