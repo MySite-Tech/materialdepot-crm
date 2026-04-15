@@ -387,7 +387,7 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
 }
 
 // ── Lead Drawer (Edit + Remarks + Visit History in single view) ─────────────
-function LeadDrawer({ lead, currentUser, branches, users, onSave, onClose, onAddRemark, onImmediateSave }) {
+function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave }) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
   const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: Array.isArray(lead.cartItems) ? lead.cartItems : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
@@ -2279,7 +2279,7 @@ export default function App() {
           lead={drawerLead ? (leads.find((l) => l.id === drawerLead.id) || drawerLead) : null}
           currentUser={currentUser}
           branches={branches}
-          users={crmUsers}
+          users={crmUsers.length > 0 ? crmUsers : availableBMs.map(name => ({ id: name, name }))}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, drawerLead.clientPhone, remark) : undefined}
