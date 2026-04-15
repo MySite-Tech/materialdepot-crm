@@ -2052,7 +2052,7 @@ export default function App() {
 
         {/* Toolbar */}
         <div className="flex justify-between items-center py-3 gap-3 flex-wrap">
-          <div className="flex gap-2 items-center flex-1 overflow-x-auto pb-1 sm:flex-wrap sm:pb-0 [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-2 items-center flex-1 overflow-x-auto sm:overflow-visible pb-1 sm:flex-wrap sm:pb-0 [&::-webkit-scrollbar]:hidden">
             <input
               className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[220px]"
               placeholder="Search leads..."
