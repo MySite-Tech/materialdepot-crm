@@ -142,7 +142,7 @@ function mergeRow(existing: SupabaseRow, incoming: SupabaseRow): SupabaseRow {
     const val = incoming[f];
     if (val !== undefined && val !== null && val !== '' &&
         !(Array.isArray(val) && val.length === 0)) {
-      (merged as Record<string, unknown>)[f] = val;
+      (merged as unknown as Record<string, unknown>)[f] = val;
     }
   }
   if (incoming.cart_value && Number(incoming.cart_value) > 0) merged.cart_value = incoming.cart_value;
@@ -211,7 +211,7 @@ export async function loginWithCode(code: string): Promise<AppUser | null> {
     .single();
   if (error) return null;
   const row = data as Record<string, unknown>;
-  return { ...(row as AppUser), allowedBranches: (row.allowed_branches as string[]) || [] };
+  return { ...(row as unknown as AppUser), allowedBranches: (row.allowed_branches as string[]) || [] };
 }
 
 export async function fetchUsers(): Promise<AppUser[]> {
@@ -221,7 +221,7 @@ export async function fetchUsers(): Promise<AppUser[]> {
     .order('created_at', { ascending: true });
   if (error) throw error;
   return ((data || []) as Record<string, unknown>[]).map(u => ({
-    ...(u as AppUser),
+    ...(u as unknown as AppUser),
     allowedBranches: (u.allowed_branches as string[]) || [],
   }));
 }

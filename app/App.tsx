@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { DayPicker } from 'react-day-picker';
+import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
+import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
+import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -21,7 +22,7 @@ const STATUSES = [
   'Order Lost',
 ];
 
-const STATUS_COLORS = {
+const STATUS_COLORS: Record<string, string> = {
   'Quote Approval Pending': '#F59E0B',
   'Request for Availability Check': '#3B82F6',
   'Site Visit': '#A855F7',
@@ -45,7 +46,7 @@ const ORDER_LOST_REASONS = [
   'Not Responding',
 ];
 
-const PIPELINE_BUCKETS = {
+const PIPELINE_BUCKETS: Record<string, string[]> = {
   Active: ['Quote Approval Pending', 'Request for Availability Check', 'Site Visit', ''],
   Won: ['Delivered', 'Order Placed', 'Partly Placed'],
   Lost: ['Refunded', 'Order Lost'],
@@ -58,28 +59,24 @@ const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
 
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = (): string => new Date().toISOString().slice(0, 10);
 
-const genId = () => {
+const genId = (): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let r = '';
   for (let i = 0; i < 6; i++) r += chars[Math.floor(Math.random() * chars.length)];
   return `MD-${r}`;
 };
 
-// Smart merge: only overwrite fields that have non-empty new values, append remarks
-const mergeLead = (existing, incoming) => {
-  const merged = { ...existing };
-  const fields = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType'];
+const mergeLead = (existing: Lead, incoming: Lead): Lead => {
+  const merged: Lead = { ...existing };
+  const fields: (keyof Lead)[] = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType'];
   for (const f of fields) {
     const val = incoming[f];
-    if (val !== undefined && val !== null && val !== '') merged[f] = val;
+    if (val !== undefined && val !== null && val !== '') (merged as any)[f] = val;
   }
-  // Cart value: update only if incoming is non-zero
   if (incoming.cartValue && incoming.cartValue > 0) merged.cartValue = incoming.cartValue;
-  // Architect involved: update if explicitly set
   if (incoming.architectInvolved !== undefined) merged.architectInvolved = incoming.architectInvolved;
-  // Remarks: append, never remove — deduplicate by ts+text
   const existingRemarks = existing.remarks || [];
   const incomingRemarks = incoming.remarks || [];
   const allRemarks = [...existingRemarks];
@@ -87,7 +84,6 @@ const mergeLead = (existing, incoming) => {
     if (!allRemarks.some((er) => er.ts === r.ts && er.text === r.text)) allRemarks.push(r);
   }
   merged.remarks = allRemarks;
-  // Visits: append, deduplicate by date+channel
   const existingVisits = existing.visits || [];
   const incomingVisits = incoming.visits || [];
   const allVisits = [...existingVisits];
@@ -98,46 +94,32 @@ const mergeLead = (existing, incoming) => {
   return merged;
 };
 
-const fmtINR = (n) => {
-  if (n == null || isNaN(n)) return '\u20B90';
-  return '\u20B9' + Number(n).toLocaleString('en-IN');
+const fmtINR = (n: number | null | undefined): string => {
+  if (n == null || isNaN(n)) return '₹0';
+  return '₹' + Number(n).toLocaleString('en-IN');
 };
 
-const fmtDate = (d) => {
-  if (!d) return '\u2014';
+const fmtDate = (d: string | null | undefined): string => {
+  if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const fmtTimestamp = (ts) => {
+const fmtTimestamp = (ts: string): string => {
   const dt = new Date(ts);
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
-    ' \u00B7 ' +
+    ' · ' +
     dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
-// ── Client names pool ───────────────────────────────────────────────────────
-const CLIENT_NAMES = [
-  'Vikram Rao', 'Anita Deshmukh', 'Suresh Kulkarni', 'Meena Nair', 'Rajesh Gupta',
-  'Deepa Joshi', 'Amit Tiwari', 'Kavita Reddy', 'Sanjay Bhat', 'Pooja Shetty',
-  'Manoj Kumar', 'Lakshmi Pillai', 'Nitin Agarwal', 'Swathi Menon', 'Harish Gowda',
-  'Divya Krishnan', 'Ramesh Patil', 'Sunita Hegde', 'Arun Prasad', 'Neha Saxena',
-  'Prakash Iyengar', 'Rekha Devi', 'Venkatesh Murthy', 'Anjali Kapoor', 'Girish Naik',
-  'Padma Rangan', 'Kiran Srinivas', 'Usha Malhotra', 'Dinesh Chandra', 'Fatima Begum',
-];
+// ── Components ──────────────────────────────────────────────────────────────
 
-const CLIENT_PHONES = [
-  '9876543210', '9845012345', '9901234567', '9823456789', '9734561234',
-  '9612345678', '9556789012', '9445678901', '9367890123', '9278901234',
-  '9189012345', '9090123456', '8901234567', '8812345678', '8723456789',
-  '8634567890', '8545678901', '8456789012', '8367890123', '8278901234',
-  '8189012345', '8090123456', '7901234567', '7812345678', '7723456789',
-  '7634567890', '7545678901', '7456789012', '7367890123', '7278901234',
-];
+interface AvatarProps {
+  name?: string;
+  size?: number;
+}
 
-// ── Components// ── Components ──────────────────────────────────────────────────────────────
-
-function Avatar({ name, size = 24 }) {
+function Avatar({ name, size = 24 }: AvatarProps) {
   const initial = name ? name.charAt(0).toUpperCase() : '?';
   return (
     <div className="bg-[#EAB308] text-white rounded-full inline-flex items-center justify-center font-semibold shrink-0" style={{ width: size, height: size, fontSize: size * 0.45, lineHeight: size + 'px' }}>
@@ -146,7 +128,7 @@ function Avatar({ name, size = 24 }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status] || '#9CA3AF';
   return (
     <span className="inline-block px-2 py-0.5 rounded-xl text-[11px] font-semibold border whitespace-nowrap" style={{ background: color + '18', color, borderColor: color + '40' }}>
@@ -155,7 +137,13 @@ function StatusBadge({ status }) {
   );
 }
 
-function EditableStatus({ status, lostReason, onCommit }) {
+interface EditableStatusProps {
+  status: string;
+  lostReason?: string;
+  onCommit: (status: string, reason?: string) => void;
+}
+
+function EditableStatus({ status, lostReason, onCommit }: EditableStatusProps) {
   const [editing, setEditing] = useState(false);
   const [pendingLost, setPendingLost] = useState(false);
 
@@ -198,7 +186,7 @@ function EditableStatus({ status, lostReason, onCommit }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-3">
       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</label>
@@ -207,7 +195,16 @@ function Field({ label, children }) {
   );
 }
 
-function Th({ label, sortKey, sortCol, sortDir, onSort, className: extraClass }) {
+interface ThProps {
+  label: string;
+  sortKey: string | null;
+  sortCol: string;
+  sortDir: 'asc' | 'desc';
+  onSort: (col: string) => void;
+  className?: string;
+}
+
+function Th({ label, sortKey, sortCol, sortDir, onSort, className: extraClass }: ThProps) {
   const active = sortCol === sortKey;
   return (
     <th
@@ -217,27 +214,33 @@ function Th({ label, sortKey, sortCol, sortDir, onSort, className: extraClass })
       {label}
       {sortKey && (
         <span className={`ml-1 ${active ? 'opacity-100' : 'opacity-30'}`}>
-          {active ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u21D5'}
+          {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇕'}
         </span>
       )}
     </th>
   );
 }
 
-// ── Multi-Select Dropdown ───────────────────────────────────────────────────
-function MultiSelect({ options, selected, onChange, label }) {
+interface MultiSelectProps {
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  label: string;
+}
+
+function MultiSelect({ options, selected, onChange, label }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    const handler = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const toggle = (val) => {
+  const toggle = (val: string) => {
     if (selected.includes(val)) {
       onChange(selected.filter((v) => v !== val));
     } else {
@@ -254,7 +257,7 @@ function MultiSelect({ options, selected, onChange, label }) {
         onClick={() => setOpen(!open)}
       >
         <span className="flex-1 text-[13px]">{display}</span>
-        <span className="text-[10px] text-gray-400">{open ? '\u25B2' : '\u25BC'}</span>
+        <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="absolute top-full left-0 z-[999] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto min-w-full mt-0.5">
@@ -278,13 +281,20 @@ function MultiSelect({ options, selected, onChange, label }) {
   );
 }
 
-function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
+interface DateRangePickerProps {
+  dateFrom: string;
+  dateTo: string;
+  onChange: (from: string, to: string) => void;
+  label?: string;
+}
+
+function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    const handler = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -295,17 +305,17 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
   const display = !hasRange
     ? displayLabel
     : dateFrom && dateTo
-      ? `${fmtDate(dateFrom)} \u2013 ${fmtDate(dateTo)}`
+      ? `${fmtDate(dateFrom)} – ${fmtDate(dateTo)}`
       : dateFrom
         ? `From ${fmtDate(dateFrom)}`
         : `Until ${fmtDate(dateTo)}`;
 
-  const toDateObj = (s) => {
+  const toDateObj = (s: string): Date | undefined => {
     if (!s) return undefined;
     const [y, m, d] = s.split('-').map(Number);
     return new Date(y, m - 1, d);
   };
-  const toStr = (d) => {
+  const toStr = (d: Date | undefined): string => {
     if (!d) return '';
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -313,9 +323,9 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
     return `${y}-${m}-${day}`;
   };
 
-  const selected = (dateFrom || dateTo) ? { from: toDateObj(dateFrom), to: toDateObj(dateTo) } : undefined;
+  const selected: DateRange | undefined = (dateFrom || dateTo) ? { from: toDateObj(dateFrom), to: toDateObj(dateTo) } : undefined;
 
-  const handleSelect = (range) => {
+  const handleSelect = (range: DateRange | undefined) => {
     if (!range) { onChange('', ''); return; }
     onChange(toStr(range.from), toStr(range.to));
   };
@@ -327,7 +337,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
         onClick={() => setOpen(!open)}
       >
         <span className={`flex-1 text-xs ${hasRange ? 'text-gray-700' : 'text-gray-400'}`}>{display}</span>
-        <span className="text-[10px] text-gray-400">{open ? '\u25B2' : '\u25BC'}</span>
+        <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="absolute top-full left-0 z-[100] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] mt-0.5 p-3">
@@ -352,10 +362,15 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel }) {
   );
 }
 
-// CartItemsEditor removed — cart items are now simple text
-
 // ── Follow-up Remark Prompt ─────────────────────────────────────────────────
-function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
+interface FollowUpRemarkPromptProps {
+  oldDate: string;
+  newDate: string;
+  onConfirm: (text: string) => void;
+  onCancel: () => void;
+}
+
+function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }: FollowUpRemarkPromptProps) {
   const [text, setText] = useState('');
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
@@ -366,7 +381,7 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
         <div className="p-5">
           <p className="mb-3 text-[13px]">
             <span className="text-gray-400">{fmtDate(oldDate)}</span>
-            {' \u2192 '}
+            {' → '}
             <span className="font-semibold">{fmtDate(newDate)}</span>
           </p>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">REASON FOR CHANGE *</label>
@@ -387,11 +402,33 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }) {
   );
 }
 
-// ── Lead Drawer (Edit + Remarks + Visit History in single view) ─────────────
-function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave }) {
+// ── Lead Drawer ─────────────────────────────────────────────────────────────
+type DrawerUser = { id: string | number; name: string };
+
+interface LeadDrawerProps {
+  lead: Lead | null;
+  currentUser: AppUser | null;
+  branches: string[];
+  users?: DrawerUser[];
+  onSave: (lead: Lead) => void;
+  onClose: () => void;
+  onAddRemark?: (remark: Remark) => void;
+  onImmediateSave?: (lead: Lead) => void;
+}
+
+function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave }: LeadDrawerProps) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
-  const [form, setForm] = useState(() => lead ? { ...lead, branch: lead.branch || (branches[0] || ''), lostReason: lead.lostReason || '', cartItems: Array.isArray(lead.cartItems) ? lead.cartItems : [], visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: v.cartSnapshot ? v.cartSnapshot.map(c => ({ ...c })) : [] })) : [], clientType: lead.clientType || '', propertyType: lead.propertyType || '', architectInvolved: lead.architectInvolved || false } : {
+  const [form, setForm] = useState<Lead>(() => lead ? {
+    ...lead,
+    branch: lead.branch || (branches[0] || ''),
+    lostReason: lead.lostReason || '',
+    cartItems: Array.isArray(lead.cartItems) ? lead.cartItems : (lead.cartItems || ''),
+    visits: lead.visits ? lead.visits.map(v => ({ ...v, cartSnapshot: Array.isArray(v.cartSnapshot) ? v.cartSnapshot.map(c => ({ ...c })) : v.cartSnapshot })) : [],
+    clientType: lead.clientType || '',
+    propertyType: lead.propertyType || '',
+    architectInvolved: lead.architectInvolved || false,
+  } : {
     id: '', createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
     cartValue: 0, cartItems: '', followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
@@ -400,52 +437,47 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [remarkAuthor, setRemarkAuthor] = useState(currentUserName);
   const [closureDateWarning, setClosureDateWarning] = useState('');
-  const [drawerDatePopup, setDrawerDatePopup] = useState(null); // 'followUpDate' | 'closureDate' | null
+  const [drawerDatePopup, setDrawerDatePopup] = useState<'followUpDate' | 'closureDate' | null>(null);
   const [remarkText, setRemarkText] = useState('');
   const [visitChannel, setVisitChannel] = useState(VISIT_CHANNELS[0]);
-  const timelineRef = useRef(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
-  // Sync remarks and visits from parent when DB updates
   useEffect(() => {
     if (lead) {
       setForm((f) => ({ ...f, remarks: lead.remarks || [], visits: lead.visits || [] }));
     }
   }, [lead?.remarks, lead?.visits]);
 
-  // Cart value is independent — no auto-calculation
-
   useEffect(() => {
     if (timelineRef.current) timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
   }, [form.remarks]);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof Lead>(k: K, v: Lead[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleDrawerDateSave = (newDate, remarkText) => {
+  const handleDrawerDateSave = (newDate: string, remarkTxt: string) => {
     const field = drawerDatePopup;
+    if (!field) return;
     setDrawerDatePopup(null);
 
     setForm((f) => {
-      const updated = { ...f, [field]: newDate };
-      const remarks = [...(f.remarks || [])];
+      const updated: Lead = { ...f, [field]: newDate };
+      const remarks: Remark[] = [...(f.remarks || [])];
 
-      // Auto-update closure if follow-up exceeds it
       if (field === 'followUpDate' && newDate && f.closureDate && newDate > f.closureDate) {
         updated.closureDate = newDate;
         remarks.push({ ts: new Date().toISOString(), author: currentUserName, text: 'Closure date auto-updated to ' + fmtDate(newDate) + ' (follow-up date exceeded closure date)' });
       }
 
-      // Add remark if provided
-      if (remarkText) {
+      if (remarkTxt) {
         const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
         const oldDate = f[field];
-        const text = label + ' date ' + (oldDate ? 'changed from ' + fmtDate(oldDate) + ' to ' : 'set to ') + fmtDate(newDate) + ': ' + remarkText;
+        const text = label + ' date ' + (oldDate ? 'changed from ' + fmtDate(oldDate) + ' to ' : 'set to ') + fmtDate(newDate) + ': ' + remarkTxt;
         remarks.push({ ts: new Date().toISOString(), author: currentUserName, text });
       }
 
       updated.remarks = remarks;
       if (field === 'followUpDate') origFollowUpDate.current = newDate;
 
-      // Immediately persist to Supabase for existing leads
       if (isEdit && onImmediateSave) {
         onImmediateSave(updated);
       }
@@ -477,18 +509,18 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
 
   const submitRemark = () => {
     if (!remarkText.trim()) return;
-    const remark = { ts: new Date().toISOString(), author: remarkAuthor, text: remarkText.trim() };
+    const remark: Remark = { ts: new Date().toISOString(), author: remarkAuthor, text: remarkText.trim() };
     setForm((f) => ({ ...f, remarks: [...(f.remarks || []), remark] }));
     if (isEdit && onAddRemark) onAddRemark(remark);
     setRemarkText('');
   };
 
-  const handleRemarkKeyDown = (e) => {
+  const handleRemarkKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.ctrlKey && e.key === 'Enter') submitRemark();
   };
 
   const logVisit = () => {
-    const visit = {
+    const visit: Visit = {
       date: todayStr(),
       channel: visitChannel,
       loggedBy: currentUserName,
@@ -504,7 +536,6 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
     <>
       <div className="fixed inset-0 bg-black/30 z-[900]" onClick={onClose} />
       <div className="fixed top-0 right-0 w-full sm:w-[480px] h-screen bg-white z-[901] flex flex-col shadow-[-4px_0_20px_rgba(0,0,0,0.1)] animate-[slideInRight_0.25s_ease-out]">
-        {/* Header */}
         <div className="bg-[#1A1A1A] px-4 py-3 flex justify-between items-center">
           <div>
             <span className="font-semibold text-sm text-white">{isEdit ? 'Edit Lead' : 'Add New Lead'}</span>
@@ -513,9 +544,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
           <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={onClose}>&times;</button>
         </div>
 
-        {/* Scrollable content: Details + Remarks + Visits together */}
         <div className="flex-1 overflow-y-auto">
-          {/* Details Section */}
           <div className="p-5">
             <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">Details</div>
             <div className="grid grid-cols-2 gap-x-3">
@@ -581,7 +610,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                   onClick={() => setDrawerDatePopup('followUpDate')}
                 >
                   <span className={`text-[13px] ${form.followUpDate ? 'text-gray-700' : 'text-gray-400'}`}>{form.followUpDate ? fmtDate(form.followUpDate) : 'Click to set date'}</span>
-                  {form.followUpDate && <span className="text-[11px] text-gray-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); set('followUpDate', ''); }}>{'\u2715'}</span>}
+                  {form.followUpDate && <span className="text-[11px] text-gray-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); set('followUpDate', ''); }}>{'✕'}</span>}
                 </div>
               </Field>
               <Field label="CLOSURE EXPECTED">
@@ -590,7 +619,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                   onClick={() => setDrawerDatePopup('closureDate')}
                 >
                   <span className={`text-[13px] ${form.closureDate ? 'text-gray-700' : 'text-gray-400'}`}>{form.closureDate ? fmtDate(form.closureDate) : 'Click to set date'}</span>
-                  {form.closureDate && <span className="text-[11px] text-gray-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); set('closureDate', ''); }}>{'\u2715'}</span>}
+                  {form.closureDate && <span className="text-[11px] text-gray-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); set('closureDate', ''); }}>{'✕'}</span>}
                 </div>
               </Field>
               <Field label="CART VALUE">
@@ -609,7 +638,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
               <input
                 className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full"
                 placeholder="e.g. Tiles, Laminates, Wall Panels, Plywood"
-                value={Array.isArray(form.cartItems) ? (typeof form.cartItems[0] === 'string' ? form.cartItems.join(', ') : form.cartItems.map(i => i.name || i).join(', ')) : (form.cartItems || '')}
+                value={Array.isArray(form.cartItems) ? (typeof form.cartItems[0] === 'string' ? (form.cartItems as unknown as string[]).join(', ') : (form.cartItems as CartItem[]).map(i => i.name).join(', ')) : (form.cartItems || '')}
                 onChange={(e) => set('cartItems', e.target.value)}
               />
               <p className="text-[10px] text-gray-400 mt-1">Comma-separated list of items</p>
@@ -618,9 +647,9 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
               <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onClose}>Cancel</button>
               <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1" onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
             </div>
+            {closureDateWarning && <div className="text-xs text-red-500 mt-2">{closureDateWarning}</div>}
           </div>
 
-          {/* Remarks Section */}
           {isEdit && (
             <div className="border-t-2 border-gray-200">
               <div className="pt-4 px-5">
@@ -656,7 +685,6 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
             </div>
           )}
 
-          {/* Visit History Section */}
           {isEdit && (
             <div className="border-t-2 border-gray-200">
               <div className="pt-4 px-5">
@@ -672,7 +700,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                     </div>
                     {v.cartSnapshot && (typeof v.cartSnapshot === 'string' ? v.cartSnapshot : (Array.isArray(v.cartSnapshot) && v.cartSnapshot.length > 0)) ? (
                       <div className="text-[11px] text-gray-500">
-                        {typeof v.cartSnapshot === 'string' ? v.cartSnapshot : v.cartSnapshot.map((c, ci) => (
+                        {typeof v.cartSnapshot === 'string' ? v.cartSnapshot : (v.cartSnapshot as CartItem[]).map((c, ci) => (
                           <div key={ci}>{typeof c === 'string' ? c : `${c.name} x${c.qty}`}</div>
                         ))}
                       </div>
@@ -697,7 +725,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
       {drawerDatePopup && (
         <DateEditPopup
           field={drawerDatePopup}
-          currentDate={form[drawerDatePopup]}
+          currentDate={form[drawerDatePopup] as string}
           followUpDate={form.followUpDate}
           closureDate={form.closureDate}
           assignedTo={form.assignedTo}
@@ -709,20 +737,30 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
   );
 }
 
-// ── Date Edit Popup (Follow-up / Closure) ──────────────────────────────────
-function DateEditPopup({ field, currentDate, followUpDate, closureDate, assignedTo, onSave, onCancel }) {
+// ── Date Edit Popup ─────────────────────────────────────────────────────────
+interface DateEditPopupProps {
+  field: 'followUpDate' | 'closureDate';
+  currentDate?: string;
+  followUpDate?: string;
+  closureDate?: string;
+  assignedTo?: string;
+  onSave: (newDate: string, remark: string) => void;
+  onCancel: () => void;
+}
+
+function DateEditPopup({ field, currentDate, followUpDate, closureDate, assignedTo, onSave, onCancel }: DateEditPopupProps) {
   const label = field === 'followUpDate' ? 'Follow-up Date' : 'Closure Date';
   const [newDate, setNewDate] = useState(currentDate || '');
   const [remark, setRemark] = useState('');
   const [warning, setWarning] = useState('');
   const [autoUpdateNote, setAutoUpdateNote] = useState('');
 
-  const toDateObj = (s) => {
+  const toDateObj = (s: string): Date | undefined => {
     if (!s) return undefined;
     const [y, m, d] = s.split('-').map(Number);
     return new Date(y, m - 1, d);
   };
-  const toStr = (d) => {
+  const toStr = (d: Date | undefined): string => {
     if (!d) return '';
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -730,7 +768,7 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
     return `${y}-${m}-${day}`;
   };
 
-  const validate = (date) => {
+  const validate = (date: string): string => {
     setAutoUpdateNote('');
     if (field === 'closureDate' && followUpDate && date && date < followUpDate) {
       return 'Closure date cannot be earlier than follow-up date (' + fmtDate(followUpDate) + ')';
@@ -741,13 +779,13 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
     return '';
   };
 
-  const handleDateSelect = (date) => {
+  const handleDateSelect = (date: Date | undefined) => {
     const dateStr = toStr(date);
     setNewDate(dateStr);
     setWarning(validate(dateStr));
   };
 
-  const remarkRequired = newDate && newDate !== currentDate;
+  const remarkRequired = !!(newDate && newDate !== currentDate);
 
   const handleSave = () => {
     const w = validate(newDate);
@@ -809,7 +847,13 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
 }
 
 // ── Delete Confirmation ─────────────────────────────────────────────────────
-function DeleteConfirm({ leadId, onConfirm, onCancel }) {
+interface DeleteConfirmProps {
+  leadId: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function DeleteConfirm({ leadId, onConfirm, onCancel }: DeleteConfirmProps) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
       <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[360px]">
@@ -828,23 +872,22 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }) {
   );
 }
 
-// ── Login Screen ──────────────────────────────────────────────────────────
 // ── Admin Dashboard ────────────────────────────────────────────────────────
-function AdminDashboard({ onBack }) {
-  const [activeTab, setActiveTab] = useState('users');
-  const [users, setUsers] = useState([]);
-  const [branchList, setBranchList] = useState([]);
+function AdminDashboard({ onBack }: { onBack: () => void }) {
+  const [activeTab, setActiveTab] = useState<'users' | 'branches' | 'logs'>('users');
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [branchList, setBranchList] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [newCode, setNewCode] = useState('');
   const [newRole, setNewRole] = useState('sales');
   const [error, setError] = useState('');
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | number | null>(null);
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
   const [editRole, setEditRole] = useState('');
-  const [editBranches, setEditBranches] = useState([]);
-  const [logs, setLogs] = useState([]);
+  const [editBranches, setEditBranches] = useState<string[]>([]);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
@@ -872,22 +915,22 @@ function AdminDashboard({ onBack }) {
       const user = await addUser({ name: newName.trim(), code: newCode.trim(), role: newRole });
       setUsers((prev) => [...prev, user]);
       setNewName(''); setNewCode(''); setNewRole('sales');
-    } catch (e) {
+    } catch (e: any) {
       setError(e.message || 'Failed to add user');
     }
   };
 
-  const handleDelete = async (id, name) => {
+  const handleDelete = async (id: string | number, name: string) => {
     if (!window.confirm(`Delete user "${name}"?`)) return;
     try {
       await deleteUser(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
-    } catch (e) {
+    } catch (e: any) {
       setError(e.message || 'Failed to delete user');
     }
   };
 
-  const startEdit = (u) => {
+  const startEdit = (u: AppUser) => {
     setEditId(u.id); setEditName(u.name); setEditCode(u.code); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
   };
 
@@ -896,16 +939,16 @@ function AdminDashboard({ onBack }) {
     if (users.some((u) => u.code === editCode.trim() && u.id !== editId)) { setError('Code already exists'); return; }
     setError('');
     try {
-      await updateUser(editId, { name: editName.trim(), code: editCode.trim(), role: editRole });
-      await updateUserBranches(editId, editBranches);
+      await updateUser(editId!, { name: editName.trim(), code: editCode.trim(), role: editRole });
+      await updateUserBranches(editId!, editBranches);
       setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), code: editCode.trim(), role: editRole, allowedBranches: editBranches } : u));
       setEditId(null);
-    } catch (e) {
+    } catch (e: any) {
       setError(e.message || 'Failed to update user');
     }
   };
 
-  const getActionBadge = (action) => {
+  const getActionBadge = (action: string): string => {
     if (action.includes('created') || action === 'csv_imported') return 'bg-green-100 text-green-700';
     if (action.includes('updated') || action.includes('remark')) return 'bg-blue-100 text-blue-700';
     if (action.includes('status') || action.includes('date')) return 'bg-amber-100 text-amber-700';
@@ -914,9 +957,9 @@ function AdminDashboard({ onBack }) {
   };
 
   const tabs = [
-    { key: 'users', label: 'Users' },
-    { key: 'branches', label: 'Branches' },
-    { key: 'logs', label: 'Logs' },
+    { key: 'users' as const, label: 'Users' },
+    { key: 'branches' as const, label: 'Branches' },
+    { key: 'logs' as const, label: 'Logs' },
   ];
 
   return (
@@ -930,7 +973,6 @@ function AdminDashboard({ onBack }) {
         <button className="bg-transparent border border-gray-600 text-gray-400 text-[11px] px-2.5 py-1 rounded cursor-pointer hover:text-white hover:border-gray-400" onClick={onBack}>Back to Login</button>
       </header>
 
-      {/* Tab Bar */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto w-full px-6 flex gap-0">
           {tabs.map((tab) => (
@@ -946,12 +988,10 @@ function AdminDashboard({ onBack }) {
       </div>
 
       <div className="max-w-4xl mx-auto w-full px-6 py-8">
-        {/* Users Tab */}
         {activeTab === 'users' && (
           <>
             <h1 className="text-lg font-bold text-gray-800 mb-6">User Management</h1>
 
-            {/* Add User Form */}
             <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Add New User</h2>
               <div className="flex gap-3 items-end flex-wrap">
@@ -977,7 +1017,6 @@ function AdminDashboard({ onBack }) {
               {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
             </div>
 
-            {/* Users Table */}
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               {loading ? (
                 <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
@@ -1039,7 +1078,7 @@ function AdminDashboard({ onBack }) {
                             <td className="px-4 py-2.5">
                               {(u.allowedBranches || []).length === 0
                                 ? <span className="text-[11px] text-gray-400">All branches</span>
-                                : <div className="flex flex-wrap gap-1">{(u.allowedBranches).map((b) => <span key={b} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">{b}</span>)}</div>
+                                : <div className="flex flex-wrap gap-1">{(u.allowedBranches!).map((b) => <span key={b} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">{b}</span>)}</div>
                               }
                             </td>
                             <td className="px-4 py-2.5 text-center whitespace-nowrap">
@@ -1061,7 +1100,6 @@ function AdminDashboard({ onBack }) {
           </>
         )}
 
-        {/* Branches Tab */}
         {activeTab === 'branches' && (
           <>
             <h1 className="text-lg font-bold text-gray-800 mb-6">Branch Management</h1>
@@ -1069,7 +1107,6 @@ function AdminDashboard({ onBack }) {
           </>
         )}
 
-        {/* Logs Tab */}
         {activeTab === 'logs' && (
           <>
             <div className="flex items-center justify-between mb-6">
@@ -1107,7 +1144,7 @@ function AdminDashboard({ onBack }) {
                           <td className="px-4 py-2.5 text-[12px] text-gray-500">
                             {log.entity_type}{log.entity_id ? ` / ${log.entity_id}` : ''}
                           </td>
-                          <td className="px-4 py-2.5 text-[12px] text-gray-500 max-w-[250px] truncate">{log.details || '\u2014'}</td>
+                          <td className="px-4 py-2.5 text-[12px] text-gray-500 max-w-[250px] truncate">{log.details || '—'}</td>
                         </tr>
                       ))}
                       {logs.length === 0 && (
@@ -1125,9 +1162,14 @@ function AdminDashboard({ onBack }) {
   );
 }
 
-function BranchManager({ branches, setBranches }) {
+interface BranchManagerProps {
+  branches: Branch[];
+  setBranches: React.Dispatch<React.SetStateAction<Branch[]>>;
+}
+
+function BranchManager({ branches, setBranches }: BranchManagerProps) {
   const [newBranch, setNewBranch] = useState('');
-  const [editBranchId, setEditBranchId] = useState(null);
+  const [editBranchId, setEditBranchId] = useState<string | number | null>(null);
   const [editBranchName, setEditBranchName] = useState('');
   const [branchError, setBranchError] = useState('');
 
@@ -1140,17 +1182,17 @@ function BranchManager({ branches, setBranches }) {
       const b = await addBranch(name);
       setBranches((prev) => [...prev, b]);
       setNewBranch('');
-    } catch (e) {
+    } catch (e: any) {
       setBranchError(e.message || 'Failed to add branch');
     }
   };
 
-  const handleDeleteBranch = async (id, name) => {
+  const handleDeleteBranch = async (id: string | number, name: string) => {
     if (!window.confirm(`Delete branch "${name}"?`)) return;
     try {
       await deleteBranch(id);
       setBranches((prev) => prev.filter((b) => b.id !== id));
-    } catch (e) {
+    } catch (e: any) {
       setBranchError(e.message || 'Failed to delete branch');
     }
   };
@@ -1161,10 +1203,10 @@ function BranchManager({ branches, setBranches }) {
     if (branches.some((b) => b.name.toLowerCase() === name.toLowerCase() && b.id !== editBranchId)) { setBranchError('Branch already exists'); return; }
     setBranchError('');
     try {
-      await updateBranch(editBranchId, name);
+      await updateBranch(editBranchId!, name);
       setBranches((prev) => prev.map((b) => b.id === editBranchId ? { ...b, name } : b));
       setEditBranchId(null);
-    } catch (e) {
+    } catch (e: any) {
       setBranchError(e.message || 'Failed to update branch');
     }
   };
@@ -1224,12 +1266,17 @@ function BranchManager({ branches, setBranches }) {
   );
 }
 
-function LoginScreen({ onLogin, onAdmin }) {
+interface LoginScreenProps {
+  onLogin: (user: AppUser) => void;
+  onAdmin: () => void;
+}
+
+function LoginScreen({ onLogin, onAdmin }: LoginScreenProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!code.trim()) return;
     setLoading(true);
@@ -1323,27 +1370,48 @@ function LoginScreen({ onLogin, onAdmin }) {
 }
 
 // ── App ─────────────────────────────────────────────────────────────────────
+interface CsvRow {
+  leadId: string;
+  clientName: string;
+  clientPhone: string;
+  createdAt: string;
+  assignedTo: string;
+  branch: string;
+  status: string;
+  lostReason: string;
+  cartItems: string;
+  cartValue: number;
+  followUpDate: string;
+  closureDate: string;
+  remarks: Remark[];
+  visits: Visit[];
+  clientType: string;
+  propertyType: string;
+  architectInvolved: boolean;
+}
+
+type DateEditState = { leadId: string; field: 'followUpDate' | 'closureDate' };
+
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [mainTab, setMainTab] = useState('leads'); // 'leads' | 'dashboard' | 'storeVisit'
-  const [dashLogs, setDashLogs] = useState([]);
+  const [mainTab, setMainTab] = useState<'leads' | 'dashboard' | 'storeVisit'>('leads');
+  const [dashLogs, setDashLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem('materialdepot_user');
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Ensure allowedBranches always exists (handles old stored sessions)
         setCurrentUser({ ...parsed, allowedBranches: parsed.allowedBranches || [] });
       }
     } catch {}
     setUserLoaded(true);
   }, []);
 
-  const handleLogin = (user) => {
-    const userData = { id: user.id, name: user.name, code: user.code, role: user.role, allowedBranches: user.allowedBranches || [] };
+  const handleLogin = (user: AppUser) => {
+    const userData: AppUser = { id: user.id, name: user.name, code: user.code, role: user.role, allowedBranches: user.allowedBranches || [] };
     setCurrentUser(userData);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
     logActivity({ userId: user.id, userName: user.name, action: 'user_login', entityType: 'user', entityId: user.id, details: user.name + ' logged in' }).catch(console.error);
@@ -1357,9 +1425,9 @@ export default function App() {
     localStorage.removeItem('materialdepot_user');
   };
 
-  const [leads, setLeads] = useState([]);
-  const [branches, setBranches] = useState(DEFAULT_BRANCHES);
-  const [crmUsers, setCrmUsers] = useState([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [branches, setBranches] = useState<string[]>(DEFAULT_BRANCHES);
+  const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
@@ -1383,9 +1451,9 @@ export default function App() {
   }, [mainTab]);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState([]);
-  const [personFilter, setPersonFilter] = useState([]);
-  const [branchFilter, setBranchFilter] = useState([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [personFilter, setPersonFilter] = useState<string[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [createdDateFrom, setCreatedDateFrom] = useState('');
   const [createdDateTo, setCreatedDateTo] = useState('');
   const [followUpDateFrom, setFollowUpDateFrom] = useState('');
@@ -1395,26 +1463,25 @@ export default function App() {
   const [cartValueGt, setCartValueGt] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
   const [sortCol, setSortCol] = useState('latestVisit');
-  const [sortDir, setSortDir] = useState('desc');
-  const [drawerLead, setDrawerLead] = useState(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
-  const [deleteLead, setDeleteLead] = useState(null);
-  const [dateEditPopup, setDateEditPopup] = useState(null);
+  const [deleteLeadState, setDeleteLeadState] = useState<Lead | null>(null);
+  const [dateEditPopup, setDateEditPopup] = useState<DateEditState | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [csvPreview, setCsvPreview] = useState(null);
-  const [csvErrors, setCsvErrors] = useState(null);
-  const [csvSelected, setCsvSelected] = useState(new Set());
-  const [csvImportCount, setCsvImportCount] = useState(null);
-  const csvFileRef = useRef(null);
+  const [csvPreview, setCsvPreview] = useState<CsvRow[] | null>(null);
+  const [csvErrors, setCsvErrors] = useState<string[] | null>(null);
+  const [csvSelected, setCsvSelected] = useState<Set<number>>(new Set());
+  const [csvImportCount, setCsvImportCount] = useState<number | null>(null);
+  const csvFileRef = useRef<HTMLInputElement>(null);
 
-  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
-  const showSaveError = (msg = 'Failed to save. Please log out and log back in, then try again.') => {
+  const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null);
+  const showSaveError = (msg: string = 'Failed to save. Please log out and log back in, then try again.') => {
     setSaveErrorMsg(msg);
     setTimeout(() => setSaveErrorMsg(null), 8000);
   };
 
-  // Column visibility
   const ALL_COLUMNS = [
     { key: 'id', label: 'Lead ID' },
     { key: 'clientName', label: 'Client Name' },
@@ -1434,7 +1501,7 @@ export default function App() {
     { key: 'visitCount', label: 'Visits' },
     { key: 'cartValue', label: 'Cart Value' },
   ];
-  const [visibleCols, setVisibleCols] = useState(() => {
+  const [visibleCols, setVisibleCols] = useState<string[]>(() => {
     if (typeof window === 'undefined') return ALL_COLUMNS.map((c) => c.key);
     try {
       const stored = localStorage.getItem('materialdepot_cols');
@@ -1442,8 +1509,8 @@ export default function App() {
     } catch {}
     return ALL_COLUMNS.map((c) => c.key);
   });
-  const isColVisible = (key) => visibleCols.includes(key);
-  const toggleCol = (key) => {
+  const isColVisible = (key: string) => visibleCols.includes(key);
+  const toggleCol = (key: string) => {
     setVisibleCols((prev) => {
       const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
       localStorage.setItem('materialdepot_cols', JSON.stringify(next));
@@ -1451,14 +1518,9 @@ export default function App() {
     });
   };
 
-  // Persist to localStorage
-  // No more localStorage — data is persisted to Supabase on each operation
-
-  // Branches this user is allowed to see (empty = no restriction, superadmin always unrestricted)
   const isAdminUser = currentUser?.role === 'superadmin';
   const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
 
-  // BM options: derived from leads filtered by branch + dates + search + cart (not by personFilter itself)
   const bmFilteredLeads = leads.filter((l) => {
     if (userAllowedBranches.length > 0) {
       if (!userAllowedBranches.includes(l.branch)) return false;
@@ -1485,30 +1547,24 @@ export default function App() {
   });
   const availableBMs = [...new Set(bmFilteredLeads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
-  // Base filtered leads (all filters except status -- so pipeline & stage cards react to filters)
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
-    // Branch restriction: user-level takes priority, then filter bar
     if (userAllowedBranches.length > 0) {
       if (!userAllowedBranches.includes(l.branch)) return false;
     } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    // Created date filter
     if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
     if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
-    // Follow-up date filter
     if (followUpDateFrom || followUpDateTo) {
       if (!l.followUpDate) return false;
       if (followUpDateFrom && l.followUpDate < followUpDateFrom) return false;
       if (followUpDateTo && l.followUpDate > followUpDateTo) return false;
     }
-    // Closure date filter
     if (closureDateFrom || closureDateTo) {
       if (!l.closureDate) return false;
       if (closureDateFrom && l.closureDate < closureDateFrom) return false;
       if (closureDateTo && l.closureDate > closureDateTo) return false;
     }
     if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
-    // Task quick filters
     if (taskFilter === 'followup_pending' && l.followUpDate) return false;
     if (taskFilter === 'closure_pending' && l.closureDate) return false;
     if (taskFilter === 'overdue') {
@@ -1530,13 +1586,11 @@ export default function App() {
     return true;
   });
 
-  // Filtering (full -- applies all filters including status)
   const filtered = baseFiltered.filter((l) => {
     if (statusFilter.length > 0 && !statusFilter.includes(l.status)) return false;
     return true;
   });
 
-  // Pipeline computations (from fully filtered leads)
   const pipelineTotal = filtered.reduce((s, l) => s + (l.cartValue || 0), 0);
   const pipelineActive = filtered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
   const pipelineWon = filtered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
@@ -1545,26 +1599,22 @@ export default function App() {
   const pctActive = pipelineTotal ? (pipelineActive / pipelineTotal) * 100 : 0;
   const pctLost = pipelineTotal ? (pipelineLost / pipelineTotal) * 100 : 0;
 
-  // Stage summary
   const stageSummary = STATUSES.map((status) => {
     const stageLeads = filtered.filter((l) => l.status === status);
     return { status, count: stageLeads.length, value: stageLeads.reduce((s, l) => s + (l.cartValue || 0), 0) };
   });
 
-  // Per-status chips for pipeline panel
   const statusChips = stageSummary.filter((s) => s.value > 0);
 
-  // Active lead counts for pipeline metrics
   const activeCount = filtered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).length;
   const wonCount = filtered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).length;
   const lostCount = filtered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).length;
 
-  // Sorting
-  const getFirstVisit = (l) => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt || ''; };
-  const getLatestVisit = (l) => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt || ''; };
+  const getFirstVisit = (l: Lead): string => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt || ''; };
+  const getLatestVisit = (l: Lead): string => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt || ''; };
 
   const sorted = [...filtered].sort((a, b) => {
-    let va, vb;
+    let va: any, vb: any;
     if (sortCol === 'visitCount') {
       va = (a.visits || []).length;
       vb = (b.visits || []).length;
@@ -1572,7 +1622,7 @@ export default function App() {
     }
     if (sortCol === 'firstVisit') { va = getFirstVisit(a); vb = getFirstVisit(b); return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va); }
     if (sortCol === 'latestVisit') { va = getLatestVisit(a); vb = getLatestVisit(b); return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va); }
-    va = a[sortCol]; vb = b[sortCol];
+    va = (a as any)[sortCol]; vb = (b as any)[sortCol];
     if (sortCol === 'cartValue') { va = va || 0; vb = vb || 0; return sortDir === 'asc' ? va - vb : vb - va; }
     if (sortCol === 'architectInvolved') { va = va ? 1 : 0; vb = vb ? 1 : 0; return sortDir === 'asc' ? va - vb : vb - va; }
     if (va == null) va = ''; if (vb == null) vb = '';
@@ -1582,24 +1632,21 @@ export default function App() {
     return 0;
   });
 
-  const handleSort = (col) => {
+  const handleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('asc'); }
     setPage(0);
   };
 
-  // Reset page when filters change
   useEffect(() => { setPage(0); }, [search, statusFilter, personFilter, branchFilter, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, closureDateFrom, closureDateTo, cartValueGt]);
 
-  // Pagination
   const totalPages = Math.ceil(sorted.length / pageSize) || 1;
   const safePage = Math.min(page, totalPages - 1);
   const paginatedRows = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
-  const filteredTotal = pipelineTotal; // same as pipelineTotal since both use filtered
+  const filteredTotal = pipelineTotal;
 
-  // Lead CRUD — optimistic state update + async Supabase persist
-  const saveLead = (formData) => {
+  const saveLead = (formData: Lead) => {
     const existing = leads.find((l) => l.id === formData.id && l.clientPhone === formData.clientPhone) || leads.find((l) => l.id === formData.id);
     const isNew = !existing;
     const finalData = existing ? mergeLead(existing, formData) : formData;
@@ -1620,24 +1667,24 @@ export default function App() {
     setShowAddDrawer(false);
   };
 
-  const removeLead = (id) => {
+  const removeLead = (id: string) => {
     const lead = leads.find((l) => l.id === id);
     setLeads((prev) => prev.filter((l) => !(l.id === id && l.clientPhone === (lead ? lead.clientPhone : ''))));
-    deleteLeadDb(id, lead ? lead.clientPhone : '').catch((e) => console.error('Delete failed:', e));
+    deleteLeadDb(id, lead ? lead.clientPhone || '' : '').catch((e) => console.error('Delete failed:', e));
     if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'deleted_lead', entityType: 'lead', entityId: id, details: lead ? lead.clientName : '' }).catch(console.error);
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'deleted_lead', entityType: 'lead', entityId: id, details: lead ? lead.clientName || '' : '' }).catch(console.error);
     }
-    setDeleteLead(null);
+    setDeleteLeadState(null);
   };
 
-  const updateStatus = (id, newStatus, lostReason) => {
+  const updateStatus = (id: string, newStatus: string, lostReason?: string) => {
     const userName = currentUser ? currentUser.name : '';
     const oldLead = leads.find((l) => l.id === id);
     const oldStatus = oldLead ? oldLead.status : '';
     setLeads((prev) => {
       const updated = prev.map((l) => {
         if (l.id !== id) return l;
-        const remark = { ts: new Date().toISOString(), author: userName, text: 'Status changed from ' + l.status + ' to ' + newStatus + (lostReason ? ' (' + lostReason + ')' : '') };
+        const remark: Remark = { ts: new Date().toISOString(), author: userName, text: 'Status changed from ' + l.status + ' to ' + newStatus + (lostReason ? ' (' + lostReason + ')' : '') };
         return { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '', remarks: [...(l.remarks || []), remark] };
       });
       const lead = updated.find((l) => l.id === id);
@@ -1645,16 +1692,13 @@ export default function App() {
       return updated;
     });
     if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' \u2192 ' + newStatus }).catch(console.error);
+      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' → ' + newStatus }).catch(console.error);
     }
   };
 
-  const addRemark = (leadId, clientPhone, remark) => {
-    // Optimistic local update
+  const addRemark = (leadId: string, clientPhone: string, remark: Remark) => {
     setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
-    // Concurrent-safe: fetch latest from DB, append, save
-    appendRemarkToLead(leadId, clientPhone, remark).then((latestRemarks) => {
-      // Sync local state with DB truth
+    appendRemarkToLead(leadId, clientPhone, remark).then((latestRemarks: Remark[]) => {
       setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: latestRemarks } : l));
     }).catch((e) => console.error('Remark save failed:', e));
     if (currentUser) {
@@ -1662,22 +1706,22 @@ export default function App() {
     }
   };
 
-  const handleDateEditSave = (newDate, remarkText) => {
+  const handleDateEditSave = (newDate: string, remarkText: string) => {
     if (!dateEditPopup) return;
     const { leadId, field } = dateEditPopup;
-    const leadPhone = (leads.find((l) => l.id === leadId) || {}).clientPhone || '';
+    const leadPhone = (leads.find((l) => l.id === leadId) || {} as Lead).clientPhone || '';
     const userName = currentUser ? currentUser.name : '';
     setLeads((prev) => {
       const updated = prev.map((l) => {
         if (!(l.id === leadId && l.clientPhone === leadPhone)) return l;
-        const u = { ...l, [field]: newDate };
+        const u: Lead = { ...l, [field]: newDate };
         if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
           u.closureDate = newDate;
         }
         if (field === 'closureDate' && l.followUpDate && newDate && newDate < l.followUpDate) {
           return l;
         }
-        const remarks = [...(l.remarks || [])];
+        const remarks: Remark[] = [...(l.remarks || [])];
         if (remarkText) {
           const label = field === 'followUpDate' ? 'Follow-up' : 'Closure';
           const oldDate = l[field];
@@ -1692,14 +1736,12 @@ export default function App() {
       });
       const lead = updated.find((l) => l.id === leadId && l.clientPhone === leadPhone);
       if (lead) {
-        // Fetch latest from DB, merge remarks, then save
-        fetchLead(leadId, leadPhone).then((dbLead) => {
+        fetchLead(leadId, leadPhone).then((dbLead: Lead) => {
           const mergedRemarks = [...(dbLead.remarks || [])];
-          // Add new remarks that aren't in DB yet
           (lead.remarks || []).forEach((r) => {
             if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
           });
-          const merged = { ...lead, remarks: mergedRemarks };
+          const merged: Lead = { ...lead, remarks: mergedRemarks };
           upsertLead(merged).catch((e) => { console.error('Date edit save failed:', e); showSaveError(); });
           setLeads((p) => p.map((l) => (l.id === leadId && l.clientPhone === leadPhone) ? merged : l));
         }).catch(() => {
@@ -1730,8 +1772,8 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const parseCsvLine = (line) => {
-    const fields = [];
+  const parseCsvLine = (line: string): string[] => {
+    const fields: string[] = [];
     let current = '';
     let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
@@ -1754,36 +1796,33 @@ export default function App() {
     return fields;
   };
 
-  // Accept DD/MM/YYYY format and convert to YYYY-MM-DD
-  const parseDDMMYYYY = (d) => {
+  const parseDDMMYYYY = (d: string): string | null => {
     if (!d) return '';
     const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!m) return null; // invalid format
+    if (!m) return null;
     const iso = `${m[3]}-${m[2]}-${m[1]}`;
     if (isNaN(new Date(iso + 'T00:00:00').getTime())) return null;
     return iso;
   };
-  const isValidCsvDate = (d) => parseDDMMYYYY(d) !== null;
+  const isValidCsvDate = (d: string): boolean => parseDDMMYYYY(d) !== null;
 
-  const handleCsvFile = (e) => {
+  const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (csvFileRef.current) csvFileRef.current.value = '';
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      let text = ev.target.result;
-      // Strip BOM
+      let text = ev.target?.result as string;
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
       if (lines.length === 0) { setCsvErrors(['File is empty.']); return; }
-      // Validate header
       const headerFields = parseCsvLine(lines[0]);
       const headerMatch = CSV_HEADERS.every((h, i) => (headerFields[i] || '').trim().toLowerCase() === h.toLowerCase());
       if (!headerMatch) { setCsvErrors(['Header row does not match expected format. Expected: ' + CSV_HEADERS.join(', ')]); return; }
       if (lines.length < 2) { setCsvErrors(['File contains only headers and no data rows.']); return; }
 
-      const errors = [];
-      const parsed = [];
+      const errors: string[] = [];
+      const parsed: CsvRow[] = [];
 
       for (let r = 1; r < lines.length; r++) {
         const rowNum = r + 1;
@@ -1792,11 +1831,9 @@ export default function App() {
 
         const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr] = fields;
 
-        // Compulsory fields
         if (!leadId) errors.push('Row ' + rowNum + ': Lead ID is required');
         if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
 
-        // Optional field validation (only validate if provided)
         if (createdDate && !isValidCsvDate(createdDate)) errors.push('Row ' + rowNum + ': Created Date "' + createdDate + '" must be DD/MM/YYYY format');
         if (branch && !branches.includes(branch)) errors.push('Row ' + rowNum + ': Branch "' + branch + '" is not a valid branch');
         if (status && !STATUSES.includes(status)) errors.push('Row ' + rowNum + ': Status "' + status + '" is not a valid status');
@@ -1807,7 +1844,6 @@ export default function App() {
           if (lostReason) errors.push('Row ' + rowNum + ': Lost Reason should be empty when Status is not "Order Lost"');
         }
 
-        // Parse cart items — simple comma or semicolon separated text
         const cartItems = cartItemsStr ? cartItemsStr.split(/[;,]/).map(s => s.trim()).filter(Boolean).join(', ') : '';
 
         const cartValueClean = cartValueStr ? cartValueStr.replace(/[^0-9]/g, '') : '';
@@ -1817,7 +1853,6 @@ export default function App() {
         if (followUpDate && !isValidCsvDate(followUpDate)) errors.push('Row ' + rowNum + ': Follow-up Date "' + followUpDate + '" must be DD/MM/YYYY format');
         if (closureDate && !isValidCsvDate(closureDate)) errors.push('Row ' + rowNum + ': Closure Date "' + closureDate + '" must be DD/MM/YYYY format');
 
-        // Validate new fields
         const clientType = (clientTypeStr || '').trim();
         const propertyType = (propertyTypeStr || '').trim();
         const architectInvolvedRaw = (architectInvolvedStr || '').trim().toLowerCase();
@@ -1826,8 +1861,7 @@ export default function App() {
         if (architectInvolvedRaw && !['true', 'false', 'yes', 'no'].includes(architectInvolvedRaw)) errors.push('Row ' + rowNum + ': Architect/Designer Involved "' + architectInvolvedStr + '" must be true/false/yes/no or empty');
         const architectInvolved = ['true', 'yes'].includes(architectInvolvedRaw);
 
-        // Parse remarks: "text|date|author;text|date|author"
-        let remarks = [];
+        let remarks: Remark[] = [];
         if (remarksStr) {
           const remarkParts = remarksStr.split(';');
           for (const rp of remarkParts) {
@@ -1842,8 +1876,7 @@ export default function App() {
           }
         }
 
-        // Parse visits: "date|channel|cartSnapshot;date|channel|cartSnapshot"
-        let visits = [];
+        let visits: Visit[] = [];
         if (visitsStr) {
           const visitParts = visitsStr.split(';');
           for (const vp of visitParts) {
@@ -1853,7 +1886,7 @@ export default function App() {
             const vChannel = (segs[1] || '').trim();
             if (vDate && !isValidCsvDate(vDate)) { errors.push('Row ' + rowNum + ': Visit date "' + vDate + '" must be DD/MM/YYYY format'); continue; }
             if (vChannel && !VISIT_CHANNELS.includes(vChannel)) { errors.push('Row ' + rowNum + ': Visit channel "' + vChannel + '" is not valid'); continue; }
-            let vCart = [];
+            let vCart: CartItem[] = [];
             if (segs[2]) {
               for (const ci of segs[2].split(',')) {
                 if (!ci.trim()) continue;
@@ -1870,8 +1903,7 @@ export default function App() {
 
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
       else {
-        // Deduplicate: if Lead ID + Phone match, keep the latest (last) entry
-        const dedupeMap = new Map();
+        const dedupeMap = new Map<string, CsvRow>();
         parsed.forEach((p) => {
           const key = p.leadId + '|' + p.clientPhone;
           dedupeMap.set(key, p);
@@ -1889,7 +1921,8 @@ export default function App() {
   };
 
   const importCsvLeads = () => {
-    const newLeads = csvPreview.filter((_, i) => csvSelected.has(i)).map((row) => ({
+    if (!csvPreview) return;
+    const newLeads: Lead[] = csvPreview.filter((_, i) => csvSelected.has(i)).map((row) => ({
       id: row.leadId,
       createdAt: row.createdAt,
       assignedTo: row.assignedTo,
@@ -1908,10 +1941,9 @@ export default function App() {
       propertyType: row.propertyType || '',
       architectInvolved: row.architectInvolved || false,
     }));
-    // Smart merge: only update non-empty fields, append remarks
     setLeads((prev) => {
       const updated = [...prev];
-      const toUpsert = [];
+      const toUpsert: Lead[] = [];
       for (const incoming of newLeads) {
         const existIdx = updated.findIndex((l) => l.id === incoming.id && l.clientPhone === incoming.clientPhone) >= 0
           ? updated.findIndex((l) => l.id === incoming.id && l.clientPhone === incoming.clientPhone)
@@ -1924,7 +1956,6 @@ export default function App() {
           toUpsert.push(incoming);
         }
       }
-      // Upsert merged leads to Supabase
       upsertLeads(toUpsert).then(() => console.log('CSV import to Supabase successful:', toUpsert.length, 'leads')).catch((e) => { console.error('CSV import failed:', e); alert('Import saved locally but failed to sync to database: ' + (e.message || e)); });
       return updated;
     });
@@ -1939,14 +1970,13 @@ export default function App() {
 
   const today = todayStr();
 
-  const isOverdue = (l) => l.followUpDate && l.followUpDate < today && !['Delivered', 'Refunded', 'Order Lost'].includes(l.status);
+  const isOverdue = (l: Lead): boolean => !!(l.followUpDate && l.followUpDate < today && !['Delivered', 'Refunded', 'Order Lost'].includes(l.status));
 
-  const toggleStatusFilter = useCallback((status) => {
+  const toggleStatusFilter = useCallback((status: string) => {
     setStatusFilter((prev) => prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]);
   }, []);
 
-  // Column count for colSpan: Lead ID, Client Name, Client Phone, Created, First Visit, Latest Visit, Assigned To, Branch, Client Type, Property Type, Architect/Designer, Status, Cart Items, Follow-up, Closure Date, Visits, Cart Value, Actions = 18
-  const COL_COUNT = visibleCols.length + 1; // +1 for Actions column (always visible)
+  const COL_COUNT = visibleCols.length + 1;
 
   if (!userLoaded) return null;
   if (showAdmin) return <AdminDashboard onBack={() => setShowAdmin(false)} />;
@@ -1954,7 +1984,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
-      {/* Header */}
       <header className="sticky top-0 z-[900] h-12 bg-[#1A1A1A] flex items-center px-6 justify-between">
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-white">material</span>
@@ -1972,9 +2001,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Tab Nav */}
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
-        {[{ key: 'leads', label: 'Leads' }, { key: 'dashboard', label: 'Dashboard' }, { key: 'storeVisit', label: 'Store Visit Form' }].map(t => (
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }]).map(t => (
           <button
             key={t.key}
             onClick={() => setMainTab(t.key)}
@@ -1994,7 +2022,6 @@ export default function App() {
       )}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
-        {/* Pipeline Revenue Summary */}
         <div className="bg-white rounded-lg px-6 py-4 border border-gray-200">
           <div className="flex justify-between flex-wrap gap-4">
             <div>
@@ -2018,13 +2045,11 @@ export default function App() {
               <div className="text-[11px] text-gray-400">{lostCount} leads</div>
             </div>
           </div>
-          {/* Stacked bar */}
           <div className="flex h-1.5 rounded-sm overflow-hidden mt-4 bg-gray-200">
             <div className="bg-green-500 transition-[width] duration-300" style={{ width: pctWon + '%' }} />
             <div className="bg-[#EAB308] transition-[width] duration-300" style={{ width: pctActive + '%' }} />
             <div className="bg-gray-400 transition-[width] duration-300" style={{ width: pctLost + '%' }} />
           </div>
-          {/* Per-status chips */}
           {statusChips.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
               {statusChips.map((sc) => (
@@ -2043,7 +2068,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Stage Cards */}
         <div className="flex gap-3 mt-3 overflow-x-auto pb-1">
           {stageSummary.map((ss) => {
             const active = statusFilter.includes(ss.status);
@@ -2063,7 +2087,6 @@ export default function App() {
           })}
         </div>
 
-        {/* Toolbar */}
         <div className="flex justify-between items-center py-3 gap-3 flex-wrap">
           <div className="flex gap-2 items-center flex-1 overflow-x-auto sm:overflow-visible pb-1 sm:flex-wrap sm:pb-0 [&::-webkit-scrollbar]:hidden">
             <input
@@ -2082,7 +2105,7 @@ export default function App() {
             <DateRangePicker label="Created Date" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
             <DateRangePicker label="Follow-up Date" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
             <DateRangePicker label="Closure Date" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
-            <span className="text-[10px] font-semibold text-gray-400 ml-1">{'\u20B9'} &gt;</span>
+            <span className="text-[10px] font-semibold text-gray-400 ml-1">{'₹'} &gt;</span>
             <input
               className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[130px] font-mono"
               type="text"
@@ -2111,12 +2134,10 @@ export default function App() {
               <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
               <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
             </div>
-            <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
             <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
           </div>
         </div>
 
-        {/* Mobile card list */}
         <div className="sm:hidden flex flex-col gap-2">
           {paginatedRows.length === 0 && <div className="text-center text-gray-400 py-10 text-sm">No leads found</div>}
           {paginatedRows.map((l) => (
@@ -2132,7 +2153,7 @@ export default function App() {
                 {l.followUpDate && <span className={isOverdue(l) ? 'text-red-500 font-semibold' : ''}>{isOverdue(l) ? '⚠ ' : ''}Follow-up: {fmtDate(l.followUpDate)}</span>}
                 {!l.followUpDate && <span className="text-gray-300">No follow-up date</span>}
                 {l.closureDate && <span>Closure: {fmtDate(l.closureDate)}</span>}
-                {l.cartValue > 0 && <span className="font-mono font-semibold text-gray-700">{fmtINR(l.cartValue)}</span>}
+                {(l.cartValue || 0) > 0 && <span className="font-mono font-semibold text-gray-700">{fmtINR(l.cartValue)}</span>}
               </div>
               <div className="flex justify-between items-center mt-2">
                 <div className="flex items-center gap-1.5">
@@ -2145,7 +2166,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Desktop Table */}
         <div className="hidden sm:block bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto max-h-[calc(100vh-340px)] overflow-y-auto">
             <table className="w-full border-collapse">
@@ -2180,35 +2200,35 @@ export default function App() {
                     {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded">{l.id}</span>
                     </td>}
-                    {isColVisible('clientName') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '\u2014'}</td>}
-                    {isColVisible('clientPhone') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '\u2014'}</td>}
+                    {isColVisible('clientName') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '—'}</td>}
+                    {isColVisible('clientPhone') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '—'}</td>}
                     {isColVisible('createdAt') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(l.createdAt)}</td>}
-                    {isColVisible('firstVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>}
-                    {isColVisible('latestVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...l.visits].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>}
+                    {isColVisible('firstVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...(l.visits || [])].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>}
+                    {isColVisible('latestVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...(l.visits || [])].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>}
                     {isColVisible('assignedTo') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <div className="flex items-center gap-1.5">
                         <Avatar name={l.assignedTo} />
                         <span className="text-xs">{l.assignedTo}</span>
                       </div>
                     </td>}
-                    {isColVisible('branch') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.branch || '\u2014'}</td>}
-                    {isColVisible('clientType') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientType || '\u2014'}</td>}
-                    {isColVisible('propertyType') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.propertyType || '\u2014'}</td>}
+                    {isColVisible('branch') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.branch || '—'}</td>}
+                    {isColVisible('clientType') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientType || '—'}</td>}
+                    {isColVisible('propertyType') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.propertyType || '—'}</td>}
                     {isColVisible('architectInvolved') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">
-                      {l.architectInvolved == null ? '\u2014' : l.architectInvolved ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}
+                      {l.architectInvolved == null ? '—' : l.architectInvolved ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}
                     </td>}
                     {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>}
                     {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[200px]">
                       <span className="whitespace-nowrap overflow-hidden text-ellipsis block">
-                        {typeof l.cartItems === 'string' ? (l.cartItems || '\u2014') : Array.isArray(l.cartItems) ? (l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(', ') || '\u2014') : '\u2014'}
+                        {typeof l.cartItems === 'string' ? (l.cartItems || '—') : Array.isArray(l.cartItems) ? (l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(', ') || '—') : '—'}
                       </span>
                     </td>}
                     {isColVisible('followUpDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
                       {l.followUpDate ? (
                         <span className={`text-xs border-b border-dashed border-gray-300 ${isOverdue(l) ? 'font-bold text-red-500' : 'font-normal text-gray-700'}`}>
-                          {isOverdue(l) && '\u26A0 '}{fmtDate(l.followUpDate)}
+                          {isOverdue(l) && '⚠ '}{fmtDate(l.followUpDate)}
                         </span>
                       ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
                     </td>}
@@ -2230,7 +2250,7 @@ export default function App() {
                     <td className="px-3 py-2.5 text-[13px] align-middle text-center whitespace-nowrap">
                       <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-gray-700 relative" title="Edit" onClick={() => setDrawerLead(l)}>
                         Edit
-                        {(l.remarks || []).length > 0 && <span className="absolute -top-0.5 -right-1 bg-[#EAB308] text-white text-[9px] font-bold rounded-full w-4 h-4 inline-flex items-center justify-center">{l.remarks.length}</span>}
+                        {(l.remarks || []).length > 0 && <span className="absolute -top-0.5 -right-1 bg-[#EAB308] text-white text-[9px] font-bold rounded-full w-4 h-4 inline-flex items-center justify-center">{l.remarks!.length}</span>}
                       </button>
                     </td>
                   </tr>
@@ -2252,7 +2272,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between mt-3 px-1">
             <div className="flex items-center gap-2">
@@ -2278,7 +2297,6 @@ export default function App() {
         )}
       </div>}
 
-      {/* Drawer */}
       {(showAddDrawer || drawerLead) && (
         <LeadDrawer
           lead={drawerLead ? (leads.find((l) => l.id === drawerLead.id) || drawerLead) : null}
@@ -2287,16 +2305,15 @@ export default function App() {
           users={availableBMs.map(name => ({ id: name, name }))}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
-          onAddRemark={drawerLead ? (remark) => addRemark(drawerLead.id, drawerLead.clientPhone, remark) : undefined}
-          onImmediateSave={(updatedLead) => {
+          onAddRemark={drawerLead ? (remark: Remark) => addRemark(drawerLead.id, drawerLead.clientPhone || '', remark) : undefined}
+          onImmediateSave={(updatedLead: Lead) => {
             setLeads((prev) => prev.map((l) => (l.id === updatedLead.id && l.clientPhone === updatedLead.clientPhone) ? updatedLead : l));
-            // Fetch latest from DB, merge remarks to avoid overwriting concurrent changes
-            fetchLead(updatedLead.id, updatedLead.clientPhone).then((dbLead) => {
+            fetchLead(updatedLead.id, updatedLead.clientPhone || '').then((dbLead: Lead) => {
               const mergedRemarks = [...(dbLead.remarks || [])];
               (updatedLead.remarks || []).forEach((r) => {
                 if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
               });
-              const merged = { ...updatedLead, remarks: mergedRemarks };
+              const merged: Lead = { ...updatedLead, remarks: mergedRemarks };
               upsertLead(merged).catch((e) => { console.error('Drawer date save failed:', e); showSaveError(); });
               setLeads((p) => p.map((l) => (l.id === merged.id && l.clientPhone === merged.clientPhone) ? merged : l));
             }).catch(() => {
@@ -2306,7 +2323,6 @@ export default function App() {
         />
       )}
 
-      {/* Date Edit Popup */}
       {dateEditPopup && (() => {
         const lead = leads.find((l) => l.id === dateEditPopup.leadId);
         if (!lead) return null;
@@ -2323,7 +2339,6 @@ export default function App() {
         );
       })()}
 
-      {/* CSV Error Modal */}
       {csvErrors && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
           <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[540px]">
@@ -2346,7 +2361,6 @@ export default function App() {
         </div>
       )}
 
-      {/* CSV Preview Modal */}
       {csvPreview && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
           <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[1100px]">
@@ -2399,20 +2413,20 @@ export default function App() {
                         </td>
                         <td className="px-3 py-2.5 text-[13px] align-middle">{i + 2}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle"><span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded">{row.leadId}</span></td>
-                        <td className="px-3 py-2.5 text-[13px] align-middle">{row.clientName || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle">{row.clientName || '—'}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle font-mono text-[11px]">{row.clientPhone}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-[11px] text-gray-500">{fmtDate(row.createdAt)}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle">{row.assignedTo}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle">{row.branch}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle"><StatusBadge status={row.status} /></td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-[11px] max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap">
-                          {(typeof row.cartItems === 'string' ? row.cartItems : Array.isArray(row.cartItems) ? row.cartItems.join(', ') : '') || '\u2014'}
+                          {(typeof row.cartItems === 'string' ? row.cartItems : Array.isArray(row.cartItems) ? (row.cartItems as string[]).join(', ') : '') || '—'}
                         </td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono text-[11px]">{fmtINR(row.cartValue)}</td>
-                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.remarks.length || '\u2014'}</td>
-                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.visits.length || '\u2014'}</td>
-                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px]">{row.clientType || '\u2014'}</td>
-                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px]">{row.propertyType || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.remarks.length || '—'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.visits.length || '—'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px]">{row.clientType || '—'}</td>
+                        <td className="px-3 py-2.5 text-[13px] align-middle text-[11px]">{row.propertyType || '—'}</td>
                         <td className="px-3 py-2.5 text-[13px] align-middle text-center text-[11px]">{row.architectInvolved ? 'Yes' : 'No'}</td>
                       </tr>
                     ))}
@@ -2430,13 +2444,11 @@ export default function App() {
         </div>
       )}
 
-      {/* CSV import confirmation toast */}
       {csvImportCount != null && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#1A1A1A] text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold z-[1100] shadow-[0_4px_12px_rgba(0,0,0,0.2)]">
           Successfully imported {csvImportCount} lead{csvImportCount !== 1 ? 's' : ''}
         </div>
       )}
-      {/* Save error toast */}
       {saveErrorMsg && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-600 text-white px-5 py-3 rounded-lg text-[13px] font-semibold z-[1100] shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center gap-4">
           <span>⚠ {saveErrorMsg}</span>
@@ -2451,4 +2463,3 @@ export default function App() {
     </div>
   );
 }
-

@@ -542,7 +542,7 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
               <XAxis dataKey="day" tick={{ fontSize: 10 }} />
               <YAxis tickFormatter={(v: number) => v >= 100000 ? `₹${(v/100000).toFixed(1)}L` : `₹${(v/1000).toFixed(0)}K`} tick={{ fontSize: 9 }} width={48} />
-              <Tooltip formatter={(v: number) => fmtINR(v)} labelFormatter={(l: string, p: { payload?: WeekDay }[]) => p[0] ? `${l} (${p[0].payload?.count} leads)` : l} />
+              <Tooltip formatter={(v: any) => fmtINR(Number(v))} labelFormatter={(l: any, p: any) => p && p[0] ? `${l} (${p[0].payload?.count} leads)` : String(l)} />
               <Bar dataKey="amount" name="Pipeline" fill="#EAB308" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
