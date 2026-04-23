@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
@@ -1393,10 +1394,11 @@ interface CsvRow {
 type DateEditState = { leadId: string; field: 'followUpDate' | 'closureDate' };
 
 export default function App() {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [mainTab, setMainTab] = useState<'leads' | 'dashboard' | 'storeVisit'>('leads');
+  const [mainTab, setMainTab] = useState<'leads' | 'dashboard' | 'storeVisit' | 'sales'>('leads');
   const [dashLogs, setDashLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
@@ -2002,10 +2004,16 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }]).map(t => (
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Sales' }]).map(t => (
           <button
             key={t.key}
-            onClick={() => setMainTab(t.key)}
+            onClick={() => {
+              if (t.key === 'sales') {
+                router.push('/dashboard');
+                return;
+              }
+              setMainTab(t.key);
+            }}
             className={`px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors ${mainTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
           >
             {t.label}
