@@ -5,6 +5,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
 import Dashboard from './Dashboard';
+import StoreVisitWrapper from './StoreVisitWrapper';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -1326,7 +1327,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [mainTab, setMainTab] = useState('leads'); // 'leads' | 'dashboard'
+  const [mainTab, setMainTab] = useState('leads'); // 'leads' | 'dashboard' | 'storeVisit'
   const [dashLogs, setDashLogs] = useState([]);
 
   useEffect(() => {
@@ -1973,7 +1974,7 @@ export default function App() {
 
       {/* Main Tab Nav */}
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
-        {[{ key: 'leads', label: 'Leads' }, { key: 'dashboard', label: 'Dashboard' }].map(t => (
+        {[{ key: 'leads', label: 'Leads' }, { key: 'dashboard', label: 'Dashboard' }, { key: 'storeVisit', label: 'Store Visit Form' }].map(t => (
           <button
             key={t.key}
             onClick={() => setMainTab(t.key)}
@@ -1986,6 +1987,10 @@ export default function App() {
 
       {mainTab === 'dashboard' && (
         <Dashboard leads={leads} logs={dashLogs} branches={branches} />
+      )}
+
+      {mainTab === 'storeVisit' && (
+        <StoreVisitWrapper />
       )}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
