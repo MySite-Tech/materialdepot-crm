@@ -9,7 +9,7 @@ const KYLAS_API_BASE =
 
 export async function GET(
   _req: NextRequest,
-  ctx: { params: { id: string } }
+  ctx: RouteContext<"/api/contacts/[id]">
 ) {
   const apiKey = process.env.KYLAS_API_KEY;
   if (!apiKey) {
