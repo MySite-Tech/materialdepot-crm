@@ -3,20 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useToast } from './StoreVisitWrapper';
+import { fetchBMsByBranch, assignBMToClient, lookupLeadByPhone, updateLead, type BMOption } from '../lib/mockApi';
+import type { LeadData } from '../types/storeVisit';
 
 interface BranchOption {
   id: number;
   name: string;
   displayName: string;
-}
-
-interface LeadData {
-  id: number;
-  customFieldValues: {
-    cfUserType?: number | null;
-    cfCategoriesOfInterest?: number[];
-  };
-  conversionDetails?: { entityType: string; entityId: number }[];
 }
 
 interface FullLeadBody {
@@ -34,39 +27,15 @@ const mockApi = {
     ];
   },
 
-  lookupLeadByPhone: async (phone: string, branch: string): Promise<{
-    success: boolean;
-    leadId: number;
-    leadData: LeadData;
-    fullLeadBody: FullLeadBody;
-  }> => {
-    console.log(`Looking up lead for phone: ${phone}, branch: ${branch}`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return {
-      success: true,
-      leadId: 12345,
-      leadData: {
-        id: 12345,
-        customFieldValues: { cfUserType: null, cfCategoriesOfInterest: [] },
-        conversionDetails: [],
-      },
-      fullLeadBody: { firstName: 'John', lastName: 'Doe' },
-    };
-  },
+  lookupLeadByPhone: (phone: string, branch: string) => lookupLeadByPhone(phone, branch),
 
-  updateLead: async (leadId: number, data: FullLeadBody, customFields: Record<string, unknown>, phone: string, name: string): Promise<{
-    success: boolean;
-    leadId: number;
-    conversionDetails: { entityType: string; entityId: number }[];
-  }> => {
-    console.log(`Updating lead ${leadId} with data:`, { data, customFields, phone, name });
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return {
-      success: true,
-      leadId,
-      conversionDetails: [{ entityType: 'CONTACT', entityId: 67890 }],
-    };
-  },
+  updateLead: (leadId: number, data: FullLeadBody, customFields: Record<string, unknown>, phone: string, name: string) =>
+    updateLead(leadId, data as Record<string, unknown>, customFields, phone, name),
+
+  fetchBMsByBranch: (branch: string) => fetchBMsByBranch(branch),
+
+  assignBM: (clientContact: string, bmContact: string, kylasLeadId: number | null) =>
+    assignBMToClient(clientContact, bmContact, kylasLeadId ?? undefined),
 };
 
 const USER_TYPE_OPTIONS = {
@@ -313,6 +282,106 @@ function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryT
   );
 }
 
+function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFetchingBMs }: {
+  bms: BMOption[];
+  selectedBM: string | null;
+  onSelect: (contact: string) => void;
+  onSubmit: () => void;
+  isLoading: boolean;
+  isFetchingBMs: boolean;
+}) {
+  const [search, setSearch] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedBM) onSubmit();
+  };
+
+  if (isFetchingBMs) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-3">
+        <div className="w-8 h-8 border-4 border-gray-300 border-t-amber-500 rounded-full animate-spin" />
+        <p className="text-gray-500 text-sm">Loading Business Managers...</p>
+      </div>
+    );
+  }
+
+  if (bms.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-600">No Business Managers available for this branch.</p>
+      </div>
+    );
+  }
+
+  const query = search.trim().toLowerCase();
+  const filteredBMs = query
+    ? bms.filter((bm) => {
+        const displayName = `${bm.f_name} ${bm.l_name}`.trim().toLowerCase();
+        return displayName.includes(query) || String(bm.bm_contact).toLowerCase().includes(query);
+      })
+    : bms;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-3">
+        <label className="text-base font-medium text-gray-900">
+          Assign Business Manager <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          placeholder="Search by name or phone"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-11 w-full border border-gray-300 rounded-md px-3 py-2 text-base"
+        />
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {filteredBMs.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">No Business Managers match &quot;{search}&quot;.</p>
+          ) : (
+            filteredBMs.map((bm) => {
+              const displayName = `${bm.f_name} ${bm.l_name}`.trim() || bm.bm_contact;
+              return (
+                <label
+                  key={bm.user_id}
+                  className="flex items-center space-x-3 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    name="bm"
+                    value={bm.bm_contact}
+                    checked={selectedBM === bm.bm_contact}
+                    onChange={() => onSelect(bm.bm_contact)}
+                    className="text-amber-500"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{displayName}</p>
+                    <p className="text-sm text-gray-500">{bm.bm_contact}</p>
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+      </div>
+      <button
+        type="submit"
+        className="w-full bg-gray-800 hover:bg-gray-700 text-white h-12 text-base font-medium rounded-md"
+        disabled={isLoading || !selectedBM}
+      >
+        {isLoading ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
+            Assigning...
+          </>
+        ) : (
+          <>Assign & Finish <span className="ml-2">→</span></>
+        )}
+      </button>
+    </form>
+  );
+}
+
 export default function StoreVisitFormSimple() {
   const searchParams = useSearchParams();
   const branch = searchParams.get('branch') || '';
@@ -334,8 +403,11 @@ export default function StoreVisitFormSimple() {
   const [isLoading, setIsLoading] = useState(false);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [bms, setBMs] = useState<BMOption[]>([]);
+  const [bmsLoading, setBMsLoading] = useState(false);
+  const [selectedBM, setSelectedBM] = useState<string | null>(null);
 
-  const totalSteps = 2;
+  const totalSteps = 3;
 
   useEffect(() => {
     setBranchesLoading(true);
@@ -376,7 +448,7 @@ export default function StoreVisitFormSimple() {
       const { cfUserType, cfCategoriesOfInterest } = response.leadData.customFieldValues;
       if (cfUserType && cfCategoriesOfInterest && cfCategoriesOfInterest.length > 0) {
         toast({ title: 'Welcome back!', description: 'Redirecting to your profile...' });
-        setTimeout(() => { window.open('https://app.kylas.io', '_blank'); }, 1000);
+        setTimeout(() => { window.open(`https://app.kylas.io/sales/leads/details/${response.leadId}`, '_blank'); }, 1000);
       } else {
         setCurrentStep(2);
       }
@@ -395,10 +467,40 @@ export default function StoreVisitFormSimple() {
         cfCategoriesOfInterest: formData.categories.map(cat => CATEGORY_OPTIONS[cat].id),
       };
       await mockApi.updateLead(leadId, fullLeadBody || {}, customFieldValues, formData.phoneNumber, formData.name);
-      toast({ title: 'Thank you!', description: 'Your information has been saved. Redirecting...' });
-      setTimeout(() => { window.open('https://app.kylas.io', '_blank'); }, 2000);
+      setCurrentStep(3);
+      setBMsLoading(true);
+      try {
+        const bmList = await mockApi.fetchBMsByBranch(branch);
+        setBMs(bmList);
+      } catch {
+        toast({ title: 'Error', description: 'Failed to load Business Managers.', variant: 'destructive' });
+      } finally {
+        setBMsLoading(false);
+      }
     } catch {
       toast({ title: 'Error', description: 'Failed to save your information. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBMAssign = async () => {
+    if (!selectedBM || !leadId) return;
+    setIsLoading(true);
+    try {
+      const result = await mockApi.assignBM(formData.phoneNumber, selectedBM, leadId);
+      if (!result.kylas_lead_owner_updated) {
+        toast({
+          title: 'Kylas update failed',
+          description: result.kylas_message || 'Could not update Kylas lead owner.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      toast({ title: 'Assigned!', description: 'Business Manager assigned. Redirecting...' });
+      setTimeout(() => { window.open(`https://app.kylas.io/sales/leads/details/${leadId}`, '_blank'); }, 1500);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to assign Business Manager. Please try again.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -442,6 +544,16 @@ export default function StoreVisitFormSimple() {
               onCategoryToggle={handleCategoryToggle}
               onSubmit={handleFinalSubmit}
               isLoading={isLoading}
+            />
+          )}
+          {branch && currentStep === 3 && (
+            <BMAssignmentStep
+              bms={bms}
+              selectedBM={selectedBM}
+              onSelect={setSelectedBM}
+              onSubmit={handleBMAssign}
+              isLoading={isLoading}
+              isFetchingBMs={bmsLoading}
             />
           )}
         </div>

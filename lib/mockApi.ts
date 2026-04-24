@@ -62,7 +62,6 @@ export async function lookupLeadByPhone(phoneNumber: string, branch: string): Pr
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${BEARER_TOKEN}`,
     },
     body: JSON.stringify({
       contact: phoneNumber,
@@ -212,4 +211,68 @@ export function getKylasRedirectUrl(leadId: number, contactId?: number): string 
     return `https://app.kylas.io/sales/contacts/details/${contactId}`;
   }
   return `https://app.kylas.io/sales/leads/details/${leadId}`;
+}
+
+export interface BMOption {
+  user_id: string;
+  bm_contact: string;
+  f_name: string;
+  l_name: string;
+  crm_id: string;
+}
+
+export async function fetchBMsByBranch(branch: string): Promise<BMOption[]> {
+  const branchName = branch.toUpperCase();
+  console.log(`[API] Fetching BMs for branch: ${branchName}`);
+
+  const response = await fetch(
+    `${API_BASE_URL}/store-visit/bms-by-branch/?branch=${encodeURIComponent(branchName)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    console.error(`[API] Fetch BMs error: ${response.status} ${response.statusText}`);
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export interface AssignBMResponse {
+  assignment_id: number;
+  created: boolean;
+  kylas_lead_owner_updated: boolean;
+  kylas_message: string;
+}
+
+export async function assignBMToClient(
+  clientContact: string,
+  bmContact: string,
+  kylasLeadId?: number,
+): Promise<AssignBMResponse> {
+  console.log(`[API] Assigning BM ${bmContact} to client ${clientContact}`);
+
+  const response = await fetch(`${API_BASE_URL}/store-visit/assign-bm/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      client_contact: clientContact,
+      bm_contact: bmContact,
+      kylas_lead_id: kylasLeadId,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error(`[API] Assign BM error: ${response.status} ${response.statusText}`);
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
 }
