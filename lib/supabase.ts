@@ -114,6 +114,38 @@ export async function fetchLeads(): Promise<Lead[]> {
   return deduped.map(toLead);
 }
 
+export async function fetchLeadRemarks(id: string): Promise<Remark[]> {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('remarks')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { remarks?: Remark[] } | null)?.remarks || [];
+}
+
+export async function fetchRemarksMap(): Promise<Record<string, Remark[]>> {
+  const allRows: { id: string; client_phone: string; remarks: Remark[] }[] = [];
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('id, client_phone, remarks')
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows.push(...(data as { id: string; client_phone: string; remarks: Remark[] }[]));
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  const map: Record<string, Remark[]> = {};
+  for (const row of allRows) {
+    if (row.remarks?.length) map[`${row.id}|${row.client_phone || ''}`] = row.remarks;
+  }
+  return map;
+}
+
 export async function upsertLead(lead: Lead): Promise<void> {
   const { error } = await supabase
     .from('leads')

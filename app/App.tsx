@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, Cha
 import { useRouter } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchClientProperties } from '../lib/mockApi';
+import { fetchLead, fetchLeadRemarks, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
+import { fetchCRMLeads, updateLeadProperties, markLeadLost } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -1440,35 +1440,22 @@ export default function App() {
   const [branches, setBranches] = useState<string[]>(DEFAULT_BRANCHES);
   const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
   const [dbReady, setDbReady] = useState(false);
+  const [leadsLoading, setLeadsLoading] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
+    setLeadsLoading(true);
     Promise.all([
-      fetchLeads(),
+      fetchCRMLeads(),
       fetchBranches().catch(() => []),
       fetchUsers().catch(() => []),
-    ]).then(([dbLeads, dbBranches, dbUsers]) => {
-      if (dbBranches.length > 0) setBranches(dbBranches.map((b) => b.name));
+    ]).then(([crmLeads, dbBranches, dbUsers]) => {
+      if (dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
       setCrmUsers(dbUsers);
-      // Overlay fresh UserProperty values from backend over Supabase data
-      const contacts = dbLeads.map((l) => l.clientPhone).filter((phone): phone is string => Boolean(phone));
-      fetchClientProperties(contacts).then((props) => {
-        setLeads(dbLeads.map((l) => {
-          const p = l.clientPhone ? props[l.clientPhone] || {} : {};
-          return {
-            ...l,
-            clientType: p.client_type || l.clientType,
-            propertyType: p.property_type || l.propertyType,
-            architectInvolved: p.architect_involved
-              ? ['yes', 'true'].includes(p.architect_involved.toLowerCase())
-              : l.architectInvolved,
-            followUpDate: p.followup_date || l.followUpDate,
-            projectPhase: p.project_phase || l.projectPhase,
-          };
-        }));
-      }).catch(() => setLeads(dbLeads));
+      setLeads(crmLeads as Lead[]);
       setDbReady(true);
-    }).catch(() => setDbReady(true));
+      setLeadsLoading(false);
+    }).catch(() => { setDbReady(true); setLeadsLoading(false); });
   }, [currentUser]);
 
   useEffect(() => {
@@ -1492,6 +1479,18 @@ export default function App() {
   const [sortCol, setSortCol] = useState('latestVisit');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
+
+  useEffect(() => {
+    if (!drawerLead) return;
+    fetchLeadRemarks(drawerLead.id).then(remarks => {
+      if (remarks.length) {
+        setLeads(prev => prev.map(l =>
+          l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, remarks } : l
+        ));
+      }
+    }).catch(() => {});
+  }, [drawerLead?.id, drawerLead?.clientPhone]);
+
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [deleteLeadState, setDeleteLeadState] = useState<Lead | null>(null);
   const [dateEditPopup, setDateEditPopup] = useState<DateEditState | null>(null);
@@ -1549,31 +1548,7 @@ export default function App() {
   const isAdminUser = currentUser?.role === 'superadmin';
   const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
 
-  const bmFilteredLeads = leads.filter((l) => {
-    if (userAllowedBranches.length > 0) {
-      if (!userAllowedBranches.includes(l.branch)) return false;
-    } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
-    if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
-    if (followUpDateFrom || followUpDateTo) {
-      if (!l.followUpDate) return false;
-      if (followUpDateFrom && l.followUpDate < followUpDateFrom) return false;
-      if (followUpDateTo && l.followUpDate > followUpDateTo) return false;
-    }
-    if (closureDateFrom || closureDateTo) {
-      if (!l.closureDate) return false;
-      if (closureDateFrom && l.closureDate < closureDateFrom) return false;
-      if (closureDateTo && l.closureDate > closureDateTo) return false;
-    }
-    if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!l.id.toLowerCase().includes(q) && !l.assignedTo.toLowerCase().includes(q) &&
-          !(l.clientName || '').toLowerCase().includes(q) && !(l.clientPhone || '').includes(q)) return false;
-    }
-    return true;
-  });
-  const availableBMs = [...new Set(bmFilteredLeads.map((l) => l.assignedTo).filter(Boolean))].sort();
+  const availableBMs = [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
@@ -1684,6 +1659,16 @@ export default function App() {
       return [...prev, finalData];
     });
     upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });
+    if (finalData.clientPhone) {
+      updateLeadProperties(finalData.clientPhone, {
+        client_type: finalData.clientType || undefined,
+        property_type: finalData.propertyType || undefined,
+        architect_involved: finalData.architectInvolved ? 'yes' : 'no',
+        followup_date: finalData.followUpDate || undefined,
+        project_phase: finalData.projectPhase || undefined,
+        estimated_closure_date: finalData.closureDate || undefined,
+      }).catch((e) => console.error('Property sync failed:', e));
+    }
     if (currentUser) {
       if (isNew) {
         logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'created_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
@@ -1719,6 +1704,9 @@ export default function App() {
       if (lead) upsertLead(lead).catch((e) => console.error('Status update failed:', e));
       return updated;
     });
+    if (newStatus === 'Order Lost') {
+      markLeadLost(id, lostReason || '').catch((e) => console.error('Estimate lost sync failed:', e));
+    }
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' → ' + newStatus }).catch(console.error);
     }
@@ -2048,7 +2036,7 @@ export default function App() {
       </div>
 
       {mainTab === 'dashboard' && (
-        <Dashboard leads={leads} logs={dashLogs} branches={branches} />
+        <Dashboard logs={dashLogs} branches={branches} />
       )}
 
       {mainTab === 'storeVisit' && (
@@ -2159,7 +2147,7 @@ export default function App() {
               <option value="closure_pending">Closure Date Pending</option>
               <option value="overdue">Overdue Tasks</option>
             </select>
-            <span className="text-xs text-gray-500">{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-gray-500">{leadsLoading ? <span className="flex items-center gap-1"><svg className="animate-spin h-3 w-3 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Loading...</span> : `${filtered.length} lead${filtered.length !== 1 ? 's' : ''}`}</span>
           </div>
           <div className="flex gap-2 items-center">
             <div className="hidden sm:flex gap-2 items-center">
@@ -2173,7 +2161,8 @@ export default function App() {
         </div>
 
         <div className="sm:hidden flex flex-col gap-2">
-          {paginatedRows.length === 0 && <div className="text-center text-gray-400 py-10 text-sm">No leads found</div>}
+          {leadsLoading && <div className="flex items-center justify-center gap-2 py-10 text-gray-400 text-sm"><svg className="animate-spin h-4 w-4 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Loading leads...</div>}
+          {!leadsLoading && paginatedRows.length === 0 && <div className="text-center text-gray-400 py-10 text-sm">No leads found</div>}
           {paginatedRows.map((l) => (
             <div key={l.id} className="bg-white rounded-lg border border-gray-200 px-4 py-3" onClick={() => setDrawerLead(l)}>
               <div className="flex justify-between items-start gap-2">
@@ -2201,11 +2190,12 @@ export default function App() {
         </div>
 
         <div className="hidden sm:block bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto max-h-[calc(100vh-340px)] overflow-y-auto">
+          <div className="overflow-x-auto">
+          <div className="max-h-[calc(100vh-340px)] overflow-y-auto">
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-[#FAFAFA]">
-                  {isColVisible('id') && <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('id') && <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="max-w-[110px] w-[110px]" />}
                   {isColVisible('clientName') && <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('clientPhone') && <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('createdAt') && <Th label="Created" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
@@ -2232,8 +2222,8 @@ export default function App() {
                     key={l.id}
                     className="border-t border-gray-200 hover:bg-[#FFFAF7]"
                   >
-                    {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle">
-                      <span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded">{l.id}</span>
+                    {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle max-w-[110px]">
+                      <span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">{l.id}</span>
                     </td>}
                     {isColVisible('clientName') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '—'}</td>}
                     {isColVisible('clientPhone') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '—'}</td>}
@@ -2291,7 +2281,15 @@ export default function App() {
                     </td>
                   </tr>
                 ))}
-                {paginatedRows.length === 0 && (
+                {leadsLoading && (
+                  <tr><td colSpan={COL_COUNT} className="p-10 text-center text-gray-400">
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-4 w-4 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      Loading leads...
+                    </div>
+                  </td></tr>
+                )}
+                {!leadsLoading && paginatedRows.length === 0 && (
                   <tr><td colSpan={COL_COUNT} className="p-10 text-center text-gray-400">No leads found</td></tr>
                 )}
               </tbody>
@@ -2305,6 +2303,7 @@ export default function App() {
                 </tfoot>
               )}
             </table>
+          </div>
           </div>
         </div>
 

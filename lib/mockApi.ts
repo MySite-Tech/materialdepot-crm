@@ -1,6 +1,6 @@
 import { LeadData } from "../types/storeVisit";
 
-const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
+const API_BASE_URL = "http://127.0.0.1:8000/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
 const BEARER_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NTc0NzQ4LCJpYXQiOjE3NzAzOTA3NDgsImp0aSI6IjNiMGFkMTUyMjdlNDQ2MGNhYzVmY2M0Njk5ZGNjZWY4IiwidXNlcl9pZCI6IjFlMDQxMWQ5LWE1YjEtNDViZC1iZDJkLTAyYzViYmNjMDk2MiJ9.YLUwIE9TxuHUizIZRuX3-4g2bGHFOF6KruJJaBH_wq0";
@@ -144,6 +144,105 @@ export async function assignBMToClient(
 }
 
 // ---------------------------------------------------------------------------
+// CRM Leads from backend
+// ---------------------------------------------------------------------------
+
+export interface CRMLeadRow {
+  id: string;
+  clientName: string | null;
+  clientPhone: string | null;
+  assignedTo: string;
+  branch: string;
+  status: string;
+  cartValue: number;
+  cartItems: string;
+  clientType: string;
+  propertyType: string;
+  architectInvolved: boolean;
+  projectPhase: string;
+  followUpDate: string;
+  closureDate: string;
+  lostReason: string;
+  createdAt: string;
+  visits: { date: string; channel: string }[];
+  remarks: never[];
+}
+
+export async function fetchCRMLeads(): Promise<CRMLeadRow[]> {
+  const data = await mdFetch('/crm/leads/');
+  return data.results || [];
+}
+
+// ---------------------------------------------------------------------------
+// CRM Dashboard aggregates from backend
+// ---------------------------------------------------------------------------
+
+export interface DashboardStatusDatum { status: string; count: number; value: number }
+export interface DashboardBranchStatus {
+  branch: string;
+  total: number;
+  totalValue: number;
+  statuses: DashboardStatusDatum[];
+}
+export interface DashboardLostReason { reason: string; count: number; value: number; pct: number }
+export interface DashboardClosureLead {
+  id: string;
+  clientName: string | null;
+  clientPhone: string | null;
+  assignedTo: string;
+  branch: string;
+  closureDate: string;
+  status: string;
+  cartValue: number;
+}
+export interface DashboardSummary {
+  total: number;
+  todayClosureCount: number;
+  todayClosureValue: number;
+  weekClosureCount: number;
+  weekClosureValue: number;
+  weekFrom: string;
+  weekTo: string;
+  today: string;
+}
+export interface DashboardData {
+  branchStatus: DashboardBranchStatus[];
+  lostReasons: DashboardLostReason[];
+  closurePipeline: DashboardClosureLead[];
+  availableBMs: string[];
+  summary: DashboardSummary;
+}
+
+export interface DashboardFilters {
+  branch?: string[];
+  bm?: string[];
+  closureFrom?: string;
+  closureTo?: string;
+  createdFrom?: string;
+  createdTo?: string;
+}
+
+export async function markLeadLost(cartNumber: string, lostReason: string): Promise<void> {
+  await mdFetch('/crm/lead-status/', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cart_number: cartNumber, lost_reason: lostReason }),
+  });
+}
+
+export async function fetchDashboardData(filters: DashboardFilters = {}): Promise<DashboardData> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.bm?.length) params.set('bm', filters.bm.join(','));
+  if (filters.closureFrom) params.set('closure_from', filters.closureFrom);
+  if (filters.closureTo) params.set('closure_to', filters.closureTo);
+  if (filters.createdFrom) params.set('created_from', filters.createdFrom);
+  if (filters.createdTo) params.set('created_to', filters.createdTo);
+  const qs = params.toString();
+  return mdFetch(`/crm/dashboard/${qs ? `?${qs}` : ''}`);
+}
+
+// ---------------------------------------------------------------------------
 // Client properties from backend (UserProperty table)
 // ---------------------------------------------------------------------------
 
@@ -162,6 +261,32 @@ export async function fetchClientProperties(contacts: string[]): Promise<Record<
   } catch {
     return {};
   }
+}
+
+export interface LeadPropertyUpdate {
+  client_type?: string;
+  property_type?: string;
+  architect_involved?: string;
+  followup_date?: string;
+  project_phase?: string;
+  estimated_closure_date?: string;
+}
+
+
+export async function updateLeadProperties(
+  contact: string,
+  fields: LeadPropertyUpdate,
+): Promise<void> {
+  if (!contact) return;
+  const payload = Object.fromEntries(
+    Object.entries(fields).filter(([, v]) => v !== undefined && v !== null)
+  );
+  if (!Object.keys(payload).length) return;
+  await mdFetch("/store-visit/client-properties/", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contact, ...payload }),
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -1,13 +1,18 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import type { Lead, ActivityLog } from '@/types/crm';
-
-const todayStr = () => new Date().toISOString().slice(0, 10);
+import type { ActivityLog } from '@/types/crm';
+import {
+  fetchDashboardData,
+  type DashboardData,
+  type DashboardBranchStatus,
+  type DashboardLostReason,
+  type DashboardClosureLead,
+} from '@/lib/mockApi';
 
 const fmtINR = (n?: number | null) => {
   if (!n) return '₹0';
@@ -30,15 +35,6 @@ const fmtRelative = (isoStr?: string | null) => {
   return fmtDate(isoStr.slice(0, 10));
 };
 
-const getWeekRange = () => {
-  const now = new Date();
-  const day = now.getDay();
-  const diffToMon = day === 0 ? -6 : 1 - day;
-  const mon = new Date(now); mon.setDate(now.getDate() + diffToMon); mon.setHours(0, 0, 0, 0);
-  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-  return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
-};
-
 const LOST_COLORS = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6','#8B5CF6','#EC4899','#14B8A6','#F59E0B','#6366F1'];
 const STATUS_COLORS: Record<string, string> = {
   'Quote Approval Pending': '#3B82F6',
@@ -51,19 +47,15 @@ const STATUS_COLORS: Record<string, string> = {
   'Refunded': '#F97316',
 };
 const DEFAULT_STATUS_COLOR = '#9CA3AF';
-const PIPELINE_STATUSES = ['Quote Approval Pending', 'Request for Availability Check', 'Site Visit', ''];
 const EDIT_ACTIONS = ['updated_lead', 'date_changed', 'added_remark', 'status_changed'];
 
-interface StatusDatum { status: string; count: number; value: number }
-interface BranchData { branch: string; total: number; totalValue: number; data: StatusDatum[] }
 interface UserStat { name: string; edits: number; total: number; lastSeen: string }
-interface LostDatum { reason: string; count: number; value: number; pct: number }
 interface WeekDay { day: string; amount: number; count: number }
 interface DateRange { from: string; to: string }
 
 interface BranchPieTooltipProps {
   active?: boolean;
-  payload?: { payload: StatusDatum }[];
+  payload?: { payload: { status: string; count: number; value: number } }[];
   total: number;
 }
 
@@ -82,7 +74,7 @@ function BranchPieTooltip({ active, payload, total }: BranchPieTooltipProps) {
 
 interface LostPieTooltipProps {
   active?: boolean;
-  payload?: { payload: LostDatum }[];
+  payload?: { payload: DashboardLostReason }[];
 }
 
 function LostPieTooltip({ active, payload }: LostPieTooltipProps) {
@@ -202,57 +194,55 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
 }
 
 interface DashboardProps {
-  leads: Lead[];
   logs: ActivityLog[];
   branches: string[];
 }
 
-export default function Dashboard({ leads, logs, branches }: DashboardProps) {
-  const today = todayStr();
-  const week = getWeekRange();
-
+export default function Dashboard({ logs, branches }: DashboardProps) {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [bmFilter, setBmFilter] = useState<string[]>([]);
   const [closureDate, setClosureDate] = useState<DateRange>({ from: '', to: '' });
   const [createdDate, setCreatedDate] = useState<DateRange>({ from: '', to: '' });
   const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || closureDate.from || closureDate.to || createdDate.from || createdDate.to;
 
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const branchOptions = useMemo(() => branches.filter(b => b !== 'HQ'), [branches]);
 
-  const filtered = useMemo(() => leads.filter(l => {
-    if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    if (bmFilter.length > 0 && !bmFilter.includes(l.assignedTo)) return false;
-    if (closureDate.from && (!l.closureDate || l.closureDate < closureDate.from)) return false;
-    if (closureDate.to && (!l.closureDate || l.closureDate > closureDate.to)) return false;
-    if (createdDate.from && (!l.createdAt || l.createdAt < createdDate.from)) return false;
-    if (createdDate.to && (!l.createdAt || l.createdAt > createdDate.to)) return false;
-    return true;
-  }), [leads, branchFilter, bmFilter, closureDate, createdDate]);
+  const load = useCallback((filters: Parameters<typeof fetchDashboardData>[0]) => {
+    setLoading(true);
+    fetchDashboardData(filters)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const availableBMs = useMemo(() => {
-    const base = branchFilter.length > 0 ? leads.filter(l => branchFilter.includes(l.branch)) : leads;
-    return [...new Set(base.map(l => l.assignedTo).filter(Boolean))].sort();
-  }, [leads, branchFilter]);
-
-  const branchStatusData = useMemo((): BranchData[] => {
-    const activeBranches = [...new Set(filtered.map(l => l.branch).filter(b => b && b !== 'HQ'))].sort();
-    return activeBranches.map(branch => {
-      const bl = filtered.filter(l => l.branch === branch);
-      const statusMap: Record<string, StatusDatum> = {};
-      bl.forEach(l => {
-        const s = l.status || 'No Status';
-        if (!statusMap[s]) statusMap[s] = { status: s, count: 0, value: 0 };
-        statusMap[s].count++;
-        statusMap[s].value += l.cartValue || 0;
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      load({
+        branch: branchFilter.length ? branchFilter : undefined,
+        bm: bmFilter.length ? bmFilter : undefined,
+        closureFrom: closureDate.from || undefined,
+        closureTo: closureDate.to || undefined,
+        createdFrom: createdDate.from || undefined,
+        createdTo: createdDate.to || undefined,
       });
-      return {
-        branch,
-        total: bl.length,
-        totalValue: bl.reduce((s, l) => s + (l.cartValue || 0), 0),
-        data: Object.values(statusMap).sort((a, b) => b.count - a.count),
-      };
-    });
-  }, [filtered]);
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [branchFilter, bmFilter, closureDate, createdDate, load]);
+
+  const availableBMs = data?.availableBMs ?? [];
+  const summary = data?.summary;
+  const branchStatusData: DashboardBranchStatus[] = data?.branchStatus ?? [];
+  const lostData: DashboardLostReason[] = data?.lostReasons ?? [];
+  const closureLeads: DashboardClosureLead[] = data?.closurePipeline ?? [];
+
+  const today = summary?.today ?? new Date().toISOString().slice(0, 10);
+  const weekFrom = summary?.weekFrom ?? '';
+  const weekTo = summary?.weekTo ?? '';
 
   const leaderboard = useMemo((): UserStat[] => {
     const userMap: Record<string, UserStat> = {};
@@ -294,65 +284,33 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
   const lbPage$ = Math.min(lbPage, lbTotalPages - 1);
   const lbPagedRows = leaderboard.slice(lbPage$ * LB_PAGE_SIZE, (lbPage$ + 1) * LB_PAGE_SIZE);
 
-  const lostLeads = useMemo(() => filtered.filter(l => l.status === 'Order Lost'), [filtered]);
-  const lostData = useMemo((): LostDatum[] => {
-    const map: Record<string, { reason: string; count: number; value: number }> = {};
-    lostLeads.forEach(l => {
-      const r = l.lostReason || 'Unknown';
-      if (!map[r]) map[r] = { reason: r, count: 0, value: 0 };
-      map[r].count++;
-      map[r].value += l.cartValue || 0;
-    });
-    const total = lostLeads.length || 1;
-    return Object.values(map)
-      .map(d => ({ ...d, pct: Math.round((d.count / total) * 100) }))
-      .sort((a, b) => b.count - a.count);
-  }, [lostLeads]);
-
-  const lastEditMap = useMemo(() => {
-    const map: Record<string, { user: string; at: string }> = {};
-    logs.forEach(log => {
-      if (!log.entity_id || !EDIT_ACTIONS.includes(log.action)) return;
-      const eid = String(log.entity_id);
-      if (!map[eid] || log.created_at > map[eid].at)
-        map[eid] = { user: log.user_name, at: log.created_at };
-    });
-    return map;
-  }, [logs]);
+  const weekDays = useMemo((): WeekDay[] => {
+    if (!weekFrom) return [];
+    const days: WeekDay[] = [];
+    const d = new Date(weekFrom);
+    for (let i = 0; i < 7; i++) {
+      const dateStr = d.toISOString().slice(0, 10);
+      const dl = closureLeads.filter(l => l.closureDate === dateStr);
+      days.push({ day: d.toLocaleDateString('en-IN', { weekday: 'short' }), amount: dl.reduce((s, l) => s + (l.cartValue || 0), 0), count: dl.length });
+      d.setDate(d.getDate() + 1);
+    }
+    return days;
+  }, [closureLeads, weekFrom]);
 
   const [closurePage, setClosurePage] = useState(0);
   const CLOSURE_PAGE_SIZE = 10;
-
-  const allClosureLeads = useMemo(() =>
-    filtered.filter(l => l.closureDate && PIPELINE_STATUSES.includes(l.status || ''))
-      .sort((a, b) => (a.closureDate || '').localeCompare(b.closureDate || '')),
-  [filtered]);
-
-  const closureLeads = useMemo(() => {
-    setClosurePage(0);
-    return allClosureLeads.filter(l => (l.closureDate || '') <= today);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allClosureLeads, today]);
-
   const closureTotalPages = Math.ceil(closureLeads.length / CLOSURE_PAGE_SIZE) || 1;
   const closurePage$ = Math.min(closurePage, closureTotalPages - 1);
   const closurePagedRows = closureLeads.slice(closurePage$ * CLOSURE_PAGE_SIZE, (closurePage$ + 1) * CLOSURE_PAGE_SIZE);
   const closureTotalAmount = closureLeads.reduce((s, l) => s + (l.cartValue || 0), 0);
 
-  const todayPipeline = useMemo(() => allClosureLeads.filter(l => l.closureDate === today), [allClosureLeads, today]);
-  const weekPipeline = useMemo(() => allClosureLeads.filter(l => (l.closureDate || '') >= week.from && (l.closureDate || '') <= week.to), [allClosureLeads, week]);
+  const todayPipelineValue = summary?.todayClosureValue ?? 0;
+  const todayPipelineCount = summary?.todayClosureCount ?? 0;
+  const weekPipelineValue = summary?.weekClosureValue ?? 0;
+  const weekPipelineCount = summary?.weekClosureCount ?? 0;
 
-  const weekDays = useMemo((): WeekDay[] => {
-    const days: WeekDay[] = [];
-    const d = new Date(week.from);
-    for (let i = 0; i < 7; i++) {
-      const dateStr = d.toISOString().slice(0, 10);
-      const dl = weekPipeline.filter(l => l.closureDate === dateStr);
-      days.push({ day: d.toLocaleDateString('en-IN', { weekday: 'short' }), amount: dl.reduce((s, l) => s + (l.cartValue || 0), 0), count: dl.length });
-      d.setDate(d.getDate() + 1);
-    }
-    return days;
-  }, [weekPipeline, week]);
+  const lostLeadsCount = lostData.reduce((s, d) => s + d.count, 0);
+  const lostLeadsValue = lostData.reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="px-6 py-5 space-y-6">
@@ -368,45 +326,50 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
             ✕ Clear
           </button>
         )}
-        <span className="ml-auto text-[11px] text-gray-400 font-mono">{filtered.length.toLocaleString()} leads</span>
+        <span className="ml-auto flex items-center gap-2 text-[11px] text-gray-400 font-mono">
+          {loading && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
+          {summary ? `${summary.total.toLocaleString()} leads` : '—'}
+        </span>
       </div>
 
       <section>
         <SectionHeader title="Branch Performance" sub={`${branchStatusData.length} branches · lead status breakdown`} />
-        {branchStatusData.length === 0
-          ? <div className="bg-white border border-gray-200 rounded-lg px-5 py-8 text-center text-[12px] text-gray-400">No branch data</div>
-          : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(branchStatusData.length, 4)}, 1fr)` }}>
-              {branchStatusData.map(b => (
-                <div key={b.branch} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
-                  <div className="flex items-baseline justify-between mb-1">
-                    <div className="font-bold text-[13px] text-gray-900">{b.branch}</div>
-                    <div className="text-[11px] text-gray-400 font-mono">{fmtINR(b.totalValue)}</div>
+        {loading && branchStatusData.length === 0
+          ? <div className="bg-white border border-gray-200 rounded-lg px-5 py-8 text-center text-[12px] text-gray-400">Loading…</div>
+          : branchStatusData.length === 0
+            ? <div className="bg-white border border-gray-200 rounded-lg px-5 py-8 text-center text-[12px] text-gray-400">No branch data</div>
+            : (
+              <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(branchStatusData.length, 4)}, 1fr)` }}>
+                {branchStatusData.map(b => (
+                  <div key={b.branch} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+                    <div className="flex items-baseline justify-between mb-1">
+                      <div className="font-bold text-[13px] text-gray-900">{b.branch}</div>
+                      <div className="text-[11px] text-gray-400 font-mono">{fmtINR(b.totalValue)}</div>
+                    </div>
+                    <div className="text-[10px] text-gray-400 mb-2">{b.total} leads</div>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <PieChart>
+                        <Pie data={b.statuses} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={2}>
+                          {b.statuses.map((entry, i) => <Cell key={i} fill={STATUS_COLORS[entry.status] || DEFAULT_STATUS_COLOR} />)}
+                        </Pie>
+                        <Tooltip content={<BranchPieTooltip total={b.total} />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-1 mt-1">
+                      {b.statuses.map(d => (
+                        <div key={d.status} className="flex items-center justify-between text-[10px]">
+                          <span className="flex items-center gap-1.5 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: STATUS_COLORS[d.status] || DEFAULT_STATUS_COLOR }} />
+                            <span className="text-gray-500 truncate">{d.status}</span>
+                          </span>
+                          <span className="font-semibold text-gray-700 ml-2 shrink-0">{d.count}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-gray-400 mb-2">{b.total} leads</div>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <PieChart>
-                      <Pie data={b.data} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={2}>
-                        {b.data.map((entry, i) => <Cell key={i} fill={STATUS_COLORS[entry.status] || DEFAULT_STATUS_COLOR} />)}
-                      </Pie>
-                      <Tooltip content={<BranchPieTooltip total={b.total} />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-1 mt-1">
-                    {b.data.map(d => (
-                      <div key={d.status} className="flex items-center justify-between text-[10px]">
-                        <span className="flex items-center gap-1.5 truncate">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: STATUS_COLORS[d.status] || DEFAULT_STATUS_COLOR }} />
-                          <span className="text-gray-500 truncate">{d.status}</span>
-                        </span>
-                        <span className="font-semibold text-gray-700 ml-2 shrink-0">{d.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
       </section>
 
       <section>
@@ -480,44 +443,46 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
       </section>
 
       <section>
-        <SectionHeader title="Lost Reasons" sub={`${lostLeads.length} orders lost · ${fmtINR(lostLeads.reduce((s,l)=>s+(l.cartValue||0),0))} pipeline lost`} />
-        {lostLeads.length === 0
-          ? <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center text-[12px] text-gray-400">No lost orders match current filters</div>
-          : (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
-                <div className="font-semibold text-[12px] text-gray-700 mb-1">By Lead Count</div>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={lostData} dataKey="count" nameKey="reason" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
-                      {lostData.map((_, i) => <Cell key={i} fill={LOST_COLORS[i % LOST_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip content={<LostPieTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
-                <div className="font-semibold text-[12px] text-gray-700 mb-3">Reason Breakdown</div>
-                <div className="space-y-2">
-                  {lostData.map((d, i) => (
-                    <div key={d.reason}>
-                      <div className="flex items-center justify-between text-[11px] mb-0.5">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: LOST_COLORS[i % LOST_COLORS.length] }} />
-                          <span className="text-gray-700 font-medium">{d.reason}</span>
-                        </span>
-                        <span className="text-gray-500 font-semibold">{d.count} · {d.pct}%</span>
+        <SectionHeader title="Lost Reasons" sub={`${lostLeadsCount} orders lost · ${fmtINR(lostLeadsValue)} pipeline lost`} />
+        {loading && lostData.length === 0
+          ? <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center text-[12px] text-gray-400">Loading…</div>
+          : lostData.length === 0
+            ? <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center text-[12px] text-gray-400">No lost orders match current filters</div>
+            : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+                  <div className="font-semibold text-[12px] text-gray-700 mb-1">By Lead Count</div>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={lostData} dataKey="count" nameKey="reason" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
+                        {lostData.map((_, i) => <Cell key={i} fill={LOST_COLORS[i % LOST_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<LostPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+                  <div className="font-semibold text-[12px] text-gray-700 mb-3">Reason Breakdown</div>
+                  <div className="space-y-2">
+                    {lostData.map((d, i) => (
+                      <div key={d.reason}>
+                        <div className="flex items-center justify-between text-[11px] mb-0.5">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: LOST_COLORS[i % LOST_COLORS.length] }} />
+                            <span className="text-gray-700 font-medium">{d.reason}</span>
+                          </span>
+                          <span className="text-gray-500 font-semibold">{d.count} · {d.pct}%</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${d.pct}%`, background: LOST_COLORS[i % LOST_COLORS.length] }} />
+                        </div>
+                        <div className="text-[10px] text-gray-400 text-right mt-0.5">{fmtINR(d.value)}</div>
                       </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${d.pct}%`, background: LOST_COLORS[i % LOST_COLORS.length] }} />
-                      </div>
-                      <div className="text-[10px] text-gray-400 text-right mt-0.5">{fmtINR(d.value)}</div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
       </section>
 
       <section className="pb-6">
@@ -525,13 +490,13 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">Today&apos;s Expected Closures</div>
-            <div className="font-mono text-[20px] font-bold text-black">{fmtINR(todayPipeline.reduce((s,l)=>s+(l.cartValue||0),0))}</div>
-            <div className="text-[11px] text-gray-400">{todayPipeline.length} lead{todayPipeline.length !== 1 ? 's' : ''} · {fmtDate(today)}</div>
+            <div className="font-mono text-[20px] font-bold text-black">{fmtINR(todayPipelineValue)}</div>
+            <div className="text-[11px] text-gray-400">{todayPipelineCount} lead{todayPipelineCount !== 1 ? 's' : ''} · {fmtDate(today)}</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">This Week&apos;s Expected Closures</div>
-            <div className="font-mono text-[20px] font-bold text-[#EAB308]">{fmtINR(weekPipeline.reduce((s,l)=>s+(l.cartValue||0),0))}</div>
-            <div className="text-[11px] text-gray-400">{weekPipeline.length} leads · {fmtDate(week.from)} – {fmtDate(week.to)}</div>
+            <div className="font-mono text-[20px] font-bold text-[#EAB308]">{fmtINR(weekPipelineValue)}</div>
+            <div className="text-[11px] text-gray-400">{weekPipelineCount} leads · {fmtDate(weekFrom)} – {fmtDate(weekTo)}</div>
           </div>
         </div>
 
@@ -570,15 +535,18 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">BM</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Closure Date</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Last Edited</th>
                   <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {closureLeads.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px] text-gray-400">No overdue or due-today leads</td></tr>}
+                {loading && closureLeads.length === 0 && (
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-[12px] text-gray-400">Loading…</td></tr>
+                )}
+                {!loading && closureLeads.length === 0 && (
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-[12px] text-gray-400">No overdue or due-today leads</td></tr>
+                )}
                 {closurePagedRows.map((l, i) => {
                   const isToday = l.closureDate === today;
-                  const edit = lastEditMap[l.id];
                   return (
                     <tr key={l.id + l.clientPhone} className={`border-b border-gray-50 hover:bg-gray-50 ${isToday ? 'bg-amber-50' : 'bg-red-50/40'}`}>
                       <td className="px-3 py-2 text-gray-400 text-[10px]">{closurePage$ * CLOSURE_PAGE_SIZE + i + 1}</td>
@@ -592,11 +560,6 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-[11px] text-gray-500">{l.status || '—'}</td>
-                      <td className="px-3 py-2">
-                        {edit
-                          ? <span className="text-[11px] text-gray-500"><span className="font-medium text-gray-700">{edit.user}</span> · {fmtRelative(edit.at)}</span>
-                          : <span className="text-[11px] text-orange-400 font-medium">Never Edited</span>}
-                      </td>
                       <td className="px-3 py-2 text-right font-mono font-semibold text-[#EAB308] text-[11px]">{fmtINR(l.cartValue)}</td>
                     </tr>
                   );
@@ -605,7 +568,7 @@ export default function Dashboard({ leads, logs, branches }: DashboardProps) {
               {closureLeads.length > 0 && (
                 <tfoot>
                   <tr className="bg-[#F9F9F9] border-t border-gray-200">
-                    <td colSpan={8} className="px-3 py-2 text-[10px] font-semibold text-gray-500">Total · {closureLeads.length} leads</td>
+                    <td colSpan={7} className="px-3 py-2 text-[10px] font-semibold text-gray-500">Total · {closureLeads.length} leads</td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-[#EAB308] text-[12px]">{fmtINR(closureTotalAmount)}</td>
                   </tr>
                 </tfoot>
