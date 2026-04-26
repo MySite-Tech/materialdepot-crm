@@ -430,22 +430,22 @@ export default function EscalationClient() {
   return (
     <div>
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="flex gap-3 mb-6">
+      <form onSubmit={handleSearch} className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <input
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Filter by enquiry no., stage, owner…"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full rounded border border-gray-200 px-3 py-1.5 pr-8 text-[12px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#EAB308]"
           />
           {inputValue && (
             <button
               type="button"
               onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -454,7 +454,7 @@ export default function EscalationClient() {
         <button
           type="submit"
           disabled={loading}
-          className="px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 rounded bg-[#EAB308] text-black text-[12px] font-semibold hover:bg-[#d4a100] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? "Loading…" : "Search"}
         </button>
@@ -466,10 +466,10 @@ export default function EscalationClient() {
           }}
           disabled={loading}
           title="Refresh from Kylas"
-          className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          className="px-3 py-1.5 rounded border border-gray-200 text-gray-600 text-[12px] font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
         >
           <svg
-            className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+            className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -481,10 +481,10 @@ export default function EscalationClient() {
       </form>
 
       {/* Date filter */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4 flex flex-wrap items-end gap-4">
+      <div className="rounded-lg border border-gray-200 bg-white px-6 py-4 mb-4 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
-            Quick range
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+            Quick Range
           </label>
           <select
             value={detectPreset(from, to)}
@@ -495,7 +495,7 @@ export default function EscalationClient() {
               setFrom(r.from);
               setTo(r.to);
             }}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#EAB308]"
           >
             <option value="">Custom</option>
             {PRESETS.map((p) => (
@@ -506,7 +506,7 @@ export default function EscalationClient() {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
             From
           </label>
           <input
@@ -514,11 +514,11 @@ export default function EscalationClient() {
             value={from}
             max={to}
             onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#EAB308]"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
             To
           </label>
           <input
@@ -527,7 +527,7 @@ export default function EscalationClient() {
             min={from}
             max={today}
             onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#EAB308]"
           />
         </div>
       </div>
@@ -541,7 +541,7 @@ export default function EscalationClient() {
 
       {/* Result count */}
       {!loading && !error && (
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-[11px] text-gray-400 mb-3">
           {totalElements} escalation deal{totalElements !== 1 ? "s" : ""} created{" "}
           {from === to ? `on ${from}` : `${from} → ${to}`}
           {query ? ` matching "${query}"` : ""}
@@ -559,10 +559,10 @@ export default function EscalationClient() {
 
       {/* Table */}
       {!loading && deals.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <tr className="bg-[#FAFAFA] text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                 <th className="px-4 py-3">Deal Name</th>
                 <th className="px-4 py-3">Stage</th>
                 <th className="px-4 py-3">Owner</th>
@@ -570,7 +570,7 @@ export default function EscalationClient() {
                 <th className="px-4 py-3">Created At</th>
                 <th className="px-4 py-3">
                   Last Updated
-                  <span className="ml-1 text-indigo-400">↓</span>
+                  <span className="ml-1 text-[#EAB308]">↓</span>
                 </th>
                 <th className="px-4 py-3">Latest Incoming</th>
                 <th className="px-4 py-3">Latest Outgoing</th>
@@ -589,8 +589,8 @@ export default function EscalationClient() {
                   <tr
                     key={deal.id}
                     onClick={() => setSelectedDeal(deal)}
-                    className={`cursor-pointer transition-colors hover:bg-indigo-50 ${
-                      selectedDeal?.id === deal.id ? "bg-indigo-50" : ""
+                    className={`cursor-pointer transition-colors hover:bg-[#FFFAF7] ${
+                      selectedDeal?.id === deal.id ? "bg-[#FFFAF7]" : ""
                     }`}
                   >
                     <td className="px-4 py-3">
@@ -606,7 +606,7 @@ export default function EscalationClient() {
                     </td>
                     <td className="px-4 py-3">
                       {deal.pipelineStage?.name ? (
-                        <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FFF7F0] border border-gray-200 text-gray-600">
                           {deal.pipelineStage.name}
                         </span>
                       ) : "—"}
@@ -662,7 +662,7 @@ export default function EscalationClient() {
                                 return next;
                               });
                             }}
-                            className={`text-xs text-gray-700 cursor-pointer hover:text-indigo-600 ${
+                            className={`text-xs text-gray-700 cursor-pointer hover:text-[#EAB308] ${
                               expandedNotes.has(deal.id) ? "whitespace-pre-wrap" : "line-clamp-2"
                             }`}
                             title={expandedNotes.has(deal.id) ? "Click to collapse" : "Click to expand"}

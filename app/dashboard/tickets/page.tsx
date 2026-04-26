@@ -26,9 +26,9 @@ export default async function TicketsPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Tickets</h1>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="mb-4">
+        <h1 className="text-[15px] font-semibold text-gray-900">Tickets</h1>
+        <p className="text-[11px] text-gray-400 mt-0.5">
           Support tickets from your Kylas CRM
         </p>
       </div>

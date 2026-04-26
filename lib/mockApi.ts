@@ -6,39 +6,40 @@ const BEARER_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NTc0NzQ4LCJpYXQiOjE3NzAzOTA3NDgsImp0aSI6IjNiMGFkMTUyMjdlNDQ2MGNhYzVmY2M0Njk5ZGNjZWY4IiwidXNlcl9pZCI6IjFlMDQxMWQ5LWE1YjEtNDViZC1iZDJkLTAyYzViYmNjMDk2MiJ9.YLUwIE9TxuHUizIZRuX3-4g2bGHFOF6KruJJaBH_wq0";
 const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
-export interface Branch {
-  id: number;
-  name: string;
-  displayName: string;
+// Shared fetch helpers
+async function mdFetch(path: string, init?: RequestInit) {
+  const res = await fetch(`${API_BASE_URL}${path}`, init);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
 }
+
+async function kylasFetch(path: string, init?: RequestInit) {
+  const res = await fetch(`${KYLAS_API_URL}${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", "api-key": KYLAS_API_KEY, ...init?.headers },
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Branches
+// ---------------------------------------------------------------------------
+
+export interface Branch { id: number; name: string; displayName: string }
 
 export async function fetchBranches(): Promise<Branch[]> {
-  console.log(`[API] Fetching branches`);
-
-  const response = await fetch(`${KYLAS_API_URL}/fields/2215123`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": KYLAS_API_KEY,
-    },
-  });
-
-  if (!response.ok) {
-    console.error(`[API] Fetch branches error: ${response.status} ${response.statusText}`);
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const values = data.field?.picklist?.values || [];
-
-  return values
+  const data = await kylasFetch("/fields/2215123");
+  return (data.field?.picklist?.values || [])
     .filter((v: { deleted: boolean; disabled: boolean }) => !v.deleted && !v.disabled)
     .map((v: { id: number; name: string; displayName: string }) => ({
-      id: v.id,
-      name: v.name,
-      displayName: v.displayName,
+      id: v.id, name: v.name, displayName: v.displayName,
     }));
 }
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
 
 export interface LookupResponse {
   success: boolean;
@@ -54,37 +55,15 @@ export interface UpdateResponse {
 }
 
 export async function lookupLeadByPhone(phoneNumber: string, branch: string): Promise<LookupResponse> {
-  const branchName = branch.toUpperCase();
-
-  console.log(`[API] Looking up lead for phone: ${phoneNumber}, branch: ${branchName}`);
-
-  const response = await fetch(`${API_BASE_URL}/store-visit-lead/`, {
+  const data = await mdFetch("/store-visit-lead/", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contact: phoneNumber,
-      branch: branchName,
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contact: phoneNumber, branch: branch.toUpperCase() }),
   });
-
-  if (!response.ok) {
-    console.error(`[API] Error: ${response.status} ${response.statusText}`);
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log(`[API] Response:`, data);
-
   return {
     success: true,
     leadId: data.id,
-    leadData: {
-      id: data.id,
-      customFieldValues: data.customFieldValues || {},
-      conversionDetails: data.conversionDetails,
-    },
+    leadData: { id: data.id, customFieldValues: data.customFieldValues || {}, conversionDetails: data.conversionDetails },
     fullLeadBody: data,
   };
 }
@@ -96,151 +75,53 @@ export async function updateLead(
   contact: string,
   name?: string,
 ): Promise<UpdateResponse> {
-  console.log(`[API] Updating lead ${leadId} with customFieldValues:`, customFieldValues);
-
-  // Always set firstName to the name from form (or contact if no name provided)
-  const newFirstName = name?.trim() || contact;
-  // Set lastName to contact (phone number)
-  const newLastName = contact;
-
-  console.log(
-    `[API] Name update debug - contact: "${contact}", name: "${name}", newFirstName: "${newFirstName}", newLastName: "${newLastName}"`,
-  );
-
-  const updatedBody = {
-    ...fullLeadBody,
-    firstName: newFirstName,
-    lastName: newLastName,
-    customFieldValues: {
-      ...((fullLeadBody.customFieldValues as Record<string, unknown>) || {}),
-      ...customFieldValues,
-    },
-  };
-
-  const response = await fetch(`${KYLAS_API_URL}/leads/${leadId}`, {
+  const data = await kylasFetch(`/leads/${leadId}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": KYLAS_API_KEY,
-    },
-    body: JSON.stringify(updatedBody),
+    body: JSON.stringify({
+      ...fullLeadBody,
+      firstName: name?.trim() || contact,
+      lastName: contact,
+      customFieldValues: { ...((fullLeadBody.customFieldValues as Record<string, unknown>) || {}), ...customFieldValues },
+    }),
   });
-
-  if (!response.ok) {
-    console.error(`[API] Update error: ${response.status} ${response.statusText}`);
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log(`[API] Update response:`, data);
-
-  return {
-    success: true,
-    leadId: data.id,
-    conversionDetails: data.conversionDetails,
-  };
+  return { success: true, leadId: data.id, conversionDetails: data.conversionDetails };
 }
 
-export async function fetchLeadById(
-  leadId: number,
-): Promise<{
+export async function fetchLeadById(leadId: number): Promise<{
   fullLeadBody: Record<string, unknown>;
   conversionDetails?: Array<{ entityType: string; entityId: number }>;
 }> {
-  console.log(`[API] Fetching lead ${leadId}`);
-
-  const response = await fetch(`${KYLAS_API_URL}/leads/${leadId}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": KYLAS_API_KEY,
-    },
-  });
-
-  if (!response.ok) {
-    console.error(`[API] Fetch error: ${response.status} ${response.statusText}`);
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log(`[API] Fetch response:`, data);
-
-  return {
-    fullLeadBody: data,
-    conversionDetails: data.conversionDetails,
-  };
+  const data = await kylasFetch(`/leads/${leadId}`);
+  return { fullLeadBody: data, conversionDetails: data.conversionDetails };
 }
 
 export async function searchContactByPhone(phoneNumber: string): Promise<number | null> {
-  console.log(`[API] Searching contact by phone: ${phoneNumber}`);
-
-  const response = await fetch(`${KYLAS_API_URL}/search/global-search`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": KYLAS_API_KEY,
-    },
-    body: JSON.stringify({
-      query: phoneNumber,
-      entities: ["CONTACT"],
-    }),
-  });
-
-  if (!response.ok) {
-    console.error(`[API] Search error: ${response.status} ${response.statusText}`);
+  try {
+    const data = await kylasFetch("/search/global-search", {
+      method: "POST",
+      body: JSON.stringify({ query: phoneNumber, entities: ["CONTACT"] }),
+    });
+    const contact = data.content?.find((item: { entityType: string }) => item.entityType === "CONTACT");
+    return contact?.values?.[0]?.id ?? null;
+  } catch {
     return null;
   }
-
-  const data = await response.json();
-  console.log(`[API] Search response:`, data);
-
-  // Find first CONTACT entity and get the first value's id
-  const contactEntity = data.content?.find((item: { entityType: string }) => item.entityType === "CONTACT");
-  if (contactEntity?.values?.length > 0) {
-    const contactId = contactEntity.values[0].id;
-    console.log(`[API] Found contact via search: ${contactId}`);
-    return contactId;
-  }
-
-  console.log(`[API] No contact found via search`);
-  return null;
 }
 
 export function getKylasRedirectUrl(leadId: number, contactId?: number): string {
-  if (contactId) {
-    return `https://app.kylas.io/sales/contacts/details/${contactId}`;
-  }
-  return `https://app.kylas.io/sales/leads/details/${leadId}`;
+  return contactId
+    ? `https://app.kylas.io/sales/contacts/details/${contactId}`
+    : `https://app.kylas.io/sales/leads/details/${leadId}`;
 }
 
-export interface BMOption {
-  user_id: string;
-  bm_contact: string;
-  f_name: string;
-  l_name: string;
-  crm_id: string;
-}
+// ---------------------------------------------------------------------------
+// Store visit — BMs & assignment
+// ---------------------------------------------------------------------------
+
+export interface BMOption { user_id: string; bm_contact: string; f_name: string; l_name: string; crm_id: string }
 
 export async function fetchBMsByBranch(branch: string): Promise<BMOption[]> {
-  const branchName = branch.toUpperCase();
-  console.log(`[API] Fetching BMs for branch: ${branchName}`);
-
-  const response = await fetch(
-    `${API_BASE_URL}/store-visit/bms-by-branch/?branch=${encodeURIComponent(branchName)}`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    console.error(`[API] Fetch BMs error: ${response.status} ${response.statusText}`);
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  return response.json();
+  return mdFetch(`/store-visit/bms-by-branch/?branch=${encodeURIComponent(branch.toUpperCase())}`);
 }
 
 export interface AssignBMResponse {
@@ -255,24 +136,86 @@ export async function assignBMToClient(
   bmContact: string,
   kylasLeadId?: number,
 ): Promise<AssignBMResponse> {
-  console.log(`[API] Assigning BM ${bmContact} to client ${clientContact}`);
-
-  const response = await fetch(`${API_BASE_URL}/store-visit/assign-bm/`, {
+  return mdFetch("/store-visit/assign-bm/", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      client_contact: clientContact,
-      bm_contact: bmContact,
-      kylas_lead_id: kylasLeadId,
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_contact: clientContact, bm_contact: bmContact, kylas_lead_id: kylasLeadId }),
   });
+}
 
-  if (!response.ok) {
-    console.error(`[API] Assign BM error: ${response.status} ${response.statusText}`);
-    throw new Error(`API error: ${response.status}`);
+// ---------------------------------------------------------------------------
+// Client properties from backend (UserProperty table)
+// ---------------------------------------------------------------------------
+
+export interface ClientProperties {
+  client_type?: string;
+  property_type?: string;
+  architect_involved?: string;
+  followup_date?: string;
+  project_phase?: string;
+}
+
+export async function fetchClientProperties(contacts: string[]): Promise<Record<string, ClientProperties>> {
+  if (!contacts.length) return {};
+  try {
+    return await mdFetch(`/store-visit/client-properties/?contacts=${contacts.join(",")}`);
+  } catch {
+    return {};
   }
+}
 
-  return response.json();
+// ---------------------------------------------------------------------------
+// BM Client-Info Tasks
+// ---------------------------------------------------------------------------
+
+export interface ClientInfoTask {
+  id: number;
+  client: { id: number; name: string; contact: string } | null;
+  followup_date: string | null;
+  status: string;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface ClientInfoProperty {
+  id: number;
+  name: string;
+  options: string[] | null;
+  required: boolean;
+  value: string | null;
+}
+
+export interface ClientInfoTaskDetail extends ClientInfoTask {
+  properties: ClientInfoProperty[];
+}
+
+export interface SaveAnswersResponse {
+  ticket_id: number;
+  saved_property_ids: number[];
+}
+
+const bmHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+export async function fetchClientInfoTasks(token: string): Promise<ClientInfoTask[]> {
+  return mdFetch("/order/bm/client-info-tasks/", { headers: bmHeaders(token) });
+}
+
+export async function fetchPendingFollowupTasks(token: string): Promise<ClientInfoTask[]> {
+  return mdFetch("/order/bm/client-info-tasks/pending-followup/", { headers: bmHeaders(token) });
+}
+
+export async function fetchClientInfoTaskDetail(token: string, ticketId: number): Promise<ClientInfoTaskDetail> {
+  return mdFetch(`/order/bm/client-info-tasks/${ticketId}/`, { headers: bmHeaders(token) });
+}
+
+export async function saveClientInfoAnswers(
+  token: string,
+  ticketId: number,
+  answers: { property_id: number; value: string }[],
+): Promise<SaveAnswersResponse> {
+  return mdFetch(`/order/bm/client-info-tasks/${ticketId}/answers/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...bmHeaders(token) },
+    body: JSON.stringify({ answers }),
+  });
 }

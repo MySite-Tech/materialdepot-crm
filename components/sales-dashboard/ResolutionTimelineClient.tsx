@@ -324,9 +324,9 @@ export default function ResolutionTimelineClient() {
   return (
     <div>
       {/* Filters */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-6 flex flex-wrap items-end gap-4">
+      <div className="rounded-lg border border-gray-200 bg-white px-6 py-4 mb-4 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Quick range</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Quick range</label>
           <select
             value={detectPreset(from, to)}
             onChange={(e) => {
@@ -336,21 +336,21 @@ export default function ResolutionTimelineClient() {
               setFrom(r.from);
               setTo(r.to);
             }}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#EAB308]"
           >
             <option value="">Custom</option>
             {PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">From</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">From</label>
           <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#EAB308]" />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">To</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">To</label>
           <input type="date" value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#EAB308]" />
         </div>
       </div>
 
@@ -362,14 +362,14 @@ export default function ResolutionTimelineClient() {
       {!loading && (
         <div className="space-y-4 mb-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase text-gray-400">Total escalations</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{deals.length}</p>
+              <p className="font-mono text-[22px] font-bold text-black mt-1">{deals.length}</p>
               <p className="text-xs text-gray-400">with resolution + attribution</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase text-gray-400">Resolved (with timestamp)</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
+              <p className="font-mono text-[22px] font-bold text-black mt-1">
                 {resolved.length}
                 {loadingFeeds && progress && (
                   <span className="text-sm font-normal text-gray-400 ml-2">
@@ -378,19 +378,19 @@ export default function ResolutionTimelineClient() {
                 )}
               </p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase text-gray-400">Working hours resolved</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{workingResolved.length}</p>
+              <p className="font-mono text-[22px] font-bold text-black mt-1">{workingResolved.length}</p>
               <p className="text-xs text-gray-400">created 10:30am–7:30pm</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase text-gray-400">Avg resolve time (working)</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{avgDeltaWorking ? formatHours(avgDeltaWorking) : "—"}</p>
+              <p className="font-mono text-[22px] font-bold text-black mt-1">{avgDeltaWorking ? formatHours(avgDeltaWorking) : "—"}</p>
             </div>
           </div>
 
           {workingResolved.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase text-gray-400 mb-3">
                 Resolution time — working hours escalations only
               </p>
@@ -449,7 +449,7 @@ export default function ResolutionTimelineClient() {
             {progress && (
               <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden max-w-xs">
                 <div
-                  className="h-full bg-indigo-500 rounded-full transition-all"
+                  className="h-full bg-[#EAB308] rounded-full transition-all"
                   style={{ width: `${(progress.done / progress.total) * 100}%` }}
                 />
               </div>
@@ -460,10 +460,10 @@ export default function ResolutionTimelineClient() {
 
       {/* Table */}
       {!loading && !loadingFeeds && resolved.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <tr className="bg-[#FAFAFA] text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                 <th className="px-4 py-3">Deal</th>
                 <th className="px-4 py-3">Owner</th>
                 <th className="px-4 py-3">Resolution</th>
@@ -475,7 +475,7 @@ export default function ResolutionTimelineClient() {
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {resolved.map((d) => (
-                <tr key={d.id} className="hover:bg-gray-50">
+                <tr key={d.id} className="hover:bg-[#FFFAF7]">
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900 text-xs">{d.name}</div>
                     <div className="text-xs text-gray-400">#{d.id} · {d.stage}</div>
@@ -515,9 +515,9 @@ export default function ResolutionTimelineClient() {
 }
 
 const BAR_COLORS: Record<string, { bg: string; bar: string }> = {
-  indigo: { bg: "bg-indigo-100", bar: "bg-indigo-500" },
-  amber: { bg: "bg-amber-100", bar: "bg-amber-500" },
-  green: { bg: "bg-green-100", bar: "bg-green-500" },
+  indigo: { bg: "bg-gray-100", bar: "bg-[#EAB308]" },
+  amber: { bg: "bg-gray-100", bar: "bg-[#EAB308]" },
+  green: { bg: "bg-gray-100", bar: "bg-[#EAB308]" },
 };
 
 function BreakdownCard({
@@ -531,7 +531,7 @@ function BreakdownCard({
 }) {
   const c = BAR_COLORS[color] ?? BAR_COLORS.indigo;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
       <p className="text-xs font-semibold uppercase text-gray-400 mb-3">{title}</p>
       {items.length === 0 ? (
         <p className="text-xs text-gray-400">No data</p>

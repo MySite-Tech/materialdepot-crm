@@ -387,19 +387,19 @@ export default function EscalationStatsClient() {
   return (
     <div>
       {/* Filter bar */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-6 flex flex-wrap items-end gap-4">
+      <div className="rounded-lg border border-gray-200 bg-white px-6 py-4 mb-4 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">From</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">From</label>
           <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400" />
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-[#EAB308]" />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">To</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">To</label>
           <input type="date" value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400" />
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-[#EAB308]" />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Time Preset</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Time Preset</label>
           <select
             value={
               fromTime === "10:30" && toTime === "19:30" ? "working"
@@ -412,7 +412,7 @@ export default function EscalationStatsClient() {
               else if (v === "non_working") { setFromTime("19:31"); setToTime("10:29"); }
               else { setFromTime("00:00"); setToTime("23:59"); }
             }}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-[#EAB308]"
           >
             <option value="all">All hours</option>
             <option value="working">Working hours (10:30 am – 7:30 pm)</option>
@@ -420,7 +420,7 @@ export default function EscalationStatsClient() {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Quick Range</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Quick Range</label>
           <select
             value={detectPreset(from, to)}
             onChange={(e) => {
@@ -430,7 +430,7 @@ export default function EscalationStatsClient() {
               setFrom(r.from);
               setTo(r.to);
             }}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
+            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-[#EAB308]"
           >
             <option value="">Custom</option>
             {PRESETS.map((p) => (
@@ -442,7 +442,7 @@ export default function EscalationStatsClient() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-400 to-amber-400 text-white text-sm font-semibold shadow-sm hover:from-rose-500 hover:to-amber-500 disabled:opacity-50 transition-colors flex items-center gap-2"
+          className="px-3 py-1.5 rounded bg-[#EAB308] text-black text-[12px] font-semibold hover:bg-[#d4a100] disabled:opacity-50 transition-colors flex items-center gap-2"
         >
           <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -460,7 +460,7 @@ export default function EscalationStatsClient() {
       {loading && allDeals.length === 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-rose-100/50 animate-pulse" />
+            <div key={i} className="h-24 rounded-lg bg-gray-100 animate-pulse" />
           ))}
         </div>
       ) : (
@@ -514,25 +514,25 @@ export default function EscalationStatsClient() {
       {!loading || allDeals.length > 0 ? (
         <div className="mt-8">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-rose-700">
-              Needs attention
-              <span className="ml-2 text-rose-400 font-normal normal-case">
+            <h2 className="text-[10px] font-semibold uppercase tracking-wider text-gray-900">
+              Needs Attention
+              <span className="ml-2 text-gray-400 font-normal normal-case">
                 ({stats.needsAttention.length})
               </span>
             </h2>
-            <p className="text-xs text-rose-700/70">
+            <p className="text-[10px] text-gray-400">
               &gt; 2h old · not awaiting customer · no resolution
             </p>
           </div>
           {stats.needsAttention.length === 0 ? (
-            <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-amber-50 p-6 text-sm text-rose-700/70">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 text-[12px] text-gray-400">
               Nothing needs attention in this window.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-rose-200">
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gradient-to-r from-rose-50 to-amber-50 text-left text-xs font-semibold text-rose-700 uppercase tracking-wider">
+                  <tr className="bg-[#FAFAFA] text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                     <th className="px-4 py-3">Deal</th>
                     <th className="px-4 py-3">Stage</th>
                     <th className="px-4 py-3">Owner</th>
@@ -541,11 +541,11 @@ export default function EscalationStatsClient() {
                     <th className="px-4 py-3 text-right">Age</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-rose-100 bg-white">
+                <tbody className="divide-y divide-gray-100 bg-white">
                   {stats.needsAttention.map((d) => {
                     const isRepeat = repeatEnqs.has(baseEnqId(d.name));
                     return (
-                    <tr key={d.id} className={`hover:bg-rose-50/50 ${isRepeat ? "bg-amber-50/60" : ""}`}>
+                    <tr key={d.id} className={`hover:bg-[#FFFAF7] ${isRepeat ? "bg-amber-50/60" : ""}`}>
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900">
                           {isRepeat && (
@@ -562,7 +562,7 @@ export default function EscalationStatsClient() {
                       </td>
                       <td className="px-4 py-3">
                         {d.pipelineStage?.name ? (
-                          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#FFF7F0] border border-gray-200 text-gray-600">
                             {d.pipelineStage.name}
                           </span>
                         ) : "—"}
@@ -597,7 +597,7 @@ export default function EscalationStatsClient() {
                             })
                           : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right text-xs font-medium text-rose-700">
+                      <td className="px-4 py-3 text-right text-xs font-medium text-[#EAB308]">
                         {d.createdAt ? formatAge(Date.now() - new Date(d.createdAt).getTime()) : "—"}
                       </td>
                     </tr>
@@ -626,12 +626,10 @@ function formatAge(ms: number) {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-amber-50 px-4 py-3 shadow-sm">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-600">{label}</p>
-      <p className="mt-1 text-2xl font-bold bg-gradient-to-r from-rose-700 to-amber-700 bg-clip-text text-transparent">
-        {value}
-      </p>
-      <p className="mt-0.5 text-[10px] text-rose-700/70">{sub}</p>
+    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="mt-1 font-mono text-[22px] font-bold text-black">{value}</p>
+      <p className="mt-0.5 text-[10px] text-gray-400">{sub}</p>
     </div>
   );
 }

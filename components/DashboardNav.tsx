@@ -15,22 +15,20 @@ export default function DashboardNav() {
   const pathname = usePathname();
 
   return (
-    <div className="mb-8 border-b border-gray-200">
-      <nav className="-mb-px flex space-x-8">
-        {dashboardTabs.map((tab) => (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              pathname === tab.href
-                ? "border-yellow-500 text-yellow-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+    <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
+      {dashboardTabs.map((tab) => (
+        <Link
+          key={tab.href}
+          href={tab.href}
+          className={`px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer transition-colors ${
+            pathname === tab.href
+              ? "border-[#EAB308] text-white"
+              : "border-transparent text-gray-400 hover:text-gray-200"
+          }`}
+        >
+          {tab.label}
+        </Link>
+      ))}
     </div>
   );
 }

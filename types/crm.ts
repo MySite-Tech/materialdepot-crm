@@ -35,6 +35,7 @@ export interface Lead {
   clientType?: string;
   propertyType?: string;
   architectInvolved?: boolean;
+  projectPhase?: string;
 }
 
 export interface AppUser {
@@ -81,4 +82,5 @@ export interface SupabaseRow {
   client_type: string;
   property_type: string;
   architect_involved: boolean;
+  project_phase?: string;
 }

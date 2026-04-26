@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 // Main App Header Component
 function AppHeader() {
   return (
-    <header className="bg-[#1A1A1A] px-6 py-4 flex justify-between items-center border-b border-gray-700">
+    <header className="sticky top-0 z-[900] h-12 bg-[#1A1A1A] flex items-center px-6 justify-between border-b border-gray-700">
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold text-white">material</span>
         <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
@@ -71,11 +71,11 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#FAFAFA]">
       <AppHeader />
       <AppTabNav />
-      <main className="p-8 overflow-auto">
-        <DashboardNav />
+      <DashboardNav />
+      <main className="px-3 py-3 sm:px-6 sm:py-4 overflow-auto">
         {children}
       </main>
     </div>

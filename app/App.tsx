@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { fetchLeads, fetchLead, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
+import { fetchClientProperties } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -57,6 +58,7 @@ const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre', 'Yela
 
 const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'Carpenter', 'Builder'];
 const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
+const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ const genId = (): string => {
 
 const mergeLead = (existing: Lead, incoming: Lead): Lead => {
   const merged: Lead = { ...existing };
-  const fields: (keyof Lead)[] = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType'];
+  const fields: (keyof Lead)[] = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType', 'projectPhase'];
   for (const f of fields) {
     const val = incoming[f];
     if (val !== undefined && val !== null && val !== '') (merged as any)[f] = val;
@@ -429,11 +431,12 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
     clientType: lead.clientType || '',
     propertyType: lead.propertyType || '',
     architectInvolved: lead.architectInvolved || false,
+    projectPhase: lead.projectPhase || '',
   } : {
     id: '', createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
     cartValue: 0, cartItems: '', followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
-    clientType: '', propertyType: '', architectInvolved: false,
+    clientType: '', propertyType: '', architectInvolved: false, projectPhase: '',
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [remarkAuthor, setRemarkAuthor] = useState(currentUserName);
@@ -591,6 +594,12 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                   <input type="checkbox" checked={!!form.architectInvolved} onChange={(e) => set('architectInvolved', e.target.checked)} className="accent-[#EAB308]" />
                   <span className="text-[13px]">{form.architectInvolved ? 'Yes' : 'No'}</span>
                 </label>
+              </Field>
+              <Field label="PROJECT PHASE">
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.projectPhase || ''} onChange={(e) => set('projectPhase', e.target.value)}>
+                  <option value="">Select...</option>
+                  {PROJECT_PHASES.map((ph) => <option key={ph} value={ph}>{ph}</option>)}
+                </select>
               </Field>
               <Field label="STATUS">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
@@ -1439,9 +1448,25 @@ export default function App() {
       fetchBranches().catch(() => []),
       fetchUsers().catch(() => []),
     ]).then(([dbLeads, dbBranches, dbUsers]) => {
-      setLeads(dbLeads);
       if (dbBranches.length > 0) setBranches(dbBranches.map((b) => b.name));
       setCrmUsers(dbUsers);
+      // Overlay fresh UserProperty values from backend over Supabase data
+      const contacts = dbLeads.map((l) => l.clientPhone).filter((phone): phone is string => Boolean(phone));
+      fetchClientProperties(contacts).then((props) => {
+        setLeads(dbLeads.map((l) => {
+          const p = l.clientPhone ? props[l.clientPhone] || {} : {};
+          return {
+            ...l,
+            clientType: p.client_type || l.clientType,
+            propertyType: p.property_type || l.propertyType,
+            architectInvolved: p.architect_involved
+              ? ['yes', 'true'].includes(p.architect_involved.toLowerCase())
+              : l.architectInvolved,
+            followUpDate: p.followup_date || l.followUpDate,
+            projectPhase: p.project_phase || l.projectPhase,
+          };
+        }));
+      }).catch(() => setLeads(dbLeads));
       setDbReady(true);
     }).catch(() => setDbReady(true));
   }, [currentUser]);
@@ -1496,6 +1521,7 @@ export default function App() {
     { key: 'clientType', label: 'Client Type' },
     { key: 'propertyType', label: 'Property Type' },
     { key: 'architectInvolved', label: 'Architect/Designer' },
+    { key: 'projectPhase', label: 'Project Phase' },
     { key: 'status', label: 'Status' },
     { key: 'cartItems', label: 'Cart Items' },
     { key: 'followUpDate', label: 'Follow-up' },
@@ -2190,6 +2216,7 @@ export default function App() {
                   {isColVisible('clientType') && <Th label="Client Type" sortKey="clientType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('propertyType') && <Th label="Property Type" sortKey="propertyType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('architectInvolved') && <Th label="Architect/Designer" sortKey="architectInvolved" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('projectPhase') && <Th label="Project Phase" sortKey="projectPhase" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('status') && <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('cartItems') && <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('followUpDate') && <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
@@ -2225,6 +2252,7 @@ export default function App() {
                     {isColVisible('architectInvolved') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">
                       {l.architectInvolved == null ? '—' : l.architectInvolved ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}
                     </td>}
+                    {isColVisible('projectPhase') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.projectPhase || '—'}</td>}
                     {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>}

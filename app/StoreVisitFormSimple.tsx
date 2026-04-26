@@ -65,21 +65,6 @@ interface FormData {
   propertyName: string;
 }
 
-function HeroBanner() {
-  return (
-    <div className="relative w-full h-48 md:h-64 bg-black overflow-hidden">
-      <div className="relative z-10 flex flex-col items-center justify-center h-full px-4 text-center">
-        <div className="w-16 h-16 md:w-20 md:h-20 bg-amber-500 rounded-full flex items-center justify-center mb-4 shadow-lg border-4 border-white">
-          <span className="text-white text-3xl md:text-4xl font-bold">M</span>
-        </div>
-        <h1 className="text-white text-xl md:text-2xl font-bold tracking-tight">
-          India&apos;s Biggest Interior Megastore
-        </h1>
-        <p className="text-white/80 text-sm md:text-base mt-1">Material Depot</p>
-      </div>
-    </div>
-  );
-}
 
 function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
@@ -516,15 +501,14 @@ export default function StoreVisitFormSimple() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <HeroBanner />
-      <div className="max-w-md mx-auto px-4 py-8">
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-semibold text-gray-900">Welcome!</h2>
-          <p className="text-gray-600 mt-1">We would love to know more about you!</p>
+    <div className="px-3 py-3 sm:px-6 sm:py-4">
+      <div className="max-w-md mx-auto">
+        <div className="mb-4">
+          <h2 className="text-[15px] font-semibold text-gray-900">Store Visit Form</h2>
+          <p className="text-[11px] text-gray-400 mt-0.5">We would love to know more about you!</p>
         </div>
         {branch && <StepIndicator currentStep={currentStep} totalSteps={totalSteps} />}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
           {!branch && (
             <BranchSelector branches={branches} isLoading={branchesLoading} onSelect={handleBranchSelect} />
           )}
@@ -562,3 +546,4 @@ export default function StoreVisitFormSimple() {
     </div>
   );
 }
+

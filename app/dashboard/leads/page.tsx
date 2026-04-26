@@ -27,15 +27,15 @@ export default async function LeadsPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="mb-4">
+        <h1 className="text-[15px] font-semibold text-gray-900">Leads</h1>
+        <p className="text-[11px] text-gray-400 mt-0.5">
           All leads from your Kylas CRM pipeline
         </p>
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <StatCard title="Total" value={leads.length} color="indigo" />
         <StatCard title="New" value={byStatus("New")} color="blue" />
         <StatCard title="Contacted" value={byStatus("Contacted")} color="indigo" />

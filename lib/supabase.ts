@@ -54,6 +54,7 @@ export function toRow(lead: Lead): SupabaseRow {
     client_type: lead.clientType || '',
     property_type: lead.propertyType || '',
     architect_involved: lead.architectInvolved || false,
+    project_phase: lead.projectPhase || '',
   };
 }
 
@@ -78,6 +79,7 @@ export function toLead(row: SupabaseRow): Lead {
     clientType: row.client_type || '',
     propertyType: row.property_type || '',
     architectInvolved: row.architect_involved || false,
+    projectPhase: row.project_phase || '',
   };
 }
 
@@ -152,7 +154,7 @@ function mergeRow(existing: SupabaseRow, incoming: SupabaseRow): SupabaseRow {
   const merged: SupabaseRow = { ...existing };
   const textFields: (keyof SupabaseRow)[] = ['client_name', 'client_phone', 'created_at', 'assigned_to', 'branch',
     'status', 'lost_reason', 'follow_up_date', 'closure_date',
-    'client_type', 'property_type', 'first_visit_date', 'latest_visit_date'];
+    'client_type', 'property_type', 'project_phase', 'first_visit_date', 'latest_visit_date'];
   for (const f of textFields) {
     const val = incoming[f];
     if (val !== undefined && val !== null && val !== '' &&
