@@ -155,17 +155,19 @@ interface EditableStatusProps {
   onCommit: (status: string, reason?: string) => void;
 }
 
-function EditableStatus({ status, lostReason, onCommit }: EditableStatusProps) {
-  const [editing, setEditing] = useState(false);
-  const [pendingLost, setPendingLost] = useState(false);
+const MARK_LOST_ELIGIBLE = new Set(['Quote Approval Pending', 'Request for Availability Check']);
 
-  if (pendingLost) {
+function EditableStatus({ status, lostReason, onCommit }: EditableStatusProps) {
+  const [pickingReason, setPickingReason] = useState(false);
+  const canMarkLost = MARK_LOST_ELIGIBLE.has(status);
+
+  if (pickingReason) {
     return (
       <select
         autoFocus
         value=""
-        onChange={(e) => { onCommit('Order Lost', e.target.value); setPendingLost(false); setEditing(false); }}
-        onBlur={() => { setPendingLost(false); setEditing(false); }}
+        onChange={(e) => { onCommit('Order Lost', e.target.value); setPickingReason(false); }}
+        onBlur={() => setPickingReason(false)}
         className="py-1 px-2 text-xs border border-red-500 rounded-md outline-none"
       >
         <option value="" disabled>Select reason...</option>
@@ -174,24 +176,8 @@ function EditableStatus({ status, lostReason, onCommit }: EditableStatusProps) {
     );
   }
 
-  if (editing) {
-    return (
-      <select
-        autoFocus
-        value={status}
-        onChange={(e) => {
-          if (e.target.value === 'Order Lost') { setPendingLost(true); }
-          else { onCommit(e.target.value); setEditing(false); }
-        }}
-        onBlur={() => setEditing(false)}
-        className="py-1 px-2 text-xs border border-gray-200 rounded-md outline-none"
-      >
-        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-    );
-  }
   return (
-    <span onDoubleClick={() => setEditing(true)}>
+    <span onDoubleClick={() => { if (canMarkLost) setPickingReason(true); }}>
       <StatusBadge status={status} />
       {status === 'Order Lost' && lostReason && <div className="text-[10px] text-gray-400 mt-0.5">{lostReason}</div>}
     </span>
@@ -611,9 +597,14 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                 </select>
               </Field>
               <Field label="STATUS">
-                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
-                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                {MARK_LOST_ELIGIBLE.has(form.status) ? (
+                  <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
+                    <option value={form.status}>{form.status}</option>
+                    <option value="Order Lost">Order Lost</option>
+                  </select>
+                ) : (
+                  <div className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 w-full">{form.status}</div>
+                )}
               </Field>
               {form.status === 'Order Lost' && (
                 <Field label="LOST REASON">

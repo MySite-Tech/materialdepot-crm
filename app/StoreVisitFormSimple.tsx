@@ -473,15 +473,7 @@ export default function StoreVisitFormSimple() {
     if (!selectedBM || !leadId) return;
     setIsLoading(true);
     try {
-      const result = await mockApi.assignBM(formData.phoneNumber, selectedBM, leadId);
-      if (!result.kylas_lead_owner_updated) {
-        toast({
-          title: 'Kylas update failed',
-          description: result.kylas_message || 'Could not update Kylas lead owner.',
-          variant: 'destructive',
-        });
-        return;
-      }
+      await mockApi.assignBM(formData.phoneNumber, selectedBM, leadId);
       toast({ title: 'Assigned!', description: 'Business Manager assigned. Redirecting...' });
       setTimeout(() => { window.open(`https://app.kylas.io/sales/leads/details/${leadId}`, '_blank'); }, 1500);
     } catch {
