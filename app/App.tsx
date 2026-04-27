@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { fetchLead, fetchLeadRemarks, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, updateLeadProperties, markLeadLost } from '../lib/mockApi';
+import { fetchCRMLeads, fetchCRMLeadsStats, updateLeadProperties, markLeadLost, CRMLeadsStats } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -34,6 +34,15 @@ const STATUS_COLORS: Record<string, string> = {
   'Refunded': '#EF4444',
   'Order Lost': '#9CA3AF',
 };
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const h = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(h);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 const ORDER_LOST_REASONS = [
   'Pricing Issue',
@@ -1441,22 +1450,9 @@ export default function App() {
   const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
   const [dbReady, setDbReady] = useState(false);
   const [leadsLoading, setLeadsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    setLeadsLoading(true);
-    Promise.all([
-      fetchCRMLeads(),
-      fetchBranches().catch(() => []),
-      fetchUsers().catch(() => []),
-    ]).then(([crmLeads, dbBranches, dbUsers]) => {
-      if (dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
-      setCrmUsers(dbUsers);
-      setLeads(crmLeads as Lead[]);
-      setDbReady(true);
-      setLeadsLoading(false);
-    }).catch(() => { setDbReady(true); setLeadsLoading(false); });
-  }, [currentUser]);
+  const [leadsTotal, setLeadsTotal] = useState(0);
+  const [leadsTotalPages, setLeadsTotalPages] = useState(1);
+  const [leadsStats, setLeadsStats] = useState<CRMLeadsStats | null>(null);
 
   useEffect(() => {
     if (mainTab === 'dashboard' && dashLogs.length === 0) {
@@ -1495,7 +1491,103 @@ export default function App() {
   const [deleteLeadState, setDeleteLeadState] = useState<Lead | null>(null);
   const [dateEditPopup, setDateEditPopup] = useState<DateEditState | null>(null);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(25);
+
+  const debouncedSearch = useDebouncedValue(search.trim(), 600);
+  const debouncedCartValueGt = useDebouncedValue(cartValueGt.trim(), 400);
+
+  useEffect(() => {
+    setPage(0);
+  }, [
+    debouncedSearch, branchFilter, personFilter, statusFilter,
+    createdDateFrom, createdDateTo,
+    followUpDateFrom, followUpDateTo,
+    closureDateFrom, closureDateTo,
+    debouncedCartValueGt,
+  ]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const branchCsv = branchFilter.join(',');
+    const bmCsv = personFilter.join(',');
+    const statusCsv = statusFilter.join(',');
+    const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
+    setLeadsLoading(true);
+    let cancelled = false;
+    Promise.all([
+      fetchCRMLeads({
+        page: page + 1,
+        pageSize,
+        branch: branchCsv || undefined,
+        bm: bmCsv || undefined,
+        q: debouncedSearch || undefined,
+        status: statusCsv || undefined,
+        createdFrom: createdDateFrom || undefined,
+        createdTo: createdDateTo || undefined,
+        followupFrom: followUpDateFrom || undefined,
+        followupTo: followUpDateTo || undefined,
+        closureFrom: closureDateFrom || undefined,
+        closureTo: closureDateTo || undefined,
+        cartValueGt: cartGt,
+      }),
+      fetchBranches().catch(() => []),
+      fetchUsers().catch(() => []),
+    ]).then(([crmLeadsPage, dbBranches, dbUsers]) => {
+      if (cancelled) return;
+      if (dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
+      setCrmUsers(dbUsers);
+      setLeads(crmLeadsPage.results as Lead[]);
+      setLeadsTotal(crmLeadsPage.count);
+      setLeadsTotalPages(crmLeadsPage.totalPages);
+      setDbReady(true);
+      setLeadsLoading(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setDbReady(true);
+      setLeadsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [
+    currentUser, page, pageSize, debouncedSearch,
+    branchFilter, personFilter, statusFilter,
+    createdDateFrom, createdDateTo,
+    followUpDateFrom, followUpDateTo,
+    closureDateFrom, closureDateTo,
+    debouncedCartValueGt,
+  ]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const branchCsv = branchFilter.join(',');
+    const bmCsv = personFilter.join(',');
+    const statusCsv = statusFilter.join(',');
+    const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
+    let cancelled = false;
+    fetchCRMLeadsStats({
+      branch: branchCsv || undefined,
+      bm: bmCsv || undefined,
+      q: debouncedSearch || undefined,
+      status: statusCsv || undefined,
+      createdFrom: createdDateFrom || undefined,
+      createdTo: createdDateTo || undefined,
+      followupFrom: followUpDateFrom || undefined,
+      followupTo: followUpDateTo || undefined,
+      closureFrom: closureDateFrom || undefined,
+      closureTo: closureDateTo || undefined,
+      cartValueGt: cartGt,
+    }).then((stats) => {
+      if (!cancelled) setLeadsStats(stats);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [
+    currentUser, debouncedSearch,
+    branchFilter, personFilter, statusFilter,
+    createdDateFrom, createdDateTo,
+    followUpDateFrom, followUpDateTo,
+    closureDateFrom, closureDateTo,
+    debouncedCartValueGt,
+  ]);
+
   const [csvPreview, setCsvPreview] = useState<CsvRow[] | null>(null);
   const [csvErrors, setCsvErrors] = useState<string[] | null>(null);
   const [csvSelected, setCsvSelected] = useState<Set<number>>(new Set());
@@ -1594,24 +1686,28 @@ export default function App() {
     return true;
   });
 
-  const pipelineTotal = filtered.reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineActive = filtered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineWon = filtered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
-  const pipelineLost = filtered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).reduce((s, l) => s + (l.cartValue || 0), 0);
+  const pipelineTotal = leadsStats?.total.value ?? 0;
+  const pipelineActive = leadsStats?.active.value ?? 0;
+  const pipelineWon = leadsStats?.won.value ?? 0;
+  const pipelineLost = leadsStats?.lost.value ?? 0;
   const pctWon = pipelineTotal ? (pipelineWon / pipelineTotal) * 100 : 0;
   const pctActive = pipelineTotal ? (pipelineActive / pipelineTotal) * 100 : 0;
   const pctLost = pipelineTotal ? (pipelineLost / pipelineTotal) * 100 : 0;
 
+  const statsByStatus = new Map<string, { count: number; value: number }>(
+    (leadsStats?.byStatus || []).map((s) => [s.status, { count: s.count, value: s.value }]),
+  );
   const stageSummary = STATUSES.map((status) => {
-    const stageLeads = filtered.filter((l) => l.status === status);
-    return { status, count: stageLeads.length, value: stageLeads.reduce((s, l) => s + (l.cartValue || 0), 0) };
+    const row = statsByStatus.get(status);
+    return { status, count: row?.count || 0, value: row?.value || 0 };
   });
 
   const statusChips = stageSummary.filter((s) => s.value > 0);
 
-  const activeCount = filtered.filter((l) => PIPELINE_BUCKETS.Active.includes(l.status)).length;
-  const wonCount = filtered.filter((l) => PIPELINE_BUCKETS.Won.includes(l.status)).length;
-  const lostCount = filtered.filter((l) => PIPELINE_BUCKETS.Lost.includes(l.status)).length;
+  const totalLeadsCount = leadsStats?.total.count ?? leadsTotal ?? filtered.length;
+  const activeCount = leadsStats?.active.count ?? 0;
+  const wonCount = leadsStats?.won.count ?? 0;
+  const lostCount = leadsStats?.lost.count ?? 0;
 
   const getFirstVisit = (l: Lead): string => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt || ''; };
   const getLatestVisit = (l: Lead): string => { const v = l.visits || []; return v.length > 0 ? [...v].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt || ''; };
@@ -1643,7 +1739,7 @@ export default function App() {
 
   useEffect(() => { setPage(0); }, [search, statusFilter, personFilter, branchFilter, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, closureDateFrom, closureDateTo, cartValueGt]);
 
-  const totalPages = Math.ceil(sorted.length / pageSize) || 1;
+  const totalPages = leadsTotalPages || (Math.ceil(sorted.length / pageSize) || 1);
   const safePage = Math.min(page, totalPages - 1);
   const paginatedRows = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
@@ -2314,11 +2410,11 @@ export default function App() {
               <select className="px-2 py-1 text-xs border border-gray-200 rounded outline-none" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
+                <option value={75}>75</option>
                 <option value={100}>100</option>
-                <option value={200}>200</option>
               </select>
               <span className="text-xs text-gray-400 ml-2">
-                {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, sorted.length)} of {sorted.length}
+                {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, leadsTotal || sorted.length)} of {leadsTotal || sorted.length}
               </span>
             </div>
             <div className="flex items-center gap-1">

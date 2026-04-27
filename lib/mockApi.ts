@@ -1,6 +1,6 @@
 import { LeadData } from "../types/storeVisit";
 
-const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
+const API_BASE_URL = "http://127.0.0.1:8000/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
 const BEARER_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NTc0NzQ4LCJpYXQiOjE3NzAzOTA3NDgsImp0aSI6IjNiMGFkMTUyMjdlNDQ2MGNhYzVmY2M0Njk5ZGNjZWY4IiwidXNlcl9pZCI6IjFlMDQxMWQ5LWE1YjEtNDViZC1iZDJkLTAyYzViYmNjMDk2MiJ9.YLUwIE9TxuHUizIZRuX3-4g2bGHFOF6KruJJaBH_wq0";
@@ -165,12 +165,95 @@ export interface CRMLeadRow {
   lostReason: string;
   createdAt: string;
   visits: { date: string; channel: string }[];
-  remarks: never[];
+  remarks: { ts: string; author: string; text: string }[];
 }
 
-export async function fetchCRMLeads(): Promise<CRMLeadRow[]> {
-  const data = await mdFetch('/crm/leads/');
-  return data.results || [];
+export interface CRMLeadsPage {
+  results: CRMLeadRow[];
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface CRMLeadsQuery {
+  page?: number;
+  pageSize?: number; // 25..100, clamped server-side
+  branch?: string;
+  bm?: string;
+  q?: string;
+  status?: string;            // CSV of CRM-vocabulary statuses
+  createdFrom?: string;       // YYYY-MM-DD
+  createdTo?: string;
+  followupFrom?: string;
+  followupTo?: string;
+  closureFrom?: string;
+  closureTo?: string;
+  cartValueGt?: number;
+}
+
+export interface CRMLeadsStatsBucket { count: number; value: number }
+export interface CRMLeadsStatsByStatus { status: string; count: number; value: number }
+export interface CRMLeadsStats {
+  total: CRMLeadsStatsBucket;
+  active: CRMLeadsStatsBucket;
+  won: CRMLeadsStatsBucket;
+  lost: CRMLeadsStatsBucket;
+  byStatus: CRMLeadsStatsByStatus[];
+}
+
+export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pageSize'> = {}): Promise<CRMLeadsStats> {
+  const params = new URLSearchParams();
+  if (query.branch) params.set('branch', query.branch);
+  if (query.bm) params.set('bm', query.bm);
+  if (query.q) params.set('q', query.q);
+  if (query.status) params.set('status', query.status);
+  if (query.createdFrom) params.set('created_from', query.createdFrom);
+  if (query.createdTo) params.set('created_to', query.createdTo);
+  if (query.followupFrom) params.set('followup_from', query.followupFrom);
+  if (query.followupTo) params.set('followup_to', query.followupTo);
+  if (query.closureFrom) params.set('closure_from', query.closureFrom);
+  if (query.closureTo) params.set('closure_to', query.closureTo);
+  if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
+    params.set('cart_value_gt', String(query.cartValueGt));
+  }
+  const qs = params.toString();
+  const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`);
+  return {
+    total: data.total || { count: 0, value: 0 },
+    active: data.active || { count: 0, value: 0 },
+    won: data.won || { count: 0, value: 0 },
+    lost: data.lost || { count: 0, value: 0 },
+    byStatus: data.byStatus || [],
+  };
+}
+
+export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeadsPage> {
+  const params = new URLSearchParams();
+  if (query.page) params.set('page', String(query.page));
+  if (query.pageSize) params.set('page_size', String(query.pageSize));
+  if (query.branch) params.set('branch', query.branch);
+  if (query.bm) params.set('bm', query.bm);
+  if (query.q) params.set('q', query.q);
+  if (query.status) params.set('status', query.status);
+  if (query.createdFrom) params.set('created_from', query.createdFrom);
+  if (query.createdTo) params.set('created_to', query.createdTo);
+  if (query.followupFrom) params.set('followup_from', query.followupFrom);
+  if (query.followupTo) params.set('followup_to', query.followupTo);
+  if (query.closureFrom) params.set('closure_from', query.closureFrom);
+  if (query.closureTo) params.set('closure_to', query.closureTo);
+  if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
+    params.set('cart_value_gt', String(query.cartValueGt));
+  }
+  const qs = params.toString();
+  const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`);
+  return {
+    results: data.results || [],
+    count: data.count || 0,
+    page: data.page || 1,
+    pageSize: data.pageSize || 25,
+    totalPages: data.totalPages || 1,
+  };
 }
 
 // ---------------------------------------------------------------------------
