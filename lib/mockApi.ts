@@ -1,6 +1,6 @@
 import { LeadData } from "../types/storeVisit";
 
-const API_BASE_URL = "http://127.0.0.1:8000/apiV1";
+const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
 const BEARER_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NTc0NzQ4LCJpYXQiOjE3NzAzOTA3NDgsImp0aSI6IjNiMGFkMTUyMjdlNDQ2MGNhYzVmY2M0Njk5ZGNjZWY4IiwidXNlcl9pZCI6IjFlMDQxMWQ5LWE1YjEtNDViZC1iZDJkLTAyYzViYmNjMDk2MiJ9.YLUwIE9TxuHUizIZRuX3-4g2bGHFOF6KruJJaBH_wq0";
