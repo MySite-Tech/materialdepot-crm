@@ -321,8 +321,8 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
   const lostLeadsValue = lostData.reduce((s, d) => s + d.value, 0);
 
   return (
-    <div className="px-6 py-5 space-y-6">
-      <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex flex-wrap items-center gap-2.5 shadow-sm">
+    <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5 sm:space-y-6">
+      <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 sm:gap-2.5 shadow-sm">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
         <FilterChip label="Branch" options={branchOptions} selected={branchFilter} onChange={v => { setBranchFilter(v); setBmFilter([]); }} color={{ active: '#3B82F6' }} />
         <FilterChip label="BM" options={availableBMs} selected={bmFilter} onChange={setBmFilter} color={{ active: '#8B5CF6' }} />
@@ -347,7 +347,7 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
           : branchStatusData.length === 0
             ? <div className="bg-white border border-gray-200 rounded-lg px-5 py-8 text-center text-[12px] text-gray-400">No branch data</div>
             : (
-              <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(branchStatusData.length, 4)}, 1fr)` }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {branchStatusData.map(b => (
                   <div key={b.branch} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
                     <div className="flex items-baseline justify-between mb-1">
@@ -383,24 +383,25 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
       <section>
         <SectionHeader title="Activity Leaderboard" sub={`${logs.length} actions logged · who's putting in the work?`} />
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 bg-[#F9F9F9] flex items-center justify-between">
+          <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-[#F9F9F9] flex items-center justify-between">
             <div>
               <div className="font-semibold text-[13px] text-gray-800">Most Active Users</div>
               <div className="text-[10px] text-gray-400 mt-0.5">Ranked by edits · updates, remarks, date & status changes</div>
             </div>
             <div className="text-[11px] text-gray-400">{leaderboard.length} users</div>
           </div>
-          <table className="w-full text-[13px]">
+          <div className="overflow-x-auto">
+          <table className="w-full text-[13px] min-w-[600px]">
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-10">Rank</th>
                 <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Name</th>
                 <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Edits</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Total Actions</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Insight</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Last Seen</th>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 hidden sm:table-cell">Total Actions</th>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 hidden md:table-cell">Insight</th>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 hidden sm:table-cell">Last Seen</th>
                 <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Share</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-36">Progress</th>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-24 sm:w-36">Progress</th>
               </tr>
             </thead>
             <tbody>
@@ -416,13 +417,13 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
                     <td className="px-4 py-2.5 text-center text-[13px]">{medal}</td>
                     <td className="px-4 py-2.5 font-semibold text-gray-800">{u.name}</td>
                     <td className="px-4 py-2.5 font-mono text-gray-700">{u.edits}</td>
-                    <td className="px-4 py-2.5 font-mono text-gray-400">{u.total}</td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-2.5 font-mono text-gray-400 hidden sm:table-cell">{u.total}</td>
+                    <td className="px-4 py-2.5 hidden md:table-cell">
                       {insight
                         ? <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">{insight.emoji} {insight.text}</span>
                         : <span className="text-[11px] text-gray-300">—</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-[11px] text-gray-400">{fmtRelative(u.lastSeen)}</td>
+                    <td className="px-4 py-2.5 text-[11px] text-gray-400 hidden sm:table-cell">{fmtRelative(u.lastSeen)}</td>
                     <td className="px-4 py-2.5 font-bold" style={{ color: rank === 0 ? '#EAB308' : '#374151' }}>{sharePct}%</td>
                     <td className="px-4 py-2.5">
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -434,6 +435,7 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
               })}
             </tbody>
           </table>
+          </div>
           {lbTotalPages > 1 && (
             <div className="px-5 py-2.5 border-t border-gray-100 flex items-center justify-between">
               <span className="text-[11px] text-gray-400">Showing {lbPage$ * LB_PAGE_SIZE + 1}–{Math.min((lbPage$ + 1) * LB_PAGE_SIZE, leaderboard.length)} of {leaderboard.length}</span>
@@ -457,7 +459,7 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
           : lostData.length === 0
             ? <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center text-[12px] text-gray-400">No lost orders match current filters</div>
             : (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
                   <div className="font-semibold text-[12px] text-gray-700 mb-1">By Lead Count</div>
                   <ResponsiveContainer width="100%" height={220}>
@@ -495,7 +497,7 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
 
       <section className="pb-6">
         <SectionHeader title="Closure Pipeline" sub="Unconverted leads with closure date up to today" />
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">Today&apos;s Expected Closures</div>
             <div className="font-mono text-[20px] font-bold text-black">{fmtINR(todayPipelineValue)}</div>
@@ -522,7 +524,7 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 bg-[#F9F9F9] flex items-center justify-between">
+          <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-[#F9F9F9] flex items-center justify-between">
             <div>
               <div className="font-semibold text-[13px] text-gray-800">Overdue &amp; Due-Today Leads</div>
               <div className="text-[10px] text-gray-400 mt-0.5">Closure date ≤ today · not yet converted · {closureLeads.length} total</div>

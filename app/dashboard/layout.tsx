@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 // Main App Header Component
 function AppHeader() {
   return (
-    <header className="sticky top-0 z-[900] h-12 bg-[#1A1A1A] flex items-center px-6 justify-between border-b border-gray-700">
+    <header className="sticky top-0 z-[900] h-12 bg-[#1A1A1A] flex items-center px-3 sm:px-6 justify-between border-b border-gray-700">
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold text-white">material</span>
         <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
@@ -49,12 +49,12 @@ function AppTabNav() {
   };
 
   return (
-    <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
+    <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex gap-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
       {tabs.map(t => (
         <button
           key={t.key}
           onClick={() => handleTabClick(t.key)}
-          className={`px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors ${
+          className={`px-3 sm:px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors whitespace-nowrap ${
             activeTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'
           }`}
         >
