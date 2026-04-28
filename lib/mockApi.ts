@@ -225,6 +225,7 @@ export interface CRMLeadsQuery {
   closureFrom?: string;
   closureTo?: string;
   cartValueGt?: number;
+  ownerUserOrgId?: string | number;
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number }
@@ -251,6 +252,9 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   if (query.closureTo) params.set('closure_to', query.closureTo);
   if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
     params.set('cart_value_gt', String(query.cartValueGt));
+  }
+  if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
+    params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`);
@@ -279,6 +283,9 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.closureTo) params.set('closure_to', query.closureTo);
   if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
     params.set('cart_value_gt', String(query.cartValueGt));
+  }
+  if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
+    params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`);
@@ -499,7 +506,7 @@ const PERMISSION_ID_TO_ROLE: Record<number, string> = {
 
 function _mapUserOrg(u: Record<string, unknown>): import('../types/crm').AppUser {
   const user = u.user as Record<string, unknown> | null;
-  const perm = u.user_permission as Record<string, unknown> | null;
+  const perm = u.user_permission_detail as Record<string, unknown> | null;
   const branches = (u.branch as Array<Record<string, unknown>>) || [];
   const fname = ((user?.f_name as string) || '').trim();
   const lname = ((user?.l_name as string) || '').trim();

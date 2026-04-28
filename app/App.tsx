@@ -1584,9 +1584,10 @@ export default function App() {
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
       : branchFilter;
     const branchCsv = effectiveBranches.join(',');
-    const bmCsv = currentUser.role === 'sales' ? currentUser.name : personFilter.join(',');
+    const bmCsv = personFilter.join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
+    const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
     setLeadsLoading(true);
     let cancelled = false;
     Promise.all([
@@ -1604,6 +1605,7 @@ export default function App() {
         closureFrom: closureDateFrom || undefined,
         closureTo: closureDateTo || undefined,
         cartValueGt: cartGt,
+        ownerUserOrgId,
       }),
       fetchBranchList().catch(() => []),
       fetchUsers().catch(() => []),
@@ -1640,6 +1642,7 @@ export default function App() {
     const bmCsv = personFilter.join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
+    const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
     let cancelled = false;
     setStatsLoading(true);
     fetchCRMLeadsStats({
@@ -1654,6 +1657,7 @@ export default function App() {
       closureFrom: closureDateFrom || undefined,
       closureTo: closureDateTo || undefined,
       cartValueGt: cartGt,
+      ownerUserOrgId,
     }).then((stats) => {
       if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
     }).catch(() => { if (!cancelled) setStatsLoading(false); });
