@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, Cha
 import { useRouter } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLead, fetchLeadRemarks, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, fetchCRMLeadsStats, updateLeadProperties, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats } from '../lib/mockApi';
+import { logActivity, fetchActivityLogs } from '../lib/supabase';
+import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -14,25 +14,33 @@ import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
 const STATUSES = [
+  'In Cart',
   'Quote Approval Pending',
-  'Request for Availability Check',
-  'Site Visit',
+  'Availability Check',
   'Order Placed',
-  'Partly Placed',
+  'Order Confirmed',
+  'Partly Shipped',
+  'Shipped',
+  'Partly Delivered',
   'Delivered',
   'Refunded',
   'Order Lost',
+  'Order Cancelled',
 ];
 
 const STATUS_COLORS: Record<string, string> = {
+  'In Cart':                '#6366F1',
   'Quote Approval Pending': '#F59E0B',
-  'Request for Availability Check': '#3B82F6',
-  'Site Visit': '#A855F7',
-  'Order Placed': '#F97316',
-  'Partly Placed': '#FB923C',
-  'Delivered': '#22C55E',
-  'Refunded': '#EF4444',
-  'Order Lost': '#9CA3AF',
+  'Availability Check':     '#3B82F6',
+  'Order Placed':           '#F97316',
+  'Order Confirmed':        '#FB923C',
+  'Partly Shipped':         '#FBBF24',
+  'Shipped':                '#34D399',
+  'Partly Delivered':       '#6EE7B7',
+  'Delivered':              '#22C55E',
+  'Refunded':               '#EF4444',
+  'Order Lost':             '#9CA3AF',
+  'Order Cancelled':        '#6B7280',
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -58,9 +66,9 @@ const ORDER_LOST_REASONS = [
 ];
 
 const PIPELINE_BUCKETS: Record<string, string[]> = {
-  Active: ['Quote Approval Pending', 'Request for Availability Check', 'Site Visit', ''],
-  Won: ['Delivered', 'Order Placed', 'Partly Placed'],
-  Lost: ['Refunded', 'Order Lost'],
+  Active: ['In Cart', 'Quote Approval Pending', 'Availability Check'],
+  Won: ['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered'],
+  Lost: ['Refunded', 'Order Lost', 'Order Cancelled'],
 };
 
 const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre', 'Yelankha Centre', 'HQ Showroom', 'Phone Call'];
@@ -71,14 +79,16 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-const ROLE_TABS: Record<string, Array<'leads' | 'dashboard' | 'storeVisit' | 'sales'>> = {
-  superadmin:   ['leads', 'dashboard', 'storeVisit', 'sales'],
-  admin:        ['leads', 'dashboard', 'sales'],
+type MainTab = 'leads' | 'dashboard' | 'storeVisit' | 'sales' | 'admin';
+const ROLE_TABS: Record<string, Array<MainTab>> = {
+  superadmin:   ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
+  admin:        ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
+  tech:         ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
   manager:      ['leads', 'dashboard', 'sales'],
   sales:        ['leads', 'sales'],
-  receptionist: ['storeVisit'],
+  retail:       ['storeVisit'],
 };
-const DEFAULT_ROLE_TABS: Array<'leads' | 'dashboard' | 'storeVisit' | 'sales'> = ['leads', 'dashboard', 'storeVisit', 'sales'];
+const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'storeVisit', 'sales'];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -269,11 +279,11 @@ function MultiSelect({ options, selected, onChange, label, className = '' }: Mul
         <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-[999] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto w-full mt-0.5">
+        <div className="absolute top-full left-0 z-[999] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto w-full min-w-[220px] mt-0.5">
           {options.map((opt) => (
             <label
               key={opt}
-              className="flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs whitespace-nowrap hover:bg-gray-50"
+              className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[13px] whitespace-nowrap hover:bg-gray-50"
             >
               <input
                 type="checkbox"
@@ -357,6 +367,8 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel, class
             selected={selected}
             onSelect={handleSelect}
             numberOfMonths={2}
+            disabled={{ before: new Date(2026, 3, 1) }}
+            defaultMonth={new Date(2026, 3, 1)}
           />
           {hasRange && (
             <div className="mt-2">
@@ -563,13 +575,13 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                 <input className={`px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono ${isEdit ? 'bg-gray-100' : 'bg-white'}`} value={form.id} readOnly={isEdit} placeholder="Enter Lead ID" onChange={isEdit ? undefined : (e) => set('id', e.target.value)} />
               </Field>
               <Field label="CREATION DATE">
-                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" type="date" value={form.createdAt} onKeyDown={(e) => e.preventDefault()} onChange={(e) => set('createdAt', e.target.value)} />
+                <input className={`px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full ${isEdit ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} type="date" value={form.createdAt} readOnly={isEdit} onKeyDown={isEdit ? (e) => e.preventDefault() : undefined} onChange={isEdit ? undefined : (e) => set('createdAt', e.target.value)} />
               </Field>
               <Field label="CLIENT NAME">
                 <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.clientName || ''} placeholder="Client name" onChange={(e) => set('clientName', e.target.value)} />
               </Field>
               <Field label="CLIENT PHONE">
-                <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono" value={form.clientPhone || ''} placeholder="10-digit phone" maxLength={10} inputMode="numeric" onChange={(e) => set('clientPhone', e.target.value.replace(/[^0-9]/g, ''))} />
+                <input className={`px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono ${isEdit ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} value={form.clientPhone || ''} placeholder="10-digit phone" maxLength={10} inputMode="numeric" readOnly={isEdit} onChange={isEdit ? undefined : (e) => set('clientPhone', e.target.value.replace(/[^0-9]/g, ''))} />
               </Field>
               <Field label="ASSIGNED TO">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
@@ -895,7 +907,7 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }: DeleteConfirmProps) {
 }
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────
-function AdminDashboard({ onBack }: { onBack: () => void }) {
+function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'users' | 'branches' | 'logs'>('users');
   const [users, setUsers] = useState<AppUser[]>([]);
   const [branchList, setBranchList] = useState<Branch[]>([]);
@@ -909,11 +921,13 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
   const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editBranches, setEditBranches] = useState<string[]>([]);
+  const [usersPage, setUsersPage] = useState(1);
+  const USERS_PER_PAGE = 20;
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([fetchUsers(), fetchBranches().catch(() => [])]).then(([userData, branchData]) => {
+    Promise.all([fetchUsers(), fetchBranchList().catch(() => [])]).then(([userData, branchData]) => {
       setUsers(userData);
       setBranchList(branchData);
       setLoading(false);
@@ -987,16 +1001,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
-      <header className="h-12 bg-[#1A1A1A] flex items-center px-6 justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-white">material</span>
-          <span className="text-sm font-bold text-[#EAB308] -ml-2.5">depot</span>
-          <span className="text-xs text-gray-400 ml-2">Super Admin</span>
-        </div>
-        <button className="bg-transparent border border-gray-600 text-gray-400 text-[11px] px-2.5 py-1 rounded cursor-pointer hover:text-white hover:border-gray-400" onClick={onBack}>Back to Login</button>
-      </header>
-
+    <div className="bg-[#FAFAFA] flex flex-col">
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto w-full px-6 flex gap-0">
           {tabs.map((tab) => (
@@ -1032,9 +1037,9 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                     <option value="sales">Sales</option>
                     <option value="manager">Manager</option>
-                    <option value="receptionist">Receptionist</option>
+                    <option value="retail">Retail</option>
                     <option value="admin">Admin</option>
-                    <option value="superadmin">Super Admin</option>
+                    <option value="tech">Tech</option>
                   </select>
                 </div>
                 <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={handleAdd}>Add User</button>
@@ -1057,7 +1062,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((u) => (
+                    {users.slice((usersPage - 1) * USERS_PER_PAGE, usersPage * USERS_PER_PAGE).map((u) => (
                       <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
                         {editId === u.id ? (
                           <>
@@ -1067,9 +1072,8 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                               <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
                                 <option value="sales">Sales</option>
                                 <option value="manager">Manager</option>
-                                <option value="receptionist">Receptionist</option>
+                                <option value="retail">Retail</option>
                                 <option value="admin">Admin</option>
-                                <option value="superadmin">Super Admin</option>
                               </select>
                             </td>
                             <td className="px-4 py-2">
@@ -1097,8 +1101,8 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                             <td className="px-4 py-2.5 text-[13px] font-medium">{u.name}</td>
                             <td className="px-4 py-2.5 text-[13px] font-mono">{u.phone}</td>
                             <td className="px-4 py-2.5">
-                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : u.role === 'receptionist' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {u.role}
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : u.role === 'tech' ? 'bg-cyan-100 text-cyan-700' : u.role === 'manager' ? 'bg-blue-100 text-blue-700' : u.role === 'retail' ? 'bg-teal-100 text-teal-700' : u.role === 'sales' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {u.role ? u.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'}
                               </span>
                             </td>
                             <td className="px-4 py-2.5">
@@ -1122,7 +1126,16 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                 </table>
               )}
             </div>
-            <p className="text-xs text-gray-400 mt-4 text-center">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-xs text-gray-400">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+              {users.length > USERS_PER_PAGE && (
+                <div className="flex items-center gap-2">
+                  <button disabled={usersPage === 1} onClick={() => setUsersPage(p => p - 1)} className="px-3 py-1 text-[12px] border border-gray-200 rounded text-gray-500 disabled:opacity-40 cursor-pointer bg-white hover:border-[#EAB308]">Prev</button>
+                  <span className="text-[12px] text-gray-500">{usersPage} / {Math.ceil(users.length / USERS_PER_PAGE)}</span>
+                  <button disabled={usersPage >= Math.ceil(users.length / USERS_PER_PAGE)} onClick={() => setUsersPage(p => p + 1)} className="px-3 py-1 text-[12px] border border-gray-200 rounded text-gray-500 disabled:opacity-40 cursor-pointer bg-white hover:border-[#EAB308]">Next</button>
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -1294,29 +1307,25 @@ function BranchManager({ branches, setBranches }: BranchManagerProps) {
 
 interface LoginScreenProps {
   onLogin: (user: AppUser) => void;
-  onAdmin: () => void;
 }
 
-function LoginScreen({ onLogin, onAdmin }: LoginScreenProps) {
+function LoginScreen({ onLogin }: LoginScreenProps) {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [pendingUser, setPendingUser] = useState<AppUser | null>(null);
-  const [isAdminMode, setIsAdminMode] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = async (adminMode: boolean) => {
+  const handleSendOtp = async () => {
     if (!/^\d{10}$/.test(phone.trim())) { setError('Enter a valid 10-digit phone number'); return; }
     setLoading(true);
     setError('');
     try {
       const user = await loginWithPhone(phone.trim());
       if (!user) { setError('Phone not authorized. Contact your admin.'); setLoading(false); return; }
-      if (adminMode && user.role !== 'superadmin') { setError('Access denied. Super Admin required.'); setLoading(false); return; }
       await sendOtp(phone.trim());
       setPendingUser(user);
-      setIsAdminMode(adminMode);
       setStep('otp');
     } catch {
       setError('Failed to send OTP. Please try again.');
@@ -1333,7 +1342,7 @@ function LoginScreen({ onLogin, onAdmin }: LoginScreenProps) {
     try {
       const ok = await verifyOtp(phone.trim(), otp.trim());
       if (!ok) { setError('Invalid OTP. Please try again.'); setLoading(false); return; }
-      if (isAdminMode) { onAdmin(); } else { onLogin(pendingUser!); }
+      onLogin(pendingUser!);
     } catch {
       setError('Verification failed. Please try again.');
     } finally {
@@ -1364,24 +1373,14 @@ function LoginScreen({ onLogin, onAdmin }: LoginScreenProps) {
             autoFocus
           />
           {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
-          <div className="flex gap-2 mt-4">
-            <button
-              type="button"
-              disabled={loading || phone.length !== 10}
-              onClick={() => handleSendOtp(false)}
-              className={`bg-[#EAB308] text-white border-none px-5 py-2.5 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${loading || phone.length !== 10 ? 'opacity-50' : 'opacity-100'}`}
-            >
-              {loading ? 'Sending OTP...' : 'Send OTP'}
-            </button>
-            <button
-              type="button"
-              disabled={loading || phone.length !== 10}
-              onClick={() => handleSendOtp(true)}
-              className={`bg-white text-gray-600 border border-gray-200 px-4 py-2.5 rounded-md text-[13px] font-medium cursor-pointer ${loading || phone.length !== 10 ? 'opacity-50' : 'opacity-100'}`}
-            >
-              Admin
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={loading || phone.length !== 10}
+            onClick={() => handleSendOtp()}
+            className={`mt-4 w-full bg-[#EAB308] text-white border-none py-2.5 rounded-md text-[13px] font-semibold cursor-pointer ${loading || phone.length !== 10 ? 'opacity-50' : 'opacity-100'}`}
+          >
+            {loading ? 'Sending OTP...' : 'Send OTP'}
+          </button>
         </>
       ) : (
         <form onSubmit={handleVerifyOtp}>
@@ -1458,8 +1457,7 @@ export default function App() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [mainTab, setMainTab] = useState<'leads' | 'dashboard' | 'storeVisit' | 'sales'>('leads');
+  const [mainTab, setMainTab] = useState<MainTab>('leads');
 
   // Derive allowed tabs for the current user's role
   const allowedTabs = ROLE_TABS[currentUser?.role ?? ''] ?? DEFAULT_ROLE_TABS;
@@ -1485,7 +1483,7 @@ export default function App() {
     setStatusFilter([]);
     setPersonFilter([]);
     setBranchFilter([]);
-    setCreatedDateFrom('2025-03-01');
+    setCreatedDateFrom('2026-04-01');
     setCreatedDateTo('');
     setFollowUpDateFrom('');
     setFollowUpDateTo('');
@@ -1516,6 +1514,7 @@ export default function App() {
   const [leadsTotal, setLeadsTotal] = useState(0);
   const [leadsTotalPages, setLeadsTotalPages] = useState(1);
   const [leadsStats, setLeadsStats] = useState<CRMLeadsStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
     if (mainTab === 'dashboard' && dashLogs.length === 0) {
@@ -1527,7 +1526,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState<string[]>([]);
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
-  const [createdDateFrom, setCreatedDateFrom] = useState('2025-03-01');
+  const [createdDateFrom, setCreatedDateFrom] = useState('2026-04-01');
   const [createdDateTo, setCreatedDateTo] = useState('');
   const [followUpDateFrom, setFollowUpDateFrom] = useState('');
   const [followUpDateTo, setFollowUpDateTo] = useState('');
@@ -1540,11 +1539,18 @@ export default function App() {
   const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
 
   useEffect(() => {
-    if (!drawerLead) return;
-    fetchLeadRemarks(drawerLead.id).then(remarks => {
+    if (!drawerLead?.clientPhone) return;
+    fetchLeadRemarks(drawerLead.clientPhone).then(remarks => {
       if (remarks.length) {
         setLeads(prev => prev.map(l =>
           l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, remarks } : l
+        ));
+      }
+    }).catch(() => {});
+    fetchLeadVisits(drawerLead.clientPhone).then(visits => {
+      if (visits.length) {
+        setLeads(prev => prev.map(l =>
+          l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, visits } : l
         ));
       }
     }).catch(() => {});
@@ -1571,14 +1577,14 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || mainTab !== 'leads') return;
     // If the user has restricted branches, intersect with any UI branch filter.
     // Otherwise just use the UI filter directly.
     const effectiveBranches = userAllowedBranches.length > 0
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
       : branchFilter;
     const branchCsv = effectiveBranches.join(',');
-    const bmCsv = personFilter.join(',');
+    const bmCsv = currentUser.role === 'sales' ? currentUser.name : personFilter.join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
     setLeadsLoading(true);
@@ -1599,7 +1605,7 @@ export default function App() {
         closureTo: closureDateTo || undefined,
         cartValueGt: cartGt,
       }),
-      fetchBranches().catch(() => []),
+      fetchBranchList().catch(() => []),
       fetchUsers().catch(() => []),
     ]).then(([crmLeadsPage, dbBranches, dbUsers]) => {
       if (cancelled) return;
@@ -1617,7 +1623,7 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, [
-    currentUser, page, pageSize, debouncedSearch,
+    currentUser, mainTab, page, pageSize, debouncedSearch,
     branchFilter, personFilter, statusFilter,
     createdDateFrom, createdDateTo,
     followUpDateFrom, followUpDateTo,
@@ -1626,7 +1632,7 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || mainTab !== 'leads') return;
     const effectiveBranches = userAllowedBranches.length > 0
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
       : branchFilter;
@@ -1635,6 +1641,7 @@ export default function App() {
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
     let cancelled = false;
+    setStatsLoading(true);
     fetchCRMLeadsStats({
       branch: branchCsv || undefined,
       bm: bmCsv || undefined,
@@ -1648,11 +1655,11 @@ export default function App() {
       closureTo: closureDateTo || undefined,
       cartValueGt: cartGt,
     }).then((stats) => {
-      if (!cancelled) setLeadsStats(stats);
-    }).catch(() => {});
+      if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
+    }).catch(() => { if (!cancelled) setStatsLoading(false); });
     return () => { cancelled = true; };
   }, [
-    currentUser, debouncedSearch,
+    currentUser, mainTab, debouncedSearch,
     branchFilter, personFilter, statusFilter,
     createdDateFrom, createdDateTo,
     followUpDateFrom, followUpDateTo,
@@ -1709,7 +1716,7 @@ export default function App() {
     });
   };
 
-  const isAdminUser = currentUser?.role === 'superadmin';
+  const isAdminUser = currentUser?.role === 'admin';
   const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
   // Lowercase set for case-insensitive branch matching (Supabase vs Django naming may differ)
   const userAllowedBranchesLower = new Set(userAllowedBranches.map((b) => b.toLowerCase()));
@@ -1828,16 +1835,18 @@ export default function App() {
       if (idx >= 0) { const next = [...prev]; next[idx] = finalData; return next; }
       return [...prev, finalData];
     });
-    upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });
-    if (finalData.clientPhone) {
-      updateLeadProperties(finalData.clientPhone, {
-        client_type: finalData.clientType || undefined,
-        property_type: finalData.propertyType || undefined,
-        architect_involved: finalData.architectInvolved ? 'yes' : 'no',
-        followup_date: finalData.followUpDate || undefined,
-        project_phase: finalData.projectPhase || undefined,
-        estimated_closure_date: finalData.closureDate || undefined,
-      }).catch((e) => console.error('Property sync failed:', e));
+    if (isNew && finalData.clientPhone && currentUser?.phone) {
+      createLead(finalData, currentUser.phone)
+        .then(() => {
+          if (finalData.clientPhone) {
+            (finalData.visits || []).forEach(v =>
+              appendVisit(finalData.clientPhone!, v, currentUser?.phone).catch(() => {})
+            );
+          }
+        })
+        .catch((e) => { console.error('Create lead failed:', e); showSaveError(); });
+    } else {
+      upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });
     }
     if (currentUser) {
       if (isNew) {
@@ -1884,7 +1893,7 @@ export default function App() {
 
   const addRemark = (leadId: string, clientPhone: string, remark: Remark) => {
     setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
-    appendRemarkToLead(leadId, clientPhone, remark).then((latestRemarks: Remark[]) => {
+    appendRemarkToLead(leadId, clientPhone, remark, currentUser?.phone).then((latestRemarks: Remark[]) => {
       setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: latestRemarks } : l));
     }).catch((e) => console.error('Remark save failed:', e));
     if (currentUser) {
@@ -2168,8 +2177,7 @@ export default function App() {
   const COL_COUNT = visibleCols.length + 1;
 
   if (!userLoaded) return null;
-  if (showAdmin) return <AdminDashboard onBack={() => setShowAdmin(false)} />;
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} onAdmin={() => setShowAdmin(true)} />;
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
@@ -2191,7 +2199,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Sales' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Sales' }, { key: 'admin' as const, label: 'Admin' }])
           .filter(t => allowedTabs.includes(t.key))
           .map(t => (
             <button
@@ -2218,28 +2226,32 @@ export default function App() {
         <StoreVisitWrapper />
       )}
 
+      {mainTab === 'admin' && allowedTabs.includes('admin') && (
+        <AdminDashboard />
+      )}
+
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200">
           <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:flex sm:justify-between sm:gap-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Total Pipeline<span className="hidden sm:inline"> Value</span></div>
-              <div className="font-mono text-[13px] sm:text-[22px] font-bold text-black break-all sm:break-normal">{fmtINR(pipelineTotal)}</div>
-              <div className="text-[11px] text-gray-400">{filtered.length} leads</div>
+              {statsLoading ? <div className="h-6 w-24 bg-gray-200 rounded animate-pulse mt-1" /> : <div className="font-mono text-[13px] sm:text-[22px] font-bold text-black break-all sm:break-normal">{fmtINR(pipelineTotal)}</div>}
+              {statsLoading ? <div className="h-3 w-12 bg-gray-100 rounded animate-pulse mt-1" /> : <div className="text-[11px] text-gray-400">{filtered.length} leads</div>}
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Active Pipeline</div>
-              <div className="font-mono text-[13px] sm:text-lg font-bold text-[#EAB308] break-all sm:break-normal">{fmtINR(pipelineActive)}</div>
-              <div className="text-[11px] text-gray-400">{activeCount} leads</div>
+              {statsLoading ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse mt-1" /> : <div className="font-mono text-[13px] sm:text-lg font-bold text-[#EAB308] break-all sm:break-normal">{fmtINR(pipelineActive)}</div>}
+              {statsLoading ? <div className="h-3 w-12 bg-gray-100 rounded animate-pulse mt-1" /> : <div className="text-[11px] text-gray-400">{activeCount} leads</div>}
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Won</div>
-              <div className="font-mono text-[13px] sm:text-lg font-bold text-green-700 break-all sm:break-normal">{fmtINR(pipelineWon)}</div>
-              <div className="text-[11px] text-gray-400">{wonCount} leads</div>
+              {statsLoading ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse mt-1" /> : <div className="font-mono text-[13px] sm:text-lg font-bold text-green-700 break-all sm:break-normal">{fmtINR(pipelineWon)}</div>}
+              {statsLoading ? <div className="h-3 w-12 bg-gray-100 rounded animate-pulse mt-1" /> : <div className="text-[11px] text-gray-400">{wonCount} leads</div>}
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Lost<span className="hidden sm:inline"> / Refunded</span></div>
-              <div className="font-mono text-[13px] sm:text-lg font-bold text-gray-400 break-all sm:break-normal">{fmtINR(pipelineLost)}</div>
-              <div className="text-[11px] text-gray-400">{lostCount} leads</div>
+              {statsLoading ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse mt-1" /> : <div className="font-mono text-[13px] sm:text-lg font-bold text-gray-400 break-all sm:break-normal">{fmtINR(pipelineLost)}</div>}
+              {statsLoading ? <div className="h-3 w-12 bg-gray-100 rounded animate-pulse mt-1" /> : <div className="text-[11px] text-gray-400">{lostCount} leads</div>}
             </div>
           </div>
           <div className="flex h-1.5 rounded-sm overflow-hidden mt-4 bg-gray-200">
@@ -2274,9 +2286,12 @@ export default function App() {
                 onClick={() => toggleStatusFilter(ss.status)}
                 className={`bg-white rounded-lg px-4 py-3 border-[1.5px] text-center min-w-[130px] cursor-pointer flex-[1_0_140px] ${active ? 'border-[#EAB308]' : 'border-gray-200'}`}
               >
-                <div className={`text-2xl font-bold ${active ? 'text-[#EAB308]' : 'text-gray-700'}`}>{ss.count}</div>
+                {statsLoading
+                  ? <div className="h-7 w-10 bg-gray-200 rounded animate-pulse mx-auto" />
+                  : <div className={`text-2xl font-bold ${active ? 'text-[#EAB308]' : 'text-gray-700'}`}>{ss.count}</div>
+                }
                 <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">{ss.status}</div>
-                {ss.value > 0 && (
+                {!statsLoading && ss.value > 0 && (
                   <div className="font-mono text-[11px] font-semibold mt-1" style={{ color: STATUS_COLORS[ss.status] }}>{fmtINR(ss.value)}</div>
                 )}
               </div>
@@ -2306,7 +2321,7 @@ export default function App() {
                 </span>
               )}
             </button>
-            <button className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap shrink-0" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
+            {/* <button className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap shrink-0" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button> */}
           </div>
           {showMobileFilters && (
             <div className="grid grid-cols-2 gap-2">
@@ -2362,7 +2377,7 @@ export default function App() {
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap" onClick={downloadCsvTemplate}>Download Template</button>
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
               <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
-              <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button>
+              {/* <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button> */}
             </div>
           </div>
           {/* Row 2: all filters */}
@@ -2468,7 +2483,7 @@ export default function App() {
                     key={l.id}
                     className="border-t border-gray-200 hover:bg-[#FFFAF7]"
                   >
-                    {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle max-w-[110px]">
+                    {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle w-[200px] min-w-[200px]">
                       <span className="font-mono text-[11px] font-semibold bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">{l.id}</span>
                     </td>}
                     {isColVisible('clientName') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '—'}</td>}
@@ -2542,7 +2557,7 @@ export default function App() {
               {filtered.length > 0 && (
                 <tfoot>
                   <tr className="bg-[#FFF7F0]">
-                    <td colSpan={COL_COUNT - 2} className="px-3 py-2.5 text-[13px] align-middle font-semibold text-xs">Total ({filtered.length} lead{filtered.length !== 1 ? 's' : ''})</td>
+                    <td colSpan={COL_COUNT - 2} className="px-3 py-2.5 text-[13px] align-middle font-semibold text-xs">Total ({filtered.length} deal{filtered.length !== 1 ? 's' : ''})</td>
                     <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold text-[#EAB308]">{fmtINR(filteredTotal)}</td>
                     <td className="px-3 py-2.5 text-[13px] align-middle" />
                   </tr>

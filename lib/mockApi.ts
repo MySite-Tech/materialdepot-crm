@@ -6,9 +6,26 @@ const BEARER_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NTc0NzQ4LCJpYXQiOjE3NzAzOTA3NDgsImp0aSI6IjNiMGFkMTUyMjdlNDQ2MGNhYzVmY2M0Njk5ZGNjZWY4IiwidXNlcl9pZCI6IjFlMDQxMWQ5LWE1YjEtNDViZC1iZDJkLTAyYzViYmNjMDk2MiJ9.YLUwIE9TxuHUizIZRuX3-4g2bGHFOF6KruJJaBH_wq0";
 const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
+const TOKEN_KEY = 'md_crm_token';
+
+export function getToken(): string {
+  return (typeof window !== 'undefined' && localStorage.getItem(TOKEN_KEY)) || '';
+}
+
+function saveToken(token: string) {
+  if (typeof window !== 'undefined') localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken() {
+  if (typeof window !== 'undefined') localStorage.removeItem(TOKEN_KEY);
+}
+
 // Shared fetch helpers
 async function mdFetch(path: string, init?: RequestInit) {
-  const res = await fetch(`${API_BASE_URL}${path}`, init);
+  const token = getToken();
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -24,7 +41,12 @@ export async function sendOtp(phone: string): Promise<void> {
 
 export async function verifyOtp(phone: string, otp: string): Promise<boolean> {
   const res = await fetch(`${API_BASE_URL}/verify-otp/?contact=${phone}&otp=${otp}`);
-  return res.ok;
+  if (!res.ok) return false;
+  try {
+    const data = await res.json();
+    if (data?.token) saveToken(data.token);
+  } catch {}
+  return true;
 }
 
 async function kylasFetch(path: string, init?: RequestInit) {
@@ -439,4 +461,223 @@ export async function saveClientInfoAnswers(
     headers: { "Content-Type": "application/json", ...bmHeaders(token) },
     body: JSON.stringify({ answers }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// CRM Auth — replaces Supabase loginWithPhone
+// ---------------------------------------------------------------------------
+
+const EXCLUDED_ROLES = new Set(['data', 'delivery']);
+
+export async function loginWithPhone(phone: string): Promise<import('../types/crm').AppUser | null> {
+  try {
+    const data = await mdFetch(`/crm/user-profile/?phone=${phone}`);
+    if (!data) return null;
+    if (EXCLUDED_ROLES.has(data.role)) return null;
+    return {
+      id: data.id,
+      name: data.name,
+      phone: data.phone,
+      role: data.role,
+      allowedBranches: data.allowedBranches || [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CRM Users — replaces Supabase users table
+// ---------------------------------------------------------------------------
+
+const PERMISSION_ID_TO_ROLE: Record<number, string> = {
+  1: 'admin', 2: 'manager', 3: 'sales', 4: 'pre_sales', 5: 'procurement',
+  6: 'delivery', 7: 'tech', 8: 'data', 9: 'accounts', 10: 'retail',
+  11: 'customer_success', 12: 'store_manager', 13: 'delivery_manager',
+  14: 'b2b_sales', 15: 'post_sales',
+};
+
+function _mapUserOrg(u: Record<string, unknown>): import('../types/crm').AppUser {
+  const user = u.user as Record<string, unknown> | null;
+  const perm = u.user_permission as Record<string, unknown> | null;
+  const branches = (u.branch as Array<Record<string, unknown>>) || [];
+  const fname = ((user?.f_name as string) || '').trim();
+  const lname = ((user?.l_name as string) || '').trim();
+  const role = (perm?.permission_name as string) || PERMISSION_ID_TO_ROLE[perm?.id as number] || '';
+  return {
+    id: u.id as number,
+    name: [fname, lname].filter(Boolean).join(' ') || String(user?.contact || ''),
+    phone: String(user?.contact || ''),
+    role,
+    allowedBranches: branches.map((b) => b.branch_name as string).filter(Boolean),
+  };
+}
+
+export async function fetchUsers(): Promise<import('../types/crm').AppUser[]> {
+  const data = await mdFetch('/user-organisation/');
+  return (data || []).map(_mapUserOrg).filter((u: import('../types/crm').AppUser) => !EXCLUDED_ROLES.has(u.role));
+}
+
+export async function addUser({ name, phone, role }: { name: string; phone: string; role: string }): Promise<import('../types/crm').AppUser> {
+  const data = await mdFetch('/user-organisation/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contact: phone, name, role }),
+  });
+  return _mapUserOrg(data);
+}
+
+export async function updateUser(id: string | number, updates: Partial<import('../types/crm').AppUser>): Promise<void> {
+  await mdFetch(`/user-organisation/${id}/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteUser(id: string | number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/user-organisation/${id}/`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) throw new Error(`API error: ${res.status}`);
+}
+
+export async function updateUserBranches(id: string | number, branches: string[]): Promise<void> {
+  await mdFetch(`/user-organisation/${id}/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branches }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Branches — uses existing /orgainsation-branch/ endpoints
+// ---------------------------------------------------------------------------
+
+export async function fetchBranchList(): Promise<import('../types/crm').Branch[]> {
+  const data = await mdFetch('/orgainsation-branch/');
+  return (data?.results || data || []).map((b: { id: number; branch_name: string }) => ({ id: b.id, name: b.branch_name }));
+}
+
+export async function addBranch(name: string): Promise<import('../types/crm').Branch> {
+  const data = await mdFetch('/orgainsation-branch/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branch_name: name }),
+  });
+  return { id: data.id, name: data.name || name };
+}
+
+export async function updateBranch(id: string | number, name: string): Promise<void> {
+  await mdFetch(`/orgainsation-branch/${id}/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branch_name: name }),
+  });
+}
+
+export async function deleteBranch(id: string | number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/orgainsation-branch/${id}/`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) throw new Error(`API error: ${res.status}`);
+}
+
+// ---------------------------------------------------------------------------
+// CRM Lead Remarks — replaces Supabase remarks in leads table
+// ---------------------------------------------------------------------------
+
+export async function fetchLeadRemarks(clientPhone: string): Promise<import('../types/crm').Remark[]> {
+  if (!clientPhone) return [];
+  try {
+    const data = await mdFetch(`/crm/lead-remarks/?client_phone=${clientPhone}`);
+    return (data || []) as import('../types/crm').Remark[];
+  } catch {
+    return [];
+  }
+}
+
+export async function appendRemarkToLead(
+  _leadId: string,
+  clientPhone: string | undefined,
+  remark: import('../types/crm').Remark,
+  authorPhone?: string,
+): Promise<import('../types/crm').Remark[]> {
+  if (!clientPhone) return [remark];
+  await mdFetch('/crm/lead-remarks/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_phone: clientPhone, text: remark.text, author_phone: authorPhone || '' }),
+  });
+  return fetchLeadRemarks(clientPhone);
+}
+
+// ---------------------------------------------------------------------------
+// CRM Lead Visits — replaces Supabase visits in leads table
+// ---------------------------------------------------------------------------
+
+export async function fetchLeadVisits(clientPhone: string): Promise<import('../types/crm').Visit[]> {
+  if (!clientPhone) return [];
+  try {
+    const data = await mdFetch(`/crm/lead-visits/?client_phone=${clientPhone}`);
+    return (data || []) as import('../types/crm').Visit[];
+  } catch {
+    return [];
+  }
+}
+
+export async function appendVisit(
+  clientPhone: string,
+  visit: import('../types/crm').Visit,
+  loggedByPhone?: string,
+): Promise<void> {
+  if (!clientPhone) return;
+  await mdFetch('/crm/lead-visits/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_phone: clientPhone, channel: visit.channel, logged_by_phone: loggedByPhone || '' }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// CRM Lead upsert / fetch / create / delete — replaces Supabase leads table
+// ---------------------------------------------------------------------------
+
+export async function upsertLead(lead: import('../types/crm').Lead): Promise<void> {
+  if (!lead.clientPhone) return;
+  await updateLeadProperties(lead.clientPhone, {
+    client_type: lead.clientType || undefined,
+    property_type: lead.propertyType || undefined,
+    architect_involved: lead.architectInvolved ? 'yes' : 'no',
+    followup_date: lead.followUpDate || undefined,
+    project_phase: lead.projectPhase || undefined,
+    estimated_closure_date: lead.closureDate || undefined,
+  });
+}
+
+export async function upsertLeads(leads: import('../types/crm').Lead[]): Promise<void> {
+  await Promise.all(leads.map(l => upsertLead(l).catch(() => {})));
+}
+
+export async function fetchLead(id: string, clientPhone?: string): Promise<import('../types/crm').Lead> {
+  const phone = clientPhone || id;
+  const data = await mdFetch(`/crm/leads/?q=${phone}&page_size=5`);
+  const results: import('../types/crm').Lead[] = data?.results || [];
+  const found = results.find(r => r.id === id || r.clientPhone === phone);
+  if (!found) throw new Error(`Lead not found: ${id}`);
+  return found;
+}
+
+export async function createLead(lead: import('../types/crm').Lead, bmPhone: string): Promise<void> {
+  if (!lead.clientPhone || !bmPhone) return;
+  await mdFetch('/crm/create-lead/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_phone: lead.clientPhone,
+      client_name: lead.clientName || '',
+      assigned_to_phone: bmPhone,
+    }),
+  });
+  await upsertLead(lead);
+}
+
+export async function deleteLead(_id: string, _clientPhone?: string): Promise<void> {
+  // Leads cannot be deleted from the backend; no-op.
 }
