@@ -196,9 +196,10 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
 interface DashboardProps {
   logs: ActivityLog[];
   branches: string[];
+  allowedBranches?: string[];
 }
 
-export default function Dashboard({ logs, branches }: DashboardProps) {
+export default function Dashboard({ logs, branches, allowedBranches = [] }: DashboardProps) {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [bmFilter, setBmFilter] = useState<string[]>([]);
   const [closureDate, setClosureDate] = useState<DateRange>({ from: '', to: '' });
@@ -209,7 +210,11 @@ export default function Dashboard({ logs, branches }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const branchOptions = useMemo(() => branches.filter(b => b !== 'HQ'), [branches]);
+  const isRestricted = allowedBranches.length > 0;
+  const branchOptions = useMemo(() => {
+    const base = isRestricted ? allowedBranches : branches;
+    return base.filter(b => b !== 'HQ');
+  }, [branches, allowedBranches, isRestricted]);
 
   const load = useCallback((filters: Parameters<typeof fetchDashboardData>[0]) => {
     setLoading(true);
@@ -222,8 +227,11 @@ export default function Dashboard({ logs, branches }: DashboardProps) {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      const effectiveBranches = isRestricted
+        ? (branchFilter.length > 0 ? branchFilter.filter(b => allowedBranches.includes(b)) : allowedBranches)
+        : (branchFilter.length > 0 ? branchFilter : undefined);
       load({
-        branch: branchFilter.length ? branchFilter : undefined,
+        branch: effectiveBranches,
         bm: bmFilter.length ? bmFilter : undefined,
         closureFrom: closureDate.from || undefined,
         closureTo: closureDate.to || undefined,
@@ -232,7 +240,7 @@ export default function Dashboard({ logs, branches }: DashboardProps) {
       });
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, closureDate, createdDate, load]);
+  }, [branchFilter, bmFilter, closureDate, createdDate, load, isRestricted, allowedBranches]);
 
   const availableBMs = data?.availableBMs ?? [];
   const summary = data?.summary;

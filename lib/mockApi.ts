@@ -127,8 +127,7 @@ export async function fetchBMsByBranch(branch: string): Promise<BMOption[]> {
 export interface AssignBMResponse {
   assignment_id: number;
   created: boolean;
-  kylas_lead_owner_updated: boolean;
-  kylas_message: string;
+  reactivated: boolean;
 }
 
 export async function assignBMToClient(

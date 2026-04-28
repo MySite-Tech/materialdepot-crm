@@ -473,8 +473,13 @@ export default function StoreVisitFormSimple() {
     if (!selectedBM || !leadId) return;
     setIsLoading(true);
     try {
-      await mockApi.assignBM(formData.phoneNumber, selectedBM, leadId);
-      toast({ title: 'Assigned!', description: 'Business Manager assigned. Redirecting...' });
+      const result = await mockApi.assignBM(formData.phoneNumber, selectedBM, leadId);
+      const description = result.created
+        ? 'Business Manager assigned successfully. Redirecting...'
+        : result.reactivated
+          ? 'Previous assignment reactivated. Redirecting...'
+          : 'Business Manager already assigned and active. Redirecting...';
+      toast({ title: 'Done!', description });
       setTimeout(() => { window.open(`https://app.kylas.io/sales/leads/details/${leadId}`, '_blank'); }, 1500);
     } catch {
       toast({ title: 'Error', description: 'Failed to assign Business Manager. Please try again.', variant: 'destructive' });

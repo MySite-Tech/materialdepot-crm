@@ -69,6 +69,16 @@ const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'C
 const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
 const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
+// Tabs each role is allowed to see.
+// Keys match the mainTab union; values are the tab keys visible to that role.
+const ROLE_TABS: Record<string, Array<'leads' | 'dashboard' | 'storeVisit' | 'sales'>> = {
+  superadmin:   ['leads', 'dashboard', 'storeVisit', 'sales'],
+  admin:        ['leads', 'dashboard', 'sales'],
+  manager:      ['leads', 'dashboard', 'sales'],
+  sales:        ['leads', 'sales'],
+  receptionist: ['storeVisit'],
+};
+const DEFAULT_ROLE_TABS: Array<'leads' | 'dashboard' | 'storeVisit' | 'sales'> = ['leads', 'dashboard', 'storeVisit', 'sales'];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -1018,6 +1028,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                     <option value="sales">Sales</option>
                     <option value="manager">Manager</option>
+                    <option value="receptionist">Receptionist</option>
                     <option value="admin">Admin</option>
                     <option value="superadmin">Super Admin</option>
                   </select>
@@ -1052,6 +1063,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                               <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
                                 <option value="sales">Sales</option>
                                 <option value="manager">Manager</option>
+                                <option value="receptionist">Receptionist</option>
                                 <option value="admin">Admin</option>
                                 <option value="superadmin">Super Admin</option>
                               </select>
@@ -1081,7 +1093,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                             <td className="px-4 py-2.5 text-[13px] font-medium">{u.name}</td>
                             <td className="px-4 py-2.5 text-[13px] font-mono">{u.code}</td>
                             <td className="px-4 py-2.5">
-                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : u.role === 'receptionist' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
                                 {u.role}
                               </span>
                             </td>
@@ -1398,6 +1410,7 @@ interface CsvRow {
   clientType: string;
   propertyType: string;
   architectInvolved: boolean;
+  projectPhase: string;
 }
 
 type DateEditState = { leadId: string; field: 'followUpDate' | 'closureDate' };
@@ -1408,6 +1421,9 @@ export default function App() {
   const [userLoaded, setUserLoaded] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [mainTab, setMainTab] = useState<'leads' | 'dashboard' | 'storeVisit' | 'sales'>('leads');
+
+  // Derive allowed tabs for the current user's role
+  const allowedTabs = ROLE_TABS[currentUser?.role ?? ''] ?? DEFAULT_ROLE_TABS;
   const [dashLogs, setDashLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
@@ -1425,6 +1441,23 @@ export default function App() {
     const userData: AppUser = { id: user.id, name: user.name, code: user.code, role: user.role, allowedBranches: user.allowedBranches || [] };
     setCurrentUser(userData);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
+    // Reset all filters so previous user's state doesn't bleed into the new session
+    setSearch('');
+    setStatusFilter([]);
+    setPersonFilter([]);
+    setBranchFilter([]);
+    setCreatedDateFrom('2025-03-01');
+    setCreatedDateTo('');
+    setFollowUpDateFrom('');
+    setFollowUpDateTo('');
+    setClosureDateFrom('');
+    setClosureDateTo('');
+    setCartValueGt('');
+    setTaskFilter('');
+    setPage(0);
+    // Land on the first tab the role has access to
+    const firstTab = (ROLE_TABS[user.role] ?? DEFAULT_ROLE_TABS)[0];
+    if (firstTab !== 'sales') setMainTab(firstTab);
     logActivity({ userId: user.id, userName: user.name, action: 'user_login', entityType: 'user', entityId: user.id, details: user.name + ' logged in' }).catch(console.error);
   };
 
@@ -1455,7 +1488,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState<string[]>([]);
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
-  const [createdDateFrom, setCreatedDateFrom] = useState('');
+  const [createdDateFrom, setCreatedDateFrom] = useState('2025-03-01');
   const [createdDateTo, setCreatedDateTo] = useState('');
   const [followUpDateFrom, setFollowUpDateFrom] = useState('');
   const [followUpDateTo, setFollowUpDateTo] = useState('');
@@ -1499,7 +1532,12 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const branchCsv = branchFilter.join(',');
+    // If the user has restricted branches, intersect with any UI branch filter.
+    // Otherwise just use the UI filter directly.
+    const effectiveBranches = userAllowedBranches.length > 0
+      ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
+      : branchFilter;
+    const branchCsv = effectiveBranches.join(',');
     const bmCsv = personFilter.join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
@@ -1549,7 +1587,10 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const branchCsv = branchFilter.join(',');
+    const effectiveBranches = userAllowedBranches.length > 0
+      ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
+      : branchFilter;
+    const branchCsv = effectiveBranches.join(',');
     const bmCsv = personFilter.join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
@@ -1630,13 +1671,15 @@ export default function App() {
 
   const isAdminUser = currentUser?.role === 'superadmin';
   const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
+  // Lowercase set for case-insensitive branch matching (Supabase vs Django naming may differ)
+  const userAllowedBranchesLower = new Set(userAllowedBranches.map((b) => b.toLowerCase()));
 
   const availableBMs = [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
     if (userAllowedBranches.length > 0) {
-      if (!userAllowedBranches.includes(l.branch)) return false;
+      if (!userAllowedBranchesLower.has((l.branch || '').toLowerCase())) return false;
     } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
     if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
     if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
@@ -1860,13 +1903,13 @@ export default function App() {
   };
 
   // ── CSV helpers ──────────────────────────────────────────────────────────
-  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved'];
+  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase'];
 
   const downloadCsvTemplate = () => {
     const rows = [
       CSV_HEADERS.join(','),
-      '"MD-ABC123",Vikram Rao,9876543210,15/03/2026,Arjun Mehta,JP Nagar,Quote Approval Pending,,"Portland Cement 50kg, Binding Wire, Sand","1,65,000",10/04/2026,20/04/2026,Client requested bulk quote|15/03/2026|Arjun Mehta,15/03/2026|Website;18/03/2026|JP Nagar Centre,Home Owner,Apartment,yes',
-      '"MD-DEF456",Anita Deshmukh,9845012345,10/03/2026,Priya Sharma,Whitefield,Order Lost,Pricing Issue,"TMT Steel Bars, Cement","3,00,000",05/04/2026,,,,Commercial Owner,Commercial,no',
+      '"MD-ABC123",Vikram Rao,9876543210,15/03/2025,Arjun Mehta,JP Nagar,Quote Approval Pending,,"Portland Cement 50kg; Binding Wire; Sand","165000",10/04/2025,20/04/2025,Client requested bulk quote|15/03/2025|Arjun Mehta,15/03/2025|Website;18/03/2025|JP Nagar Centre,Home Owner,Apartment,yes,Woodwork',
+      '"MD-DEF456",Anita Deshmukh,9845012345,10/03/2025,Priya Sharma,Whitefield,Order Lost,Pricing Issue,"TMT Steel Bars; Cement","300000",05/04/2025,,,,,Commercial Owner,Commercial,no,Civil & Plumbing',
     ];
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1932,7 +1975,7 @@ export default function App() {
         const fields = parseCsvLine(lines[r]);
         if (fields.length < 14) { errors.push('Row ' + rowNum + ': Expected at least 14 columns, got ' + fields.length); continue; }
 
-        const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr] = fields;
+        const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr, projectPhaseStr] = fields;
 
         if (!leadId) errors.push('Row ' + rowNum + ': Lead ID is required');
         if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
@@ -1958,9 +2001,11 @@ export default function App() {
 
         const clientType = (clientTypeStr || '').trim();
         const propertyType = (propertyTypeStr || '').trim();
+        const projectPhase = (projectPhaseStr || '').trim();
         const architectInvolvedRaw = (architectInvolvedStr || '').trim().toLowerCase();
         if (clientType && !CLIENT_TYPES.includes(clientType)) errors.push('Row ' + rowNum + ': Client Type "' + clientType + '" is not valid. Must be one of: ' + CLIENT_TYPES.join(', '));
         if (propertyType && !PROPERTY_TYPES.includes(propertyType)) errors.push('Row ' + rowNum + ': Property Type "' + propertyType + '" is not valid. Must be one of: ' + PROPERTY_TYPES.join(', '));
+        if (projectPhase && !PROJECT_PHASES.includes(projectPhase)) errors.push('Row ' + rowNum + ': Project Phase "' + projectPhase + '" is not valid. Must be one of: ' + PROJECT_PHASES.join(', '));
         if (architectInvolvedRaw && !['true', 'false', 'yes', 'no'].includes(architectInvolvedRaw)) errors.push('Row ' + rowNum + ': Architect/Designer Involved "' + architectInvolvedStr + '" must be true/false/yes/no or empty');
         const architectInvolved = ['true', 'yes'].includes(architectInvolvedRaw);
 
@@ -2001,7 +2046,7 @@ export default function App() {
           }
         }
 
-        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved });
+        parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved, projectPhase });
       }
 
       if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
@@ -2043,6 +2088,7 @@ export default function App() {
       clientType: row.clientType || '',
       propertyType: row.propertyType || '',
       architectInvolved: row.architectInvolved || false,
+      projectPhase: row.projectPhase || '',
     }));
     setLeads((prev) => {
       const updated = [...prev];
@@ -2105,25 +2151,27 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-6 flex gap-1">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Sales' }]).map(t => (
-          <button
-            key={t.key}
-            onClick={() => {
-              if (t.key === 'sales') {
-                router.push('/dashboard');
-                return;
-              }
-              setMainTab(t.key);
-            }}
-            className={`px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors ${mainTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-          >
-            {t.label}
-          </button>
-        ))}
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Sales' }])
+          .filter(t => allowedTabs.includes(t.key))
+          .map(t => (
+            <button
+              key={t.key}
+              onClick={() => {
+                if (t.key === 'sales') {
+                  router.push('/dashboard');
+                  return;
+                }
+                setMainTab(t.key);
+              }}
+              className={`px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors ${mainTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+            >
+              {t.label}
+            </button>
+          ))}
       </div>
 
       {mainTab === 'dashboard' && (
-        <Dashboard logs={dashLogs} branches={branches} />
+        <Dashboard logs={dashLogs} branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
       {mainTab === 'storeVisit' && (
@@ -2206,8 +2254,10 @@ export default function App() {
             />
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
             <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="All Salespeople" />
-            {userAllowedBranches.length > 0 ? (
-              <span className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 whitespace-nowrap">{userAllowedBranches.join(', ')}</span>
+            {userAllowedBranches.length === 1 ? (
+              <span className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 whitespace-nowrap">{userAllowedBranches[0]}</span>
+            ) : userAllowedBranches.length > 1 ? (
+              <MultiSelect options={userAllowedBranches} selected={branchFilter} onChange={setBranchFilter} label="All My Branches" />
             ) : (
               <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
             )}
