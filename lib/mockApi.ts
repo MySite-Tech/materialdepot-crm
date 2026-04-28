@@ -13,6 +13,20 @@ async function mdFetch(path: string, init?: RequestInit) {
   return res.json();
 }
 
+// ---------------------------------------------------------------------------
+// OTP Auth
+// ---------------------------------------------------------------------------
+
+export async function sendOtp(phone: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/login-otp/?contact=${phone}&country_code=91`);
+  if (!res.ok) throw new Error(`Failed to send OTP: ${res.status}`);
+}
+
+export async function verifyOtp(phone: string, otp: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE_URL}/verify-otp/?contact=${phone}&otp=${otp}`);
+  return res.ok;
+}
+
 async function kylasFetch(path: string, init?: RequestInit) {
   const res = await fetch(`${KYLAS_API_URL}${path}`, {
     ...init,

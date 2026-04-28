@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, Cha
 import { useRouter } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchLead, fetchLeadRemarks, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithCode, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, fetchCRMLeadsStats, updateLeadProperties, markLeadLost, CRMLeadsStats } from '../lib/mockApi';
+import { fetchLead, fetchLeadRemarks, upsertLead, upsertLeads, appendRemarkToLead, deleteLead as deleteLeadDb, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranches, addBranch, updateBranch, deleteBranch, logActivity, fetchActivityLogs } from '../lib/supabase';
+import { fetchCRMLeads, fetchCRMLeadsStats, updateLeadProperties, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -901,12 +901,12 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
   const [branchList, setBranchList] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
-  const [newCode, setNewCode] = useState('');
+  const [newPhone, setNewPhone] = useState('');
   const [newRole, setNewRole] = useState('sales');
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<string | number | null>(null);
   const [editName, setEditName] = useState('');
-  const [editCode, setEditCode] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editBranches, setEditBranches] = useState<string[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -930,13 +930,14 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
   }, [activeTab]);
 
   const handleAdd = async () => {
-    if (!newName.trim() || !newCode.trim()) { setError('Name and code are required'); return; }
-    if (users.some((u) => u.code === newCode.trim())) { setError('Code already exists'); return; }
+    if (!newName.trim() || !newPhone.trim()) { setError('Name and phone are required'); return; }
+    if (!/^\d{10}$/.test(newPhone.trim())) { setError('Phone must be 10 digits'); return; }
+    if (users.some((u) => u.phone === newPhone.trim())) { setError('Phone already exists'); return; }
     setError('');
     try {
-      const user = await addUser({ name: newName.trim(), code: newCode.trim(), role: newRole });
+      const user = await addUser({ name: newName.trim(), phone: newPhone.trim(), role: newRole });
       setUsers((prev) => [...prev, user]);
-      setNewName(''); setNewCode(''); setNewRole('sales');
+      setNewName(''); setNewPhone(''); setNewRole('sales');
     } catch (e: any) {
       setError(e.message || 'Failed to add user');
     }
@@ -953,17 +954,18 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
   };
 
   const startEdit = (u: AppUser) => {
-    setEditId(u.id); setEditName(u.name); setEditCode(u.code); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
+    setEditId(u.id); setEditName(u.name); setEditPhone(u.phone); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
   };
 
   const handleSaveEdit = async () => {
-    if (!editName.trim() || !editCode.trim()) { setError('Name and code are required'); return; }
-    if (users.some((u) => u.code === editCode.trim() && u.id !== editId)) { setError('Code already exists'); return; }
+    if (!editName.trim() || !editPhone.trim()) { setError('Name and phone are required'); return; }
+    if (!/^\d{10}$/.test(editPhone.trim())) { setError('Phone must be 10 digits'); return; }
+    if (users.some((u) => u.phone === editPhone.trim() && u.id !== editId)) { setError('Phone already exists'); return; }
     setError('');
     try {
-      await updateUser(editId!, { name: editName.trim(), code: editCode.trim(), role: editRole });
+      await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole });
       await updateUserBranches(editId!, editBranches);
-      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), code: editCode.trim(), role: editRole, allowedBranches: editBranches } : u));
+      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches } : u));
       setEditId(null);
     } catch (e: any) {
       setError(e.message || 'Failed to update user');
@@ -1021,9 +1023,9 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Name</label>
                   <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name" />
                 </div>
-                <div className="w-[100px]">
-                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Code</label>
-                  <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-full text-center" value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="0000" maxLength={10} />
+                <div className="w-[140px]">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Phone</label>
+                  <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-full text-center" value={newPhone} onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ''))} placeholder="9876543210" maxLength={10} />
                 </div>
                 <div className="w-[130px]">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
@@ -1048,7 +1050,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <thead>
                     <tr className="bg-[#FAFAFA]">
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Name</th>
-                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Code</th>
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Phone</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Role</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Branch Access</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">Actions</th>
@@ -1060,7 +1062,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                         {editId === u.id ? (
                           <>
                             <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editName} onChange={(e) => setEditName(e.target.value)} /></td>
-                            <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editCode} onChange={(e) => setEditCode(e.target.value)} /></td>
+                            <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} maxLength={10} /></td>
                             <td className="px-4 py-2">
                               <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
                                 <option value="sales">Sales</option>
@@ -1093,7 +1095,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                         ) : (
                           <>
                             <td className="px-4 py-2.5 text-[13px] font-medium">{u.name}</td>
-                            <td className="px-4 py-2.5 text-[13px] font-mono">{u.code}</td>
+                            <td className="px-4 py-2.5 text-[13px] font-mono">{u.phone}</td>
                             <td className="px-4 py-2.5">
                               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'manager' ? 'bg-amber-100 text-amber-700' : u.role === 'receptionist' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
                                 {u.role}
@@ -1296,48 +1298,123 @@ interface LoginScreenProps {
 }
 
 function LoginScreen({ onLogin, onAdmin }: LoginScreenProps) {
-  const [code, setCode] = useState('');
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [pendingUser, setPendingUser] = useState<AppUser | null>(null);
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!code.trim()) return;
+  const handleSendOtp = async (adminMode: boolean) => {
+    if (!/^\d{10}$/.test(phone.trim())) { setError('Enter a valid 10-digit phone number'); return; }
     setLoading(true);
     setError('');
     try {
-      const user = await loginWithCode(code.trim());
-      if (user) {
-        onLogin(user);
-      } else {
-        setError('Invalid code');
-      }
+      const user = await loginWithPhone(phone.trim());
+      if (!user) { setError('Phone not authorized. Contact your admin.'); setLoading(false); return; }
+      if (adminMode && user.role !== 'superadmin') { setError('Access denied. Super Admin required.'); setLoading(false); return; }
+      await sendOtp(phone.trim());
+      setPendingUser(user);
+      setIsAdminMode(adminMode);
+      setStep('otp');
     } catch {
-      setError('Login failed. Please try again.');
+      setError('Failed to send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAdminAccess = async () => {
-    if (!code.trim()) { setError('Enter your admin code first'); return; }
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    if (otp.length !== 4) return;
     setLoading(true);
     setError('');
     try {
-      const user = await loginWithCode(code.trim());
-      if (user && user.role === 'superadmin') {
-        onAdmin();
-      } else if (user) {
-        setError('Access denied. Super Admin code required.');
-      } else {
-        setError('Invalid code');
-      }
+      const ok = await verifyOtp(phone.trim(), otp.trim());
+      if (!ok) { setError('Invalid OTP. Please try again.'); setLoading(false); return; }
+      if (isAdminMode) { onAdmin(); } else { onLogin(pendingUser!); }
     } catch {
-      setError('Login failed. Please try again.');
+      setError('Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  const card = (
+    <div className="bg-white rounded-lg border border-gray-200 shadow-[0_4px_12px_rgba(0,0,0,0.08)] w-[360px] p-8">
+      <div className="text-center mb-6">
+        <div className="flex items-center justify-center gap-1 mb-2">
+          <span className="text-lg font-bold text-[#1A1A1A]">material</span>
+          <span className="text-lg font-bold text-[#EAB308] -ml-1.5">depot</span>
+        </div>
+        <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Sales CRM Login</p>
+      </div>
+
+      {step === 'phone' ? (
+        <>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Phone Number</label>
+          <input
+            className="px-2.5 py-2.5 text-[15px] border border-gray-200 rounded-md outline-none font-mono w-full text-center tracking-[0.15em] focus:border-[#EAB308]"
+            type="tel"
+            value={phone}
+            onChange={(e) => { setPhone(e.target.value.replace(/\D/g, '')); setError(''); }}
+            placeholder="9876543210"
+            maxLength={10}
+            autoFocus
+          />
+          {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              disabled={loading || phone.length !== 10}
+              onClick={() => handleSendOtp(false)}
+              className={`bg-[#EAB308] text-white border-none px-5 py-2.5 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${loading || phone.length !== 10 ? 'opacity-50' : 'opacity-100'}`}
+            >
+              {loading ? 'Sending OTP...' : 'Send OTP'}
+            </button>
+            <button
+              type="button"
+              disabled={loading || phone.length !== 10}
+              onClick={() => handleSendOtp(true)}
+              className={`bg-white text-gray-600 border border-gray-200 px-4 py-2.5 rounded-md text-[13px] font-medium cursor-pointer ${loading || phone.length !== 10 ? 'opacity-50' : 'opacity-100'}`}
+            >
+              Admin
+            </button>
+          </div>
+        </>
+      ) : (
+        <form onSubmit={handleVerifyOtp}>
+          <p className="text-[12px] text-gray-500 text-center mb-4">OTP sent to <span className="font-semibold text-gray-700">{phone}</span></p>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Enter OTP</label>
+          <input
+            className="px-2.5 py-2.5 text-[22px] border border-gray-200 rounded-md outline-none font-mono w-full text-center tracking-[0.5em] focus:border-[#EAB308]"
+            type="tel"
+            value={otp}
+            onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '')); setError(''); }}
+            placeholder="••••"
+            maxLength={4}
+            autoFocus
+          />
+          {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading || otp.length !== 4}
+            className={`mt-4 w-full bg-[#EAB308] text-white border-none py-2.5 rounded-md text-[13px] font-semibold cursor-pointer ${loading || otp.length !== 4 ? 'opacity-50' : 'opacity-100'}`}
+          >
+            {loading ? 'Verifying...' : 'Verify OTP'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+            className="mt-2 w-full bg-transparent border-none text-gray-400 text-[12px] cursor-pointer py-1"
+          >
+            ← Change number
+          </button>
+        </form>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
@@ -1348,47 +1425,7 @@ function LoginScreen({ onLogin, onAdmin }: LoginScreenProps) {
           <span className="text-xs text-gray-400 ml-2">Sales CRM</span>
         </div>
       </header>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="bg-white rounded-lg border border-gray-200 shadow-[0_4px_12px_rgba(0,0,0,0.08)] w-[360px] p-8">
-          <div className="text-center mb-6">
-            <div className="flex items-center justify-center gap-1 mb-2">
-              <span className="text-lg font-bold text-[#1A1A1A]">material</span>
-              <span className="text-lg font-bold text-[#EAB308] -ml-1.5">depot</span>
-            </div>
-            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Sales CRM Login</p>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Enter your unique code</label>
-            <input
-              className="px-2.5 py-2.5 text-[15px] border border-gray-200 rounded-md outline-none font-mono w-full text-center tracking-[0.3em] focus:border-[#EAB308]"
-              type="text"
-              value={code}
-              onChange={(e) => { setCode(e.target.value); setError(''); }}
-              placeholder="0000"
-              maxLength={10}
-              autoFocus
-            />
-            {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
-            <div className="flex gap-2 mt-4">
-              <button
-                type="submit"
-                disabled={loading || !code.trim()}
-                className={`bg-[#EAB308] text-white border-none px-5 py-2.5 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${loading || !code.trim() ? 'opacity-50' : 'opacity-100'}`}
-              >
-                {loading ? 'Logging in...' : 'Login'}
-              </button>
-              <button
-                type="button"
-                disabled={loading || !code.trim()}
-                onClick={handleAdminAccess}
-                className={`bg-white text-gray-600 border border-gray-200 px-4 py-2.5 rounded-md text-[13px] font-medium cursor-pointer ${loading || !code.trim() ? 'opacity-50' : 'opacity-100'}`}
-              >
-                Admin
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+      <div className="flex-1 flex items-center justify-center">{card}</div>
     </div>
   );
 }
@@ -1440,7 +1477,7 @@ export default function App() {
   }, []);
 
   const handleLogin = (user: AppUser) => {
-    const userData: AppUser = { id: user.id, name: user.name, code: user.code, role: user.role, allowedBranches: user.allowedBranches || [] };
+    const userData: AppUser = { id: user.id, name: user.name, phone: user.phone, role: user.role, allowedBranches: user.allowedBranches || [] };
     setCurrentUser(userData);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
     // Reset all filters so previous user's state doesn't bleed into the new session

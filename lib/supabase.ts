@@ -252,15 +252,15 @@ export async function deleteLead(id: string, clientPhone?: string): Promise<void
   if (error) throw error;
 }
 
-export async function loginWithCode(code: string): Promise<AppUser | null> {
+export async function loginWithPhone(phone: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .eq('code', code)
+    .eq('code', phone)
     .single();
   if (error) return null;
   const row = data as Record<string, unknown>;
-  return { ...(row as unknown as AppUser), allowedBranches: (row.allowed_branches as string[]) || [] };
+  return { ...(row as unknown as AppUser), phone: row.code as string, allowedBranches: (row.allowed_branches as string[]) || [] };
 }
 
 export async function fetchUsers(): Promise<AppUser[]> {
@@ -271,6 +271,7 @@ export async function fetchUsers(): Promise<AppUser[]> {
   if (error) throw error;
   return ((data || []) as Record<string, unknown>[]).map(u => ({
     ...(u as unknown as AppUser),
+    phone: u.code as string,
     allowedBranches: (u.allowed_branches as string[]) || [],
   }));
 }
@@ -283,20 +284,23 @@ export async function updateUserBranches(userId: string | number, branches: stri
   if (error && !(error as { message?: string }).message?.includes('allowed_branches')) throw error;
 }
 
-export async function addUser({ name, code, role }: { name: string; code: string; role: string }): Promise<AppUser> {
+export async function addUser({ name, phone, role }: { name: string; phone: string; role: string }): Promise<AppUser> {
   const { data, error } = await supabase
     .from('users')
-    .insert({ name, code, role: role || 'sales' })
+    .insert({ name, code: phone, role: role || 'sales' })
     .select()
     .single();
   if (error) throw error;
-  return data as AppUser;
+  const row = data as Record<string, unknown>;
+  return { ...(row as unknown as AppUser), phone: row.code as string };
 }
 
 export async function updateUser(id: string | number, updates: Partial<AppUser>): Promise<void> {
+  const { phone, ...rest } = updates as Partial<AppUser> & { phone?: string };
+  const dbUpdates = { ...rest, ...(phone !== undefined ? { code: phone } : {}) };
   const { error } = await supabase
     .from('users')
-    .update(updates)
+    .update(dbUpdates)
     .eq('id', id);
   if (error) throw error;
 }

@@ -41,7 +41,7 @@ export interface Lead {
 export interface AppUser {
   id: string | number;
   name: string;
-  code: string;
+  phone: string;
   role: string;
   allowedBranches?: string[];
 }
