@@ -1112,8 +1112,7 @@ function AdminDashboard() {
                               }
                             </td>
                             <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                              <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
-                              <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDelete(u.id, u.name)}>Delete</button>
+                              <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
                             </td>
                           </>
                         )}
@@ -1287,8 +1286,7 @@ function BranchManager({ branches, setBranches }: BranchManagerProps) {
                   <>
                     <td className="px-4 py-2.5 text-[13px] font-medium">{b.name}</td>
                     <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                      <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none mr-3 hover:text-[#EAB308]" onClick={() => { setEditBranchId(b.id); setEditBranchName(b.name); setBranchError(''); }}>Edit</button>
-                      <button className="text-red-400 text-xs cursor-pointer bg-transparent border-none hover:text-red-600" onClick={() => handleDeleteBranch(b.id, b.name)}>Delete</button>
+                      <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none hover:text-[#EAB308]" onClick={() => { setEditBranchId(b.id); setEditBranchName(b.name); setBranchError(''); }}>Edit</button>
                     </td>
                   </>
                 )}
