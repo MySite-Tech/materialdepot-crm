@@ -2251,7 +2251,7 @@ export default function App() {
         <AdminDashboard />
       )}
 
-      {mainTab === 'sales' && <MobileDashboard />}
+      {mainTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200">
