@@ -90,6 +90,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
 
   // Expanded deal for raise form
   const [expandedDealId, setExpandedDealId] = useState<number | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [dealContact, setDealContact] = useState<Record<number, string>>({});
 
   // All escalation+support deals for history matching
@@ -102,7 +103,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Fetch sales deals
-  const [allSalesDeals, setAllSalesDeals] = useState<Deal[]>([]);
 
   const fetchDeals = useCallback(async (q: string) => {
     setLoading(true);
@@ -178,7 +178,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         allSales = collected.filter(isSalesDeal);
       }
 
-      setAllSalesDeals(allSales);
       setDeals(allSales);
       setLoading(false);
 
@@ -418,7 +417,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2.5 rounded-lg bg-gray-950 text-yellow-400 text-sm font-semibold disabled:opacity-50"
+          className="px-4 py-2.5 rounded-lg bg-[#EAB308] text-gray-950 text-sm font-semibold disabled:opacity-50"
         >
           Search
         </button>
@@ -519,18 +518,23 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       ) : (
         <div className="space-y-2">
           {deals.map((deal) => {
-            const isExpanded = expandedDealId === deal.id;
             const escDeals = getOngoing(deal.name);
             const existingSupport = cfDisplayValue(deal.customFieldValues?.["cfRaiseSupportRequest"]);
             const existingEscalation = cfDisplayValue(deal.customFieldValues?.["cfRaiseEscalation"]);
             const contactName = dealContact[deal.id];
 
             return (
-              <div key={deal.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                <div
-                  className="px-4 py-3 active:bg-gray-50"
-                  onClick={() => handleExpandDeal(deal)}
-                >
+              <div
+                key={deal.id}
+                onClick={() => {
+                  setSelectedDeal(deal);
+                  setExpandedDealId(deal.id);
+                }}
+                className={`rounded-xl border border-gray-200 overflow-hidden cursor-pointer transition-colors ${
+                  selectedDeal?.id === deal.id ? "bg-yellow-50/60 border-yellow-300" : "bg-white hover:bg-yellow-50/40"
+                }`}
+              >
+                <div className="px-4 py-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 text-sm truncate">{deal.name}</p>
@@ -545,11 +549,8 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
                           {deal.pipelineStage.name}
                         </span>
                       )}
-                      <svg
-                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
                       </svg>
                     </div>
                   </div>
@@ -569,76 +570,94 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
                   )}
                 </div>
 
-                {isExpanded && (
-                  <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50">
-                    {/* Escalation / support history (name-matched, active only) */}
-                    {(() => {
-                      const history = getOngoing(deal.name);
-                      return (
-                        <div className="mb-4">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                            Ongoing Escalation/Support Requests
-                          </p>
-                          {history.length > 0 ? (
-                            <ul className="space-y-1.5">
-                              {history.map((ed) => (
-                                <li
-                                  key={ed.id}
-                                  onClick={() => onViewDeal(ed.name)}
-                                  className={`flex items-center justify-between rounded-lg border px-3 py-2 active:opacity-80 cursor-pointer ${
-                                    ed.pipeline === "escalation"
-                                      ? "border-rose-100 bg-rose-50/50"
-                                      : "border-teal-100 bg-teal-50/50"
-                                  }`}
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-xs font-medium text-gray-900 truncate">{ed.name}</p>
-                                  </div>
-                                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
-                                    ed.pipeline === "escalation"
-                                      ? "bg-rose-100 text-rose-700"
-                                      : "bg-teal-100 text-teal-700"
-                                  }`}>
-                                    {ed.stage}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-xs text-gray-400">No ongoing escalation/support requests.</p>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Raise forms — both can be filled */}
-                    <div className="space-y-3">
-                      <RaiseField
-                        label="Raise Support Request"
-                        options={SUPPORT_OPTIONS}
-                                                onSubmit={(opts) => handleSubmit(deal.id, "support", opts)}
-                        submitting={submitting === deal.id}
-                      />
-                      <RaiseField
-                        label="Raise Escalation"
-                        options={ESCALATION_OPTIONS}
-                                                onSubmit={(opts) => handleSubmit(deal.id, "escalation", opts)}
-                        submitting={submitting === deal.id}
-                      />
-                    </div>
-
-                    {submitSuccess === deal.id && (
-                      <p className="text-xs text-green-600 font-medium mt-2">Updated in CRM</p>
-                    )}
-                    {submitError && submitting === null && expandedDealId === deal.id && (
-                      <p className="text-xs text-red-600 mt-2">{submitError}</p>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Detail sidebar */}
+      {selectedDeal && (
+        <>
+          <div className="fixed inset-0 z-[999] bg-black/20" onClick={() => setSelectedDeal(null)} />
+          <div className="fixed top-0 right-0 h-screen w-[420px] max-w-full z-[1000] bg-white shadow-2xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200">
+              <div className="flex-1 min-w-0 pr-3">
+                <p className="text-sm font-semibold text-gray-900 truncate">{selectedDeal.name}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {selectedDeal.ownedBy?.name ?? "—"}
+                  {selectedDeal.pipelineStage?.name && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
+                      {selectedDeal.pipelineStage.name}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDeal(null)}
+                className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+              {/* Ongoing requests */}
+              <div>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Ongoing Escalation/Support Requests
+                </p>
+                {getOngoing(selectedDeal.name).length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {getOngoing(selectedDeal.name).map((ed) => (
+                      <li
+                        key={ed.id}
+                        onClick={() => { onViewDeal(ed.name); setSelectedDeal(null); }}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 cursor-pointer hover:opacity-80 ${
+                          ed.pipeline === "escalation" ? "border-rose-100 bg-rose-50/50" : "border-teal-100 bg-teal-50/50"
+                        }`}
+                      >
+                        <p className="text-xs font-medium text-gray-900 truncate flex-1">{ed.name}</p>
+                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                          ed.pipeline === "escalation" ? "bg-rose-100 text-rose-700" : "bg-teal-100 text-teal-700"
+                        }`}>{ed.stage}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-gray-400">No ongoing requests.</p>
+                )}
+              </div>
+
+              {/* Raise forms */}
+              <div className="space-y-3">
+                <RaiseField
+                  label="Raise Support Request"
+                  options={SUPPORT_OPTIONS}
+                  onSubmit={(opts) => handleSubmit(selectedDeal.id, "support", opts)}
+                  submitting={submitting === selectedDeal.id}
+                />
+                <RaiseField
+                  label="Raise Escalation"
+                  options={ESCALATION_OPTIONS}
+                  onSubmit={(opts) => handleSubmit(selectedDeal.id, "escalation", opts)}
+                  submitting={submitting === selectedDeal.id}
+                />
+              </div>
+
+              {submitSuccess === selectedDeal.id && (
+                <p className="text-xs text-green-600 font-medium">Updated in CRM</p>
+              )}
+              {submitError && submitting === null && expandedDealId === selectedDeal.id && (
+                <p className="text-xs text-red-600">{submitError}</p>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

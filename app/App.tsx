@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
 import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
+import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -1469,10 +1470,11 @@ interface CsvRow {
 type DateEditState = { leadId: string; field: 'followUpDate' | 'closureDate' };
 
 export default function App() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-  const [mainTab, setMainTab] = useState<MainTab>('leads');
+  const initialTab = (searchParams.get('tab') as MainTab) ?? 'leads';
+  const [mainTab, setMainTab] = useState<MainTab>(initialTab);
 
   // Derive allowed tabs for the current user's role
   const allowedTabs = ROLE_TABS[currentUser?.role ?? ''] ?? DEFAULT_ROLE_TABS;
@@ -2218,14 +2220,14 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Sales' }, { key: 'admin' as const, label: 'Admin' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }])
           .filter(t => allowedTabs.includes(t.key))
           .map(t => (
             <button
               key={t.key}
               onClick={() => {
                 if (t.key === 'sales') {
-                  router.push('/dashboard');
+                  setMainTab('sales');
                   return;
                 }
                 setMainTab(t.key);
@@ -2248,6 +2250,8 @@ export default function App() {
       {mainTab === 'admin' && allowedTabs.includes('admin') && (
         <AdminDashboard />
       )}
+
+      {mainTab === 'sales' && <MobileDashboard />}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200">
