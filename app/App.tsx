@@ -2426,8 +2426,8 @@ export default function App() {
         <div className="sm:hidden flex flex-col gap-2">
           {leadsLoading && <div className="flex items-center justify-center gap-2 py-10 text-gray-400 text-sm"><svg className="animate-spin h-4 w-4 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Loading leads...</div>}
           {!leadsLoading && paginatedRows.length === 0 && <div className="text-center text-gray-400 py-10 text-sm">No leads found</div>}
-          {paginatedRows.map((l) => (
-            <div key={l.id} className="bg-white rounded-lg border border-gray-200 px-4 py-3" onClick={() => setDrawerLead(l)}>
+          {paginatedRows.map((l,i) => (
+            <div key={l.id + i} className="bg-white rounded-lg border border-gray-200 px-4 py-3" onClick={() => setDrawerLead(l)}>
               <div className="flex justify-between items-start gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-[14px] truncate">{l.clientName || '—'}</div>
@@ -2480,9 +2480,9 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedRows.map((l) => (
+                {paginatedRows.map((l, i) => (
                   <tr
-                    key={l.id}
+                    key={l.id + i}
                     className="border-t border-gray-200 hover:bg-[#FFFAF7]"
                   >
                     {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle w-[200px] min-w-[200px]">
