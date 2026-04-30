@@ -1,7 +1,12 @@
 'use client';
 
+import { Suspense } from 'react';
 import App from './App';
 
 export default function Page() {
-  return <App />;
+  return (
+    <Suspense>
+      <App />
+    </Suspense>
+  );
 }
