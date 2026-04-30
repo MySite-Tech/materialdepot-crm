@@ -1,4 +1,3 @@
-import { LeadData } from "../types/storeVisit";
 
 const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
@@ -79,15 +78,9 @@ export async function fetchBranches(): Promise<Branch[]> {
 
 export interface LookupResponse {
   success: boolean;
-  leadId: number;
-  leadData: LeadData;
-  fullLeadBody?: Record<string, unknown>;
-}
-
-export interface UpdateResponse {
-  success: boolean;
-  leadId: number;
-  conversionDetails?: Array<{ entityType: string; entityId: number }>;
+  userId: string;
+  newVisit: boolean;
+  name: string;
 }
 
 export async function lookupLeadByPhone(phoneNumber: string, branch: string): Promise<LookupResponse> {
@@ -98,10 +91,37 @@ export async function lookupLeadByPhone(phoneNumber: string, branch: string): Pr
   });
   return {
     success: true,
-    leadId: data.id,
-    leadData: { id: data.id, customFieldValues: data.customFieldValues || {}, conversionDetails: data.conversionDetails },
-    fullLeadBody: data,
+    userId: data.user_id,
+    newVisit: data.new_visit,
+    name: data.name || '',
   };
+}
+
+// ---------------------------------------------------------------------------
+// User Info Properties (questions + options from Django)
+// ---------------------------------------------------------------------------
+
+export interface UserInfoProperty {
+  id: number;
+  name: string;
+  options: string[] | null;
+  required: boolean;
+}
+
+export async function fetchUserInfoProperties(ids: number[]): Promise<UserInfoProperty[]> {
+  const data: UserInfoProperty[] = await mdFetch('/user-info-property/');
+  return data.filter(p => ids.includes(p.id));
+}
+
+export async function saveUserProperties(
+  userId: string,
+  properties: Array<{ property_id: number; value: string }>,
+): Promise<void> {
+  await mdFetch('/user-property/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, properties }),
+  });
 }
 
 export async function updateLead(
@@ -110,7 +130,7 @@ export async function updateLead(
   customFieldValues: Record<string, unknown>,
   contact: string,
   name?: string,
-): Promise<UpdateResponse> {
+): Promise<{ success: boolean; leadId: number; conversionDetails?: Array<{ entityType: string; entityId: number }> }> {
   const data = await kylasFetch(`/leads/${leadId}`, {
     method: "PUT",
     body: JSON.stringify({
@@ -389,6 +409,7 @@ export async function fetchClientProperties(contacts: string[]): Promise<Record<
 }
 
 export interface LeadPropertyUpdate {
+  name?: string;
   client_type?: string;
   property_type?: string;
   architect_involved?: string;

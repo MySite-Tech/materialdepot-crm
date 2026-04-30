@@ -33,7 +33,7 @@ function ToastProvider({ children }: { children: React.ReactNode }) {
       {toasts.map((toastItem) => (
         <div
           key={toastItem.id}
-          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+          className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg max-w-sm ${
             toastItem.variant === 'destructive'
               ? 'bg-red-500 text-white'
               : 'bg-gray-800 text-white'

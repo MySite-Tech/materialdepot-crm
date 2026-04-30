@@ -3,18 +3,21 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useToast } from './StoreVisitWrapper';
-import { fetchBMsByBranch, assignBMToClient, lookupLeadByPhone, updateLead, type BMOption } from '../lib/mockApi';
-import type { LeadData } from '../types/storeVisit';
+import {
+  fetchBMsByBranch,
+  assignBMToClient,
+  lookupLeadByPhone,
+  fetchUserInfoProperties,
+  saveUserProperties,
+  updateLeadProperties,
+  type BMOption,
+  type UserInfoProperty,
+} from '../lib/mockApi';
 
 interface BranchOption {
   id: number;
   name: string;
   displayName: string;
-}
-
-interface FullLeadBody {
-  firstName?: string;
-  lastName?: string;
 }
 
 const mockApi = {
@@ -28,38 +31,20 @@ const mockApi = {
   },
 
   lookupLeadByPhone: (phone: string, branch: string) => lookupLeadByPhone(phone, branch),
-
-  updateLead: (leadId: number, data: FullLeadBody, customFields: Record<string, unknown>, phone: string, name: string) =>
-    updateLead(leadId, data as Record<string, unknown>, customFields, phone, name),
-
   fetchBMsByBranch: (branch: string) => fetchBMsByBranch(branch),
-
-  assignBM: (clientContact: string, bmContact: string, kylasLeadId: number | null) =>
-    assignBMToClient(clientContact, bmContact, kylasLeadId ?? undefined),
+  assignBM: (clientContact: string, bmContact: string) =>
+    assignBMToClient(clientContact, bmContact),
 };
 
-const USER_TYPE_OPTIONS = {
-  architect: { id: 2686527, label: 'Architect' },
-  homeOwner: { id: 2686528, label: 'Home owner' },
-} as const;
-
-const CATEGORY_OPTIONS = {
-  tiles: { id: 2689623, label: 'Tiles' },
-  panels: { id: 2689624, label: 'Panels' },
-  laminates: { id: 2689625, label: 'Laminates' },
-  wallpapers: { id: 2689626, label: 'Wallpapers' },
-  woodenFlooring: { id: 2689627, label: 'Wooden Flooring' },
-  others: { id: 2689628, label: 'Others' },
-} as const;
-
-type UserTypeKey = keyof typeof USER_TYPE_OPTIONS;
-type CategoryKey = keyof typeof CATEGORY_OPTIONS;
+// Property IDs for the 2 questions in UserInfoProperty table
+const USER_TYPE_PROPERTY_ID = 48;
+const CATEGORIES_PROPERTY_ID = 81;
 
 interface FormData {
   phoneNumber: string;
   name: string;
-  userType: UserTypeKey | null;
-  categories: CategoryKey[];
+  userType: string | null;
+  categories: string[];
   projectType: null;
   propertyType: null;
   propertyName: string;
@@ -132,7 +117,7 @@ function PhoneStep({ phoneNumber, onPhoneChange, onSubmit, isLoading }: {
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (validatePhone(phoneNumber)) onSubmit();
   };
@@ -182,17 +167,19 @@ function PhoneStep({ phoneNumber, onPhoneChange, onSubmit, isLoading }: {
   );
 }
 
-function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryToggle, onSubmit, isLoading }: {
+function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryToggle, onSubmit, isLoading, userTypeProp, categoriesProp }: {
   formData: FormData;
   onNameChange: (v: string) => void;
-  onUserTypeChange: (v: UserTypeKey) => void;
-  onCategoryToggle: (v: CategoryKey) => void;
+  onUserTypeChange: (v: string) => void;
+  onCategoryToggle: (v: string) => void;
   onSubmit: () => void;
   isLoading: boolean;
+  userTypeProp: UserInfoProperty | null;
+  categoriesProp: UserInfoProperty | null;
 }) {
   const isValid = formData.name.trim() && formData.userType && formData.categories.length > 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (isValid) onSubmit();
   };
@@ -211,44 +198,48 @@ function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryT
           className="h-12 w-full border border-gray-300 rounded-md px-3 py-2"
         />
       </div>
-      <div className="space-y-3">
-        <label className="text-base font-medium text-gray-900">
-          What would best describe you? <span className="text-red-500">*</span>
-        </label>
-        <div className="space-y-2">
-          {(Object.entries(USER_TYPE_OPTIONS) as [UserTypeKey, { id: number; label: string }][]).map(([key, option]) => (
-            <label key={key} className="flex items-center space-x-3 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
-              <input
-                type="radio"
-                name="userType"
-                value={key}
-                checked={formData.userType === key}
-                onChange={() => onUserTypeChange(key)}
-                className="text-amber-500"
-              />
-              <span className="flex-1">{option.label}</span>
-            </label>
-          ))}
+      {categoriesProp && (
+        <div className="space-y-3">
+          <label className="text-base font-medium text-gray-900">
+            {categoriesProp.name} <span className="text-red-500">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(categoriesProp.options || []).map((option) => (
+              <label key={option} className="flex items-center space-x-2 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.categories.includes(option)}
+                  onChange={() => onCategoryToggle(option)}
+                  className="text-amber-500"
+                />
+                <span className="text-sm">{option}</span>
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
-      <div className="space-y-3">
-        <label className="text-base font-medium text-gray-900">
-          Interested categories? <span className="text-red-500">*</span>
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          {(Object.entries(CATEGORY_OPTIONS) as [CategoryKey, { id: number; label: string }][]).map(([key, option]) => (
-            <label key={key} className="flex items-center space-x-2 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.categories.includes(key)}
-                onChange={() => onCategoryToggle(key)}
-                className="text-amber-500"
-              />
-              <span className="text-sm">{option.label}</span>
-            </label>
-          ))}
+      )}
+      {userTypeProp && (
+        <div className="space-y-3">
+          <label className="text-base font-medium text-gray-900">
+            {userTypeProp.name} <span className="text-red-500">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(userTypeProp.options || []).map((option) => (
+              <label key={option} className="flex items-center space-x-2 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name="userType"
+                  value={option}
+                  checked={formData.userType === option}
+                  onChange={() => onUserTypeChange(option)}
+                  className="text-amber-500"
+                />
+                <span className="text-sm">{option}</span>
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <button
         type="submit"
         className="w-full bg-gray-800 hover:bg-gray-700 text-white h-12 text-base font-medium rounded-md"
@@ -277,7 +268,7 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
 }) {
   const [search, setSearch] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (selectedBM) onSubmit();
   };
@@ -311,7 +302,7 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-3">
         <label className="text-base font-medium text-gray-900">
-          Assign Business Manager <span className="text-red-500">*</span>
+          Assign Sales BM <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -382,15 +373,15 @@ export default function StoreVisitFormSimple() {
     propertyType: null,
     propertyName: '',
   });
-  const [leadId, setLeadId] = useState<number | null>(null);
-  const [leadData, setLeadData] = useState<LeadData | null>(null);
-  const [fullLeadBody, setFullLeadBody] = useState<FullLeadBody | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [bms, setBMs] = useState<BMOption[]>([]);
   const [bmsLoading, setBMsLoading] = useState(false);
   const [selectedBM, setSelectedBM] = useState<string | null>(null);
+  const [userTypeProp, setUserTypeProp] = useState<UserInfoProperty | null>(null);
+  const [categoriesProp, setCategoriesProp] = useState<UserInfoProperty | null>(null);
 
   const totalSteps = 3;
 
@@ -407,13 +398,13 @@ export default function StoreVisitFormSimple() {
   }, [branch, toast]);
 
   useEffect(() => {
-    if (fullLeadBody) {
-      const prefillName = fullLeadBody.firstName?.trim() || fullLeadBody.lastName?.trim() || '';
-      if (prefillName) {
-        setFormData(prev => ({ ...prev, name: prefillName }));
-      }
-    }
-  }, [leadData, fullLeadBody]);
+    fetchUserInfoProperties([USER_TYPE_PROPERTY_ID, CATEGORIES_PROPERTY_ID])
+      .then(props => {
+        setUserTypeProp(props.find(p => p.id === USER_TYPE_PROPERTY_ID) || null);
+        setCategoriesProp(props.find(p => p.id === CATEGORIES_PROPERTY_ID) || null);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleBranchSelect = (branchName: string) => {
     const url = new URL(window.location.href);
@@ -422,21 +413,27 @@ export default function StoreVisitFormSimple() {
     setCurrentStep(1);
   };
 
+  const loadBMs = async () => {
+    setBMsLoading(true);
+    try {
+      const bmList = await mockApi.fetchBMsByBranch(branch);
+      setBMs(bmList);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load Business Managers.', variant: 'destructive' });
+    } finally {
+      setBMsLoading(false);
+    }
+  };
+
   const handlePhoneSubmit = async () => {
     setIsLoading(true);
     try {
       const response = await mockApi.lookupLeadByPhone(formData.phoneNumber, branch);
-      setLeadId(response.leadId);
-      setLeadData(response.leadData);
-      setFullLeadBody(response.fullLeadBody || null);
-
-      const { cfUserType, cfCategoriesOfInterest } = response.leadData.customFieldValues;
-      if (cfUserType && cfCategoriesOfInterest && cfCategoriesOfInterest.length > 0) {
-        toast({ title: 'Welcome back!', description: 'Redirecting to your profile...' });
-        setTimeout(() => { window.open(`https://app.kylas.io/sales/leads/details/${response.leadId}`, '_blank'); }, 1000);
-      } else {
-        setCurrentStep(2);
+      setUserId(response.userId || null);
+      if (response.name) {
+        setFormData(prev => ({ ...prev, name: response.name }));
       }
+      setCurrentStep(2);
     } catch {
       toast({ title: 'Error', description: 'Failed to lookup your information. Please try again.', variant: 'destructive' });
     } finally {
@@ -445,23 +442,26 @@ export default function StoreVisitFormSimple() {
   };
 
   const handleFinalSubmit = async () => {
-    if (!leadId || !leadData) return;
     setIsLoading(true);
     try {
-      const customFieldValues = {
-        cfCategoriesOfInterest: formData.categories.map(cat => CATEGORY_OPTIONS[cat].id),
-      };
-      await mockApi.updateLead(leadId, fullLeadBody || {}, customFieldValues, formData.phoneNumber, formData.name);
-      setCurrentStep(3);
-      setBMsLoading(true);
-      try {
-        const bmList = await mockApi.fetchBMsByBranch(branch);
-        setBMs(bmList);
-      } catch {
-        toast({ title: 'Error', description: 'Failed to load Business Managers.', variant: 'destructive' });
-      } finally {
-        setBMsLoading(false);
+      const saves: Promise<unknown>[] = [];
+
+      // Save user properties (questions 48 & 81)
+      if (userId) {
+        const properties: Array<{ property_id: number; value: string }> = [];
+        if (formData.userType) properties.push({ property_id: USER_TYPE_PROPERTY_ID, value: formData.userType });
+        if (formData.categories.length > 0) properties.push({ property_id: CATEGORIES_PROPERTY_ID, value: formData.categories.join(', ') });
+        if (properties.length > 0) saves.push(saveUserProperties(userId, properties));
       }
+
+      // Update user name in Django User table
+      if (formData.name.trim()) {
+        saves.push(updateLeadProperties(formData.phoneNumber, { name: formData.name.trim() }));
+      }
+
+      await Promise.all(saves);
+      setCurrentStep(3);
+      await loadBMs();
     } catch {
       toast({ title: 'Error', description: 'Failed to save your information. Please try again.', variant: 'destructive' });
     } finally {
@@ -470,17 +470,24 @@ export default function StoreVisitFormSimple() {
   };
 
   const handleBMAssign = async () => {
-    if (!selectedBM || !leadId) return;
+    if (!selectedBM) return;
     setIsLoading(true);
     try {
-      const result = await mockApi.assignBM(formData.phoneNumber, selectedBM, leadId);
+      const result = await mockApi.assignBM(formData.phoneNumber, selectedBM);
       const description = result.created
-        ? 'Business Manager assigned successfully. Redirecting...'
+        ? 'Business Manager assigned successfully!'
         : result.reactivated
-          ? 'Previous assignment reactivated. Redirecting...'
-          : 'Business Manager already assigned and active. Redirecting...';
+          ? 'Previous assignment reactivated!'
+          : 'Business Manager already assigned and active.';
       toast({ title: 'Done!', description });
-      setTimeout(() => { window.open(`https://app.kylas.io/sales/leads/details/${leadId}`, '_blank'); }, 1500);
+      // Reset form for next visitor
+      setTimeout(() => {
+        setCurrentStep(1);
+        setFormData({ phoneNumber: '', name: '', userType: null, categories: [], projectType: null, propertyType: null, propertyName: '' });
+        setUserId(null);
+        setSelectedBM(null);
+        setBMs([]);
+      }, 2000);
     } catch {
       toast({ title: 'Error', description: 'Failed to assign Business Manager. Please try again.', variant: 'destructive' });
     } finally {
@@ -488,7 +495,7 @@ export default function StoreVisitFormSimple() {
     }
   };
 
-  const handleCategoryToggle = (category: CategoryKey) => {
+  const handleCategoryToggle = (category: string) => {
     setFormData(prev => ({
       ...prev,
       categories: prev.categories.includes(category)
@@ -525,6 +532,8 @@ export default function StoreVisitFormSimple() {
               onCategoryToggle={handleCategoryToggle}
               onSubmit={handleFinalSubmit}
               isLoading={isLoading}
+              userTypeProp={userTypeProp}
+              categoriesProp={categoriesProp}
             />
           )}
           {branch && currentStep === 3 && (
@@ -543,4 +552,3 @@ export default function StoreVisitFormSimple() {
     </div>
   );
 }
-
