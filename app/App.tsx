@@ -84,7 +84,7 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   superadmin:   ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
   admin:        ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
   tech:         ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
-  manager:      ['leads', 'dashboard', 'sales'],
+  manager:      ['leads', 'dashboard', 'storeVisit', 'sales'],
   sales:        ['leads', 'sales'],
   retail:       ['storeVisit'],
 };
@@ -922,6 +922,7 @@ function AdminDashboard() {
   const [editRole, setEditRole] = useState('');
   const [editBranches, setEditBranches] = useState<string[]>([]);
   const [usersPage, setUsersPage] = useState(1);
+  const [userSearch, setUserSearch] = useState('');
   const USERS_PER_PAGE = 20;
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -994,6 +995,13 @@ function AdminDashboard() {
     return 'bg-gray-100 text-gray-600';
   };
 
+  const filteredUsers = userSearch.trim()
+    ? users.filter((u) => {
+        const q = userSearch.trim().toLowerCase();
+        return u.name.toLowerCase().includes(q) || u.phone.includes(q);
+      })
+    : users;
+
   const tabs = [
     { key: 'users' as const, label: 'Users' },
     { key: 'branches' as const, label: 'Branches' },
@@ -1047,6 +1055,15 @@ function AdminDashboard() {
               {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
             </div>
 
+            <div className="mb-3">
+              <input
+                className="px-3 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full max-w-xs"
+                placeholder="Search by name or phone..."
+                value={userSearch}
+                onChange={(e) => { setUserSearch(e.target.value); setUsersPage(1); }}
+              />
+            </div>
+
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               {loading ? (
                 <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
@@ -1062,7 +1079,7 @@ function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.slice((usersPage - 1) * USERS_PER_PAGE, usersPage * USERS_PER_PAGE).map((u) => (
+                    {filteredUsers.slice((usersPage - 1) * USERS_PER_PAGE, usersPage * USERS_PER_PAGE).map((u) => (
                       <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
                         {editId === u.id ? (
                           <>
@@ -1118,7 +1135,7 @@ function AdminDashboard() {
                         )}
                       </tr>
                     ))}
-                    {users.length === 0 && (
+                    {filteredUsers.length === 0 && (
                       <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
                     )}
                   </tbody>
@@ -1126,12 +1143,12 @@ function AdminDashboard() {
               )}
             </div>
             <div className="flex items-center justify-between mt-4">
-              <p className="text-xs text-gray-400">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
-              {users.length > USERS_PER_PAGE && (
+              <p className="text-xs text-gray-400">{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}{userSearch.trim() ? ` matching "${userSearch.trim()}"` : ' total'}</p>
+              {filteredUsers.length > USERS_PER_PAGE && (
                 <div className="flex items-center gap-2">
                   <button disabled={usersPage === 1} onClick={() => setUsersPage(p => p - 1)} className="px-3 py-1 text-[12px] border border-gray-200 rounded text-gray-500 disabled:opacity-40 cursor-pointer bg-white hover:border-[#EAB308]">Prev</button>
-                  <span className="text-[12px] text-gray-500">{usersPage} / {Math.ceil(users.length / USERS_PER_PAGE)}</span>
-                  <button disabled={usersPage >= Math.ceil(users.length / USERS_PER_PAGE)} onClick={() => setUsersPage(p => p + 1)} className="px-3 py-1 text-[12px] border border-gray-200 rounded text-gray-500 disabled:opacity-40 cursor-pointer bg-white hover:border-[#EAB308]">Next</button>
+                  <span className="text-[12px] text-gray-500">{usersPage} / {Math.ceil(filteredUsers.length / USERS_PER_PAGE)}</span>
+                  <button disabled={usersPage >= Math.ceil(filteredUsers.length / USERS_PER_PAGE)} onClick={() => setUsersPage(p => p + 1)} className="px-3 py-1 text-[12px] border border-gray-200 rounded text-gray-500 disabled:opacity-40 cursor-pointer bg-white hover:border-[#EAB308]">Next</button>
                 </div>
               )}
             </div>
