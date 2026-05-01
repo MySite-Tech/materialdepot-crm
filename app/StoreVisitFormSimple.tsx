@@ -560,6 +560,8 @@ export default function StoreVisitFormSimple() {
         setUserId(null);
         setSelectedBM(null);
         setBMs([]);
+        setFootfallCount(0);
+        setCurrentSalesBM(undefined);
       }, 2000);
     } catch {
       toast({ title: 'Error', description: 'Failed to assign Business Manager. Please try again.', variant: 'destructive' });
