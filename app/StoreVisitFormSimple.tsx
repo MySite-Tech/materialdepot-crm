@@ -12,6 +12,8 @@ import {
   updateLeadProperties,
   type BMOption,
   type UserInfoProperty,
+  type CurrentSalesBM,
+  type UserProperties,
 } from '../lib/mockApi';
 
 interface BranchOption {
@@ -37,8 +39,9 @@ const mockApi = {
 };
 
 // Property IDs for the 2 questions in UserInfoProperty table
-const USER_TYPE_PROPERTY_ID = 48;
-const CATEGORIES_PROPERTY_ID = 81;
+// NOTE: Backend data shows ID 48 actually stores categories, 81 stores user_type
+const USER_TYPE_PROPERTY_ID = 81;
+const CATEGORIES_PROPERTY_ID = 48;
 
 interface FormData {
   phoneNumber: string;
@@ -258,13 +261,14 @@ function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryT
   );
 }
 
-function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFetchingBMs }: {
+function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFetchingBMs, currentSalesBM }: {
   bms: BMOption[];
   selectedBM: string | null;
   onSelect: (contact: string) => void;
   onSubmit: () => void;
   isLoading: boolean;
   isFetchingBMs: boolean;
+  currentSalesBM?: CurrentSalesBM;
 }) {
   const [search, setSearch] = useState('');
 
@@ -298,12 +302,33 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
       })
     : bms;
 
+  const currentBMDisplayName = currentSalesBM
+    ? `${currentSalesBM.f_name} ${currentSalesBM.l_name}`.trim() || currentSalesBM.bm_contact
+    : null;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-3">
         <label className="text-base font-medium text-gray-900">
           Assign Sales BM <span className="text-red-500">*</span>
         </label>
+
+        {/* Show current sales BM if available */}
+        {currentSalesBM && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">Current Sales BM</p>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-semibold text-sm">
+                {currentSalesBM.f_name?.[0] || '?'}
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">{currentBMDisplayName}</p>
+                <p className="text-sm text-gray-500">{currentSalesBM.bm_contact}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <input
           type="text"
           placeholder="Search by name or phone"
@@ -317,10 +342,15 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
           ) : (
             filteredBMs.map((bm) => {
               const displayName = `${bm.f_name} ${bm.l_name}`.trim() || bm.bm_contact;
+              const isCurrentBM = currentSalesBM?.bm_contact === bm.bm_contact;
               return (
                 <label
                   key={bm.user_id}
-                  className="flex items-center space-x-3 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                  className={`flex items-center space-x-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                    isCurrentBM
+                      ? 'border-amber-500 bg-amber-50 hover:bg-amber-100'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
                   <input
                     type="radio"
@@ -331,7 +361,14 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
                     className="text-amber-500"
                   />
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{displayName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900">{displayName}</p>
+                      {isCurrentBM && (
+                        <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                          Current
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-500">{bm.bm_contact}</p>
                   </div>
                 </label>
@@ -380,6 +417,8 @@ export default function StoreVisitFormSimple() {
   const [bms, setBMs] = useState<BMOption[]>([]);
   const [bmsLoading, setBMsLoading] = useState(false);
   const [selectedBM, setSelectedBM] = useState<string | null>(null);
+  const [currentSalesBM, setCurrentSalesBM] = useState<CurrentSalesBM | undefined>(undefined);
+  const [footfallCount, setFootfallCount] = useState<number>(0);
   const [userTypeProp, setUserTypeProp] = useState<UserInfoProperty | null>(null);
   const [categoriesProp, setCategoriesProp] = useState<UserInfoProperty | null>(null);
 
@@ -430,9 +469,43 @@ export default function StoreVisitFormSimple() {
     try {
       const response = await mockApi.lookupLeadByPhone(formData.phoneNumber, branch);
       setUserId(response.userId || null);
+
+      // Pre-fill form data with existing values
+      const updates: Partial<FormData> = {};
+
       if (response.name) {
-        setFormData(prev => ({ ...prev, name: response.name }));
+        updates.name = response.name;
       }
+
+      // Pre-fill user properties if available
+      if (response.userProperties) {
+        const props = response.userProperties;
+        // ID 48 stores categories (comma-separated string)
+        if (props[48]) {
+          updates.categories = props[48].split(',').map(c => c.trim()).filter(Boolean);
+        }
+        // ID 81 stores user type
+        if (props[81]) {
+          updates.userType = props[81];
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setFormData(prev => ({ ...prev, ...updates }));
+      }
+
+      // Store current sales BM info and pre-select if available
+      if (response.currentSalesBM) {
+        setCurrentSalesBM(response.currentSalesBM);
+        setSelectedBM(response.currentSalesBM.bm_contact);
+      } else {
+        setCurrentSalesBM(undefined);
+        setSelectedBM(null);
+      }
+
+      // Store footfall count
+      setFootfallCount(response.footfallCount || 0);
+
       setCurrentStep(2);
     } catch {
       toast({ title: 'Error', description: 'Failed to lookup your information. Please try again.', variant: 'destructive' });
@@ -512,6 +585,26 @@ export default function StoreVisitFormSimple() {
           <p className="text-[11px] text-gray-400 mt-0.5">We would love to know more about you!</p>
         </div>
         {branch && <StepIndicator currentStep={currentStep} totalSteps={totalSteps} />}
+
+        {/* Footfall count badge - visible on all steps when client has history */}
+        {branch && footfallCount > 0 && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm">
+                {footfallCount}
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">
+                  {footfallCount === 1 ? 'First Footfall' : footfallCount === 2 ? 'Second Footfall' : `${footfallCount}th Footfall`}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {footfallCount === 1 ? 'Welcome!' : 'Returning customer'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           {!branch && (
             <BranchSelector branches={branches} isLoading={branchesLoading} onSelect={handleBranchSelect} />
@@ -544,6 +637,7 @@ export default function StoreVisitFormSimple() {
               onSubmit={handleBMAssign}
               isLoading={isLoading}
               isFetchingBMs={bmsLoading}
+              currentSalesBM={currentSalesBM}
             />
           )}
         </div>

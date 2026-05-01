@@ -76,11 +76,25 @@ export async function fetchBranches(): Promise<Branch[]> {
 // Leads
 // ---------------------------------------------------------------------------
 
+export interface CurrentSalesBM {
+  bm_contact: string;
+  f_name: string;
+  l_name: string;
+  crm_id: string;
+}
+
+export interface UserProperties {
+  [propertyId: number]: string;
+}
+
 export interface LookupResponse {
   success: boolean;
   userId: string;
   newVisit: boolean;
   name: string;
+  footfallCount: number;
+  currentSalesBM?: CurrentSalesBM;
+  userProperties?: UserProperties;
 }
 
 export async function lookupLeadByPhone(phoneNumber: string, branch: string): Promise<LookupResponse> {
@@ -94,6 +108,9 @@ export async function lookupLeadByPhone(phoneNumber: string, branch: string): Pr
     userId: data.user_id,
     newVisit: data.new_visit,
     name: data.name || '',
+    footfallCount: data.footfall_count || 0,
+    currentSalesBM: data.current_sales_bm,
+    userProperties: data.user_properties,
   };
 }
 
