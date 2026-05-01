@@ -44,6 +44,14 @@ const STATUS_COLORS: Record<string, string> = {
   'Order Cancelled':        '#6B7280',
 };
 
+function getFirstDayOfCurrentMonth(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = '01';
+  return `${y}-${m}-${d}`;
+}
+
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -1500,7 +1508,7 @@ export default function App() {
     setStatusFilter([]);
     setPersonFilter([]);
     setBranchFilter([]);
-    setCreatedDateFrom('2026-04-01');
+    setCreatedDateFrom(getFirstDayOfCurrentMonth());
     setCreatedDateTo('');
     setFollowUpDateFrom('');
     setFollowUpDateTo('');
@@ -1543,7 +1551,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState<string[]>([]);
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
-  const [createdDateFrom, setCreatedDateFrom] = useState('2026-04-01');
+  const [createdDateFrom, setCreatedDateFrom] = useState(getFirstDayOfCurrentMonth());
   const [createdDateTo, setCreatedDateTo] = useState('');
   const [followUpDateFrom, setFollowUpDateFrom] = useState('');
   const [followUpDateTo, setFollowUpDateTo] = useState('');
