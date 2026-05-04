@@ -254,19 +254,32 @@ interface MultiSelectProps {
   onChange: (next: string[]) => void;
   label: string;
   className?: string;
+  searchable?: boolean;
 }
 
-function MultiSelect({ options, selected, onChange, label, className = '' }: MultiSelectProps) {
+function MultiSelect({ options, selected, onChange, label, className = '', searchable = false }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: globalThis.MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch('');
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (open && searchable && searchRef.current) {
+      searchRef.current.focus();
+    }
+    if (!open) setSearch('');
+  }, [open, searchable]);
 
   const toggle = (val: string) => {
     if (selected.includes(val)) {
@@ -278,6 +291,10 @@ function MultiSelect({ options, selected, onChange, label, className = '' }: Mul
 
   const display = selected.length === 0 ? label : selected.length === 1 ? selected[0] : `${selected.length} selected`;
 
+  const filtered = searchable && search.trim()
+    ? options.filter((o) => o.toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
+
   return (
     <div ref={ref} className={`relative inline-block ${className}`}>
       <button
@@ -288,21 +305,38 @@ function MultiSelect({ options, selected, onChange, label, className = '' }: Mul
         <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-[999] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] max-h-[260px] overflow-y-auto w-full min-w-[220px] mt-0.5">
-          {options.map((opt) => (
-            <label
-              key={opt}
-              className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[13px] whitespace-nowrap hover:bg-gray-50"
-            >
+        <div className="absolute top-full left-0 z-[999] bg-white border border-gray-200 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.1)] w-full min-w-[220px] mt-0.5">
+          {searchable && (
+            <div className="p-2 border-b border-gray-100">
               <input
-                type="checkbox"
-                checked={selected.includes(opt)}
-                onChange={() => toggle(opt)}
-                className="accent-[#EAB308]"
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded outline-none focus:border-yellow-400"
+                onClick={(e) => e.stopPropagation()}
               />
-              {opt}
-            </label>
-          ))}
+            </div>
+          )}
+          <div className="max-h-[220px] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-gray-400">No results</div>
+            ) : filtered.map((opt, i) => (
+              <label
+                key={`${opt}-${i}`}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[13px] whitespace-nowrap hover:bg-gray-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={() => toggle(opt)}
+                  className="accent-[#EAB308]"
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1508,7 +1542,7 @@ export default function App() {
     setStatusFilter([]);
     setPersonFilter([]);
     setBranchFilter([]);
-    setCreatedDateFrom(getFirstDayOfCurrentMonth());
+    setCreatedDateFrom('');
     setCreatedDateTo('');
     setFollowUpDateFrom('');
     setFollowUpDateTo('');
@@ -1551,7 +1585,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState<string[]>([]);
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
-  const [createdDateFrom, setCreatedDateFrom] = useState(getFirstDayOfCurrentMonth());
+  const [createdDateFrom, setCreatedDateFrom] = useState('');
   const [createdDateTo, setCreatedDateTo] = useState('');
   const [followUpDateFrom, setFollowUpDateFrom] = useState('');
   const [followUpDateTo, setFollowUpDateTo] = useState('');
@@ -1750,7 +1784,10 @@ export default function App() {
   // Lowercase set for case-insensitive branch matching (Supabase vs Django naming may differ)
   const userAllowedBranchesLower = new Set(userAllowedBranches.map((b) => b.toLowerCase()));
 
-  const availableBMs = [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
+  // Use all org users (not just those with leads in current view) so salespeople without leads still appear
+  const availableBMs = crmUsers.length > 0
+    ? crmUsers.map((u) => u.name).filter(Boolean).sort()
+    : [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
   const baseFiltered = leads.filter((l) => {
     if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
@@ -2357,7 +2394,7 @@ export default function App() {
           {showMobileFilters && (
             <div className="grid grid-cols-2 gap-2">
               <MultiSelect className="w-full" options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="Status" />
-              <MultiSelect className="w-full" options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="Salesperson" />
+              <MultiSelect className="w-full" options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="Salesperson" searchable />
               {userAllowedBranches.length === 1 ? (
                 <span className="px-2 py-2 text-[12px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 truncate">{userAllowedBranches[0]}</span>
               ) : userAllowedBranches.length > 1 ? (
@@ -2414,7 +2451,7 @@ export default function App() {
           {/* Row 2: all filters */}
           <div className="flex gap-2 items-center flex-wrap">
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
-            <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="All Salespeople" />
+            <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="All Salespeople" searchable />
             {userAllowedBranches.length === 1 ? (
               <span className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 whitespace-nowrap">{userAllowedBranches[0]}</span>
             ) : userAllowedBranches.length > 1 ? (
