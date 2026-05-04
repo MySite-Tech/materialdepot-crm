@@ -7,6 +7,7 @@ import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
 import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb } from '../lib/mockApi';
 import Dashboard from './Dashboard';
+import FootfallDashboard from './FootfallDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -88,16 +89,16 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'storeVisit' | 'sales' | 'admin';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'storeVisit' | 'sales' | 'admin';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
-  admin:        ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
-  tech:         ['leads', 'dashboard', 'storeVisit', 'sales', 'admin'],
-  manager:      ['leads', 'dashboard', 'storeVisit', 'sales'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'admin'],
+  admin:        ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'admin'],
+  tech:         ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'admin'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'],
   sales:        ['leads', 'sales'],
   retail:       ['storeVisit'],
 };
-const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'storeVisit', 'sales'];
+const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -184,7 +185,7 @@ interface EditableStatusProps {
   onCommit: (status: string, reason?: string) => void;
 }
 
-const MARK_LOST_ELIGIBLE = new Set(['Quote Approval Pending', 'Request for Availability Check']);
+const MARK_LOST_ELIGIBLE = new Set(['In Cart', 'Quote Approval Pending', 'Availability Check', 'Request for Availability Check']);
 
 function EditableStatus({ status, lostReason, onCommit }: EditableStatusProps) {
   const [pickingReason, setPickingReason] = useState(false);
@@ -479,9 +480,10 @@ interface LeadDrawerProps {
   onClose: () => void;
   onAddRemark?: (remark: Remark) => void;
   onImmediateSave?: (lead: Lead) => void;
+  visitsLoading?: boolean;
 }
 
-function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave }: LeadDrawerProps) {
+function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
   const [form, setForm] = useState<Lead>(() => lead ? {
@@ -631,7 +633,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                   {form.assignedTo && !users.some((u) => u.name === form.assignedTo) && (
                     <option value={form.assignedTo}>{form.assignedTo}</option>
                   )}
-                  {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  {users.map((u, i) => <option key={i} value={u.name}>{u.name}</option>)}
                 </select>
               </Field>
               <Field label="BRANCH">
@@ -720,6 +722,27 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
               />
               <p className="text-[10px] text-gray-400 mt-1">Comma-separated list of items</p>
             </div>
+            {isEdit && (() => {
+              const sorted = [...visits].sort((a, b) => a.date.localeCompare(b.date));
+              const firstVisit = visits.length > 0 ? fmtDate(sorted[0]?.date) : '—';
+              const latestVisit = visits.length > 0 ? fmtDate(sorted[sorted.length - 1]?.date) : '—';
+              return (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'FIRST VISIT', value: firstVisit },
+                    { label: 'LATEST VISIT', value: latestVisit },
+                    { label: 'TOTAL VISITS', value: String(visits.length) },
+                  ].map(({ label, value }) => (
+                    <div key={label}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</p>
+                      {visitsLoading
+                        ? <div className="h-[34px] bg-gray-100 rounded-md animate-pulse" />
+                        : <div className="px-2.5 py-2 text-[13px] bg-gray-50 border border-gray-100 rounded-md text-gray-600 font-mono">{value}</div>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <div className="flex gap-2 mt-4">
               <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onClose}>Cancel</button>
               <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1" onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Lead'}</button>
@@ -1593,9 +1616,10 @@ export default function App() {
   const [closureDateTo, setClosureDateTo] = useState('');
   const [cartValueGt, setCartValueGt] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
-  const [sortCol, setSortCol] = useState('latestVisit');
+  const [sortCol, setSortCol] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
+  const [visitsLoading, setVisitsLoading] = useState(false);
 
   useEffect(() => {
     if (!drawerLead?.clientPhone) return;
@@ -1606,13 +1630,12 @@ export default function App() {
         ));
       }
     }).catch(() => {});
+    setVisitsLoading(true);
     fetchLeadVisits(drawerLead.clientPhone).then(visits => {
-      if (visits.length) {
-        setLeads(prev => prev.map(l =>
-          l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, visits } : l
-        ));
-      }
-    }).catch(() => {});
+      setLeads(prev => prev.map(l =>
+        l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, visits } : l
+      ));
+    }).catch(() => {}).finally(() => setVisitsLoading(false));
   }, [drawerLead?.id, drawerLead?.clientPhone]);
 
   const [showAddDrawer, setShowAddDrawer] = useState(false);
@@ -1747,8 +1770,6 @@ export default function App() {
     { key: 'clientName', label: 'Client Name' },
     { key: 'clientPhone', label: 'Client Phone' },
     { key: 'createdAt', label: 'Created' },
-    { key: 'firstVisit', label: 'First Visit' },
-    { key: 'latestVisit', label: 'Latest Visit' },
     { key: 'assignedTo', label: 'Assigned To' },
     { key: 'branch', label: 'Branch' },
     { key: 'clientType', label: 'Client Type' },
@@ -1759,7 +1780,6 @@ export default function App() {
     { key: 'cartItems', label: 'Cart Items' },
     { key: 'followUpDate', label: 'Follow-up' },
     { key: 'closureDate', label: 'Closure Date' },
-    { key: 'visitCount', label: 'Visits' },
     { key: 'cartValue', label: 'Cart Value' },
   ];
   const [visibleCols, setVisibleCols] = useState<string[]>(() => {
@@ -1890,7 +1910,7 @@ export default function App() {
   const safePage = Math.min(page, totalPages - 1);
   const paginatedRows = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
-  const filteredTotal = pipelineTotal;
+  const filteredTotal = filtered.reduce((sum, l) => sum + (l.cartValue || 0), 0);
 
   const saveLead = (formData: Lead) => {
     const existing = leads.find((l) => l.id === formData.id && l.clientPhone === formData.clientPhone) || leads.find((l) => l.id === formData.id);
@@ -1913,6 +1933,9 @@ export default function App() {
         .catch((e) => { console.error('Create lead failed:', e); showSaveError(); });
     } else {
       upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });
+    }
+    if (!isNew && finalData.status === 'Order Lost' && existing?.status !== 'Order Lost') {
+      markLeadLost(finalData.id, finalData.lostReason || '', finalData.ticketId).catch((e) => console.error('Estimate lost sync failed:', e));
     }
     if (currentUser) {
       if (isNew) {
@@ -1950,7 +1973,8 @@ export default function App() {
       return updated;
     });
     if (newStatus === 'Order Lost') {
-      markLeadLost(id, lostReason || '').catch((e) => console.error('Estimate lost sync failed:', e));
+      const ticketId = leads.find((l) => l.id === id)?.ticketId;
+      markLeadLost(id, lostReason || '', ticketId).catch((e) => console.error('Estimate lost sync failed:', e));
     }
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' → ' + newStatus }).catch(console.error);
@@ -2265,7 +2289,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }])
           .filter(t => allowedTabs.includes(t.key))
           .map(t => (
             <button
@@ -2286,6 +2310,10 @@ export default function App() {
 
       {mainTab === 'dashboard' && (
         <Dashboard logs={dashLogs} branches={branches} allowedBranches={userAllowedBranches} />
+      )}
+
+      {mainTab === 'footfall' && (
+        <FootfallDashboard branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
       {mainTab === 'storeVisit' && (
@@ -2528,8 +2556,6 @@ export default function App() {
                   {isColVisible('clientName') && <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('clientPhone') && <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('createdAt') && <Th label="Created" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('firstVisit') && <Th label="First Visit" sortKey="firstVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('latestVisit') && <Th label="Latest Visit" sortKey="latestVisit" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('assignedTo') && <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('branch') && <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('clientType') && <Th label="Client Type" sortKey="clientType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
@@ -2540,7 +2566,6 @@ export default function App() {
                   {isColVisible('cartItems') && <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('followUpDate') && <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('closureDate') && <Th label="Closure Date" sortKey="closureDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('visitCount') && <Th label="Visits" sortKey="visitCount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />}
                   {isColVisible('cartValue') && <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />}
                   <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
                 </tr>
@@ -2557,8 +2582,6 @@ export default function App() {
                     {isColVisible('clientName') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.clientName || '—'}</td>}
                     {isColVisible('clientPhone') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs font-mono">{l.clientPhone || '—'}</td>}
                     {isColVisible('createdAt') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(l.createdAt)}</td>}
-                    {isColVisible('firstVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...(l.visits || [])].sort((a, b) => a.date.localeCompare(b.date))[0].date : l.createdAt))}</td>}
-                    {isColVisible('latestVisit') && <td className="px-3 py-2.5 text-[13px] align-middle text-gray-500 text-xs">{fmtDate(((l.visits || []).length > 0 ? [...(l.visits || [])].sort((a, b) => b.date.localeCompare(a.date))[0].date : l.createdAt))}</td>}
                     {isColVisible('assignedTo') && <td className="px-3 py-2.5 text-[13px] align-middle">
                       <div className="flex items-center gap-1.5">
                         <Avatar name={l.assignedTo} />
@@ -2591,13 +2614,6 @@ export default function App() {
                       {l.closureDate ? (
                         <span className="text-xs text-gray-500 border-b border-dashed border-gray-300">{fmtDate(l.closureDate)}</span>
                       ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
-                    </td>}
-                    {isColVisible('visitCount') && <td className="px-3 py-2.5 text-[13px] align-middle text-center">
-                      {(l.visits || []).length > 0 ? (
-                        <span className="inline-flex items-center justify-center bg-[#3B82F618] text-blue-500 font-bold text-[11px] rounded-full w-[22px] h-[22px] border border-[#3B82F640]">{(l.visits || []).length}</span>
-                      ) : (
-                        <span className="text-gray-400 text-[11px]">0</span>
-                      )}
                     </td>}
                     {isColVisible('cartValue') && <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
                       {fmtINR(l.cartValue)}
@@ -2670,6 +2686,7 @@ export default function App() {
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
           onAddRemark={drawerLead ? (remark: Remark) => addRemark(drawerLead.id, drawerLead.clientPhone || '', remark) : undefined}
+          visitsLoading={visitsLoading}
           onImmediateSave={(updatedLead: Lead) => {
             setLeads((prev) => prev.map((l) => (l.id === updatedLead.id && l.clientPhone === updatedLead.clientPhone) ? updatedLead : l));
             fetchLead(updatedLead.id, updatedLead.clientPhone || '').then((dbLead: Lead) => {

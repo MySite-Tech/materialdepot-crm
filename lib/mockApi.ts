@@ -1,8 +1,6 @@
 
 const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
-const BEARER_TOKEN =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NTc0NzQ4LCJpYXQiOjE3NzAzOTA3NDgsImp0aSI6IjNiMGFkMTUyMjdlNDQ2MGNhYzVmY2M0Njk5ZGNjZWY4IiwidXNlcl9pZCI6IjFlMDQxMWQ5LWE1YjEtNDViZC1iZDJkLTAyYzViYmNjMDk2MiJ9.YLUwIE9TxuHUizIZRuX3-4g2bGHFOF6KruJJaBH_wq0";
 const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
 const TOKEN_KEY = 'md_crm_token';
@@ -384,11 +382,51 @@ export interface DashboardFilters {
   createdTo?: string;
 }
 
-export async function markLeadLost(cartNumber: string, lostReason: string): Promise<void> {
+export interface FootfallBMRow {
+  bm_name: string;
+  total: number;
+  cart_created: number;
+  no_cart: number;
+  cart_pct: number;
+}
+export interface FootfallBranchRow {
+  branch: string;
+  total: number;
+  cart_created: number;
+  no_cart: number;
+  cart_pct: number;
+}
+export interface FootfallDashboardData {
+  total: number;
+  cart_created: number;
+  no_cart: number;
+  cart_pct: number;
+  no_cart_pct: number;
+  by_bm: FootfallBMRow[];
+  by_branch: FootfallBranchRow[];
+  available_bms: string[];
+}
+export interface FootfallFilters {
+  branch?: string[];
+  bm?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}
+export async function fetchFootfallDashboard(filters: FootfallFilters = {}): Promise<FootfallDashboardData> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.bm?.length) params.set('bm', filters.bm.join(','));
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  const qs = params.toString();
+  return mdFetch(`/crm/footfall-dashboard/${qs ? `?${qs}` : ''}`);
+}
+
+export async function markLeadLost(cartNumber: string, lostReason: string, ticketId?: number): Promise<void> {
   await mdFetch('/crm/lead-status/', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cart_number: cartNumber, lost_reason: lostReason }),
+    body: JSON.stringify({ cart_number: cartNumber, lost_reason: lostReason, ...(ticketId ? { ticket_id: ticketId } : {}) }),
   });
 }
 

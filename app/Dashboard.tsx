@@ -599,6 +599,7 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
           )}
         </div>
       </section>
+
     </div>
   );
 }
