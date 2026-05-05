@@ -257,6 +257,8 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
     setLoading(true);
     setNcLoading(true);
     setNcLoading2(true);
+    setNcData(null);
+    setNcData2(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const filters: FootfallFilters = {
