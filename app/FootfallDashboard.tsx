@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchFootfallDashboard,
   fetchFootfallNonConverted,
+  fetchFootfallNoCart,
   FootfallDashboardData,
   FootfallFilters,
   FootfallBMRow,
   FootfallBranchRow,
-  FootfallNonConvertedRow,
   FootfallNonConvertedPage,
+  FootfallNoCartPage,
 } from '../lib/mockApi';
 
 interface Props {
@@ -213,6 +214,12 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   const ncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const NC_PAGE_SIZE = 10;
 
+  const [ncData2, setNcData2] = useState<FootfallNoCartPage | null>(null);
+  const [ncLoading2, setNcLoading2] = useState(false);
+  const [ncPage2, setNcPage2] = useState(1);
+  const [ncSearch2, setNcSearch2] = useState('');
+  const ncDebounceRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || dateRange.from || dateRange.to;
 
   const load = useCallback((filters: FootfallFilters) => {
@@ -231,6 +238,14 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
       .finally(() => setNcLoading(false));
   }, []);
 
+  const loadNoCart = useCallback((filters: FootfallFilters, page: number, q: string) => {
+    setNcLoading2(true);
+    fetchFootfallNoCart({ ...filters, page, pageSize: NC_PAGE_SIZE, q: q || undefined })
+      .then(setNcData2)
+      .catch(() => setNcData2(null))
+      .finally(() => setNcLoading2(false));
+  }, []);
+
   // Compute effective branches once so both loaders share the same value
   const getEffectiveBranches = useCallback(() =>
     isRestricted
@@ -241,6 +256,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   useEffect(() => {
     setLoading(true);
     setNcLoading(true);
+    setNcLoading2(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const filters: FootfallFilters = {
@@ -252,11 +268,14 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
       setBmPage(0);
       setNcPage(1);
       setNcSearch('');
+      setNcPage2(1);
+      setNcSearch2('');
       load(filters);
       loadNonConverted(filters, 1, '');
+      loadNoCart(filters, 1, '');
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, dateRange, load, loadNonConverted, getEffectiveBranches]);
+  }, [branchFilter, bmFilter, dateRange, load, loadNonConverted, loadNoCart, getEffectiveBranches]);
 
   // Re-fetch non-converted when page changes
   useEffect(() => {
@@ -269,6 +288,18 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
     loadNonConverted(filters, ncPage, ncSearch);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ncPage]);
+
+  // Re-fetch no-cart when page changes
+  useEffect(() => {
+    const filters: FootfallFilters = {
+      branch: getEffectiveBranches(),
+      bm: bmFilter.length > 0 ? bmFilter : undefined,
+      dateFrom: dateRange.from || undefined,
+      dateTo: dateRange.to || undefined,
+    };
+    loadNoCart(filters, ncPage2, ncSearch2);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ncPage2]);
 
   // Debounced re-fetch when search term changes (resets to page 1)
   useEffect(() => {
@@ -286,6 +317,23 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
     return () => { if (ncDebounceRef.current) clearTimeout(ncDebounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ncSearch]);
+
+  // Debounced re-fetch for no-cart search
+  useEffect(() => {
+    if (ncDebounceRef2.current) clearTimeout(ncDebounceRef2.current);
+    ncDebounceRef2.current = setTimeout(() => {
+      const filters: FootfallFilters = {
+        branch: getEffectiveBranches(),
+        bm: bmFilter.length > 0 ? bmFilter : undefined,
+        dateFrom: dateRange.from || undefined,
+        dateTo: dateRange.to || undefined,
+      };
+      setNcPage2(1);
+      loadNoCart(filters, 1, ncSearch2);
+    }, 350);
+    return () => { if (ncDebounceRef2.current) clearTimeout(ncDebounceRef2.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ncSearch2]);
 
   const availableBMs = data?.available_bms ?? [];
 
@@ -522,6 +570,81 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
               <span className="text-[11px] text-gray-500 px-2">Page {ncData.page} of {ncData.total_pages}</span>
               <button onClick={() => setNcPage(p => Math.min(ncData.total_pages, p + 1))} disabled={ncData.page >= ncData.total_pages} className="px-2 py-1 text-[11px] border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 hover:bg-gray-50">Next</button>
               <button onClick={() => setNcPage(ncData.total_pages)} disabled={ncData.page >= ncData.total_pages} className="px-2 py-1 text-[11px] border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 hover:bg-gray-50">Last</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* No Cart Created panel */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
+          <span className="text-[13px] font-bold text-gray-800 shrink-0">No Cart Created</span>
+          <input
+            type="text"
+            placeholder="Search name, contact or BM…"
+            value={ncSearch2}
+            onChange={e => setNcSearch2(e.target.value)}
+            className="flex-1 max-w-[260px] border border-gray-200 rounded px-2.5 py-1 text-[12px] text-gray-700 placeholder-gray-400 outline-none focus:border-red-400 bg-white"
+          />
+          {ncData2 && (
+            <span className="text-[11px] text-gray-400 ml-auto shrink-0">{ncData2.count.toLocaleString()} clients</span>
+          )}
+          {ncLoading2 && (
+            <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin shrink-0" />
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">#</th>
+                <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">Name</th>
+                <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">Contact</th>
+                <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">BM</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {!ncLoading2 && (!ncData2 || ncData2.results.length === 0) && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-[12px] text-gray-400">
+                    No clients without a cart found.
+                  </td>
+                </tr>
+              )}
+              {ncLoading2 && !ncData2 && Array.from({ length: NC_PAGE_SIZE }).map((_, i) => (
+                <tr key={i}>
+                  {[1,2,3,4].map(c => (
+                    <td key={c} className="px-4 sm:px-5 py-2.5">
+                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: c === 1 ? 24 : c === 3 ? 80 : '70%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {ncData2?.results.map((row, i) => {
+                const globalIdx = ((ncData2.page - 1) * NC_PAGE_SIZE) + i + 1;
+                return (
+                  <tr key={row.user_id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 sm:px-5 py-2.5 text-gray-400 tabular-nums">{globalIdx}</td>
+                    <td className="px-4 sm:px-5 py-2.5 font-medium text-gray-700">{row.name || '—'}</td>
+                    <td className="px-4 sm:px-5 py-2.5 text-gray-500 font-mono">{row.contact || '—'}</td>
+                    <td className="px-4 sm:px-5 py-2.5 text-gray-600">{row.bm}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {ncData2 && ncData2.total_pages > 1 && (
+          <div className="px-4 sm:px-5 py-2.5 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+            <span className="text-[11px] text-gray-400">
+              Showing {((ncData2.page - 1) * NC_PAGE_SIZE) + 1}–{Math.min(ncData2.page * NC_PAGE_SIZE, ncData2.count)} of {ncData2.count}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setNcPage2(1)} disabled={ncData2.page <= 1} className="px-2 py-1 text-[11px] border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 hover:bg-gray-50">First</button>
+              <button onClick={() => setNcPage2(p => Math.max(1, p - 1))} disabled={ncData2.page <= 1} className="px-2 py-1 text-[11px] border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 hover:bg-gray-50">Prev</button>
+              <span className="text-[11px] text-gray-500 px-2">Page {ncData2.page} of {ncData2.total_pages}</span>
+              <button onClick={() => setNcPage2(p => Math.min(ncData2.total_pages, p + 1))} disabled={ncData2.page >= ncData2.total_pages} className="px-2 py-1 text-[11px] border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 hover:bg-gray-50">Next</button>
+              <button onClick={() => setNcPage2(ncData2.total_pages)} disabled={ncData2.page >= ncData2.total_pages} className="px-2 py-1 text-[11px] border border-gray-200 rounded bg-white cursor-pointer disabled:opacity-40 hover:bg-gray-50">Last</button>
             </div>
           </div>
         )}
