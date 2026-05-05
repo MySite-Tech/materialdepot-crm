@@ -382,26 +382,22 @@ export interface DashboardFilters {
   createdTo?: string;
 }
 
-export interface FootfallBMRow {
+export interface FootfallFunnelStats {
+  footfall_users: number;
+  cart_users: number;
+  address_users: number;
+  order_users: number;
+  cart_pct: number;
+  address_pct: number;
+  order_pct: number;
+}
+export interface FootfallBMRow extends FootfallFunnelStats {
   bm_name: string;
-  total: number;
-  cart_created: number;
-  no_cart: number;
-  cart_pct: number;
 }
-export interface FootfallBranchRow {
+export interface FootfallBranchRow extends FootfallFunnelStats {
   branch: string;
-  total: number;
-  cart_created: number;
-  no_cart: number;
-  cart_pct: number;
 }
-export interface FootfallDashboardData {
-  total: number;
-  cart_created: number;
-  no_cart: number;
-  cart_pct: number;
-  no_cart_pct: number;
+export interface FootfallDashboardData extends FootfallFunnelStats {
   by_bm: FootfallBMRow[];
   by_branch: FootfallBranchRow[];
   available_bms: string[];
@@ -412,6 +408,33 @@ export interface FootfallFilters {
   dateFrom?: string;
   dateTo?: string;
 }
+export interface FootfallNonConvertedRow {
+  user_id: number;
+  name: string;
+  contact: string;
+  bm: string;
+}
+export interface FootfallNonConvertedPage {
+  results: FootfallNonConvertedRow[];
+  count: number;
+  page: number;
+  total_pages: number;
+}
+export async function fetchFootfallNonConverted(
+  filters: FootfallFilters & { page?: number; pageSize?: number; q?: string },
+): Promise<FootfallNonConvertedPage> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.bm?.length) params.set('bm', filters.bm.join(','));
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.page) params.set('page', String(filters.page));
+  if (filters.pageSize) params.set('page_size', String(filters.pageSize));
+  if (filters.q) params.set('q', filters.q);
+  const qs = params.toString();
+  return mdFetch(`/crm/footfall-non-converted/${qs ? `?${qs}` : ''}`);
+}
+
 export async function fetchFootfallDashboard(filters: FootfallFilters = {}): Promise<FootfallDashboardData> {
   const params = new URLSearchParams();
   if (filters.branch?.length) params.set('branch', filters.branch.join(','));
