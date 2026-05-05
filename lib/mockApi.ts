@@ -716,10 +716,10 @@ export async function deleteBranch(id: string | number): Promise<void> {
 // CRM Lead Remarks — replaces Supabase remarks in leads table
 // ---------------------------------------------------------------------------
 
-export async function fetchLeadRemarks(clientPhone: string): Promise<import('../types/crm').Remark[]> {
-  if (!clientPhone) return [];
+export async function fetchLeadRemarks(ticketId: number): Promise<import('../types/crm').Remark[]> {
+  if (!ticketId) return [];
   try {
-    const data = await mdFetch(`/crm/lead-remarks/?client_phone=${clientPhone}`);
+    const data = await mdFetch(`/crm/lead-remarks/?ticket_id=${ticketId}`);
     return (data || []) as import('../types/crm').Remark[];
   } catch {
     return [];
@@ -727,18 +727,17 @@ export async function fetchLeadRemarks(clientPhone: string): Promise<import('../
 }
 
 export async function appendRemarkToLead(
-  _leadId: string,
-  clientPhone: string | undefined,
+  ticketId: number,
   remark: import('../types/crm').Remark,
   authorPhone?: string,
 ): Promise<import('../types/crm').Remark[]> {
-  if (!clientPhone) return [remark];
+  if (!ticketId) return [remark];
   await mdFetch('/crm/lead-remarks/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_phone: clientPhone, text: remark.text, author_phone: authorPhone || '' }),
+    body: JSON.stringify({ ticket_id: ticketId, text: remark.text, author_phone: authorPhone || '' }),
   });
-  return fetchLeadRemarks(clientPhone);
+  return fetchLeadRemarks(ticketId);
 }
 
 // ---------------------------------------------------------------------------

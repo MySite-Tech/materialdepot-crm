@@ -1623,10 +1623,10 @@ export default function App() {
 
   useEffect(() => {
     if (!drawerLead?.clientPhone) return;
-    fetchLeadRemarks(drawerLead.clientPhone).then(remarks => {
+    if (drawerLead.ticketId) fetchLeadRemarks(drawerLead.ticketId).then(remarks => {
       if (remarks.length) {
         setLeads(prev => prev.map(l =>
-          l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, remarks } : l
+          l.id === drawerLead.id && l.ticketId === drawerLead.ticketId ? { ...l, remarks } : l
         ));
       }
     }).catch(() => {});
@@ -1981,10 +1981,10 @@ export default function App() {
     }
   };
 
-  const addRemark = (leadId: string, clientPhone: string, remark: Remark) => {
-    setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
-    appendRemarkToLead(leadId, clientPhone, remark, currentUser?.phone).then((latestRemarks: Remark[]) => {
-      setLeads((prev) => prev.map((l) => (l.id === leadId && l.clientPhone === clientPhone) ? { ...l, remarks: latestRemarks } : l));
+  const addRemark = (leadId: string, ticketId: number, remark: Remark) => {
+    setLeads((prev) => prev.map((l) => (l.id === leadId && l.ticketId === ticketId) ? { ...l, remarks: [...(l.remarks || []), remark] } : l));
+    appendRemarkToLead(ticketId, remark, currentUser?.phone).then((latestRemarks: Remark[]) => {
+      setLeads((prev) => prev.map((l) => (l.id === leadId && l.ticketId === ticketId) ? { ...l, remarks: latestRemarks } : l));
     }).catch((e) => console.error('Remark save failed:', e));
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'added_remark', entityType: 'lead', entityId: leadId, details: remark.text ? remark.text.substring(0, 100) : '' }).catch(console.error);
@@ -2685,7 +2685,7 @@ export default function App() {
           users={availableBMs.map(name => ({ id: name, name }))}
           onSave={saveLead}
           onClose={() => { setDrawerLead(null); setShowAddDrawer(false); }}
-          onAddRemark={drawerLead ? (remark: Remark) => addRemark(drawerLead.id, drawerLead.clientPhone || '', remark) : undefined}
+          onAddRemark={drawerLead ? (remark: Remark) => addRemark(drawerLead.id, drawerLead.ticketId!, remark) : undefined}
           visitsLoading={visitsLoading}
           onImmediateSave={(updatedLead: Lead) => {
             setLeads((prev) => prev.map((l) => (l.id === updatedLead.id && l.clientPhone === updatedLead.clientPhone) ? updatedLead : l));
