@@ -1814,8 +1814,6 @@ export default function App() {
     if (userAllowedBranches.length > 0) {
       if (!userAllowedBranchesLower.has((l.branch || '').toLowerCase())) return false;
     } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    if (createdDateFrom && (!l.createdAt || l.createdAt < createdDateFrom)) return false;
-    if (createdDateTo && (!l.createdAt || l.createdAt > createdDateTo)) return false;
     if (followUpDateFrom || followUpDateTo) {
       if (!l.followUpDate) return false;
       if (followUpDateFrom && l.followUpDate < followUpDateFrom) return false;
@@ -1908,7 +1906,7 @@ export default function App() {
 
   const totalPages = leadsTotalPages || (Math.ceil(sorted.length / pageSize) || 1);
   const safePage = Math.min(page, totalPages - 1);
-  const paginatedRows = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const paginatedRows = sorted; // server already returns the correct page
 
   const filteredTotal = filtered.reduce((sum, l) => sum + (l.cartValue || 0), 0);
 
