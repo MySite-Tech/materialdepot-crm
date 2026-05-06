@@ -813,3 +813,65 @@ export async function createLead(lead: import('../types/crm').Lead, bmPhone: str
 export async function deleteLead(_id: string, _clientPhone?: string): Promise<void> {
   // Leads cannot be deleted from the backend; no-op.
 }
+
+// ---------------------------------------------------------------------------
+// Kylas — sync estimate to deal
+// ---------------------------------------------------------------------------
+
+export interface SyncEstimateResult {
+  success: boolean;
+  mode?: string;
+  estimate_id?: number;
+  lead_id?: string;
+  estimate_status?: string;
+  deal_id?: number;
+  message?: string;
+  queued?: boolean;
+  error?: string;
+}
+
+export interface KylasDealInfo {
+  id: number;
+  name: string;
+  ownerName: string | null;
+  stageName: string | null;
+  pipelineName: string | null;
+}
+
+function detectInputType(value: string): { lead_id?: string; estimate_id?: number; user_id?: string } {
+  const trimmed = value.trim();
+  // UUID pattern → user_id
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    return { user_id: trimmed };
+  }
+  // All digits → estimate_id
+  if (/^\d+$/.test(trimmed)) {
+    return { estimate_id: parseInt(trimmed, 10) };
+  }
+  // Otherwise → lead_id (ENQ..., CT..., etc.)
+  return { lead_id: trimmed };
+}
+
+export async function syncEstimate(value: string): Promise<SyncEstimateResult> {
+  const payload = detectInputType(value);
+  return mdFetch('/kylas/sync-estimate/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchKylasDealInfo(dealId: number): Promise<KylasDealInfo | null> {
+  try {
+    const data = await kylasFetch(`/deals/${dealId}`);
+    return {
+      id: dealId,
+      name: data.name ?? `Deal #${dealId}`,
+      ownerName: data.ownedBy?.name ?? null,
+      stageName: data.pipelineStage?.name ?? null,
+      pipelineName: data.pipeline?.name ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
