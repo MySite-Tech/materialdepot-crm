@@ -112,6 +112,24 @@ export async function lookupLeadByPhone(phoneNumber: string, branch: string): Pr
   };
 }
 
+export async function syncLeadToKylas(
+  phoneNumber: string,
+  branch: string,
+  interestedCategories: string[],
+  userType: string,
+): Promise<void> {
+  await mdFetch("/store-visit-lead/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contact: phoneNumber,
+      branch: branch.toUpperCase(),
+      interested_categories: interestedCategories,
+      user_type: userType,
+    }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // User Info Properties (questions + options from Django)
 // ---------------------------------------------------------------------------

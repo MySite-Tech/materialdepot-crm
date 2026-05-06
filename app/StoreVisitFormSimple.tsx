@@ -10,6 +10,7 @@ import {
   fetchUserInfoProperties,
   saveUserProperties,
   updateLeadProperties,
+  syncLeadToKylas,
   type BMOption,
   type UserInfoProperty,
   type CurrentSalesBM,
@@ -530,6 +531,16 @@ export default function StoreVisitFormSimple() {
       // Update user name in Django User table
       if (formData.name.trim()) {
         saves.push(updateLeadProperties(formData.phoneNumber, { name: formData.name.trim() }));
+      }
+
+      // Sync cfInterestedCategories and cfUserType to Kylas lead
+      if (formData.categories.length > 0 || formData.userType) {
+        saves.push(syncLeadToKylas(
+          formData.phoneNumber,
+          branch,
+          formData.categories,
+          formData.userType || '',
+        ));
       }
 
       await Promise.all(saves);
