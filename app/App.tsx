@@ -1836,12 +1836,13 @@ export default function App() {
     if (search) {
       const q = search.toLowerCase();
       const matchId = l.id.toLowerCase().includes(q);
+      const matchLeadId = (l.leadId || '').toLowerCase().includes(q);
       const matchPerson = l.assignedTo.toLowerCase().includes(q);
       const cartStr = typeof l.cartItems === 'string' ? l.cartItems : Array.isArray(l.cartItems) ? l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(' ') : '';
       const matchItems = cartStr.toLowerCase().includes(q);
       const matchClient = (l.clientName || '').toLowerCase().includes(q);
       const matchPhone = (l.clientPhone || '').includes(q);
-      if (!matchId && !matchPerson && !matchItems && !matchClient && !matchPhone) return false;
+      if (!matchId && !matchLeadId && !matchPerson && !matchItems && !matchClient && !matchPhone) return false;
     }
     return true;
   });

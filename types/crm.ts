@@ -19,6 +19,7 @@ export interface Visit {
 
 export interface Lead {
   id: string;
+  leadId?: string;
   ticketId?: number;
   createdAt: string;
   clientName?: string;
