@@ -30,7 +30,7 @@ const mockApi = {
       { id: 2, name: 'Whitefield', displayName: 'Whitefield' },
       { id: 3, name: 'Yelahanka', displayName: 'Yelahanka' },
       { id: 4, name: 'HQ', displayName: 'HQ' },
-      { id: 5, name: 'Hyderabad', displayName: 'Hyderabad' },
+      { id: 5, name: 'Gachibowli', displayName: 'Gachibowli' },
     ];
   },
 
