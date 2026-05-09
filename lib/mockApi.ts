@@ -117,6 +117,7 @@ export async function syncLeadToKylas(
   branch: string,
   interestedCategories: string[],
   userType: string,
+  name?: string,
 ): Promise<void> {
   await mdFetch("/store-visit-lead/", {
     method: "POST",
@@ -126,6 +127,7 @@ export async function syncLeadToKylas(
       branch: branch.toUpperCase(),
       interested_categories: interestedCategories,
       user_type: userType,
+      ...(name ? { name } : {}),
     }),
   });
 }

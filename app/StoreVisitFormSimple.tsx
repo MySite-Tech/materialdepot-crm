@@ -541,6 +541,7 @@ export default function StoreVisitFormSimple() {
           branch,
           formData.categories,
           formData.userType || '',
+          formData.name.trim() || undefined,
         ));
       }
 
