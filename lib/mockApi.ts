@@ -545,6 +545,7 @@ export interface LeadPropertyUpdate {
 export async function updateLeadProperties(
   contact: string,
   fields: LeadPropertyUpdate,
+  dealTicketId?: number,
 ): Promise<void> {
   if (!contact) return;
   const payload = Object.fromEntries(
@@ -554,7 +555,7 @@ export async function updateLeadProperties(
   await mdFetch("/store-visit/client-properties/", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contact, ...payload }),
+    body: JSON.stringify({ contact, ...payload, ...(dealTicketId ? { deal_ticket_id: dealTicketId } : {}) }),
   });
 }
 
@@ -798,7 +799,7 @@ export async function upsertLead(lead: import('../types/crm').Lead): Promise<voi
     followup_date: lead.followUpDate || undefined,
     project_phase: lead.projectPhase || undefined,
     estimated_closure_date: lead.closureDate || undefined,
-  });
+  }, lead.ticketId);
 }
 
 export async function upsertLeads(leads: import('../types/crm').Lead[]): Promise<void> {
