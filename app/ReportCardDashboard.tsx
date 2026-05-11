@@ -7,6 +7,7 @@ import {
   ReportCardBM,
   ReportCardStore,
   BMDistributionEntry,
+  ReportCardBMOption,
 } from '../lib/mockApi';
 
 interface Props {
@@ -124,57 +125,81 @@ function FilterChip({
   );
 }
 
-function TextFilterChip({
-  label, value, onChange, placeholder, color,
+function BMFilterChip({
+  label, onSelect, onClear, options, color,
 }: {
-  label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; color?: { active: string };
+  label: string; // display name of selected BM (empty if none)
+  onSelect: (name: string, contact: string) => void;
+  onClear: () => void;
+  options: ReportCardBMOption[]; color?: { active: string };
 }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(value);
+  const [search, setSearch] = useState('');
   const c = color || { active: '#8B5CF6' };
-  const active = value.trim().length > 0;
+  const active = label.trim().length > 0;
+
+  const visible = search.trim()
+    ? options.filter(o =>
+        o.name.toLowerCase().includes(search.toLowerCase()) ||
+        o.contact.includes(search)
+      )
+    : options;
+
+  const select = (o: ReportCardBMOption) => { onSelect(o.name, o.contact); setOpen(false); setSearch(''); };
+  const clear = () => { onClear(); setSearch(''); setOpen(false); };
+
   return (
     <div className="relative">
       <button
-        onClick={() => { setOpen(o => !o); setDraft(value); }}
+        onClick={() => { setOpen(o => !o); setSearch(''); }}
         style={active ? { background: c.active, borderColor: c.active, color: '#fff' } : {}}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border transition-all ${
           active ? 'shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
         }`}
       >
         {!active && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.active }} />}
-        {active ? `${label}: ${value}` : label}
+        {active ? `BM: ${label}` : 'BM'}
         <span className="text-[10px] opacity-60">▾</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] min-w-[220px] p-3 space-y-2">
-            <input
-              autoFocus
-              type="text"
-              placeholder={placeholder ?? 'Enter name or phone…'}
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { onChange(draft); setOpen(false); } }}
-              className="w-full border border-gray-200 rounded px-2 py-1.5 text-[12px] outline-none"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => { onChange(draft); setOpen(false); }}
-                className="flex-1 bg-purple-600 text-white text-[11px] font-semibold py-1 rounded cursor-pointer"
-              >
-                Apply
-              </button>
+          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] min-w-[200px] flex flex-col" style={{ maxHeight: 260 }}>
+            <div className="px-2 pt-2 pb-1 border-b border-gray-100 shrink-0">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Search BM…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                className="w-full border border-gray-200 rounded px-2 py-1 text-[12px] text-gray-700 placeholder-gray-400 outline-none bg-white"
+              />
+            </div>
+            <div className="overflow-y-auto py-1 flex-1">
               {active && (
                 <button
-                  onClick={() => { onChange(''); setDraft(''); setOpen(false); }}
-                  className="flex-1 bg-gray-100 text-gray-600 text-[11px] font-semibold py-1 rounded cursor-pointer"
+                  onClick={clear}
+                  className="w-full text-left px-3 py-1.5 text-[12px] text-red-500 hover:bg-red-50 cursor-pointer"
                 >
-                  Clear
+                  Clear selection
                 </button>
               )}
+              {visible.length === 0 && (
+                <div className="px-3 py-2 text-[12px] text-gray-400">No match</div>
+              )}
+              {visible.map(o => (
+                <button
+                  key={o.contact || o.name}
+                  onClick={() => select(o)}
+                  className={`w-full text-left px-3 py-1.5 text-[12px] cursor-pointer hover:bg-gray-50 ${
+                    label === o.name ? 'font-semibold text-purple-700 bg-purple-50' : 'text-gray-700'
+                  }`}
+                >
+                  {o.name}
+                  {o.contact && <span className="ml-1.5 text-gray-400 font-normal">{o.contact}</span>}
+                </button>
+              ))}
             </div>
           </div>
         </>
@@ -350,7 +375,9 @@ function StorePanel({ store }: { store: ReportCardStore }) {
 
 export default function ReportCardDashboard({ branches, allowedBranches }: Props) {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
-  const [bmFilter, setBmFilter] = useState('');
+  // bmLabel = display name; bmContact = contact sent to API (unique, matched by contact__icontains)
+  const [bmLabel, setBmLabel] = useState('');
+  const [bmContact, setBmContact] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [data, setData] = useState<ReportCardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -377,12 +404,12 @@ export default function ReportCardDashboard({ branches, allowedBranches }: Props
         : (branchFilter.length > 0 ? branchFilter : undefined);
       load({
         branch: effectiveBranches,
-        bm: bmFilter.trim() || undefined,
+        bm: bmContact.trim() || undefined,
         month: monthFilter || undefined,
       });
     }, 500);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, monthFilter, load, isRestricted, allowedBranches]);
+  }, [branchFilter, bmContact, monthFilter, load, isRestricted, allowedBranches]);
 
   return (
     <div className="px-3 sm:px-6 py-4 space-y-4">
@@ -395,9 +422,12 @@ export default function ReportCardDashboard({ branches, allowedBranches }: Props
           onChange={v => { setBranchFilter(v); }}
           color={{ active: '#3B82F6' }}
         />
-        <TextFilterChip
-          label="BM" value={bmFilter} onChange={setBmFilter}
-          placeholder="Name or phone…" color={{ active: '#8B5CF6' }}
+        <BMFilterChip
+          label={bmLabel}
+          onSelect={(name, contact) => { setBmLabel(name); setBmContact(contact); }}
+          onClear={() => { setBmLabel(''); setBmContact(''); }}
+          options={data?.available_bms ?? []}
+          color={{ active: '#8B5CF6' }}
         />
         <MonthChip value={monthFilter} onChange={setMonthFilter} />
         <span className="ml-auto flex items-center gap-2 text-[11px] text-gray-400 font-mono">
@@ -416,7 +446,7 @@ export default function ReportCardDashboard({ branches, allowedBranches }: Props
       )}
 
       {data && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-4 transition-opacity duration-150 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           {/* BM card */}
           <div>
             {data.bm ? (

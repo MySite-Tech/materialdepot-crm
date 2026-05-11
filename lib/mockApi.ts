@@ -925,6 +925,7 @@ export interface WeeklyFunnelData {
     top_categories: string[];
     rows: CategorySplitRow[];
   };
+  available_bms: { name: string; contact: string }[];
 }
 
 export interface WeeklyFunnelFilters {
@@ -1004,9 +1005,15 @@ export interface ReportCardStore {
   pipeline_health: { active_carts: number; active_cart_value: number; hot_leads_gt_1L: number };
 }
 
+export interface ReportCardBMOption {
+  name: string;
+  contact: string;
+}
+
 export interface ReportCardData {
   bm: ReportCardBM | null;
   store: ReportCardStore;
+  available_bms: ReportCardBMOption[];
 }
 
 export interface ReportCardFilters {
