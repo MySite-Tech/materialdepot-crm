@@ -209,7 +209,7 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
     ? allowedBranches.filter(b => b !== 'HQ')
     : branches.filter(b => b !== 'HQ');
 
-  const load = useCallback((filters: { branch?: string[]; bm?: string[] }) => {
+  const load = useCallback((filters: { branch?: string[]; bm?: string[]; date?: string }) => {
     setLoading(true);
     fetchWeeklyFunnel(filters)
       .then(setData)
