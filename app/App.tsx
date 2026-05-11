@@ -1835,17 +1835,7 @@ export default function App() {
       const closureOverdue = l.closureDate && l.closureDate < today;
       if (!followUpOverdue && !closureOverdue) return false;
     }
-    if (search) {
-      const q = search.toLowerCase();
-      const matchId = l.id.toLowerCase().includes(q);
-      const matchLeadId = (l.leadId || '').toLowerCase().includes(q);
-      const matchPerson = l.assignedTo.toLowerCase().includes(q);
-      const cartStr = typeof l.cartItems === 'string' ? l.cartItems : Array.isArray(l.cartItems) ? l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(' ') : '';
-      const matchItems = cartStr.toLowerCase().includes(q);
-      const matchClient = (l.clientName || '').toLowerCase().includes(q);
-      const matchPhone = (l.clientPhone || '').includes(q);
-      if (!matchId && !matchLeadId && !matchPerson && !matchItems && !matchClient && !matchPhone) return false;
-    }
+    // search filtering is handled server-side via `q` param; skip client re-filter to avoid hiding server-matched rows
     return true;
   });
 

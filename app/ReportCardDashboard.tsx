@@ -208,25 +208,37 @@ function BMFilterChip({
   );
 }
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 function MonthChip({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const active = !!value;
   const [open, setOpen] = useState(false);
-
-  const months: string[] = [];
   const now = new Date();
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
+  const [pickerYear, setPickerYear] = useState(() =>
+    value ? parseInt(value.split('-')[0]) : now.getFullYear()
+  );
+
+  const selectedYear = value ? parseInt(value.split('-')[0]) : null;
+  const selectedMonth = value ? parseInt(value.split('-')[1]) - 1 : null; // 0-indexed
 
   const displayLabel = value
-    ? new Date(value + '-01').toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+    ? `${MONTH_NAMES[parseInt(value.split('-')[1]) - 1]} ${value.split('-')[0]}`
     : 'Month';
+
+  const select = (month: number) => {
+    const m = String(month + 1).padStart(2, '0');
+    onChange(`${pickerYear}-${m}`);
+    setOpen(false);
+  };
+
+  const isFuture = (month: number) =>
+    pickerYear > now.getFullYear() ||
+    (pickerYear === now.getFullYear() && month > now.getMonth());
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setOpen(o => !o); if (!open) setPickerYear(selectedYear ?? now.getFullYear()); }}
         style={active ? { background: '#F59E0B', borderColor: '#F59E0B', color: '#fff' } : {}}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border transition-all ${
           active ? 'shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
@@ -239,16 +251,56 @@ function MonthChip({ value, onChange }: { value: string; onChange: (v: string) =
       {open && (
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] min-w-[150px] py-1">
-            {months.map(m => (
+          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-[51] w-[220px] p-3">
+            {/* Year navigation */}
+            <div className="flex items-center justify-between mb-3">
               <button
-                key={m}
-                onClick={() => { onChange(m); setOpen(false); }}
-                className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 cursor-pointer ${m === value ? 'font-semibold text-yellow-700' : 'text-gray-700'}`}
+                onClick={() => setPickerYear(y => y - 1)}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 cursor-pointer text-[13px]"
               >
-                {new Date(m + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+                ‹
               </button>
-            ))}
+              <span className="text-[13px] font-bold text-gray-800">{pickerYear}</span>
+              <button
+                onClick={() => setPickerYear(y => y + 1)}
+                disabled={pickerYear >= now.getFullYear()}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 cursor-pointer text-[13px] disabled:opacity-30 disabled:cursor-default"
+              >
+                ›
+              </button>
+            </div>
+            {/* Month grid */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {MONTH_NAMES.map((name, i) => {
+                const isSelected = pickerYear === selectedYear && i === selectedMonth;
+                const disabled = isFuture(i);
+                return (
+                  <button
+                    key={name}
+                    disabled={disabled}
+                    onClick={() => select(i)}
+                    className={`py-1.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-yellow-400 text-white font-bold'
+                        : disabled
+                        ? 'text-gray-300 cursor-default'
+                        : 'hover:bg-yellow-50 text-gray-700'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Clear */}
+            {active && (
+              <button
+                onClick={() => { onChange(''); setOpen(false); }}
+                className="mt-3 w-full text-[11px] text-red-500 hover:text-red-600 border border-red-200 rounded-md py-1 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </>
       )}
