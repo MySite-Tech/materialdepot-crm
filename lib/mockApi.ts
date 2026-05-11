@@ -882,6 +882,148 @@ export async function syncEstimate(value: string): Promise<SyncEstimateResult> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Weekly Funnel Dashboard
+// ---------------------------------------------------------------------------
+
+export interface WeeklyFunnelRow {
+  week: string;
+  customer_type: string;
+  footfall: number;
+  cart: number;
+  cart_pct: number;
+  pi: number;
+  pi_pct: number;
+  order: number;
+  order_pct: number;
+  order_value: number;
+  avg_order_value: number;
+  avg_category: number;
+}
+
+export interface MonthSplitRow {
+  month: string;
+  '0-25k': number;
+  '25-50k': number;
+  '50-100k': number;
+  '100k-250k': number;
+  '250k-500k': number;
+  '500k+': number;
+  total: number;
+}
+
+export interface CategorySplitRow {
+  month: string;
+  [category: string]: number | string;
+}
+
+export interface WeeklyFunnelData {
+  weekly_rows: WeeklyFunnelRow[];
+  cart_split_by_month: MonthSplitRow[];
+  order_split_by_month: MonthSplitRow[];
+  category_split_by_month: {
+    top_categories: string[];
+    rows: CategorySplitRow[];
+  };
+}
+
+export interface WeeklyFunnelFilters {
+  branch?: string[];
+  bm?: string[];
+  date?: string; // YYYY-MM-DD
+}
+
+export async function fetchWeeklyFunnel(filters: WeeklyFunnelFilters = {}): Promise<WeeklyFunnelData> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.bm?.length) params.set('bm', filters.bm.join(','));
+  if (filters.date) params.set('date', filters.date);
+  const qs = params.toString();
+  return mdFetch(`/crm/weekly-funnel/${qs ? `?${qs}` : ''}`);
+}
+
+// ---------------------------------------------------------------------------
+// Report Card
+// ---------------------------------------------------------------------------
+
+export interface ReportCardBMToday {
+  walk_ins: number;
+  carts_created: number;
+  orders_closed: number;
+}
+
+export interface ReportCardBMMTD {
+  total_orders: number;
+  total_revenue: number;
+  avg_order_value: number;
+  repeat_walkins: number;
+  new_walkins: number;
+  days_elapsed: number;
+  projected_monthly_revenue: number;
+}
+
+export interface ReportCardBMCartHealth {
+  active_carts: number;
+  fresh_0_7d: number;
+  warm_8_14d: number;
+  cold_15_30d: number;
+  dead_30d_plus: number;
+  pipeline_by_value: Record<string, number>;
+}
+
+export interface ReportCardBMWeekly {
+  orders: number;
+  revenue: number;
+  daily_avg: number;
+}
+
+export interface ReportCardBM {
+  bm_name: string;
+  bm_id: number;
+  today: ReportCardBMToday;
+  mtd: ReportCardBMMTD;
+  cart_health: ReportCardBMCartHealth;
+  weekly_last_7d: ReportCardBMWeekly;
+}
+
+export interface BMDistributionEntry {
+  bm_name: string;
+  mtd_revenue: number;
+  projected_monthly: number;
+}
+
+export interface ReportCardStore {
+  yesterday: { walk_ins: number; carts: number; pis: number; orders: number; revenue: number };
+  mtd: { days_elapsed: number; days_in_month: number; total_orders: number; total_revenue: number; daily_avg: number; projected_end: number; gap: number };
+  bm_distribution: {
+    stars_gt_25L: BMDistributionEntry[];
+    on_track_15_25L: BMDistributionEntry[];
+    at_risk_10_15L: BMDistributionEntry[];
+    critical_lt_10L: BMDistributionEntry[];
+  };
+  pipeline_health: { active_carts: number; active_cart_value: number; hot_leads_gt_1L: number };
+}
+
+export interface ReportCardData {
+  bm: ReportCardBM | null;
+  store: ReportCardStore;
+}
+
+export interface ReportCardFilters {
+  bm?: string;
+  branch?: string[];
+  month?: string; // YYYY-MM
+}
+
+export async function fetchReportCard(filters: ReportCardFilters = {}): Promise<ReportCardData> {
+  const params = new URLSearchParams();
+  if (filters.bm) params.set('bm', filters.bm);
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.month) params.set('month', filters.month);
+  const qs = params.toString();
+  return mdFetch(`/crm/report-card/${qs ? `?${qs}` : ''}`);
+}
+
 export async function fetchKylasDealInfo(dealId: number): Promise<KylasDealInfo | null> {
   try {
     const data = await kylasFetch(`/deals/${dealId}`);

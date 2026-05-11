@@ -8,6 +8,8 @@ import { logActivity, fetchActivityLogs } from '../lib/supabase';
 import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallDashboard from './FootfallDashboard';
+import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
+import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
@@ -89,11 +91,11 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'storeVisit' | 'sales' | 'admin';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'admin'],
-  admin:        ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'admin'],
-  tech:         ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'admin'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
   manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'],
   sales:        ['leads', 'sales'],
   retail:       ['storeVisit'],
@@ -2288,7 +2290,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }])
           .filter(t => allowedTabs.includes(t.key))
           .map(t => (
             <button
@@ -2313,6 +2315,14 @@ export default function App() {
 
       {mainTab === 'footfall' && (
         <FootfallDashboard branches={branches} allowedBranches={userAllowedBranches} />
+      )}
+
+      {mainTab === 'weeklyFunnel' && (
+        <WeeklyFunnelDashboard branches={branches} allowedBranches={userAllowedBranches} />
+      )}
+
+      {mainTab === 'reportCard' && (
+        <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
       {mainTab === 'storeVisit' && (
