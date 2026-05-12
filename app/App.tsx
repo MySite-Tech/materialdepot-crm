@@ -1840,8 +1840,6 @@ export default function App() {
     return { status, count: row?.count || 0, value: row?.value || 0 };
   });
 
-  const statusChips = stageSummary.filter((s) => s.value > 0);
-
   const totalLeadsCount = leadsStats?.total.count ?? leadsTotal ?? filtered.length;
   const activeCount = leadsStats?.active.count ?? 0;
   const wonCount = leadsStats?.won.count ?? 0;
@@ -2334,41 +2332,23 @@ export default function App() {
             <div className="bg-[#EAB308] transition-[width] duration-300" style={{ width: pctActive + '%' }} />
             <div className="bg-gray-400 transition-[width] duration-300" style={{ width: pctLost + '%' }} />
           </div>
-          {statusChips.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {statusChips.map((sc) => (
-                <span
-                  key={sc.status}
-                  onClick={() => toggleStatusFilter(sc.status)}
-                  className={`inline-flex items-center px-2.5 py-1 rounded-2xl bg-white text-[11px] cursor-pointer border ${statusFilter.includes(sc.status) ? 'border-[#EAB308]' : 'border-gray-200'}`}
-                >
-                  <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: STATUS_COLORS[sc.status] }} />
-                  <span className="text-[11px]">{sc.status}</span>
-                  <span className="font-mono text-[11px] font-semibold ml-1.5">{fmtINR(sc.value)}</span>
-                  <span className="text-[10px] text-gray-400 ml-1">({sc.count})</span>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="flex gap-3 mt-3 overflow-x-auto pb-1">
           {stageSummary.map((ss) => {
-            const active = statusFilter.includes(ss.status);
             return (
               <div
                 key={ss.status}
-                onClick={() => toggleStatusFilter(ss.status)}
-                className={`bg-white rounded-lg px-4 py-3 border-[1.5px] text-center min-w-[130px] cursor-pointer flex-[1_0_140px] ${active ? 'border-[#EAB308]' : 'border-gray-200'}`}
+                className="bg-white rounded-lg px-4 py-3 border-[1.5px] text-center min-w-[130px] flex-[1_0_140px] border-gray-200"
               >
                 {statsLoading
                   ? <div className="h-7 w-10 bg-gray-200 rounded animate-pulse mx-auto" />
-                  : <div className={`text-2xl font-bold ${active ? 'text-[#EAB308]' : 'text-gray-700'}`}>{ss.count}</div>
+                  : <div className="text-2xl font-bold text-gray-700">{ss.count}</div>
                 }
                 <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">{ss.status}</div>
-                {!statsLoading && ss.value > 0 && (
-                  <div className="font-mono text-[11px] font-semibold mt-1" style={{ color: STATUS_COLORS[ss.status] }}>{fmtINR(ss.value)}</div>
-                )}
+                <div className="font-mono text-[11px] font-semibold mt-1 min-h-[16px]" style={{ color: STATUS_COLORS[ss.status] }}>
+                  {!statsLoading && ss.value > 0 ? fmtINR(ss.value) : ''}
+                </div>
               </div>
             );
           })}
