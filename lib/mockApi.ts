@@ -281,6 +281,7 @@ export interface CRMLeadsQuery {
   closureTo?: string;
   cartValueGt?: number;
   ownerUserOrgId?: string | number;
+  sortDir?: 'asc' | 'desc';
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number }
@@ -342,6 +343,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
+  if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`);
   return {

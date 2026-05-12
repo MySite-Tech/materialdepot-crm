@@ -1690,6 +1690,7 @@ export default function App() {
         closureTo: closureDateTo || undefined,
         cartValueGt: cartGt,
         ownerUserOrgId,
+        sortDir: sortCol === 'createdAt' ? sortDir : undefined,
       }),
       fetchBranchList().catch(() => []),
       fetchUsers().catch(() => []),
@@ -1715,6 +1716,7 @@ export default function App() {
     followUpDateFrom, followUpDateTo,
     closureDateFrom, closureDateTo,
     debouncedCartValueGt,
+    sortCol, sortDir,
   ]);
 
   useEffect(() => {
@@ -1811,38 +1813,7 @@ export default function App() {
     ? crmUsers.map((u) => u.name).filter(Boolean).sort()
     : [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
 
-  const baseFiltered = leads.filter((l) => {
-    if (personFilter.length > 0 && !personFilter.includes(l.assignedTo)) return false;
-    if (userAllowedBranches.length > 0) {
-      if (!userAllowedBranchesLower.has((l.branch || '').toLowerCase())) return false;
-    } else if (branchFilter.length > 0 && !branchFilter.includes(l.branch)) return false;
-    if (followUpDateFrom || followUpDateTo) {
-      if (!l.followUpDate) return false;
-      if (followUpDateFrom && l.followUpDate < followUpDateFrom) return false;
-      if (followUpDateTo && l.followUpDate > followUpDateTo) return false;
-    }
-    if (closureDateFrom || closureDateTo) {
-      if (!l.closureDate) return false;
-      if (closureDateFrom && l.closureDate < closureDateFrom) return false;
-      if (closureDateTo && l.closureDate > closureDateTo) return false;
-    }
-    if (cartValueGt !== '' && (l.cartValue || 0) < Number(cartValueGt)) return false;
-    if (taskFilter === 'followup_pending' && l.followUpDate) return false;
-    if (taskFilter === 'closure_pending' && l.closureDate) return false;
-    if (taskFilter === 'overdue') {
-      const today = todayStr();
-      const followUpOverdue = l.followUpDate && l.followUpDate < today;
-      const closureOverdue = l.closureDate && l.closureDate < today;
-      if (!followUpOverdue && !closureOverdue) return false;
-    }
-    // search filtering is handled server-side via `q` param; skip client re-filter to avoid hiding server-matched rows
-    return true;
-  });
-
-  const filtered = baseFiltered.filter((l) => {
-    if (statusFilter.length > 0 && !statusFilter.includes(l.status)) return false;
-    return true;
-  });
+  const filtered = leads;
 
   const pipelineTotal = leadsStats?.total.value ?? 0;
   const pipelineActive = leadsStats?.active.value ?? 0;
