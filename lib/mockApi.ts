@@ -282,6 +282,7 @@ export interface CRMLeadsQuery {
   cartValueGt?: number;
   ownerUserOrgId?: string | number;
   sortDir?: 'asc' | 'desc';
+  taskFilter?: string;
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number }
@@ -312,6 +313,7 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
+  if (query.taskFilter) params.set('task_filter', query.taskFilter);
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`);
   return {
@@ -343,6 +345,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
+  if (query.taskFilter) params.set('task_filter', query.taskFilter);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`);

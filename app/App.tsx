@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
@@ -1668,7 +1668,7 @@ export default function App() {
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
       : branchFilter;
     const branchCsv = effectiveBranches.join(',');
-    const bmCsv = personFilter.join(',');
+    const bmCsv = personFilter.map((name) => bmNameToPhone[name] || name).join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
     const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
@@ -1691,6 +1691,7 @@ export default function App() {
         cartValueGt: cartGt,
         ownerUserOrgId,
         sortDir: sortCol === 'createdAt' ? sortDir : undefined,
+        taskFilter: taskFilter || undefined,
       }),
       fetchBranchList().catch(() => []),
       fetchUsers().catch(() => []),
@@ -1717,6 +1718,7 @@ export default function App() {
     closureDateFrom, closureDateTo,
     debouncedCartValueGt,
     sortCol, sortDir,
+    taskFilter,
   ]);
 
   useEffect(() => {
@@ -1725,7 +1727,7 @@ export default function App() {
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
       : branchFilter;
     const branchCsv = effectiveBranches.join(',');
-    const bmCsv = personFilter.join(',');
+    const bmCsv = personFilter.map((name) => bmNameToPhone[name] || name).join(',');
     const statusCsv = statusFilter.join(',');
     const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
     const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
@@ -1744,6 +1746,7 @@ export default function App() {
       closureTo: closureDateTo || undefined,
       cartValueGt: cartGt,
       ownerUserOrgId,
+      taskFilter: taskFilter || undefined,
     }).then((stats) => {
       if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
     }).catch(() => { if (!cancelled) setStatsLoading(false); });
@@ -1755,6 +1758,7 @@ export default function App() {
     followUpDateFrom, followUpDateTo,
     closureDateFrom, closureDateTo,
     debouncedCartValueGt,
+    taskFilter,
   ]);
 
   const [csvPreview, setCsvPreview] = useState<CsvRow[] | null>(null);
@@ -1812,6 +1816,11 @@ export default function App() {
   const availableBMs = crmUsers.length > 0
     ? crmUsers.map((u) => u.name).filter(Boolean).sort()
     : [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
+  const bmNameToPhone = useMemo(() => {
+    const map: Record<string, string> = {};
+    crmUsers.forEach((u) => { if (u.name && u.phone) map[u.name] = u.phone; });
+    return map;
+  }, [crmUsers]);
 
   const filtered = leads;
 
@@ -1866,7 +1875,7 @@ export default function App() {
     setPage(0);
   };
 
-  useEffect(() => { setPage(0); }, [search, statusFilter, personFilter, branchFilter, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, closureDateFrom, closureDateTo, cartValueGt]);
+  useEffect(() => { setPage(0); }, [search, statusFilter, personFilter, branchFilter, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, closureDateFrom, closureDateTo, cartValueGt, taskFilter]);
 
   const totalPages = leadsTotalPages || (Math.ceil(sorted.length / pageSize) || 1);
   const safePage = Math.min(page, totalPages - 1);
@@ -2487,7 +2496,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="sm:hidden flex flex-col gap-2">
+        <div className={`sm:hidden flex flex-col gap-2 ${leadsLoading ? 'opacity-40 pointer-events-none' : ''}`}>
           {leadsLoading && <div className="flex items-center justify-center gap-2 py-10 text-gray-400 text-sm"><svg className="animate-spin h-4 w-4 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Loading leads...</div>}
           {!leadsLoading && paginatedRows.length === 0 && <div className="text-center text-gray-400 py-10 text-sm">No leads found</div>}
           {paginatedRows.map((l,i) => (
@@ -2540,7 +2549,7 @@ export default function App() {
                   <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={leadsLoading ? 'opacity-40 pointer-events-none' : ''}>
                 {paginatedRows.map((l, i) => (
                   <tr
                     key={l.id + i}
