@@ -930,6 +930,10 @@ export interface WeeklyFunnelData {
     top_categories: string[];
     rows: CategorySplitRow[];
   };
+  category_revenue_split_by_month: {
+    top_categories: string[];
+    rows: CategorySplitRow[];
+  };
   available_bms: { name: string; contact: string }[];
 }
 
@@ -999,7 +1003,7 @@ export interface BMDistributionEntry {
 }
 
 export interface ReportCardStore {
-  yesterday: { walk_ins: number; carts: number; pis: number; orders: number; revenue: number };
+  yesterday: { walk_ins: number; carts: number; estimates: number; orders: number; revenue: number };
   mtd: { days_elapsed: number; days_in_month: number; total_orders: number; total_revenue: number; daily_avg: number; projected_end: number; gap: number };
   bm_distribution: {
     stars_gt_25L: BMDistributionEntry[];

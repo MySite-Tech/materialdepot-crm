@@ -64,15 +64,16 @@ function CartHealthBar({ label, count, total, color }: { label: string; count: n
 
 function BmDistGroup({ label, entries, dotColor }: { label: string; entries: BMDistributionEntry[]; dotColor: string }) {
   if (entries.length === 0) return null;
+  const sorted = [...entries].sort((a, b) => b.projected_monthly - a.projected_monthly);
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-1.5">
         <span className="w-2 h-2 rounded-full" style={{ background: dotColor }} />
         <span className="text-[11px] font-semibold text-gray-700">{label}</span>
-        <span className="text-[11px] text-gray-400">({entries.length})</span>
+        <span className="text-[11px] text-gray-400">({sorted.length})</span>
       </div>
       <div className="space-y-1 pl-3.5">
-        {entries.map((e, i) => (
+        {sorted.map((e, i) => (
           <div key={`${e.bm_name}-${i}`} className="flex justify-between text-[11px]">
             <span className="text-gray-600">{e.bm_name}</span>
             <span className="font-mono text-gray-500">{fmtINR(e.mtd_revenue)} <span className="text-gray-400">→ {fmtINR(e.projected_monthly)}</span></span>
@@ -381,7 +382,7 @@ function StorePanel({ store }: { store: ReportCardStore }) {
         <div className="grid grid-cols-3 gap-3">
           <Stat label="Walk-ins" value={store.yesterday.walk_ins} />
           <Stat label="Carts" value={store.yesterday.carts} />
-          <Stat label="PIs" value={store.yesterday.pis} />
+          <Stat label="Estimates" value={store.yesterday.estimates} />
         </div>
         <div className="grid grid-cols-2 gap-3 mt-1">
           <Stat label="Orders" value={store.yesterday.orders} accent="text-green-600" />

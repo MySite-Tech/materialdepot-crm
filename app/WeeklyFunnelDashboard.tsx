@@ -233,6 +233,7 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
   const orderSplit: MonthSplitRow[] = data?.order_split_by_month ?? [];
   const topCats: string[] = data?.category_split_by_month?.top_categories ?? [];
   const catRows = data?.category_split_by_month?.rows ?? [];
+  const catRevRows = data?.category_revenue_split_by_month?.rows ?? [];
 
   return (
     <div className="px-3 sm:px-6 py-4 space-y-5">
@@ -384,6 +385,41 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
                     <td className="px-3 py-2 font-mono text-[11px] text-gray-700">{row.month as string}</td>
                     {topCats.map(c => (
                       <td key={c} className="px-3 py-2 text-right font-mono">{((row[c] as number) ?? 0).toLocaleString()}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 4: Category revenue split by month ───────────────────── */}
+      <section>
+        <h2 className="text-[14px] font-bold text-gray-900 mb-2">Category Revenue Split by Month (Top 5)</h2>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Month</th>
+                  {topCats.map(c => (
+                    <th key={c} className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && catRevRows.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                )}
+                {!loading && topCats.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No revenue data</td></tr>
+                )}
+                {catRevRows.map(row => (
+                  <tr key={row.month as string} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="px-3 py-2 font-mono text-[11px] text-gray-700">{row.month as string}</td>
+                    {topCats.map(c => (
+                      <td key={c} className="px-3 py-2 text-right font-mono">{fmtINR((row[c] as number) ?? 0)}</td>
                     ))}
                   </tr>
                 ))}

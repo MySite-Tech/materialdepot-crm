@@ -2228,6 +2228,7 @@ export default function App() {
   const today = todayStr();
 
   const isOverdue = (l: Lead): boolean => !!(l.followUpDate && l.followUpDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
+  const isClosureOverdue = (l: Lead): boolean => !!(l.closureDate && l.closureDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
 
   const toggleStatusFilter = useCallback((status: string) => {
     setStatusFilter((prev) => prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]);
@@ -2571,7 +2572,9 @@ export default function App() {
                     </td>}
                     {isColVisible('closureDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
                       {l.closureDate ? (
-                        <span className="text-xs text-gray-500 border-b border-dashed border-gray-300">{fmtDate(l.closureDate)}</span>
+                        <span className={`text-xs border-b border-dashed border-gray-300 ${isClosureOverdue(l) ? 'font-bold text-red-500' : 'text-gray-500'}`}>
+                          {isClosureOverdue(l) && '⚠ '}{fmtDate(l.closureDate)}
+                        </span>
                       ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
                     </td>}
                     {isColVisible('cartValue') && <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
