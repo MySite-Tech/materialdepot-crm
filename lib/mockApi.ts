@@ -396,7 +396,6 @@ export interface DashboardData {
   branchStatus: DashboardBranchStatus[];
   lostReasons: DashboardLostReason[];
   closurePipeline: DashboardClosureLead[];
-  availableBMs: string[];
   summary: DashboardSummary;
 }
 
@@ -412,10 +411,10 @@ export interface DashboardFilters {
 export interface FootfallFunnelStats {
   footfall_users: number;
   cart_users: number;
-  address_users: number;
+  pi_users: number;
   order_users: number;
   cart_pct: number;
-  address_pct: number;
+  pi_pct: number;
   order_pct: number;
 }
 export interface FootfallBMRow extends FootfallFunnelStats {
@@ -427,7 +426,6 @@ export interface FootfallBranchRow extends FootfallFunnelStats {
 export interface FootfallDashboardData extends FootfallFunnelStats {
   by_bm: FootfallBMRow[];
   by_branch: FootfallBranchRow[];
-  available_bms: string[];
 }
 export interface FootfallFilters {
   branch?: string[];
@@ -936,7 +934,6 @@ export interface WeeklyFunnelData {
     top_categories: string[];
     rows: CategorySplitRow[];
   };
-  available_bms: { name: string; contact: string }[];
 }
 
 export interface WeeklyFunnelFilters {
@@ -1047,7 +1044,6 @@ export interface ReportCardBMOption {
 export interface ReportCardData {
   bm: ReportCardBM | null;
   store: ReportCardStore;
-  available_bms: ReportCardBMOption[];
 }
 
 export interface ReportCardFilters {

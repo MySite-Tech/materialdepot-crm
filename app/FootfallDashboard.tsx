@@ -251,13 +251,13 @@ function PctBar({ value, max = 100 }: { value: number; max?: number }) {
 const FUNNEL_COLS = [
   { key: 'footfall_users', label: 'Footfall', color: 'text-gray-800' },
   { key: 'cart_users',     label: 'Cart',     color: 'text-blue-600' },
-  { key: 'address_users',  label: 'PI',       color: 'text-purple-600' },
+  { key: 'pi_users',       label: 'PI',       color: 'text-purple-600' },
   { key: 'order_users',    label: 'Order',    color: 'text-green-600' },
 ] as const;
 
 const PCT_COLS = [
   { key: 'cart_pct',    label: 'Cart Conv%' },
-  { key: 'address_pct', label: 'PI Conv%' },
+  { key: 'pi_pct',      label: 'PI Conv%' },
   { key: 'order_pct',   label: 'Order Conv%' },
 ] as const;
 
@@ -421,12 +421,12 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
     fetchAvailableBMs(effective).then(setBmRows).catch(() => setBmRows([]));
   }, [branchKey]);
 
-  type SummaryCardKey = 'footfall_users' | 'cart_users' | 'address_users' | 'order_users';
-  type SummaryPctKey = 'cart_pct' | 'address_pct' | 'order_pct';
+  type SummaryCardKey = 'footfall_users' | 'cart_users' | 'pi_users' | 'order_users';
+  type SummaryPctKey = 'cart_pct' | 'pi_pct' | 'order_pct';
   const SUMMARY_CARDS: Array<{ key: SummaryCardKey; label: string; color: string; pctKey?: SummaryPctKey }> = [
     { key: 'footfall_users', label: 'Footfall Clients',  color: 'text-gray-900' },
     { key: 'cart_users',     label: 'Cart Clients',      color: 'text-blue-600',   pctKey: 'cart_pct' },
-    { key: 'address_users',  label: 'PI Clients',        color: 'text-purple-600', pctKey: 'address_pct' },
+    { key: 'pi_users',       label: 'PI Clients',        color: 'text-purple-600', pctKey: 'pi_pct' },
     { key: 'order_users',    label: 'Order Clients',     color: 'text-green-600',  pctKey: 'order_pct' },
   ];
 
