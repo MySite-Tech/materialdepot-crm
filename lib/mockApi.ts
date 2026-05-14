@@ -281,6 +281,7 @@ export interface CRMLeadsQuery {
   closureTo?: string;
   cartValueGt?: number;
   ownerUserOrgId?: string | number;
+  sortBy?: 'createdAt' | 'clientName' | 'clientPhone' | 'assignedTo' | 'branch' | 'cartValue';
   sortDir?: 'asc' | 'desc';
   taskFilter?: string;
 }
@@ -346,6 +347,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
+  if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`);

@@ -77,6 +77,10 @@ const ORDER_LOST_REASONS = [
   'Not Responding',
 ];
 
+const BACKEND_SORTABLE_COLS = new Set([
+  'createdAt', 'clientName', 'clientPhone', 'assignedTo', 'branch', 'cartValue',
+]);
+
 const PIPELINE_BUCKETS: Record<string, string[]> = {
   Active: ['In Cart', 'Quote Approval Pending', 'Availability Check'],
   Won: ['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered'],
@@ -1662,6 +1666,20 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || mainTab !== 'leads') return;
+    let cancelled = false;
+    Promise.all([
+      fetchBranchList().catch(() => []),
+      fetchUsers().catch(() => []),
+    ]).then(([dbBranches, dbUsers]) => {
+      if (cancelled) return;
+      if (dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
+      setCrmUsers(dbUsers);
+    });
+    return () => { cancelled = true; };
+  }, [currentUser, mainTab]);
+
+  useEffect(() => {
+    if (!currentUser || mainTab !== 'leads') return;
     // If the user has restricted branches, intersect with any UI branch filter.
     // Otherwise just use the UI filter directly.
     const effectiveBranches = userAllowedBranches.length > 0
@@ -1674,31 +1692,26 @@ export default function App() {
     const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
     setLeadsLoading(true);
     let cancelled = false;
-    Promise.all([
-      fetchCRMLeads({
-        page: page + 1,
-        pageSize,
-        branch: branchCsv || undefined,
-        bm: bmCsv || undefined,
-        q: debouncedSearch || undefined,
-        status: statusCsv || undefined,
-        createdFrom: createdDateFrom || undefined,
-        createdTo: createdDateTo || undefined,
-        followupFrom: followUpDateFrom || undefined,
-        followupTo: followUpDateTo || undefined,
-        closureFrom: closureDateFrom || undefined,
-        closureTo: closureDateTo || undefined,
-        cartValueGt: cartGt,
-        ownerUserOrgId,
-        sortDir: sortCol === 'createdAt' ? sortDir : undefined,
-        taskFilter: taskFilter || undefined,
-      }),
-      fetchBranchList().catch(() => []),
-      fetchUsers().catch(() => []),
-    ]).then(([crmLeadsPage, dbBranches, dbUsers]) => {
+    fetchCRMLeads({
+      page: page + 1,
+      pageSize,
+      branch: branchCsv || undefined,
+      bm: bmCsv || undefined,
+      q: debouncedSearch || undefined,
+      status: statusCsv || undefined,
+      createdFrom: createdDateFrom || undefined,
+      createdTo: createdDateTo || undefined,
+      followupFrom: followUpDateFrom || undefined,
+      followupTo: followUpDateTo || undefined,
+      closureFrom: closureDateFrom || undefined,
+      closureTo: closureDateTo || undefined,
+      cartValueGt: cartGt,
+      ownerUserOrgId,
+      sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt') as any,
+      sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
+      taskFilter: taskFilter || undefined,
+    }).then((crmLeadsPage) => {
       if (cancelled) return;
-      if (dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
-      setCrmUsers(dbUsers);
       setLeads(crmLeadsPage.results as Lead[]);
       setLeadsTotal(crmLeadsPage.count);
       setLeadsTotalPages(crmLeadsPage.totalPages);
@@ -2512,20 +2525,20 @@ export default function App() {
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-[#FAFAFA]">
-                  {isColVisible('id') && <Th label="Lead ID" sortKey="id" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="max-w-[110px] w-[110px]" />}
+                  {isColVisible('id') && <Th label="Lead ID" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="max-w-[110px] w-[110px]" />}
                   {isColVisible('clientName') && <Th label="Client Name" sortKey="clientName" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('clientPhone') && <Th label="Client Phone" sortKey="clientPhone" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('createdAt') && <Th label="Created" sortKey="createdAt" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('assignedTo') && <Th label="Assigned To" sortKey="assignedTo" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('branch') && <Th label="Branch" sortKey="branch" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('clientType') && <Th label="Client Type" sortKey="clientType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('propertyType') && <Th label="Property Type" sortKey="propertyType" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('architectInvolved') && <Th label="Architect/Designer" sortKey="architectInvolved" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('projectPhase') && <Th label="Project Phase" sortKey="projectPhase" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('status') && <Th label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('clientType') && <Th label="Client Type" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('propertyType') && <Th label="Property Type" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('architectInvolved') && <Th label="Architect/Designer" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('projectPhase') && <Th label="Project Phase" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('status') && <Th label="Status" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('cartItems') && <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('followUpDate') && <Th label="Follow-up" sortKey="followUpDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-                  {isColVisible('closureDate') && <Th label="Closure Date" sortKey="closureDate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('followUpDate') && <Th label="Follow-up" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {isColVisible('closureDate') && <Th label="Closure Date" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
                   {isColVisible('cartValue') && <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />}
                   <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
                 </tr>
