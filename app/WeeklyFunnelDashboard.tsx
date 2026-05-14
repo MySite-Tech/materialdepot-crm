@@ -6,6 +6,10 @@ import {
   WeeklyFunnelData,
   WeeklyFunnelRow,
   MonthSplitRow,
+  fetchCategoryOptions,
+  CategoryOption,
+  fetchAvailableBMs,
+  AvailableBM,
 } from '../lib/mockApi';
 
 interface Props {
@@ -42,8 +46,8 @@ function FilterChip({
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] min-w-[170px] max-h-[220px] overflow-y-auto py-1">
-            {options.map(opt => (
-              <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-[12px] text-gray-700">
+            {options.map((opt, i) => (
+              <label key={i} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-[12px] text-gray-700">
                 <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} style={{ accentColor: c.active }} />
                 {opt}
               </label>
@@ -73,8 +77,12 @@ function BMFilterChip({
       )
     : options;
 
-  const toggle = (name: string) =>
-    onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name]);
+  const toggle = (contact: string) =>
+    onChange(selected.includes(contact) ? selected.filter(x => x !== contact) : [...selected, contact]);
+
+  const selectedLabels = selected
+    .map(c => options.find(o => o.contact === c)?.name || c)
+    .join(', ');
 
   return (
     <div className="relative">
@@ -86,7 +94,7 @@ function BMFilterChip({
         }`}
       >
         {!active && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.active }} />}
-        {active ? `BM: ${selected.join(', ')}` : 'BM'}
+        {active ? `BM: ${selectedLabels}` : 'BM'}
         <span className="text-[10px] opacity-60">▾</span>
       </button>
       {open && (
@@ -108,12 +116,12 @@ function BMFilterChip({
               {visible.length === 0 && (
                 <div className="px-3 py-2 text-[12px] text-gray-400">No match</div>
               )}
-              {visible.map(o => (
-                <label key={o.contact || o.name} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-[12px] text-gray-700">
+              {visible.map((o, i) => (
+                <label key={o.contact || i} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-[12px] text-gray-700">
                   <input
                     type="checkbox"
-                    checked={selected.includes(o.name)}
-                    onChange={() => toggle(o.name)}
+                    checked={selected.includes(o.contact)}
+                    onChange={() => toggle(o.contact)}
                     style={{ accentColor: c.active }}
                   />
                   <span>{o.name}</span>
@@ -133,9 +141,23 @@ const fmtDateChip = (d: string) => {
   return `${day}/${m}/${y}`;
 };
 
-function DateChip({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DateRangeChip({
+  from, to, onChange,
+}: {
+  from: string;
+  to: string;
+  onChange: (from: string, to: string) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const active = !!value;
+  const active = !!(from && to);
+  const today = new Date().toISOString().split('T')[0];
+
+  const label = active
+    ? `${fmtDateChip(from)} → ${fmtDateChip(to)}`
+    : (from || to)
+      ? `${from ? fmtDateChip(from) : '…'} → ${to ? fmtDateChip(to) : '…'}`
+      : 'Date';
+
   return (
     <div className="relative">
       <button
@@ -146,28 +168,40 @@ function DateChip({ value, onChange }: { value: string; onChange: (v: string) =>
         }`}
       >
         {!active && <span className="w-2 h-2 rounded-full shrink-0 bg-amber-400" />}
-        {active ? fmtDateChip(value) : 'Date'}
+        {label}
         <span className="text-[10px] opacity-60">▾</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] p-3 space-y-2">
-            <div className="text-[10px] text-gray-500 uppercase font-semibold">Anchor date</div>
+          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] p-3 space-y-2 min-w-[220px]">
+            <div className="text-[10px] text-gray-500 uppercase font-semibold">Date range</div>
+            <div className="text-[10px] text-gray-400 leading-snug">
+              W-0 is the 7 days ending on <span className="font-semibold">To</span>. Earlier weeks shift back 7 days each.
+            </div>
+            <label className="block text-[10px] text-gray-500 uppercase font-semibold mt-1">From</label>
             <input
-              autoFocus
               type="date"
-              value={value}
-              max={new Date().toISOString().split('T')[0]}
-              onChange={e => { onChange(e.target.value); if (e.target.value) setOpen(false); }}
-              className="border border-gray-200 bg-white text-gray-700 rounded px-2 py-1 text-[11px] outline-none"
+              value={from}
+              max={to || today}
+              onChange={e => onChange(e.target.value, to)}
+              className="border border-gray-200 bg-white text-gray-700 rounded px-2 py-1 text-[11px] outline-none w-full"
             />
-            {active && (
+            <label className="block text-[10px] text-gray-500 uppercase font-semibold mt-1">To (anchor)</label>
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              max={today}
+              onChange={e => onChange(from, e.target.value)}
+              className="border border-gray-200 bg-white text-gray-700 rounded px-2 py-1 text-[11px] outline-none w-full"
+            />
+            {(from || to) && (
               <button
-                onClick={() => { onChange(''); setOpen(false); }}
+                onClick={() => { onChange('', ''); setOpen(false); }}
                 className="block text-[11px] text-red-500 hover:text-red-600 cursor-pointer border border-red-200 rounded px-2 py-0.5 w-full text-center hover:bg-red-50"
               >
-                Clear date
+                Clear range
               </button>
             )}
           </div>
@@ -199,17 +233,37 @@ const VALUE_BUCKETS = ['0-25k', '25-50k', '50-100k', '100k-250k', '250k-500k', '
 export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Props) {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [bmFilter, setBmFilter] = useState<string[]>([]);
-  const [dateFilter, setDateFilter] = useState<string>('');
+  const [dateFromFilter, setDateFromFilter] = useState<string>('');
+  const [dateToFilter, setDateToFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
+  const [availableBmList, setAvailableBmList] = useState<AvailableBM[]>([]);
   const [data, setData] = useState<WeeklyFunnelData | null>(null);
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+  }, []);
+
+  const branchKey = (allowedBranches.length > 0
+    ? (branchFilter.length > 0 ? branchFilter.filter(b => allowedBranches.includes(b)) : allowedBranches)
+    : branchFilter
+  ).join(',');
+  useEffect(() => {
+    const effective = branchKey ? branchKey.split(',') : undefined;
+    fetchAvailableBMs(effective).then(setAvailableBmList).catch(() => setAvailableBmList([]));
+  }, [branchKey]);
 
   const isRestricted = allowedBranches.length > 0;
   const branchOptions = isRestricted
     ? allowedBranches.filter(b => b !== 'HQ')
     : branches.filter(b => b !== 'HQ');
 
-  const load = useCallback((filters: { branch?: string[]; bm?: string[]; date?: string }) => {
+  const [splitsOnly, setSplitsOnly] = useState(false);
+  const prevDepsRef = useRef<null | { branch: string[]; bm: string[]; dateFrom: string; dateTo: string }>(null);
+
+  const load = useCallback((filters: { branch?: string[]; bm?: string[]; dateFrom?: string; dateTo?: string; category?: string[] }) => {
     setLoading(true);
     fetchWeeklyFunnel(filters)
       .then(setData)
@@ -220,13 +274,34 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      const p = prevDepsRef.current;
+      const onlyCategoryChanged =
+        p !== null &&
+        JSON.stringify(branchFilter) === JSON.stringify(p.branch) &&
+        JSON.stringify(bmFilter) === JSON.stringify(p.bm) &&
+        dateFromFilter === p.dateFrom &&
+        dateToFilter === p.dateTo;
+      setSplitsOnly(onlyCategoryChanged);
+
       const effectiveBranches = isRestricted
         ? (branchFilter.length > 0 ? branchFilter.filter(b => allowedBranches.includes(b)) : allowedBranches)
         : (branchFilter.length > 0 ? branchFilter : undefined);
-      load({ branch: effectiveBranches, bm: bmFilter.length ? bmFilter : undefined, date: dateFilter || undefined });
+      load({
+        branch: effectiveBranches,
+        bm: bmFilter.length ? bmFilter : undefined,
+        dateFrom: (dateFromFilter && dateToFilter) ? dateFromFilter : undefined,
+        dateTo: (dateFromFilter && dateToFilter) ? dateToFilter : undefined,
+        category: categoryFilter.length ? categoryFilter : undefined,
+      });
+      prevDepsRef.current = {
+        branch: [...branchFilter],
+        bm: [...bmFilter],
+        dateFrom: dateFromFilter,
+        dateTo: dateToFilter,
+      };
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, dateFilter, load, isRestricted, allowedBranches]);
+  }, [branchFilter, bmFilter, dateFromFilter, dateToFilter, categoryFilter, load, isRestricted, allowedBranches]);
 
   const weeklyRows: WeeklyFunnelRow[] = data?.weekly_rows ?? [];
   const cartSplit: MonthSplitRow[] = data?.cart_split_by_month ?? [];
@@ -248,10 +323,14 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
         />
         <BMFilterChip
           selected={bmFilter} onChange={setBmFilter}
-          options={data?.available_bms ?? []}
+          options={availableBmList}
           color={{ active: '#8B5CF6' }}
         />
-        <DateChip value={dateFilter} onChange={setDateFilter} />
+        <DateRangeChip
+          from={dateFromFilter}
+          to={dateToFilter}
+          onChange={(f, t) => { setDateFromFilter(f); setDateToFilter(t); }}
+        />
         <span className="ml-auto flex items-center gap-2 text-[11px] text-gray-400 font-mono">
           {loading && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
           Weekly Funnel
@@ -262,7 +341,7 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
       <section>
         <h2 className="text-[14px] font-bold text-gray-900 mb-2">Footfall → Cart → PI → Order by Visit Week</h2>
         <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-          {loading && (
+          {loading && !splitsOnly && (
             <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10 rounded-xl">
               <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
             </div>
@@ -319,6 +398,16 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
       </section>
 
       {/* ── Section 2: Cart & Order splits by month ───────────────────────── */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Cart / Order Split filter</span>
+        <FilterChip
+          label="Category"
+          options={categoryOptions.map(c => c.name)}
+          selected={categoryFilter}
+          onChange={setCategoryFilter}
+          color={{ active: '#10B981' }}
+        />
+      </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {[
           { label: 'Cart Split by Month', rows: cartSplit },
@@ -326,7 +415,12 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
         ].map(({ label, rows }) => (
           <section key={label}>
             <h2 className="text-[14px] font-bold text-gray-900 mb-2">{label}</h2>
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              {loading && (
+                <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10 rounded-xl">
+                  <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
@@ -359,75 +453,76 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
         ))}
       </div>
 
-      {/* ── Section 3: Category split by month ───────────────────────────── */}
-      <section>
-        <h2 className="text-[14px] font-bold text-gray-900 mb-2">Category Split by Month (Top 5)</h2>
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Month</th>
-                  {topCats.map(c => (
-                    <th key={c} className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading && catRows.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
-                )}
-                {!loading && topCats.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No category data</td></tr>
-                )}
-                {catRows.map(row => (
-                  <tr key={row.month as string} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-3 py-2 font-mono text-[11px] text-gray-700">{row.month as string}</td>
+      {/* ── Section 3 & 4: Category split & revenue split, side by side ──── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <section>
+          <h2 className="text-[14px] font-bold text-gray-900 mb-2">Category Split by Month (Top 5)</h2>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Month</th>
                     {topCats.map(c => (
-                      <td key={c} className="px-3 py-2 text-right font-mono">{((row[c] as number) ?? 0).toLocaleString()}</td>
+                      <th key={c} className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{c}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {loading && catRows.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                  )}
+                  {!loading && topCats.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No category data</td></tr>
+                  )}
+                  {catRows.map(row => (
+                    <tr key={row.month as string} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-[11px] text-gray-700">{row.month as string}</td>
+                      {topCats.map(c => (
+                        <td key={c} className="px-3 py-2 text-right font-mono">{((row[c] as number) ?? 0).toLocaleString()}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── Section 4: Category revenue split by month ───────────────────── */}
-      <section>
-        <h2 className="text-[14px] font-bold text-gray-900 mb-2">Category Revenue Split by Month (Top 5)</h2>
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Month</th>
-                  {topCats.map(c => (
-                    <th key={c} className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading && catRevRows.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
-                )}
-                {!loading && topCats.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No revenue data</td></tr>
-                )}
-                {catRevRows.map(row => (
-                  <tr key={row.month as string} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-3 py-2 font-mono text-[11px] text-gray-700">{row.month as string}</td>
+        <section>
+          <h2 className="text-[14px] font-bold text-gray-900 mb-2">Category Revenue Split by Month (Top 5)</h2>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Month</th>
                     {topCats.map(c => (
-                      <td key={c} className="px-3 py-2 text-right font-mono">{fmtINR((row[c] as number) ?? 0)}</td>
+                      <th key={c} className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{c}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {loading && catRevRows.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                  )}
+                  {!loading && topCats.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No revenue data</td></tr>
+                  )}
+                  {catRevRows.map(row => (
+                    <tr key={row.month as string} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-[11px] text-gray-700">{row.month as string}</td>
+                      {topCats.map(c => (
+                        <td key={c} className="px-3 py-2 text-right font-mono">{fmtINR((row[c] as number) ?? 0)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
     </div>
   );

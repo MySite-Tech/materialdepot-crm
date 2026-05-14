@@ -8,6 +8,7 @@ import {
   ReportCardStore,
   BMDistributionEntry,
   ReportCardBMOption,
+  fetchAvailableBMs,
 } from '../lib/mockApi';
 
 interface Props {
@@ -113,8 +114,8 @@ function FilterChip({
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] min-w-[170px] max-h-[220px] overflow-y-auto py-1">
-            {options.map(opt => (
-              <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-[12px] text-gray-700">
+            {options.map((opt, i) => (
+              <label key={i} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-[12px] text-gray-700">
                 <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} style={{ accentColor: c.active }} />
                 {opt}
               </label>
@@ -434,9 +435,19 @@ export default function ReportCardDashboard({ branches, allowedBranches }: Props
   const [monthFilter, setMonthFilter] = useState('');
   const [data, setData] = useState<ReportCardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [availableBmList, setAvailableBmList] = useState<ReportCardBMOption[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isRestricted = allowedBranches.length > 0;
+
+  const branchKey = (isRestricted
+    ? (branchFilter.length > 0 ? branchFilter.filter(b => allowedBranches.includes(b)) : allowedBranches)
+    : branchFilter
+  ).join(',');
+  useEffect(() => {
+    const effective = branchKey ? branchKey.split(',') : undefined;
+    fetchAvailableBMs(effective).then(setAvailableBmList).catch(() => setAvailableBmList([]));
+  }, [branchKey]);
   const branchOptions = isRestricted
     ? allowedBranches.filter(b => b !== 'HQ')
     : branches.filter(b => b !== 'HQ');
@@ -479,7 +490,7 @@ export default function ReportCardDashboard({ branches, allowedBranches }: Props
           label={bmLabel}
           onSelect={(name, contact) => { setBmLabel(name); setBmContact(contact); }}
           onClear={() => { setBmLabel(''); setBmContact(''); }}
-          options={data?.available_bms ?? []}
+          options={availableBmList}
           color={{ active: '#8B5CF6' }}
         />
         <MonthChip value={monthFilter} onChange={setMonthFilter} />
