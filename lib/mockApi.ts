@@ -1033,7 +1033,12 @@ export interface ReportCardStore {
     at_risk_10_15L: BMDistributionEntry[];
     critical_lt_10L: BMDistributionEntry[];
   };
-  pipeline_health: { active_carts: number; active_cart_value: number; hot_leads_gt_1L: number };
+  pipeline_health: {
+    pipeline: { count: number; value: number };
+    order_closed: { count: number; value: number };
+    order_lost: { count: number; value: number };
+    refunded: { count: number; value: number };
+  };
 }
 
 export interface ReportCardBMOption {

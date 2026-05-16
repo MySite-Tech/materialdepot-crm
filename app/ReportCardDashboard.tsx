@@ -415,11 +415,43 @@ function StorePanel({ store }: { store: ReportCardStore }) {
       </Card>
 
       <Card title="Pipeline Health" accent="text-orange-500">
-        <div className="grid grid-cols-3 gap-3">
-          <Stat label="Active Carts" value={store.pipeline_health.active_carts} />
-          <Stat label="Cart Value" value={fmtINR(store.pipeline_health.active_cart_value)} accent="text-[#EAB308]" />
-          <Stat label="Hot Leads (>₹1L)" value={store.pipeline_health.hot_leads_gt_1L} accent="text-red-500" />
-        </div>
+        {(() => {
+          const ph = store.pipeline_health;
+          const total = ph.pipeline.value + (ph.order_closed?.value || 0) + (ph.order_lost?.value || 0) + (ph.refunded?.value || 0);
+          const pct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+          return (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Pipeline</div>
+                  <div className="font-mono text-lg font-bold text-[#EAB308] break-all">{fmtINR(ph.pipeline.value)}</div>
+                  <div className="text-[11px] text-gray-400">{ph.pipeline.count} carts</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Order Closed</div>
+                  <div className="font-mono text-lg font-bold text-green-700 break-all">{fmtINR(ph.order_closed.value)}</div>
+                  <div className="text-[11px] text-gray-400">{ph.order_closed.count} carts</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Order Lost</div>
+                  <div className="font-mono text-lg font-bold text-gray-500 break-all">{fmtINR(ph.order_lost.value)}</div>
+                  <div className="text-[11px] text-gray-400">{ph.order_lost.count} carts</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Refunded</div>
+                  <div className="font-mono text-lg font-bold text-red-500 break-all">{fmtINR(ph.refunded.value)}</div>
+                  <div className="text-[11px] text-gray-400">{ph.refunded.count} carts</div>
+                </div>
+              </div>
+              <div className="flex h-1.5 rounded-sm overflow-hidden mt-4 bg-gray-200">
+                <div className="bg-[#EAB308] transition-[width] duration-300" style={{ width: pct(ph.pipeline.value) + '%' }} />
+                <div className="bg-green-500 transition-[width] duration-300" style={{ width: pct(ph.order_closed.value) + '%' }} />
+                <div className="bg-gray-400 transition-[width] duration-300" style={{ width: pct(ph.order_lost.value) + '%' }} />
+                <div className="bg-red-400 transition-[width] duration-300" style={{ width: pct(ph.refunded.value) + '%' }} />
+              </div>
+            </>
+          );
+        })()}
       </Card>
     </div>
   );
@@ -432,7 +464,10 @@ export default function ReportCardDashboard({ branches, allowedBranches }: Props
   // bmLabel = display name; bmContact = contact sent to API (unique, matched by contact__icontains)
   const [bmLabel, setBmLabel] = useState('');
   const [bmContact, setBmContact] = useState('');
-  const [monthFilter, setMonthFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [data, setData] = useState<ReportCardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [availableBmList, setAvailableBmList] = useState<ReportCardBMOption[]>([]);
