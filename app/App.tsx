@@ -1676,7 +1676,7 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!currentUser || mainTab !== 'leads') return;
+    if (!currentUser) return;
     let cancelled = false;
     Promise.all([
       fetchBranchList().catch(() => []),
@@ -1687,7 +1687,7 @@ export default function App() {
       setCrmUsers(dbUsers);
     });
     return () => { cancelled = true; };
-  }, [currentUser, mainTab]);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser || mainTab !== 'leads') return;
