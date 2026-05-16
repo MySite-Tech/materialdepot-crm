@@ -1544,8 +1544,19 @@ export default function App() {
   const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-  const initialTab = (searchParams.get('tab') as MainTab) ?? 'leads';
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'];
+  const tabFromUrl = searchParams.get('tab') as MainTab | null;
+  const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('tab') !== mainTab) {
+      url.searchParams.set('tab', mainTab);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [mainTab]);
 
   // Derive allowed tabs for the current user's role
   const allowedTabs = ROLE_TABS[currentUser?.role ?? ''] ?? DEFAULT_ROLE_TABS;
