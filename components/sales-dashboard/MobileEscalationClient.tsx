@@ -416,12 +416,11 @@ interface MobileEscalationProps {
 }
 
 export default function MobileEscalationClient({ jumpToSearch, userName }: MobileEscalationProps) {
-  const today = toLocalDateInput(new Date());
   const hasJump = !!jumpToSearch;
   const [query, setQuery] = useState(hasJump ? jumpToSearch : "");
   const [inputValue, setInputValue] = useState(hasJump ? jumpToSearch : "");
-  const [from, setFrom] = useState(hasJump ? "" : today);
-  const [to, setTo] = useState(hasJump ? "" : today);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [exactMode, setExactMode] = useState(hasJump);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [totalElements, setTotalElements] = useState(0);
@@ -456,7 +455,7 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
   >({});
 
   // New UI state
-  const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>(hasJump ? "all" : "today");
+  const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
   const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilter>("all");
 
   // ---- Data fetching (identical logic to EscalationClient) ----
