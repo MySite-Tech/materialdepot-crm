@@ -12,6 +12,8 @@ import {
   FootfallNonConvertedPage,
   FootfallNoCartPage,
   fetchAvailableBMs,
+  fetchCategoryOptions,
+  CategoryOption,
 } from '../lib/mockApi';
 
 interface Props {
@@ -229,6 +231,27 @@ function DateChip({ label, value, onChange, color }: DateChipProps) {
   );
 }
 
+// ── CSV helpers ──────────────────────────────────────────────────────────────
+
+function csvCell(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function csvRow(values: unknown[]): string {
+  return values.map(csvCell).join(',');
+}
+
+function downloadCsv(filename: string, content: string) {
+  const blob = new Blob(['﻿' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 function fmtPct(v: number) {
@@ -366,8 +389,14 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   const monthStart = localDate(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = localDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   const [dateRange, setDateRange] = useState<DateRange>({ from: monthStart, to: monthEnd });
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [bmPage, setBmPage] = useState(0);
   const [bmSearch, setBmSearch] = useState('');
+
+  useEffect(() => {
+    fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+  }, []);
 
   const [data, setData] = useState<FootfallDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -380,13 +409,22 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   const ncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const NC_PAGE_SIZE = 10;
 
+  const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportSections, setExportSections] = useState({
+    byBranch: true,
+    byBm: true,
+    cartNotConverted: true,
+    noCart: true,
+  });
+
   const [ncData2, setNcData2] = useState<FootfallNoCartPage | null>(null);
   const [ncLoading2, setNcLoading2] = useState(false);
   const [ncPage2, setNcPage2] = useState(1);
   const [ncSearch2, setNcSearch2] = useState('');
   const ncDebounceRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || dateRange.from || dateRange.to;
+  const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || dateRange.from || dateRange.to || categoryFilter.length > 0;
 
   const load = useCallback((filters: FootfallFilters) => {
     setLoading(true);
@@ -432,6 +470,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
         bm: bmFilter.length > 0 ? bmFilter : undefined,
         dateFrom: dateRange.from || undefined,
         dateTo: dateRange.to || undefined,
+        category: categoryFilter.length ? categoryFilter : undefined,
       };
       setBmPage(0);
       setNcPage(1);
@@ -443,7 +482,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
       loadNoCart(filters, 1, '');
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, dateRange, load, loadNonConverted, loadNoCart, getEffectiveBranches]);
+  }, [branchFilter, bmFilter, dateRange, categoryFilter, load, loadNonConverted, loadNoCart, getEffectiveBranches]);
 
   // Re-fetch non-converted when page changes
   useEffect(() => {
@@ -452,6 +491,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
       bm: bmFilter.length > 0 ? bmFilter : undefined,
       dateFrom: dateRange.from || undefined,
       dateTo: dateRange.to || undefined,
+      category: categoryFilter.length ? categoryFilter : undefined,
     };
     loadNonConverted(filters, ncPage, ncSearch);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -464,6 +504,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
       bm: bmFilter.length > 0 ? bmFilter : undefined,
       dateFrom: dateRange.from || undefined,
       dateTo: dateRange.to || undefined,
+      category: categoryFilter.length ? categoryFilter : undefined,
     };
     loadNoCart(filters, ncPage2, ncSearch2);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -478,6 +519,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
         bm: bmFilter.length > 0 ? bmFilter : undefined,
         dateFrom: dateRange.from || undefined,
         dateTo: dateRange.to || undefined,
+        category: categoryFilter.length ? categoryFilter : undefined,
       };
       setNcPage(1);
       loadNonConverted(filters, 1, ncSearch);
@@ -495,6 +537,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
         bm: bmFilter.length > 0 ? bmFilter : undefined,
         dateFrom: dateRange.from || undefined,
         dateTo: dateRange.to || undefined,
+        category: categoryFilter.length ? categoryFilter : undefined,
       };
       setNcPage2(1);
       loadNoCart(filters, 1, ncSearch2);
@@ -522,6 +565,72 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
     { key: 'order_users',    label: 'Order Clients',     color: 'text-green-600',  pctKey: 'order_pct' },
   ];
 
+  const handleExportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const baseFilters: FootfallFilters = {
+        branch: getEffectiveBranches(),
+        bm: bmFilter.length > 0 ? bmFilter : undefined,
+        dateFrom: dateRange.from || undefined,
+        dateTo: dateRange.to || undefined,
+        category: categoryFilter.length ? categoryFilter : undefined,
+      };
+      const ncTotal = ncData?.count ?? 0;
+      const nc2Total = ncData2?.count ?? 0;
+      const BIG = 10000;
+      const [ncAll, nc2All] = await Promise.all([
+        exportSections.cartNotConverted && ncTotal > 0
+          ? fetchFootfallNonConverted({ ...baseFilters, page: 1, pageSize: Math.min(ncTotal, BIG), q: ncSearch || undefined })
+          : Promise.resolve(null),
+        exportSections.noCart && nc2Total > 0
+          ? fetchFootfallNoCart({ ...baseFilters, page: 1, pageSize: Math.min(nc2Total, BIG), q: ncSearch2 || undefined })
+          : Promise.resolve(null),
+      ]);
+
+      const lines: string[] = [];
+
+      if (exportSections.byBranch && data?.by_branch?.length) {
+        lines.push('By Branch');
+        lines.push(csvRow(['Branch', 'Footfall', 'Cart', 'PI', 'Order', 'Cart Conv%', 'PI Conv%', 'Order Conv%']));
+        data.by_branch.forEach(r => {
+          lines.push(csvRow([r.branch, r.footfall_users, r.cart_users, r.pi_users, r.order_users,
+            r.cart_pct.toFixed(1), r.pi_pct.toFixed(1), r.order_pct.toFixed(1)]));
+        });
+        lines.push('');
+      }
+
+      if (exportSections.byBm && data?.by_bm?.length) {
+        lines.push('By BM');
+        lines.push(csvRow(['BM', 'Footfall', 'Cart', 'PI', 'Order', 'Cart Conv%', 'PI Conv%', 'Order Conv%']));
+        data.by_bm.forEach(r => {
+          lines.push(csvRow([r.bm_name, r.footfall_users, r.cart_users, r.pi_users, r.order_users,
+            r.cart_pct.toFixed(1), r.pi_pct.toFixed(1), r.order_pct.toFixed(1)]));
+        });
+        lines.push('');
+      }
+
+      if (ncAll?.results?.length) {
+        lines.push(`Cart Not Converted (${ncAll.count})`);
+        lines.push(csvRow(['Name', 'Contact', 'BM']));
+        ncAll.results.forEach(r => lines.push(csvRow([r.name, r.contact, r.bm])));
+        lines.push('');
+      }
+
+      if (nc2All?.results?.length) {
+        lines.push(`No Cart Created (${nc2All.count})`);
+        lines.push(csvRow(['Name', 'Contact', 'BM']));
+        nc2All.results.forEach(r => lines.push(csvRow([r.name, r.contact, r.bm])));
+        lines.push('');
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadCsv(`footfall-dashboard_${stamp}.csv`, lines.join('\n'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5 sm:space-y-6">
       {/* Filter bar */}
@@ -531,19 +640,65 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
           onChange={v => { setBranchFilter(v); setBmFilter([]); }} color={{ active: '#3B82F6' }} />
         <BMFilterChip selected={bmFilter} onChange={setBmFilter} options={bmRows} color={{ active: '#8B5CF6' }} />
         <DateChip label="Date Range" value={dateRange} onChange={setDateRange} color={{ active: '#F59E0B' }} />
+        <FilterChip label="Category" options={categoryOptions.map(c => c.name)} selected={categoryFilter} onChange={setCategoryFilter} color={{ active: '#10B981' }} searchable />
         {hasFilters && (
           <button
             onClick={() => {
               setBranchFilter([]);
               setBmFilter([]);
               setDateRange({ from: monthStart, to: monthEnd });
+              setCategoryFilter([]);
             }}
             className="px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border border-red-200 text-red-500 hover:bg-red-50 bg-transparent transition-all"
           >
             ✕ Clear
           </button>
         )}
-        <span className="ml-auto flex items-center gap-2 text-[11px] text-gray-400 font-mono">
+        <div className="relative ml-auto">
+          <button
+            onClick={() => setExportOpen(o => !o)}
+            disabled={loading || !data}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {exporting
+              ? <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+              : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            }
+            Export CSV
+            <span className="text-[10px] opacity-60">▾</span>
+          </button>
+          {exportOpen && (
+            <>
+              <div className="fixed inset-0 z-[50]" onClick={() => setExportOpen(false)} />
+              <div className="absolute top-full right-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] min-w-[220px] p-3">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Include in export</div>
+                {([
+                  { key: 'byBranch' as const,         label: 'By Branch' },
+                  { key: 'byBm' as const,             label: 'By BM' },
+                  { key: 'cartNotConverted' as const, label: `Cart Not Converted${ncData ? ` (${ncData.count})` : ''}` },
+                  { key: 'noCart' as const,           label: `No Cart Created${ncData2 ? ` (${ncData2.count})` : ''}` },
+                ]).map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 py-1 cursor-pointer text-[12px] text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={exportSections[key]}
+                      onChange={e => setExportSections(s => ({ ...s, [key]: e.target.checked }))}
+                    />
+                    {label}
+                  </label>
+                ))}
+                <button
+                  onClick={async () => { setExportOpen(false); await handleExportCsv(); }}
+                  disabled={exporting || !Object.values(exportSections).some(Boolean)}
+                  className="mt-2 w-full px-3 py-1.5 rounded-md text-[12px] font-semibold cursor-pointer bg-[#EAB308] text-black hover:bg-[#D4A107] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  Download CSV
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        <span className="flex items-center gap-2 text-[11px] text-gray-400 font-mono shrink-0">
           {loading && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
           {data ? `${data.footfall_users?.toLocaleString()} clients` : '—'}
         </span>

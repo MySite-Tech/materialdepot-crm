@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb } from '../lib/mockApi';
+import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallDashboard from './FootfallDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
@@ -305,10 +305,10 @@ function MultiSelect({ options, selected, onChange, label, className = '', searc
   return (
     <div ref={ref} className={`relative inline-block ${className}`}>
       <button
-        className="px-2.5 py-2 text-[13px] w-full min-w-[150px] border border-gray-200 rounded-md outline-none font-sans cursor-pointer flex items-center gap-1.5 bg-white text-left"
+        className="px-2 py-1.5 text-[12px] w-full min-w-[100px] border border-gray-200 rounded-md outline-none font-sans cursor-pointer flex items-center gap-1 bg-white text-left"
         onClick={() => setOpen(!open)}
       >
-        <span className="flex-1 text-[13px]">{display}</span>
+        <span className="flex-1 text-[12px] truncate">{display}</span>
         <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
@@ -403,7 +403,7 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel, class
   return (
     <div ref={ref} className={`relative inline-block ${className}`}>
       <button
-        className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full min-w-[150px] cursor-pointer flex items-center gap-1.5 bg-white text-left"
+        className="px-2 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none font-sans w-full min-w-[110px] cursor-pointer flex items-center gap-1 bg-white text-left whitespace-nowrap"
         onClick={() => setOpen(!open)}
       >
         <span className={`flex-1 text-xs ${hasRange ? 'text-gray-700' : 'text-gray-400'}`}>{display}</span>
@@ -1590,6 +1590,7 @@ export default function App() {
     setClosureDateTo('');
     setCartValueGt('');
     setTaskFilter('');
+    setCategoryFilter([]);
     setPage(0);
     // Land on the first tab the role has access to
     const firstTab = (ROLE_TABS[user.role] ?? DEFAULT_ROLE_TABS)[0];
@@ -1621,6 +1622,10 @@ export default function App() {
     }
   }, [mainTab]);
 
+  useEffect(() => {
+    fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+  }, []);
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState<string[]>([]);
@@ -1633,6 +1638,8 @@ export default function App() {
   const [closureDateTo, setClosureDateTo] = useState('');
   const [cartValueGt, setCartValueGt] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [sortCol, setSortCol] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
@@ -1673,6 +1680,7 @@ export default function App() {
     followUpDateFrom, followUpDateTo,
     closureDateFrom, closureDateTo,
     debouncedCartValueGt,
+    categoryFilter,
   ]);
 
   useEffect(() => {
@@ -1721,6 +1729,7 @@ export default function App() {
       sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt') as any,
       sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
       taskFilter: taskFilter || undefined,
+      category: categoryFilter.length ? categoryFilter.join(',') : undefined,
     }).then((crmLeadsPage) => {
       if (cancelled) return;
       setLeads(crmLeadsPage.results as Lead[]);
@@ -1743,6 +1752,7 @@ export default function App() {
     debouncedCartValueGt,
     sortCol, sortDir,
     taskFilter,
+    categoryFilter,
   ]);
 
   useEffect(() => {
@@ -1771,6 +1781,7 @@ export default function App() {
       cartValueGt: cartGt,
       ownerUserOrgId,
       taskFilter: taskFilter || undefined,
+      category: categoryFilter.length ? categoryFilter.join(',') : undefined,
     }).then((stats) => {
       if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
     }).catch(() => { if (!cancelled) setStatsLoading(false); });
@@ -1783,6 +1794,7 @@ export default function App() {
     closureDateFrom, closureDateTo,
     debouncedCartValueGt,
     taskFilter,
+    categoryFilter,
   ]);
 
   const [csvPreview, setCsvPreview] = useState<CsvRow[] | null>(null);
@@ -2395,9 +2407,9 @@ export default function App() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
               </svg>
-              {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== ''].filter(Boolean).length > 0 && !showMobileFilters && (
+              {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== '', categoryFilter.length > 0].filter(Boolean).length > 0 && !showMobileFilters && (
                 <span className="absolute -top-1 -right-1 bg-[#EAB308] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== ''].filter(Boolean).length}
+                  {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== '', categoryFilter.length > 0].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -2417,6 +2429,7 @@ export default function App() {
               <DateRangePicker className="w-full" label="Created" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
               <DateRangePicker className="w-full" label="Follow-up" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
               <DateRangePicker className="w-full" label="Closure" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
+              <MultiSelect className="w-full" options={categoryOptions.map((c) => c.name)} selected={categoryFilter} onChange={setCategoryFilter} label="Category" searchable />
               <input
                 className="px-2 py-2 text-[12px] border border-gray-200 rounded-md outline-none font-mono w-full"
                 type="text"
@@ -2461,23 +2474,24 @@ export default function App() {
             </div>
           </div>
           {/* Row 2: all filters */}
-          <div className="flex gap-2 items-center flex-wrap">
-            <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="All Statuses" />
-            <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="All Salespeople" searchable />
+          <div className="flex gap-1.5 items-center [&>*]:shrink">
+            <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="Status" />
+            <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="Salesperson" searchable />
             {userAllowedBranches.length === 1 ? (
-              <span className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 whitespace-nowrap">{userAllowedBranches[0]}</span>
+              <span className="px-2 py-1.5 text-[12px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 whitespace-nowrap">{userAllowedBranches[0]}</span>
             ) : userAllowedBranches.length > 1 ? (
-              <MultiSelect options={userAllowedBranches} selected={branchFilter} onChange={setBranchFilter} label="All My Branches" />
+              <MultiSelect options={userAllowedBranches} selected={branchFilter} onChange={setBranchFilter} label="Branch" />
             ) : (
-              <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="All Branches" />
+              <MultiSelect options={branches} selected={branchFilter} onChange={setBranchFilter} label="Branch" />
             )}
-            <DateRangePicker label="Created Date" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
-            <DateRangePicker label="Follow-up Date" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
-            <DateRangePicker label="Closure Date" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
-            <div className="flex items-center gap-1.5 border border-gray-200 rounded-md px-2.5 bg-white">
+            <DateRangePicker label="Created" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
+            <DateRangePicker label="Follow-up" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
+            <DateRangePicker label="Closure" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
+            <MultiSelect options={categoryOptions.map((c) => c.name)} selected={categoryFilter} onChange={setCategoryFilter} label="Category" searchable />
+            <div className="flex items-center gap-1 border border-gray-200 rounded-md px-2 bg-white shrink-0">
               <span className="text-[11px] font-semibold text-gray-400">₹&gt;</span>
               <input
-                className="py-2 text-[13px] outline-none font-sans w-[100px] font-mono bg-transparent"
+                className="py-1.5 text-[12px] outline-none font-sans w-[60px] font-mono bg-transparent"
                 type="text"
                 inputMode="numeric"
                 placeholder="0"
@@ -2489,14 +2503,14 @@ export default function App() {
               )}
             </div>
             <select
-              className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans bg-white cursor-pointer"
+              className="px-2 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none font-sans bg-white cursor-pointer shrink-0"
               value={taskFilter}
               onChange={(e) => setTaskFilter(e.target.value)}
             >
-              <option value="">All Tasks</option>
-              <option value="followup_pending">Follow-up Date Pending</option>
-              <option value="closure_pending">Closure Date Pending</option>
-              <option value="overdue">Overdue Tasks</option>
+              <option value="">Tasks</option>
+              <option value="followup_pending">Follow-up Pending</option>
+              <option value="closure_pending">Closure Pending</option>
+              <option value="overdue">Overdue</option>
             </select>
           </div>
         </div>

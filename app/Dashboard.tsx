@@ -9,6 +9,8 @@ import type { ActivityLog } from '@/types/crm';
 import {
   fetchDashboardData,
   fetchAvailableBMs,
+  fetchCategoryOptions,
+  type CategoryOption,
   type DashboardData,
   type DashboardBranchStatus,
   type DashboardLostReason,
@@ -278,7 +280,13 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
   const [bmFilter, setBmFilter] = useState<string[]>([]);
   const [closureDate, setClosureDate] = useState<DateRange>({ from: '', to: '' });
   const [createdDate, setCreatedDate] = useState<DateRange>({ from: '', to: '' });
-  const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || closureDate.from || closureDate.to || createdDate.from || createdDate.to;
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
+  const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || closureDate.from || closureDate.to || createdDate.from || createdDate.to || categoryFilter.length > 0;
+
+  useEffect(() => {
+    fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+  }, []);
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -311,10 +319,11 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
         closureTo: closureDate.to || undefined,
         createdFrom: createdDate.from || undefined,
         createdTo: createdDate.to || undefined,
+        category: categoryFilter.length ? categoryFilter : undefined,
       });
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, closureDate, createdDate, load, isRestricted, allowedBranches]);
+  }, [branchFilter, bmFilter, closureDate, createdDate, categoryFilter, load, isRestricted, allowedBranches]);
 
   const [bmRows, setBmRows] = useState<{ name: string; contact: string }[]>([]);
   const branchKey = (isRestricted
@@ -410,8 +419,9 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
         <BMFilterChip selected={bmFilter} onChange={setBmFilter} options={bmRows} color={{ active: '#8B5CF6' }} />
         <DateChip label="Closure Date" value={closureDate} onChange={setClosureDate} color={{ active: '#F59E0B' }} />
         <DateChip label="Created Date" value={createdDate} onChange={setCreatedDate} color={{ active: '#22C55E' }} />
+        <FilterChip label="Category" options={categoryOptions.map(c => c.name)} selected={categoryFilter} onChange={setCategoryFilter} color={{ active: '#10B981' }} />
         {hasFilters && (
-          <button onClick={() => { setBranchFilter([]); setBmFilter([]); setClosureDate({ from:'', to:'' }); setCreatedDate({ from:'', to:'' }); }}
+          <button onClick={() => { setBranchFilter([]); setBmFilter([]); setClosureDate({ from:'', to:'' }); setCreatedDate({ from:'', to:'' }); setCategoryFilter([]); }}
             className="px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border border-red-200 text-red-500 hover:bg-red-50 bg-transparent transition-all">
             ✕ Clear
           </button>

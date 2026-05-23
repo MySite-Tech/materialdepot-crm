@@ -284,6 +284,7 @@ export interface CRMLeadsQuery {
   sortBy?: 'createdAt' | 'clientName' | 'clientPhone' | 'assignedTo' | 'branch' | 'cartValue';
   sortDir?: 'asc' | 'desc';
   taskFilter?: string;
+  category?: string;          // CSV of category names
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number }
@@ -315,6 +316,7 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
+  if (query.category) params.set('category', query.category);
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`);
   return {
@@ -347,6 +349,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
   }
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
+  if (query.category) params.set('category', query.category);
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();
@@ -406,6 +409,7 @@ export interface DashboardFilters {
   closureTo?: string;
   createdFrom?: string;
   createdTo?: string;
+  category?: string[];
 }
 
 export interface FootfallFunnelStats {
@@ -432,6 +436,7 @@ export interface FootfallFilters {
   bm?: string[];
   dateFrom?: string;
   dateTo?: string;
+  category?: string[];
 }
 export interface FootfallNonConvertedRow {
   user_id: number;
@@ -465,6 +470,7 @@ export async function fetchFootfallNoCart(
   if (filters.bm?.length) params.set('bm', filters.bm.join(','));
   if (filters.dateFrom) params.set('date_from', filters.dateFrom);
   if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.category?.length) params.set('category', filters.category.join(','));
   if (filters.page) params.set('page', String(filters.page));
   if (filters.pageSize) params.set('page_size', String(filters.pageSize));
   if (filters.q) params.set('q', filters.q);
@@ -480,6 +486,7 @@ export async function fetchFootfallNonConverted(
   if (filters.bm?.length) params.set('bm', filters.bm.join(','));
   if (filters.dateFrom) params.set('date_from', filters.dateFrom);
   if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.category?.length) params.set('category', filters.category.join(','));
   if (filters.page) params.set('page', String(filters.page));
   if (filters.pageSize) params.set('page_size', String(filters.pageSize));
   if (filters.q) params.set('q', filters.q);
@@ -493,6 +500,7 @@ export async function fetchFootfallDashboard(filters: FootfallFilters = {}): Pro
   if (filters.bm?.length) params.set('bm', filters.bm.join(','));
   if (filters.dateFrom) params.set('date_from', filters.dateFrom);
   if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.category?.length) params.set('category', filters.category.join(','));
   const qs = params.toString();
   return mdFetch(`/crm/footfall-dashboard/${qs ? `?${qs}` : ''}`);
 }
@@ -513,6 +521,7 @@ export async function fetchDashboardData(filters: DashboardFilters = {}): Promis
   if (filters.closureTo) params.set('closure_to', filters.closureTo);
   if (filters.createdFrom) params.set('created_from', filters.createdFrom);
   if (filters.createdTo) params.set('created_to', filters.createdTo);
+  if (filters.category?.length) params.set('category', filters.category.join(','));
   const qs = params.toString();
   return mdFetch(`/crm/dashboard/${qs ? `?${qs}` : ''}`);
 }
