@@ -7,7 +7,7 @@ import type { Deal, DealsSearchResponse, CallLog } from "@/lib/types";
 // Constants & helpers (same logic as EscalationClient)
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 500;
+const PAGE_SIZE = 20;
 
 const SEARCH_FIELDS = [
   "name",
@@ -19,10 +19,19 @@ const SEARCH_FIELDS = [
   "createdAt",
   "updatedAt",
   "customFieldValues",
+  "associatedContacts",
 ];
 
+const ESCALATION_PIPELINE_ID = 32620;
+const SUPPORT_PIPELINE_ID = 32616;
+
+const ESC_SUPPORT_PIPELINE_RULE = {
+  id: "pipeline", field: "pipeline", type: "string", input: "select",
+  operator: "in", value: [ESCALATION_PIPELINE_ID, SUPPORT_PIPELINE_ID],
+};
+
 function buildBody(query: string, fromIso: string | null, toIso: string | null) {
-  const rules: unknown[] = [];
+  const rules: unknown[] = [ESC_SUPPORT_PIPELINE_RULE];
   if (fromIso && toIso) {
     rules.push({
       id: "createdAt",
@@ -41,17 +50,6 @@ function buildBody(query: string, fromIso: string | null, toIso: string | null) 
       input: "multi_field",
       operator: "multi_field",
       value: query.trim(),
-    });
-  }
-  // Need at least one rule for Kylas
-  if (rules.length === 0) {
-    rules.push({
-      id: "multi_field",
-      field: "multi_field",
-      type: "multi_field",
-      input: "multi_field",
-      operator: "multi_field",
-      value: "Escalation",
     });
   }
   return {
@@ -424,6 +422,9 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
   const [exactMode, setExactMode] = useState(hasJump);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [totalElements, setTotalElements] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pageLoading, setPageLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -461,58 +462,58 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
   // ---- Data fetching (identical logic to EscalationClient) ----
 
   const fetchDeals = useCallback(
-    async (searchQuery: string, fromStr: string, toStr: string) => {
-      setLoading(true);
+    async (searchQuery: string, fromStr: string, toStr: string, page: number = 0) => {
+      if (page === 0) setLoading(true);
+      else setPageLoading(true);
       setError(null);
-      setCallLogMap({});
-      setNoteMap({});
-      setContactMap({});
+      if (page === 0) {
+        setCallLogMap({});
+        setNoteMap({});
+        setContactMap({});
+      }
       const fromIso = fromStr ? startOfDay(fromStr).toISOString() : null;
       const toIso = toStr ? endOfDay(toStr).toISOString() : null;
       try {
-        const collected: Deal[] = [];
-        let page = 0;
-        while (true) {
-          const res = await fetch(
-            `/api/deals/search?page=${page}&size=${PAGE_SIZE}&sort=${encodeURIComponent("updatedAt,desc")}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(buildBody(searchQuery, fromIso, toIso)),
-              cache: "no-store",
-            }
-          );
-          if (!res.ok) {
-            const json = await res.json().catch(() => ({}));
-            throw new Error(json.error ?? `Request failed: ${res.status}`);
+        const res = await fetch(
+          `/api/deals/search?page=${page}&size=${PAGE_SIZE}&sort=${encodeURIComponent("updatedAt,desc")}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildBody(searchQuery, fromIso, toIso)),
+            cache: "no-store",
           }
-          const data: DealsSearchResponse = await res.json();
-          collected.push(...(data.content ?? []));
-          const totalPages = data.totalPages ?? 0;
-          page += 1;
-          if (page >= totalPages || (data.content ?? []).length === 0) break;
+        );
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error ?? `Request failed: ${res.status}`);
         }
-        let filtered = collected.filter(isEscalationOrSupport);
+        const data: DealsSearchResponse = await res.json();
+        let filtered = (data.content ?? []).filter(isEscalationOrSupport);
         if (searchQuery.trim()) {
           const q = searchQuery.trim().toUpperCase();
-          if (exactMode) {
-            filtered = filtered.filter((d) => d.name.toUpperCase() === q);
-          } else {
-            filtered = filtered.filter((d) => d.name.toUpperCase().includes(q));
-          }
+          if (exactMode) filtered = filtered.filter((d) => d.name.toUpperCase() === q);
+          else filtered = filtered.filter((d) => d.name.toUpperCase().includes(q));
         }
         setDeals(filtered);
-        setTotalElements(filtered.length);
+        setTotalElements(data.totalElements ?? filtered.length);
+        setTotalPages(data.totalPages ?? 0);
+        setCurrentPage(page);
         return filtered;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
         return [];
       } finally {
         setLoading(false);
+        setPageLoading(false);
       }
     },
-    []
+    [exactMode]
   );
+
+  function goToPage(p: number) {
+    if (pageLoading || p < 0 || (totalPages > 0 && p >= totalPages)) return;
+    fetchDeals(query ?? "", from, to, p).then((deals) => populateContacts(deals));
+  }
 
   async function pool<T, R>(
     items: T[],
@@ -549,42 +550,17 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
   }
 
   // Only fetch timelines on load — everything else on expand
-  const fetchTimelines = useCallback(async (dealList: Deal[]) => {
-    if (dealList.length === 0) return;
-    for (const deal of dealList.slice(0, 15)) {
-      await new Promise((r) => setTimeout(r, 250));
-      try {
-        const res = await fetch(`/api/feeds/search?page=0&size=50&sort=performedAt%2Cdesc`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonRule: { condition: "AND", rules: [
-              { field: "related_to", operator: "equal", id: "related_to", type: "related_lookup", value: { entity: "deal", id: String(deal.id) } },
-              { field: "systemDefault", operator: "equal", id: "systemDefault", type: "boolean", value: false },
-              { field: "category", operator: "equal", id: "category", type: "string", value: "ALL" },
-            ], valid: true },
-          }),
-          cache: "no-store",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTimelineMap((prev) => ({ ...prev, [deal.id]: parseTimeline(data.content ?? []) }));
-        }
-      } catch { /* skip */ }
-    }
-    // After timelines, fetch contacts for first 15 deals
-    for (const deal of dealList.slice(0, 15)) {
-      if (contactMap[deal.id] !== undefined) continue;
-      await new Promise((r) => setTimeout(r, 250));
-      try {
-        const res = await fetch(`/api/deals/${deal.id}`, { cache: "no-store" });
-        if (res.ok) {
-          const d = await res.json();
-          const c = d.associatedContacts?.[0];
-          setContactMap((prev) => ({ ...prev, [deal.id]: c ? { id: c.id, name: c.name } : null }));
-        }
-      } catch { /* skip */ }
-    }
+  // Populate contact map from `associatedContacts` in search response (no extra fetch)
+  const populateContacts = useCallback((dealList: Deal[]) => {
+    setContactMap((prev) => {
+      const next = { ...prev };
+      for (const deal of dealList) {
+        if (next[deal.id] !== undefined) continue;
+        const c = (deal as typeof deal & { associatedContacts?: { id: number; name: string }[] }).associatedContacts?.[0];
+        next[deal.id] = c ? { id: c.id, name: c.name } : null;
+      }
+      return next;
+    });
   }, []);
 
   const fetchKeyRef = useRef("");
@@ -593,8 +569,8 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
     const key = `${query}|${from}|${to}`;
     if (fetchKeyRef.current === key) return;
     fetchKeyRef.current = key;
-    fetchDeals(query, from, to).then((deals) => fetchTimelines(deals));
-  }, [fetchDeals, fetchTimelines, query, from, to]);
+    fetchDeals(query, from, to).then((deals) => populateContacts(deals));
+  }, [fetchDeals, populateContacts, query, from, to]);
 
 
   async function pacedFetch(url: string, options?: RequestInit): Promise<Response | null> {
@@ -905,10 +881,10 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
       {/* Status filter chips */}
       <div className="flex gap-3 mb-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
         {([
-          { value: "all" as StatusFilter, label: `All (${statusCounts.all})` },
-          { value: "open" as StatusFilter, label: `Open (${statusCounts.open})` },
-          { value: "waiting" as StatusFilter, label: `Waiting (${statusCounts.waiting})` },
-          { value: "resolved" as StatusFilter, label: `Resolved (${statusCounts.resolved})` },
+          { value: "all" as StatusFilter, label: "All", count: totalElements },
+          { value: "open" as StatusFilter, label: "Open", count: statusCounts.open },
+          { value: "waiting" as StatusFilter, label: "Waiting", count: statusCounts.waiting },
+          { value: "resolved" as StatusFilter, label: "Resolved", count: statusCounts.resolved },
         ]).map((chip) => (
           <button
             key={chip.value}
@@ -920,6 +896,7 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
             }`}
           >
             {chip.label}
+            {activeStatusFilter === chip.value && <span className="ml-1">({chip.count})</span>}
           </button>
         ))}
       </div>
@@ -986,9 +963,7 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
 
                   {/* Row 2: Contact + Owner + SLA badge */}
                   <div className="flex items-center gap-2 mb-3 text-xs text-gray-500 flex-wrap">
-                    {contactMap[deal.id]?.name && (
-                      <><span className="text-yellow-700 font-medium">{contactMap[deal.id]!.name}</span><span>·</span></>
-                    )}
+                    <><span className="text-yellow-700 font-medium">{contactMap[deal.id]?.name ?? "User"}</span><span>·</span></>
                     {deal.ownedBy?.name && <span>{deal.ownedBy.name}</span>}
                     {deal.ownedBy?.name && deal.createdAt && <span>·</span>}
                     {deal.createdAt && (
@@ -1086,6 +1061,34 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
       {!loading && !error && filteredDeals.length === 0 && (
         <div className="text-center py-16 text-gray-400 text-sm">
           No requests found.
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && !error && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2 mt-3 px-1">
+          <span className="text-xs text-gray-500">
+            {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, totalElements)} of {totalElements}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={pageLoading || currentPage === 0}
+              className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white disabled:opacity-40 active:bg-gray-50"
+            >
+              Prev
+            </button>
+            <span className="text-xs text-gray-600 px-2">
+              Page {currentPage + 1} of {totalPages}
+            </span>
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={pageLoading || currentPage >= totalPages - 1}
+              className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white disabled:opacity-40 active:bg-gray-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
