@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useToast } from './StoreVisitWrapper';
 import {
   fetchBMsByBranch,
@@ -398,11 +397,18 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
 }
 
 export default function StoreVisitFormSimple() {
-  const searchParams = useSearchParams();
-  const branch = searchParams.get('branch') || '';
   const { toast } = useToast();
 
-  const [currentStep, setCurrentStep] = useState(branch ? 1 : 0);
+  const [branch, setBranch] = useState('');
+  const [currentStep, setCurrentStep] = useState(0);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('branch')) {
+      url.searchParams.delete('branch');
+      window.history.replaceState({}, '', url);
+    }
+  }, []);
   const [formData, setFormData] = useState<FormData>({
     phoneNumber: '',
     name: '',
@@ -448,9 +454,7 @@ export default function StoreVisitFormSimple() {
   }, []);
 
   const handleBranchSelect = (branchName: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('branch', branchName);
-    window.history.pushState({}, '', url);
+    setBranch(branchName);
     setCurrentStep(1);
   };
 
