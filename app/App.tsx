@@ -1622,10 +1622,6 @@ export default function App() {
     }
   }, [mainTab]);
 
-  useEffect(() => {
-    fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
-  }, []);
-
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [personFilter, setPersonFilter] = useState<string[]>([]);
@@ -1640,6 +1636,12 @@ export default function App() {
   const [taskFilter, setTaskFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
+
+  useEffect(() => {
+    if (mainTab !== 'leads') return;
+    if (categoryOptions.length > 0) return;
+    fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+  }, [mainTab, categoryOptions.length]);
   const [sortCol, setSortCol] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
@@ -1685,17 +1687,20 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
+    const needsBranches = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard'].includes(mainTab);
+    const needsUsers = mainTab === 'leads';
+    if (!needsBranches && !needsUsers) return;
     let cancelled = false;
     Promise.all([
-      fetchBranchList().catch(() => []),
-      fetchUsers().catch(() => []),
+      needsBranches ? fetchBranchList().catch(() => []) : Promise.resolve(null),
+      needsUsers ? fetchUsers().catch(() => []) : Promise.resolve(null),
     ]).then(([dbBranches, dbUsers]) => {
       if (cancelled) return;
-      if (dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
-      setCrmUsers(dbUsers);
+      if (dbBranches && dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
+      if (dbUsers) setCrmUsers(dbUsers);
     });
     return () => { cancelled = true; };
-  }, [currentUser]);
+  }, [currentUser, mainTab]);
 
   useEffect(() => {
     if (!currentUser || mainTab !== 'leads') return;

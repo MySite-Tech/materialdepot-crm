@@ -5,10 +5,17 @@ import type { Deal, DealsSearchResponse } from "@/lib/types";
 import { syncEstimate, fetchKylasDealInfo, type SyncEstimateResult, type KylasDealInfo } from "@/lib/mockApi";
 
 const PAGE_SIZE = 200;
+const DEFAULT_PAGE_SIZE = 10;
+const SALES_PIPELINE_ID = 31661;
+
+const SALES_PIPELINE_RULE = {
+  id: "pipeline", field: "pipeline", type: "string", input: "select",
+  operator: "equal", value: SALES_PIPELINE_ID,
+};
 
 const SEARCH_FIELDS = [
   "name", "ownedBy", "estimatedValue", "pipeline", "pipelineStage",
-  "id", "createdAt", "updatedAt", "customFieldValues",
+  "id", "createdAt", "updatedAt", "customFieldValues", "associatedContacts",
 ];
 
 const SUPPORT_OPTIONS = [
@@ -36,6 +43,24 @@ const ESCALATION_OPTIONS = [
 
 function isSalesDeal(deal: Deal) {
   return (deal.pipeline?.name ?? "").toLowerCase().includes("sales");
+}
+
+function extractEscSupport(deals: Deal[]) {
+  const seen = new Set<number>();
+  const out: { id: number; name: string; stage: string; pipeline: string }[] = [];
+  for (const d of deals) {
+    const p = (d.pipeline?.name ?? "").toLowerCase();
+    if (!p.includes("escalation") && !p.includes("support")) continue;
+    if (seen.has(d.id)) continue;
+    seen.add(d.id);
+    out.push({
+      id: d.id,
+      name: d.name,
+      stage: d.pipelineStage?.name ?? "—",
+      pipeline: p.includes("escalation") ? "escalation" : "support",
+    });
+  }
+  return out;
 }
 
 function formatCurrency(val: Deal["estimatedValue"]) {
@@ -99,6 +124,13 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     { id: number; name: string; stage: string; pipeline: string }[]
   >([]);
 
+  // Pagination (default mode only)
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [defaultRange, setDefaultRange] = useState<{ from: string; to: string } | null>(null);
+
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -151,138 +183,109 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         const partial = allSales.filter((d) => d.name.toUpperCase().includes(upper));
         allSales = exact.length > 0 ? exact : partial.length > 0 ? partial : allSales;
 
-        // Derive escalation/support deals from same response (avoid extra API calls)
-        const escSupport = all
-          .filter((d) => {
-            const p = (d.pipeline?.name ?? "").toLowerCase();
-            return p.includes("escalation") || p.includes("support");
-          })
-          .map((d) => ({
-            id: d.id,
-            name: d.name,
-            stage: d.pipelineStage?.name ?? "—",
-            pipeline: (d.pipeline?.name ?? "").toLowerCase().includes("escalation") ? "escalation" : "support",
-          }));
-        setEscSupportDeals(escSupport);
+        setEscSupportDeals(extractEscSupport(all));
+        setTotalPages(0);
+        setTotalCount(0);
+        setCurrentPage(0);
+        setDefaultRange(null);
       } else {
-        // Default: last 7 days by createdAt
+        // Default: last 7 days by createdAt — fetch only first page, expose Load More
         const now = new Date();
         const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
         const fromIso = sevenDaysAgo.toISOString();
         const toIso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
 
-        const collected: Deal[] = [];
-        let page = 0;
-        while (true) {
-          const res = await fetch(
-            `/api/deals/search?page=${page}&size=${PAGE_SIZE}&sort=${encodeURIComponent("createdAt,desc")}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                fields: SEARCH_FIELDS,
-                jsonRule: {
-                  condition: "AND",
-                  rules: [{
-                    id: "createdAt", field: "createdAt", type: "date", input: "date",
-                    operator: "between", value: [fromIso, toIso],
-                  }],
-                  valid: true,
-                },
-              }),
-              cache: "no-store",
-            }
-          );
-          if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-          const data: DealsSearchResponse = await res.json();
-          collected.push(...(data.content ?? []));
-          page += 1;
-          if (page >= (data.totalPages ?? 0) || (data.content ?? []).length === 0) break;
-        }
-        allSales = collected.filter(isSalesDeal);
-      }
-
-      setDeals(allSales);
-      setLoading(false);
-
-      // Background: contacts + (esc history only in non-search mode)
-      loadBackgroundData(allSales, !q.trim());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setLoading(false);
-    }
-  }, []);
-
-  async function loadBackgroundData(filtered: Deal[], fetchEscSupport: boolean) {
-    // Contacts for top 15 deals
-    const targets = filtered.slice(0, 15);
-    const contactNames: Record<number, string> = {};
-    for (const d of targets) {
-      await new Promise((r) => setTimeout(r, 250));
-      try {
-        const dr = await fetch(`/api/deals/${d.id}`, { cache: "no-store" });
-        if (dr.status === 429) { await new Promise((r) => setTimeout(r, 1500)); continue; }
-        if (dr.ok) {
-          const dd = await dr.json();
-          const c = dd.associatedContacts?.[0];
-          if (c) {
-            contactNames[d.id] = c.name;
-            setDealContact((prev) => ({ ...prev, [d.id]: c.name }));
-          }
-        }
-      } catch { /* skip */ }
-    }
-
-    // Esc/support history — fetch escalation + support pipeline deals separately
-    if (!fetchEscSupport) return;
-    try {
-      const FINAL_STAGES = ["closed cancelled", "closed invalid", "escalation won"];
-      const allActive: typeof escSupportDeals = [];
-
-      for (const searchTerm of ["Escalation", "Support"]) {
-        const escRes = await fetch(
-          `/api/deals/search?page=0&size=500&sort=${encodeURIComponent("createdAt,desc")}`,
+        const res = await fetch(
+          `/api/deals/search?page=0&size=${DEFAULT_PAGE_SIZE}&sort=${encodeURIComponent("createdAt,desc")}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              fields: ["name", "pipeline", "pipelineStage", "id"],
+              fields: SEARCH_FIELDS,
               jsonRule: {
                 condition: "AND",
-                rules: [{
-                  id: "multi_field", field: "multi_field", type: "multi_field",
-                  input: "multi_field", operator: "multi_field",
-                  value: searchTerm,
-                }],
+                rules: [
+                  { id: "createdAt", field: "createdAt", type: "date", input: "date",
+                    operator: "between", value: [fromIso, toIso] },
+                  SALES_PIPELINE_RULE,
+                ],
                 valid: true,
               },
             }),
             cache: "no-store",
           }
         );
-        if (escRes.ok) {
-          const escData: DealsSearchResponse = await escRes.json();
-          for (const d of escData.content ?? []) {
-            const p = (d.pipeline?.name ?? "").toLowerCase();
-            if (!p.includes("escalation") && !p.includes("support")) continue;
-            const s = (d.pipelineStage?.name ?? "").toLowerCase().trim();
-            if (FINAL_STAGES.some((f) => s === f || s.startsWith("closed"))) continue;
-            allActive.push({
-              id: d.id,
-              name: d.name,
-              stage: d.pipelineStage?.name ?? "—",
-              pipeline: p.includes("escalation") ? "escalation" : "support",
-            });
-          }
-        }
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const data: DealsSearchResponse = await res.json();
+        const content = data.content ?? [];
+        allSales = content.filter(isSalesDeal);
+        // Don't pre-extract escalation/support — loaded lazily when a deal sidebar opens
+        setEscSupportDeals([]);
+        setTotalPages(data.totalPages ?? 0);
+        setTotalCount(data.totalElements ?? content.length);
+        setCurrentPage(0);
+        setDefaultRange({ from: fromIso, to: toIso });
       }
 
-      // Deduplicate by id
-      const seen = new Set<number>();
-      const deduped = allActive.filter((d) => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
-      setEscSupportDeals(deduped);
+      setDeals(allSales);
+      setLoading(false);
 
+      // Background: contact names only
+      loadBackgroundData(allSales);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setLoading(false);
+    }
+  }, []);
+
+  async function goToPage(page: number) {
+    if (!defaultRange || pageLoading || page < 0 || (totalPages > 0 && page >= totalPages)) return;
+    setPageLoading(true);
+    try {
+      const res = await fetch(
+        `/api/deals/search?page=${page}&size=${DEFAULT_PAGE_SIZE}&sort=${encodeURIComponent("createdAt,desc")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fields: SEARCH_FIELDS,
+            jsonRule: {
+              condition: "AND",
+              rules: [
+                { id: "createdAt", field: "createdAt", type: "date", input: "date",
+                  operator: "between", value: [defaultRange.from, defaultRange.to] },
+                SALES_PIPELINE_RULE,
+              ],
+              valid: true,
+            },
+          }),
+          cache: "no-store",
+        }
+      );
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      const data: DealsSearchResponse = await res.json();
+      const content = data.content ?? [];
+      const pageSales = content.filter(isSalesDeal);
+      setDeals(pageSales);
+      setCurrentPage(page);
+      setTotalPages(data.totalPages ?? totalPages);
+      setTotalCount(data.totalElements ?? totalCount);
+      loadBackgroundData(pageSales);
     } catch { /* ignore */ }
+    finally { setPageLoading(false); }
+  }
+
+  function loadBackgroundData(filtered: Deal[]) {
+    // Contact names come from the search response (`associatedContacts` field).
+    // No per-deal fetch — if a deal genuinely has no associated contact, just don't show one.
+    const inline: Record<number, string> = {};
+    for (const d of filtered) {
+      const c = (d as Deal & { associatedContacts?: { name: string }[] }).associatedContacts?.[0];
+      if (c?.name) inline[d.id] = c.name;
+    }
+    if (Object.keys(inline).length > 0) {
+      setDealContact((prev) => ({ ...prev, ...inline }));
+    }
   }
 
   // Search contacts
@@ -346,24 +349,31 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       if (!res.ok) return;
       const data: DealsSearchResponse = await res.json();
       const matched: AssociatedDeal[] = [];
-      for (const d of data.content ?? []) {
-        try {
-          const dr = await fetch(`/api/deals/${d.id}`, { cache: "no-store" });
-          if (!dr.ok) continue;
-          const dd = await dr.json();
-          if (dd.associatedContacts?.some((c: { id: number }) => c.id === contactId)) {
+      const all = data.content ?? [];
+      const BATCH = 8;
+      outer: for (let i = 0; i < all.length; i += BATCH) {
+        const batch = all.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(async (d) => {
+          try {
+            const dr = await fetch(`/api/deals/${d.id}`, { cache: "no-store" });
+            if (!dr.ok) return null;
+            const dd = await dr.json();
+            if (!dd.associatedContacts?.some((c: { id: number }) => c.id === contactId)) return null;
             const pName = (d.pipeline?.name ?? "").toLowerCase();
-            matched.push({
+            return {
               id: d.id,
               name: d.name,
               pipeline: pName.includes("escalation") ? "escalation" : pName.includes("support") ? "support" : "sales",
               pipelineName: d.pipeline?.name ?? "—",
               stage: d.pipelineStage?.name ?? "—",
               estimatedValue: formatCurrency(d.estimatedValue),
-            });
-          }
-        } catch { /* skip */ }
-        if (matched.length >= 20) break;
+            } as AssociatedDeal;
+          } catch { return null; }
+        }));
+        for (const r of results) {
+          if (r) matched.push(r);
+          if (matched.length >= 20) break outer;
+        }
       }
       setContactDeals(matched);
     } catch { /* ignore */ }
@@ -405,7 +415,15 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       }
       setSubmitSuccess(dealId);
       setTimeout(() => setSubmitSuccess(null), 3000);
-      fetchDeals(query);
+      // Patch local state — avoid re-running the full fetch flow
+      setDeals((prev) => prev.map((d) => d.id === dealId
+        ? { ...d, customFieldValues: { ...(d.customFieldValues ?? {}), [field]: selectedOptions } }
+        : d
+      ));
+      setSelectedDeal((prev) => prev && prev.id === dealId
+        ? { ...prev, customFieldValues: { ...(prev.customFieldValues ?? {}), [field]: selectedOptions } }
+        : prev
+      );
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to update");
     } finally {
@@ -445,6 +463,48 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   }
 
   useEffect(() => { fetchDeals(""); }, [fetchDeals]);
+
+  // Lazy-load escalation/support for the opened deal
+  useEffect(() => {
+    if (!selectedDeal) return;
+    const base = selectedDeal.name.match(/((?:ENQ|MD|CT)\w+)/i)?.[1];
+    if (!base) return;
+    // Skip if we already have entries for this base name (e.g. from search-mode load)
+    if (escSupportDeals.some((d) => d.name.toUpperCase().includes(base.toUpperCase()))) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/deals/search?page=0&size=50&sort=${encodeURIComponent("updatedAt,desc")}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fields: ["name", "pipeline", "pipelineStage", "id"],
+              jsonRule: {
+                condition: "AND",
+                rules: [{
+                  id: "multi_field", field: "multi_field", type: "multi_field",
+                  input: "multi_field", operator: "multi_field", value: base,
+                }],
+                valid: true,
+              },
+            }),
+            cache: "no-store",
+          }
+        );
+        if (!res.ok || cancelled) return;
+        const data: DealsSearchResponse = await res.json();
+        const found = extractEscSupport(data.content ?? []);
+        if (cancelled || found.length === 0) return;
+        setEscSupportDeals((prev) => {
+          const seen = new Set(prev.map((d) => d.id));
+          return [...prev, ...found.filter((d) => !seen.has(d.id))];
+        });
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedDeal?.id]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -588,7 +648,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
             const escDeals = getOngoing(deal.name);
             const existingSupport = cfDisplayValue(deal.customFieldValues?.["cfRaiseSupportRequest"]);
             const existingEscalation = cfDisplayValue(deal.customFieldValues?.["cfRaiseEscalation"]);
-            const contactName = dealContact[deal.id];
+            const contactName = dealContact[deal.id] ?? "User";
 
             return (
               <div
@@ -640,6 +700,32 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
               </div>
             );
           })}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-2 mt-3 px-1">
+              <span className="text-xs text-gray-500">
+                {currentPage * DEFAULT_PAGE_SIZE + 1}–{Math.min((currentPage + 1) * DEFAULT_PAGE_SIZE, totalCount)} of {totalCount}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={pageLoading || currentPage === 0}
+                  className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white disabled:opacity-40 active:bg-gray-50"
+                >
+                  Prev
+                </button>
+                <span className="text-xs text-gray-600 px-2">
+                  Page {currentPage + 1} of {totalPages}
+                </span>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={pageLoading || currentPage >= totalPages - 1}
+                  className="px-2.5 py-1 text-xs border border-gray-200 rounded bg-white disabled:opacity-40 active:bg-gray-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
