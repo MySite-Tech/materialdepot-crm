@@ -143,12 +143,27 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         );
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data: DealsSearchResponse = await res.json();
-        allSales = (data.content ?? []).filter(isSalesDeal);
+        const all = data.content ?? [];
+        allSales = all.filter(isSalesDeal);
         // Client-side partial match refinement
         const upper = q.trim().toUpperCase();
         const exact = allSales.filter((d) => d.name.toUpperCase() === upper);
         const partial = allSales.filter((d) => d.name.toUpperCase().includes(upper));
         allSales = exact.length > 0 ? exact : partial.length > 0 ? partial : allSales;
+
+        // Derive escalation/support deals from same response (avoid extra API calls)
+        const escSupport = all
+          .filter((d) => {
+            const p = (d.pipeline?.name ?? "").toLowerCase();
+            return p.includes("escalation") || p.includes("support");
+          })
+          .map((d) => ({
+            id: d.id,
+            name: d.name,
+            stage: d.pipelineStage?.name ?? "—",
+            pipeline: (d.pipeline?.name ?? "").toLowerCase().includes("escalation") ? "escalation" : "support",
+          }));
+        setEscSupportDeals(escSupport);
       } else {
         // Default: last 7 days by createdAt
         const now = new Date();
@@ -190,15 +205,15 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       setDeals(allSales);
       setLoading(false);
 
-      // Background: contacts + esc history (non-blocking)
-      loadBackgroundData(allSales);
+      // Background: contacts + (esc history only in non-search mode)
+      loadBackgroundData(allSales, !q.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
     }
   }, []);
 
-  async function loadBackgroundData(filtered: Deal[]) {
+  async function loadBackgroundData(filtered: Deal[], fetchEscSupport: boolean) {
     // Contacts for top 15 deals
     const targets = filtered.slice(0, 15);
     const contactNames: Record<number, string> = {};
@@ -219,6 +234,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     }
 
     // Esc/support history — fetch escalation + support pipeline deals separately
+    if (!fetchEscSupport) return;
     try {
       const FINAL_STAGES = ["closed cancelled", "closed invalid", "escalation won"];
       const allActive: typeof escSupportDeals = [];
@@ -436,7 +452,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     setContacts([]);
     setExpandedContactId(null);
     fetchDeals(inputValue);
-    searchContacts(inputValue);
+    if (/^\d{10}$/.test(inputValue.trim())) {
+      searchContacts(inputValue);
+    } else {
+      setContacts([]);
+    }
   }
 
   function handleExpandDeal(deal: Deal) {
