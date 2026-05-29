@@ -891,12 +891,12 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
     setWarning(validate(dateStr));
   };
 
-  const remarkRequired = !!(newDate && newDate !== currentDate);
+  const remarkRequired = true;
 
   const handleSave = () => {
     const w = validate(newDate);
     if (w) { setWarning(w); return; }
-    if (remarkRequired && !remark.trim()) { setWarning('Remark is required when changing the date.'); return; }
+    if (!remark.trim()) { setWarning('Remark is required.'); return; }
     onSave(newDate, remark.trim());
   };
 
@@ -930,7 +930,7 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
           {autoUpdateNote && <div className="text-[11px] text-[#EAB308] mt-1 mb-1">{autoUpdateNote}</div>}
           <div className="mt-2">
             <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: remarkRequired ? '#EF4444' : '#9CA3AF' }}>
-              REMARK {remarkRequired ? <span className="text-red-500">* REQUIRED</span> : '(OPTIONAL)'}
+              REMARK {remarkRequired ? <span className="text-red-500">*</span> : '(OPTIONAL)'}
             </label>
             <textarea
               className={`px-2.5 py-2 text-xs rounded-md outline-none font-sans w-full min-h-[50px] resize-y border ${remarkRequired && !remark.trim() ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
