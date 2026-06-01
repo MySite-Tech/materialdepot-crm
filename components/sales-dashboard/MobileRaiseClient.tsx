@@ -18,27 +18,25 @@ const SEARCH_FIELDS = [
   "id", "createdAt", "updatedAt", "customFieldValues", "associatedContacts",
 ];
 
-const SUPPORT_OPTIONS = [
-  { id: 184499, name: "Change delivery date" },
-  { id: 184696, name: "Need Order tracking details" },
-  { id: 184503, name: "Others" },
-  { id: 184500, name: "Update delivery address" },
-  { id: 184694, name: "Add/Remove Express&Unloading" },
-  { id: 184692, name: "Schedule Installation" },
-  { id: 189779, name: "Send tax invoice" },
-];
-
-const ESCALATION_OPTIONS = [
-  { id: 184504, name: "Delivery delay" },
-  { id: 184505, name: "Damaged material" },
-  { id: 184506, name: "Quality Issue" },
-  { id: 184507, name: "Wrong material" },
-  { id: 184508, name: "Item missing" },
-  { id: 184509, name: "Installation Issue" },
-  { id: 184510, name: "Return/Exchange Request" },
-  { id: 184512, name: "Other disputes" },
-  { id: 184693, name: "Order cancellation" },
-  { id: 184695, name: "Modify Order" },
+// Single "Raise Request" field (single-select). Every value routes through
+// cfRaiseEscalation (Escalation pipeline); `requestType` is the auto-mapped
+// Request Type written to cfRequestType on submit (system-set, per the brief).
+//
+// These 13 values come from the redefined "Raise request" field in Kylas.
+const RAISE_OPTIONS: { id: number; name: string; requestType: "Support" | "Escalation" }[] = [
+  { id: 202380, name: "Return Request", requestType: "Support" },
+  { id: 202381, name: "Change in lead time", requestType: "Support" },
+  { id: 184695, name: "Modify Order", requestType: "Support" },
+  { id: 202382, name: "Order status update", requestType: "Support" },
+  { id: 202383, name: "Delivery Attempted", requestType: "Support" },
+  { id: 184503, name: "Others", requestType: "Support" },
+  { id: 184504, name: "Delivery Delay", requestType: "Escalation" },
+  { id: 202384, name: "Items missing/Incorrect Quantity", requestType: "Escalation" },
+  { id: 184507, name: "Wrong material", requestType: "Escalation" },
+  { id: 184505, name: "Damaged Material", requestType: "Escalation" },
+  { id: 202385, name: "Unloading not done", requestType: "Escalation" },
+  { id: 184506, name: "Quality issue", requestType: "Escalation" },
+  { id: 202386, name: "Installation/Site Audit Issue", requestType: "Escalation" },
 ];
 
 function isSalesDeal(deal: Deal) {
@@ -389,13 +387,17 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   async function handleSubmit(
     dealId: number,
     type: "support" | "escalation",
-    selectedOptions: { id: number; name: string }[]
+    selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" }[]
   ) {
     setSubmitting(dealId);
     setSubmitError(null);
     setSubmitSuccess(null);
     try {
       const field = type === "support" ? "cfRaiseSupportRequest" : "cfRaiseEscalation";
+      // Auto-mapped Request Type: Escalation wins if any selected value is an escalation.
+      const requestType = selectedOptions.some((o) => o.requestType === "Escalation")
+        ? "Escalation"
+        : "Support";
       const patchOps = [
         { op: "add", path: `/customFieldValues/${field}`, value: [] },
         ...selectedOptions.map((opt, i) => ({
@@ -403,6 +405,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
           path: `/customFieldValues/${field}/${i}`,
           value: { id: opt.id, name: opt.name },
         })),
+        { op: "add" as const, path: `/customFieldValues/cfRequestType`, value: requestType },
       ];
       const res = await fetch(`/api/deals/${dealId}`, {
         method: "PATCH",
@@ -919,17 +922,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
                 )}
               </div>
 
-              {/* Raise forms */}
+              {/* Raise form — single field, always routes to the Escalation pipeline */}
               <div className="space-y-3">
                 <RaiseField
-                  label="Raise Support Request"
-                  options={SUPPORT_OPTIONS}
-                  onSubmit={(opts) => handleSubmit(selectedDeal.id, "support", opts)}
-                  submitting={submitting === selectedDeal.id}
-                />
-                <RaiseField
-                  label="Raise Escalation"
-                  options={ESCALATION_OPTIONS}
+                  label="Raise Request"
+                  options={RAISE_OPTIONS}
                   onSubmit={(opts) => handleSubmit(selectedDeal.id, "escalation", opts)}
                   submitting={submitting === selectedDeal.id}
                 />
@@ -956,32 +953,29 @@ function RaiseField({
   submitting,
 }: {
   label: string;
-  options: { id: number; name: string }[];
-  onSubmit: (opts: { id: number; name: string }[]) => void;
+  options: { id: number; name: string; requestType?: "Support" | "Escalation" }[];
+  onSubmit: (opts: { id: number; name: string; requestType?: "Support" | "Escalation" }[]) => void;
   submitting: boolean;
 }) {
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Single-select per the brief — one value per "Raise request". Selection is
+  // tracked by index since PENDING options share id 0.
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  function toggle(id: number) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
+  const selectedOption = selectedIdx === null ? null : options[selectedIdx];
+  const isPending = selectedOption?.id === 0;
 
   return (
     <div>
       <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
       <div className="flex flex-wrap gap-1.5 mb-2">
-        {options.map((o) => (
+        {options.map((o, i) => (
           <button
-            key={o.id}
+            key={`${o.id}-${i}`}
             type="button"
             disabled={submitting}
-            onClick={() => toggle(o.id)}
+            onClick={() => setSelectedIdx(selectedIdx === i ? null : i)}
             className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-40 ${
-              selected.has(o.id)
+              selectedIdx === i
                 ? "bg-gray-950 text-yellow-400 border-gray-950"
                 : "bg-white text-gray-700 border-gray-300 active:bg-gray-100"
             }`}
@@ -990,16 +984,13 @@ function RaiseField({
           </button>
         ))}
       </div>
-      {selected.size > 0 && (
+      {selectedOption && (
         <button
-          onClick={() => {
-            const opts = options.filter((o) => selected.has(o.id));
-            if (opts.length > 0) onSubmit(opts);
-          }}
-          disabled={submitting}
+          onClick={() => { if (!isPending) onSubmit([selectedOption]); }}
+          disabled={submitting || isPending}
           className="w-full py-2 rounded-lg bg-yellow-400 text-gray-950 text-sm font-bold disabled:opacity-50"
         >
-          {submitting ? "Submitting…" : "Submit"}
+          {isPending ? "Pending Kylas ID" : submitting ? "Submitting…" : "Submit"}
         </button>
       )}
     </div>
