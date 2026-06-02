@@ -21,6 +21,7 @@ const STATUSES = [
   'In Cart',
   'Quote Approval Pending',
   'Availability Check',
+  'Hold Stock',
   'Order Placed',
   'Order Confirmed',
   'Partly Shipped',
@@ -36,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
   'In Cart':                '#6366F1',
   'Quote Approval Pending': '#F59E0B',
   'Availability Check':     '#3B82F6',
+  'Hold Stock':             '#8B5CF6',
   'Order Placed':           '#F97316',
   'Order Confirmed':        '#FB923C',
   'Partly Shipped':         '#FBBF24',
@@ -82,7 +84,7 @@ const BACKEND_SORTABLE_COLS = new Set([
 ]);
 
 const PIPELINE_BUCKETS: Record<string, string[]> = {
-  Active: ['In Cart', 'Quote Approval Pending', 'Availability Check'],
+  Active: ['In Cart', 'Quote Approval Pending', 'Availability Check', 'Hold Stock'],
   Won: ['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered'],
   Lost: ['Refunded', 'Order Lost', 'Order Cancelled'],
 };
