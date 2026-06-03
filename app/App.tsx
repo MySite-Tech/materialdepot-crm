@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption } from '../lib/mockApi';
+import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallDashboard from './FootfallDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
@@ -1945,6 +1945,15 @@ export default function App() {
         .catch((e) => { console.error('Create lead failed:', e); showSaveError(); });
     } else {
       upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });
+    }
+    if (!isNew && finalData.clientPhone && finalData.assignedTo && finalData.assignedTo !== existing?.assignedTo) {
+      const bmPhone = bmNameToPhone[finalData.assignedTo];
+      if (bmPhone) {
+        assignBMToClient(finalData.clientPhone, bmPhone).catch((e) => { console.error('Reassign BM failed:', e); showSaveError(); });
+      } else {
+        console.error('Could not resolve BM phone for assignedTo:', finalData.assignedTo);
+        showSaveError();
+      }
     }
     if (!isNew && finalData.status === 'Order Lost' && existing?.status !== 'Order Lost') {
       markLeadLost(finalData.id, finalData.lostReason || '', finalData.ticketId).catch((e) => console.error('Estimate lost sync failed:', e));
