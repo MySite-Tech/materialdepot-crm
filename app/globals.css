@@ -15,6 +15,11 @@
   to { transform: translateX(0); }
 }
 
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 /* Date range calendar picker */
 .rdp-compact {
   font-size: 12px;

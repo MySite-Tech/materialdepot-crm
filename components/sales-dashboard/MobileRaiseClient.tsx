@@ -529,28 +529,30 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   return (
     <div>
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+      <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 mb-4">
         <input
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="Search by contact or deal…"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          className="w-full sm:flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2.5 rounded-lg bg-[#EAB308] text-gray-950 text-sm font-semibold disabled:opacity-50"
-        >
-          Search
-        </button>
-        <button
-          type="button"
-          onClick={handleOpenKylasModal}
-          className="px-4 py-2.5 rounded-lg bg-gray-900 text-yellow-400 text-sm font-semibold whitespace-nowrap"
-        >
-          Find Kylas Deal
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-[#EAB308] text-gray-950 text-sm font-semibold disabled:opacity-50"
+          >
+            Search
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenKylasModal}
+            className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-gray-900 text-yellow-400 text-sm font-semibold whitespace-nowrap"
+          >
+            Find Kylas Deal
+          </button>
+        </div>
       </form>
 
       {error && (
@@ -868,8 +870,12 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       {/* Detail sidebar */}
       {selectedDeal && (
         <>
-          <div className="fixed inset-0 z-[999] bg-black/20" onClick={() => setSelectedDeal(null)} />
-          <div className="fixed top-0 right-0 h-screen w-[420px] max-w-full z-[1000] bg-white shadow-2xl flex flex-col">
+          <div className="fixed inset-0 z-[999] bg-black/40 sm:bg-black/20" onClick={() => setSelectedDeal(null)} />
+          <div className="fixed inset-x-0 bottom-0 z-[1000] flex flex-col bg-white shadow-2xl max-h-[88vh] rounded-t-2xl animate-[slideUp_0.2s_ease-out] sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:h-screen sm:max-h-none sm:w-[420px] sm:rounded-none sm:animate-[slideInRight_0.2s_ease-out]">
+            {/* Mobile grabber */}
+            <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="h-1 w-10 rounded-full bg-gray-300" />
+            </div>
             {/* Header */}
             <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200">
               <div className="flex-1 min-w-0 pr-3">

@@ -1097,11 +1097,15 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-[999] bg-black/20"
+            className="fixed inset-0 z-[999] bg-black/40 sm:bg-black/20"
             onClick={() => setSelectedDeal(null)}
           />
-          {/* Panel */}
-          <div className="fixed top-0 right-0 h-screen w-[420px] max-w-full z-[1000] bg-white shadow-2xl flex flex-col">
+          {/* Panel — bottom sheet on mobile, right drawer on desktop */}
+          <div className="fixed inset-x-0 bottom-0 z-[1000] flex flex-col bg-white shadow-2xl max-h-[88vh] rounded-t-2xl animate-[slideUp_0.2s_ease-out] sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:h-screen sm:max-h-none sm:w-[420px] sm:rounded-none sm:animate-[slideInRight_0.2s_ease-out]">
+            {/* Mobile grabber */}
+            <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="h-1 w-10 rounded-full bg-gray-300" />
+            </div>
             {/* Header */}
             <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200">
               <div className="flex-1 min-w-0 pr-3">
