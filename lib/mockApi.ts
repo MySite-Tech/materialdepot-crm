@@ -1095,11 +1095,11 @@ export async function fetchReportCard(filters: ReportCardFilters = {}): Promise<
   return mdFetch(`/crm/report-card/${qs ? `?${qs}` : ''}`);
 }
 
-export async function fetchKylasDealInfo(dealId: number): Promise<KylasDealInfo | null> {
+export async function fetchKylasDealInfo(dealId: number | string): Promise<KylasDealInfo | null> {
   try {
     const data = await kylasFetch(`/deals/${dealId}`);
     return {
-      id: dealId,
+      id: Number(dealId),
       name: data.name ?? `Deal #${dealId}`,
       ownerName: data.ownedBy?.name ?? null,
       stageName: data.pipelineStage?.name ?? null,
