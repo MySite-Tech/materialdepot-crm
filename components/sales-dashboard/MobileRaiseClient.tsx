@@ -386,45 +386,70 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
 
   async function handleSubmit(
     dealId: number,
-    type: "support" | "escalation",
     selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" }[]
   ) {
     setSubmitting(dealId);
     setSubmitError(null);
     setSubmitSuccess(null);
     try {
-      const field = type === "support" ? "cfRaiseSupportRequest" : "cfRaiseEscalation";
+      const field = "cfRaiseEscalation";
       // Auto-mapped Request Type: Escalation wins if any selected value is an escalation.
       const requestType = selectedOptions.some((o) => o.requestType === "Escalation")
         ? "Escalation"
         : "Support";
+
+      async function patchDeal(ops: unknown[]) {
+        const res = await fetch(`/api/deals/${dealId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ops),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error ?? `Failed: ${res.status}`);
+        }
+      }
+
+      const currentDeal = deals.find((d) => d.id === dealId) ?? selectedDeal;
+      const existing = currentDeal?.customFieldValues?.[field];
+      const existingArr = Array.isArray(existing)
+        ? (existing as { id: number; name: string }[])
+        : [];
+
+      const reRaiseIndices = selectedOptions
+        .map((opt) => existingArr.findIndex((e) => e.id === opt.id))
+        .filter((i) => i !== -1)
+        .sort((a, b) => b - a); // descending so indices stay valid while removing
+      if (reRaiseIndices.length > 0) {
+        await patchDeal(
+          reRaiseIndices.map((i) => ({ op: "remove", path: `/customFieldValues/${field}/${i}` }))
+        );
+      }
+
       const patchOps = [
-        { op: "add", path: `/customFieldValues/${field}`, value: [] },
-        ...selectedOptions.map((opt, i) => ({
+        ...(existingArr.length > 0 ? [] : [{ op: "add", path: `/customFieldValues/${field}`, value: [] }]),
+        ...selectedOptions.map((opt) => ({
           op: "add" as const,
-          path: `/customFieldValues/${field}/${i}`,
+          path: `/customFieldValues/${field}/-`,
           value: { id: opt.id, name: opt.name },
         })),
         { op: "add" as const, path: `/customFieldValues/cfRequestType`, value: requestType },
       ];
-      const res = await fetch(`/api/deals/${dealId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patchOps),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `Failed: ${res.status}`);
-      }
+      await patchDeal(patchOps);
+
+      const mergedValue = [
+        ...existingArr.filter((e) => !selectedOptions.some((o) => o.id === e.id)),
+        ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
+      ];
       setSubmitSuccess(dealId);
       setTimeout(() => setSubmitSuccess(null), 3000);
       // Patch local state — avoid re-running the full fetch flow
       setDeals((prev) => prev.map((d) => d.id === dealId
-        ? { ...d, customFieldValues: { ...(d.customFieldValues ?? {}), [field]: selectedOptions } }
+        ? { ...d, customFieldValues: { ...(d.customFieldValues ?? {}), [field]: mergedValue } }
         : d
       ));
       setSelectedDeal((prev) => prev && prev.id === dealId
-        ? { ...prev, customFieldValues: { ...(prev.customFieldValues ?? {}), [field]: selectedOptions } }
+        ? { ...prev, customFieldValues: { ...(prev.customFieldValues ?? {}), [field]: mergedValue } }
         : prev
       );
     } catch (err) {
@@ -933,7 +958,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
                 <RaiseField
                   label="Raise Request"
                   options={RAISE_OPTIONS}
-                  onSubmit={(opts) => handleSubmit(selectedDeal.id, "escalation", opts)}
+                  onSubmit={(opts) => handleSubmit(selectedDeal.id, opts)}
                   submitting={submitting === selectedDeal.id}
                 />
               </div>
