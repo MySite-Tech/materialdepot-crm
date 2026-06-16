@@ -205,6 +205,10 @@ export function getKylasRedirectUrl(leadId: number, contactId?: number): string 
     : `https://app.kylas.io/sales/leads/details/${leadId}`;
 }
 
+export function getKylasDealUrl(dealId: number | string): string {
+  return `https://app.kylas.io/sales/deals/details/${dealId}`;
+}
+
 // ---------------------------------------------------------------------------
 // Store visit — BMs & assignment
 // ---------------------------------------------------------------------------
@@ -859,7 +863,7 @@ export interface SyncEstimateResult {
   estimate_id?: number;
   lead_id?: string;
   estimate_status?: string;
-  deal_id?: number;
+  deal_id?: number | string;
   message?: string;
   queued?: boolean;
   error?: string;
@@ -873,27 +877,43 @@ export interface KylasDealInfo {
   pipelineName: string | null;
 }
 
-function detectInputType(value: string): { lead_id?: string; estimate_id?: number; user_id?: string } {
+function detectInputType(value: string): { lead_id?: string; estimate_id?: number; user_id?: string; cart_number?: string } {
   const trimmed = value.trim();
   // UUID pattern → user_id
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
     return { user_id: trimmed };
   }
+  if (/^CT/i.test(trimmed)) {
+    return { cart_number: trimmed };
+  }
   // All digits → estimate_id
   if (/^\d+$/.test(trimmed)) {
     return { estimate_id: parseInt(trimmed, 10) };
   }
-  // Otherwise → lead_id (ENQ..., CT..., etc.)
+  // Otherwise → lead_id (ENQ..., etc.)
   return { lead_id: trimmed };
 }
 
 export async function syncEstimate(value: string): Promise<SyncEstimateResult> {
   const payload = detectInputType(value);
-  return mdFetch('/kylas/sync-estimate/', {
+  const token = getToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE_URL}/kylas/sync-estimate/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {}
+  if (!res.ok) {
+    const msg =
+      data?.error || data?.message || data?.detail || `API error: ${res.status}`;
+    return { success: false, error: msg };
+  }
+  return data ?? { success: false, error: `API error: ${res.status}` };
 }
 
 // ---------------------------------------------------------------------------

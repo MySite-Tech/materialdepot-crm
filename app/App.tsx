@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption } from '../lib/mockApi';
+import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallDashboard from './FootfallDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
@@ -1609,6 +1609,10 @@ export default function App() {
   };
 
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [kylasSync, setKylasSync] = useState<Record<string, { loading?: boolean; ok?: boolean; msg?: string }>>({});
+  const [showKylasModal, setShowKylasModal] = useState(false);
+  const [kylasModalInput, setKylasModalInput] = useState('');
+  const [kylasModalResult, setKylasModalResult] = useState<{ loading?: boolean; ok?: boolean; msg?: string; link?: string } | null>(null);
   const [branches, setBranches] = useState<string[]>(DEFAULT_BRANCHES);
   const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
   const [dbReady, setDbReady] = useState(false);
@@ -1815,6 +1819,11 @@ export default function App() {
     setSaveErrorMsg(msg);
     setTimeout(() => setSaveErrorMsg(null), 8000);
   };
+  const [toast, setToast] = useState<{ msg: string; ok: boolean; link?: string } | null>(null);
+  const showToast = (msg: string, ok: boolean, link?: string) => {
+    setToast({ msg, ok, link });
+    setTimeout(() => setToast(null), link ? 10000 : 5000);
+  };
 
   const ALL_COLUMNS = [
     { key: 'id', label: 'Lead ID' },
@@ -1999,6 +2008,38 @@ export default function App() {
     }
     if (currentUser) {
       logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' → ' + newStatus }).catch(console.error);
+    }
+  };
+
+  const handleKylasSync = async (leadId: string) => {
+    setKylasSync((p) => ({ ...p, [leadId]: { loading: true } }));
+    try {
+      const res = await syncEstimate(leadId);
+      showToast(
+        res.success ? (res.message || 'Synced to Kylas') : (res.error || res.message || 'Sync failed'),
+        res.success,
+        res.success && res.deal_id ? getKylasDealUrl(res.deal_id) : undefined,
+      );
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Sync failed', false);
+    } finally {
+      setKylasSync((p) => { const n = { ...p }; delete n[leadId]; return n; });
+    }
+  };
+
+  const handleKylasModalSync = async () => {
+    const value = kylasModalInput.trim();
+    if (!value) return;
+    setKylasModalResult({ loading: true });
+    try {
+      const res = await syncEstimate(value);
+      setKylasModalResult({
+        ok: res.success,
+        msg: res.success ? (res.message || 'Synced to Kylas') : (res.error || res.message || 'Sync failed'),
+        link: res.success && res.deal_id ? getKylasDealUrl(res.deal_id) : undefined,
+      });
+    } catch (e) {
+      setKylasModalResult({ ok: false, msg: e instanceof Error ? e.message : 'Sync failed' });
     }
   };
 
@@ -2486,6 +2527,7 @@ export default function App() {
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap" onClick={downloadCsvTemplate}>Download Template</button>
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
               <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+              <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap" onClick={() => { setShowKylasModal(true); setKylasModalInput(''); setKylasModalResult(null); }}>Kylas Sync</button>
               {/* <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button> */}
             </div>
           </div>
@@ -2634,11 +2676,21 @@ export default function App() {
                     {isColVisible('cartValue') && <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
                       {fmtINR(l.cartValue)}
                     </td>}
-                    <td className="px-3 py-2.5 text-[13px] align-middle text-center whitespace-nowrap">
-                      <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-gray-700 relative" title="Edit" onClick={() => setDrawerLead(l)}>
-                        Edit
-                        {(l.remarks || []).length > 0 && <span className="absolute -top-0.5 -right-1 bg-[#EAB308] text-white text-[9px] font-bold rounded-full w-4 h-4 inline-flex items-center justify-center">{l.remarks!.length}</span>}
-                      </button>
+                    <td className="px-3 py-2.5 text-[13px] align-middle whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2">
+                        <button className="bg-transparent border-none cursor-pointer py-1 px-1.5 text-[13px] text-gray-700 relative" title="Edit" onClick={() => setDrawerLead(l)}>
+                          Edit
+                          {(l.remarks || []).length > 0 && <span className="absolute -top-1 -right-1 bg-[#EAB308] text-white text-[9px] font-bold rounded-full w-4 h-4 inline-flex items-center justify-center">{l.remarks!.length}</span>}
+                        </button>
+                        <button
+                          className="border border-gray-200 rounded-md cursor-pointer py-1 px-2.5 text-[11px] font-medium text-gray-600 hover:border-[#EAB308] hover:text-[#EAB308] disabled:opacity-40 disabled:cursor-default"
+                          title="Sync this deal to Kylas if it's missing"
+                          disabled={kylasSync[l.id]?.loading}
+                          onClick={() => handleKylasSync(l.id)}
+                        >
+                          {kylasSync[l.id]?.loading ? 'Syncing…' : 'Kylas Sync'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -2735,6 +2787,53 @@ export default function App() {
           />
         );
       })()}
+
+      {showKylasModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]" onClick={() => setShowKylasModal(false)}>
+          <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[440px]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
+              <span className="font-semibold text-sm">Kylas Sync</span>
+              <button className="bg-transparent border-none text-gray-400 text-xl cursor-pointer leading-none" onClick={() => setShowKylasModal(false)}>&times;</button>
+            </div>
+            <div className="p-5">
+              <p className="text-[13px] text-gray-600 mb-2">Sync a deal to Kylas if it&apos;s missing. Enter a lead ID or cart number.</p>
+              <input
+                className="px-3 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full focus:border-[#EAB308]"
+                placeholder="e.g. ENQ2026043067368 or CT6F6100196349"
+                value={kylasModalInput}
+                autoFocus
+                onChange={(e) => { setKylasModalInput(e.target.value); setKylasModalResult(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !kylasModalResult?.loading) handleKylasModalSync(); }}
+              />
+              {kylasModalResult?.msg && (
+                <div className={`mt-3 text-[12px] ${kylasModalResult.ok ? 'text-green-600' : 'text-red-500'}`}>
+                  {kylasModalResult.msg}
+                  {kylasModalResult.link && (
+                    <a
+                      href={kylasModalResult.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 font-semibold underline"
+                    >
+                      View deal ↗
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+              <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => setShowKylasModal(false)}>Close</button>
+              <button
+                className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                disabled={!kylasModalInput.trim() || kylasModalResult?.loading}
+                onClick={handleKylasModalSync}
+              >
+                {kylasModalResult?.loading ? 'Syncing…' : 'Sync'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {csvErrors && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
@@ -2854,6 +2953,27 @@ export default function App() {
             className="bg-white text-red-600 px-3 py-1 rounded text-[12px] font-bold cursor-pointer border-none shrink-0"
           >
             Log out
+          </button>
+        </div>
+      )}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-lg text-[13px] font-semibold z-[1100] shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center gap-4 text-white ${toast.ok ? 'bg-green-600' : 'bg-red-600'}`}>
+          <span>{toast.ok ? '✓' : '⚠'} {toast.msg}</span>
+          {toast.link && (
+            <a
+              href={toast.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white text-green-700 px-3 py-1 rounded text-[12px] font-bold cursor-pointer no-underline shrink-0"
+            >
+              View deal ↗
+            </a>
+          )}
+          <button
+            onClick={() => setToast(null)}
+            className="bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-[12px] font-bold cursor-pointer border-none shrink-0"
+          >
+            ✕
           </button>
         </div>
       )}
