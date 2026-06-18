@@ -65,7 +65,9 @@ async function mdFetch(path: string, init?: RequestInit, retried = false): Promi
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
-  if (res.status === 401 && !retried) {
+  // Backend returns 403 (not 401) for unauthenticated requests because
+  // SessionAuthentication is first in DRF's auth classes — treat both the same.
+  if ((res.status === 401 || res.status === 403) && !retried) {
     if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
     const ok = await refreshPromise;
     if (ok) return mdFetch(path, init, true);
@@ -73,7 +75,9 @@ async function mdFetch(path: string, init?: RequestInit, retried = false): Promi
     throw new Error('Session expired');
   }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -758,8 +762,7 @@ export async function updateUser(id: string | number, updates: Partial<import('.
 }
 
 export async function deleteUser(id: string | number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/user-organisation/${id}/`, { method: 'DELETE' });
-  if (!res.ok && res.status !== 204) throw new Error(`API error: ${res.status}`);
+  await mdFetch(`/user-organisation/${id}/`, { method: 'DELETE' });
 }
 
 export async function updateUserBranches(id: string | number, branches: string[]): Promise<void> {
@@ -797,8 +800,7 @@ export async function updateBranch(id: string | number, name: string): Promise<v
 }
 
 export async function deleteBranch(id: string | number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/orgainsation-branch/${id}/`, { method: 'DELETE' });
-  if (!res.ok && res.status !== 204) throw new Error(`API error: ${res.status}`);
+  await mdFetch(`/orgainsation-branch/${id}/`, { method: 'DELETE' });
 }
 
 // ---------------------------------------------------------------------------
