@@ -3,26 +3,75 @@ const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
 const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
-const TOKEN_KEY = 'md_crm_token';
+const TOKEN_KEY = 'jwt_token';
+const REFRESH_KEY = 'refresh_token';
 
 export function getToken(): string {
   return (typeof window !== 'undefined' && localStorage.getItem(TOKEN_KEY)) || '';
+}
+
+function getRefreshToken(): string {
+  return (typeof window !== 'undefined' && localStorage.getItem(REFRESH_KEY)) || '';
 }
 
 function saveToken(token: string) {
   if (typeof window !== 'undefined') localStorage.setItem(TOKEN_KEY, token);
 }
 
+function saveRefreshToken(token: string) {
+  if (typeof window !== 'undefined') localStorage.setItem(REFRESH_KEY, token);
+}
+
 export function clearToken() {
-  if (typeof window !== 'undefined') localStorage.removeItem(TOKEN_KEY);
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+  }
+}
+
+function forceReLogin() {
+  clearToken();
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('materialdepot_user');
+    window.location.reload();
+  }
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refresh = getRefreshToken();
+  if (!refresh) return false;
+  try {
+    const res = await fetch(`${API_BASE_URL}/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data?.access) return false;
+    saveToken(data.access);
+    if (data.refresh) saveRefreshToken(data.refresh);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Shared fetch helpers
-async function mdFetch(path: string, init?: RequestInit) {
+async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
   const token = getToken();
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  if (res.status === 401 && !retried) {
+    if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+    const ok = await refreshPromise;
+    if (ok) return mdFetch(path, init, true);
+    forceReLogin();
+    throw new Error('Session expired');
+  }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -42,6 +91,7 @@ export async function verifyOtp(phone: string, otp: string): Promise<boolean> {
   try {
     const data = await res.json();
     if (data?.token) saveToken(data.token);
+    if (data?.refresh) saveRefreshToken(data.refresh);
   } catch {}
   return true;
 }

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
-import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
+import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, clearToken, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallDashboard from './FootfallDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
@@ -1402,7 +1402,6 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [pendingUser, setPendingUser] = useState<AppUser | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -1411,10 +1410,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
     setLoading(true);
     setError('');
     try {
-      const user = await loginWithPhone(phone.trim());
-      if (!user) { setError('Phone not authorized. Contact your admin.'); setLoading(false); return; }
       await sendOtp(phone.trim());
-      setPendingUser(user);
       setStep('otp');
     } catch {
       setError('Failed to send OTP. Please try again.');
@@ -1431,7 +1427,9 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
     try {
       const ok = await verifyOtp(phone.trim(), otp.trim());
       if (!ok) { setError('Invalid OTP. Please try again.'); setLoading(false); return; }
-      onLogin(pendingUser!);
+      const user = await loginWithPhone(phone.trim());
+      if (!user) { clearToken(); setError('Phone not authorized. Contact your admin.'); setLoading(false); return; }
+      onLogin(user);
     } catch {
       setError('Verification failed. Please try again.');
     } finally {
