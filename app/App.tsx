@@ -111,6 +111,16 @@ const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'st
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
 
+const MIN_LOST_AGE_DAYS = 30;
+const daysSinceCreated = (createdAt?: string): number => {
+  if (!createdAt) return Infinity;
+  const created = new Date(createdAt);
+  if (isNaN(created.getTime())) return Infinity;
+  return Math.floor((Date.now() - created.getTime()) / 864e5);
+};
+const canMarkLostByAge = (createdAt?: string, isAdmin = false): boolean =>
+  isAdmin || daysSinceCreated(createdAt) >= MIN_LOST_AGE_DAYS;
+
 const genId = (): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let r = '';
@@ -190,14 +200,16 @@ function StatusBadge({ status }: { status: string }) {
 interface EditableStatusProps {
   status: string;
   lostReason?: string;
+  createdAt?: string;
+  isAdmin?: boolean;
   onCommit: (status: string, reason?: string) => void;
 }
 
 const MARK_LOST_ELIGIBLE = new Set(['In Cart', 'Quote Approval Pending', 'Availability Check', 'Request for Availability Check']);
 
-function EditableStatus({ status, lostReason, onCommit }: EditableStatusProps) {
+function EditableStatus({ status, lostReason, createdAt, isAdmin = false, onCommit }: EditableStatusProps) {
   const [pickingReason, setPickingReason] = useState(false);
-  const canMarkLost = MARK_LOST_ELIGIBLE.has(status);
+  const canMarkLost = MARK_LOST_ELIGIBLE.has(status) && canMarkLostByAge(createdAt, isAdmin);
 
   if (pickingReason) {
     return (
@@ -494,6 +506,7 @@ interface LeadDrawerProps {
 function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
+  const isAdmin = currentUser?.role === 'admin';
   const [form, setForm] = useState<Lead>(() => lead ? {
     ...lead,
     branch: lead.branch || (branches[0] || ''),
@@ -674,13 +687,18 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                 </select>
               </Field>
               <Field label="STATUS">
-                {MARK_LOST_ELIGIBLE.has(form.status) ? (
+                {MARK_LOST_ELIGIBLE.has(form.status) && canMarkLostByAge(form.createdAt, isAdmin) ? (
                   <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.status} onChange={(e) => { set('status', e.target.value); if (e.target.value !== 'Order Lost') set('lostReason', ''); }}>
                     <option value={form.status}>{form.status}</option>
                     <option value="Order Lost">Order Lost</option>
                   </select>
                 ) : (
-                  <div className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 w-full">{form.status}</div>
+                  <div className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 w-full">
+                    {form.status}
+                    {MARK_LOST_ELIGIBLE.has(form.status) && !canMarkLostByAge(form.createdAt, isAdmin) && (
+                      <span className="block text-[10px] text-gray-400 mt-0.5">Only admins can mark lost within {MIN_LOST_AGE_DAYS} days of cart creation</span>
+                    )}
+                  </div>
                 )}
               </Field>
               {form.status === 'Order Lost' && (
@@ -1934,6 +1952,10 @@ export default function App() {
   const saveLead = (formData: Lead) => {
     const existing = leads.find((l) => l.id === formData.id && l.clientPhone === formData.clientPhone) || leads.find((l) => l.id === formData.id);
     const isNew = !existing;
+    if (formData.status === 'Order Lost' && existing?.status !== 'Order Lost' && !canMarkLostByAge(existing?.createdAt ?? formData.createdAt, isAdminUser)) {
+      alert(`Only admins can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
+      return;
+    }
     const finalData = existing ? mergeLead(existing, formData) : formData;
     setLeads((prev) => {
       const idx = prev.findIndex((l) => l.id === finalData.id && l.clientPhone === finalData.clientPhone);
@@ -1990,6 +2012,10 @@ export default function App() {
     const userName = currentUser ? currentUser.name : '';
     const oldLead = leads.find((l) => l.id === id);
     const oldStatus = oldLead ? oldLead.status : '';
+    if (newStatus === 'Order Lost' && !canMarkLostByAge(oldLead?.createdAt, isAdminUser)) {
+      alert(`Only admins can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
+      return;
+    }
     setLeads((prev) => {
       const updated = prev.map((l) => {
         if (l.id !== id) return l;
@@ -2650,7 +2676,7 @@ export default function App() {
                     </td>}
                     {isColVisible('projectPhase') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.projectPhase || '—'}</td>}
                     {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
-                      <EditableStatus status={l.status} lostReason={l.lostReason} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
+                      <EditableStatus status={l.status} lostReason={l.lostReason} createdAt={l.createdAt} isAdmin={isAdminUser} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>}
                     {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[200px]">
                       <span className="whitespace-nowrap overflow-hidden text-ellipsis block">
