@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { Deal, DealsSearchResponse, CallLog } from "@/lib/types";
+import { getEscalationRaisedBy } from "@/lib/mockApi";
 
 // ---------------------------------------------------------------------------
 // Constants & helpers (same logic as EscalationClient)
@@ -433,6 +434,7 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
   const [dealNotes, setDealNotes] = useState<{ id: number; description: string; createdAt?: string }[]>([]);
   const [timelineMap, setTimelineMap] = useState<Record<number, TimelineEntry[]>>({});
   const [loadingExpanded, setLoadingExpanded] = useState(false);
+  const [raisedBy, setRaisedBy] = useState<string | null>(null);
 
   // Add note / upload doc state
   const [noteTargetDeal, setNoteTargetDeal] = useState<number | null>(null);
@@ -594,6 +596,11 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
     setLoadingExpanded(true);
     setExpandedCallLogs([]);
     setDealNotes([]);
+    setRaisedBy(null);
+
+    getEscalationRaisedBy(dealId)
+      .then((r) => setRaisedBy(r?.raised_by ?? null))
+      .catch(() => setRaisedBy(null));
 
     try {
       // Phase 1: deal detail + notes (show resolution immediately)
@@ -1143,6 +1150,10 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
                   <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-yellow-700 mb-2">Resolution Details</p>
                     <div className="space-y-1.5">
+                      <div className="flex items-start gap-2 text-xs">
+                        <span className="text-gray-500 w-20 shrink-0">Raised by</span>
+                        <span className="font-medium text-gray-800">{raisedBy || "—"}</span>
+                      </div>
                       <div className="flex items-start gap-2 text-xs">
                         <span className="text-gray-500 w-20 shrink-0">Resolution</span>
                         <span className="font-medium text-gray-800">{cfDisplayValue(selectedDeal.customFieldValues?.["cfResolution"]) || "—"}</span>
