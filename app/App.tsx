@@ -102,8 +102,8 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
   admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
   tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'],
-  sales:        ['leads', 'sales'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel'],
+  sales:        ['leads', 'sales', 'footfall'],
   retail:       ['storeVisit','footfall'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
