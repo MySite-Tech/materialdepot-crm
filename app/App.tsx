@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Download, FileText, FileSpreadsheet, FileType2 } from 'lucide-react';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
@@ -170,6 +171,62 @@ const fmtTimestamp = (ts: string): string => {
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
     ' · ' +
     dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+// ── Lead export helpers ────────────────────────────────────────────────────
+// Serialize an ISO date (YYYY-MM-DD or full timestamp) back to DD/MM/YYYY so
+// exported files round-trip cleanly through the CSV importer.
+const toExportDate = (d: string | null | undefined): string => {
+  if (!d) return '';
+  const m = String(d).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(d);
+};
+
+const csvEscape = (v: unknown): string => {
+  const s = v == null ? '' : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+
+// Produce the 18 fields (in CSV_HEADERS order) for one lead, matching the
+// exact format handleCsvFile expects on import.
+const leadToExportRow = (lead: Lead): string[] => {
+  const cartItems = Array.isArray(lead.cartItems)
+    ? lead.cartItems.map((c) => c.name).filter(Boolean).join('; ')
+    : (lead.cartItems || '');
+  const remarks = (lead.remarks || [])
+    .map((r) => `${r.text}|${toExportDate(r.ts)}|${r.author}`)
+    .join(';');
+  const visits = (lead.visits || [])
+    .map((v) => `${toExportDate(v.date)}|${v.channel}`)
+    .join(';');
+  return [
+    lead.leadId || lead.id || '',
+    lead.clientName || '',
+    lead.clientPhone || '',
+    toExportDate(lead.createdAt),
+    lead.assignedTo || '',
+    lead.branch || '',
+    lead.status || '',
+    lead.lostReason || '',
+    cartItems,
+    lead.cartValue != null ? String(lead.cartValue) : '',
+    toExportDate(lead.followUpDate),
+    toExportDate(lead.closureDate),
+    remarks,
+    visits,
+    lead.clientType || '',
+    lead.propertyType || '',
+    lead.architectInvolved ? 'yes' : 'no',
+    lead.projectPhase || '',
+  ];
+};
+
+const triggerDownload = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 // ── Components ──────────────────────────────────────────────────────────────
@@ -1829,6 +1886,9 @@ export default function App() {
   const [csvSelected, setCsvSelected] = useState<Set<number>>(new Set());
   const [csvImportCount, setCsvImportCount] = useState<number | null>(null);
   const csvFileRef = useRef<HTMLInputElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportScope, setExportScope] = useState<'all' | 'page'>('all');
 
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null);
   const showSaveError = (msg: string = 'Failed to save. Please log out and log back in, then try again.') => {
@@ -2130,17 +2190,101 @@ export default function App() {
   // ── CSV helpers ──────────────────────────────────────────────────────────
   const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase'];
 
-  const downloadCsvTemplate = () => {
-    const rows = [
-      CSV_HEADERS.join(','),
-      '"MD-ABC123",Vikram Rao,9876543210,15/03/2025,Arjun Mehta,JP Nagar,Quote Approval Pending,,"Portland Cement 50kg; Binding Wire; Sand","165000",10/04/2025,20/04/2025,Client requested bulk quote|15/03/2025|Arjun Mehta,15/03/2025|Website;18/03/2025|JP Nagar Centre,Home Owner,Apartment,yes,Woodwork',
-      '"MD-DEF456",Anita Deshmukh,9845012345,10/03/2025,Priya Sharma,Whitefield,Order Lost,Pricing Issue,"TMT Steel Bars; Cement","300000",05/04/2025,,,,,Commercial Owner,Commercial,no,Civil & Plumbing',
-    ];
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'materialdepot_crm_template.csv'; a.click();
-    URL.revokeObjectURL(url);
+  // ── Lead export (CSV / Excel / PDF) ──────────────────────────────────────
+  // Build the same query the leads table uses, so "all leads" honours the
+  // active filters/search/sort exactly as shown on screen.
+  const buildLeadsExportQuery = () => {
+    const effectiveBranches = userAllowedBranches.length > 0
+      ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
+      : branchFilter;
+    return {
+      branch: effectiveBranches.join(',') || undefined,
+      bm: personFilter.map((name) => bmNameToPhone[name] || name).join(',') || undefined,
+      q: debouncedSearch || undefined,
+      status: statusFilter.join(',') || undefined,
+      createdFrom: createdDateFrom || undefined,
+      createdTo: createdDateTo || undefined,
+      followupFrom: followUpDateFrom || undefined,
+      followupTo: followUpDateTo || undefined,
+      closureFrom: closureDateFrom || undefined,
+      closureTo: closureDateTo || undefined,
+      cartValueGt: debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined,
+      ownerUserOrgId: currentUser && currentUser.role === 'sales' ? currentUser.id : undefined,
+      sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt'),
+      sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
+      taskFilter: taskFilter || undefined,
+      category: categoryFilter.length ? categoryFilter.join(',') : undefined,
+    };
+  };
+
+  // Page through the backend (max 100/page) to gather every matching lead.
+  const fetchAllFilteredLeads = async (): Promise<Lead[]> => {
+    const base = buildLeadsExportQuery();
+    const all: Lead[] = [];
+    let pageNum = 1;
+    let totalPages = 1;
+    do {
+      const res = await fetchCRMLeads({ ...base, page: pageNum, pageSize: 100 } as any);
+      all.push(...(res.results as Lead[]));
+      totalPages = res.totalPages || 1;
+      pageNum++;
+    } while (pageNum <= totalPages);
+    return all;
+  };
+
+  const exportLeadsCsv = (list: Lead[], filename: string) => {
+    const rows = [CSV_HEADERS, ...list.map(leadToExportRow)];
+    const csv = '﻿' + rows.map((r) => r.map(csvEscape).join(',')).join('\n');
+    triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename + '.csv');
+  };
+
+  const exportLeadsExcel = async (list: Lead[], filename: string) => {
+    const XLSX = await import('xlsx');
+    const rows = [CSV_HEADERS, ...list.map(leadToExportRow)];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = CSV_HEADERS.map(() => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+    XLSX.writeFile(wb, filename + '.xlsx');
+  };
+
+  const exportLeadsPdf = async (list: Lead[], filename: string) => {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a2' });
+    doc.setFontSize(12);
+    doc.text(`MaterialDepot — Leads (${list.length})`, 40, 30);
+    autoTable(doc, {
+      head: [CSV_HEADERS],
+      body: list.map(leadToExportRow),
+      startY: 44,
+      styles: { fontSize: 6, cellPadding: 2, overflow: 'linebreak' },
+      headStyles: { fillColor: [234, 179, 8], textColor: [255, 255, 255], fontSize: 6 },
+      margin: { left: 20, right: 20 },
+    });
+    doc.save(filename + '.pdf');
+  };
+
+  const runLeadsExport = async (format: 'csv' | 'excel' | 'pdf', scope: 'all' | 'page') => {
+    setExportMenuOpen(false);
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const list = scope === 'all' ? await fetchAllFilteredLeads() : leads;
+      if (!list.length) { alert('No leads to export.'); return; }
+      const name = `materialdepot_leads_${scope === 'all' ? 'all' : 'page'}_${todayStr()}`;
+      if (format === 'csv') exportLeadsCsv(list, name);
+      else if (format === 'excel') await exportLeadsExcel(list, name);
+      else await exportLeadsPdf(list, name);
+      if (currentUser) {
+        logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'leads_exported', entityType: 'lead', entityId: null, details: `${list.length} leads exported as ${format} (${scope})` }).catch(console.error);
+      }
+    } catch (e: any) {
+      console.error('Lead export failed:', e);
+      alert('Export failed: ' + (e?.message || e));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const parseCsvLine = (line: string): string[] => {
@@ -2548,7 +2692,50 @@ export default function App() {
             />
             <div className="flex gap-2 items-center ml-auto">
               <MultiSelect options={ALL_COLUMNS.map((c) => c.label)} selected={ALL_COLUMNS.filter((c) => isColVisible(c.key)).map((c) => c.label)} onChange={(labels) => { const keys = ALL_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key); setVisibleCols(keys); localStorage.setItem('materialdepot_cols', JSON.stringify(keys)); }} label="Columns" />
-              <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap" onClick={downloadCsvTemplate}>Download Template</button>
+              <div className="relative">
+                <button className="inline-flex items-center gap-1.5 bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap hover:bg-gray-50 disabled:opacity-50 disabled:cursor-default" disabled={exporting} onClick={() => setExportMenuOpen((o) => !o)}>
+                  <Download size={15} strokeWidth={2} className={exporting ? 'animate-pulse' : ''} />
+                  {exporting ? 'Exporting…' : 'Download'}
+                  <svg width="10" height="10" viewBox="0 0 10 10" className={`ml-0.5 text-gray-400 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`}><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+                {exportMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
+                    <div className="absolute right-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-lg shadow-xl ring-1 ring-black/5 z-50 overflow-hidden">
+                      <div className="px-3.5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Export leads</div>
+                      {/* Scope toggle */}
+                      <div className="px-3 pb-2.5 pt-1">
+                        <div className="flex p-0.5 bg-gray-100 rounded-md text-[12px] font-medium">
+                          <button className={`flex-1 px-2 py-1.5 rounded transition-colors cursor-pointer ${exportScope === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setExportScope('all')}>
+                            All <span className="opacity-60">({leadsTotal})</span>
+                          </button>
+                          <button className={`flex-1 px-2 py-1.5 rounded transition-colors cursor-pointer ${exportScope === 'page' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setExportScope('page')}>
+                            This page <span className="opacity-60">({leads.length})</span>
+                          </button>
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-gray-400 leading-tight px-0.5">
+                          {exportScope === 'all' ? 'Every lead matching your current filters.' : 'Only the leads on the current page.'}
+                        </p>
+                      </div>
+                      <div className="border-t border-gray-100" />
+                      {/* Format rows */}
+                      <div className="py-1">
+                        {([
+                          { fmt: 'csv' as const, label: 'CSV', ext: '.csv', Icon: FileText, color: 'text-sky-600', bg: 'bg-sky-50' },
+                          { fmt: 'excel' as const, label: 'Excel', ext: '.xlsx', Icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                          { fmt: 'pdf' as const, label: 'PDF', ext: '.pdf', Icon: FileType2, color: 'text-rose-600', bg: 'bg-rose-50' },
+                        ]).map(({ fmt, label, ext, Icon, color, bg }) => (
+                          <button key={fmt} className="group w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-left" onClick={() => runLeadsExport(fmt, exportScope)}>
+                            <span className={`flex items-center justify-center w-7 h-7 rounded-md ${bg} ${color}`}><Icon size={15} strokeWidth={2} /></span>
+                            <span className="text-[13px] font-medium text-gray-700">{label}</span>
+                            <span className="ml-auto text-[11px] text-gray-400 font-mono group-hover:text-gray-500">{ext}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
               <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap" onClick={() => { setShowKylasModal(true); setKylasModalInput(''); setKylasModalResult(null); }}>Kylas Sync</button>
