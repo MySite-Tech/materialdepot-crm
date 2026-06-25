@@ -1,24 +1,20 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
+import {
+  fetchNPSTracker, fetchNPSOverview, submitNPS,
+  type NPSRow, type NPSOverview,
+} from '@/lib/mockApi';
 
-// ── Types ───────────────────────────────────────────────────────────────────
-type NpsStatus = 'submitted' | 'pending';
-interface NpsRow {
-  id: string;
-  name: string;
-  contact: string;
-  store: string;
-  visitDate: string; // ISO yyyy-mm-dd
-  time: string;
-  status: NpsStatus;
-  score: number | null;       // Q1: 0-10
-  understood: boolean | null;  // Q2: Yes/No
-  remark: string;              // Q4
-}
+const Q3_OPTIONS = [
+  'Pricing / Budget Expectations',
+  'Collection / Product Preference',
+  'Service & Delivery Timelines',
+  'Sales Experience',
+];
 
 // ── NPS helpers ───────────────────────────────────────────────────────────────
 type Bucket = 'Promoter' | 'Passive' | 'Detractor';
@@ -36,47 +32,12 @@ const BUCKET_TEXT: Record<Bucket, string> = {
   Detractor: 'text-red-600',
 };
 
-const npsScore = (rows: NpsRow[]): number | null => {
-  const scored = rows.filter(r => r.score != null) as (NpsRow & { score: number })[];
-  if (!scored.length) return null;
-  const promoters = scored.filter(r => r.score >= 9).length;
-  const detractors = scored.filter(r => r.score <= 6).length;
-  return Math.round(((promoters - detractors) / scored.length) * 100);
-};
-
 const fmtDate = (d: string) =>
-  new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-// ── Mock data (frontend only — backend wires in later) ───────────────────────
-const MOCK_ROWS: NpsRow[] = [
-  { id: '1', name: 'Rachna Sharma', contact: '+91 9876543210', store: 'JP Nagar', visitDate: '2026-06-25', time: '10:15', status: 'submitted', score: 9, understood: true, remark: 'Very helpful staff.' },
-  { id: '2', name: 'Arjun Mehta', contact: '+91 9845001234', store: 'JP Nagar', visitDate: '2026-06-25', time: '11:30', status: 'submitted', score: 9, understood: true, remark: 'Good range of tiles.' },
-  { id: '3', name: 'Priya Nair', contact: '+91 9900112233', store: 'JP Nagar', visitDate: '2026-06-25', time: '14:00', status: 'submitted', score: 4, understood: false, remark: 'Long wait time.' },
-  { id: '4', name: 'Karan Patel', contact: '+91 9812345678', store: 'Whitefield', visitDate: '2026-06-25', time: '09:45', status: 'submitted', score: 10, understood: true, remark: 'Excellent experience.' },
-  { id: '5', name: 'Sunita Rao', contact: '+91 9988776655', store: 'Whitefield', visitDate: '2026-06-25', time: '13:20', status: 'pending', score: null, understood: null, remark: '' },
-  { id: '6', name: 'Vikram Joshi', contact: '+91 9771234567', store: 'Gachibowli', visitDate: '2026-06-25', time: '10:50', status: 'submitted', score: 8, understood: true, remark: 'Decent, could be faster.' },
-  { id: '7', name: 'Ananya Krishnan', contact: '+91 9654321098', store: 'Gachibowli', visitDate: '2026-06-25', time: '15:05', status: 'pending', score: null, understood: null, remark: '' },
-  { id: '8', name: 'Suresh Kumar', contact: '+91 9811223344', store: 'Yelahanka', visitDate: '2026-06-25', time: '11:10', status: 'submitted', score: 9, understood: true, remark: 'Will recommend.' },
-  { id: '9', name: 'Lakshmi Devi', contact: '+91 9722334455', store: 'Yelahanka', visitDate: '2026-06-25', time: '14:45', status: 'submitted', score: 10, understood: true, remark: 'Loved the collection.' },
-  { id: '10', name: 'Deepak Verma', contact: '+91 9501234567', store: 'JP Nagar', visitDate: '2026-06-05', time: '11:00', status: 'submitted', score: 9, understood: true, remark: '' },
-  { id: '11', name: 'Amit Sharma', contact: '+91 9633445566', store: 'JP Nagar', visitDate: '2026-06-24', time: '10:20', status: 'submitted', score: 9, understood: true, remark: '' },
-  { id: '12', name: 'Pooja Singh', contact: '+91 9544556677', store: 'JP Nagar', visitDate: '2026-06-24', time: '12:05', status: 'submitted', score: 7, understood: true, remark: 'Average.' },
-  { id: '13', name: 'Ramesh Kumar', contact: '+91 9455667788', store: 'JP Nagar', visitDate: '2026-06-24', time: '15:30', status: 'submitted', score: 2, understood: false, remark: 'Not satisfied.' },
-  { id: '14', name: 'Kavitha Reddy', contact: '+91 9366778899', store: 'JP Nagar', visitDate: '2026-06-24', time: '16:00', status: 'pending', score: null, understood: null, remark: '' },
-];
-
-// Daily NPS series for the Overview chart.
-const DAILY_NPS = [
-  { date: '01/06', nps: 100 }, { date: '05/06', nps: 50 }, { date: '07/06', nps: 100 },
-  { date: '09/06', nps: 100 }, { date: '11/06', nps: 0 }, { date: '12/06', nps: -100 },
-  { date: '14/06', nps: 100 }, { date: '16/06', nps: 100 }, { date: '18/06', nps: -100 },
-  { date: '19/06', nps: 100 }, { date: '20/06', nps: 100 }, { date: '21/06', nps: 0 },
-  { date: '22/06', nps: 100 }, { date: '23/06', nps: 50 }, { date: '24/06', nps: 44 },
-  { date: '25/06', nps: 57 },
-];
+  d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtPhone = (c: number | null) => (c == null ? '—' : `+91 ${c}`);
 
 // ── Small UI atoms ────────────────────────────────────────────────────────────
-function StatusPill({ status }: { status: NpsStatus }) {
+function StatusPill({ status }: { status: NPSRow['status'] }) {
   const submitted = status === 'submitted';
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium ${submitted ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
@@ -130,7 +91,7 @@ function StoreDropdown({ stores, value, onChange }: { stores: string[]; value: s
       {open && (
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] py-1 min-w-[160px]">
+          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] py-1 min-w-[160px] max-h-[280px] overflow-y-auto">
             {['All Stores', ...stores].map(s => (
               <button
                 key={s}
@@ -148,18 +109,32 @@ function StoreDropdown({ stores, value, onChange }: { stores: string[]; value: s
 }
 
 // ── Survey modal ──────────────────────────────────────────────────────────────
-function SurveyModal({ row, onClose, onSave }: { row: NpsRow; onClose: () => void; onSave: (r: NpsRow) => void }) {
+function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => void; onSubmit: (payload: { footfall_id: number; score: number | null; understood: boolean | null; better: string[]; remark: string }) => Promise<void> }) {
   const [score, setScore] = useState<number | null>(row.score);
   const [understood, setUnderstood] = useState<boolean | null>(row.understood);
+  const [better, setBetter] = useState<string[]>(row.better ?? []);
   const [remark, setRemark] = useState(row.remark);
+  const [saving, setSaving] = useState(false);
 
   const bucket = score == null ? null : bucketOf(score);
+  const toggleBetter = (opt: string) =>
+    setBetter(b => b.includes(opt) ? b.filter(x => x !== opt) : [...b, opt]);
+
+  const save = async () => {
+    if (score == null) return;
+    setSaving(true);
+    try {
+      await onSubmit({ footfall_id: row.id, score, understood, better, remark });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-black/40 py-10 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[640px] my-auto">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[640px] max-h-[90vh] flex flex-col">
         {/* header */}
-        <div className="flex items-start justify-between px-6 pt-5 pb-3">
+        <div className="flex items-start justify-between px-6 pt-5 pb-3 shrink-0">
           <div>
             <h2 className="text-[18px] font-bold text-gray-900">NPS Survey</h2>
             <p className="text-[13px] text-gray-400 mt-0.5">Collect feedback from the customer.</p>
@@ -167,9 +142,11 @@ function SurveyModal({ row, onClose, onSave }: { row: NpsRow; onClose: () => voi
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer">×</button>
         </div>
 
+        {/* scrollable body */}
+        <div className="overflow-y-auto flex-1">
         {/* visitor info */}
         <div className="px-6 grid grid-cols-2 gap-y-3 gap-x-6 pb-5">
-          {[['Name', row.name], ['Phone', row.contact], ['Store', row.store], ['Visit Date', fmtDate(row.visitDate)]].map(([k, v]) => (
+          {[['Name', row.name || '—'], ['Phone', fmtPhone(row.contact)], ['Store', row.store || '—'], ['Visit Date', fmtDate(row.visit_date)]].map(([k, v]) => (
             <div key={k}>
               <div className="text-[12px] text-gray-400">{k}</div>
               <div className="text-[14px] text-gray-900 font-medium mt-0.5">{v}</div>
@@ -204,7 +181,7 @@ function SurveyModal({ row, onClose, onSave }: { row: NpsRow; onClose: () => voi
             <div className="text-[15px] font-bold text-gray-900">Q2. Did our team understand what you were looking for? <span className="text-red-500">*</span></div>
             <div className="flex gap-3 mt-3">
               <button
-                onClick={() => setUnderstood(true)}
+                onClick={() => { setUnderstood(true); setBetter([]); }}
                 className={`px-7 py-2.5 rounded-lg text-[14px] font-semibold border cursor-pointer transition-colors ${understood === true ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'}`}
               >Yes</button>
               <button
@@ -213,6 +190,30 @@ function SurveyModal({ row, onClose, onSave }: { row: NpsRow; onClose: () => voi
               >No</button>
             </div>
           </div>
+
+          {/* Q3 — only when Q2 = No */}
+          {understood === false && (
+          <div>
+            <div className="text-[15px] font-bold text-gray-900">Q3. What could we have done better? <span className="text-[13px] font-normal text-gray-400">(optional)</span></div>
+            <div className="space-y-2 mt-3">
+              {Q3_OPTIONS.map(opt => {
+                const checked = better.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => toggleBetter(opt)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left cursor-pointer transition-colors ${checked ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}>
+                      {checked && <span className="text-white text-[10px] leading-none">✓</span>}
+                    </span>
+                    <span className="text-[14px] text-gray-800 font-medium">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          )}
 
           {/* Q4 */}
           <div>
@@ -225,18 +226,20 @@ function SurveyModal({ row, onClose, onSave }: { row: NpsRow; onClose: () => voi
             />
           </div>
         </div>
+        </div>
 
         {/* footer */}
-        <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100">
+        <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
           <div className="flex items-center gap-2 mr-auto">
             <ResultPill score={score} />
             {row.status === 'submitted' && <span className="text-[13px] text-gray-400">Submitted — you can correct it.</span>}
           </div>
           <button onClick={onClose} className="px-5 py-2 rounded-lg text-[14px] font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 cursor-pointer">Cancel</button>
           <button
-            onClick={() => onSave({ ...row, score, understood, remark, status: score != null ? 'submitted' : 'pending' })}
-            className="px-6 py-2 rounded-lg text-[14px] font-semibold text-white bg-gray-900 hover:bg-black cursor-pointer"
-          >Update</button>
+            onClick={save}
+            disabled={score == null || saving}
+            className="px-6 py-2 rounded-lg text-[14px] font-semibold text-white bg-gray-900 hover:bg-black cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >{saving ? 'Saving…' : 'Update'}</button>
         </div>
       </div>
     </div>
@@ -249,30 +252,66 @@ interface NPSDashboardProps {
   allowedBranches?: string[];
 }
 
-export default function NPSDashboard({ branches = [] }: NPSDashboardProps) {
-  const [rows, setRows] = useState<NpsRow[]>(MOCK_ROWS);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const monthStartISO = () => todayISO().slice(0, 8) + '01';
+
+export default function NPSDashboard({ branches = [], allowedBranches = [] }: NPSDashboardProps) {
+  // Restricted users (allowedBranches set) only see their branches; everyone else sees all.
+  const branchOptions = allowedBranches.length > 0 ? allowedBranches : branches;
+
   const [tab, setTab] = useState<'tracker' | 'overview'>('tracker');
   const [store, setStore] = useState('All Stores');
-  const [from, setFrom] = useState('2026-06-01');
-  const [to, setTo] = useState('2026-06-25');
+  const [from, setFrom] = useState(monthStartISO());
+  const [to, setTo] = useState(todayISO());
   const [search, setSearch] = useState('');
-  const [active, setActive] = useState<NpsRow | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const storeOptions = branches.length ? branches : Array.from(new Set(MOCK_ROWS.map(r => r.store)));
+  const [rows, setRows] = useState<NPSRow[]>([]);
+  const [overview, setOverview] = useState<NPSOverview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [active, setActive] = useState<NPSRow | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows.filter(r => {
-      if (store !== 'All Stores' && r.store !== store) return false;
-      if (from && r.visitDate < from) return false;
-      if (to && r.visitDate > to) return false;
-      if (q && !r.name.toLowerCase().includes(q) && !r.contact.includes(q)) return false;
-      return true;
-    });
-  }, [rows, store, from, to, search]);
+  // Debounce only the search text; branch/date filters apply immediately.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const overall = npsScore(filtered);
-  const submittedCount = filtered.filter(r => r.status === 'submitted').length;
+  // "All Stores" → scope to the user's allowed branches if restricted, else no filter (all stores).
+  const effectiveBranches = store !== 'All Stores'
+    ? [store]
+    : (allowedBranches.length > 0 ? allowedBranches : undefined);
+  const branchKey = (effectiveBranches ?? []).join(',');
+
+  const loadTracker = useCallback(() => {
+    setLoading(true);
+    fetchNPSTracker({ branches: branchKey ? branchKey.split(',') : undefined, from, to, search: debouncedSearch })
+      .then(setRows)
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [branchKey, from, to, debouncedSearch]);
+
+  const loadOverview = useCallback(() => {
+    fetchNPSOverview({ branches: branchKey ? branchKey.split(',') : undefined, from, to })
+      .then(setOverview)
+      .catch(() => setOverview(null));
+  }, [branchKey, from, to]);
+
+  // Tracker — fires immediately on filter change; search is pre-debounced.
+  useEffect(() => {
+    if (tab === 'tracker') loadTracker();
+  }, [tab, loadTracker]);
+
+  // Overview — on filter changes.
+  useEffect(() => {
+    if (tab === 'overview') loadOverview();
+  }, [tab, loadOverview]);
+
+  const handleSubmit = async (payload: { footfall_id: number; score: number | null; understood: boolean | null; better: string[]; remark: string }) => {
+    await submitNPS(payload);
+    setActive(null);
+    loadTracker();
+  };
 
   return (
     <div className="px-3 py-4 sm:px-6 sm:py-6 max-w-[1400px] mx-auto">
@@ -282,7 +321,7 @@ export default function NPSDashboard({ branches = [] }: NPSDashboardProps) {
 
       {/* filters */}
       <div className="flex flex-wrap items-center gap-3 mt-4">
-        <StoreDropdown stores={storeOptions} value={store} onChange={setStore} />
+        <StoreDropdown stores={branchOptions} value={store} onChange={setStore} />
         <div className="flex items-center gap-2">
           <span className="text-[13px] text-gray-400">From</span>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
@@ -329,20 +368,23 @@ export default function NPSDashboard({ branches = [] }: NPSDashboardProps) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(r => (
+                {rows.map(r => (
                   <tr key={r.id} onClick={() => setActive(r)}
                     className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
-                    <td className="px-5 py-3.5 text-[14px] font-semibold text-gray-900">{r.name}</td>
-                    <td className="px-5 py-3.5 text-[14px] text-gray-600">{r.contact}</td>
-                    <td className="px-5 py-3.5 text-[14px] text-gray-600">{r.store}</td>
-                    <td className="px-5 py-3.5 text-[14px] text-gray-600">{fmtDate(r.visitDate)}</td>
+                    <td className="px-5 py-3.5 text-[14px] font-semibold text-gray-900">{r.name || '—'}</td>
+                    <td className="px-5 py-3.5 text-[14px] text-gray-600">{fmtPhone(r.contact)}</td>
+                    <td className="px-5 py-3.5 text-[14px] text-gray-600">{r.store || '—'}</td>
+                    <td className="px-5 py-3.5 text-[14px] text-gray-600">{fmtDate(r.visit_date)}</td>
                     <td className="px-5 py-3.5 text-[14px] text-gray-500">{r.time}</td>
                     <td className="px-5 py-3.5"><StatusPill status={r.status} /></td>
                     <td className="px-5 py-3.5"><ResultPill score={r.score} /></td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {!loading && rows.length === 0 && (
                   <tr><td colSpan={7} className="px-5 py-10 text-center text-[13px] text-gray-400">No responses for this filter.</td></tr>
+                )}
+                {loading && (
+                  <tr><td colSpan={7} className="px-5 py-10 text-center text-[13px] text-gray-400">Loading…</td></tr>
                 )}
               </tbody>
             </table>
@@ -354,20 +396,19 @@ export default function NPSDashboard({ branches = [] }: NPSDashboardProps) {
       {tab === 'overview' && (
         <div className="mt-5 space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Today" value={overall} responses={submittedCount} />
-            <StatCard label="Yesterday" value={43} responses={7} />
-            <StatCard label="Day Before" value={50} responses={8} />
-            <StatCard label="1 Month" value={51} responses={37}
-              trailing={<span className="text-[11px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">1 mo ▾</span>} />
+            <StatCard label="Today" value={overview?.today.nps ?? null} responses={overview?.today.responses ?? 0} />
+            <StatCard label="Yesterday" value={overview?.yesterday.nps ?? null} responses={overview?.yesterday.responses ?? 0} />
+            <StatCard label="Day Before" value={overview?.day_before.nps ?? null} responses={overview?.day_before.responses ?? 0} />
+            <StatCard label="1 Month" value={overview?.month.nps ?? null} responses={overview?.month.responses ?? 0}
+              trailing={<span className="text-[11px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">1 mo</span>} />
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[14px] font-bold text-gray-900">Daily NPS</h3>
-              <span className="text-[12px] text-gray-400">NPS trending down this period (recent avg +44).</span>
             </div>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={DAILY_NPS} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+              <LineChart data={overview?.daily ?? []} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
                 <YAxis domain={[-100, 100]} ticks={[-100, -50, 0, 50, 100]} tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
@@ -384,7 +425,7 @@ export default function NPSDashboard({ branches = [] }: NPSDashboardProps) {
         <SurveyModal
           row={active}
           onClose={() => setActive(null)}
-          onSave={(updated) => { setRows(rs => rs.map(r => r.id === updated.id ? updated : r)); setActive(null); }}
+          onSubmit={handleSubmit}
         />
       )}
     </div>

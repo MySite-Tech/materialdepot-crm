@@ -1620,7 +1620,7 @@ export default function App() {
   const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
@@ -2561,7 +2561,7 @@ export default function App() {
       )}
 
       {mainTab === 'nps' && (
-        <NPSDashboard branches={branches} allowedBranches={userAllowedBranches} />
+        <NPSDashboard branches={branches} allowedBranches={['admin', 'superadmin', 'tech'].includes(currentUser?.role ?? '') ? [] : userAllowedBranches} />
       )}
 
       {mainTab === 'admin' && allowedTabs.includes('admin') && (
