@@ -9,6 +9,7 @@ import { logActivity, fetchActivityLogs } from '../lib/supabase';
 import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, clearToken, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallDashboard from './FootfallDashboard';
+import NPSDashboard from './NPSDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
 import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
@@ -98,14 +99,14 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
-  retail:       ['storeVisit','footfall'],
+  retail:       ['storeVisit','footfall', 'nps'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
@@ -2520,7 +2521,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }])
           .filter(t => allowedTabs.includes(t.key))
           .map(t => (
             <button
@@ -2557,6 +2558,10 @@ export default function App() {
 
       {mainTab === 'storeVisit' && (
         <StoreVisitWrapper />
+      )}
+
+      {mainTab === 'nps' && (
+        <NPSDashboard branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
       {mainTab === 'admin' && allowedTabs.includes('admin') && (
