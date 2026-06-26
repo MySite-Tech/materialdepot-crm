@@ -253,7 +253,6 @@ interface NPSDashboardProps {
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const monthStartISO = () => todayISO().slice(0, 8) + '01';
 
 export default function NPSDashboard({ branches = [], allowedBranches = [] }: NPSDashboardProps) {
   // Restricted users (allowedBranches set) only see their branches; everyone else sees all.
@@ -261,7 +260,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
 
   const [tab, setTab] = useState<'tracker' | 'overview'>('tracker');
   const [store, setStore] = useState('All Stores');
-  const [from, setFrom] = useState(monthStartISO());
+  const [from, setFrom] = useState(todayISO());
   const [to, setTo] = useState(todayISO());
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
