@@ -416,13 +416,15 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         ? (existing as { id: number; name: string }[])
         : [];
 
-      const reRaiseIndices = selectedOptions
-        .map((opt) => existingArr.findIndex((e) => e.id === opt.id))
-        .filter((i) => i !== -1)
-        .sort((a, b) => b - a); // descending so indices stay valid while removing
-      if (reRaiseIndices.length > 0) {
+      const activeIds = new Set(RAISE_OPTIONS.map((o) => o.id));
+      const removeIndices = existingArr
+        .map((e, i) => ({ e, i }))
+        .filter(({ e }) => !activeIds.has(e.id) || selectedOptions.some((o) => o.id === e.id))
+        .map(({ i }) => i)
+        .sort((a, b) => b - a);
+      if (removeIndices.length > 0) {
         await patchDeal(
-          reRaiseIndices.map((i) => ({ op: "remove", path: `/customFieldValues/${field}/${i}` }))
+          removeIndices.map((i) => ({ op: "remove", path: `/customFieldValues/${field}/${i}` }))
         );
       }
 
@@ -438,7 +440,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       await patchDeal(patchOps);
 
       const mergedValue = [
-        ...existingArr.filter((e) => !selectedOptions.some((o) => o.id === e.id)),
+        ...existingArr.filter((e) => activeIds.has(e.id) && !selectedOptions.some((o) => o.id === e.id)),
         ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
       ];
       setSubmitSuccess(dealId);
