@@ -422,27 +422,25 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         .filter(({ e }) => !activeIds.has(e.id) || selectedOptions.some((o) => o.id === e.id))
         .map(({ i }) => i)
         .sort((a, b) => b - a);
-      if (removeIndices.length > 0) {
-        await patchDeal(
-          removeIndices.map((i) => ({ op: "remove", path: `/customFieldValues/${field}/${i}` }))
-        );
-      }
-
-      const patchOps = [
-        ...(existingArr.length > 0 ? [] : [{ op: "add", path: `/customFieldValues/${field}`, value: [] }]),
-        ...selectedOptions.map((opt) => ({
-          op: "add" as const,
-          path: `/customFieldValues/${field}/-`,
-          value: { id: opt.id, name: opt.name },
-        })),
-        { op: "add" as const, path: `/customFieldValues/cfRequestType`, value: requestType },
-      ];
-      await patchDeal(patchOps);
 
       const mergedValue = [
         ...existingArr.filter((e) => activeIds.has(e.id) && !selectedOptions.some((o) => o.id === e.id)),
         ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
       ];
+
+      // Two saves on purpose: PATCH 1 removes (so re-raising the same tag registers
+      // as a genuine change), PATCH 2 adds it back. Removing the last element makes
+      // Kylas drop the field to null, so PATCH 2 sets the WHOLE array — a `/-` append
+      // to a null field is rejected with `invalid.patch.request`.
+      if (removeIndices.length > 0) {
+        await patchDeal(
+          removeIndices.map((i) => ({ op: "remove", path: `/customFieldValues/${field}/${i}` }))
+        );
+      }
+      await patchDeal([
+        { op: "add", path: `/customFieldValues/${field}`, value: mergedValue },
+        { op: "add", path: `/customFieldValues/cfRequestType`, value: requestType },
+      ]);
       setSubmitSuccess(dealId);
       setTimeout(() => setSubmitSuccess(null), 3000);
       // Patch local state — avoid re-running the full fetch flow
