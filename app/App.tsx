@@ -8,7 +8,7 @@ import 'react-day-picker/style.css';
 import { logActivity, fetchActivityLogs } from '../lib/supabase';
 import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, clearToken, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
 import Dashboard from './Dashboard';
-import FootfallDashboard from './FootfallDashboard';
+import FootfallTab from './FootfallTab';
 import NPSDashboard from './NPSDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
 import ReportCardDashboard from './ReportCardDashboard';
@@ -2545,7 +2545,7 @@ export default function App() {
       )}
 
       {mainTab === 'footfall' && (
-        <FootfallDashboard branches={branches} allowedBranches={userAllowedBranches} />
+        <FootfallTab branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
       {mainTab === 'weeklyFunnel' && (

@@ -570,6 +570,56 @@ export async function fetchFootfallNonConverted(
   return mdFetch(`/crm/footfall-non-converted/${qs ? `?${qs}` : ''}`);
 }
 
+export interface FootfallRepeatRow {
+  bucket: string;
+  unique_clients: number;
+  orders_current: number;
+  orders_till_last: number;
+  sales_current: number;
+  sales_till_last: number;
+  aov_current: number;
+  aov_till_last: number;
+}
+export interface FootfallRepeatData {
+  rows: FootfallRepeatRow[];
+  total: FootfallRepeatRow;
+  current_month: string;
+}
+export async function fetchFootfallRepeat(
+  filters: { branch?: string[]; dateFrom?: string; dateTo?: string } = {},
+): Promise<FootfallRepeatData> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  const qs = params.toString();
+  return mdFetch(`/crm/footfall-repeat/${qs ? `?${qs}` : ''}`);
+}
+
+export type FootfallBreakdownKind = 'int' | 'money' | 'pct';
+export interface FootfallBreakdownRow {
+  key: string;
+  label: string;
+  comment: string;
+  kind: FootfallBreakdownKind;
+  values: Record<string, number>;
+  total: number;
+}
+export interface FootfallBreakdownData {
+  stores: string[];
+  rows: FootfallBreakdownRow[];
+}
+export async function fetchFootfallBreakdown(filters: FootfallFilters = {}): Promise<FootfallBreakdownData> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.bm?.length) params.set('bm', filters.bm.join(','));
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.category?.length) params.set('category', filters.category.join(','));
+  const qs = params.toString();
+  return mdFetch(`/crm/footfall-breakdown/${qs ? `?${qs}` : ''}`);
+}
+
 export async function fetchFootfallDashboard(filters: FootfallFilters = {}): Promise<FootfallDashboardData> {
   const params = new URLSearchParams();
   if (filters.branch?.length) params.set('branch', filters.branch.join(','));
