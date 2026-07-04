@@ -2538,8 +2538,9 @@ export default function App() {
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
         {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
-          .filter(t => allowedTabs.includes(t.key))
-          .filter(t => t.key !== 'appointmentTracker' || APPOINTMENT_TRACKER_ALLOWED_PHONES.has(String(currentUser?.phone ?? '').replace(/\D/g, '').slice(-10)))
+          .filter(t => t.key === 'appointmentTracker'
+            ? APPOINTMENT_TRACKER_ALLOWED_PHONES.has(String(currentUser?.phone ?? '').replace(/\D/g, '').slice(-10))
+            : allowedTabs.includes(t.key))
           .map(t => (
             <button
               key={t.key}
@@ -2587,7 +2588,7 @@ export default function App() {
 
       {mainTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
 
-      {mainTab === 'appointmentTracker' && (
+      {mainTab === 'appointmentTracker' && APPOINTMENT_TRACKER_ALLOWED_PHONES.has(String(currentUser?.phone ?? '').replace(/\D/g, '').slice(-10)) && (
         <div className="h-[calc(100vh-84px)] w-full">
           <iframe
             src={APPOINTMENT_TRACKER_URL}
