@@ -105,13 +105,13 @@ function DateChip({
 // ── Table ─────────────────────────────────────────────────────────────────────
 
 const COLS: Array<{ key: keyof FootfallRepeatRow; label: string; kind: 'int' | 'money' }> = [
-  { key: 'unique_clients',   label: 'Total Unique Clients',        kind: 'int' },
-  { key: 'orders_current',   label: 'Orders Current Month',        kind: 'int' },
-  { key: 'orders_till_last', label: 'Total Orders Till Last Month', kind: 'int' },
-  { key: 'sales_current',    label: 'Current Month Sales',         kind: 'money' },
-  { key: 'sales_till_last',  label: 'Total Sales Till Last Month',  kind: 'money' },
-  { key: 'aov_current',      label: 'AOV Current',                 kind: 'money' },
-  { key: 'aov_till_last',    label: 'AOV Till Last Month',         kind: 'money' },
+  { key: 'unique_clients',   label: 'Total Unique Clients',   kind: 'int' },
+  { key: 'orders_current',   label: 'Orders Current Month(s)', kind: 'int' },
+  { key: 'orders_till_last', label: 'Orders Prev Month(s)',    kind: 'int' },
+  { key: 'sales_current',    label: 'Sales Current Month(s)',  kind: 'money' },
+  { key: 'sales_till_last',  label: 'Sales Prev Month(s)',     kind: 'money' },
+  { key: 'aov_current',      label: 'AOV Current Month(s)',    kind: 'money' },
+  { key: 'aov_till_last',    label: 'AOV Prev Month(s)',       kind: 'money' },
 ];
 
 function cell(row: FootfallRepeatRow, col: (typeof COLS)[number]) {
@@ -177,7 +177,7 @@ export default function FootfallRepeatDashboard({ branches, allowedBranches }: P
         )}
         <span className="flex items-center gap-2 text-[11px] text-gray-400 font-mono shrink-0 ml-auto">
           {loading && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
-          {data ? `Current month: ${data.current_month}` : '—'}
+          {data ? `Months: ${data.current_month}` : '—'}
         </span>
       </div>
 
