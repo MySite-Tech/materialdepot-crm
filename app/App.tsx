@@ -99,16 +99,32 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps' | 'appointmentTracker';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps', 'appointmentTracker'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps', 'appointmentTracker'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['storeVisit','footfall', 'nps'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
+
+const APPOINTMENT_TRACKER_URL = 'https://kylas-dashboard.vercel.app/dashboard/appointment-tracker';
+
+// Only these users see the Appointment Tracker tab (in addition to role gating).
+// Mirrors the hardcoded DEFAULT_ACCESS list in the appointment-tracker repo
+// (src/lib/appt-shared.ts). Matched to CRM login phone numbers from the
+// user_organisation table.
+const APPOINTMENT_TRACKER_ALLOWED_PHONES = new Set<string>([
+  '6366310816', // Harshit Naik
+  '8617025960', // Arpan
+  '9301938525', // Dhruv Gangrade
+  '6379016318', // Kousika Krishnasami
+  '9606009385', // Kousika (alt account)
+  '9738365231', // Vidyasagar (alternate)
+  '9606948932', // Vidyasagar (alternate)
+]);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -1620,7 +1636,7 @@ export default function App() {
   const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
@@ -2521,8 +2537,9 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
           .filter(t => allowedTabs.includes(t.key))
+          .filter(t => t.key !== 'appointmentTracker' || APPOINTMENT_TRACKER_ALLOWED_PHONES.has(String(currentUser?.phone ?? '').replace(/\D/g, '').slice(-10)))
           .map(t => (
             <button
               key={t.key}
@@ -2569,6 +2586,16 @@ export default function App() {
       )}
 
       {mainTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
+
+      {mainTab === 'appointmentTracker' && (
+        <div className="h-[calc(100vh-84px)] w-full">
+          <iframe
+            src={APPOINTMENT_TRACKER_URL}
+            title="Appointment Tracker"
+            className="w-full h-full border-0"
+          />
+        </div>
+      )}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200">
