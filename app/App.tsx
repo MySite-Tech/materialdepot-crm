@@ -1658,6 +1658,7 @@ export default function App() {
   const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
+  const [permsLoaded, setPermsLoaded] = useState(false);
   const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
@@ -1682,15 +1683,36 @@ export default function App() {
       const stored = localStorage.getItem('materialdepot_user');
       if (stored) {
         const parsed = JSON.parse(stored);
-        setCurrentUser({ ...parsed, allowedBranches: parsed.allowedBranches || [], individualPermissions: parsed.individualPermissions || [] });
+        setCurrentUser({ ...parsed, allowedBranches: parsed.allowedBranches || [], individualPermissions: undefined });
+        if (parsed?.phone) {
+          loginWithPhone(String(parsed.phone))
+            .then((fresh) => {
+              if (fresh) {
+                const merged: AppUser = {
+                  ...fresh,
+                  allowedBranches: fresh.allowedBranches || [],
+                  individualPermissions: fresh.individualPermissions || [],
+                };
+                setCurrentUser(merged);
+                localStorage.setItem('materialdepot_user', JSON.stringify(merged));
+              }
+            })
+            .catch(() => {/* keep cached identity on transient failure */})
+            .finally(() => setPermsLoaded(true));
+        } else {
+          setPermsLoaded(true);
+        }
+      } else {
+        setPermsLoaded(true);
       }
-    } catch {}
+    } catch { setPermsLoaded(true); }
     setUserLoaded(true);
   }, []);
 
   const handleLogin = (user: AppUser) => {
     const userData: AppUser = { id: user.id, name: user.name, phone: user.phone, role: user.role, allowedBranches: user.allowedBranches || [], individualPermissions: user.individualPermissions || [] };
     setCurrentUser(userData);
+    setPermsLoaded(true);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
     // Reset all filters so previous user's state doesn't bleed into the new session
     setSearch('');
@@ -2539,6 +2561,11 @@ export default function App() {
 
   if (!userLoaded) return null;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
+  // Wait for fresh permissions before rendering gated UI (avoids showing stale
+  // cached permissions for a moment on reload).
+  if (!permsLoaded) return (
+    <div className="flex items-center justify-center h-screen text-sm text-gray-400">Loading…</div>
+  );
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
