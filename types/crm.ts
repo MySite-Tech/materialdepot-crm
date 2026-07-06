@@ -46,6 +46,7 @@ export interface AppUser {
   phone: string;
   role: string;
   allowedBranches?: string[];
+  individualPermissions?: string[];
 }
 
 export interface Branch {

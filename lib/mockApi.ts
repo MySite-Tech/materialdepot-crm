@@ -774,6 +774,7 @@ export async function loginWithPhone(phone: string): Promise<import('../types/cr
       phone: data.phone,
       role: data.role,
       allowedBranches: data.allowedBranches || [],
+      individualPermissions: data.individualPermissions || [],
     };
   } catch {
     return null;
@@ -804,6 +805,9 @@ function _mapUserOrg(u: Record<string, unknown>): import('../types/crm').AppUser
     phone: String(user?.contact || ''),
     role,
     allowedBranches: branches.map((b) => b.branch_name as string).filter(Boolean),
+    individualPermissions: Array.isArray(u.individual_permissions)
+      ? (u.individual_permissions as string[])
+      : [],
   };
 }
 

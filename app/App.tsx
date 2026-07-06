@@ -101,30 +101,40 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 // Keys match the mainTab union; values are the tab keys visible to that role.
 type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps' | 'appointmentTracker';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps', 'appointmentTracker'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps', 'appointmentTracker'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['storeVisit','footfall', 'nps'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
-const APPOINTMENT_TRACKER_URL = 'https://kylas-dashboard.vercel.app/dashboard/appointment-tracker';
+const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
+  ['crm.leads', 'leads'],
+  ['crm.dashboard', 'dashboard'],
+  ['crm.footfall', 'footfall'],
+  ['crm.weekly_funnel', 'weeklyFunnel'],
+  ['crm.report_card', 'reportCard'],
+  ['crm.store_visit', 'storeVisit'],
+  ['crm.sales', 'sales'],
+  ['crm.admin', 'admin'],
+  ['crm.nps', 'nps'],
+  ['crm.appointment_tracker', 'appointmentTracker'],
+];
 
-// Only these users see the Appointment Tracker tab (in addition to role gating).
-// Mirrors the hardcoded DEFAULT_ACCESS list in the appointment-tracker repo
-// (src/lib/appt-shared.ts). Matched to CRM login phone numbers from the
-// user_organisation table.
-const APPOINTMENT_TRACKER_ALLOWED_PHONES = new Set<string>([
-  '6366310816', // Harshit Naik
-  '8617025960', // Arpan
-  '9301938525', // Dhruv Gangrade
-  '6379016318', // Kousika Krishnasami
-  '9606009385', // Kousika (alt account)
-  '9738365231', // Vidyasagar (alternate)
-  '9606948932', // Vidyasagar (alternate)
-]);
+// Resolve the tabs a user may see. Per-user CRM permissions win when present;
+// otherwise fall back to the role-based defaults.
+const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
+  const perms = user?.individualPermissions;
+  if (Array.isArray(perms) && perms.length > 0) {
+    const set = new Set(perms);
+    return PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
+  }
+  return ROLE_TABS[user?.role ?? ''] ?? DEFAULT_ROLE_TABS;
+};
+
+const APPOINTMENT_TRACKER_URL = 'https://kylas-dashboard.vercel.app/dashboard/appointment-tracker';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -138,6 +148,18 @@ const daysSinceCreated = (createdAt?: string): number => {
 };
 const canMarkLostByAge = (createdAt?: string, isAdmin = false): boolean =>
   isAdmin || daysSinceCreated(createdAt) >= MIN_LOST_AGE_DAYS;
+
+// Roles allowed to mark a deal lost regardless of its age (admins and managers).
+// Fallback roles for the "mark lost within 30 days" bypass, used only when a
+// user has no individual permissions set.
+const LOST_AGE_BYPASS_ROLES = new Set(['admin', 'manager']);
+const MARK_LOST_BYPASS_SLUG = 'crm.mark_lost_bypass_age';
+// Per-user permission wins when present; otherwise fall back to role.
+const canBypassLostAge = (user?: AppUser | null): boolean => {
+  const perms = user?.individualPermissions;
+  if (Array.isArray(perms) && perms.length > 0) return perms.includes(MARK_LOST_BYPASS_SLUG);
+  return LOST_AGE_BYPASS_ROLES.has(user?.role ?? '');
+};
 
 const genId = (): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -580,7 +602,7 @@ interface LeadDrawerProps {
 function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = canBypassLostAge(currentUser);
   const [form, setForm] = useState<Lead>(() => lead ? {
     ...lead,
     branch: lead.branch || (branches[0] || ''),
@@ -770,7 +792,7 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
                   <div className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md bg-gray-50 text-gray-500 w-full">
                     {form.status}
                     {MARK_LOST_ELIGIBLE.has(form.status) && !canMarkLostByAge(form.createdAt, isAdmin) && (
-                      <span className="block text-[10px] text-gray-400 mt-0.5">Only admins can mark lost within {MIN_LOST_AGE_DAYS} days of cart creation</span>
+                      <span className="block text-[10px] text-gray-400 mt-0.5">Only admins and managers can mark lost within {MIN_LOST_AGE_DAYS} days of cart creation</span>
                     )}
                   </div>
                 )}
@@ -1650,8 +1672,9 @@ export default function App() {
     }
   }, [mainTab]);
 
-  // Derive allowed tabs for the current user's role
-  const allowedTabs = ROLE_TABS[currentUser?.role ?? ''] ?? DEFAULT_ROLE_TABS;
+  // Derive allowed tabs — per-user CRM permissions override role defaults.
+  const allowedTabs = resolveAllowedTabs(currentUser);
+  const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
   const [dashLogs, setDashLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
@@ -1659,14 +1682,14 @@ export default function App() {
       const stored = localStorage.getItem('materialdepot_user');
       if (stored) {
         const parsed = JSON.parse(stored);
-        setCurrentUser({ ...parsed, allowedBranches: parsed.allowedBranches || [] });
+        setCurrentUser({ ...parsed, allowedBranches: parsed.allowedBranches || [], individualPermissions: parsed.individualPermissions || [] });
       }
     } catch {}
     setUserLoaded(true);
   }, []);
 
   const handleLogin = (user: AppUser) => {
-    const userData: AppUser = { id: user.id, name: user.name, phone: user.phone, role: user.role, allowedBranches: user.allowedBranches || [] };
+    const userData: AppUser = { id: user.id, name: user.name, phone: user.phone, role: user.role, allowedBranches: user.allowedBranches || [], individualPermissions: user.individualPermissions || [] };
     setCurrentUser(userData);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
     // Reset all filters so previous user's state doesn't bleed into the new session
@@ -1684,9 +1707,9 @@ export default function App() {
     setTaskFilter('');
     setCategoryFilter([]);
     setPage(0);
-    // Land on the first tab the role has access to
-    const firstTab = (ROLE_TABS[user.role] ?? DEFAULT_ROLE_TABS)[0];
-    if (firstTab !== 'sales') setMainTab(firstTab);
+    // Land on the first tab the user has access to
+    const firstTab = resolveAllowedTabs(userData)[0];
+    if (firstTab && firstTab !== 'sales') setMainTab(firstTab);
     logActivity({ userId: user.id, userName: user.name, action: 'user_login', entityType: 'user', entityId: user.id, details: user.name + ' logged in' }).catch(console.error);
   };
 
@@ -2029,8 +2052,8 @@ export default function App() {
   const saveLead = (formData: Lead) => {
     const existing = leads.find((l) => l.id === formData.id && l.clientPhone === formData.clientPhone) || leads.find((l) => l.id === formData.id);
     const isNew = !existing;
-    if (formData.status === 'Order Lost' && existing?.status !== 'Order Lost' && !canMarkLostByAge(existing?.createdAt ?? formData.createdAt, isAdminUser)) {
-      alert(`Only admins can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
+    if (formData.status === 'Order Lost' && existing?.status !== 'Order Lost' && !canMarkLostByAge(existing?.createdAt ?? formData.createdAt, canBypassLostAge(currentUser))) {
+      alert(`Only admins and managers can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
       return;
     }
     const finalData = existing ? mergeLead(existing, formData) : formData;
@@ -2089,8 +2112,8 @@ export default function App() {
     const userName = currentUser ? currentUser.name : '';
     const oldLead = leads.find((l) => l.id === id);
     const oldStatus = oldLead ? oldLead.status : '';
-    if (newStatus === 'Order Lost' && !canMarkLostByAge(oldLead?.createdAt, isAdminUser)) {
-      alert(`Only admins can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
+    if (newStatus === 'Order Lost' && !canMarkLostByAge(oldLead?.createdAt, canBypassLostAge(currentUser))) {
+      alert(`Only admins and managers can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
       return;
     }
     setLeads((prev) => {
@@ -2539,7 +2562,7 @@ export default function App() {
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
         {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
           .filter(t => t.key === 'appointmentTracker'
-            ? APPOINTMENT_TRACKER_ALLOWED_PHONES.has(String(currentUser?.phone ?? '').replace(/\D/g, '').slice(-10))
+            ? canSeeAppointmentTracker
             : allowedTabs.includes(t.key))
           .map(t => (
             <button
@@ -2588,7 +2611,7 @@ export default function App() {
 
       {mainTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
 
-      {mainTab === 'appointmentTracker' && APPOINTMENT_TRACKER_ALLOWED_PHONES.has(String(currentUser?.phone ?? '').replace(/\D/g, '').slice(-10)) && (
+      {mainTab === 'appointmentTracker' && canSeeAppointmentTracker && (
         <div className="h-[calc(100vh-84px)] w-full">
           <iframe
             src={APPOINTMENT_TRACKER_URL}
@@ -2896,7 +2919,7 @@ export default function App() {
                     </td>}
                     {isColVisible('projectPhase') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.projectPhase || '—'}</td>}
                     {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
-                      <EditableStatus status={l.status} lostReason={l.lostReason} createdAt={l.createdAt} isAdmin={isAdminUser} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
+                      <EditableStatus status={l.status} lostReason={l.lostReason} createdAt={l.createdAt} isAdmin={canBypassLostAge(currentUser)} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
                     </td>}
                     {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[200px]">
                       <span className="whitespace-nowrap overflow-hidden text-ellipsis block">
