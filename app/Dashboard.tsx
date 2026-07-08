@@ -16,6 +16,7 @@ import {
   type DashboardLostReason,
   type DashboardClosureLead,
 } from '@/lib/mockApi';
+import OrderLostDashboard from './OrderLostDashboard';
 
 const fmtINR = (n?: number | null) => {
   if (!n) return '₹0';
@@ -273,9 +274,11 @@ interface DashboardProps {
   logs: ActivityLog[];
   branches: string[];
   allowedBranches?: string[];
+  orderLostOnly?: boolean;
 }
 
-export default function Dashboard({ logs, branches, allowedBranches = [] }: DashboardProps) {
+export default function Dashboard({ logs, branches, allowedBranches = [], orderLostOnly = false }: DashboardProps) {
+  const [view, setView] = useState<'overview' | 'orderLost'>(orderLostOnly ? 'orderLost' : 'overview');
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [bmFilter, setBmFilter] = useState<string[]>([]);
   const [closureDate, setClosureDate] = useState<DateRange>({ from: '', to: '' });
@@ -412,6 +415,25 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
   const lostLeadsValue = lostData.reduce((s, d) => s + d.value, 0);
 
   return (
+    <div>
+      <div className="px-3 sm:px-6 pt-4 flex items-center gap-1.5">
+        {(orderLostOnly
+          ? ([{ key: 'orderLost', label: 'Order Lost' }] as const)
+          : ([{ key: 'overview', label: 'Overview' }, { key: 'orderLost', label: 'Order Lost' }] as const)
+        ).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setView(t.key)}
+            className={`px-4 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border transition-all ${view === t.key ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'orderLost' ? (
+        <OrderLostDashboard branches={branches} allowedBranches={allowedBranches} />
+      ) : (
     <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5 sm:space-y-6">
       <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 sm:gap-2.5 shadow-sm">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
@@ -692,6 +714,8 @@ export default function Dashboard({ logs, branches, allowedBranches = [] }: Dash
         </div>
       </section>
 
+    </div>
+      )}
     </div>
   );
 }

@@ -106,7 +106,7 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps'],
   manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
-  retail:       ['storeVisit','footfall', 'nps'],
+  retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
@@ -2609,7 +2609,7 @@ export default function App() {
       </div>
 
       {mainTab === 'dashboard' && (
-        <Dashboard logs={dashLogs} branches={branches} allowedBranches={userAllowedBranches} />
+        <Dashboard logs={dashLogs} branches={branches} allowedBranches={userAllowedBranches} orderLostOnly={currentUser?.role === 'retail'} />
       )}
 
       {mainTab === 'footfall' && (

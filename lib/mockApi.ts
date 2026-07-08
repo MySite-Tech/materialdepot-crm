@@ -639,6 +639,40 @@ export async function markLeadLost(cartNumber: string, lostReason: string, ticke
   });
 }
 
+export interface OrderLostBranchSummary {
+  branch: string;
+  totalCount: number; totalValue: number;
+  activeCount: number; activeValue: number;
+  wonCount: number; wonValue: number;
+  lostCount: number; lostValue: number;
+  groupCount: { Category: number; Retail: number; Other: number };
+  groupValue: { Category: number; Retail: number; Other: number };
+}
+
+export interface OrderLostSummaryFilters {
+  branch?: string[];
+  bm?: string[];
+  category?: string[];
+  createdFrom?: string;
+  createdTo?: string;
+  cartValueGt?: number;
+}
+
+export async function fetchOrderLostSummary(filters: OrderLostSummaryFilters = {}): Promise<OrderLostBranchSummary[]> {
+  const params = new URLSearchParams();
+  if (filters.branch?.length) params.set('branch', filters.branch.join(','));
+  if (filters.bm?.length) params.set('bm', filters.bm.join(','));
+  if (filters.category?.length) params.set('category', filters.category.join(','));
+  if (filters.createdFrom) params.set('created_from', filters.createdFrom);
+  if (filters.createdTo) params.set('created_to', filters.createdTo);
+  if (filters.cartValueGt !== undefined && filters.cartValueGt !== null && !Number.isNaN(filters.cartValueGt)) {
+    params.set('cart_value_gt', String(filters.cartValueGt));
+  }
+  const qs = params.toString();
+  const data = await mdFetch(`/crm/order-lost-summary/${qs ? `?${qs}` : ''}`);
+  return data?.branches ?? [];
+}
+
 export async function fetchDashboardData(filters: DashboardFilters = {}): Promise<DashboardData> {
   const params = new URLSearchParams();
   if (filters.branch?.length) params.set('branch', filters.branch.join(','));
