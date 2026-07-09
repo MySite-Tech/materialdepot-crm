@@ -2621,7 +2621,7 @@ export default function App() {
       )}
 
       {mainTab === 'reportCard' && (
-        <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} />
+        <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} currentUserPhone={currentUser?.phone ?? ''} />
       )}
 
       {mainTab === 'storeVisit' && (
