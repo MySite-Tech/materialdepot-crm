@@ -316,12 +316,11 @@ function CrmAdherenceSection({ c, range }: { c: ReportCardData['crm_adherence'];
 
 function PhoneCell({ phone }: { phone: string }) {
   return (
-    <span className="group/ph relative inline-block font-mono text-[12px] text-gray-500 cursor-default">
-      <span className="group-hover/ph:hidden tracking-widest">•••• •••••</span>
-      <span className="hidden group-hover/ph:inline">{phone || '—'}</span>
-    </span>
+    <span className="font-mono text-[12px] text-gray-600">{phone || '—'}</span>
   );
 }
+
+const CLOSURE_PAGE_SIZE = 25;
 
 function ClosurePipelineSection({
   clients, catOptions,
@@ -345,6 +344,12 @@ function ClosurePipelineSection({
   }), [clients, from, to, cat, stage, min, max]);
 
   const totalPipeline = filtered.reduce((s, c) => s + c.cart_value, 0);
+
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [from, to, cat, stage, min, max, clients]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CLOSURE_PAGE_SIZE));
+  const pageClamped = Math.min(page, totalPages);
+  const pageRows = filtered.slice((pageClamped - 1) * CLOSURE_PAGE_SIZE, pageClamped * CLOSURE_PAGE_SIZE);
 
   return (
     <div className="space-y-3">
@@ -374,8 +379,8 @@ function ClosurePipelineSection({
             {filtered.length === 0 && (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px] text-gray-400">No clients match these filters</td></tr>
             )}
-            {filtered.map((c, i) => (
-              <tr key={`${c.phone}-${i}`} className={`border-b border-gray-50 last:border-0 ${c.stage === 'HOT' ? 'bg-red-50/20' : ''}`}>
+            {pageRows.map((c, i) => (
+              <tr key={`${c.phone}-${(pageClamped - 1) * CLOSURE_PAGE_SIZE + i}`} className={`border-b border-gray-50 last:border-0 ${c.stage === 'HOT' ? 'bg-red-50/20' : ''}`}>
                 <td className="px-4 py-3 text-[13px] font-semibold text-gray-800">{c.client_name}</td>
                 <td className="px-4 py-3"><PhoneCell phone={c.phone} /></td>
                 <td className="px-4 py-3 text-[12px] text-gray-600">{c.categories.join(' · ') || '—'}</td>
@@ -390,8 +395,30 @@ function ClosurePipelineSection({
           </tbody>
         </table>
       </div>
-      <div className="text-[11px] text-gray-400">
-        Showing {filtered.length} client{filtered.length === 1 ? '' : 's'} · Total pipeline: {fmtMoney(totalPipeline)} · Hover phone numbers to reveal
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-[11px] text-gray-400">
+          {filtered.length === 0
+            ? 'No clients'
+            : `Showing ${(pageClamped - 1) * CLOSURE_PAGE_SIZE + 1}–${Math.min(pageClamped * CLOSURE_PAGE_SIZE, filtered.length)} of ${filtered.length}`}
+          {' · '}Total pipeline: {fmtMoney(totalPipeline)}
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={pageClamped <= 1}
+              className="px-2.5 py-1 text-[12px] rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50">
+              Prev
+            </button>
+            <span className="text-[11px] text-gray-500 px-1">Page {pageClamped} of {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={pageClamped >= totalPages}
+              className="px-2.5 py-1 text-[12px] rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50">
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
