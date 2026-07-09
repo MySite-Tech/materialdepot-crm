@@ -356,6 +356,7 @@ export interface CRMLeadsQuery {
   closureFrom?: string;
   closureTo?: string;
   cartValueGt?: number;
+  cartValueLt?: number;
   ownerUserOrgId?: string | number;
   sortBy?: 'createdAt' | 'clientName' | 'clientPhone' | 'assignedTo' | 'branch' | 'cartValue';
   sortDir?: 'asc' | 'desc';
@@ -387,6 +388,9 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   if (query.closureTo) params.set('closure_to', query.closureTo);
   if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
     params.set('cart_value_gt', String(query.cartValueGt));
+  }
+  if (query.cartValueLt !== undefined && query.cartValueLt !== null && !Number.isNaN(query.cartValueLt)) {
+    params.set('cart_value_lt', String(query.cartValueLt));
   }
   if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
@@ -420,6 +424,9 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.closureTo) params.set('closure_to', query.closureTo);
   if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
     params.set('cart_value_gt', String(query.cartValueGt));
+  }
+  if (query.cartValueLt !== undefined && query.cartValueLt !== null && !Number.isNaN(query.cartValueLt)) {
+    params.set('cart_value_lt', String(query.cartValueLt));
   }
   if (query.ownerUserOrgId !== undefined && query.ownerUserOrgId !== null) {
     params.set('owner_user_org_id', String(query.ownerUserOrgId));
@@ -531,6 +538,7 @@ export interface FootfallNoCartRow {
   name: string;
   contact: string;
   bm: string;
+  has_deal_ticket?: boolean;
 }
 export interface FootfallNoCartPage {
   results: FootfallNoCartRow[];
@@ -647,6 +655,8 @@ export interface OrderLostBranchSummary {
   lostCount: number; lostValue: number;
   groupCount: { Category: number; Retail: number; Other: number };
   groupValue: { Category: number; Retail: number; Other: number };
+  reasonCount?: { Category: Record<string, number>; Retail: Record<string, number>; Other: Record<string, number> };
+  reasonValue?: { Category: Record<string, number>; Retail: Record<string, number>; Other: Record<string, number> };
 }
 
 export interface OrderLostSummaryFilters {
@@ -656,6 +666,7 @@ export interface OrderLostSummaryFilters {
   createdFrom?: string;
   createdTo?: string;
   cartValueGt?: number;
+  cartValueLt?: number;
 }
 
 export async function fetchOrderLostSummary(filters: OrderLostSummaryFilters = {}): Promise<OrderLostBranchSummary[]> {
@@ -667,6 +678,9 @@ export async function fetchOrderLostSummary(filters: OrderLostSummaryFilters = {
   if (filters.createdTo) params.set('created_to', filters.createdTo);
   if (filters.cartValueGt !== undefined && filters.cartValueGt !== null && !Number.isNaN(filters.cartValueGt)) {
     params.set('cart_value_gt', String(filters.cartValueGt));
+  }
+  if (filters.cartValueLt !== undefined && filters.cartValueLt !== null && !Number.isNaN(filters.cartValueLt)) {
+    params.set('cart_value_lt', String(filters.cartValueLt));
   }
   const qs = params.toString();
   const data = await mdFetch(`/crm/order-lost-summary/${qs ? `?${qs}` : ''}`);

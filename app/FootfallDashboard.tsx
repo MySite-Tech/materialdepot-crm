@@ -846,21 +846,22 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
                 <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">Contact</th>
                 <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">BM</th>
+                <th className="text-left px-4 sm:px-5 py-2 font-semibold text-gray-400 text-[10px] uppercase tracking-wider">Deal Ticket</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {!ncLoading2 && (!ncData2 || ncData2.results.length === 0) && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-[12px] text-gray-400">
+                  <td colSpan={5} className="px-4 py-6 text-center text-[12px] text-gray-400">
                     No clients without a cart found.
                   </td>
                 </tr>
               )}
               {ncLoading2 && !ncData2 && Array.from({ length: NC_PAGE_SIZE }).map((_, i) => (
                 <tr key={i}>
-                  {[1,2,3,4].map(c => (
+                  {[1,2,3,4,5].map(c => (
                     <td key={c} className="px-4 sm:px-5 py-2.5">
-                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: c === 1 ? 24 : c === 3 ? 80 : '70%' }} />
+                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: c === 1 ? 24 : c === 3 ? 80 : c === 5 ? 60 : '70%' }} />
                     </td>
                   ))}
                 </tr>
@@ -873,6 +874,15 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
                     <td className="px-4 sm:px-5 py-2.5 font-medium text-gray-700">{row.name || '—'}</td>
                     <td className="px-4 sm:px-5 py-2.5 text-gray-500 font-mono">{row.contact || '—'}</td>
                     <td className="px-4 sm:px-5 py-2.5 text-gray-600">{row.bm}</td>
+                    <td className="px-4 sm:px-5 py-2.5">
+                      {row.has_deal_ticket ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">
+                          ✓ Created
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 text-[10px]">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
