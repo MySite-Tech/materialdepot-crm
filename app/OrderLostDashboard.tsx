@@ -598,7 +598,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
         <div className="flex items-start justify-between mb-2">
           <div>
             <h2 className="text-[15px] font-bold text-gray-900">Summary Table</h2>
-            <p className="text-[11px] text-gray-400">Total Leads = footfall (store visits, org users excluded) · date range applies to <span className="font-semibold text-gray-500">Visit Date</span> · Store, BM &amp; Category filters apply</p>
+            <p className="text-[11px] text-gray-400">Total Leads = deal-ticket leads (one row per deal ticket) · date range applies to <span className="font-semibold text-gray-500">Cart Created</span> · Store, BM &amp; Category filters apply</p>
           </div>
           <button onClick={downloadSummaryCsv}
             className="flex items-center gap-1.5 bg-[#1A1A1A] text-white px-3 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer hover:bg-black">
