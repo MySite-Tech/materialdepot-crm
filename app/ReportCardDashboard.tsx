@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  fetchReportCard,
-  fetchAvailableBMs,
-  fetchCategoryOptions,
-  ReportCardData,
-  ReportCardBMOption,
   CategoryOption,
-  WalkinRow,
-  PipelineCartRow,
-  RankingRow,
   ClosureClient,
   ClosureStage,
+  fetchAvailableBMs,
+  fetchCategoryOptions,
+  fetchReportCard,
+  PipelineCartRow,
+  RankingRow,
+  ReportCardBMOption,
+  ReportCardData,
+  WalkinRow,
 } from '../lib/mockApi';
 
 interface Props {
@@ -205,7 +205,7 @@ function MultiDropdown({
 function WalkinTable({ w }: { w: ReportCardData['walkin_analysis'] }) {
   const total = w.total;
   const rows: { key: keyof ReportCardData['walkin_analysis']; label: string; sub: string; tint: string; color: string; row: WalkinRow }[] = [
-    { key: 'total', label: 'Total Walkins', sub: 'All footfall attended · date range', tint: 'bg-amber-50/40', color: 'text-amber-600', row: w.total },
+    { key: 'total', label: 'Total Unique Walkins', sub: 'All footfall attended · date range', tint: 'bg-amber-50/40', color: 'text-amber-600', row: w.total },
     { key: 'new', label: 'New Walkins', sub: 'First-time visitors', tint: 'bg-green-50/40', color: 'text-green-700', row: w.new },
     { key: 'old', label: 'Old Walkins', sub: 'Repeat visitors (2nd visit onwards)', tint: 'bg-blue-50/40', color: 'text-blue-700', row: w.old },
     { key: 'no_walkin', label: 'No Walkins', sub: 'Orders placed remotely without store visit', tint: '', color: 'text-gray-400', row: w.no_walkin },
