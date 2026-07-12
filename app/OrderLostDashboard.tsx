@@ -360,8 +360,8 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     category: dCategoryParam,
     cartValueGt: dCartGtNum,
     cartValueLt: dCartLtNum,
-    closureFrom: lostFrom || undefined,
-    closureTo: lostTo || undefined,
+    lostFrom: lostFrom || undefined,
+    lostTo: lostTo || undefined,
     sortBy: 'createdAt' as const,
     sortDir: 'desc' as const,
   }), [detailBranchParam, dBmParam, dCategoryParam, dCartGtNum, dCartLtNum, lostFrom, lostTo]);
@@ -488,11 +488,11 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
       const head = ['Client Name', 'Phone', 'Store', 'BM', 'Categories', 'Cart Value', 'Cart Created', 'Lost Mark Date', 'Days in Pipeline', 'Lost Reason', 'Comments', 'Property Type'];
       const rows: string[][] = [head];
       for (const r of rowsData) {
-        const days = daysBetween(r.createdAt, r.closureDate);
+        const days = daysBetween(r.createdAt, r.lostMarkDate);
         rows.push([
           r.clientName ?? '', r.clientPhone ?? '', r.branch ?? '', r.assignedTo ?? '',
           r.cartItems ?? '', String(Math.round(r.cartValue || 0)),
-          fmtDetailDate(r.createdAt), fmtDetailDate(r.closureDate),
+          fmtDetailDate(r.createdAt), fmtDetailDate(r.lostMarkDate),
           days != null ? `${days}d` : '—', r.lostReason ?? '', latestComment(r), r.propertyType ?? '',
         ]);
       }
@@ -721,7 +721,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
                   <tr><td colSpan={13} className="px-4 py-10 text-center text-[13px] text-gray-400">No lost clients for the selected filters</td></tr>
                 )}
                 {filteredDetail.map((r, i) => {
-                  const days = daysBetween(r.createdAt, r.closureDate);
+                  const days = daysBetween(r.createdAt, r.lostMarkDate);
                   const cats = (r.cartItems || '').split(',').map(s => s.trim()).filter(Boolean);
                   return (
                     <tr key={r.id || i} className="border-b border-gray-50 hover:bg-gray-50/60 align-top">
@@ -739,7 +739,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
                       </td>
                       <td className="px-3 py-2.5 font-mono font-semibold text-gray-800 whitespace-nowrap">{fmtFull(r.cartValue || 0)}</td>
                       <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{fmtDetailDate(r.createdAt)}</td>
-                      <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{fmtDetailDate(r.closureDate)}</td>
+                      <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{fmtDetailDate(r.lostMarkDate)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-600 whitespace-nowrap">{days != null ? `${days}d` : '—'}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600 border border-red-100">{r.lostReason || '—'}</span>

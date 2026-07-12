@@ -328,6 +328,7 @@ export interface CRMLeadRow {
   projectPhase: string;
   followUpDate: string;
   closureDate: string;
+  lostMarkDate: string;
   lostReason: string;
   createdAt: string;
   visits: { date: string; channel: string }[];
@@ -355,6 +356,8 @@ export interface CRMLeadsQuery {
   followupTo?: string;
   closureFrom?: string;
   closureTo?: string;
+  lostFrom?: string;           // Lost Mark Date range (deal resolution date)
+  lostTo?: string;
   cartValueGt?: number;
   cartValueLt?: number;
   ownerUserOrgId?: string | number;
@@ -386,6 +389,8 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   if (query.followupTo) params.set('followup_to', query.followupTo);
   if (query.closureFrom) params.set('closure_from', query.closureFrom);
   if (query.closureTo) params.set('closure_to', query.closureTo);
+  if (query.lostFrom) params.set('lost_from', query.lostFrom);
+  if (query.lostTo) params.set('lost_to', query.lostTo);
   if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
     params.set('cart_value_gt', String(query.cartValueGt));
   }
@@ -422,6 +427,8 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.followupTo) params.set('followup_to', query.followupTo);
   if (query.closureFrom) params.set('closure_from', query.closureFrom);
   if (query.closureTo) params.set('closure_to', query.closureTo);
+  if (query.lostFrom) params.set('lost_from', query.lostFrom);
+  if (query.lostTo) params.set('lost_to', query.lostTo);
   if (query.cartValueGt !== undefined && query.cartValueGt !== null && !Number.isNaN(query.cartValueGt)) {
     params.set('cart_value_gt', String(query.cartValueGt));
   }
