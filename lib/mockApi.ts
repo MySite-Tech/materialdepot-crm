@@ -1166,7 +1166,7 @@ export async function fetchWeeklyFunnel(filters: WeeklyFunnelFilters = {}): Prom
 export interface CategoryOption { id: number; name: string }
 
 export async function fetchCategoryOptions(): Promise<CategoryOption[]> {
-  const data = await mdFetch('/category/');
+  const data = await mdFetch('/category-list-all/');
   return (data || [])
     .map((c: { id: number; category_name: string | null }) => ({ id: c.id, name: (c.category_name || '').trim() }))
     .filter((c: CategoryOption) => c.name);
