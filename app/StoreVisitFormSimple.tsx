@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from './StoreVisitWrapper';
 import {
+  fetchBranches,
   fetchBMsByBranch,
   assignBMToClient,
   lookupLeadByPhone,
@@ -10,28 +11,17 @@ import {
   saveUserProperties,
   updateLeadProperties,
   syncLeadToKylas,
+  type Branch,
   type BMOption,
   type UserInfoProperty,
   type CurrentSalesBM,
   type UserProperties,
 } from '../lib/mockApi';
 
-interface BranchOption {
-  id: number;
-  name: string;
-  displayName: string;
-}
+type BranchOption = Branch;
 
 const mockApi = {
-  fetchBranches: async (): Promise<BranchOption[]> => {
-    return [
-      { id: 1, name: 'JP Nagar', displayName: 'JP Nagar' },
-      { id: 2, name: 'Whitefield', displayName: 'Whitefield' },
-      { id: 3, name: 'Yelahanka', displayName: 'Yelahanka' },
-      { id: 4, name: 'HQ', displayName: 'HQ' },
-      { id: 5, name: 'Gachibowli', displayName: 'Gachibowli' },
-    ];
-  },
+  fetchBranches: (): Promise<BranchOption[]> => fetchBranches(),
 
   lookupLeadByPhone: (phone: string, branch: string) => lookupLeadByPhone(phone, branch),
   fetchBMsByBranch: (branch: string) => fetchBMsByBranch(branch),
@@ -89,7 +79,9 @@ function BranchSelector({ branches, isLoading, onSelect }: {
         Select your branch <span className="text-red-500">*</span>
       </label>
       <div className="grid gap-3">
-        {branches.map((branch) => (
+        {branches
+          .filter((branch) => branch.displayName.trim().toUpperCase() !== 'HYDERABAD')
+          .map((branch) => (
           <button
             key={branch.id}
             className="w-full h-12 justify-start text-base font-medium border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 flex items-center px-3 py-2"

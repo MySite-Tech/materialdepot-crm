@@ -190,6 +190,51 @@ function CartValueRangeChip({ gt, lt, onChange, color }: {
   );
 }
 
+function DaysRangeChip({ gt, lt, onChange, color }: {
+  gt: string; lt: string; onChange: (gt: string, lt: string) => void; color: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = !!(gt || lt);
+  const display = active
+    ? `Days in Pipeline: ${gt || '0'} – ${lt || '∞'}`
+    : 'Days in Pipeline';
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={active ? { background: color, borderColor: color, color: '#fff' } : {}}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border transition-all ${active ? 'shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
+      >
+        {!active && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />}
+        {display}
+        <span className="text-[10px] opacity-60">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-xl z-[51] p-3 space-y-2 min-w-[220px]">
+            <div className="text-[10px] text-gray-500 uppercase font-semibold">Days in Pipeline</div>
+            <label className="block text-[10px] text-gray-500 uppercase font-semibold mt-1">Min (at least)</label>
+            <input type="number" inputMode="numeric" min={0} step={1} value={gt} placeholder="0"
+              onChange={e => onChange(e.target.value, lt)}
+              className="border border-gray-200 bg-white text-gray-700 rounded px-2 py-1 text-[11px] outline-none w-full" />
+            <label className="block text-[10px] text-gray-500 uppercase font-semibold mt-1">Max (at most)</label>
+            <input type="number" inputMode="numeric" min={0} step={1} value={lt} placeholder="No limit"
+              onChange={e => onChange(gt, e.target.value)}
+              className="border border-gray-200 bg-white text-gray-700 rounded px-2 py-1 text-[11px] outline-none w-full" />
+            {active && (
+              <button onClick={() => { onChange('', ''); setOpen(false); }}
+                className="block text-[11px] text-red-500 hover:text-red-600 cursor-pointer border border-red-200 rounded px-2 py-0.5 w-full text-center hover:bg-red-50">
+                Clear range
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const fmtChipDate = (d: string) => { const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; };
 
 function DateRangeChip({ from, to, onChange, label, color }: {
@@ -294,6 +339,8 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
   const [lostReasonFilter, setLostReasonFilter] = useState<string[]>([]);
   const [lostFrom, setLostFrom] = useState('');
   const [lostTo, setLostTo] = useState('');
+  const [dDaysGt, setDDaysGt] = useState<string>('');
+  const [dDaysLt, setDDaysLt] = useState<string>('');
 
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [bmList, setBmList] = useState<AvailableBM[]>([]);
@@ -431,12 +478,25 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     return acc;
   }, [summary]);
 
-  // ── Detail client-side filtering (lost reason) ────────────────────────────
+  // ── Detail client-side filtering (lost reason + days in pipeline) ─────────
+  const dDaysGtNum = dDaysGt ? Number(dDaysGt) : undefined;
+  const dDaysLtNum = dDaysLt ? Number(dDaysLt) : undefined;
+  const matchesDetailClientFilters = (r: CRMLeadRow, wanted: Set<string> | null): boolean => {
+    if (wanted && !wanted.has(normalizeReason(r.lostReason))) return false;
+    if (dDaysGtNum != null || dDaysLtNum != null) {
+      const days = daysBetween(r.createdAt, r.lostMarkDate);
+      if (days == null) return false;
+      if (dDaysGtNum != null && days < dDaysGtNum) return false;
+      if (dDaysLtNum != null && days > dDaysLtNum) return false;
+    }
+    return true;
+  };
   const filteredDetail = useMemo(() => {
-    if (!lostReasonFilter.length) return detail;
-    const wanted = new Set(lostReasonFilter.map(normalizeReason));
-    return detail.filter(r => wanted.has(normalizeReason(r.lostReason)));
-  }, [detail, lostReasonFilter]);
+    const hasClientFilter = lostReasonFilter.length > 0 || dDaysGtNum != null || dDaysLtNum != null;
+    if (!hasClientFilter) return detail;
+    const wanted = lostReasonFilter.length ? new Set(lostReasonFilter.map(normalizeReason)) : null;
+    return detail.filter(r => matchesDetailClientFilters(r, wanted));
+  }, [detail, lostReasonFilter, dDaysGtNum, dDaysLtNum]);
 
   const latestComment = (r: CRMLeadRow): string => {
     if (!r.remarks?.length) return '';
@@ -449,7 +509,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
   };
   const resetDetail = () => {
     setDBranch([]); setDBm([]); setDCategory([]); setDCartGt(''); setDCartLt('');
-    setLostReasonFilter([]); setLostFrom(''); setLostTo('');
+    setLostReasonFilter([]); setLostFrom(''); setLostTo(''); setDDaysGt(''); setDDaysLt('');
   };
 
   const downloadSummaryCsv = () => {
@@ -484,7 +544,9 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
         if (page >= (res.totalPages || 1)) break;
       }
       const wanted = lostReasonFilter.length ? new Set(lostReasonFilter.map(normalizeReason)) : null;
-      const rowsData = wanted ? all.filter(r => wanted.has(normalizeReason(r.lostReason))) : all;
+      const rowsData = (wanted || dDaysGtNum != null || dDaysLtNum != null)
+        ? all.filter(r => matchesDetailClientFilters(r, wanted))
+        : all;
       const head = ['Client Name', 'Phone', 'Store', 'BM', 'Categories', 'Cart Value', 'Cart Created', 'Lost Mark Date', 'Days in Pipeline', 'Lost Reason', 'Comments', 'Property Type'];
       const rows: string[][] = [head];
       for (const r of rowsData) {
@@ -694,11 +756,13 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
             onChange={setLostReasonFilter} color="#EF4444" />
           <DateRangeChip from={lostFrom} to={lostTo} onChange={(f, t) => { setLostFrom(f); setLostTo(t); }}
             label="Lost Mark Date" color="#DC2626" />
+          <DaysRangeChip gt={dDaysGt} lt={dDaysLt}
+            onChange={(g, l) => { setDDaysGt(g); setDDaysLt(l); }} color="#0EA5E9" />
           <button onClick={resetDetail} className="ml-auto text-[12px] text-gray-400 hover:text-gray-600 underline underline-offset-2 cursor-pointer">Reset all</button>
         </div>
-        {!detailLoading && lostReasonFilter.length > 0 && (
+        {!detailLoading && (lostReasonFilter.length > 0 || dDaysGtNum != null || dDaysLtNum != null) && (
           <div className="mb-2 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-1.5">
-            Lost Reason filter is applied to this page only — download the CSV for the full filtered list.
+            {lostReasonFilter.length > 0 && (dDaysGtNum != null || dDaysLtNum != null) ? 'Lost Reason and Days in Pipeline filters are' : lostReasonFilter.length > 0 ? 'Lost Reason filter is' : 'Days in Pipeline filter is'} applied to this page only — download the CSV for the full filtered list.
           </div>
         )}
         <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -724,7 +788,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
                   const days = daysBetween(r.createdAt, r.lostMarkDate);
                   const cats = (r.cartItems || '').split(',').map(s => s.trim()).filter(Boolean);
                   return (
-                    <tr key={r.id || i} className="border-b border-gray-50 hover:bg-gray-50/60 align-top">
+                    <tr key={`${r.id || 'row'}-${i}`} className="border-b border-gray-50 hover:bg-gray-50/60 align-top">
                       <td className="px-3 py-2.5 text-gray-400 font-mono">{(detailPage - 1) * DETAIL_PAGE_SIZE + i + 1}</td>
                       <td className="px-3 py-2.5 font-semibold text-gray-800 whitespace-nowrap">{r.clientName || '—'}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-500 whitespace-nowrap">{r.clientPhone || '—'}</td>

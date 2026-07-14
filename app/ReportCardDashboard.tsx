@@ -233,16 +233,16 @@ function WalkinTable({ w }: { w: ReportCardData['walkin_analysis'] }) {
               </td>
               <td className={`px-4 py-3 text-right font-mono text-[13px] font-semibold ${color}`}>
                 {fmtNum(row.carts_created)}
-                {key !== 'total' && <div className="text-[10px] text-gray-400 font-normal">{pct(row.carts_created, total.carts_created)} of total carts</div>}
+                {key !== 'total' && key !== 'no_walkin' && <div className="text-[10px] text-gray-400 font-normal">{pct(row.carts_created, total.carts_created)} of total carts</div>}
               </td>
               <td className={`px-4 py-3 text-right font-mono text-[13px] font-semibold ${color}`}>{fmtPct(row.cart_creation_pct)}</td>
               <td className={`px-4 py-3 text-right font-mono text-[13px] font-semibold ${color}`}>
                 {fmtNum(row.total_orders)}
-                {key !== 'total' && <div className="text-[10px] text-gray-400 font-normal">{pct(row.total_orders, total.total_orders)} of orders</div>}
+                {key !== 'total' && key !== 'no_walkin' && <div className="text-[10px] text-gray-400 font-normal">{pct(row.total_orders, total.total_orders)} of orders</div>}
               </td>
               <td className={`px-4 py-3 text-right font-mono text-[13px] font-semibold ${color}`}>
                 {row.total_sale_value ? fmtMoney(row.total_sale_value) : '₹0'}
-                {key !== 'total' && <div className="text-[10px] text-gray-400 font-normal">{pct(row.total_sale_value, total.total_sale_value)} of value</div>}
+                {key !== 'total' && key !== 'no_walkin' && <div className="text-[10px] text-gray-400 font-normal">{pct(row.total_sale_value, total.total_sale_value)} of value</div>}
               </td>
               <td className={`px-4 py-3 text-right font-mono text-[13px] font-semibold ${color}`}>{row.avg_aov ? fmtMoney(row.avg_aov) : '—'}</td>
               <td className={`px-4 py-3 text-right font-mono text-[13px] font-semibold ${color}`}>{row.total_orders ? fmtPct(row.conversion_pct) : '—'}</td>
