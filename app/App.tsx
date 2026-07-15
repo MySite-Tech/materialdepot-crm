@@ -13,13 +13,14 @@ import NPSDashboard from './NPSDashboard';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
 import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
+import CategoryFollowUpTab from './CategoryFollowUpTab';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
-const STATUSES = [
+export const STATUSES = [
   'In Cart',
   'Quote Approval Pending',
   'Availability Check',
@@ -35,7 +36,7 @@ const STATUSES = [
   'Order Cancelled',
 ];
 
-const STATUS_COLORS: Record<string, string> = {
+export const STATUS_COLORS: Record<string, string> = {
   'In Cart':                '#6366F1',
   'Quote Approval Pending': '#F59E0B',
   'Availability Check':     '#3B82F6',
@@ -99,12 +100,12 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps' | 'appointmentTracker';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps' | 'appointmentTracker' | 'categoryMaster' | 'categoryFollowUp';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'categoryMaster', 'categoryFollowUp'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'categoryMaster', 'categoryFollowUp'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps', 'categoryMaster', 'categoryFollowUp'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps', 'categoryMaster', 'categoryFollowUp'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
 };
@@ -121,6 +122,8 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.admin', 'admin'],
   ['crm.nps', 'nps'],
   ['crm.appointment_tracker', 'appointmentTracker'],
+  ['crm.category_master', 'categoryMaster'],
+  ['crm.category_followup', 'categoryFollowUp'],
 ];
 
 // Resolve the tabs a user may see. Per-user CRM permissions win when present;
@@ -135,6 +138,10 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
 };
 
 const APPOINTMENT_TRACKER_URL = 'https://kylas-dashboard.vercel.app/dashboard/appointment-tracker';
+// Cart → enquiry conversion dashboard (Metabase). Embedded live so it always
+// reflects the source; filters (category, branch, dates, etc.) are driven from
+// within the dashboard itself.
+const CATEGORY_MASTER_URL = 'https://metabase.materialdepot.in/dashboard/421-cart2enq-conversion';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -194,12 +201,12 @@ const mergeLead = (existing: Lead, incoming: Lead): Lead => {
   return merged;
 };
 
-const fmtINR = (n: number | null | undefined): string => {
+export const fmtINR = (n: number | null | undefined): string => {
   if (n == null || isNaN(n)) return '₹0';
   return '₹' + Number(n).toLocaleString('en-IN');
 };
 
-const fmtDate = (d: string | null | undefined): string => {
+export const fmtDate = (d: string | null | undefined): string => {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -275,7 +282,7 @@ interface AvatarProps {
   size?: number;
 }
 
-function Avatar({ name, size = 24 }: AvatarProps) {
+export function Avatar({ name, size = 24 }: AvatarProps) {
   const initial = name ? name.charAt(0).toUpperCase() : '?';
   return (
     <div className="bg-[#EAB308] text-white rounded-full inline-flex items-center justify-center font-semibold shrink-0" style={{ width: size, height: size, fontSize: size * 0.45, lineHeight: size + 'px' }}>
@@ -284,7 +291,7 @@ function Avatar({ name, size = 24 }: AvatarProps) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status] || '#9CA3AF';
   return (
     <span className="inline-block px-2 py-0.5 rounded-xl text-[11px] font-semibold border whitespace-nowrap" style={{ background: color + '18', color, borderColor: color + '40' }}>
@@ -303,7 +310,7 @@ interface EditableStatusProps {
 
 const MARK_LOST_ELIGIBLE = new Set(['In Cart', 'Quote Approval Pending', 'Availability Check', 'Request for Availability Check']);
 
-function EditableStatus({ status, lostReason, createdAt, isAdmin = false, onCommit }: EditableStatusProps) {
+export function EditableStatus({ status, lostReason, createdAt, isAdmin = false, onCommit }: EditableStatusProps) {
   const [pickingReason, setPickingReason] = useState(false);
   const canMarkLost = MARK_LOST_ELIGIBLE.has(status) && canMarkLostByAge(createdAt, isAdmin);
 
@@ -374,7 +381,7 @@ interface MultiSelectProps {
   searchable?: boolean;
 }
 
-function MultiSelect({ options, selected, onChange, label, className = '', searchable = false }: MultiSelectProps) {
+export function MultiSelect({ options, selected, onChange, label, className = '', searchable = false }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -468,7 +475,7 @@ interface DateRangePickerProps {
   className?: string;
 }
 
-function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel, className = '' }: DateRangePickerProps) {
+export function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel, className = '' }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -599,7 +606,7 @@ interface LeadDrawerProps {
   visitsLoading?: boolean;
 }
 
-function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
+export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
   const isEdit = !!lead;
   const currentUserName = currentUser ? currentUser.name : '';
   const isAdmin = canBypassLostAge(currentUser);
@@ -970,7 +977,7 @@ interface DateEditPopupProps {
   onCancel: () => void;
 }
 
-function DateEditPopup({ field, currentDate, followUpDate, closureDate, assignedTo, onSave, onCancel }: DateEditPopupProps) {
+export function DateEditPopup({ field, currentDate, followUpDate, closureDate, assignedTo, onSave, onCancel }: DateEditPopupProps) {
   const label = field === 'followUpDate' ? 'Follow-up Date' : 'Closure Date';
   const [newDate, setNewDate] = useState(currentDate || '');
   const [remark, setRemark] = useState('');
@@ -1659,7 +1666,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [permsLoaded, setPermsLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker', 'categoryMaster'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
@@ -1676,6 +1683,7 @@ export default function App() {
   // Derive allowed tabs — per-user CRM permissions override role defaults.
   const allowedTabs = resolveAllowedTabs(currentUser);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
+  const canSeeCategoryMaster = allowedTabs.includes('categoryMaster');
   const [dashLogs, setDashLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
@@ -2587,10 +2595,14 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }, { key: 'categoryMaster' as const, label: 'Category Master Dashboard' }, { key: 'categoryFollowUp' as const, label: 'Category Follow Up' }])
           .filter(t => t.key === 'appointmentTracker'
             ? canSeeAppointmentTracker
-            : allowedTabs.includes(t.key))
+            : t.key === 'categoryMaster'
+              ? canSeeCategoryMaster
+              : t.key === 'categoryFollowUp'
+                ? true // always visible (not gated by per-user permissions) — tighten later via crm.category_followup
+                : allowedTabs.includes(t.key))
           .map(t => (
             <button
               key={t.key}
@@ -2646,6 +2658,25 @@ export default function App() {
             className="w-full h-full border-0"
           />
         </div>
+      )}
+
+      {mainTab === 'categoryMaster' && canSeeCategoryMaster && (
+        <div className="h-[calc(100vh-84px)] w-full">
+          <iframe
+            src={CATEGORY_MASTER_URL}
+            title="Category Master Dashboard"
+            className="w-full h-full border-0"
+          />
+        </div>
+      )}
+
+      {mainTab === 'categoryFollowUp' && (
+        <CategoryFollowUpTab
+          currentUser={currentUser}
+          branches={branches}
+          allowedBranches={userAllowedBranches}
+          availableBMs={availableBMs}
+        />
       )}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">

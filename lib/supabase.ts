@@ -243,6 +243,71 @@ export async function upsertLeads(leads: Lead[]): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Category Follow Up overlay (abandoned-cart sheet)
+// Follow-up state for cart rows sourced from the Metabase sheet. Kept in its
+// own table (keyed by cart_number) so it never mixes with the `leads` pipeline.
+// ---------------------------------------------------------------------------
+
+export interface CategoryFollowupOverlay {
+  cart_number: string;
+  client_phone: string;
+  assigned_to: string;
+  branch: string;
+  status: string;
+  lost_reason: string;
+  follow_up_date: string;
+  closure_date: string;
+  remarks: Remark[];
+}
+
+export async function fetchCategoryFollowups(): Promise<Record<string, CategoryFollowupOverlay>> {
+  const allRows: CategoryFollowupOverlay[] = [];
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('category_followups')
+      .select('*')
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows.push(...(data as CategoryFollowupOverlay[]));
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  const map: Record<string, CategoryFollowupOverlay> = {};
+  for (const row of allRows) map[row.cart_number] = row;
+  return map;
+}
+
+export async function upsertCategoryFollowup(row: CategoryFollowupOverlay): Promise<void> {
+  const { error } = await supabase
+    .from('category_followups')
+    .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'cart_number' });
+  if (error) throw error;
+}
+
+export async function appendCategoryFollowupRemark(
+  cartNumber: string,
+  base: Omit<CategoryFollowupOverlay, 'remarks'>,
+  remark: Remark,
+): Promise<Remark[]> {
+  const { data, error: fetchErr } = await supabase
+    .from('category_followups')
+    .select('remarks')
+    .eq('cart_number', cartNumber)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  const existing: Remark[] = (data as { remarks?: Remark[] } | null)?.remarks || [];
+  const remarks = [...existing, remark];
+  const { error: upErr } = await supabase
+    .from('category_followups')
+    .upsert({ ...base, cart_number: cartNumber, remarks, updated_at: new Date().toISOString() }, { onConflict: 'cart_number' });
+  if (upErr) throw upErr;
+  return remarks;
+}
+
 export async function deleteLead(id: string, clientPhone?: string): Promise<void> {
   const { error } = await supabase
     .from('leads')
