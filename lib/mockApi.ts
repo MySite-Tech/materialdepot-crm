@@ -1333,6 +1333,7 @@ export interface NPSRow {
   name: string;
   contact: number | null;
   store: string;
+  bm: string;
   visit_date: string;
   time: string;
   status: 'submitted' | 'pending';
