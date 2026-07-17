@@ -491,8 +491,8 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     }
     return true;
   };
+  const hasClientFilter = lostReasonFilter.length > 0 || dDaysGtNum != null || dDaysLtNum != null;
   const filteredDetail = useMemo(() => {
-    const hasClientFilter = lostReasonFilter.length > 0 || dDaysGtNum != null || dDaysLtNum != null;
     if (!hasClientFilter) return detail;
     const wanted = lostReasonFilter.length ? new Set(lostReasonFilter.map(normalizeReason)) : null;
     return detail.filter(r => matchesDetailClientFilters(r, wanted));
@@ -734,7 +734,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
           <div>
             <h2 className="text-[15px] font-bold text-gray-900">Lost Clients Detail</h2>
             <p className="text-[11px] text-gray-400">Date range applies to <span className="font-semibold text-gray-500">Lost Mark Date</span> — clients marked lost in the selected window ·
-              {' '}{detailLoading ? 'loading…' : `${detailCount.toLocaleString('en-IN')} clients`}</p>
+              {' '}{detailLoading ? 'loading…' : hasClientFilter ? `${filteredDetail.length.toLocaleString('en-IN')} clients on this page` : `${detailCount.toLocaleString('en-IN')} clients`}</p>
           </div>
           <button onClick={downloadDetailCsv} disabled={csvBusy || detailLoading}
             className="flex items-center gap-1.5 bg-[#1A1A1A] text-white px-3 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer hover:bg-black disabled:opacity-50">
@@ -822,7 +822,9 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
         {!detailLoading && detailCount > 0 && (
           <div className="flex items-center justify-between mt-2 text-[12px] text-gray-500">
             <span>
-              Showing {((detailPage - 1) * DETAIL_PAGE_SIZE + 1).toLocaleString('en-IN')}–{Math.min(detailPage * DETAIL_PAGE_SIZE, detailCount).toLocaleString('en-IN')} of {detailCount.toLocaleString('en-IN')}
+              {hasClientFilter
+                ? `Showing ${filteredDetail.length.toLocaleString('en-IN')} matching on this page`
+                : `Showing ${((detailPage - 1) * DETAIL_PAGE_SIZE + 1).toLocaleString('en-IN')}–${Math.min(detailPage * DETAIL_PAGE_SIZE, detailCount).toLocaleString('en-IN')} of ${detailCount.toLocaleString('en-IN')}`}
             </span>
             <div className="flex items-center gap-1.5">
               <button onClick={() => setDetailPage(p => Math.max(1, p - 1))} disabled={detailPage <= 1}
