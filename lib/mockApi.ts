@@ -271,6 +271,211 @@ export async function searchContactByPhone(phoneNumber: string): Promise<number 
   }
 }
 
+// ---------------------------------------------------------------------------
+// B2B Inbound Leads — Kylas pipeline 31627, stage 220514 (Hardi & Mandeep)
+// ---------------------------------------------------------------------------
+
+const B2B_INBOUND_PIPELINE = 31627;
+const B2B_INBOUND_STAGE = 220514;
+const B2B_INBOUND_OWNERS: Record<number, string> = {
+  81181: 'Hardi',
+  73321: 'Mandeep',
+};
+
+const B2B_INBOUND_FIELDS = [
+  'firstName', 'lastName', 'ownerId', 'pipelineStage', 'phoneNumbers', 'zipcode',
+  'actualClosureDate', 'source', 'createdAt', 'updatedAt', 'cfBranch',
+  'cfSpaceRequirement', 'requirementName', 'city', 'id', 'recordActions', 'customFieldValues',
+];
+
+function b2bInboundRule(ownerId: number) {
+  return {
+    fields: B2B_INBOUND_FIELDS,
+    jsonRule: {
+      rules: [
+        { operator: 'equal', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerId, relatedFieldIds: null },
+        { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE, dependentFieldIds: ['pipelineStage', 'pipelineStageReason'] },
+        { operator: 'equal', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGE, relatedFieldIds: ['pipeline'] },
+      ],
+      condition: 'AND',
+      valid: true,
+    },
+  };
+}
+
+function mapInboundSource(raw: unknown): import('../app/b2b/mockData').InboundLead['source'] {
+  const name = (typeof raw === 'object' && raw ? (raw as { name?: string }).name : String(raw || '')).toLowerCase();
+  if (name.includes('whatsapp')) return 'WhatsApp';
+  if (name.includes('referral')) return 'Referral';
+  if (name.includes('walk')) return 'Walk-in';
+  if (name.includes('google')) return 'Google';
+  if (name.includes('web') || name.includes('form')) return 'Website form';
+  return 'Other';
+}
+
+function mapInboundLead(raw: Record<string, any>): import('../app/b2b/mockData').InboundLead {
+  const firstName = String(raw.firstName || '').trim();
+  const lastName = String(raw.lastName || '').trim();
+  const phone = Array.isArray(raw.phoneNumbers) && raw.phoneNumbers.length
+    ? String(raw.phoneNumbers[0]?.value || raw.phoneNumbers[0]?.dialCode || '')
+    : lastName;
+  return {
+    id: String(raw.id),
+    company: firstName || lastName || `Lead ${raw.id}`,
+    contactName: firstName || '—',
+    phone,
+    ownerId: typeof raw.ownerId === 'number' ? raw.ownerId : undefined,
+    accountType: 'Retailer',
+    stage: 'New',
+    priority: 'Medium',
+    owner: B2B_INBOUND_OWNERS[raw.ownerId] || 'Unassigned',
+    source: mapInboundSource(raw.source),
+    urgency: 'Planning',
+    value: 0,
+    requirement: raw.requirementName ?? raw.customFieldValues?.requirementName ?? undefined,
+    timeline: raw.city ?? raw.customFieldValues?.city ?? undefined,
+    expectedClosure: raw.actualClosureDate || undefined,
+    calls: [],
+    notes: [],
+  };
+}
+
+export async function fetchB2BInboundLeads(): Promise<import('../app/b2b/mockData').InboundLead[]> {
+  const owners = Object.keys(B2B_INBOUND_OWNERS).map(Number);
+  const responses = await Promise.all(
+    owners.map((ownerId) =>
+      kylasFetch('/search/lead?sort=createdAt,desc&page=0&size=100', {
+        method: 'POST',
+        body: JSON.stringify(b2bInboundRule(ownerId)),
+      }).catch(() => ({ content: [] })),
+    ),
+  );
+  const seen = new Set<string>();
+  const leads: import('../app/b2b/mockData').InboundLead[] = [];
+  for (const res of responses) {
+    for (const raw of (res?.content || [])) {
+      const id = String(raw.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      leads.push(mapInboundLead(raw));
+    }
+  }
+  return leads;
+}
+
+function stripHtml(s: unknown): string {
+  return String(s || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatKylasTs(ts: unknown): string {
+  const ms = typeof ts === 'number' ? ts : Date.parse(String(ts || ''));
+  if (!ms || Number.isNaN(ms)) return '';
+  return new Date(ms).toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
+export async function fetchLeadNotes(
+  leadId: string | number,
+  ownerId?: number,
+): Promise<import('../app/b2b/mockData').LeadNote[]> {
+  const params = new URLSearchParams({
+    targetEntityId: String(leadId),
+    targetEntityType: 'LEAD',
+    sort: 'createdAt,desc',
+    page: '0',
+    size: '10',
+  });
+  if (ownerId) params.set('targetEntityOwnerId', String(ownerId));
+  try {
+    const data = await kylasFetch(`/notes/relation?${params.toString()}`);
+    const items = data?.content || (Array.isArray(data) ? data : []);
+    return items
+      .map((n: Record<string, any>) => ({
+        ts: formatKylasTs(n.createdAt),
+        author: n.createdBy?.name || n.updatedBy?.name || 'Kylas',
+        text: stripHtml(n.description ?? n.note ?? n.body ?? ''),
+      }))
+      .filter((n: import('../app/b2b/mockData').LeadNote) => n.text);
+  } catch {
+    return [];
+  }
+}
+
+function pickName(v: unknown): string {
+  if (v && typeof v === 'object') return String((v as { name?: string }).name || '');
+  return String(v || '');
+}
+
+export async function fetchLeadCallLogs(
+  leadId: string | number,
+): Promise<import('../app/b2b/mockData').CallLogEntry[]> {
+  const body = {
+    jsonRule: {
+      rules: [{
+        id: 'related_to', field: 'related_to', type: 'related_lookup',
+        value: { entity: 'lead', id: String(leadId) }, operator: 'equal',
+      }],
+      condition: 'AND',
+    },
+  };
+  try {
+    const data = await kylasFetch('/call-logs/search?page=1&size=10&sort=createdAt,desc', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const items = data?.content || (Array.isArray(data) ? data : []);
+    return items.map((c: Record<string, any>) => ({
+      id: String(c.id),
+      ts: formatKylasTs(c.createdAt ?? c.calledAt ?? c.startTime),
+      direction: pickName(c.callType ?? c.type ?? c.direction) || 'Call',
+      status: pickName(c.status ?? c.callStatus ?? c.outcome) || '—',
+      durationSec: typeof c.duration === 'number' ? c.duration : undefined,
+      by: c.createdBy?.name || c.owner?.name || c.calledBy?.name || '',
+      note: stripHtml(c.notes ?? c.description ?? c.remark ?? ''),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function updateLeadRequirement(
+  leadId: string | number,
+  requirementName: string,
+): Promise<boolean> {
+  try {
+    await kylasFetch(`/leads/${leadId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ requirementName }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function createLeadNote(
+  leadId: string | number,
+  text: string,
+): Promise<boolean> {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const body = {
+    sourceEntity: { description: `<div>${escaped}</div>`, mentions: null },
+    targetEntityId: String(leadId),
+    targetEntityType: 'LEAD',
+  };
+  try {
+    await kylasFetch('/notes/relation', { method: 'POST', body: JSON.stringify(body) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getKylasRedirectUrl(leadId: number, contactId?: number): string {
   return contactId
     ? `https://app.kylas.io/sales/contacts/details/${contactId}`

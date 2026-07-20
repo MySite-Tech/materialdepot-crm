@@ -14,6 +14,7 @@ import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
 import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
+import B2BSalesCRM from './b2b/B2BSalesCRM';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -99,12 +100,12 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'admin' | 'nps' | 'appointmentTracker';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin','nps'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','weeklyFunnel', 'nps'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'b2bSales', 'weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
 };
@@ -118,6 +119,7 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.report_card', 'reportCard'],
   ['crm.store_visit', 'storeVisit'],
   ['crm.sales', 'sales'],
+  ['crm.b2b_sales', 'b2bSales'],
   ['crm.admin', 'admin'],
   ['crm.nps', 'nps'],
   ['crm.appointment_tracker', 'appointmentTracker'],
@@ -125,13 +127,22 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
 
 // Resolve the tabs a user may see. Per-user CRM permissions win when present;
 // otherwise fall back to the role-based defaults.
+// Roles that always see the B2B Sales CRM, regardless of individual permissions.
+const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech']);
+
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
+  let tabs: Array<MainTab>;
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
-    return PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
+    tabs = PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
+  } else {
+    tabs = ROLE_TABS[user?.role ?? ''] ?? DEFAULT_ROLE_TABS;
   }
-  return ROLE_TABS[user?.role ?? ''] ?? DEFAULT_ROLE_TABS;
+  if (B2B_SALES_ROLES.has(user?.role ?? '') && !tabs.includes('b2bSales')) {
+    tabs = [...tabs, 'b2bSales'];
+  }
+  return tabs;
 };
 
 const APPOINTMENT_TRACKER_URL = 'https://kylas-dashboard.vercel.app/dashboard/appointment-tracker';
@@ -2587,7 +2598,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'b2bSales' as const, label: 'B2B Sales' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
           .filter(t => t.key === 'appointmentTracker'
             ? canSeeAppointmentTracker
             : allowedTabs.includes(t.key))
@@ -2637,6 +2648,8 @@ export default function App() {
       )}
 
       {mainTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
+
+      {mainTab === 'b2bSales' && <B2BSalesCRM />}
 
       {mainTab === 'appointmentTracker' && canSeeAppointmentTracker && (
         <div className="h-[calc(100vh-84px)] w-full">
