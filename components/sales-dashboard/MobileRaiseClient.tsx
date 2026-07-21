@@ -575,7 +575,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
             onClick={handleOpenKylasModal}
             className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-gray-900 text-yellow-400 text-sm font-semibold whitespace-nowrap"
           >
-            Find Kylas Deal
+            Create Kylas Deal
           </button>
         </div>
       </form>
