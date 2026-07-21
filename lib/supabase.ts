@@ -30,6 +30,7 @@ function computeVisitDates(visits: Visit[]): { first_visit_date: string; latest_
   };
 }
 
+
 export function toRow(lead: Lead): SupabaseRow {
   const vd = computeVisitDates(lead.visits || []);
   return {
