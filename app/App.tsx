@@ -1598,7 +1598,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [permsLoaded, setPermsLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'admin', 'nps', 'appointmentTracker'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'appointmentTracker'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
