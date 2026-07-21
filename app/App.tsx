@@ -107,6 +107,9 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'b2bSales', 'weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
+  b2b_sales:    ['b2bSales'],
+  b2b_KAM:      ['b2bSales'],
+  b2b_manager:  ['b2bSales'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
@@ -127,7 +130,7 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
 // Resolve the tabs a user may see. Per-user CRM permissions win when present;
 // otherwise fall back to the role-based defaults.
 // Roles that always see the B2B Sales CRM, regardless of individual permissions.
-const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech', 'b2b_sales']);
+const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech', 'b2b_sales', 'b2b_KAM', 'b2b_manager']);
 
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
