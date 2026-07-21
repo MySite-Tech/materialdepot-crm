@@ -59,20 +59,42 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+function isAuthFailureBody(bodyText: string): boolean {
+  if (!bodyText) return false;
+  let detail = '';
+  let code = '';
+  try {
+    const j = JSON.parse(bodyText);
+    detail = String(j?.detail ?? '');
+    code = String(j?.code ?? j?.messages?.[0]?.message ?? '');
+  } catch {
+    detail = bodyText;
+  }
+  const s = `${detail} ${code}`.toLowerCase();
+  return (
+    s.includes('authentication credentials were not provided') ||
+    s.includes('token_not_valid') ||
+    s.includes('token not valid') ||
+    s.includes('not authenticated')
+  );
+}
+
 // Shared fetch helpers
 async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
   const token = getToken();
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
-  // Backend returns 403 (not 401) for unauthenticated requests because
-  // SessionAuthentication is first in DRF's auth classes — treat both the same.
   if ((res.status === 401 || res.status === 403) && !retried) {
-    if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
-    const ok = await refreshPromise;
-    if (ok) return mdFetch(path, init, true);
-    forceReLogin();
-    throw new Error('Session expired');
+    const body = await res.text();
+    if (res.status === 401 || isAuthFailureBody(body)) {
+      if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+      const ok = await refreshPromise;
+      if (ok) return mdFetch(path, init, true);
+      forceReLogin();
+      throw new Error('Session expired');
+    }
+    throw new Error('You do not have access to this resource.');
   }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   if (res.status === 204) return null;
