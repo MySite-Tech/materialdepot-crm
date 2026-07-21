@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  INBOUND_STAGES, INBOUND_STAGE_COLORS, PRIORITY_COLORS,
-  PRODUCT_CATEGORIES,
-  fmtINR, type InboundLead, type InboundStage, type Priority, type ProductCategory,
+  INBOUND_STAGES, INBOUND_STAGE_COLORS, PRIORITY_COLORS, KYLAS_LEAD_CATEGORIES, KAM_STAGES,
+  fmtINR, type InboundLead, type InboundStage, type Priority,
   type LeadNote, type CallLogEntry,
 } from './mockData';
-import { fetchB2BInboundLeads, fetchLeadNotes, createLeadNote, fetchLeadCallLogs, updateLeadRequirement } from '@/lib/mockApi';
+import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, updateInboundLeadKylas, fetchInboundLeadDetail } from '@/lib/mockApi';
+import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
 
 function PriorityBadge({ p }: { p: Priority }) {
   const c = PRIORITY_COLORS[p];
@@ -88,11 +88,31 @@ function LeadDrawer({
     return () => { alive = false; };
   }, [lead.id]);
 
+  // Requirement / categories / closure are Kylas-owned — load them live on open.
+  const [detailLoading, setDetailLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setDetailLoading(true);
+    fetchInboundLeadDetail(lead.id)
+      .then((d) => {
+        if (!alive) return;
+        setDraft((prev) => ({
+          ...prev,
+          requirement: d.requirement ?? prev.requirement,
+          requirementBrief: d.requirementBrief || prev.requirementBrief,
+          timeline: d.timeline || prev.timeline,
+          categories: d.categories ?? prev.categories,
+          expectedClosure: d.expectedClosure || prev.expectedClosure,
+        }));
+      })
+      .finally(() => { if (alive) setDetailLoading(false); });
+    return () => { alive = false; };
+  }, [lead.id]);
 
   const set = <K extends keyof InboundLead>(k: K, v: InboundLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
-  const toggleCategory = (c: ProductCategory) => {
+  const toggleCategory = (c: string) => {
     const cur = draft.categories || [];
     set('categories', cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]);
   };
@@ -103,7 +123,11 @@ function LeadDrawer({
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
-    await updateLeadRequirement(lead.id, draft.requirement || '');
+    await updateInboundLeadKylas(lead.id, {
+      requirement: draft.requirement,
+      expectedClosure: draft.expectedClosure,
+      categories: draft.categories,
+    });
     setSaving(false);
     onSave(draft);
   };
@@ -229,10 +253,13 @@ function LeadDrawer({
 
           {/* Requirement details */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Requirement details</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Requirement details</span>
+              {detailLoading && <span className="w-3 h-3 rounded-full border-2 border-gray-200 border-t-[#0F766E] animate-spin" />}
+            </div>
             <Field label="Category" className="mt-3">
               <div className="flex flex-wrap gap-2">
-                {PRODUCT_CATEGORIES.map((c) => {
+                {KYLAS_LEAD_CATEGORIES.map(({ label: c }) => {
                   const active = (draft.categories || []).includes(c);
                   return (
                     <button
@@ -259,6 +286,42 @@ function LeadDrawer({
                 </select>
               </Field>
             </div>
+
+            {draft.stage === 'Followup Required' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <Field label="Follow-up date">
+                  <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Follow-up time">
+                  <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value)} className={inputCls} />
+                </Field>
+              </div>
+            )}
+
+            {draft.stage === 'PI Shared' && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <Field label="ENQ ID">
+                    <input value={draft.enqId || ''} onChange={(e) => set('enqId', e.target.value)} className={inputCls} />
+                  </Field>
+                  <Field label="Value (₹)">
+                    <input type="number" min={0} value={draft.value || ''} onChange={(e) => set('value', Number(e.target.value) || 0)} className={inputCls} />
+                  </Field>
+                </div>
+                <Field label="PI status" className="mt-3">
+                  <select value={draft.piStatus || ''} onChange={(e) => set('piStatus', e.target.value)} className={inputCls}>
+                    <option value="">Select…</option>
+                    {KAM_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+              </>
+            )}
+
+            {draft.stage === 'Lost' && (
+              <Field label="Lost reason" className="mt-3">
+                <textarea value={draft.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)} rows={3} className={inputCls + ' resize-none'} />
+              </Field>
+            )}
           </div>
         </div>
 
@@ -298,7 +361,7 @@ export default function InboundLeads() {
   const load = () => {
     setLoading(true);
     setError(null);
-    fetchB2BInboundLeads()
+    fetchInboundBoard()
       .then(setLeads)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load leads'))
       .finally(() => setLoading(false));
@@ -319,7 +382,12 @@ export default function InboundLeads() {
   const byStage = (s: InboundStage) => filtered.filter((l) => l.stage === s);
 
   const moveLead = (id: string, stage: InboundStage) =>
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, stage } : l)));
+    setLeads((prev) => prev.map((l) => {
+      if (l.id !== id) return l;
+      const updated = { ...l, stage };
+      upsertInboundLead(updated);
+      return updated;
+    }));
 
   const handleDrop = (stage: InboundStage) => {
     if (dragId) moveLead(dragId, stage);
@@ -458,7 +526,9 @@ export default function InboundLeads() {
           lead={selected}
           onClose={() => setSelectedId(null)}
           onSave={(patch) => {
-            setLeads((prev) => prev.map((l) => (l.id === selected.id ? { ...l, ...patch } : l)));
+            const updated = { ...selected, ...patch };
+            setLeads((prev) => prev.map((l) => (l.id === selected.id ? updated : l)));
+            upsertInboundLead(updated);
             setSelectedId(null);
           }}
         />

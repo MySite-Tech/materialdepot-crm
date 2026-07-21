@@ -285,8 +285,39 @@ const B2B_INBOUND_OWNERS: Record<number, string> = {
 const B2B_INBOUND_FIELDS = [
   'firstName', 'lastName', 'ownerId', 'pipelineStage', 'phoneNumbers', 'zipcode',
   'actualClosureDate', 'source', 'createdAt', 'updatedAt', 'cfBranch',
-  'cfSpaceRequirement', 'requirementName', 'city', 'id', 'recordActions', 'customFieldValues',
+  'cfSpaceRequirement', 'requirementName', 'city', 'expectedClosureOn',
+  'cfCategoriesOfInterest', 'id', 'recordActions', 'customFieldValues',
 ];
+
+const KYLAS_CATEGORIES: { id: number; label: string }[] = [
+  { id: 2689623, label: 'Tiles' },
+  { id: 2689624, label: 'Panels' },
+  { id: 2689625, label: 'Laminates' },
+  { id: 2689626, label: 'Wallpapers' },
+  { id: 2689627, label: 'Wooden Flooring' },
+  { id: 2689628, label: 'Others' },
+];
+
+function categoryLabelsFromIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((x) => (x && typeof x === 'object' ? (x as { id?: number }).id : x))
+    .map((id) => KYLAS_CATEGORIES.find((c) => c.id === Number(id))?.label)
+    .filter((l): l is string => !!l);
+}
+
+function categoryIdsFromLabels(labels: string[] | undefined): number[] {
+  return (labels || [])
+    .map((l) => KYLAS_CATEGORIES.find((c) => c.label === l)?.id)
+    .filter((id): id is number => typeof id === 'number');
+}
+
+function toDateInput(v: unknown): string {
+  if (!v) return '';
+  if (typeof v === 'number') return new Date(v).toISOString().slice(0, 10);
+  const s = String(v);
+  return s.includes('T') ? s.slice(0, 10) : s;
+}
 
 function b2bInboundRule(ownerId: number) {
   return {
@@ -304,7 +335,7 @@ function b2bInboundRule(ownerId: number) {
 }
 
 function mapInboundSource(raw: unknown): import('../app/b2b/mockData').InboundLead['source'] {
-  const name = (typeof raw === 'object' && raw ? (raw as { name?: string }).name : String(raw || '')).toLowerCase();
+  const name = (typeof raw === 'object' && raw ? (raw as { name?: string }).name || '' : String(raw || '')).toLowerCase();
   if (name.includes('whatsapp')) return 'WhatsApp';
   if (name.includes('referral')) return 'Referral';
   if (name.includes('walk')) return 'Walk-in';
@@ -334,7 +365,8 @@ function mapInboundLead(raw: Record<string, any>): import('../app/b2b/mockData')
     value: 0,
     requirement: raw.requirementName ?? raw.customFieldValues?.requirementName ?? undefined,
     timeline: raw.city ?? raw.customFieldValues?.city ?? undefined,
-    expectedClosure: raw.actualClosureDate || undefined,
+    categories: categoryLabelsFromIds(raw.cfCategoriesOfInterest ?? raw.customFieldValues?.cfCategoriesOfInterest),
+    expectedClosure: toDateInput(raw.expectedClosureOn) || undefined,
     calls: [],
     notes: [],
   };
@@ -443,18 +475,44 @@ export async function fetchLeadCallLogs(
   }
 }
 
-export async function updateLeadRequirement(
+export interface InboundLeadEdit {
+  requirement?: string;
+  expectedClosure?: string;   // 'YYYY-MM-DD'
+  categories?: string[];      // Kylas category labels
+}
+
+export async function updateInboundLeadKylas(
   leadId: string | number,
-  requirementName: string,
+  edit: InboundLeadEdit,
 ): Promise<boolean> {
+  const body: Record<string, unknown> = {
+    requirementName: edit.requirement || '',
+    cfCategoriesOfInterest: categoryIdsFromLabels(edit.categories),
+  };
+  if (edit.expectedClosure) body.expectedClosureOn = edit.expectedClosure;
   try {
-    await kylasFetch(`/leads/${leadId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ requirementName }),
-    });
+    await kylasFetch(`/leads/${leadId}`, { method: 'PATCH', body: JSON.stringify(body) });
     return true;
   } catch {
     return false;
+  }
+}
+
+// Live editable fields for a lead, straight from Kylas (used on drawer open).
+export async function fetchInboundLeadDetail(leadId: string | number): Promise<InboundLeadEdit & {
+  requirementBrief?: string; timeline?: string;
+}> {
+  try {
+    const d = await kylasFetch(`/leads/${leadId}`);
+    return {
+      requirement: d.requirementName ?? d.customFieldValues?.requirementName ?? '',
+      requirementBrief: d.cfSpaceRequirement ?? d.customFieldValues?.cfSpaceRequirement ?? '',
+      timeline: d.city ?? '',
+      categories: categoryLabelsFromIds(d.cfCategoriesOfInterest ?? d.customFieldValues?.cfCategoriesOfInterest),
+      expectedClosure: toDateInput(d.expectedClosureOn),
+    };
+  } catch {
+    return {};
   }
 }
 

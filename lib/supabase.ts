@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Lead, Remark, Visit, CartItem, SupabaseRow, AppUser, Branch, ActivityLog } from '@/types/crm';
+import type { Lead, Remark, Visit, CartItem, SupabaseRow, AppUser, Branch } from '@/types/crm';
 
 let _client: SupabaseClient | null = null;
 function getClient(): SupabaseClient {
@@ -348,40 +348,3 @@ export async function deleteBranch(id: string | number): Promise<void> {
   if (error) throw error;
 }
 
-export async function logActivity({
-  userId,
-  userName,
-  action,
-  entityType,
-  entityId,
-  details,
-}: {
-  userId?: string | number | null;
-  userName: string;
-  action: string;
-  entityType: string;
-  entityId?: string | number | null;
-  details?: string;
-}): Promise<void> {
-  const { error } = await supabase
-    .from('activity_logs')
-    .insert({
-      user_id: userId || null,
-      user_name: userName,
-      action,
-      entity_type: entityType,
-      entity_id: entityId || null,
-      details: details || '',
-    });
-  if (error) throw error;
-}
-
-export async function fetchActivityLogs(limit = 200): Promise<ActivityLog[]> {
-  const { data, error } = await supabase
-    .from('activity_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data || []) as ActivityLog[];
-}

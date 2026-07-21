@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import B2BDashboard from './Dashboard';
 import InboundLeads from './InboundLeads';
 import OutboundLeads from './OutboundLeads';
 import KAMs from './KAMs';
@@ -9,7 +8,7 @@ import KAMs from './KAMs';
 type B2BView = 'dashboard' | 'inbound' | 'outbound' | 'kams' | 'leadership' | 'targets';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
-  { key: 'dashboard',  label: 'Dashboard',        ready: true },
+  { key: 'dashboard',  label: 'Dashboard',        ready: false },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
   { key: 'outbound',   label: 'Outbound Leads',   ready: true },
   { key: 'kams',       label: 'KAMs',             ready: true },
@@ -27,7 +26,7 @@ function ComingSoon({ label }: { label: string }) {
 }
 
 export default function B2BSalesCRM() {
-  const [view, setView] = useState<B2BView>('dashboard');
+  const [view, setView] = useState<B2BView>('inbound');
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-84px)] bg-[#FAFAFA]">
@@ -77,7 +76,7 @@ export default function B2BSalesCRM() {
 
       {/* ── Content ── */}
       <main className="flex-1 overflow-y-auto min-w-0">
-        {view === 'dashboard' && <B2BDashboard />}
+        {view === 'dashboard' && <ComingSoon label="Dashboard" />}
         {view === 'inbound' && <InboundLeads />}
         {view === 'outbound' && <OutboundLeads />}
         {view === 'kams' && <KAMs />}

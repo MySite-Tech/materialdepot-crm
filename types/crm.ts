@@ -54,17 +54,6 @@ export interface Branch {
   name: string;
 }
 
-export interface ActivityLog {
-  id: string | number;
-  created_at: string;
-  user_id?: string | number | null;
-  user_name: string;
-  action: string;
-  entity_type: string;
-  entity_id?: string | number | null;
-  details?: string;
-}
-
 export interface SupabaseRow {
   id: string;
   created_at: string;

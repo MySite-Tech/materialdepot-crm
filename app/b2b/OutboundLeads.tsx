@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  OUTBOUND_LEADS, OUTBOUND_STAGES, OUTBOUND_STAGE_COLORS, B2B_REPS,
+  OUTBOUND_STAGES, OUTBOUND_STAGE_COLORS, B2B_REPS, KAM_STAGES,
   PRODUCT_CATEGORIES,
   fmtL, fmtINR, ordinal, type OutboundLead, type OutboundStage, type ProductCategory,
 } from './mockData';
+import { fetchOutboundLeads, upsertOutboundLead } from '@/lib/b2bLeads';
 
 function StageBadge({ s }: { s: OutboundStage }) {
   const c = OUTBOUND_STAGE_COLORS[s];
@@ -107,13 +108,21 @@ function LeadDrawer({
                 </Field>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <Field label="Proposal value (₹)">
+                <Field label="Monthly order value (₹)">
                   <input type="number" min={0} value={draft.value} onChange={(e) => set('value', Number(e.target.value) || 0)} className={inputCls} />
                 </Field>
                 <Field label="BDA">
                   <select value={draft.bda} onChange={(e) => set('bda', e.target.value)} className={inputCls}>
                     {B2B_REPS.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <Field label="Next meeting date">
+                  <input type="date" value={draft.nextMeetingDate || ''} onChange={(e) => set('nextMeetingDate', e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Next meeting time">
+                  <input type="time" value={draft.nextMeetingTime || ''} onChange={(e) => set('nextMeetingTime', e.target.value)} className={inputCls} />
                 </Field>
               </div>
             </div>
@@ -175,6 +184,32 @@ function LeadDrawer({
                 </select>
               </Field>
             </div>
+
+            {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">PI details</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <Field label="ENQ ID">
+                    <input value={draft.enqId || ''} onChange={(e) => set('enqId', e.target.value)} className={inputCls} />
+                  </Field>
+                  <Field label="Value (₹)">
+                    <input type="number" min={0} value={draft.piValue ?? ''} onChange={(e) => set('piValue', Number(e.target.value) || 0)} className={inputCls} />
+                  </Field>
+                </div>
+                <Field label="PI status" className="mt-3">
+                  <select value={draft.piStatus || ''} onChange={(e) => set('piStatus', e.target.value)} className={inputCls}>
+                    <option value="">Select…</option>
+                    {KAM_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+              </div>
+            )}
+
+            {draft.stage === 'Lost' && (
+              <Field label="Lost reason" className="mt-4 pt-4 border-t border-gray-100">
+                <textarea value={draft.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)} rows={3} className={inputCls + ' resize-none'} />
+              </Field>
+            )}
           </div>
         </div>
 
@@ -330,17 +365,24 @@ function AddLeadModal({ onClose, onAdd }: { onClose: () => void; onAdd: (lead: O
 export default function OutboundLeads() {
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [owner, setOwner] = useState('all');
-  const [leads, setLeads] = useState<OutboundLead[]>(OUTBOUND_LEADS);
+  const [leads, setLeads] = useState<OutboundLead[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<OutboundStage | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
+  useEffect(() => { fetchOutboundLeads().then(setLeads); }, []);
+
   const filtered = useMemo(() => leads.filter((l) => owner === 'all' || l.bda === owner), [leads, owner]);
   const byStage = (s: OutboundStage) => filtered.filter((l) => l.stage === s);
 
   const moveLead = (id: string, stage: OutboundStage) =>
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, stage } : l)));
+    setLeads((prev) => prev.map((l) => {
+      if (l.id !== id) return l;
+      const updated = { ...l, stage };
+      upsertOutboundLead(updated);
+      return updated;
+    }));
 
   const handleDrop = (stage: OutboundStage) => {
     if (dragId) moveLead(dragId, stage);
@@ -463,6 +505,7 @@ export default function OutboundLeads() {
           onClose={() => setAdding(false)}
           onAdd={(lead) => {
             setLeads((prev) => [lead, ...prev]);
+            upsertOutboundLead(lead);
             setAdding(false);
           }}
         />
@@ -473,7 +516,9 @@ export default function OutboundLeads() {
           lead={selected}
           onClose={() => setSelectedId(null)}
           onSave={(patch) => {
-            setLeads((prev) => prev.map((l) => (l.id === selected.id ? { ...l, ...patch } : l)));
+            const updated = { ...selected, ...patch };
+            setLeads((prev) => prev.map((l) => (l.id === selected.id ? updated : l)));
+            upsertOutboundLead(updated);
             setSelectedId(null);
           }}
         />

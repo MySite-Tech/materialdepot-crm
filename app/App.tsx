@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { Download, FileText, FileSpreadsheet, FileType2 } from 'lucide-react';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { logActivity, fetchActivityLogs } from '../lib/supabase';
 import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, clearToken, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallTab from './FootfallTab';
@@ -15,7 +14,7 @@ import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import B2BSalesCRM from './b2b/B2BSalesCRM';
-import type { Lead, AppUser, Branch, Remark, Visit, CartItem, ActivityLog } from '../types/crm';
+import type { Lead, AppUser, Branch, Remark, Visit, CartItem } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -1107,7 +1106,7 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }: DeleteConfirmProps) {
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────
 function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'users' | 'branches' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'branches'>('users');
   const [users, setUsers] = useState<AppUser[]>([]);
   const [branchList, setBranchList] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1123,9 +1122,6 @@ function AdminDashboard() {
   const [usersPage, setUsersPage] = useState(1);
   const [userSearch, setUserSearch] = useState('');
   const USERS_PER_PAGE = 20;
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-
   useEffect(() => {
     Promise.all([fetchUsers(), fetchBranchList().catch(() => [])]).then(([userData, branchData]) => {
       setUsers(userData);
@@ -1133,15 +1129,6 @@ function AdminDashboard() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
-
-  const loadLogs = () => {
-    setLogsLoading(true);
-    fetchActivityLogs(200).then((data) => { setLogs(data); setLogsLoading(false); }).catch(() => setLogsLoading(false));
-  };
-
-  useEffect(() => {
-    if (activeTab === 'logs') loadLogs();
-  }, [activeTab]);
 
   const handleAdd = async () => {
     if (!newName.trim() || !newPhone.trim()) { setError('Name and phone are required'); return; }
@@ -1186,14 +1173,6 @@ function AdminDashboard() {
     }
   };
 
-  const getActionBadge = (action: string): string => {
-    if (action.includes('created') || action === 'csv_imported') return 'bg-green-100 text-green-700';
-    if (action.includes('updated') || action.includes('remark')) return 'bg-blue-100 text-blue-700';
-    if (action.includes('status') || action.includes('date')) return 'bg-amber-100 text-amber-700';
-    if (action.includes('deleted')) return 'bg-red-100 text-red-700';
-    return 'bg-gray-100 text-gray-600';
-  };
-
   const filteredUsers = userSearch.trim()
     ? users.filter((u) => {
         const q = userSearch.trim().toLowerCase();
@@ -1204,7 +1183,6 @@ function AdminDashboard() {
   const tabs = [
     { key: 'users' as const, label: 'Users' },
     { key: 'branches' as const, label: 'Branches' },
-    { key: 'logs' as const, label: 'Logs' },
   ];
 
   return (
@@ -1361,56 +1339,6 @@ function AdminDashboard() {
           </>
         )}
 
-        {activeTab === 'logs' && (
-          <>
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-lg font-bold text-gray-800">Activity Logs</h1>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400">{logs.length} log entries</span>
-                <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:border-gray-300" onClick={loadLogs}>Refresh</button>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {logsLoading ? (
-                <div className="p-8 text-center text-gray-400 text-sm">Loading logs...</div>
-              ) : (
-                <div className="max-h-[600px] overflow-y-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-[#FAFAFA] sticky top-0">
-                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Time</th>
-                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">User</th>
-                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Action</th>
-                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Entity</th>
-                        <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((log) => (
-                        <tr key={log.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
-                          <td className="px-4 py-2.5 text-[12px] text-gray-500 whitespace-nowrap">{fmtTimestamp(log.created_at)}</td>
-                          <td className="px-4 py-2.5 text-[13px] font-medium">{log.user_name}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={`inline-block px-2 py-0.5 rounded-xl text-[11px] font-semibold ${getActionBadge(log.action)}`}>
-                              {log.action}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-[12px] text-gray-500">
-                            {log.entity_type}{log.entity_id ? ` / ${log.entity_id}` : ''}
-                          </td>
-                          <td className="px-4 py-2.5 text-[12px] text-gray-500 max-w-[250px] truncate">{log.details || '—'}</td>
-                        </tr>
-                      ))}
-                      {logs.length === 0 && (
-                        <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm">No log entries found</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
@@ -1687,7 +1615,6 @@ export default function App() {
   // Derive allowed tabs — per-user CRM permissions override role defaults.
   const allowedTabs = resolveAllowedTabs(currentUser);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
-  const [dashLogs, setDashLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
     try {
@@ -1743,13 +1670,9 @@ export default function App() {
     // Land on the first tab the user has access to
     const firstTab = resolveAllowedTabs(userData)[0];
     if (firstTab && firstTab !== 'sales') setMainTab(firstTab);
-    logActivity({ userId: user.id, userName: user.name, action: 'user_login', entityType: 'user', entityId: user.id, details: user.name + ' logged in' }).catch(console.error);
   };
 
   const handleLogout = () => {
-    if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'user_logout', entityType: 'user', entityId: currentUser.id, details: currentUser.name + ' logged out' }).catch(console.error);
-    }
     setCurrentUser(null);
     localStorage.removeItem('materialdepot_user');
   };
@@ -1767,12 +1690,6 @@ export default function App() {
   const [leadsTotalPages, setLeadsTotalPages] = useState(1);
   const [leadsStats, setLeadsStats] = useState<CRMLeadsStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
-
-  useEffect(() => {
-    if (mainTab === 'dashboard' && dashLogs.length === 0) {
-      fetchActivityLogs(500).then(setDashLogs).catch(() => {});
-    }
-  }, [mainTab]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -2120,13 +2037,6 @@ export default function App() {
     if (!isNew && finalData.status === 'Order Lost' && existing?.status !== 'Order Lost') {
       markLeadLost(finalData.id, finalData.lostReason || '', finalData.ticketId).catch((e) => console.error('Estimate lost sync failed:', e));
     }
-    if (currentUser) {
-      if (isNew) {
-        logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'created_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
-      } else {
-        logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'updated_lead', entityType: 'lead', entityId: formData.id, details: formData.clientName || '' }).catch(console.error);
-      }
-    }
     setDrawerLead(null);
     setShowAddDrawer(false);
   };
@@ -2135,9 +2045,6 @@ export default function App() {
     const lead = leads.find((l) => l.id === id);
     setLeads((prev) => prev.filter((l) => !(l.id === id && l.clientPhone === (lead ? lead.clientPhone : ''))));
     deleteLeadDb(id, lead ? lead.clientPhone || '' : '').catch((e) => console.error('Delete failed:', e));
-    if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'deleted_lead', entityType: 'lead', entityId: id, details: lead ? lead.clientName || '' : '' }).catch(console.error);
-    }
     setDeleteLeadState(null);
   };
 
@@ -2162,9 +2069,6 @@ export default function App() {
     if (newStatus === 'Order Lost') {
       const ticketId = leads.find((l) => l.id === id)?.ticketId;
       markLeadLost(id, lostReason || '', ticketId).catch((e) => console.error('Estimate lost sync failed:', e));
-    }
-    if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'status_changed', entityType: 'lead', entityId: id, details: oldStatus + ' → ' + newStatus }).catch(console.error);
     }
   };
 
@@ -2205,9 +2109,6 @@ export default function App() {
     appendRemarkToLead(ticketId, remark, currentUser?.phone).then((latestRemarks: Remark[]) => {
       setLeads((prev) => prev.map((l) => (l.id === leadId && l.ticketId === ticketId) ? { ...l, remarks: latestRemarks } : l));
     }).catch((e) => console.error('Remark save failed:', e));
-    if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'added_remark', entityType: 'lead', entityId: leadId, details: remark.text ? remark.text.substring(0, 100) : '' }).catch(console.error);
-    }
   };
 
   const handleDateEditSave = (newDate: string, remarkText: string) => {
@@ -2254,9 +2155,6 @@ export default function App() {
       }
       return updated;
     });
-    if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'date_changed', entityType: 'lead', entityId: leadId, details: field + ' set to ' + newDate }).catch(console.error);
-    }
     setDateEditPopup(null);
   };
 
@@ -2349,9 +2247,6 @@ export default function App() {
       if (format === 'csv') exportLeadsCsv(list, name);
       else if (format === 'excel') await exportLeadsExcel(list, name);
       else await exportLeadsPdf(list, name);
-      if (currentUser) {
-        logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'leads_exported', entityType: 'lead', entityId: null, details: `${list.length} leads exported as ${format} (${scope})` }).catch(console.error);
-      }
     } catch (e: any) {
       console.error('Lead export failed:', e);
       alert('Export failed: ' + (e?.message || e));
@@ -2550,9 +2445,6 @@ export default function App() {
       upsertLeads(toUpsert).then(() => console.log('CSV import to Supabase successful:', toUpsert.length, 'leads')).catch((e) => { console.error('CSV import failed:', e); alert('Import saved locally but failed to sync to database: ' + (e.message || e)); });
       return updated;
     });
-    if (currentUser) {
-      logActivity({ userId: currentUser.id, userName: currentUser.name, action: 'csv_imported', entityType: 'lead', entityId: null, details: newLeads.length + ' leads imported' }).catch(console.error);
-    }
     setCsvImportCount(newLeads.length);
     setCsvPreview(null);
     setCsvSelected(new Set());
@@ -2620,7 +2512,7 @@ export default function App() {
       </div>
 
       {mainTab === 'dashboard' && (
-        <Dashboard logs={dashLogs} branches={branches} allowedBranches={userAllowedBranches} orderLostOnly={currentUser?.role === 'retail'} />
+        <Dashboard branches={branches} allowedBranches={userAllowedBranches} orderLostOnly={currentUser?.role === 'retail'} />
       )}
 
       {mainTab === 'footfall' && (

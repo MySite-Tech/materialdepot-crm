@@ -5,7 +5,6 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import type { ActivityLog } from '@/types/crm';
 import {
   fetchDashboardData,
   fetchAvailableBMs,
@@ -29,16 +28,6 @@ const fmtDate = (d?: string | null) => {
   return `${day}/${m}/${y}`;
 };
 
-const fmtRelative = (isoStr?: string | null) => {
-  if (!isoStr) return 'Never Edited';
-  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
-  return fmtDate(isoStr.slice(0, 10));
-};
-
 const LOST_COLORS = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6','#8B5CF6','#EC4899','#14B8A6','#F59E0B','#6366F1'];
 const STATUS_COLORS: Record<string, string> = {
   'Quote Approval Pending': '#3B82F6',
@@ -51,9 +40,7 @@ const STATUS_COLORS: Record<string, string> = {
   'Refunded': '#F97316',
 };
 const DEFAULT_STATUS_COLOR = '#9CA3AF';
-const EDIT_ACTIONS = ['updated_lead', 'date_changed', 'added_remark', 'status_changed'];
 
-interface UserStat { name: string; edits: number; total: number; lastSeen: string }
 interface WeekDay { day: string; amount: number; count: number }
 interface DateRange { from: string; to: string }
 
@@ -271,13 +258,12 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
 }
 
 interface DashboardProps {
-  logs: ActivityLog[];
   branches: string[];
   allowedBranches?: string[];
   orderLostOnly?: boolean;
 }
 
-export default function Dashboard({ logs, branches, allowedBranches = [], orderLostOnly = false }: DashboardProps) {
+export default function Dashboard({ branches, allowedBranches = [], orderLostOnly = false }: DashboardProps) {
   const [view, setView] = useState<'overview' | 'orderLost'>(orderLostOnly ? 'orderLost' : 'overview');
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [bmFilter, setBmFilter] = useState<string[]>([]);
@@ -345,46 +331,6 @@ export default function Dashboard({ logs, branches, allowedBranches = [], orderL
   const today = summary?.today ?? new Date().toISOString().slice(0, 10);
   const weekFrom = summary?.weekFrom ?? '';
   const weekTo = summary?.weekTo ?? '';
-
-  const leaderboard = useMemo((): UserStat[] => {
-    const userMap: Record<string, UserStat> = {};
-    logs.forEach(log => {
-      if (!log.user_name) return;
-      if (!userMap[log.user_name]) userMap[log.user_name] = { name: log.user_name, edits: 0, total: 0, lastSeen: '' };
-      userMap[log.user_name].total++;
-      if (EDIT_ACTIONS.includes(log.action)) userMap[log.user_name].edits++;
-      if (!userMap[log.user_name].lastSeen || log.created_at > userMap[log.user_name].lastSeen)
-        userMap[log.user_name].lastSeen = log.created_at;
-    });
-    return Object.values(userMap).sort((a, b) => b.edits - a.edits);
-  }, [logs]);
-
-  const totalEdits = leaderboard.reduce((s, u) => s + u.edits, 0) || 1;
-
-  const mostRecentUser = useMemo(() => {
-    if (!leaderboard.length) return null;
-    return [...leaderboard].sort((a, b) => (b.lastSeen || '').localeCompare(a.lastSeen || ''))[0]?.name;
-  }, [leaderboard]);
-
-  const userInsight = useMemo(() => {
-    if (!leaderboard.length) return {} as Record<string, { emoji: string; text: string }>;
-    const map: Record<string, { emoji: string; text: string }> = {};
-    const top3Share = leaderboard.slice(0, 3).reduce((s, u) => s + u.edits, 0);
-    leaderboard.forEach((u, i) => {
-      const pct = Math.round((u.edits / totalEdits) * 100);
-      if (i === 0) { map[u.name] = { emoji: '🏆', text: `Carrying the team · ${pct}% of all edits` }; return; }
-      if (u.edits === 0) { map[u.name] = { emoji: '😴', text: 'Logged in, 0 edits so far' }; return; }
-      if (u.name === mostRecentUser && i !== 0) { map[u.name] = { emoji: '⚡', text: 'Most recent action in CRM' }; return; }
-      if (i < 3) { map[u.name] = { emoji: '🎯', text: `Top 3 · ${Math.round((top3Share / totalEdits) * 100)}% share combined` }; return; }
-    });
-    return map;
-  }, [leaderboard, totalEdits, mostRecentUser]);
-
-  const [lbPage, setLbPage] = useState(0);
-  const LB_PAGE_SIZE = 5;
-  const lbTotalPages = Math.ceil(leaderboard.length / LB_PAGE_SIZE) || 1;
-  const lbPage$ = Math.min(lbPage, lbTotalPages - 1);
-  const lbPagedRows = leaderboard.slice(lbPage$ * LB_PAGE_SIZE, (lbPage$ + 1) * LB_PAGE_SIZE);
 
   const weekDays = useMemo((): WeekDay[] => {
     if (!weekFrom) return [];
@@ -492,78 +438,6 @@ export default function Dashboard({ logs, branches, allowedBranches = [], orderL
                 ))}
               </div>
             )}
-      </section>
-
-      <section>
-        <SectionHeader title="Activity Leaderboard" sub={`${logs.length} actions logged · who's putting in the work?`} />
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-[#F9F9F9] flex items-center justify-between">
-            <div>
-              <div className="font-semibold text-[13px] text-gray-800">Most Active Users</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">Ranked by edits · updates, remarks, date & status changes</div>
-            </div>
-            <div className="text-[11px] text-gray-400">{leaderboard.length} users</div>
-          </div>
-          <div className="overflow-x-auto">
-          <table className="w-full text-[13px] min-w-[600px]">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-10">Rank</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Name</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Edits</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 hidden sm:table-cell">Total Actions</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 hidden md:table-cell">Insight</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 hidden sm:table-cell">Last Seen</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Share</th>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-24 sm:w-36">Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-[12px] text-gray-400">No activity data</td></tr>}
-              {lbPagedRows.map(u => {
-                const rank = leaderboard.indexOf(u);
-                const sharePct = Math.round((u.edits / totalEdits) * 100);
-                const medal = rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : `${rank + 1}`;
-                const barColor = rank === 0 ? '#EAB308' : rank === 1 ? '#9CA3AF' : rank === 2 ? '#B45309' : '#D1D5DB';
-                const insight = userInsight[u.name];
-                return (
-                  <tr key={u.name} className={`border-b border-gray-50 hover:bg-gray-50 ${rank === 0 ? 'bg-amber-50' : ''}`}>
-                    <td className="px-4 py-2.5 text-center text-[13px]">{medal}</td>
-                    <td className="px-4 py-2.5 font-semibold text-gray-800">{u.name}</td>
-                    <td className="px-4 py-2.5 font-mono text-gray-700">{u.edits}</td>
-                    <td className="px-4 py-2.5 font-mono text-gray-400 hidden sm:table-cell">{u.total}</td>
-                    <td className="px-4 py-2.5 hidden md:table-cell">
-                      {insight
-                        ? <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">{insight.emoji} {insight.text}</span>
-                        : <span className="text-[11px] text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-[11px] text-gray-400 hidden sm:table-cell">{fmtRelative(u.lastSeen)}</td>
-                    <td className="px-4 py-2.5 font-bold" style={{ color: rank === 0 ? '#EAB308' : '#374151' }}>{sharePct}%</td>
-                    <td className="px-4 py-2.5">
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${sharePct}%`, background: barColor }} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-          {lbTotalPages > 1 && (
-            <div className="px-5 py-2.5 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-[11px] text-gray-400">Showing {lbPage$ * LB_PAGE_SIZE + 1}–{Math.min((lbPage$ + 1) * LB_PAGE_SIZE, leaderboard.length)} of {leaderboard.length}</span>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: lbTotalPages }, (_, i) => (
-                  <button key={i} onClick={() => setLbPage(i)}
-                    className={`w-6 h-6 text-[11px] rounded border cursor-pointer ${lbPage$ === i ? 'bg-[#EAB308] text-black border-[#EAB308] font-bold' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </section>
 
       <section>

@@ -57,10 +57,26 @@ export interface InboundLead {
   timeline?: string;              // "1 month"
   requirementBrief?: string;      // "Plywood for 3 residential projects"
   requirement?: string;           // detailed requirement, edited by rep
-  categories?: ProductCategory[];
+  categories?: string[];          // Kylas cfCategoriesOfInterest labels
   calls?: CallStep[];
   notes?: LeadNote[];
+  // ── stage-specific working fields (CRM-owned) ──
+  followUpDate?: string;          // Followup Required
+  followUpTime?: string;          // Followup Required
+  enqId?: string;                 // PI Shared
+  piStatus?: string;              // PI Shared
+  lostReason?: string;            // Lost
 }
+
+// Kylas custom field `cfCategoriesOfInterest` picklist (id ↔ display label)
+export const KYLAS_LEAD_CATEGORIES: { id: number; label: string }[] = [
+  { id: 2689623, label: 'Tiles' },
+  { id: 2689624, label: 'Panels' },
+  { id: 2689625, label: 'Laminates' },
+  { id: 2689626, label: 'Wallpapers' },
+  { id: 2689627, label: 'Wooden Flooring' },
+  { id: 2689628, label: 'Others' },
+];
 
 // ── Outbound ─────────────────────────────────────────────────────────────────
 export type OutboundStage =
@@ -88,6 +104,11 @@ export interface OutboundLead {
   requirement?: string;           // detailed requirement, edited by BDA
   categories?: ProductCategory[];
   notes?: LeadNote[];
+  // ── stage-specific working fields ──
+  enqId?: string;                 // PI Shared / Closed
+  piValue?: number;               // PI Shared / Closed
+  piStatus?: string;              // PI Shared / Closed
+  lostReason?: string;            // Lost
 }
 
 // ── KAM (existing clients & converted leads) ─────────────────────────────────
@@ -110,7 +131,7 @@ export interface KamClient {
   notes?: LeadNote[];
 }
 
-export const KAMS = ['Sidhant', 'Jadhav', 'Hardi', 'Tharun'];
+export const KAMS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
 // ── Stage → accent colour (aligned with app STATUS_COLORS vocabulary) ─────────
 export const INBOUND_STAGE_COLORS: Record<InboundStage, string> = {
@@ -185,7 +206,7 @@ export const KAM_CLIENTS: KamClient[] = [
   { id: 'KAM-04', company: 'Skyline Developers',  contactName: 'Ajay Menon',   phone: '9900099035', enqId: 'ENQ-4055', value: 890000, stage: 'Closed',            kam: 'Tharun',  source: 'Outbound' },
 ];
 
-export const B2B_REPS = ['Krishna Bhagavatula'];
+export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
 // ── Dashboard summary (mirrors the reference design) ──────────────────────────
 export const DASHBOARD = {
