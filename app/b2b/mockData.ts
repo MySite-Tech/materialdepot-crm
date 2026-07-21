@@ -187,25 +187,6 @@ export const INBOUND_LEADS: InboundLead[] = [
     calls: [{ label: 'Call 1', outcome: 'RNR', ts: '5 Jul 1:15 pm' }, { label: 'Call 2', outcome: 'RNR', ts: '7 Jul 6:30 pm' }, { label: 'Call 3', outcome: null }, { label: 'Call 4', outcome: null }] },
 ];
 
-export const OUTBOUND_LEADS: OutboundLead[] = [
-  { id: 'OB-01', company: 'Prime Builders', contactName: 'Vikram Shetty', accountType: 'Builder', city: 'Bengaluru', stage: 'In Progress', bda: 'Krishna Bhagavatula', segment: 'Seg 1', visitCount: 2, value: 600000, expectedClosure: '2026-07-25',
-    categories: ['Tiles', 'Panel'], requirement: 'Tiles + panels for 40-unit apartment project',
-    notes: [{ ts: '13 Jul 5:20 pm', author: 'Krishna Bhagavatula', text: 'Second visit done, shared catalogue. Awaiting BOQ.' }] },
-  { id: 'OB-02', company: 'Elite Interior Studio', contactName: 'Farah Khan', accountType: 'Interior Designer', city: 'Bengaluru', stage: 'PI Shared', bda: 'Krishna Bhagavatula', segment: 'Seg 2', visitCount: 3, value: 320000, expectedClosure: '2026-07-22',
-    categories: ['Laminate'], requirement: 'Premium laminates for boutique showroom' },
-  { id: 'OB-03', company: 'Skyline Developers', contactName: 'Ajay Menon', accountType: 'Builder', city: 'Bengaluru', stage: 'Closed', bda: 'Krishna Bhagavatula', segment: 'Seg 1', visitCount: 3, value: 890000,
-    categories: ['Tiles'], requirement: 'Vitrified tiles for 2 towers' },
-  { id: 'OB-04', company: 'Greenfield Estates', contactName: 'Ritu Sharma', accountType: 'Builder', city: 'Bengaluru', stage: 'Lost', bda: 'Krishna Bhagavatula', segment: 'Seg 3', visitCount: 1, value: 75000,
-    categories: [], requirement: 'Budget too low, sourcing locally' },
-];
-
-export const KAM_CLIENTS: KamClient[] = [
-  { id: 'KAM-01', company: 'Silverline Homes',    contactName: 'Ananya Rao',   phone: '9900099002',                    value: 0,      stage: 'No Active Enquiry', kam: 'Sidhant', source: 'Existing' },
-  { id: 'KAM-02', company: 'Metro Constructions', contactName: 'Rahul Nair',   phone: '9900099013', enqId: 'ENQ-3980', value: 265000, stage: 'PI Shared',         kam: 'Jadhav',  source: 'Existing' },
-  { id: 'KAM-03', company: 'Om Sai Builders',     contactName: 'Prakash Iyer', phone: '9900099024', enqId: 'ENQ-3312', value: 412000, stage: 'Awaiting Payment',  kam: 'Hardi',   source: 'Inbound', expectedClosure: '2026-07-24' },
-  { id: 'KAM-04', company: 'Skyline Developers',  contactName: 'Ajay Menon',   phone: '9900099035', enqId: 'ENQ-4055', value: 890000, stage: 'Closed',            kam: 'Tharun',  source: 'Outbound' },
-];
-
 export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
 // ── Dashboard summary (mirrors the reference design) ──────────────────────────

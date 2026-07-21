@@ -1,7 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { fetchB2BInboundLeads } from '@/lib/mockApi';
 import {
-  OUTBOUND_LEADS, KAM_CLIENTS,
   type InboundLead, type InboundStage, type Priority,
   type OutboundLead, type OutboundStage,
   type KamClient, type KamStage, type KamSource,
@@ -213,8 +212,8 @@ export async function fetchOutboundLeads(): Promise<OutboundLead[]> {
   try {
     return (await fetchRows('outbound')).map(rowToOutbound);
   } catch (e) {
-    console.error('[b2b] outbound DB fetch failed (pre-migration?), using seed', e);
-    return OUTBOUND_LEADS;
+    console.error('[b2b] outbound DB fetch failed', e);
+    return [];
   }
 }
 
@@ -222,8 +221,8 @@ export async function fetchKamClients(): Promise<KamClient[]> {
   try {
     return (await fetchRows('kam')).map(rowToKam);
   } catch (e) {
-    console.error('[b2b] kam DB fetch failed (pre-migration?), using seed', e);
-    return KAM_CLIENTS;
+    console.error('[b2b] kam DB fetch failed', e);
+    return [];
   }
 }
 
