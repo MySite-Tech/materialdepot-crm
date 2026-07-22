@@ -22,16 +22,15 @@ const SEARCH_FIELDS = [
 // cfRaiseEscalation (Escalation pipeline); `requestType` is the auto-mapped
 // Request Type written to cfRequestType on submit (system-set, per the brief).
 //
-// These 13 values come from the redefined "Raise request" field in Kylas.
+// These values come from the redefined "Raise request" field in Kylas.
 const RAISE_OPTIONS: { id: number; name: string; requestType: "Support" | "Escalation" }[] = [
   { id: 202380, name: "Return Request", requestType: "Support" },
-  { id: 202381, name: "Change in lead time", requestType: "Support" },
   { id: 184695, name: "Modify Order", requestType: "Support" },
   { id: 202382, name: "Order status update", requestType: "Support" },
-  { id: 202383, name: "Delivery Attempted", requestType: "Support" },
   { id: 184512, name: "Others", requestType: "Support" },
   { id: 184504, name: "Delivery Delay", requestType: "Escalation" },
-  { id: 202384, name: "Items missing/Incorrect Quantity", requestType: "Escalation" },
+  { id: 184508, name: "Item missing", requestType: "Escalation" },
+  { id: 202384, name: "Incorrect quantity received", requestType: "Escalation" },
   { id: 184507, name: "Wrong material", requestType: "Escalation" },
   { id: 184505, name: "Damaged Material", requestType: "Escalation" },
   { id: 202385, name: "Unloading not done", requestType: "Escalation" },
