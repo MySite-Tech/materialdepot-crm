@@ -7,6 +7,13 @@ import {
   fmtL, fmtINR, ordinal, type OutboundLead, type OutboundStage, type ProductCategory,
 } from './mockData';
 import { fetchOutboundLeads, upsertOutboundLead } from '@/lib/b2bLeads';
+import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, type ExportFormat, type ExportScope } from './exportUtils';
+
+const OUTBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Segment', 'Visits', 'BDA', 'Value'];
+const outboundToRow = (l: OutboundLead): (string | number)[] => [
+  l.company || '', l.contactName || '', l.accountType || '', l.stage || '', l.segment || '',
+  ordinal(l.visitCount), l.bda || '', l.value != null ? l.value : '',
+];
 
 function StageBadge({ s }: { s: OutboundStage }) {
   const c = OUTBOUND_STAGE_COLORS[s];
@@ -376,6 +383,22 @@ export default function OutboundLeads() {
   const filtered = useMemo(() => leads.filter((l) => owner === 'all' || l.bda === owner), [leads, owner]);
   const byStage = (s: OutboundStage) => filtered.filter((l) => l.stage === s);
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async (format: ExportFormat, scope: ExportScope) => {
+    if (exporting) return;
+    const list = scope === 'all' ? leads : filtered;
+    if (!list.length) { alert('No leads to export.'); return; }
+    setExporting(true);
+    try {
+      const name = `b2b_outbound_leads_${scope}_${todayStr()}`;
+      const rows = list.map(outboundToRow);
+      if (format === 'csv') exportRowsCsv(OUTBOUND_EXPORT_HEADERS, rows, name);
+      else await exportRowsExcel(OUTBOUND_EXPORT_HEADERS, rows, name, 'Outbound Leads');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const moveLead = (id: string, stage: OutboundStage) =>
     setLeads((prev) => prev.map((l) => {
       if (l.id !== id) return l;
@@ -411,6 +434,7 @@ export default function OutboundLeads() {
               </button>
             ))}
           </div>
+          <ExportButton onExport={handleExport} disabled={exporting} />
           <button onClick={() => setAdding(true)} className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap">+ Add Lead</button>
         </div>
       </div>

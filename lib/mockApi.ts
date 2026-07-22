@@ -140,13 +140,26 @@ export async function verifyOtp(phone: string, otp: string): Promise<boolean> {
   return true;
 }
 
-async function kylasFetch(path: string, init?: RequestInit) {
-  const res = await fetch(`${KYLAS_API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", "api-key": KYLAS_API_KEY, ...init?.headers },
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function kylasFetch(path: string, init?: RequestInit, maxRetries = 4) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${KYLAS_API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", "api-key": KYLAS_API_KEY, ...init?.headers },
+    });
+    if (res.ok) return res.json();
+    // Retry rate-limits (429) and transient upstream errors with backoff.
+    if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : Math.min(500 * 2 ** attempt, 8000);
+      await sleep(waitMs);
+      continue;
+    }
+    throw new Error(`API error: ${res.status}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -518,6 +531,56 @@ export async function fetchLeadCallLogs(
   }
 }
 
+export type CallOutcome = 'connected' | 'busy' | 'rejected' | 'no_answer' | 'missed_call';
+
+export const CALL_OUTCOME_OPTIONS: { value: CallOutcome; label: string }[] = [
+  { value: 'connected', label: 'Connected' },
+  { value: 'busy', label: 'Busy' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'no_answer', label: 'No Answer' },
+  { value: 'missed_call', label: 'Missed Call' },
+];
+
+export async function createInboundCallLog(params: {
+  leadId: string | number;
+  leadName: string;
+  phoneId: string | number;
+  outcome: CallOutcome;
+  callType?: 'outgoing' | 'incoming';
+  callSummary?: string;
+  durationMinutes?: number;   // only meaningful when outcome is 'connected'
+  startTime?: string; // ISO; defaults to now
+}): Promise<boolean> {
+  const { leadId, leadName, phoneId, outcome, callType = 'outgoing', callSummary = '', durationMinutes, startTime } = params;
+  const fd = new FormData();
+  fd.append('isManual', 'true');
+  fd.append('outcome', outcome);
+  fd.append('startTime', startTime || new Date().toISOString());
+  fd.append('phoneId', String(phoneId));
+  fd.append('callType', callType);
+  if (outcome === 'connected' && durationMinutes != null) {
+    fd.append('duration', String(durationMinutes));
+    fd.append('durationType', 'minutes');
+  }
+  fd.append('callSummary', callSummary);
+  fd.append('notes', '[]');
+  fd.append('relatedTo[id]', String(leadId));
+  fd.append('relatedTo[name]', leadName);
+  fd.append('relatedTo[entity]', 'lead');
+  fd.append('relatedTo[phoneId]', String(phoneId));
+  try {
+    const res = await fetch(`${KYLAS_API_URL}/call-logs/`, {
+      method: 'POST',
+      headers: { 'api-key': KYLAS_API_KEY },
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface InboundLeadEdit {
   requirement?: string;
   expectedClosure?: string;   // 'YYYY-MM-DD'
@@ -543,16 +606,19 @@ export async function updateInboundLeadKylas(
 
 // Live editable fields for a lead, straight from Kylas (used on drawer open).
 export async function fetchInboundLeadDetail(leadId: string | number): Promise<InboundLeadEdit & {
-  requirementBrief?: string; timeline?: string;
+  requirementBrief?: string; timeline?: string; phoneId?: number; phone?: string;
 }> {
   try {
     const d = await kylasFetch(`/leads/${leadId}`);
+    const pn = Array.isArray(d.phoneNumbers) && d.phoneNumbers.length ? d.phoneNumbers[0] : null;
     return {
       requirement: d.requirementName ?? d.customFieldValues?.requirementName ?? '',
       requirementBrief: d.cfSpaceRequirement ?? d.customFieldValues?.cfSpaceRequirement ?? '',
       timeline: d.city ?? '',
       categories: categoryLabelsFromIds(d.cfCategoriesOfInterest ?? d.customFieldValues?.cfCategoriesOfInterest),
       expectedClosure: toDateInput(d.expectedClosureOn),
+      phoneId: pn && typeof pn.id === 'number' ? pn.id : undefined,
+      phone: pn ? String(pn.value || '') : undefined,
     };
   } catch {
     return {};

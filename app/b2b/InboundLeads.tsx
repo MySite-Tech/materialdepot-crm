@@ -6,8 +6,15 @@ import {
   fmtINR, type InboundLead, type InboundStage, type Priority,
   type LeadNote, type CallLogEntry,
 } from './mockData';
-import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, updateInboundLeadKylas, fetchInboundLeadDetail, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
+import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, createInboundCallLog, CALL_OUTCOME_OPTIONS, type CallOutcome, updateInboundLeadKylas, fetchInboundLeadDetail, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
+import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, type ExportFormat, type ExportScope } from './exportUtils';
+
+const INBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Priority', 'Owner', 'Source', 'Value'];
+const inboundToRow = (l: InboundLead): (string | number)[] => [
+  l.company || '', l.phone || '', l.accountType || '', l.stage || '', l.priority || '',
+  l.owner || '', l.source || '', l.value ? l.value : '',
+];
 
 function PriorityBadge({ p }: { p: Priority }) {
   const c = PRIORITY_COLORS[p];
@@ -90,12 +97,14 @@ function LeadDrawer({
 
   // Requirement / categories / closure are Kylas-owned — load them live on open.
   const [detailLoading, setDetailLoading] = useState(true);
+  const [phoneId, setPhoneId] = useState<number | undefined>(undefined);
   useEffect(() => {
     let alive = true;
     setDetailLoading(true);
     fetchInboundLeadDetail(lead.id)
       .then((d) => {
         if (!alive) return;
+        setPhoneId(d.phoneId);
         setDraft((prev) => ({
           ...prev,
           requirement: d.requirement ?? prev.requirement,
@@ -108,6 +117,33 @@ function LeadDrawer({
       .finally(() => { if (alive) setDetailLoading(false); });
     return () => { alive = false; };
   }, [lead.id]);
+
+  // Log-a-call form
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [callOutcome, setCallOutcome] = useState<CallOutcome>('connected');
+  const [callDuration, setCallDuration] = useState('');
+  const [logging, setLogging] = useState(false);
+
+  const logCall = async () => {
+    if (logging || !phoneId) return;
+    setLogging(true);
+    const ok = await createInboundCallLog({
+      leadId: lead.id,
+      leadName: draft.contactName && draft.contactName !== '—' ? draft.contactName : draft.company,
+      phoneId,
+      outcome: callOutcome,
+      durationMinutes: callOutcome === 'connected' && callDuration ? Number(callDuration) : undefined,
+    });
+    setLogging(false);
+    if (ok) {
+      setCallDuration('');
+      setShowLogForm(false);
+      setCallsLoading(true);
+      fetchLeadCallLogs(lead.id).then(setCallLogs).finally(() => setCallsLoading(false));
+    } else {
+      alert('Failed to log call. Please try again.');
+    }
+  };
 
   const set = <K extends keyof InboundLead>(k: K, v: InboundLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
@@ -215,18 +251,68 @@ function LeadDrawer({
           </div>
 
           {/* Call cadence */}
-          {(callsLoading || callLogs.length > 0) && (
+          {(
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Call logs</span>
-                {!callsLoading && <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{callLogs.length} calls · via Kylas</span>}
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Call logs</span>
+                  {!showLogForm && (
+                    <button
+                      onClick={() => setShowLogForm(true)}
+                      disabled={!phoneId}
+                      className="border border-gray-200 bg-white text-gray-600 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap disabled:opacity-50 hover:border-[#0F766E] hover:text-[#0F766E]"
+                    >
+                      {!phoneId ? (detailLoading ? 'Loading number…' : 'No phone number') : '＋ Log call'}
+                    </button>
+                  )}
+                </div>
+                {!callsLoading && <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{callLogs.length} calls · via Kylas</span>}
               </div>
+
+              {/* Log a call */}
+              {showLogForm && (
+                <div className="flex items-center gap-2 mb-3">
+                  <select
+                    value={callOutcome}
+                    onChange={(e) => setCallOutcome(e.target.value as CallOutcome)}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white focus:border-[#0F766E]"
+                  >
+                    {CALL_OUTCOME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  {callOutcome === 'connected' && (
+                    <input
+                      type="number"
+                      min={0}
+                      value={callDuration}
+                      onChange={(e) => setCallDuration(e.target.value)}
+                      placeholder="Mins"
+                      className="w-20 shrink-0 px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white focus:border-[#0F766E]"
+                    />
+                  )}
+                  <button
+                    onClick={logCall}
+                    disabled={logging}
+                    className="shrink-0 bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap disabled:opacity-50"
+                  >
+                    {logging ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setShowLogForm(false)}
+                    className="shrink-0 text-gray-400 hover:text-gray-700 text-lg leading-none px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-col divide-y divide-gray-100 max-h-[280px] overflow-y-auto">
                 {callsLoading ? (
                   <div className="flex items-center justify-center gap-2 py-4 text-[11px] text-gray-400">
                     <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 border-t-[#0F766E] animate-spin" />
                     Loading call logs…
                   </div>
+                ) : callLogs.length === 0 ? (
+                  <p className="text-[11px] text-gray-300 text-center py-2">No calls logged yet.</p>
                 ) : callLogs.map((c) => {
                   const connected = /connect|complete|answer/i.test(c.status);
                   return (
@@ -374,6 +460,47 @@ export default function InboundLeads() {
   const runSearch = () => setAppliedSearch(search.trim());
   const clearSearch = () => { setSearch(''); setAppliedSearch(''); };
 
+  const [exporting, setExporting] = useState(false);
+
+  const fetchAllInbound = async (opts: { ownerId?: number; search?: string }): Promise<InboundLead[]> => {
+    const all: InboundLead[] = [];
+    const seen = new Set<string>();
+    let p = 0;
+    for (;;) {
+      const res = await fetchInboundBoard({ page: p, ownerId: opts.ownerId, search: opts.search });
+      for (const l of res.leads) { if (!seen.has(l.id)) { seen.add(l.id); all.push(l); } }
+      if (!res.hasMore) break;
+      p += 1;
+      await new Promise((r) => setTimeout(r, 250)); // throttle to stay under Kylas rate limits
+    }
+    return all;
+  };
+
+  const handleExport = async (format: ExportFormat, scope: ExportScope) => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      let list: InboundLead[];
+      if (scope === 'all') {
+        list = await fetchAllInbound({});
+      } else {
+        list = await fetchAllInbound({ ownerId, search: appliedSearch });
+        list = list.filter((l) =>
+          (priority === 'all' || l.priority === priority) &&
+          (stage === 'all' || l.stage === stage));
+      }
+      if (!list.length) { alert('No leads to export.'); return; }
+      const name = `b2b_inbound_leads_${scope}_${todayStr()}`;
+      const rows = list.map(inboundToRow);
+      if (format === 'csv') exportRowsCsv(INBOUND_EXPORT_HEADERS, rows, name);
+      else await exportRowsExcel(INBOUND_EXPORT_HEADERS, rows, name, 'Inbound Leads');
+    } catch (e) {
+      alert('Export failed: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const load = () => {
     setLoading(true);
     setError(null);
@@ -482,6 +609,7 @@ export default function InboundLeads() {
               </button>
             ))}
           </div>
+          <ExportButton onExport={handleExport} disabled={exporting} />
           <button onClick={load} disabled={loading} className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap disabled:opacity-50">↻ Sync from Kylas</button>
         </div>
       </div>
