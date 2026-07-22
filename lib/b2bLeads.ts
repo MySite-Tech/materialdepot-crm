@@ -195,17 +195,45 @@ async function fetchRows(pipeline: Pipeline): Promise<B2BLeadRow[]> {
   return (data || []) as B2BLeadRow[];
 }
 
+export interface InboundBoardPage {
+  leads: InboundLead[];
+  page: number;
+  hasMore: boolean;
+  total: number;
+}
+
 // Inbound board = promoted DB rows + Kylas "New" leads not yet in the DB.
-export async function fetchInboundBoard(): Promise<InboundLead[]> {
-  const kylasNew = await fetchB2BInboundLeads();
+// Paginated over the Kylas side; DB overlay is loaded once on the first page.
+export async function fetchInboundBoard(
+  opts?: { page?: number; ownerId?: number; search?: string },
+): Promise<InboundBoardPage> {
+  const page = opts?.page ?? 0;
+  const ownerIds = opts?.ownerId ? [opts.ownerId] : undefined;
+  const search = (opts?.search || '').trim();
+  const kylas = await fetchB2BInboundLeads(page, ownerIds, search);
+
   let dbLeads: InboundLead[] = [];
-  try {
-    dbLeads = (await fetchRows('inbound')).map(rowToInbound);
-  } catch (e) {
-    console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
+  if (page === 0) {
+    try {
+      dbLeads = (await fetchRows('inbound')).map(rowToInbound);
+      if (opts?.ownerId) dbLeads = dbLeads.filter((l) => l.ownerId === opts.ownerId);
+      if (search) {
+        const q = search.toLowerCase();
+        dbLeads = dbLeads.filter((l) =>
+          [l.company, l.contactName, l.phone].some((v) => (v || '').toLowerCase().includes(q)),
+        );
+      }
+    } catch (e) {
+      console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
+    }
   }
   const dbIds = new Set(dbLeads.map((l) => l.id));
-  return [...dbLeads, ...kylasNew.filter((k) => !dbIds.has(k.id))];
+  return {
+    leads: [...dbLeads, ...kylas.leads.filter((k) => !dbIds.has(k.id))],
+    page: kylas.page,
+    hasMore: kylas.hasMore,
+    total: kylas.total,
+  };
 }
 
 export async function fetchOutboundLeads(): Promise<OutboundLead[]> {

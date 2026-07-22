@@ -298,11 +298,14 @@ export async function searchContactByPhone(phoneNumber: string): Promise<number 
 // ---------------------------------------------------------------------------
 
 const B2B_INBOUND_PIPELINE = 31627;
-const B2B_INBOUND_STAGE = 220514;
+const B2B_INBOUND_STAGE = 220515;
 const B2B_INBOUND_OWNERS: Record<number, string> = {
   81181: 'Hardi',
   73321: 'Mandeep',
 };
+
+export const B2B_INBOUND_OWNER_LIST: { id: number; name: string }[] =
+  Object.entries(B2B_INBOUND_OWNERS).map(([id, name]) => ({ id: Number(id), name }));
 
 const B2B_INBOUND_FIELDS = [
   'firstName', 'lastName', 'ownerId', 'pipelineStage', 'phoneNumbers', 'zipcode',
@@ -341,18 +344,22 @@ function toDateInput(v: unknown): string {
   return s.includes('T') ? s.slice(0, 10) : s;
 }
 
-function b2bInboundRule(ownerId: number) {
+function b2bInboundRule(ownerIds: number[], search?: string) {
+  const ownerRule = ownerIds.length === 1
+    ? { operator: 'equal', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerIds[0], relatedFieldIds: null }
+    : { operator: 'in', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerIds, relatedFieldIds: null };
+  const rules: Record<string, any>[] = [
+    ownerRule,
+    { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE, dependentFieldIds: ['pipelineStage', 'pipelineStageReason'] },
+    { operator: 'equal', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGE, relatedFieldIds: ['pipeline'] },
+  ];
+  const q = (search || '').trim();
+  if (q) {
+    rules.push({ id: 'multi_field', field: 'multi_field', type: 'multi_field', input: 'multi_field', operator: 'multi_field', value: q });
+  }
   return {
     fields: B2B_INBOUND_FIELDS,
-    jsonRule: {
-      rules: [
-        { operator: 'equal', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerId, relatedFieldIds: null },
-        { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE, dependentFieldIds: ['pipelineStage', 'pipelineStageReason'] },
-        { operator: 'equal', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGE, relatedFieldIds: ['pipeline'] },
-      ],
-      condition: 'AND',
-      valid: true,
-    },
+    jsonRule: { rules, condition: 'AND', valid: true },
   };
 }
 
@@ -394,27 +401,41 @@ function mapInboundLead(raw: Record<string, any>): import('../app/b2b/mockData')
   };
 }
 
-export async function fetchB2BInboundLeads(): Promise<import('../app/b2b/mockData').InboundLead[]> {
-  const owners = Object.keys(B2B_INBOUND_OWNERS).map(Number);
-  const responses = await Promise.all(
-    owners.map((ownerId) =>
-      kylasFetch('/search/lead?sort=createdAt,desc&page=0&size=100', {
-        method: 'POST',
-        body: JSON.stringify(b2bInboundRule(ownerId)),
-      }).catch(() => ({ content: [] })),
-    ),
-  );
-  const seen = new Set<string>();
-  const leads: import('../app/b2b/mockData').InboundLead[] = [];
-  for (const res of responses) {
-    for (const raw of (res?.content || [])) {
-      const id = String(raw.id);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      leads.push(mapInboundLead(raw));
-    }
+export const B2B_INBOUND_PAGE_SIZE = 25;
+const B2B_INBOUND_OWNER_IDS = Object.keys(B2B_INBOUND_OWNERS).map(Number);
+
+export interface B2BInboundPage {
+  leads: import('../app/b2b/mockData').InboundLead[];
+  page: number;
+  hasMore: boolean;
+  total: number;
+}
+
+export async function fetchB2BInboundLeads(
+  page = 0,
+  ownerIds: number[] = B2B_INBOUND_OWNER_IDS,
+  search = '',
+): Promise<B2BInboundPage> {
+  let res;
+  try {
+    res = await kylasFetch(`/search/lead?sort=createdAt,desc&page=${page}&size=${B2B_INBOUND_PAGE_SIZE}`, {
+      method: 'POST',
+      body: JSON.stringify(b2bInboundRule(ownerIds, search)),
+    });
+  } catch {
+    return { leads: [], page, hasMore: false, total: 0 };
   }
-  return leads;
+  const content: Record<string, any>[] = res?.content || [];
+  const total = typeof res?.totalElements === 'number' ? res.totalElements : content.length;
+  const totalPages = typeof res?.totalPages === 'number'
+    ? res.totalPages
+    : Math.ceil(total / B2B_INBOUND_PAGE_SIZE);
+  return {
+    leads: content.map(mapInboundLead),
+    page,
+    hasMore: page + 1 < totalPages,
+    total,
+  };
 }
 
 function stripHtml(s: unknown): string {

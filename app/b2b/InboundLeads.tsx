@@ -6,7 +6,7 @@ import {
   fmtINR, type InboundLead, type InboundStage, type Priority,
   type LeadNote, type CallLogEntry,
 } from './mockData';
-import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, updateInboundLeadKylas, fetchInboundLeadDetail } from '@/lib/mockApi';
+import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, updateInboundLeadKylas, fetchInboundLeadDetail, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
 
 function PriorityBadge({ p }: { p: Priority }) {
@@ -351,6 +351,9 @@ export default function InboundLeads() {
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [owner, setOwner] = useState('all');
   const [priority, setPriority] = useState('all');
+  const [stage, setStage] = useState<'all' | InboundStage>('all');
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [leads, setLeads] = useState<InboundLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -358,26 +361,89 @@ export default function InboundLeads() {
   const [dragOverStage, setDragOverStage] = useState<InboundStage | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const ownerId = useMemo(
+    () => (owner === 'all' ? undefined : B2B_INBOUND_OWNER_LIST.find((o) => o.name === owner)?.id),
+    [owner],
+  );
+
+  const runSearch = () => setAppliedSearch(search.trim());
+  const clearSearch = () => { setSearch(''); setAppliedSearch(''); };
+
   const load = () => {
     setLoading(true);
     setError(null);
-    fetchInboundBoard()
-      .then(setLeads)
+    fetchInboundBoard({ page: 0, ownerId, search: appliedSearch })
+      .then((res) => {
+        setLeads(res.leads);
+        setPage(res.page);
+        setHasMore(res.hasMore);
+        setTotal(res.total);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load leads'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  // Refetch from page 0 whenever the owner filter or search changes.
+  useEffect(() => { load(); }, [ownerId, appliedSearch]);
 
-  const ownerOptions = useMemo(
-    () => Array.from(new Set(leads.map((l) => l.owner))).sort(),
-    [leads],
+  const loadMore = () => {
+    if (loadingMore || loading || !hasMore) return;
+    setLoadingMore(true);
+    fetchInboundBoard({ page: page + 1, ownerId, search: appliedSearch })
+      .then((res) => {
+        setLeads((prev) => {
+          const seen = new Set(prev.map((l) => l.id));
+          return [...prev, ...res.leads.filter((l) => !seen.has(l.id))];
+        });
+        setPage(res.page);
+        setHasMore(res.hasMore);
+        setTotal(res.total);
+      })
+      .finally(() => setLoadingMore(false));
+  };
+
+  // ── List view: discrete pagination (replace page, not accumulate) ──
+  const [listPage, setListPage] = useState(0);
+  const [listLeads, setListLeads] = useState<InboundLead[]>([]);
+  const [listTotal, setListTotal] = useState(0);
+  const [listLoading, setListLoading] = useState(false);
+
+  useEffect(() => { setListPage(0); }, [ownerId, appliedSearch]);
+
+  useEffect(() => {
+    if (view !== 'list') return;
+    let alive = true;
+    setListLoading(true);
+    fetchInboundBoard({ page: listPage, ownerId, search: appliedSearch })
+      .then((res) => {
+        if (!alive) return;
+        setListLeads(res.leads);
+        setListTotal(res.total);
+      })
+      .finally(() => { if (alive) setListLoading(false); });
+    return () => { alive = false; };
+  }, [view, listPage, ownerId, appliedSearch]);
+
+  const listTotalPages = Math.max(1, Math.ceil(listTotal / B2B_INBOUND_PAGE_SIZE));
+  const listFiltered = useMemo(
+    () => listLeads.filter((l) =>
+      (priority === 'all' || l.priority === priority) &&
+      (stage === 'all' || l.stage === stage),
+    ),
+    [listLeads, priority, stage],
   );
 
+  const ownerOptions = useMemo(() => B2B_INBOUND_OWNER_LIST.map((o) => o.name).sort(), []);
+
   const filtered = useMemo(() => leads.filter((l) =>
-    (owner === 'all' || l.owner === owner) &&
-    (priority === 'all' || l.priority === priority)
-  ), [leads, owner, priority]);
+    (priority === 'all' || l.priority === priority) &&
+    (stage === 'all' || l.stage === stage)
+  ), [leads, priority, stage]);
 
   const byStage = (s: InboundStage) => filtered.filter((l) => l.stage === s);
 
@@ -402,7 +468,7 @@ export default function InboundLeads() {
       <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-gray-800">Inbound Leads</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Synced from Kylas · Hardi &amp; Mandeep{loading ? ' · loading…' : ` · ${leads.length}`}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Synced from Kylas · Hardi &amp; Mandeep{loading ? ' · loading…' : ` · ${leads.length}${total > leads.length ? ` of ${total}` : ''}`}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-gray-200 overflow-hidden">
@@ -425,18 +491,53 @@ export default function InboundLeads() {
         {INBOUND_STAGES.map((s) => (
           <div key={s} className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
             <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 truncate">{s}</div>
-            <div className="text-2xl font-bold text-gray-800 mt-0.5">{byStage(s).length}</div>
+            <div className="text-2xl font-bold text-gray-800 mt-0.5">{s === 'New' ? total : byStage(s).length}</div>
           </div>
         ))}
       </div>
 
       {/* ── Filters ── */}
       <div className="flex items-end gap-3 mb-4 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Search</label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
+                placeholder="Name or phone…"
+                className="w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white focus:border-[#0F766E]"
+              />
+              {search && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm leading-none"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <button
+              onClick={runSearch}
+              className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
+            >
+              Search
+            </button>
+          </div>
+        </div>
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Owner</label>
           <select value={owner} onChange={(e) => setOwner(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px]">
             <option value="all">All Reps</option>
             {ownerOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Stage</label>
+          <select value={stage} onChange={(e) => setStage(e.target.value as 'all' | InboundStage)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px]">
+            <option value="all">All Stages</option>
+            {INBOUND_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
@@ -448,7 +549,7 @@ export default function InboundLeads() {
             <option value="Low">Low</option>
           </select>
         </div>
-        <button onClick={() => { setOwner('all'); setPriority('all'); }} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500">Clear</button>
+        <button onClick={() => { setOwner('all'); setPriority('all'); setStage('all'); clearSearch(); }} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500">Clear</button>
       </div>
 
       {error && (
@@ -504,7 +605,7 @@ export default function InboundLeads() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((l) => (
+              {listFiltered.map((l) => (
                 <tr key={l.id} onClick={() => setSelectedId(l.id)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
                   <td className="px-3 py-2.5 font-semibold text-gray-800">{l.company}</td>
                   <td className="px-3 py-2.5 text-gray-500 font-mono">{l.phone}</td>
@@ -518,6 +619,58 @@ export default function InboundLeads() {
               ))}
             </tbody>
           </table>
+          {listLoading && (
+            <div className="flex items-center justify-center gap-2 py-4 text-[11px] text-gray-400">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 border-t-[#0F766E] animate-spin" />
+              Loading…
+            </div>
+          )}
+          {!listLoading && listFiltered.length === 0 && (
+            <div className="text-[11px] text-gray-300 text-center py-6">No leads on this page</div>
+          )}
+          {/* ── List pagination ── */}
+          <div className="flex items-center justify-between px-3 py-3 border-t border-gray-100">
+            <span className="text-[11px] text-gray-400">
+              Page {listPage + 1} of {listTotalPages} · {listTotal} leads
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setListPage((p) => Math.max(0, p - 1))}
+                disabled={listPage === 0 || listLoading}
+                className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40 hover:enabled:border-[#0F766E] hover:enabled:text-[#0F766E]"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={() => setListPage((p) => Math.min(listTotalPages - 1, p + 1))}
+                disabled={listPage >= listTotalPages - 1 || listLoading}
+                className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40 hover:enabled:border-[#0F766E] hover:enabled:text-[#0F766E]"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Load more (kanban only) ── */}
+      {view === 'kanban' && !loading && filtered.length > 0 && (
+        <div className="flex items-center justify-center py-4">
+          {loadingMore ? (
+            <div className="flex items-center gap-2 text-[11px] text-gray-400">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 border-t-[#0F766E] animate-spin" />
+              Loading more…
+            </div>
+          ) : hasMore ? (
+            <button
+              onClick={loadMore}
+              className="px-4 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 hover:border-[#0F766E] hover:text-[#0F766E]"
+            >
+              Load more{total > leads.length ? ` · ${leads.length} of ${total}` : ''}
+            </button>
+          ) : (
+            <span className="text-[11px] text-gray-300">End of leads</span>
+          )}
         </div>
       )}
 
