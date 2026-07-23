@@ -191,11 +191,11 @@ export default function B2BDashboard() {
         <div className="grid grid-cols-3 gap-4">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Current Run Rate</div>
-            <div className="font-mono text-xl font-bold text-black mt-1">{fmtL(d.runRate)}</div>
+            <div className="font-mono text-xl font-bold text-black mt-1">{fmtL(runRate)}</div>
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Required Run Rate</div>
-            <div className="font-mono text-xl font-bold text-black mt-1">{fmtL(d.monthlyTarget)}</div>
+            <div className="font-mono text-xl font-bold text-black mt-1">{fmtL(monthlyTarget)}</div>
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Gap</div>
