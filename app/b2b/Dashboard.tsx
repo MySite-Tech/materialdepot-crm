@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { DASHBOARD, INBOUND_STAGE_COLORS, fmtL, fmtINR } from './mockData';
+import { INBOUND_STAGE_COLORS, fmtL } from './mockData';
+import { fetchB2BData, fetchTargets } from '@/lib/b2bLeads';
+import { computeDashboard, type DashboardMetrics } from './analytics';
 
 const CLIENT_COLORS = ['#EAB308', '#C2410C'];
 const SOURCE_COLORS = ['#1A1A1A', '#EAB308', '#0F766E'];
@@ -26,11 +29,37 @@ function Panel({ title, children, className = '' }: { title: string; children: R
 }
 
 export default function B2BDashboard() {
-  const d = DASHBOARD;
-  const achievedPct = Math.round((d.revenueGenerated / d.monthlyTarget) * 100);
+  const [d, setD] = useState<DashboardMetrics | null>(null);
+  const [monthlyTarget, setMonthlyTarget] = useState(0);
+  const [runRate, setRunRate] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([fetchB2BData(), fetchTargets()])
+      .then(([data, targets]) => {
+        if (!alive) return;
+        const m = computeDashboard(data);
+        const target = targets.monthlyTargetL * 100000;
+        const now = new Date();
+        const dayOfMonth = now.getDate();
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        setD(m);
+        setMonthlyTarget(target);
+        setRunRate(Math.round((m.revenueGenerated / dayOfMonth) * daysInMonth));
+      })
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
+
+  if (loading || !d) {
+    return <div className="p-4 sm:p-6 text-sm text-gray-400">Loading dashboard…</div>;
+  }
+
+  const achievedPct = monthlyTarget > 0 ? Math.round((d.revenueGenerated / monthlyTarget) * 100) : 0;
   const vertical = d.pipelineByVertical;
   const overallPipeline = vertical.inbound + vertical.outbound + vertical.kam;
-  const gap = d.runRate - d.monthlyTarget;
+  const gap = runRate - monthlyTarget;
 
   const maxStage = Math.max(...d.pipelineByStage.map((s) => s.count), 1);
   const clientData = [
@@ -53,16 +82,16 @@ export default function B2BDashboard() {
 
       {/* ── Top metric cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Revenue Generated" value={fmtL(d.revenueGenerated)} sub={`of ${fmtL(d.monthlyTarget)} target`} />
+        <MetricCard label="Revenue Generated" value={fmtL(d.revenueGenerated)} sub={`of ${fmtL(monthlyTarget)} target`} />
         <MetricCard label="Target Achieved" value={`${achievedPct}%`} />
-        <MetricCard label="Run Rate" value={fmtL(d.runRate)} sub="Below required" subTone="warn" />
-        <MetricCard label="Month Projection" value={fmtL(d.monthProjection)} />
+        <MetricCard label="Run Rate" value={fmtL(runRate)} sub={runRate < monthlyTarget ? 'Below required' : 'On track'} subTone={runRate < monthlyTarget ? 'warn' : 'muted'} />
+        <MetricCard label="Month Projection" value={fmtL(runRate)} />
       </div>
 
       {/* ── Revenue vs Target ── */}
       <Panel title="Revenue vs Target" className="mt-3">
         <div className="font-mono text-lg font-bold text-black">
-          {fmtL(d.revenueGenerated)} <span className="text-sm font-normal text-gray-400">of {fmtL(d.monthlyTarget)}</span>
+          {fmtL(d.revenueGenerated)} <span className="text-sm font-normal text-gray-400">of {fmtL(monthlyTarget)}</span>
         </div>
         <div className="h-2 rounded-full bg-gray-200 overflow-hidden mt-3">
           <div className="h-full bg-[#0F766E] rounded-full transition-[width] duration-500" style={{ width: `${achievedPct}%` }} />

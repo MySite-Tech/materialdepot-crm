@@ -133,6 +133,8 @@ export interface KamClient {
 
 export const KAMS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
+export const B2B_ADMINS = ['Krishna Bhagavatula'];
+
 // ── Stage → accent colour (aligned with app STATUS_COLORS vocabulary) ─────────
 export const INBOUND_STAGE_COLORS: Record<InboundStage, string> = {
   'New':               '#3B82F6',
@@ -189,30 +191,49 @@ export const INBOUND_LEADS: InboundLead[] = [
 
 export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
-// ── Dashboard summary (mirrors the reference design) ──────────────────────────
-export const DASHBOARD = {
-  revenueGenerated: 1780000,     // ₹17.80 L
-  monthlyTarget: 12000000,       // ₹1.20 Cr
-  runRate: 3941000,              // ₹39.41 L
-  monthProjection: 3941000,      // ₹39.41 L
-  pipelineByStage: [
-    { label: 'New',         count: 1 },
-    { label: 'In Progress', count: 3 },
-    { label: 'PI Shared',   count: 2 },
-    { label: 'Won',         count: 1 },
-  ],
-  pipelineByVertical: {
-    inbound:  412000,   // ₹4.12 L
-    outbound: 920000,   // ₹9.20 L
-    kam:      677000,   // ₹6.77 L
-  },
-  clients: { active: 3, inactive: 1 },
-  revenueBySource: [
-    { source: 'Inbound',    value: 0 },
-    { source: 'Outbound',   value: 890000 },
-    { source: 'KAM Direct', value: 890000 },
-  ],
+// ── Targets — per-rep role + goal config (actuals are computed from live data) ─
+export type RepRole = 'KAM' | 'Inbound' | 'Outbound';
+
+export interface RepTargetConfig {
+  rep: string;
+  role: RepRole;
+  revenueTargetL: number;       // goal, ₹ lakhs
+  clientsTarget: number;        // KAM goal
+  onboardingsTarget: number;    // Inbound / Outbound goal
+}
+
+export const REP_TARGETS: RepTargetConfig[] = [
+  { rep: 'Tharun',  role: 'KAM',      revenueTargetL: 8, clientsTarget: 12, onboardingsTarget: 0 },
+  { rep: 'Jadhav',  role: 'KAM',      revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
+  { rep: 'Sidhant', role: 'KAM',      revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
+  { rep: 'Hardi',   role: 'Inbound',  revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
+  { rep: 'Mandeep', role: 'Inbound',  revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
+  { rep: 'Vilok',   role: 'Outbound', revenueTargetL: 6, clientsTarget: 0,  onboardingsTarget: 6 },
+  { rep: 'Praful',  role: 'Outbound', revenueTargetL: 6, clientsTarget: 0,  onboardingsTarget: 6 },
+];
+
+export const REP_ROLE_COLORS: Record<RepRole, string> = {
+  KAM:      '#0F766E',
+  Inbound:  '#3B82F6',
+  Outbound: '#EAB308',
 };
+
+export const B2B_MONTHLY_TARGET_L = 120; // ₹1.20 Cr
+
+export interface TargetStore {
+  monthlyTargetL: number;
+  reps: Record<string, { revenueTargetL: number; clientsTarget: number; onboardingsTarget: number }>;
+}
+
+// Default goals from config; the saved store (Supabase b2b_target) is merged over this.
+export function defaultTargetStore(): TargetStore {
+  return {
+    monthlyTargetL: B2B_MONTHLY_TARGET_L,
+    reps: Object.fromEntries(REP_TARGETS.map((r) => [r.rep, {
+      revenueTargetL: r.revenueTargetL, clientsTarget: r.clientsTarget, onboardingsTarget: r.onboardingsTarget,
+    }])),
+  };
+}
 
 // ── Formatting helpers (Indian lakh/crore) ────────────────────────────────────
 export const fmtL = (n: number): string => {

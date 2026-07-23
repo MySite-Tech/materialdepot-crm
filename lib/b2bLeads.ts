@@ -1,10 +1,12 @@
 import { supabase } from '@/lib/supabase';
-import { fetchB2BInboundLeads } from '@/lib/mockApi';
+import { fetchB2BInboundLeads, B2B_INBOUND_OWNER_LIST } from '@/lib/mockApi';
 import {
+  defaultTargetStore,
   type InboundLead, type InboundStage, type Priority,
   type OutboundLead, type OutboundStage,
   type KamClient, type KamStage, type KamSource,
   type AccountType, type ProductCategory, type LeadNote,
+  type TargetStore,
 } from '@/app/b2b/mockData';
 
 type Pipeline = 'inbound' | 'outbound' | 'kam';
@@ -236,6 +238,44 @@ export async function fetchInboundBoard(
   };
 }
 
+export interface B2BData {
+  inbound: InboundLead[];
+  outbound: OutboundLead[];
+  kam: KamClient[];
+  inboundTotal: number;                        // true Kylas total of "New" inbound leads (board only loads page 0)
+  inboundOwnerTotals: Record<string, number>;  // New-stage count per owner name (for the leaderboard)
+}
+
+// Per-owner New-stage totals from Kylas (one light count query per inbound owner).
+async function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
+  const entries = await Promise.all(
+    B2B_INBOUND_OWNER_LIST.map(async (o) => {
+      try {
+        const res = await fetchB2BInboundLeads(0, [o.id]);
+        return [o.name, res.total] as const;
+      } catch {
+        return [o.name, 0] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
+// Aggregation feed for Dashboard / Leadership / Targets — one pull across all
+// three pipelines. Inbound = full DB overlay + first page of Kylas "New" leads;
+// inboundTotal / inboundOwnerTotals carry the real New-stage counts so the
+// numbers don't reflect only page 0.
+export async function fetchB2BData(): Promise<B2BData> {
+  const inboundP = fetchInboundBoard()
+    .then((p) => ({ leads: p.leads, total: p.total }))
+    .catch((e) => { console.error('[b2b] inbound aggregate fetch failed', e); return { leads: [] as InboundLead[], total: 0 }; });
+  const ownerTotalsP = fetchInboundOwnerTotals().catch(() => ({} as Record<string, number>));
+  const [inbound, outbound, kam, inboundOwnerTotals] = await Promise.all([
+    inboundP, fetchOutboundLeads(), fetchKamClients(), ownerTotalsP,
+  ]);
+  return { inbound: inbound.leads, outbound, kam, inboundTotal: inbound.total, inboundOwnerTotals };
+}
+
 export async function fetchOutboundLeads(): Promise<OutboundLead[]> {
   try {
     return (await fetchRows('outbound')).map(rowToOutbound);
@@ -275,4 +315,41 @@ export function upsertOutboundLead(l: OutboundLead): Promise<void> {
 
 export function upsertKamClient(l: KamClient): Promise<void> {
   return upsert(kamToRow(l), 'id');
+}
+
+// ── Targets (shared team goals; single config row) ────────────────────────────
+
+const TARGET_TABLE = 'b2b_target';
+const TARGET_ROW_ID = 'default';
+
+export async function fetchTargets(): Promise<TargetStore> {
+  const base = defaultTargetStore();
+  try {
+    const { data, error } = await supabase
+      .from(TARGET_TABLE)
+      .select('monthly_target_l, reps')
+      .eq('id', TARGET_ROW_ID)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return base;
+    return {
+      monthlyTargetL: Number(data.monthly_target_l) || base.monthlyTargetL,
+      reps: { ...base.reps, ...((data.reps as TargetStore['reps']) || {}) },
+    };
+  } catch (e) {
+    console.error('[b2b] fetch targets failed (pre-migration?)', e);
+    return base;
+  }
+}
+
+export async function saveTargets(store: TargetStore): Promise<void> {
+  try {
+    const { error } = await supabase.from(TARGET_TABLE).upsert(
+      { id: TARGET_ROW_ID, monthly_target_l: store.monthlyTargetL, reps: store.reps, updated_at: new Date().toISOString() },
+      { onConflict: 'id' },
+    );
+    if (error) throw error;
+  } catch (e) {
+    console.error('[b2b] save targets failed', e);
+  }
 }
