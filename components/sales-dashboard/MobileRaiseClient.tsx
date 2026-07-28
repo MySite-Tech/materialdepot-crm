@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Deal, DealsSearchResponse } from "@/lib/types";
 import { syncEstimate, fetchKylasDealInfo, type SyncEstimateResult, type KylasDealInfo } from "@/lib/mockApi";
 
 const PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 10;
+// Kylas' search index lags behind deal creation, so a freshly-synced deal is
+// polled for rather than fetched once — up to ~50s before giving up.
+const SYNC_INDEX_DELAY_MS = 5000;
+const SYNC_INDEX_MAX_ATTEMPTS = 10;
 const SALES_PIPELINE_ID = 31661;
 
 const SALES_PIPELINE_RULE = {
@@ -140,6 +144,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   const [kylasDealInfo, setKylasDealInfo] = useState<KylasDealInfo | null>(null);
   const [kylasError, setKylasError] = useState<string | null>(null);
 
+  // Auto-sync when a search for a lead/cart ID returns no deals
+  const [autoSyncing, setAutoSyncing] = useState(false);
+  const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
+  const autoSyncAttempted = useRef<Set<string>>(new Set());
+
   // Fetch sales deals
 
   const fetchDeals = useCallback(async (q: string) => {
@@ -229,9 +238,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
 
       // Background: contact names only
       loadBackgroundData(allSales);
+      return allSales;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
+      return null;
     }
   }, []);
 
@@ -533,16 +544,70 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     return () => { cancelled = true; };
   }, [selectedDeal?.id]);
 
-  function handleSearch(e: React.FormEvent) {
+  // Only IDs that detectInputType() maps to cart_number or lead_id are safe to
+  // auto-sync — a name or phone would be sent to the backend as a bogus lead_id.
+  function isSyncableId(q: string) {
+    return /^CT\w+$/i.test(q) || /^(?:ENQ|MD)\w+$/i.test(q);
+  }
+
+  // The sync-estimate endpoint looks the deal up and creates it if missing, and is
+  // idempotent — so a zero-result search on a known ID can just call it directly.
+  async function autoSyncMissingDeal(q: string) {
+    const key = q.toUpperCase();
+    // Marked only on success — a failed sync must stay retryable, otherwise
+    // hitting Search again would silently do nothing.
+    autoSyncAttempted.current.delete(key);
+    setAutoSyncing(true);
+    setAutoSyncError(null);
+    try {
+      const result = await syncEstimate(q);
+      if (result.success) {
+        autoSyncAttempted.current.add(key);
+        // The deal exists in Kylas now, but its search index lags behind the
+        // create by an unpredictable amount — poll until it shows up.
+        for (let i = 0; i < SYNC_INDEX_MAX_ATTEMPTS; i++) {
+          await new Promise((resolve) => setTimeout(resolve, SYNC_INDEX_DELAY_MS));
+          const found = await fetchDeals(q);
+          if (found && found.length > 0) return;
+        }
+        setAutoSyncError(
+          "Deal created in Kylas, but it hasn't appeared in search yet. Search again in a moment."
+        );
+      } else if (result.queued) {
+        setAutoSyncError("Rate limited by Kylas — queued for retry. Search again in a moment.");
+      } else {
+        setAutoSyncError(
+          `${result.message ?? result.error ?? "Could not create this deal in Kylas."} — search again to retry.`
+        );
+      }
+    } catch (err) {
+      setAutoSyncError(
+        `${err instanceof Error ? err.message : "Could not reach Kylas."} — search again to retry.`
+      );
+    } finally {
+      setAutoSyncing(false);
+    }
+  }
+
+  async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+    const q = inputValue.trim();
     setQuery(inputValue);
     setContacts([]);
     setExpandedContactId(null);
-    fetchDeals(inputValue);
-    if (/^\d{10}$/.test(inputValue.trim())) {
+    setAutoSyncError(null);
+    if (/^\d{10}$/.test(q)) {
       searchContacts(inputValue);
     } else {
       setContacts([]);
+    }
+    const found = await fetchDeals(inputValue);
+    if (
+      found?.length === 0 &&
+      isSyncableId(q) &&
+      !autoSyncAttempted.current.has(q.toUpperCase())
+    ) {
+      autoSyncMissingDeal(q);
     }
   }
 
@@ -663,14 +728,29 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         Sales Deals {!loading && `(${deals.length})`}
       </p>
 
-      {loading ? (
+      {/* Checked before `loading` — each poll flips loading on, which would
+          otherwise swap this spinner for the skeleton every few seconds. */}
+      {autoSyncing ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+          <svg className="w-4 h-4 animate-spin text-yellow-500" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          syncing from Kylas…
+        </div>
+      ) : loading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
           ))}
         </div>
       ) : deals.length === 0 ? (
-        <p className="text-center py-10 text-sm text-gray-400">No sales deals found.</p>
+        <div className="py-10 space-y-2">
+          <p className="text-center text-sm text-gray-400">No sales deals found.</p>
+          {autoSyncError && (
+            <p className="text-center text-sm text-red-600 px-4">{autoSyncError}</p>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
           {deals.map((deal) => {
