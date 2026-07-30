@@ -133,6 +133,12 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
 // Roles that always see the B2B Sales CRM, regardless of individual permissions.
 const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech', 'b2b_sales', 'b2b_KAM', 'b2b_manager']);
 
+const APPOINTMENT_TRACKER_ROLES = new Set([
+  'superadmin', 'admin', 'tech',   // → Admin view
+  'manager', 'store_manager',      // → Store Manager view
+  'retail',                        // → Receptionist view
+]);
+
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
   let tabs: Array<MainTab>;
@@ -144,6 +150,9 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   }
   if (B2B_SALES_ROLES.has(user?.role ?? '') && !tabs.includes('b2bSales')) {
     tabs = [...tabs, 'b2bSales'];
+  }
+  if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
+    tabs = [...tabs, 'appointmentTracker'];
   }
   return tabs;
 };

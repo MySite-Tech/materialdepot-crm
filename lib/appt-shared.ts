@@ -25,9 +25,12 @@ export type Role = (typeof ROLES)[number]["key"];
 
 // ── Tracker role resolution ───────────────────────────────────
 // Straight from the CRM role. Keys are the backend's `permission_name` values
-// (see PERMISSION_ID_TO_ROLE in lib/mockApi.ts). The `crm.appointment_tracker`
-// permission already decides *whether* someone sees the tab; this decides which
-// view they get once they're in.
+// (UserPermission.permission_choices in MaterialDepotDjangoBackend). Note the
+// stored value and its display label differ for some roles: 'retail' is labelled
+// "Receptionist" and 'customer_success' is labelled "Consultants" — so 'retail'
+// is the receptionist here, and consultants fall through to the presales view.
+// The `crm.appointment_tracker` permission decides *whether* someone sees the
+// tab; this decides which view they get once they're in.
 const CRM_ROLE_TO_APPT: Record<string, Role> = {
   superadmin: "admin",
   admin: "admin",
@@ -35,7 +38,6 @@ const CRM_ROLE_TO_APPT: Record<string, Role> = {
   manager: "manager",
   store_manager: "manager",
   retail: "receptionist",
-  customer_success: "receptionist",
   pre_sales: "presales",
   sales: "presales",
   post_sales: "presales",
