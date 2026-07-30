@@ -14,6 +14,7 @@ import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import B2BSalesCRM from './b2b/B2BSalesCRM';
+import AppointmentTrackerClient from '@/components/appointment-tracker/AppointmentTrackerClient';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -146,8 +147,6 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   }
   return tabs;
 };
-
-const APPOINTMENT_TRACKER_URL = 'https://kylas-dashboard.vercel.app/dashboard/appointment-tracker';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
@@ -2547,13 +2546,7 @@ export default function App() {
       {mainTab === 'b2bSales' && <B2BSalesCRM />}
 
       {mainTab === 'appointmentTracker' && canSeeAppointmentTracker && (
-        <div className="h-[calc(100vh-84px)] w-full">
-          <iframe
-            src={APPOINTMENT_TRACKER_URL}
-            title="Appointment Tracker"
-            className="w-full h-full border-0"
-          />
-        </div>
+        <AppointmentTrackerClient currentUser={currentUser} />
       )}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
