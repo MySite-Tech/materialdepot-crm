@@ -11,7 +11,7 @@ import type { AppUser } from '../types/crm';
 
 // Branch enumValue must exactly match the corresponding option on Kylas's own
 // `companyBusinessType` picklist, or that branch's leads won't be found (see
-// branchFrom/BRANCH_ENUM_VALUES usage in AppointmentTrackerClient.tsx).
+// branchFrom here, and BRANCH_ENUM_VALUES in app/api/appointments/route.ts).
 export const BRANCHES = ["JP Nagar", "Yelahanka", "Whitefield", "Gachibowli", "Kompally", "HSR"] as const;
 export type Branch = (typeof BRANCHES)[number];
 
