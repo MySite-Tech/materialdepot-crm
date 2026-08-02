@@ -468,6 +468,16 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
     return () => { cancelled = true; };
   }, [needsPlan, planLoaded]);
 
+  // Re-read the plan from the server. Called after a save or a discard so the
+  // planner shows authoritative state — including branches this client didn't
+  // write and edits other people made — rather than trusting its own draft.
+  const reloadPlan = useCallback(async () => {
+    const fresh = await fetchPlan();
+    setPlan(fresh);
+    setPlanLoaded(true);
+    return fresh;
+  }, []);
+
   useEffect(() => { if (hydrated) localStorage.setItem(LS.BRANCH, branch); }, [branch, hydrated]);
 
   // Appointments: one request for every branch and date, so this must NOT depend
@@ -621,7 +631,7 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
         <>
           <ManagerSummary leads={scopedLeads} branch={branch} ec={ec} footfall={footfall} range={range} />
           {planLoaded ? (
-            <RotaPlanner plan={plan} setPlan={setPlan} branch={branch} allowBranchSwitch={role === "admin"} />
+            <RotaPlanner plan={plan} reloadPlan={reloadPlan} branch={branch} allowBranchSwitch={role === "admin"} />
           ) : (
             <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6 text-[12px] text-gray-400">
               Loading rota…
@@ -825,9 +835,10 @@ function withCodeAt(codeStr: string | undefined, dayIdx: number, value: ShiftCod
   return arr.join("");
 }
 
-function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
+function RotaPlanner({ plan, reloadPlan, branch, allowBranchSwitch = false }: {
   plan: RotaPlan;
-  setPlan: (p: RotaPlan) => void;
+  /** Re-reads from the server and updates the parent; returns the fresh plan. */
+  reloadPlan: () => Promise<RotaPlan>;
   branch: Branch;
   allowBranchSwitch?: boolean;
 }) {
@@ -904,8 +915,12 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
     setSaveError(null);
     try {
       await savePlan(draft, b); // only the branch on screen — see savePlan
-      setPlan(draft); // reflect saved state up to parent (shared across users after next fetch)
+      // Clear `touched` BEFORE reloading, so the sync effect is allowed to adopt
+      // the server's copy. Re-reading (rather than trusting our own draft) is
+      // what surfaces other branches and other people's concurrent edits.
       setTouched(false);
+      const fresh = await reloadPlan();
+      setDraft(fresh);
       setSavingState("saved");
       setTimeout(() => setSavingState("idle"), 2000);
     } catch (e) {
@@ -914,9 +929,14 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
     }
   };
 
-  const handleReset = () => {
-    setDraft(plan); // discard local edits
+  // Discard: drop local edits AND re-read, so what's on screen afterwards is the
+  // server's current state rather than whatever this tab happened to load with.
+  const handleReset = async () => {
     setTouched(false);
+    setDraft(plan); // immediate feedback; the reload below corrects it if stale
+    try {
+      setDraft(await reloadPlan());
+    } catch { /* keep the local copy if the refresh fails */ }
   };
 
   return (
