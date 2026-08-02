@@ -179,8 +179,8 @@ function mergeWithDefaults(partial: unknown): RotaPlan {
   return base;
 }
 
-// Fetch shared rota from Kylas (via /api/resource-plan). Falls back to empty
-// defaults if the API is unreachable or the settings lead's field is empty.
+// Fetch the shared rota (via /api/resource-plan, backed by the `rota_plan`
+// Supabase table). Falls back to empty defaults if the API is unreachable.
 async function fetchPlan(): Promise<RotaPlan> {
   try {
     const res = await fetch("/api/resource-plan", { cache: "no-store" });
@@ -190,13 +190,17 @@ async function fetchPlan(): Promise<RotaPlan> {
   } catch { return defaultPlan(); }
 }
 
-async function savePlan(p: RotaPlan): Promise<void> {
-  const pruned: RotaPlan = { version: 2, branches: {} as Record<Branch, RotaBranchData> };
-  for (const b of BRANCHES) pruned.branches[b] = pruneBranchData(p.branches[b] ?? emptyBranchData());
+/**
+ * Saves ONE branch. Sending only the edited branch is what stops a tab that has
+ * been open a while from overwriting branches other people changed in the
+ * meantime — the server writes just the rows it receives.
+ */
+async function savePlan(p: RotaPlan, branch: Branch): Promise<void> {
+  const branches = { [branch]: pruneBranchData(p.branches[branch] ?? emptyBranchData()) };
   const res = await fetch("/api/resource-plan", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan: pruned }),
+    body: JSON.stringify({ plan: { version: 2, branches } }),
   });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
@@ -449,8 +453,9 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
     setHydrated(true);
   }, []);
 
-  // Rota plan (Kylas settings lead) — fetched the first time a view needs it,
-  // then kept. `planLoaded` stops us re-requesting it on every view switch.
+  // Rota plan (Supabase `rota_plan`) — fetched the first time a view needs it,
+  // then kept. `planLoaded` stops us re-requesting it on every view switch, and
+  // gates the planner's render so it never mounts on an empty default plan.
   const [planLoaded, setPlanLoaded] = useState(false);
   useEffect(() => {
     if (!needsPlan || planLoaded) return;
@@ -615,7 +620,13 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
       {(role === "manager" || (role === "admin" && adminView === "manager")) && (
         <>
           <ManagerSummary leads={scopedLeads} branch={branch} ec={ec} footfall={footfall} range={range} />
-          <RotaPlanner plan={plan} setPlan={setPlan} branch={branch} allowBranchSwitch={role === "admin"} />
+          {planLoaded ? (
+            <RotaPlanner plan={plan} setPlan={setPlan} branch={branch} allowBranchSwitch={role === "admin"} />
+          ) : (
+            <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6 text-[12px] text-gray-400">
+              Loading rota…
+            </div>
+          )}
         </>
       )}
       {role === "admin" && adminView === "overview" && (
@@ -829,9 +840,16 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // If the parent plan updates (e.g., re-fetched from server), sync into the draft
-  // as long as the user isn't actively editing (dirty).
-  useEffect(() => { setDraft(plan); }, [plan]);
+  // Set the moment the user edits anything, cleared on save/reset. This is what
+  // protects unsaved work from an incoming `plan` update: the old code adopted
+  // the new plan unconditionally, so anything typed before the initial fetch
+  // resolved was silently discarded.
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (touched) return;
+    setDraft(plan);
+  }, [plan, touched]);
   useEffect(() => { setEditBranch(branch); }, [branch]);
 
   const b = allowBranchSwitch ? editBranch : branch;
@@ -845,6 +863,7 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
   const today = ymd(new Date());
 
   const setCell = (memberId: string, dayIdx: number, value: ShiftCode | "-") => {
+    setTouched(true);
     setDraft((prev) => {
       const bd = prev.branches[b] ?? emptyBranchData();
       const week = { ...(bd.weeks[weekKey] ?? {}) };
@@ -856,6 +875,7 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
   const addMember = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    setTouched(true);
     setDraft((prev) => {
       const bd = prev.branches[b] ?? emptyBranchData();
       return { ...prev, branches: { ...prev.branches, [b]: { ...bd, members: [...bd.members, { id: newMemberId(), name: trimmed }] } } };
@@ -865,12 +885,14 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
   const renameMember = (memberId: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    setTouched(true);
     setDraft((prev) => {
       const bd = prev.branches[b] ?? emptyBranchData();
       return { ...prev, branches: { ...prev.branches, [b]: { ...bd, members: bd.members.map((m) => m.id === memberId ? { ...m, name: trimmed } : m) } } };
     });
   };
   const removeMember = (memberId: string) => {
+    setTouched(true);
     setDraft((prev) => {
       const bd = prev.branches[b] ?? emptyBranchData();
       return { ...prev, branches: { ...prev.branches, [b]: { ...bd, members: bd.members.filter((m) => m.id !== memberId) } } };
@@ -881,8 +903,9 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
     setSavingState("saving");
     setSaveError(null);
     try {
-      await savePlan(draft);
+      await savePlan(draft, b); // only the branch on screen — see savePlan
       setPlan(draft); // reflect saved state up to parent (shared across users after next fetch)
+      setTouched(false);
       setSavingState("saved");
       setTimeout(() => setSavingState("idle"), 2000);
     } catch (e) {
@@ -893,6 +916,7 @@ function RotaPlanner({ plan, setPlan, branch, allowBranchSwitch = false }: {
 
   const handleReset = () => {
     setDraft(plan); // discard local edits
+    setTouched(false);
   };
 
   return (
