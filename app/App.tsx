@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Download, FileText, FileSpreadsheet, FileType2 } from 'lucide-react';
 import { DayPicker, DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, clearToken, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, appendVisit, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
+import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, clearToken, CRMLeadsStats, loginWithPhone, fetchUsers, addUser, updateUser, deleteUser, updateUserBranches, fetchBranchList, addBranch, updateBranch, deleteBranch, fetchLeadRemarks, appendRemarkToLead, fetchLeadVisits, upsertLead, upsertLeads, fetchLead, createLead, assignBMToClient, deleteLead as deleteLeadDb, fetchCategoryOptions, CategoryOption, syncEstimate, getKylasDealUrl } from '../lib/mockApi';
 import Dashboard from './Dashboard';
 import FootfallTab from './FootfallTab';
 import NPSDashboard from './NPSDashboard';
@@ -2025,13 +2025,6 @@ export default function App() {
     });
     if (isNew && finalData.clientPhone && currentUser?.phone) {
       createLead(finalData, currentUser.phone)
-        .then(() => {
-          if (finalData.clientPhone) {
-            (finalData.visits || []).forEach(v =>
-              appendVisit(finalData.clientPhone!, v, currentUser?.phone).catch(() => {})
-            );
-          }
-        })
         .catch((e) => { console.error('Create lead failed:', e); showSaveError(); });
     } else {
       upsertLead(finalData).catch((e) => { console.error('Save failed:', e); showSaveError(); });

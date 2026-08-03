@@ -1344,19 +1344,6 @@ export async function fetchLeadVisits(clientPhone: string): Promise<import('../t
   }
 }
 
-export async function appendVisit(
-  clientPhone: string,
-  visit: import('../types/crm').Visit,
-  loggedByPhone?: string,
-): Promise<void> {
-  if (!clientPhone) return;
-  await mdFetch('/crm/lead-visits/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_phone: clientPhone, channel: visit.channel, logged_by_phone: loggedByPhone || '' }),
-  });
-}
-
 // ---------------------------------------------------------------------------
 // CRM Lead upsert / fetch / create / delete — replaces Supabase leads table
 // ---------------------------------------------------------------------------
