@@ -6,6 +6,7 @@ import SiteAuditRoleViewerView from '@/components/site-audit/SiteAuditRoleViewer
 import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
 import SiteAuditPerfView from '@/components/site-audit/SiteAuditPerfView';
 import SiteAuditAnalyticsView from '@/components/site-audit/SiteAuditAnalyticsView';
+import SiteAuditStoreTeamView from '@/components/site-audit/SiteAuditStoreTeamView';
 
 /* leaflet touches `window` at module-load time, so it must never be pulled
    into the server-rendered pass Next.js still does for client components. */
@@ -16,7 +17,7 @@ const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/SiteAudi
    trick only works same-origin, so it links out to the real Admin Console
    instead of embedding it. */
 
-type View = 'roleviewer' | 'jobs' | 'perf' | 'analytics' | 'live';
+type View = 'roleviewer' | 'jobs' | 'perf' | 'analytics' | 'live' | 'storeteam';
 
 const TABS: Array<{ view: View; label: string }> = [
   { view: 'roleviewer', label: 'Role Viewer' },
@@ -24,6 +25,7 @@ const TABS: Array<{ view: View; label: string }> = [
   { view: 'perf', label: 'Performance' },
   { view: 'analytics', label: 'Analytics' },
   { view: 'live', label: 'Live' },
+  { view: 'storeteam', label: 'Store Booking' },
 ];
 
 export default function SiteAuditRail() {
@@ -47,11 +49,12 @@ export default function SiteAuditRail() {
         </div>
       </div>
       <div className="p-4 sm:p-6">
-        {view === 'roleviewer' && <SiteAuditRoleViewerView />}
+        {view === 'roleviewer' && <SiteAuditRoleViewerView onOpenStoreTeam={() => setView('storeteam')} />}
         {view === 'jobs' && <SiteAuditJobsView />}
         {view === 'perf' && <SiteAuditPerfView />}
         {view === 'analytics' && <SiteAuditAnalyticsView />}
         {view === 'live' && <SiteAuditLiveView />}
+        {view === 'storeteam' && <SiteAuditStoreTeamView />}
       </div>
     </div>
   );

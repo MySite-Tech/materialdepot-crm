@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { sbGet } from './siteAuditShared';
+import SiteAuditorApp from './SiteAuditorApp';
+import SiteInstallerApp from './SiteInstallerApp';
 
 /* Role/person picker mirroring the original Admin Console's Role Viewer. The
-   original embeds an iframe and swaps localStorage to impersonate a login —
-   that trick only works same-origin, so from the CRM we can only point the
-   user at the real Admin Console to finish the preview there. */
-
-const ADMIN_CONSOLE_URL = 'https://material-depot-site.vercel.app/Admin.html';
-const STORE_TEAM_APP_URL = 'https://material-depot-site.vercel.app/Store_Team_App.html';
+   original embeds an iframe and swaps localStorage to impersonate a login;
+   that trick only works same-origin, so instead we render the native
+   Auditor/Installer apps directly, passing the selected person in as
+   `actingAs`. Service Manager has no native app yet — no external site is
+   linked from here either; it just shows as unavailable until one is built. */
 
 const ROLES: Record<string, { label: string; ico: string }> = {
   service_mgr: { label: 'Service Manager', ico: '📋' },
@@ -22,11 +23,12 @@ const ROLE_ORDER = ['service_mgr', 'site_auditor', 'installer', 'auditor_install
 
 type Person = { id: string; name: string; email: string; role: string };
 
-export default function SiteAuditRoleViewerView() {
+export default function SiteAuditRoleViewerView({ onOpenStoreTeam }: { onOpenStoreTeam: () => void }) {
   const [persons, setPersons] = useState<Record<string, Person[]>>({});
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [personEmail, setPersonEmail] = useState<string | null>(null);
+  const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
 
   useEffect(() => {
     let alive = true;
@@ -48,27 +50,25 @@ export default function SiteAuditRoleViewerView() {
     <div>
       <div className="mb-4">
         <h1 className="text-lg font-bold text-black">Role Viewer</h1>
-        <p className="text-[13px] text-gray-400 mt-0.5">Pick a role and person, then open the Admin Console to preview what they see when they log in.</p>
+        <p className="text-[13px] text-gray-400 mt-0.5">Pick a role and person to preview their dashboard, viewed as them.</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         {ROLE_ORDER.map((k) => {
           // Store Team is a shared per-store kiosk tool, not a per-person login —
-          // link straight out to it, same as the Overview page's "public link" card,
-          // instead of feeding it into the role/person picker below.
+          // it lives in this same tab bar as "Store Booking" (native, no impersonation
+          // needed), so jump straight there instead of feeding it into the picker below.
           if (k === 'store_staff') {
             return (
-              <a
+              <button
                 key={k}
-                href={STORE_TEAM_APP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={onOpenStoreTeam}
                 className="rounded-lg border border-[#EAB308] bg-white p-4 text-center cursor-pointer transition-colors hover:bg-yellow-50"
               >
                 <div className="text-2xl mb-2">{ROLES[k].ico}</div>
                 <div className="text-sm font-semibold text-black">{ROLES[k].label}</div>
-                <div className="text-[11px] font-semibold text-[#EAB308] mt-0.5">Open (public link) ↗</div>
-              </a>
+                <div className="text-[11px] font-semibold text-[#EAB308] mt-0.5">Open Store Booking →</div>
+              </button>
             );
           }
           const cnt = (persons[k] || []).length;
@@ -107,32 +107,80 @@ export default function SiteAuditRoleViewerView() {
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        {!role ? (
+      {!role ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
           <div className="text-center text-gray-400 text-[13px] py-8">👆 Select a role above to preview their dashboard</div>
-        ) : !list.length ? (
+        </div>
+      ) : !list.length ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
           <div className="text-center text-gray-400 text-[13px] py-8">No {ROLES[role].label}s found.</div>
-        ) : !person ? (
+        </div>
+      ) : !person ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
           <div className="text-center text-gray-400 text-[13px] py-8">👆 Select a person above to view their dashboard</div>
-        ) : (
+        </div>
+      ) : role === 'site_auditor' ? (
+        <div className="rounded-lg border border-gray-200 bg-white">
+          <PersonBanner person={person} roleLabel={ROLES[person.role]?.label || person.role} />
+          <div className="p-4 sm:p-6">
+            <SiteAuditorApp actingAs={{ id: person.id, name: person.name, email: person.email }} />
+          </div>
+        </div>
+      ) : role === 'installer' ? (
+        <div className="rounded-lg border border-gray-200 bg-white">
+          <PersonBanner person={person} roleLabel={ROLES[person.role]?.label || person.role} />
+          <div className="p-4 sm:p-6">
+            <SiteInstallerApp actingAs={{ id: person.id, name: person.name, email: person.email }} />
+          </div>
+        </div>
+      ) : role === 'auditor_installer' ? (
+        <div className="rounded-lg border border-gray-200 bg-white">
+          <PersonBanner person={person} roleLabel={ROLES[person.role]?.label || person.role} />
+          <div className="px-4 sm:px-6 pt-4 flex gap-2">
+            <button
+              onClick={() => setCombinedView('auditor')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${combinedView === 'auditor' ? 'bg-[#1A1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'}`}
+            >
+              Auditor view
+            </button>
+            <button
+              onClick={() => setCombinedView('installer')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${combinedView === 'installer' ? 'bg-[#1A1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'}`}
+            >
+              Installer view
+            </button>
+          </div>
+          <div className="p-4 sm:p-6">
+            {combinedView === 'auditor' ? (
+              <SiteAuditorApp actingAs={{ id: person.id, name: person.name, email: person.email }} />
+            ) : (
+              <SiteInstallerApp actingAs={{ id: person.id, name: person.name, email: person.email }} />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
           <div className="text-center py-6">
             <div className="text-sm font-semibold text-black">{person.name}</div>
             <div className="text-[12px] text-gray-400 mt-0.5">{person.email} · {ROLES[person.role]?.label || person.role}</div>
             <p className="text-[12px] text-gray-400 mt-3 max-w-md mx-auto">
-              Impersonated previews only work within the Admin Console itself (it swaps your session locally to load their view) —
-              open it, then pick <b>{ROLES[person.role]?.label || person.role}</b> → <b>{person.name}</b> there.
+              {ROLES[role].label} doesn't have a dashboard in the CRM yet.
             </p>
-            <a
-              href={ADMIN_CONSOLE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-4 bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:opacity-90"
-            >
-              Open Admin Console ↗
-            </a>
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PersonBanner({ person, roleLabel }: { person: Person; roleLabel: string }) {
+  return (
+    <div className="px-4 sm:px-6 pt-4 pb-2 border-b border-gray-100 flex items-center justify-between">
+      <div>
+        <div className="text-sm font-semibold text-black">{person.name}</div>
+        <div className="text-[12px] text-gray-400">{person.email} · {roleLabel}</div>
       </div>
+      <div className="text-[11px] font-semibold text-[#EAB308] bg-yellow-50 border border-[#EAB308]/40 rounded-full px-2.5 py-1">Viewing as</div>
     </div>
   );
 }
