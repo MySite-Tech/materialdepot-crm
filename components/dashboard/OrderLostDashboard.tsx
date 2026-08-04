@@ -11,7 +11,7 @@ import {
   AvailableBM,
   CRMLeadRow,
   OrderLostBranchSummary,
-} from '../lib/mockApi';
+} from '@/lib/mockApi';
 
 interface Props {
   branches: string[];

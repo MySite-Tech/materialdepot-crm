@@ -15,7 +15,7 @@ import {
   type DashboardLostReason,
   type DashboardClosureLead,
 } from '@/lib/mockApi';
-import OrderLostDashboard from './OrderLostDashboard';
+import OrderLostDashboard from '@/components/dashboard/OrderLostDashboard';
 
 const fmtINR = (n?: number | null) => {
   if (!n) return '₹0';

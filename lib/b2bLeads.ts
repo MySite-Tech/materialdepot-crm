@@ -7,7 +7,7 @@ import {
   type KamClient, type KamStage, type KamSource,
   type AccountType, type ProductCategory, type LeadNote,
   type TargetStore,
-} from '@/app/b2b/mockData';
+} from '@/components/b2b/mockData';
 
 type Pipeline = 'inbound' | 'outbound' | 'kam';
 

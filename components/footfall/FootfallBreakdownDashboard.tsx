@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchFootfallBreakdown, FootfallBreakdownData, FootfallBreakdownRow,
   fetchAvailableBMs, fetchCategoryOptions, CategoryOption,
-} from '../lib/mockApi';
+} from '@/lib/mockApi';
 
 interface Props {
   branches: string[];

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import FootfallDashboard from './FootfallDashboard';
-import FootfallRepeatDashboard from './FootfallRepeatDashboard';
-import FootfallBreakdownDashboard from './FootfallBreakdownDashboard';
+import FootfallDashboard from '@/components/footfall/FootfallDashboard';
+import FootfallRepeatDashboard from '@/components/footfall/FootfallRepeatDashboard';
+import FootfallBreakdownDashboard from '@/components/footfall/FootfallBreakdownDashboard';
 
 interface Props {
   branches: string[];

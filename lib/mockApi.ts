@@ -376,7 +376,7 @@ function b2bInboundRule(ownerIds: number[], search?: string) {
   };
 }
 
-function mapInboundSource(raw: unknown): import('../app/b2b/mockData').InboundLead['source'] {
+function mapInboundSource(raw: unknown): import('../components/b2b/mockData').InboundLead['source'] {
   const name = (typeof raw === 'object' && raw ? (raw as { name?: string }).name || '' : String(raw || '')).toLowerCase();
   if (name.includes('whatsapp')) return 'WhatsApp';
   if (name.includes('referral')) return 'Referral';
@@ -386,7 +386,7 @@ function mapInboundSource(raw: unknown): import('../app/b2b/mockData').InboundLe
   return 'Other';
 }
 
-function mapInboundLead(raw: Record<string, any>): import('../app/b2b/mockData').InboundLead {
+function mapInboundLead(raw: Record<string, any>): import('../components/b2b/mockData').InboundLead {
   const firstName = String(raw.firstName || '').trim();
   const lastName = String(raw.lastName || '').trim();
   const phone = Array.isArray(raw.phoneNumbers) && raw.phoneNumbers.length
@@ -418,7 +418,7 @@ export const B2B_INBOUND_PAGE_SIZE = 25;
 const B2B_INBOUND_OWNER_IDS = Object.keys(B2B_INBOUND_OWNERS).map(Number);
 
 export interface B2BInboundPage {
-  leads: import('../app/b2b/mockData').InboundLead[];
+  leads: import('../components/b2b/mockData').InboundLead[];
   page: number;
   hasMore: boolean;
   total: number;
@@ -470,7 +470,7 @@ function formatKylasTs(ts: unknown): string {
 export async function fetchLeadNotes(
   leadId: string | number,
   ownerId?: number,
-): Promise<import('../app/b2b/mockData').LeadNote[]> {
+): Promise<import('../components/b2b/mockData').LeadNote[]> {
   const params = new URLSearchParams({
     targetEntityId: String(leadId),
     targetEntityType: 'LEAD',
@@ -488,7 +488,7 @@ export async function fetchLeadNotes(
         author: n.createdBy?.name || n.updatedBy?.name || 'Kylas',
         text: stripHtml(n.description ?? n.note ?? n.body ?? ''),
       }))
-      .filter((n: import('../app/b2b/mockData').LeadNote) => n.text);
+      .filter((n: import('../components/b2b/mockData').LeadNote) => n.text);
   } catch {
     return [];
   }
@@ -501,7 +501,7 @@ function pickName(v: unknown): string {
 
 export async function fetchLeadCallLogs(
   leadId: string | number,
-): Promise<import('../app/b2b/mockData').CallLogEntry[]> {
+): Promise<import('../components/b2b/mockData').CallLogEntry[]> {
   const body = {
     jsonRule: {
       rules: [{

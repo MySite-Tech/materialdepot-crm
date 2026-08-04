@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import SiteAuditRoleViewerView from './SiteAuditRoleViewerView';
-import SiteAuditJobsView from './SiteAuditJobsView';
-import SiteAuditPerfView from './SiteAuditPerfView';
-import SiteAuditAnalyticsView from './SiteAuditAnalyticsView';
+import SiteAuditRoleViewerView from '@/components/site-audit/SiteAuditRoleViewerView';
+import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
+import SiteAuditPerfView from '@/components/site-audit/SiteAuditPerfView';
+import SiteAuditAnalyticsView from '@/components/site-audit/SiteAuditAnalyticsView';
 
 /* leaflet touches `window` at module-load time, so it must never be pulled
    into the server-rendered pass Next.js still does for client components. */
-const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
+const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/SiteAuditLiveView'), { ssr: false });
 
 /* Sub-tab wrapper for the CRM's Site Audit tab. Role Viewer here is a
    role/person picker only — the original's iframe+localStorage impersonation

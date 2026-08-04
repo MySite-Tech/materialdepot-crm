@@ -14,7 +14,7 @@ import {
   fetchAvailableBMs,
   fetchCategoryOptions,
   CategoryOption,
-} from '../lib/mockApi';
+} from '@/lib/mockApi';
 
 interface Props {
   branches: string[];

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchFootfallRepeat, FootfallRepeatData, FootfallRepeatRow } from '../lib/mockApi';
+import { fetchFootfallRepeat, FootfallRepeatData, FootfallRepeatRow } from '@/lib/mockApi';
 
 interface Props {
   branches: string[];

@@ -13,7 +13,7 @@ import {
   ReportCardBMOption,
   ReportCardData,
   WalkinRow,
-} from '../lib/mockApi';
+} from '@/lib/mockApi';
 
 interface Props {
   branches: string[];

@@ -16,7 +16,7 @@ import {
   type UserInfoProperty,
   type CurrentSalesBM,
   type UserProperties,
-} from '../lib/mockApi';
+} from '@/lib/mockApi';
 
 type BranchOption = Branch;
 
