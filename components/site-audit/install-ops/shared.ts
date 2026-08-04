@@ -1,0 +1,261 @@
+/* Pure business-logic helpers ported verbatim (algorithms unchanged) from
+   material-depot-site's app/src/pages/SMInstall.jsx. The source keeps
+   ORDERS/INSTALLERS/SLOTS_FL/SLOTS_WP as module-level mutable arrays that
+   every helper reads directly; here every helper takes the arrays as
+   parameters instead, so the same math works against React state without
+   reintroducing module-level mutable globals. */
+
+import { SQFT_PER_ROLL } from '../siteAuditShared';
+import type { Assignment, InstallOrder, Installer, SlotDef, Subjob } from './types';
+
+export { SQFT_PER_ROLL };
+
+export const INSTALL_SKU = 'SVC-INSTALL-001';
+export const CUSTOM_WP_SKU = 'WP-CUST';
+export const FLOOR_DAY_CAP = 1;
+export const WP_DAY_SLOTS = 3;
+
+export const DEFAULT_SLOTS_FL: SlotDef[] = [
+  { id: 'sf1', label: '9 AM – 12 PM' },
+  { id: 'sf2', label: '12 PM – 3 PM' },
+  { id: 'sf3', label: '3 PM – 6 PM' },
+];
+export const DEFAULT_SLOTS_WP: SlotDef[] = [
+  { id: 'sw1', label: '8:00 AM – 11:00 AM' },
+  { id: 'sw2', label: '11:00 AM – 2:00 PM' },
+  { id: 'sw3', label: '2:00 PM – 5:00 PM' },
+];
+
+const LS_KEY_FL = 'md_install_slots_fl';
+const LS_KEY_WP = 'md_install_slots_wp';
+
+export function loadSlots(kind: 'fl' | 'wp'): SlotDef[] {
+  const fallback = kind === 'fl' ? DEFAULT_SLOTS_FL : DEFAULT_SLOTS_WP;
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(kind === 'fl' ? LS_KEY_FL : LS_KEY_WP);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {
+    /* malformed local override — fall back to defaults */
+  }
+  return fallback;
+}
+export function saveSlots(kind: 'fl' | 'wp', slots: SlotDef[]) {
+  try {
+    localStorage.setItem(kind === 'fl' ? LS_KEY_FL : LS_KEY_WP, JSON.stringify(slots));
+  } catch {
+    /* best-effort local persistence */
+  }
+}
+
+export function slotsForWp(rolls: number): number {
+  const r = Number(rolls) || 0;
+  return r <= 3 ? 1 : r <= 6 ? 2 : 3;
+}
+export function totalRolls(sj: Subjob): number {
+  return (sj.items || []).reduce((s, it) => s + Math.ceil((parseFloat(it.sqft as any) || 0) / SQFT_PER_ROLL), 0);
+}
+export function dateRange(from: string, to: string): string[] {
+  if (!from || !to || from > to) return from ? [from] : [];
+  const out: string[] = [];
+  let d = new Date(from + 'T00:00');
+  const end = new Date(to + 'T00:00');
+  while (d <= end) {
+    out.push(dstr(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+/* Local-date helpers (dstr/today/addDays), matching material-depot-site's
+   lib/dates.js and the pattern already used in SiteAuditStoreTeamView.tsx /
+   SiteInstallerApp.tsx elsewhere in this CRM. */
+export function dstr(d: Date): string {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+export const today = (() => {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
+})();
+export function addDays(n: number): Date {
+  const d = new Date(today);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+export function fmtDate(ds: string | null | undefined): string {
+  if (!ds) return '—';
+  const d = new Date(ds + 'T00:00');
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+export const STATUS: Record<string, { l: string; badge: string }> = {
+  pending: { l: 'Pending', badge: 'bg-gray-100 text-gray-600' },
+  deliv_ontime: { l: 'Delivery on time', badge: 'bg-green-100 text-green-700' },
+  deliv_delayed: { l: 'Delivery Delayed', badge: 'bg-red-100 text-red-700' },
+  created: { l: 'Service Created', badge: 'bg-purple-100 text-purple-700' },
+  call_na: { l: 'Call not picked', badge: 'bg-red-100 text-red-700' },
+  scheduled: { l: 'Site Installation Scheduled', badge: 'bg-sky-100 text-sky-700' },
+  assigned: { l: 'Site Installer Assigned', badge: 'bg-amber-100 text-amber-700' },
+  callpending: { l: 'Call Pending (Installer)', badge: 'bg-amber-100 text-amber-700' },
+  reschedule: { l: 'To Reschedule', badge: 'bg-red-100 text-red-700' },
+  onway: { l: 'On The Way', badge: 'bg-blue-100 text-blue-700' },
+  atsite: { l: 'At Site', badge: 'bg-indigo-100 text-indigo-700' },
+  partial: { l: 'Partially Completed', badge: 'bg-teal-100 text-teal-700' },
+  completed: { l: 'Site Installation Completed', badge: 'bg-green-100 text-green-700' },
+};
+export const AUTO_STATUSES = ['onway', 'atsite', 'completed'];
+
+export function mapUrl(a: string) {
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
+}
+
+export function mapInstallRow(r: any): InstallOrder {
+  return {
+    id: r.id,
+    pi: r.pi || '',
+    po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+    skus: r.skus || [],
+    bm: r.bm || '—',
+    name: r.customer_name || '',
+    phone: r.phone || '',
+    addr: r.addr || '',
+    matchedAudit: r.matched_audit || false,
+    auditBy: (r.service && r.service.audit_by) || null,
+    deliveryDate: r.delivery_date || null,
+    customWp: r.custom_wp || false,
+    status: r.status || 'pending',
+    subjobs: r.subjobs || null,
+    service: r.service || null,
+    log: r.log || [],
+  };
+}
+
+export function slotLabel(id: string | null | undefined, slotsFl: SlotDef[], slotsWp: SlotDef[]): string {
+  if (!id) return '—';
+  const found = [...slotsFl, ...slotsWp].find((s) => s.id === id);
+  if (found) return found.label;
+  if (/^\d{1,2}:\d{2}$/.test(id)) {
+    const [h, m] = id.split(':').map(Number);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return h12 + ':' + (m < 10 ? '0' : '') + m + ' ' + ap;
+  }
+  return '—';
+}
+
+export function installerById(installers: Installer[], id: string | null | undefined) {
+  return installers.find((a) => a.id === id) || null;
+}
+
+function subjobAssignList(sj: Subjob): Array<{ installer_id?: string; date?: string | null; dates?: string[]; mode: string }> {
+  if (sj.assignments && sj.assignments.length) return sj.assignments;
+  return sj.installer ? [{ installer_id: sj.installer, date: sj.date, dates: [], mode: 'standard' }] : [];
+}
+
+export function opsCallDue(o: InstallOrder): boolean {
+  if (!['pending', 'deliv_delayed', 'call_na'].includes(o.status)) return false;
+  if (!o.deliveryDate) return false;
+  const dd = new Date(o.deliveryDate + 'T00:00');
+  const daysToDelivery = Math.round((dd.getTime() - today.getTime()) / 86400000);
+  return o.customWp ? daysToDelivery <= 3 : daysToDelivery <= 1;
+}
+
+export function flLoad(orders: InstallOrder[], id: string, date: string): number {
+  let n = 0;
+  orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
+    if (sj.type !== 'flooring') return;
+    subjobAssignList(sj).forEach((a) => {
+      if (a.installer_id !== id) return;
+      const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : [];
+      if (dates.includes(date)) n++;
+    });
+  }));
+  return n;
+}
+export function wpSlotLoad(orders: InstallOrder[], id: string, date: string): number {
+  let n = 0;
+  orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
+    if (sj.type !== 'wallpaper') return;
+    subjobAssignList(sj).forEach((a) => {
+      if (a.installer_id !== id) return;
+      const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : [];
+      if (dates.includes(date)) n += slotsForWp(totalRolls(sj));
+    });
+  }));
+  return n;
+}
+export function installOrderHasDate(o: InstallOrder, ds: string): boolean {
+  return (o.subjobs || []).some((sj) => subjobAssignList(sj).some((a) => (a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : []).includes(ds)));
+}
+
+/* All (order, subjob) pairs that have an installer assignment landing on
+   date `ds` — used by both the "Today's installs" table and the Calendar
+   day columns/detail panel. */
+export function sjsForDay(orders: InstallOrder[], installers: Installer[], ds: string): Array<{ o: InstallOrder; sj: Subjob }> {
+  const res: Array<{ o: InstallOrder; sj: Subjob }> = [];
+  orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
+    const asgns: Assignment[] = sj.assignments && sj.assignments.length
+      ? sj.assignments
+      : sj.installer
+        ? [{ installer_id: sj.installer, installer_name: (installerById(installers, sj.installer) || { name: '?' } as Installer).name, date: sj.date, mode: 'standard', primary: true, dates: [] }]
+        : [];
+    if (asgns.some((a) => { const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : []; return dates.includes(ds); })) res.push({ o, sj });
+  }));
+  return res;
+}
+export function needActionCount(orders: InstallOrder[]): number {
+  const opsDue = orders.filter(opsCallDue).length;
+  const todayStr = dstr(today);
+  const fuDue = orders.filter((o) => o.service && o.service.follow_up_date && o.service.follow_up_date <= todayStr).length;
+  const resched = orders.filter((o) => o.status === 'reschedule' || (o.subjobs || []).some((sj) => sj.status === 'reschedule')).length;
+  return opsDue + fuDue + resched;
+}
+
+/* Pure version of the source's syncParent(o) — returns the rolled-up parent
+   status instead of mutating `o.status` in place. */
+export function syncParentStatus(subjobs: Subjob[] | null, fallback: string): string {
+  if (!subjobs || !subjobs.length) return fallback;
+  const sts = subjobs.map((s) => s.status);
+  if (sts.every((s) => s === 'completed')) return 'completed';
+  if (sts.some((s) => s === 'completed') && sts.some((s) => s !== 'completed')) return 'partial';
+  if (sts.some((s) => ['onway', 'atsite'].includes(s))) return sts.find((s) => ['onway', 'atsite'].includes(s))!;
+  if (sts.some((s) => s === 'reschedule')) return 'reschedule';
+  if (sts.every((s) => s === 'assigned')) return 'assigned';
+  if (sts.some((s) => s === 'assigned')) return 'assigned';
+  if (sts.some((s) => s === 'scheduled')) return 'scheduled';
+  if (sts.every((s) => s === 'created')) return 'created';
+  return fallback;
+}
+
+export function initials(n?: string | null) {
+  return (n || '').split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase();
+}
+
+export function fmtLogLocal(d?: string | null): string {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) {
+    const m = String(d).match(/\d{1,2}:\d{2}\s*(?:[AP]M)?/i);
+    return m ? m[0] + ' (date unknown)' : '—';
+  }
+  const ts = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + ts;
+}
+
+export function emptySkuRow(grp: 'flooring' | 'wallpaper') {
+  return grp === 'flooring' ? { sku: '', name: '', sqft: '', link: '' } : { sku: '', name: '', sqft: '' };
+}
+export function skuQtyField(grp: 'flooring' | 'wallpaper') {
+  return grp === 'wallpaper' ? { label: 'Area to be wallpapered (sq.ft)', ph: 'e.g. 120' } : { label: 'Area of installation (sq.ft)', ph: 'e.g. 180' };
+}
+export function rollHintText(sqft: string | number | undefined) {
+  const n = parseFloat(String(sqft ?? '')) || 0;
+  if (!n) return SQFT_PER_ROLL + ' sq.ft = 1 roll, rounded up';
+  const r = Math.ceil(n / SQFT_PER_ROLL);
+  return '= ' + r + ' roll' + (r === 1 ? '' : 's') + ' · ' + SQFT_PER_ROLL + ' sq.ft = 1 roll';
+}
