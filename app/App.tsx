@@ -9,6 +9,7 @@ import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, cl
 import Dashboard from './Dashboard';
 import FootfallTab from './FootfallTab';
 import NPSDashboard from './NPSDashboard';
+import SiteAuditRail from './SiteAuditRail';
 import WeeklyFunnelDashboard from './WeeklyFunnelDashboard';
 import ReportCardDashboard from './ReportCardDashboard';
 import StoreVisitWrapper from './StoreVisitWrapper';
@@ -100,11 +101,11 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker' | 'siteAudit';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps', 'siteAudit'],
   manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'b2bSales', 'weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
@@ -125,6 +126,7 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.b2b_sales', 'b2bSales'],
   ['crm.admin', 'admin'],
   ['crm.nps', 'nps'],
+  ['crm.site_audit', 'siteAudit'],
   ['crm.appointment_tracker', 'appointmentTracker'],
 ];
 
@@ -1609,7 +1611,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [permsLoaded, setPermsLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'appointmentTracker'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'appointmentTracker', 'siteAudit'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
@@ -2494,7 +2496,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'b2bSales' as const, label: 'B2B Sales' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'b2bSales' as const, label: 'B2B Sales' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'siteAudit' as const, label: 'Site Audit' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
           .filter(t => t.key === 'appointmentTracker'
             ? canSeeAppointmentTracker
             : allowedTabs.includes(t.key))
@@ -2537,6 +2539,10 @@ export default function App() {
 
       {mainTab === 'nps' && (
         <NPSDashboard branches={branches} allowedBranches={['admin', 'superadmin', 'tech'].includes(currentUser?.role ?? '') ? [] : userAllowedBranches} />
+      )}
+
+      {mainTab === 'siteAudit' && (
+        <SiteAuditRail />
       )}
 
       {mainTab === 'admin' && allowedTabs.includes('admin') && (
