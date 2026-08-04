@@ -6,7 +6,6 @@ import SiteAuditRoleViewerView from '@/components/site-audit/SiteAuditRoleViewer
 import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
 import SiteAuditPerfView from '@/components/site-audit/SiteAuditPerfView';
 import SiteAuditAnalyticsView from '@/components/site-audit/SiteAuditAnalyticsView';
-import SiteAuditStoreTeamView from '@/components/site-audit/SiteAuditStoreTeamView';
 
 /* leaflet touches `window` at module-load time, so it must never be pulled
    into the server-rendered pass Next.js still does for client components. */
@@ -15,9 +14,11 @@ const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/SiteAudi
 /* Sub-tab wrapper for the CRM's Site Audit tab. Role Viewer here is a
    role/person picker only — the original's iframe+localStorage impersonation
    trick only works same-origin, so it links out to the real Admin Console
-   instead of embedding it. */
+   instead of embedding it. Store Booking isn't a tab here — it's the public
+   /store-booking route (see app/store-booking/page.tsx), same as the
+   original's public kiosk link. */
 
-type View = 'roleviewer' | 'jobs' | 'perf' | 'analytics' | 'live' | 'storeteam';
+type View = 'roleviewer' | 'jobs' | 'perf' | 'analytics' | 'live';
 
 const TABS: Array<{ view: View; label: string }> = [
   { view: 'roleviewer', label: 'Role Viewer' },
@@ -25,7 +26,6 @@ const TABS: Array<{ view: View; label: string }> = [
   { view: 'perf', label: 'Performance' },
   { view: 'analytics', label: 'Analytics' },
   { view: 'live', label: 'Live' },
-  { view: 'storeteam', label: 'Store Booking' },
 ];
 
 export default function SiteAuditRail() {
@@ -49,12 +49,11 @@ export default function SiteAuditRail() {
         </div>
       </div>
       <div className="p-4 sm:p-6">
-        {view === 'roleviewer' && <SiteAuditRoleViewerView onOpenStoreTeam={() => setView('storeteam')} />}
+        {view === 'roleviewer' && <SiteAuditRoleViewerView />}
         {view === 'jobs' && <SiteAuditJobsView />}
         {view === 'perf' && <SiteAuditPerfView />}
         {view === 'analytics' && <SiteAuditAnalyticsView />}
         {view === 'live' && <SiteAuditLiveView />}
-        {view === 'storeteam' && <SiteAuditStoreTeamView />}
       </div>
     </div>
   );

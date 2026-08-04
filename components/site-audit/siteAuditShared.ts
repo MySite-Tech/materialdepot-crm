@@ -24,6 +24,14 @@ async function cachedFetch(url: string, signal: AbortSignal): Promise<any> {
   return r.json();
 }
 
+// Writes must evict any cached reads of the table they touch — otherwise a
+// refetch within CACHE_TTL_MS of a write can return pre-write data.
+function invalidateTable(t: string): void {
+  for (const key of cache.keys()) {
+    if (key === t || key.startsWith(t + '?')) cache.delete(key);
+  }
+}
+
 function withCache(q: string, timeoutMs: number): Promise<any> {
   const now = Date.now();
   const hit = cache.get(q);
@@ -60,6 +68,7 @@ export async function sbPost(t: string, b: any): Promise<any> {
     const r = await fetch(SB_URL + '/rest/v1/' + t, { method: 'POST', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
     const j = await r.json();
     if (!r.ok) throw new Error(j.message || j.error || 'DB error ' + r.status);
+    invalidateTable(t);
     return j;
   } finally {
     clearTimeout(tid);
@@ -75,6 +84,7 @@ export async function sbPatch(t: string, id: string, b: any): Promise<void> {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
     }
+    invalidateTable(t);
   } finally {
     clearTimeout(tid);
   }
@@ -91,6 +101,7 @@ export async function sbPatchLong(t: string, id: string, b: any): Promise<void> 
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
     }
+    invalidateTable(t);
   } finally {
     clearTimeout(tid);
   }
@@ -105,6 +116,7 @@ export async function sbDel(t: string, id: string): Promise<void> {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
     }
+    invalidateTable(t);
   } finally {
     clearTimeout(tid);
   }

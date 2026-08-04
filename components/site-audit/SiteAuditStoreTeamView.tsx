@@ -22,7 +22,7 @@ interface SlotDef {
   group: 'Morning' | 'Afternoon' | 'Evening';
 }
 
-const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka'];
+const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka', 'Gachibowli', 'Kompally', 'HSR Layout'];
 
 const SLOT_DEFS: SlotDef[] = [
   { id: '10:00', label: '10:00 AM', rangeEnd: '11:00 AM', startMin: 600, endMin: 660, group: 'Morning' },

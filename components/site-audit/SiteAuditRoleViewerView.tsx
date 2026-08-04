@@ -33,7 +33,7 @@ const ROLE_ORDER = ['service_mgr', 'site_auditor', 'installer', 'auditor_install
 
 type Person = { id: string; name: string; email: string; role: string };
 
-export default function SiteAuditRoleViewerView({ onOpenStoreTeam }: { onOpenStoreTeam: () => void }) {
+export default function SiteAuditRoleViewerView() {
   const [persons, setPersons] = useState<Record<string, Person[]>>({});
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
@@ -68,19 +68,22 @@ export default function SiteAuditRoleViewerView({ onOpenStoreTeam }: { onOpenSto
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         {ROLE_ORDER.map((k) => {
           // Store Team is a shared per-store kiosk tool, not a per-person login —
-          // it lives in this same tab bar as "Store Booking" (native, no impersonation
-          // needed), so jump straight there instead of feeding it into the picker below.
+          // it's the public /store-booking route (no CRM auth), same as the
+          // original's public link, so this just opens it instead of feeding
+          // it into the role/person picker below.
           if (k === 'store_staff') {
             return (
-              <button
+              <a
                 key={k}
-                onClick={onOpenStoreTeam}
-                className="rounded-lg border border-[#EAB308] bg-white p-4 text-center cursor-pointer transition-colors hover:bg-yellow-50"
+                href="/store-booking"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-[#EAB308] bg-white p-4 text-center cursor-pointer transition-colors hover:bg-yellow-50 block"
               >
                 <div className="text-2xl mb-2">{ROLES[k].ico}</div>
                 <div className="text-sm font-semibold text-black">{ROLES[k].label}</div>
-                <div className="text-[11px] font-semibold text-[#EAB308] mt-0.5">Open Store Booking →</div>
-              </button>
+                <div className="text-[11px] font-semibold text-[#EAB308] mt-0.5">Open Store Booking ↗</div>
+              </a>
             );
           }
           const cnt = (persons[k] || []).length;

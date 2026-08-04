@@ -68,6 +68,7 @@ type Order = {
   skus: SkuItem[];
   log: LogEntry[];
   jobcard: JobCard | null;
+  service?: Record<string, any> | null;
 };
 
 const AUDITOR_COLS =
@@ -245,6 +246,7 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
       skus: r.skus || [],
       log: r.log || [],
       jobcard: existing[r.pi] || null,
+      service: r.service || null,
     }));
   } catch (e) {
     console.error('loadJobs', e);
@@ -1152,7 +1154,7 @@ function JobDetailView({
             await adv('reschedule', 'Sent to SM to reschedule', logMsg);
             if (followUp && order.id) {
               try {
-                await sbPatch('audit_orders', order.id, { service: { follow_up_date: followUp } });
+                await sbPatch('audit_orders', order.id, { service: { ...order.service, follow_up_date: followUp } });
               } catch {}
             }
           }}

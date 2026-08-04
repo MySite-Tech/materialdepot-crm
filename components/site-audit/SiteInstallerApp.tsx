@@ -43,6 +43,8 @@ type PersistedRoom = {
   height: string;
   width: string;
   photos: string[];
+  /** Legacy single-photo field from older persisted records — reads only. */
+  photo?: string;
   comments: string;
 };
 
@@ -201,7 +203,7 @@ function appendRoomState(rooms: Room[], seqRef: { current: number }, job: Job | 
         qty: restore.qty || '',
         height: restore.height || '',
         width: restore.width || '',
-        photos: restore.photos || [],
+        photos: restore.photos || (restore.photo ? [restore.photo] : []),
         comments: restore.comments || '',
       }
     : {
@@ -320,7 +322,7 @@ async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Room ' + (i + 1) + ': ' + (r.name || '-'), M, y + 2); y += 14;
     const hwStr = (r.height || r.width) ? (' · H×W: ' + [r.height, r.width].filter(Boolean).join(' × ')) : '';
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text('SKU: ' + (r.sku || '-') + (r.qty ? ' · Qty: ' + r.qty : '') + hwStr, M, y + 10); y += 24;
-    const rPhotos = r.photos && r.photos.length ? r.photos : [];
+    const rPhotos = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
     const piw = W - 2 * M, pih = piw * 0.6;
     for (let pi = 0; pi < rPhotos.length; pi++) {
       const ph = await compressForPdf(rPhotos[pi]);
@@ -845,8 +847,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     const sigImg = signPadRef.current!.export();
     const newJobcard: JobCard = { rooms, sign: { img: sigImg, name: signName, ratings: jcRatings } };
     job.jobcard = newJobcard;
-    job.parentLog = job.parentLog || [];
-    job.parentLog.push({ t: (job.type === 'wallpaper' ? 'Wallpaper' : 'Flooring') + ' installation completed', d: new Date().toISOString(), by: 'auto', who: actingAs.name });
+    const newParentLog = [...(job.parentLog || []), { t: (job.type === 'wallpaper' ? 'Wallpaper' : 'Flooring') + ' installation completed', d: new Date().toISOString(), by: 'auto', who: actingAs.name }];
     setFinishBusy(true);
     toast('Saving...');
     try {
@@ -865,10 +866,11 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           sj.jobcard = newJobcard;
         }
         const parentStatus = rollupStatus(subjobs, parentRows[0].status || 'completed');
-        await sbPatch('install_orders', job.id, { status: parentStatus, log: job.parentLog });
+        await sbPatch('install_orders', job.id, { status: parentStatus, log: newParentLog });
         const completionPatch = { subjobs };
         completionWriteRef.current = completionPatch;
         await sbPatchLong('install_orders', job.id, completionPatch);
+        job.parentLog = newParentLog;
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
         try {
           await sbPost('ratings', { order_type: 'install', pi: job.pi, order_id: job.id, staff_email: actingAs.email, staff_name: actingAs.name, q1_score: jcRatings.q1, q2_score: jcRatings.q2, q3_score: jcRatings.q3, comments: jcRatings.comments || '', customer_name: job.name, customer_phone: job.phone });
@@ -948,6 +950,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setActiveKey(key);
     setScreen('detail');
     setRescheduleOpen(false);
+    setRescheduleReason('');
+    setRescheduleFollowUp('');
   }, []);
 
   const handleDownloadPdf = useCallback(async (job: Job) => {
@@ -972,6 +976,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     if (!reason) { toast('Please enter a reason for rescheduling'); return; }
     if (!activeJob) return;
     setRescheduleOpen(false);
+    setRescheduleReason('');
+    setRescheduleFollowUp('');
     advanceStatus(activeJob, 'reschedule', 'Sent to office to reschedule', 'Reschedule requested: ' + reason + (followUp ? ' · Follow-up: ' + followUp : ''));
   }, [activeJob, advanceStatus, rescheduleFollowUp, rescheduleReason, toast]);
 
@@ -1024,13 +1030,13 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           rescheduleOpen={rescheduleOpen}
           rescheduleReason={rescheduleReason}
           rescheduleFollowUp={rescheduleFollowUp}
-          onBack={() => { setScreen('list'); setRescheduleOpen(false); }}
+          onBack={() => { setScreen('list'); setRescheduleOpen(false); setRescheduleReason(''); setRescheduleFollowUp(''); }}
           onToCall={() => setCommentSheet({ title: 'Starting pre-install call', onConfirm: (c) => { setCommentSheet(null); advanceStatus(activeJob, 'callpending', 'Pre-install call started' + (c ? ' — ' + c : '')); } })}
           onYes={() => setCommentSheet({ title: 'Confirming on the way', onConfirm: (c) => { setCommentSheet(null); advanceStatus(activeJob, 'onway', "Installer on the way · customer confirmed" + (c ? ' — ' + c : '')); } })}
           onReached={() => setArrivalOpen(true)}
           onOpenJobCard={() => openJobCard(activeJob)}
-          onTriggerReschedule={() => setRescheduleOpen(true)}
-          onCancelReschedule={() => setRescheduleOpen(false)}
+          onTriggerReschedule={() => { setRescheduleReason(''); setRescheduleFollowUp(''); setRescheduleOpen(true); }}
+          onCancelReschedule={() => { setRescheduleOpen(false); setRescheduleReason(''); setRescheduleFollowUp(''); }}
           onReasonChange={setRescheduleReason}
           onFollowUpChange={setRescheduleFollowUp}
           onSubmitReschedule={submitReschedule}

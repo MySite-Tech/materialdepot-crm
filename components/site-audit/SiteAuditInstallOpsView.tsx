@@ -188,7 +188,7 @@ export default function SiteAuditInstallOpsView() {
       created_by_email: SM_ATTRIBUTION,
     };
     try {
-      const existing = await sbGet('install_orders?select=id&pi=eq.' + encodeURIComponent(pi) + '&limit=1').catch(() => []);
+      const existing = await sbGet('install_orders?select=id&pi=eq.' + encodeURIComponent(pi) + '&status=neq.deleted&limit=1').catch(() => []);
       const existingId = Array.isArray(existing) && existing.length ? existing[0].id : null;
       let savedId: string | number | null = null;
       if (existingId) { await sbPatch('install_orders', String(existingId), payload); savedId = existingId; }
