@@ -39,7 +39,7 @@ export function DeletedView({ deleted, onRestore }: { deleted: InstallOrder[]; o
                 </td>
                 <td className="px-3 py-2.5 text-[13px] align-top"><div className="flex flex-wrap gap-1">{o.skus.map((s, i) => <span key={i} className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-gray-100 text-[#1F3A5F]">{s.c}</span>)}</div></td>
                 <td className="px-3 py-2.5 text-[13px] align-top"><b>{o.name}</b><div className="text-gray-500">{o.phone}</div></td>
-                <td className="px-3 py-2.5 text-[13px] align-top max-w-[170px]"><MapLink addr={o.addr} /></td>
+                <td className="px-3 py-2.5 text-[13px] align-top w-[170px] max-w-[170px]"><MapLink addr={o.addr} /></td>
                 <td className="px-3 py-2.5 text-[13px] align-top">{fmtDate(o.deliveryDate)}</td>
                 <td className="px-3 py-2.5 text-[13px] align-top"><RestoreBtn id={o.id} pi={o.pi} onRestore={onRestore} /></td>
               </tr>

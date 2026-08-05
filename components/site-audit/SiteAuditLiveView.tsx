@@ -43,7 +43,7 @@ export default function SiteAuditLiveView() {
             '&status=not.in.(deleted,slot_reserved,slot_converted)'
         ),
         sbGet(
-          'install_orders?select=pi,addr,subjobs,status&status=not.in.(deleted,pending,deliv_ontime,deliv_delayed)'
+          'install_orders_slim?select=pi,addr,subjobs,status&status=not.in.(deleted,pending,deliv_ontime,deliv_delayed)'
         ),
         sbGet(
           'profiles?select=name,email,role,last_lat,last_lng,last_loc_at,last_order_pi&role=in.(site_auditor,installer,auditor_installer)'

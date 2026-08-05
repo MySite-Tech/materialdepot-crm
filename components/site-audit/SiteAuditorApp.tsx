@@ -888,6 +888,7 @@ function RescheduleForm({
 /* ---- stage bar (per-status call-to-action) ---- */
 function StageBar({
   order,
+  busy,
   onToCall,
   onCustYes,
   onReschedule,
@@ -899,6 +900,7 @@ function StageBar({
   fn,
 }: {
   order: Order;
+  busy: boolean;
   onToCall: () => void;
   onCustYes: () => void;
   onReschedule: () => void;
@@ -913,7 +915,8 @@ function StageBar({
     <button
       type="button"
       onClick={onReschedule}
-      className="mt-2.5 w-full rounded-xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-700 hover:bg-red-100"
+      disabled={busy}
+      className="mt-2.5 w-full rounded-xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
     >
       Can&apos;t proceed — Reschedule
     </button>
@@ -932,7 +935,8 @@ function StageBar({
           <button
             type="button"
             onClick={onToCall}
-            className="w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90"
+            disabled={busy}
+            className="w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
           >
             Start pre-visit call
           </button>
@@ -952,14 +956,16 @@ function StageBar({
           <button
             type="button"
             onClick={onCustYes}
-            className="mb-2 w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white hover:opacity-90"
+            disabled={busy}
+            className="mb-2 w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
           >
             Customer confirmed → On the way
           </button>
           <button
             type="button"
             onClick={onReschedule}
-            className="w-full rounded-xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-700 hover:bg-red-100"
+            disabled={busy}
+            className="w-full rounded-xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
           >
             Customer declined → Reschedule
           </button>
@@ -982,7 +988,8 @@ function StageBar({
           <button
             type="button"
             onClick={onAtSite}
-            className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white hover:opacity-90"
+            disabled={busy}
+            className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
           >
             I&apos;ve arrived → At Site
           </button>
@@ -1070,28 +1077,42 @@ function JobDetailView({
   const [arrivalOpen, setArrivalOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [pdfLink, setPdfLink] = useState<string | null>(null);
+  const [advBusy, setAdvBusy] = useState(false);
 
+  // Read-merge-write + busy-guard, mirroring SiteInstallerApp's advanceStatus
+  // — without the fresh read, a double-tap builds its `newLog` off the same
+  // stale `order.log` closure twice, and whichever sbPatch lands last silently
+  // drops the other tap's log entry.
   const adv = useCallback(
     async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra) => {
-      const logText = logOverride || DEFAULT_LOG_TEXT[st] || st;
-      const entry: LogEntry = { t: logText, d: new Date().toISOString(), by: 'auto', who: actingAs.name, ...extraLog };
-      const newLog = [...order.log, entry];
-      const dbStatus = st === 'scheduled' ? 'assigned' : st;
-      if (order.id) {
-        try {
-          await sbPatch('audit_orders', order.id, { status: dbStatus, log: newLog });
-        } catch {
-          showToast('Network error — try again');
-          return;
+      if (advBusy) return;
+      setAdvBusy(true);
+      try {
+        const logText = logOverride || DEFAULT_LOG_TEXT[st] || st;
+        const entry: LogEntry = { t: logText, d: new Date().toISOString(), by: 'auto', who: actingAs.name, ...extraLog };
+        const dbStatus = st === 'scheduled' ? 'assigned' : st;
+        let newLog = [...order.log, entry];
+        if (order.id) {
+          try {
+            const rows = await sbGet('audit_orders?id=eq.' + order.id + '&select=log');
+            const freshLog: LogEntry[] = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].log) ? rows[0].log : order.log;
+            newLog = [...freshLog, entry];
+            await sbPatch('audit_orders', order.id, { status: dbStatus, log: newLog });
+          } catch {
+            showToast('Network error — try again');
+            return;
+          }
         }
+        if (st === 'atsite') locationTracker.start(order.pi);
+        else if (st === 'completed' || st === 'reschedule') locationTracker.stop();
+        onUpdateOrder((o) => ({ ...o, status: st, log: newLog }));
+        await refreshJobs();
+        showToast(toastMsg);
+      } finally {
+        setAdvBusy(false);
       }
-      if (st === 'atsite') locationTracker.start(order.pi);
-      else if (st === 'completed' || st === 'reschedule') locationTracker.stop();
-      onUpdateOrder((o) => ({ ...o, status: st, log: newLog }));
-      await refreshJobs();
-      showToast(toastMsg);
     },
-    [order, actingAs.name, locationTracker, onUpdateOrder, refreshJobs, showToast],
+    [advBusy, order, actingAs.name, locationTracker, onUpdateOrder, refreshJobs, showToast],
   );
 
   const handleDownloadPdf = useCallback(async () => {
@@ -1163,6 +1184,7 @@ function JobDetailView({
         <>
           <StageBar
             order={order}
+            busy={advBusy}
             onToCall={() =>
               setCommentDialog({
                 title: 'Starting pre-visit call',
@@ -1731,6 +1753,24 @@ function JobCardWizard({
     [],
   );
 
+  // Unlike SiteInstallerApp (whose job-card state lives at the app root and
+  // survives navigating back to the detail screen, so its 3s debounce just
+  // keeps ticking in the background), this wizard unmounts on back — the
+  // cleanup above kills the pending timer outright. Flush any pending write
+  // immediately on back instead of waiting out the debounce, so edits made
+  // in the last <3s aren't silently dropped (only the same-device localStorage
+  // draft was protecting them before).
+  const flushAutosave = useCallback(async () => {
+    if (!autosaveTimerRef.current) return;
+    clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+    if (completionWriteRef.current || !order.id) return;
+    try {
+      const draftRooms = rooms.map(({ photos, ...rest }) => rest);
+      await sbPatch('audit_orders', order.id, { audit_ticked: { draft: true, rooms: draftRooms } });
+    } catch { /* best-effort — localStorage draft still covers this device */ }
+  }, [rooms, order.id]);
+
   const addRoom = useCallback(() => {
     const firstType: 'flooring' | 'wallpaper' = order.skus[0]?.type === 'wallpaper' ? 'wallpaper' : 'flooring';
     setRooms((prev) => [...prev, makeRoom(++seqRef.current, firstType)]);
@@ -1758,7 +1798,9 @@ function JobCardWizard({
     }
     autosaveSeqRef.current++;
 
-    const signImg = signPadRef.current.export();
+    const rawSignImg = signPadRef.current.export();
+    let signImg = rawSignImg;
+    try { signImg = await uploadPhoto(rawSignImg); } catch { /* keep raw captured data URL */ }
     const signData: SignData = { img: signImg, name: signName, ratings };
     const finishedRooms = rooms.map((r) => ({ ...r }));
     const newLogEntry: LogEntry = {
@@ -1866,7 +1908,7 @@ function JobCardWizard({
       <div className="mb-4 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => onBack(rooms)}
+          onClick={() => { flushAutosave(); onBack(rooms); }}
           className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
         >
           ←

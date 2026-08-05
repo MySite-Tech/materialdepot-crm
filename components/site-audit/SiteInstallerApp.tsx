@@ -844,7 +844,9 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
     autosaveSeqRef.current++;
     const rooms = collectRooms(jcRoomsRef.current);
-    const sigImg = signPadRef.current!.export();
+    const rawSig = signPadRef.current!.export();
+    let sigImg = rawSig;
+    try { sigImg = await uploadPhoto(rawSig); } catch { /* keep raw captured data URL */ }
     const newJobcard: JobCard = { rooms, sign: { img: sigImg, name: signName, ratings: jcRatings } };
     job.jobcard = newJobcard;
     const newParentLog = [...(job.parentLog || []), { t: (job.type === 'wallpaper' ? 'Wallpaper' : 'Flooring') + ' installation completed', d: new Date().toISOString(), by: 'auto', who: actingAs.name }];

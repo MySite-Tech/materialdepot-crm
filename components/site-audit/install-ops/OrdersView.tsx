@@ -152,12 +152,12 @@ export default function OrdersView({
                   </td>
                   <td className="px-3 py-2.5 border-t border-gray-100 align-top"><OrderCategoryPills o={o} /></td>
                   <td className="px-3 py-2.5 border-t border-gray-100 align-top"><div className="text-[13px]"><b>{o.name}</b><div className="text-gray-500">{o.phone}</div></div></td>
-                  <td className="px-3 py-2.5 border-t border-gray-100 align-top max-w-[170px]"><span className="maplink-stop"><MapLink addr={o.addr} /></span></td>
+                  <td className="px-3 py-2.5 border-t border-gray-100 align-top w-[170px] max-w-[170px]"><span className="maplink-stop block min-w-0"><MapLink addr={o.addr} /></span></td>
                   <td className="px-3 py-2.5 border-t border-gray-100 align-top whitespace-nowrap">
                     <span className={`font-bold text-[12.5px] ${delivClass}`}>{fmtDate(o.deliveryDate)}</span>
                     {opsCallDue(o) ? <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">Call Ops</span> : null}
                   </td>
-                  <td className="px-3 py-2.5 border-t border-gray-100 align-top"><SubjobSummary o={o} installers={installers} /></td>
+                  <td className="px-3 py-2.5 border-t border-gray-100 align-top w-[220px] max-w-[220px]"><SubjobSummary o={o} installers={installers} /></td>
                   <td className="px-3 py-2.5 border-t border-gray-100 align-top">
                     <Chip st={o.status} />
                     {o.service && o.service.rectification_raised ? <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700">RECT</span> : null}

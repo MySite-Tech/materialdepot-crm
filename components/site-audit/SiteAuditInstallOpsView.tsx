@@ -118,7 +118,7 @@ export default function SiteAuditInstallOpsView() {
 
   const loadDeletedOrders = useCallback(async () => {
     try {
-      const rows = await sbGet('install_orders?select=id,pi,po,skus,bm,customer_name,phone,addr,status,log,delivery_date&status=eq.deleted&order=created_at.desc');
+      const rows = await sbGet('install_orders_slim?select=id,pi,po,skus,bm,customer_name,phone,addr,status,log,delivery_date&status=eq.deleted&order=created_at.desc');
       setDeleted((Array.isArray(rows) ? rows : []).map(mapInstallRow));
       setDeletedLoaded(true);
     } catch {

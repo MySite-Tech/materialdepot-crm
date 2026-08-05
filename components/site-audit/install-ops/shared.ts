@@ -82,6 +82,20 @@ export const today = (() => {
   t.setHours(0, 0, 0, 0);
   return t;
 })();
+// This SM dashboard realistically stays open across a full shift (60s poll
+// in SiteAuditInstallOpsView.tsx) — without this, `today` would freeze at
+// whatever date the tab was opened on and silently go stale past midnight,
+// throwing off opsCallDue/minDate/the calendar strip/installer load lookups.
+// Mutating the same Date object in place (not reassigning) means every
+// existing `today` reference — and anything built from it via addDays, which
+// re-reads `today` on each call — picks up the change automatically.
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    if (now.getTime() !== today.getTime()) today.setTime(now.getTime());
+  }, 60000);
+}
 export function addDays(n: number): Date {
   const d = new Date(today);
   d.setDate(d.getDate() + n);

@@ -27,7 +27,7 @@ export default function SiteAuditPerfView() {
       const [usersRes, auditRes, installRes] = await Promise.all([
         sbGet('profiles?select=*&role=neq.admin&order=name.asc'),
         sbGet('audit_orders?select=auditor_email,status,created_at,created_by_email&status=not.in.(deleted,slot_reserved,slot_converted)'),
-        sbGet('install_orders?select=subjobs,status,created_at,created_by_email'),
+        sbGet('install_orders_slim?select=subjobs,status,created_at,created_by_email'),
       ]);
       if (!alive) return;
       const field = Array.isArray(usersRes) ? usersRes.filter((u: any) => u.role !== 'admin') : [];

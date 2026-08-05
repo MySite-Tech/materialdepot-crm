@@ -22,14 +22,14 @@ export function Chip({ st }: { st: string }) {
 export function MapLink({ addr }: { addr: string }) {
   return (
     <a
-      className="text-blue-600 font-medium inline-flex items-center gap-1 hover:underline"
+      className="text-blue-600 font-medium flex items-center gap-1 hover:underline min-w-0 max-w-full"
       href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr)}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
     >
-      <span>📍</span>
-      <span className="truncate">{addr}</span>
+      <span className="shrink-0">📍</span>
+      <span className="truncate min-w-0">{addr}</span>
     </a>
   );
 }
@@ -71,7 +71,7 @@ export function SubjobSummary({ o, installers }: { o: InstallOrder; installers: 
             : [];
         const names = asgns.map((a: any) => a.installer_name || 'Unassigned').join(', ') || 'Unassigned';
         return (
-          <span key={i} className="text-[12px] text-gray-600 whitespace-nowrap">
+          <span key={i} className="block max-w-[220px] truncate text-[12px] text-gray-600" title={`${fmtDate(sj.date)} · ${names} · ${(STATUS[sj.status] || { l: sj.status }).l}`}>
             <span className={`inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${sj.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-50 text-yellow-800'}`}>
               {sj.type === 'wallpaper' ? 'WP' : 'FL'}
             </span>

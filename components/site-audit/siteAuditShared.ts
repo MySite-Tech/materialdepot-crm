@@ -15,20 +15,49 @@ const H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': '
 const CACHE_TTL_MS = 8000;
 const cache = new Map<string, { ts: number; promise: Promise<any> }>();
 
+// Entries only get evicted when the SAME query string is requested again or
+// a write happens to touch its table — a long-lived tab that cycles through
+// many distinct filter/date-range/pagination combinations (which each get
+// their own cache key) would otherwise accumulate stale entries forever.
+// Sweep anything past its TTL on a slower cadence than the TTL itself.
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of cache) {
+      if (now - entry.ts >= CACHE_TTL_MS) cache.delete(key);
+    }
+  }, CACHE_TTL_MS * 2);
+}
+
 async function cachedFetch(url: string, signal: AbortSignal): Promise<any> {
-  const r = await fetch(url, { headers: H, signal });
-  if (!r.ok) {
-    console.error(`[siteAudit] ${r.status} ${r.statusText} for ${url}`);
+  try {
+    const r = await fetch(url, { headers: H, signal });
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      console.error(`[siteAudit] ${r.status} ${r.statusText} for ${url}${body ? ' — ' + body.slice(0, 300) : ''}`);
+      return null;
+    }
+    return await r.json();
+  } catch (e) {
+    // Network failure or our own abort timeout — resolve null like a failed
+    // HTTP response above, so sbGet/sbGetLong never reject and every caller
+    // can rely on the same "null/[] means no data" contract.
+    console.error(`[siteAudit] fetch failed for ${url}`, e);
     return null;
   }
-  return r.json();
 }
 
 // Writes must evict any cached reads of the table they touch — otherwise a
-// refetch within CACHE_TTL_MS of a write can return pre-write data.
+// refetch within CACHE_TTL_MS of a write can return pre-write data. Tables
+// with a `_slim` mirror (e.g. install_orders / install_orders_slim) reflect
+// the same underlying rows, so a write to either side must evict cached
+// reads of both — otherwise e.g. SiteAuditInstallOpsView's install_orders_slim
+// list can show stale data for up to CACHE_TTL_MS after an install_orders edit.
 function invalidateTable(t: string): void {
+  const base = t.endsWith('_slim') ? t.slice(0, -'_slim'.length) : t;
+  const variants = [base, base + '_slim'];
   for (const key of cache.keys()) {
-    if (key === t || key.startsWith(t + '?')) cache.delete(key);
+    if (variants.some((v) => key === v || key.startsWith(v + '?'))) cache.delete(key);
   }
 }
 
@@ -66,8 +95,11 @@ export async function sbPost(t: string, b: any): Promise<any> {
   const tid = setTimeout(() => ac.abort(), 12000);
   try {
     const r = await fetch(SB_URL + '/rest/v1/' + t, { method: 'POST', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.message || j.error || 'DB error ' + r.status);
+    }
     const j = await r.json();
-    if (!r.ok) throw new Error(j.message || j.error || 'DB error ' + r.status);
     invalidateTable(t);
     return j;
   } finally {
@@ -79,7 +111,7 @@ export async function sbPatch(t: string, id: string, b: any): Promise<void> {
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 12000);
   try {
-    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + id, { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
+    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
@@ -96,7 +128,7 @@ export async function sbPatchLong(t: string, id: string, b: any): Promise<void> 
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 90000);
   try {
-    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + id, { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
+    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
@@ -111,7 +143,7 @@ export async function sbDel(t: string, id: string): Promise<void> {
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 12000);
   try {
-    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + id, { method: 'DELETE', headers: H, signal: ac.signal });
+    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'DELETE', headers: H, signal: ac.signal });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
@@ -123,17 +155,47 @@ export async function sbDel(t: string, id: string): Promise<void> {
 }
 
 /* Uploads a data: URL (JPEG) to the `job-photos` storage bucket and returns
-   its public URL. Used by room photos, arrival photos, doc scans, signatures. */
+   its public URL. Used by room photos, arrival photos, doc scans, signatures.
+   Every call site falls back to embedding the raw base64 dataURL straight in
+   the row on failure — on flaky field/mobile connections that fallback was
+   firing on the very first dropped request, leaving multi-MB base64 blobs
+   permanently stuck in install_orders/audit_orders rows (this is what blew
+   the Jobs Overview query up to 26MB, see SiteAuditJobsView.tsx). Retrying a
+   couple of times with a short backoff before giving up turns most of those
+   transient drops into successful uploads instead. */
+async function uploadPhotoAttempt(blob: Blob, fname: string): Promise<string> {
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 15000);
+  try {
+    const r = await fetch(SB_URL + '/storage/v1/object/job-photos/' + fname, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+      body: blob,
+      signal: ac.signal,
+    });
+    if (!r.ok) throw new Error('upload failed: ' + r.status);
+    return SB_URL + '/storage/v1/object/public/job-photos/' + fname;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 export async function uploadPhoto(dataURL: string): Promise<string> {
   const blob = await (await fetch(dataURL)).blob();
   const fname = Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.jpg';
-  const r = await fetch(SB_URL + '/storage/v1/object/job-photos/' + fname, {
-    method: 'POST',
-    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
-    body: blob,
-  });
-  if (!r.ok) throw new Error('upload failed');
-  return SB_URL + '/storage/v1/object/public/job-photos/' + fname;
+  const attempts = 3;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await uploadPhotoAttempt(blob, fname);
+    } catch (e) {
+      if (i === attempts) {
+        console.error(`[siteAudit] photo upload failed after ${attempts} attempts, falling back to inline base64`, e);
+        throw e;
+      }
+      await new Promise((res) => setTimeout(res, 1000 * i));
+    }
+  }
+  throw new Error('upload failed');
 }
 
 export const ROLES: Record<string, { label: string; color: string }> = {
@@ -167,11 +229,13 @@ export function initials(n?: string | null) {
 export function fmtDate(s?: string | null) {
   if (!s) return '—';
   const d = new Date(s);
+  if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 export function fmtDateA(ds?: string | null) {
   if (!ds) return '—';
   const d = new Date(ds + 'T00:00');
+  if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 export function fmtLog(d?: string | null) {

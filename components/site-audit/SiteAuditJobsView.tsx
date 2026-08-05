@@ -192,7 +192,7 @@ function JdRoomCardAudit({ r, i }: { r: any; i: number }) {
     <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 mb-3">
       <div className="text-[13px] font-bold text-gray-900">Room {i + 1}: {r.name || '—'} · {r.type === 'wallpaper' ? 'Wallpaper' : 'Flooring'} · SKU: {r.sku || 'NA'}</div>
       {meas.length ? <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">{meas.map(([l, k]) => <div key={k}><div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{l}</div><div className="text-[13px] text-gray-900">{r.calc[k]}</div></div>)}</div> : null}
-      {photos.length ? <div className="mt-2 flex flex-wrap gap-2">{photos.slice(0, 4).map((p: string, pi: number) => <img key={pi} src={p} className="w-20 h-15 object-cover rounded-md cursor-pointer" style={{ height: 60 }} onClick={(e) => window.open((e.target as HTMLImageElement).src)} />)}</div> : null}
+      {photos.length ? <div className="mt-2 flex flex-wrap gap-2">{photos.slice(0, 4).map((p: string, pi: number) => <img key={pi} src={p} className="w-20 object-cover rounded-md cursor-pointer" style={{ height: 60 }} onClick={(e) => window.open((e.target as HTMLImageElement).src)} />)}</div> : null}
       {r.notes ? <div className="text-xs text-gray-400 mt-2">Notes: {r.notes}</div> : null}
     </div>
   );
@@ -368,7 +368,7 @@ export default function SiteAuditJobsView() {
     async function load() {
       const [auditRes, installRes, profileRes] = await Promise.all([
         sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
-        sbGet('install_orders?select=pi,customer_name,addr,subjobs,status,delivery_date&status=neq.deleted&order=created_at.desc'),
+        sbGet('install_orders_slim?select=pi,customer_name,addr,subjobs,status,delivery_date&status=neq.deleted&order=created_at.desc'),
         sbGet('profiles?select=name,email&role=neq.admin'),
       ]);
       if (!alive) return;

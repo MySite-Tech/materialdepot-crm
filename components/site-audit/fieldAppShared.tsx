@@ -460,6 +460,16 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Bumped by stopStream so a getUserMedia() promise that resolves AFTER the
+  // modal already closed/retook can tell it's stale and stop the stream it
+  // just got instead of assigning it to streamRef — otherwise that stream is
+  // never released and the camera indicator stays on.
+  const camGenRef = useRef(0);
+  // Set when the user cancels/retakes while a confirm's uploadPhoto() retry
+  // is still in flight, so that pending call's eventual continuation skips
+  // firing onConfirm — otherwise a cancelled arrival could still get recorded
+  // once the (up to ~48s) retry finally settles.
+  const cancelledRef = useRef(false);
 
   const [photo, setPhoto] = useState<string | null>(null);
   const [lat, setLat] = useState<number | null>(null);
@@ -470,6 +480,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   const [confirming, setConfirming] = useState(false);
 
   const stopStream = useCallback(() => {
+    camGenRef.current++;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -497,15 +508,18 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   }, []);
 
   const startCam = useCallback(() => {
+    const gen = ++camGenRef.current;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then((s) => {
+        if (gen !== camGenRef.current) { s.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = s;
         setCameraFailed(false);
         setCamReady(true);
         if (videoRef.current) videoRef.current.srcObject = s;
       })
       .catch(() => {
+        if (gen !== camGenRef.current) return;
         setCameraFailed(true);
         setCamReady(false);
       });
@@ -518,6 +532,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     setLng(null);
     setCameraFailed(false);
     setConfirming(false);
+    cancelledRef.current = false;
     setLocStatus({ text: 'Getting location…', color: '#9ca3af' });
     captureLocation();
     startCam();
@@ -556,12 +571,14 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   );
 
   const retake = useCallback(() => {
+    cancelledRef.current = true;
     setPhoto(null);
     setCameraFailed(false);
     startCam();
   }, [startCam]);
 
   const handleClose = useCallback(() => {
+    cancelledRef.current = true;
     stopStream();
     onClose();
   }, [stopStream, onClose]);
@@ -577,6 +594,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
       }
     }
     setConfirming(false);
+    if (cancelledRef.current) return;
     handleClose();
     onConfirm({ photo: ph, lat, lng });
   }, [photo, lat, lng, handleClose, onConfirm]);
@@ -757,6 +775,12 @@ export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalPro
   const imgContainerRef = useRef<HTMLDivElement | null>(null);
   const previewImgRef = useRef<HTMLImageElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const camGenRef = useRef(0);
+  // apply() defers its actual work by 80ms; if the user hits Retake/Cancel
+  // inside that window the deferred callback would still run, warp the STALE
+  // captured frame, and re-close/re-scan over whatever the user just chose
+  // instead — bump this so the deferred callback can tell it's stale and bail.
+  const applySeqRef = useRef(0);
 
   const [phase, setPhase] = useState<'camera' | 'review'>('camera');
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
@@ -766,6 +790,7 @@ export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalPro
   const [, setLayoutTick] = useState(0);
 
   const stopCam = useCallback(() => {
+    camGenRef.current++;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -773,13 +798,16 @@ export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalPro
   }, []);
 
   const startCam = useCallback(() => {
+    const gen = ++camGenRef.current;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } })
       .then((s) => {
+        if (gen !== camGenRef.current) { s.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = s;
         if (videoRef.current) videoRef.current.srcObject = s;
       })
       .catch(() => {
+        if (gen !== camGenRef.current) return;
         stopCam();
         onClose();
         if (typeof window !== 'undefined') window.alert('Cannot access camera. Please allow camera access.');
@@ -831,11 +859,13 @@ export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalPro
   }, []);
 
   const retake = useCallback(() => {
+    applySeqRef.current++;
     setPhase('camera');
     startCam();
   }, [startCam]);
 
   const handleClose = useCallback(() => {
+    applySeqRef.current++;
     stopCam();
     onClose();
   }, [stopCam, onClose]);
@@ -855,8 +885,10 @@ export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalPro
   );
 
   const apply = useCallback(() => {
+    const seq = ++applySeqRef.current;
     setApplying(true);
     window.setTimeout(() => {
+      if (seq !== applySeqRef.current) return;
       try {
         const srcCv = srcCanvasRef.current;
         if (!srcCv) throw new Error('missing source canvas');
