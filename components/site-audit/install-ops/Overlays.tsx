@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { sbPatch, sbPost } from '../siteAuditShared';
+import { getToken } from '@/lib/mockApi';
 import type { InstallOrder, SkuType } from './types';
 
 /* ── Add / Edit Order ─────────────────────────────────────────────────── */
@@ -107,7 +108,10 @@ export function KylasOverlay({ open, orders, onClose, onUse }: { open: boolean; 
     try {
       const params = new URLSearchParams({ type: 'installation', page_size: '100' });
       if (searchVal) params.set('search', searchVal);
-      const res = await fetch('/api/site-audit/install-pos?' + params.toString());
+      const token = getToken();
+      const res = await fetch('/api/site-audit/install-pos?' + params.toString(), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       setRows(data.results || []); setCount(data.count || (data.results || []).length); setLoading(false);

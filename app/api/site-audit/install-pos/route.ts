@@ -3,9 +3,9 @@ import type { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 // Proxies to the Django `SiteAuditInstallationPOListAPI` (order/views.py),
-// which is `permissions.AllowAny` — no auth headers needed. This is the real
-// backend behind material-depot-site's Vercel rewrite `/api/pos` ->
-// https://api-dev2.materialdepot.in/apiV1/site-audit-installation-pos/
+// which requires IsInternalOrgUser — the caller's CRM token is forwarded
+// straight through. This is the real backend behind material-depot-site's
+// Vercel rewrite `/api/pos` -> https://api-dev2.materialdepot.in/apiV1/site-audit-installation-pos/
 // (see that repo's vercel.json). The Install Ops "Pending POs" overlay here
 // calls this route instead of hitting the legacy app's rewrite directly.
 const MD_API_BASE = process.env.MD_API_BASE_URL || "https://api.materialdepot.com/apiV1";
@@ -20,9 +20,14 @@ export async function GET(request: NextRequest) {
     if (val) url.searchParams.set(key, val);
   }
 
+  const authHeader = request.headers.get("authorization");
+
   try {
     const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
       cache: "no-store",
     });
     const data = await res.json().catch(() => null);
