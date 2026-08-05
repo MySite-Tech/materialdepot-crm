@@ -54,25 +54,3 @@ export interface Branch {
   name: string;
 }
 
-export interface SupabaseRow {
-  id: string;
-  created_at: string;
-  client_name: string;
-  client_phone: string;
-  assigned_to: string;
-  branch: string;
-  status: string;
-  lost_reason: string;
-  cart_value: number;
-  cart_items: string[] | CartItem[];
-  follow_up_date: string;
-  closure_date: string;
-  remarks: Remark[];
-  visits: Visit[];
-  first_visit_date: string;
-  latest_visit_date: string;
-  client_type: string;
-  property_type: string;
-  architect_involved: boolean;
-  project_phase?: string;
-}
