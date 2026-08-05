@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { sbGet } from '@/components/site-audit/siteAuditShared';
+import { sbGet, siteAuditRoleFromPermissions } from '@/components/site-audit/siteAuditShared';
 import SiteAuditorApp from '@/components/site-audit/SiteAuditorApp';
 import SiteInstallerApp from '@/components/site-audit/SiteInstallerApp';
 import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
@@ -35,6 +35,7 @@ function SiteAuditViewInner() {
   const searchParams = useSearchParams();
   const email = searchParams.get('person') || '';
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const [permissionRole, setPermissionRole] = useState<string | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
@@ -43,9 +44,12 @@ function SiteAuditViewInner() {
 
   useEffect(() => {
     try {
-      setLoggedIn(!!localStorage.getItem('materialdepot_user'));
+      const stored = localStorage.getItem('materialdepot_user');
+      setLoggedIn(!!stored);
+      setPermissionRole(siteAuditRoleFromPermissions(stored ? JSON.parse(stored)?.individualPermissions : null));
     } catch {
       setLoggedIn(false);
+      setPermissionRole(null);
     }
   }, []);
 
@@ -80,14 +84,14 @@ function SiteAuditViewInner() {
     <div className="min-h-screen bg-[#FAFAFA] p-4 sm:p-6">
       <div className="mb-4">
         <div className="text-base font-bold text-black">{person.name}</div>
-        <div className="text-[12px] text-gray-400">{person.email} · {ROLE_LABELS[person.role] || person.role}</div>
+        <div className="text-[12px] text-gray-400">{person.email} · {ROLE_LABELS[permissionRole || ''] || permissionRole || 'No site audit permission'}</div>
       </div>
 
-      {person.role === 'site_auditor' ? (
+      {permissionRole === 'site_auditor' ? (
         <SiteAuditorApp actingAs={actingAs} />
-      ) : person.role === 'installer' ? (
+      ) : permissionRole === 'installer' ? (
         <SiteInstallerApp actingAs={actingAs} />
-      ) : person.role === 'auditor_installer' ? (
+      ) : permissionRole === 'auditor_installer' ? (
         <>
           <div className="flex gap-2 mb-4">
             <button
@@ -105,7 +109,7 @@ function SiteAuditViewInner() {
           </div>
           {combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />}
         </>
-      ) : person.role === 'service_mgr' ? (
+      ) : permissionRole === 'service_mgr' ? (
         <>
           <div className="flex gap-2 mb-3">
             <button
@@ -152,7 +156,9 @@ function SiteAuditViewInner() {
           )}
         </>
       ) : (
-        <div className="text-sm text-gray-400">No dashboard available for role &quot;{person.role}&quot;.</div>
+        <div className="text-sm text-gray-400">
+          No Site Audit dashboard permission set for this account. Ask an admin to grant a Site Audit sub-role under Admin &gt; Users.
+        </div>
       )}
     </div>
   );

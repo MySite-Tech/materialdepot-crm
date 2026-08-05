@@ -2308,7 +2308,6 @@ export default function SiteAuditorApp({ actingAs }: { actingAs: ActingAs }) {
         <>
           <div className="mb-4">
             <h1 className="text-xl font-bold text-gray-900">Site Auditor</h1>
-            <p className="mt-0.5 text-[13px] text-gray-400">Signed in as {actingAs.name}</p>
           </div>
           {loading ? (
             <Spinner />

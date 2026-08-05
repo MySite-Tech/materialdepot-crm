@@ -207,6 +207,25 @@ export const ROLES: Record<string, { label: string; color: string }> = {
   store_staff: { label: 'Store Team', color: '#9a6200' },
 };
 
+// CRM individual_permissions slugs (set via the Admin > Users tab) that grant
+// a Site Audit sub-view, mapped to the same role keys ROLES above uses.
+// Replaces the old profiles.role-driven routing in app/site-audit-view/page.tsx.
+export const SITE_AUDIT_PERMISSION_TO_ROLE: Record<string, string> = {
+  'site_audit.site_auditor': 'site_auditor',
+  'site_audit.installer': 'installer',
+  'site_audit.service_manager': 'service_mgr',
+  'site_audit.auditor_installer': 'auditor_installer',
+};
+
+export function siteAuditRoleFromPermissions(perms: string[] | undefined | null): string | null {
+  if (!Array.isArray(perms)) return null;
+  for (const slug of perms) {
+    const role = SITE_AUDIT_PERMISSION_TO_ROLE[slug];
+    if (role) return role;
+  }
+  return null;
+}
+
 export const JOB_STATUS: Record<string, { l: string; c: string }> = {
   pending: { l: 'Pending', c: 'c-pending' },
   created: { l: 'Service Created', c: 'c-scheduled' },

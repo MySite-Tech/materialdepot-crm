@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment, FormEvent, KeyboardEvent, ChangeEvent, MouseEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Download, FileText, FileSpreadsheet, FileType2 } from 'lucide-react';
 import { DayPicker, DateRange } from 'react-day-picker';
@@ -10,6 +10,8 @@ import Dashboard from '@/components/dashboard/Dashboard';
 import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
 import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
+import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
+import { siteAuditRoleFromPermissions } from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
@@ -129,6 +131,126 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.site_audit', 'siteAudit'],
   ['crm.appointment_tracker', 'appointmentTracker'],
 ];
+
+// Sub-permissions nested under crm.site_audit: they only matter once a user
+// already has the siteAudit tab, and pick which view within it they land on
+// (mirrors the roles the separate field-app profiles table used to drive).
+// '' (Admin) is a pseudo-slug — it's never stored, it just means "no sub-role",
+// which is what makes App.tsx render the oversight SiteAuditRail instead of a
+// field-worker's own dashboard.
+const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
+  ['', 'Admin'],
+  ['site_audit.site_auditor', 'Site Auditor'],
+  ['site_audit.installer', 'Site Installer'],
+  ['site_audit.service_manager', 'Service Manager'],
+  ['site_audit.auditor_installer', 'Auditor + Installer'],
+];
+
+const TAB_LABELS: Record<MainTab, string> = {
+  leads: 'Leads', dashboard: 'Dashboard', footfall: 'Footfall', weeklyFunnel: 'Weekly Funnel',
+  reportCard: 'Report Card', storeVisit: 'Store Visit Form', sales: 'Escalation visibility',
+  b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
+  appointmentTracker: 'Appointment Tracker',
+};
+
+// Reverse of PERMISSION_TAB_ORDER — used to pre-check the permission list from a role's default tabs.
+const defaultPermissionsForRole = (role: string): string[] => {
+  const tabs = new Set(ROLE_TABS[role] ?? DEFAULT_ROLE_TABS);
+  return PERMISSION_TAB_ORDER.filter(([, tab]) => tabs.has(tab)).map(([slug]) => slug);
+};
+
+// Generic "button that opens a checkbox panel" — closes on outside click.
+function CheckboxDropdown({ label, summary, children, hideLabel }: { label: string; summary: string; children: React.ReactNode; hideLabel?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+  return (
+    <div className="relative" ref={ref}>
+      {!hideLabel && <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 whitespace-nowrap">{label}</label>}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full text-left flex items-center justify-between gap-2 cursor-pointer hover:border-gray-300"
+      >
+        <span className="truncate text-gray-700">{summary}</span>
+        <span className={`text-gray-400 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-[320px] max-h-[360px] overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg p-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckboxRow({ checked, onChange, children }: { checked: boolean; onChange: () => void; children: React.ReactNode }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer text-[12.5px] text-gray-600 py-1">
+      <input type="checkbox" className="accent-[#EAB308]" checked={checked} onChange={onChange} />
+      {children}
+    </label>
+  );
+}
+
+const SITE_AUDIT_SUBROLE_SLUGS = new Set(SITE_AUDIT_SUBROLES.map(([slug]) => slug));
+
+function PermissionChecklist({ value, onChange, hideLabel }: { value: string[]; onChange: (next: string[]) => void; hideLabel?: boolean }) {
+  const toggle = (slug: string) => onChange(value.includes(slug) ? value.filter((s) => s !== slug) : [...value, slug]);
+  // Site Audit sub-role is single-select — a person has exactly one field role, so
+  // picking one clears any other sub-role slug instead of accumulating them.
+  const hasAnySubRole = value.some((s) => SITE_AUDIT_SUBROLE_SLUGS.has(s));
+  const selectSubRole = (slug: string) => {
+    const withoutSubRoles = value.filter((s) => !SITE_AUDIT_SUBROLE_SLUGS.has(s));
+    onChange(slug ? [...withoutSubRoles, slug] : withoutSubRoles);
+  };
+  const hasSiteAudit = value.includes('crm.site_audit');
+  const summary = value.length === 0 ? 'None (role-based tabs)' : `${value.length} permission${value.length === 1 ? '' : 's'} set`;
+  return (
+    <CheckboxDropdown label="CRM Permissions" summary={summary} hideLabel={hideLabel}>
+      <p className="text-[10.5px] text-gray-400 mb-2 pb-2 border-b border-gray-100">Optional — overrides role-based tabs once any are set.</p>
+      {PERMISSION_TAB_ORDER.map(([slug, tab]) => (
+        <Fragment key={slug}>
+          <CheckboxRow checked={value.includes(slug)} onChange={() => toggle(slug)}>
+            {TAB_LABELS[tab]}
+          </CheckboxRow>
+          {slug === 'crm.site_audit' && hasSiteAudit && (
+            <div className="my-1.5 py-1.5 border-y border-gray-100 pl-3 border-l-2 border-l-amber-200">
+              <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Site Audit view (pick one)</span>
+              {SITE_AUDIT_SUBROLES.map(([subSlug, label]) => (
+                <label key={subSlug} className="flex items-center gap-2 cursor-pointer text-[12.5px] text-gray-600 py-1">
+                  <input type="radio" name="site-audit-subrole" className="accent-[#EAB308]" checked={subSlug ? value.includes(subSlug) : !hasAnySubRole} onChange={() => selectSubRole(subSlug)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </CheckboxDropdown>
+  );
+}
+
+function BranchAccessDropdown({ branchList, value, onChange, hideLabel }: { branchList: Branch[]; value: string[]; onChange: (next: string[]) => void; hideLabel?: boolean }) {
+  const toggle = (name: string) => onChange(value.includes(name) ? value.filter((s) => s !== name) : [...value, name]);
+  const summary = value.length === 0 ? 'All branches' : value.join(', ');
+  return (
+    <CheckboxDropdown label="Branch Access" summary={summary} hideLabel={hideLabel}>
+      {branchList.map((b) => (
+        <CheckboxRow key={b.id} checked={value.includes(b.name)} onChange={() => toggle(b.name)}>
+          {b.name}
+        </CheckboxRow>
+      ))}
+    </CheckboxDropdown>
+  );
+}
 
 // Resolve the tabs a user may see. Per-user CRM permissions win when present;
 // otherwise fall back to the role-based defaults.
@@ -1126,12 +1248,14 @@ function AdminDashboard() {
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newRole, setNewRole] = useState('sales');
+  const [newPermissions, setNewPermissions] = useState<string[]>(() => defaultPermissionsForRole('sales'));
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<string | number | null>(null);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editBranches, setEditBranches] = useState<string[]>([]);
+  const [editPermissions, setEditPermissions] = useState<string[]>([]);
   const [usersPage, setUsersPage] = useState(1);
   const [userSearch, setUserSearch] = useState('');
   const USERS_PER_PAGE = 20;
@@ -1149,9 +1273,9 @@ function AdminDashboard() {
     if (users.some((u) => u.phone === newPhone.trim())) { setError('Phone already exists'); return; }
     setError('');
     try {
-      const user = await addUser({ name: newName.trim(), phone: newPhone.trim(), role: newRole });
+      const user = await addUser({ name: newName.trim(), phone: newPhone.trim(), role: newRole, individualPermissions: newPermissions });
       setUsers((prev) => [...prev, user]);
-      setNewName(''); setNewPhone(''); setNewRole('sales');
+      setNewName(''); setNewPhone(''); setNewRole('sales'); setNewPermissions([]);
     } catch (e: any) {
       setError(e.message || 'Failed to add user');
     }
@@ -1169,6 +1293,7 @@ function AdminDashboard() {
 
   const startEdit = (u: AppUser) => {
     setEditId(u.id); setEditName(u.name); setEditPhone(u.phone); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
+    setEditPermissions(u.individualPermissions?.length ? u.individualPermissions : defaultPermissionsForRole(u.role));
   };
 
   const handleSaveEdit = async () => {
@@ -1177,9 +1302,9 @@ function AdminDashboard() {
     if (users.some((u) => u.phone === editPhone.trim() && u.id !== editId)) { setError('Phone already exists'); return; }
     setError('');
     try {
-      await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole });
+      await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole, individualPermissions: editPermissions });
       await updateUserBranches(editId!, editBranches);
-      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches } : u));
+      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches, individualPermissions: editPermissions } : u));
       setEditId(null);
     } catch (e: any) {
       setError(e.message || 'Failed to update user');
@@ -1232,13 +1357,16 @@ function AdminDashboard() {
                 </div>
                 <div className="w-[130px]">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
-                  <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                  <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => { setNewRole(e.target.value); setNewPermissions(defaultPermissionsForRole(e.target.value)); }}>
                     <option value="sales">Sales</option>
                     <option value="manager">Manager</option>
                     <option value="retail">Retail</option>
                     <option value="admin">Admin</option>
                     <option value="tech">Tech</option>
                   </select>
+                </div>
+                <div className="w-[220px]">
+                  <PermissionChecklist value={newPermissions} onChange={setNewPermissions} />
                 </div>
                 <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={handleAdd}>Add User</button>
               </div>
@@ -1254,7 +1382,7 @@ function AdminDashboard() {
               />
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-visible">
               {loading ? (
                 <div className="p-8 text-center text-gray-400 text-sm">Loading users...</div>
               ) : (
@@ -1265,38 +1393,31 @@ function AdminDashboard() {
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Phone</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Role</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">Branch Access</th>
+                      <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left">CRM Permissions</th>
                       <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredUsers.slice((usersPage - 1) * USERS_PER_PAGE, usersPage * USERS_PER_PAGE).map((u) => (
-                      <tr key={u.id} className="border-t border-gray-200 hover:bg-[#FFFAF7]">
+                      <Fragment key={u.id}>
+                      <tr className="border-t border-gray-200 hover:bg-[#FFFAF7]">
                         {editId === u.id ? (
                           <>
                             <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editName} onChange={(e) => setEditName(e.target.value)} /></td>
                             <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} maxLength={10} /></td>
                             <td className="px-4 py-2">
-                              <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                              <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => { setEditRole(e.target.value); setEditPermissions(defaultPermissionsForRole(e.target.value)); }}>
                                 <option value="sales">Sales</option>
                                 <option value="manager">Manager</option>
                                 <option value="retail">Retail</option>
                                 <option value="admin">Admin</option>
                               </select>
                             </td>
-                            <td className="px-4 py-2">
-                              <div className="flex flex-wrap gap-1.5">
-                                {branchList.map((b) => (
-                                  <label key={b.id} className="flex items-center gap-1 cursor-pointer text-[11px] text-gray-600">
-                                    <input
-                                      type="checkbox"
-                                      className="accent-[#EAB308]"
-                                      checked={editBranches.includes(b.name)}
-                                      onChange={() => setEditBranches((prev) => prev.includes(b.name) ? prev.filter((x) => x !== b.name) : [...prev, b.name])}
-                                    />
-                                    {b.name}
-                                  </label>
-                                ))}
-                              </div>
+                            <td className="px-4 py-2 min-w-[180px]">
+                              <BranchAccessDropdown branchList={branchList} value={editBranches} onChange={setEditBranches} hideLabel />
+                            </td>
+                            <td className="px-4 py-2 min-w-[180px]">
+                              <PermissionChecklist value={editPermissions} onChange={setEditPermissions} hideLabel />
                             </td>
                             <td className="px-4 py-2 text-center whitespace-nowrap">
                               <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveEdit}>Save</button>
@@ -1318,15 +1439,22 @@ function AdminDashboard() {
                                 : <div className="flex flex-wrap gap-1">{(u.allowedBranches!).map((b) => <span key={b} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">{b}</span>)}</div>
                               }
                             </td>
+                            <td className="px-4 py-2.5">
+                              {(u.individualPermissions || []).length === 0
+                                ? <span className="text-[11px] text-gray-400">Role-based</span>
+                                : <span className="text-[11px] text-gray-600">{u.individualPermissions!.length} set</span>
+                              }
+                            </td>
                             <td className="px-4 py-2.5 text-center whitespace-nowrap">
                               <button className="text-gray-500 text-xs cursor-pointer bg-transparent border-none hover:text-[#EAB308]" onClick={() => startEdit(u)}>Edit</button>
                             </td>
                           </>
                         )}
                       </tr>
+                      </Fragment>
                     ))}
                     {filteredUsers.length === 0 && (
-                      <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
+                      <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm">No users found</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1628,6 +1756,7 @@ export default function App() {
   // Derive allowed tabs — per-user CRM permissions override role defaults.
   const allowedTabs = resolveAllowedTabs(currentUser);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
+  const siteAuditSubRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
 
   useEffect(() => {
     try {
@@ -2542,7 +2671,11 @@ export default function App() {
       )}
 
       {mainTab === 'siteAudit' && (
-        <SiteAuditRail />
+        siteAuditSubRole ? (
+          <SiteAuditOwnDashboard contact={currentUser?.phone || ''} permissionRole={siteAuditSubRole} />
+        ) : (
+          <SiteAuditRail />
+        )
       )}
 
       {mainTab === 'admin' && allowedTabs.includes('admin') && (

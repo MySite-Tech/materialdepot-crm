@@ -1243,20 +1243,29 @@ export async function fetchUsers(): Promise<import('../types/crm').AppUser[]> {
   return (data || []).map(_mapUserOrg).filter((u: import('../types/crm').AppUser) => !EXCLUDED_ROLES.has(u.role));
 }
 
-export async function addUser({ name, phone, role }: { name: string; phone: string; role: string }): Promise<import('../types/crm').AppUser> {
+export async function addUser({ name, phone, role, individualPermissions }: { name: string; phone: string; role: string; individualPermissions?: string[] }): Promise<import('../types/crm').AppUser> {
   const data = await mdFetch('/user-organisation/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contact: phone, name, role }),
+    body: JSON.stringify({
+      contact: phone,
+      name,
+      role,
+      ...(individualPermissions ? { individual_permissions: individualPermissions } : {}),
+    }),
   });
   return _mapUserOrg(data);
 }
 
 export async function updateUser(id: string | number, updates: Partial<import('../types/crm').AppUser>): Promise<void> {
+  const { individualPermissions, ...rest } = updates;
   await mdFetch(`/user-organisation/${id}/`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
+    body: JSON.stringify({
+      ...rest,
+      ...(individualPermissions !== undefined ? { individual_permissions: individualPermissions } : {}),
+    }),
   });
 }
 
