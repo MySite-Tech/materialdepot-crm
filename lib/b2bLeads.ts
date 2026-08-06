@@ -1,8 +1,11 @@
 import { supabase } from '@/lib/supabase';
-import { fetchB2BInboundLeads, B2B_INBOUND_OWNER_LIST } from '@/lib/mockApi';
+import {
+  fetchB2BInboundLeads, B2B_INBOUND_OWNER_LIST, fetchCRMLeadsStats,
+  type CRMLeadsStats, type CRMLeadsStatsBucket,
+} from '@/lib/mockApi';
 import {
   defaultTargetStore,
-  type InboundLead, type InboundStage, type Priority,
+  type InboundLead, type InboundStage,
   type OutboundLead, type OutboundStage,
   type KamClient, type KamStage, type KamSource,
   type AccountType, type ProductCategory, type LeadNote,
@@ -36,9 +39,9 @@ function rowToInbound(r: B2BLeadRow): InboundLead {
     phone: m.phone || '',
     owner: r.owner || '',
     ownerId: m.owner_kylas_id,
-    accountType: (m.account_type as AccountType) || 'Retailer',
+    accountType: (m.account_type as AccountType) || undefined,
     stage: r.stage as InboundStage,
-    priority: (m.priority as Priority) || 'Medium',
+    kylasStage: typeof m.kylas_stage === 'number' ? m.kylas_stage : undefined,
     source: m.source || 'Other',
     urgency: m.urgency || 'Planning',
     value: Number(r.value) || 0,
@@ -74,7 +77,7 @@ function inboundToRow(l: InboundLead): B2BLeadRow {
       phone: l.phone,
       owner_kylas_id: l.ownerId,
       account_type: l.accountType,
-      priority: l.priority,
+      kylas_stage: l.kylasStage,
       source: l.source,
       timeline: l.timeline || '',
       // Kylas-owned, mirrored here as a fallback
@@ -187,12 +190,33 @@ function kamToRow(l: KamClient): B2BLeadRow {
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 
-async function fetchRows(pipeline: Pipeline): Promise<B2BLeadRow[]> {
-  const { data, error } = await supabase
+// 'YYYY-MM-DD' + 1 day, as a string. Used to build a half-open upper bound.
+function nextDay(day: string): string {
+  const ms = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(ms)) return day;
+  return new Date(ms + 86_400_000).toISOString().slice(0, 10);
+}
+
+// createdFrom/createdTo are 'YYYY-MM-DD', both inclusive.
+//
+// created_at is a *text* column, so these are lexicographic comparisons — which
+// match chronological order for ISO-8601-shaped strings. The range is half-open
+// (`>= from`, `< to+1day`) rather than `<= to` so it is correct whether a value
+// is day-only ('2026-08-06') or a full timestamp ('2026-08-06T18:00:00Z'):
+// both sort below '2026-08-07'. A `<= '2026-08-06'` bound would drop the
+// timestamped one, and a `<= '2026-08-06T23:59:59'` bound would drop the
+// day-only one (a string sorts before its own longer extension).
+async function fetchRows(
+  pipeline: Pipeline,
+  opts?: { createdFrom?: string; createdTo?: string },
+): Promise<B2BLeadRow[]> {
+  let query = supabase
     .from(TABLE)
     .select('*')
-    .eq('pipeline', pipeline)
-    .order('created_at', { ascending: false });
+    .eq('pipeline', pipeline);
+  if (opts?.createdFrom) query = query.gte('created_at', opts.createdFrom);
+  if (opts?.createdTo) query = query.lt('created_at', nextDay(opts.createdTo));
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   return (data || []) as B2BLeadRow[];
 }
@@ -206,18 +230,37 @@ export interface InboundBoardPage {
 
 // Inbound board = promoted DB rows + Kylas "New" leads not yet in the DB.
 // Paginated over the Kylas side; DB overlay is loaded once on the first page.
+// createdFrom/createdTo are plain 'YYYY-MM-DD' days. The IST-anchored instants
+// Kylas needs are derived here, so the two sides can't drift apart.
 export async function fetchInboundBoard(
-  opts?: { page?: number; ownerId?: number; search?: string },
+  opts?: {
+    page?: number; ownerId?: number; search?: string;
+    createdFrom?: string; createdTo?: string; kylasStage?: number;
+  },
 ): Promise<InboundBoardPage> {
   const page = opts?.page ?? 0;
   const ownerIds = opts?.ownerId ? [opts.ownerId] : undefined;
   const search = (opts?.search || '').trim();
-  const kylas = await fetchB2BInboundLeads(page, ownerIds, search);
+  const createdAfter = opts?.createdFrom ? new Date(`${opts.createdFrom}T00:00:00+05:30`).toISOString() : '';
+  const createdBefore = opts?.createdTo ? new Date(`${opts.createdTo}T23:59:59.999+05:30`).toISOString() : '';
+  const kylas = await fetchB2BInboundLeads(
+    page, ownerIds, search, createdAfter, createdBefore, opts?.kylasStage,
+  );
 
+  // A New-stage filter is about the Kylas New pool only; the DB overlay holds
+  // leads that have already moved past New, so it is skipped entirely.
   let dbLeads: InboundLead[] = [];
-  if (page === 0) {
+  if (page === 0 && !opts?.kylasStage) {
     try {
-      dbLeads = (await fetchRows('inbound')).map(rowToInbound);
+      // Same created-date window Kylas applied to the New pool, so promoted
+      // leads in the other columns honour the filter too. Applied in SQL against
+      // the created_at column rather than a mapped field, so it doesn't depend on
+      // the row mapper carrying a date through.
+      const rows = await fetchRows('inbound', {
+        createdFrom: opts?.createdFrom,
+        createdTo: opts?.createdTo,
+      });
+      dbLeads = rows.map(rowToInbound);
       if (opts?.ownerId) dbLeads = dbLeads.filter((l) => l.ownerId === opts.ownerId);
       if (search) {
         const q = search.toLowerCase();
@@ -276,9 +319,51 @@ export async function fetchB2BData(): Promise<B2BData> {
   return { inbound: inbound.leads, outbound, kam, inboundTotal: inbound.total, inboundOwnerTotals };
 }
 
-export async function fetchOutboundLeads(): Promise<OutboundLead[]> {
+// ── Pipeline value (Django /crm/leads/stats/, branch = B2B) ───────────────────
+// Cart value lives on the Django estimates/tickets, not in b2b_lead — so every
+// rupee on the dashboard comes from the same endpoint the Leads tab strip uses,
+// scoped to the B2B branch. b2b_lead only drives stage counts and ownership.
+
+export const B2B_BRANCH = 'B2B';
+
+export interface B2BPipelineStats {
+  total: CRMLeadsStatsBucket;
+  active: CRMLeadsStatsBucket;
+  won: CRMLeadsStatsBucket;
+  lost: CRMLeadsStatsBucket;
+  byStatus: CRMLeadsStats['byStatus'];
+}
+
+const EMPTY_BUCKET: CRMLeadsStatsBucket = { count: 0, value: 0 };
+
+// 'YYYY-MM-DD' for the current Indian day — the API filters on IST dates.
+export function istToday(now: Date = new Date()): string {
+  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+// Created-date window, both ends inclusive and optional. Omit both for all-time.
+// Same parameters the Leads tab sends, so a B2B-filtered Leads tab and this
+// dashboard report identical numbers for identical windows.
+export async function fetchB2BPipelineStats(
+  range?: { from?: string; to?: string },
+): Promise<B2BPipelineStats> {
+  const stats = await fetchCRMLeadsStats({
+    branch: B2B_BRANCH, createdFrom: range?.from, createdTo: range?.to,
+  }).catch((e) => { console.error('[b2b] leads stats fetch failed', e); return null; });
+  return {
+    total: stats?.total ?? EMPTY_BUCKET,
+    active: stats?.active ?? EMPTY_BUCKET,
+    won: stats?.won ?? EMPTY_BUCKET,
+    lost: stats?.lost ?? EMPTY_BUCKET,
+    byStatus: stats?.byStatus ?? [],
+  };
+}
+
+export async function fetchOutboundLeads(
+  opts?: { createdFrom?: string; createdTo?: string },
+): Promise<OutboundLead[]> {
   try {
-    return (await fetchRows('outbound')).map(rowToOutbound);
+    return (await fetchRows('outbound', opts)).map(rowToOutbound);
   } catch (e) {
     console.error('[b2b] outbound DB fetch failed', e);
     return [];

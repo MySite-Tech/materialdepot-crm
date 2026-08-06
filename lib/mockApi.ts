@@ -1,4 +1,3 @@
-
 const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
 const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
@@ -307,11 +306,11 @@ export async function searchContactByPhone(phoneNumber: string): Promise<number 
 }
 
 // ---------------------------------------------------------------------------
-// B2B Inbound Leads — Kylas pipeline 31627, stage 220514 (Hardi & Mandeep)
+// B2B Inbound Leads — Kylas pipeline 31627, stages 220515 & 220290 (Hardi & Mandeep)
 // ---------------------------------------------------------------------------
 
 const B2B_INBOUND_PIPELINE = 31627;
-const B2B_INBOUND_STAGE = 220515;
+const B2B_INBOUND_STAGES = [220515, 220290];
 const B2B_INBOUND_OWNERS: Record<number, string> = {
   81181: 'Hardi',
   73321: 'Mandeep',
@@ -357,18 +356,45 @@ function toDateInput(v: unknown): string {
   return s.includes('T') ? s.slice(0, 10) : s;
 }
 
-function b2bInboundRule(ownerIds: number[], search?: string) {
+function b2bInboundRule(
+  ownerIds: number[],
+  search?: string,
+  createdAfter?: string,
+  createdBefore?: string,
+  kylasStage?: number,
+) {
   const ownerRule = ownerIds.length === 1
     ? { operator: 'equal', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerIds[0], relatedFieldIds: null }
     : { operator: 'in', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerIds, relatedFieldIds: null };
+  // Narrow to one stage when the New Type filter is set, so paging/counts stay
+  // correct instead of being thinned out client-side.
+  const stageRule = kylasStage
+    ? { operator: 'equal', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: kylasStage, relatedFieldIds: ['pipeline'] }
+    : { operator: 'in', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGES, relatedFieldIds: ['pipeline'] };
   const rules: Record<string, any>[] = [
     ownerRule,
     { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE, dependentFieldIds: ['pipelineStage', 'pipelineStageReason'] },
-    { operator: 'equal', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGE, relatedFieldIds: ['pipeline'] },
+    stageRule,
   ];
   const q = (search || '').trim();
   if (q) {
     rules.push({ id: 'multi_field', field: 'multi_field', type: 'multi_field', input: 'multi_field', operator: 'multi_field', value: q });
+  }
+  if (createdAfter && createdBefore) {
+    rules.push({
+      operator: 'between', id: 'createdAt', field: 'createdAt', type: 'date',
+      value: [createdAfter, createdBefore], relatedFieldIds: null, timeZone: 'Asia/Calcutta',
+    });
+  } else if (createdAfter) {
+    rules.push({
+      operator: 'greater', id: 'createdAt', field: 'createdAt', type: 'date',
+      value: createdAfter, relatedFieldIds: null, timeZone: 'Asia/Calcutta',
+    });
+  } else if (createdBefore) {
+    rules.push({
+      operator: 'less', id: 'createdAt', field: 'createdAt', type: 'date',
+      value: createdBefore, relatedFieldIds: null, timeZone: 'Asia/Calcutta',
+    });
   }
   return {
     fields: B2B_INBOUND_FIELDS,
@@ -392,21 +418,22 @@ function mapInboundLead(raw: Record<string, any>): import('../components/b2b/moc
   const phone = Array.isArray(raw.phoneNumbers) && raw.phoneNumbers.length
     ? String(raw.phoneNumbers[0]?.value || raw.phoneNumbers[0]?.dialCode || '')
     : lastName;
+  const timeline = raw.city ?? raw.customFieldValues?.city ?? undefined;
+  const kylasStage = typeof raw.pipelineStage === 'object' ? raw.pipelineStage?.id : raw.pipelineStage;
   return {
     id: String(raw.id),
     company: firstName || lastName || `Lead ${raw.id}`,
     contactName: firstName || '—',
     phone,
     ownerId: typeof raw.ownerId === 'number' ? raw.ownerId : undefined,
-    accountType: 'Retailer',
     stage: 'New',
-    priority: 'Medium',
+    kylasStage: typeof kylasStage === 'number' ? kylasStage : undefined,
     owner: B2B_INBOUND_OWNERS[raw.ownerId] || 'Unassigned',
     source: mapInboundSource(raw.source),
     urgency: 'Planning',
     value: 0,
     requirement: raw.requirementName ?? raw.customFieldValues?.requirementName ?? undefined,
-    timeline: raw.city ?? raw.customFieldValues?.city ?? undefined,
+    timeline,
     categories: categoryLabelsFromIds(raw.cfCategoriesOfInterest ?? raw.customFieldValues?.cfCategoriesOfInterest),
     expectedClosure: toDateInput(raw.expectedClosureOn) || undefined,
     calls: [],
@@ -428,12 +455,15 @@ export async function fetchB2BInboundLeads(
   page = 0,
   ownerIds: number[] = B2B_INBOUND_OWNER_IDS,
   search = '',
+  createdAfter = '',
+  createdBefore = '',
+  kylasStage?: number,
 ): Promise<B2BInboundPage> {
   let res;
   try {
     res = await kylasFetch(`/search/lead?sort=createdAt,desc&page=${page}&size=${B2B_INBOUND_PAGE_SIZE}`, {
       method: 'POST',
-      body: JSON.stringify(b2bInboundRule(ownerIds, search)),
+      body: JSON.stringify(b2bInboundRule(ownerIds, search, createdAfter, createdBefore, kylasStage)),
     });
   } catch {
     return { leads: [], page, hasMore: false, total: 0 };
@@ -465,6 +495,31 @@ function formatKylasTs(ts: unknown): string {
   return new Date(ms).toLocaleString('en-IN', {
     day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
   });
+}
+
+// Deal tickets for a B2B lead come from the Django `ticket` table (via /crm/leads/),
+// matched on phone — more reliable than fuzzy-matching Kylas deals.
+export async function fetchLeadDeals(phone: string | number): Promise<import('../components/b2b/mockData').LeadDeal[]> {
+  const q = String(phone || '').trim();
+  if (!q) return [];
+  try {
+    const { results } = await fetchCRMLeads({ q, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' });
+    return results.map((r) => ({
+      id: r.id,
+      ticketId: r.ticketId,
+      status: r.status || '',
+      cartValue: Number(r.cartValue) || 0,
+      cartItems: r.cartItems || undefined,
+      branch: r.branch || undefined,
+      assignedTo: r.assignedTo || undefined,
+      createdAt: r.createdAt || undefined,
+      followUpDate: r.followUpDate || undefined,
+      closureDate: r.closureDate || undefined,
+      lostReason: r.lostReason || undefined,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchLeadNotes(
@@ -529,6 +584,11 @@ export async function fetchLeadCallLogs(
   } catch {
     return [];
   }
+}
+
+export async function fetchCallLogSummary(callLogId: string | number): Promise<string> {
+  const data = await kylasFetch(`/call-logs/${callLogId}?relatedToType=lead`);
+  return stripHtml(data?.callSummary ?? data?.summary ?? data?.aiSummary ?? data?.transcriptSummary ?? '');
 }
 
 export type CallOutcome = 'connected' | 'busy' | 'rejected' | 'no_answer' | 'missed_call';
@@ -687,6 +747,8 @@ export async function assignBMToClient(
 
 export interface CRMLeadRow {
   id: string;
+  leadId?: string;
+  ticketId?: number;
   clientName: string | null;
   clientPhone: string | null;
   assignedTo: string;

@@ -577,6 +577,29 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     [storeData],
   );
 
+  // Response rate is measured over every footfall in `base` (pending + submitted),
+  // so it deliberately ignores the understood/category chips.
+  const storeResponseData = useMemo(() => {
+    const names = Array.from(new Set(base.map(r => r.store).filter(Boolean))) as string[];
+    return names.map(s => {
+      const rs = base.filter(r => r.store === s);
+      const responses = rs.filter(isSubmitted).length;
+      return {
+        store: s,
+        footfalls: rs.length,
+        responses,
+        pending: rs.length - responses,
+        rate: rs.length ? Math.round(responses / rs.length * 100) : 0,
+      };
+    }).sort((a, b) => b.rate - a.rate || b.footfalls - a.footfalls);
+  }, [base]);
+
+  const responseTotals = useMemo(() => {
+    const footfalls = storeResponseData.reduce((a, d) => a + d.footfalls, 0);
+    const responses = storeResponseData.reduce((a, d) => a + d.responses, 0);
+    return { footfalls, responses, pending: footfalls - responses, rate: footfalls ? Math.round(responses / footfalls * 100) : 0 };
+  }, [storeResponseData]);
+
   const bmChartData = useMemo(() => {
     const names = Array.from(new Set(analysis.map(r => r.bm).filter(Boolean))) as string[];
     return names.map(n => {
@@ -894,6 +917,52 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
               ) : <EmptyChart msg="No data for this selection." />}
             </ChartCard>
           </div>
+
+          {/* Response rate by store */}
+          <ChartCard title="Response rate by store" caption="Responses collected vs total footfalls · sorted highest to lowest">
+            {storeResponseData.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px]">
+                  <thead>
+                    <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                      <th className="px-4 py-2.5">Store</th>
+                      <th className="px-4 py-2.5 text-right">Footfalls</th>
+                      <th className="px-4 py-2.5 text-right">Responses</th>
+                      <th className="px-4 py-2.5 text-right">Pending</th>
+                      <th className="px-4 py-2.5 text-right">Response Rate</th>
+                      <th className="px-4 py-2.5 w-[180px]"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {storeResponseData.map(d => (
+                      <tr key={d.store} className="border-b border-gray-50 last:border-0">
+                        <td className="px-4 py-3 text-[13.5px] font-semibold text-gray-900">{d.store}</td>
+                        <td className="px-4 py-3 text-[13.5px] text-gray-600 text-right tabular-nums">{d.footfalls}</td>
+                        <td className="px-4 py-3 text-[13.5px] text-gray-900 font-semibold text-right tabular-nums">{d.responses}</td>
+                        <td className="px-4 py-3 text-[13.5px] text-gray-500 text-right tabular-nums">{d.pending}</td>
+                        <td className={`px-4 py-3 text-[13.5px] font-bold text-right tabular-nums ${d.rate >= 70 ? 'text-green-600' : d.rate >= 40 ? 'text-amber-600' : 'text-red-600'}`}>{d.rate}%</td>
+                        <td className="px-4 py-3">
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${d.rate}%`, background: d.rate >= 70 ? C.promoter : d.rate >= 40 ? C.passive : C.detractor }} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-gray-200 bg-gray-50/60">
+                      <td className="px-4 py-3 text-[13.5px] font-bold text-gray-900">Total</td>
+                      <td className="px-4 py-3 text-[13.5px] font-semibold text-gray-700 text-right tabular-nums">{responseTotals.footfalls}</td>
+                      <td className="px-4 py-3 text-[13.5px] font-bold text-gray-900 text-right tabular-nums">{responseTotals.responses}</td>
+                      <td className="px-4 py-3 text-[13.5px] font-semibold text-gray-600 text-right tabular-nums">{responseTotals.pending}</td>
+                      <td className="px-4 py-3 text-[13.5px] font-bold text-gray-900 text-right tabular-nums">{responseTotals.rate}%</td>
+                      <td className="px-4 py-3"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : <EmptyChart msg="No footfalls in this selection." />}
+          </ChartCard>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Score distribution */}

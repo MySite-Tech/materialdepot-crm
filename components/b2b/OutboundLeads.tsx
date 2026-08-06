@@ -7,7 +7,7 @@ import {
   fmtL, fmtINR, ordinal, type OutboundLead, type OutboundStage, type ProductCategory,
 } from './mockData';
 import { fetchOutboundLeads, upsertOutboundLead } from '@/lib/b2bLeads';
-import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, type ExportFormat, type ExportScope } from './exportUtils';
+import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, type ExportFormat, type ExportScope } from './exportUtils';
 
 const OUTBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Segment', 'Visits', 'BDA', 'Value'];
 const outboundToRow = (l: OutboundLead): (string | number)[] => [
@@ -377,8 +377,14 @@ export default function OutboundLeads() {
   const [dragOverStage, setDragOverStage] = useState<OutboundStage | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [createdFrom, setCreatedFrom] = useState(''); // 'YYYY-MM-DD', filtered in Supabase
+  const [createdTo, setCreatedTo] = useState('');
 
-  useEffect(() => { fetchOutboundLeads().then(setLeads); }, []);
+  useEffect(() => {
+    let alive = true;
+    fetchOutboundLeads({ createdFrom, createdTo }).then((l) => { if (alive) setLeads(l); });
+    return () => { alive = false; };
+  }, [createdFrom, createdTo]);
 
   const filtered = useMemo(() => leads.filter((l) => owner === 'all' || l.bda === owner), [leads, owner]);
   const byStage = (s: OutboundStage) => filtered.filter((l) => l.stage === s);
@@ -414,6 +420,7 @@ export default function OutboundLeads() {
   };
 
   const selected = leads.find((l) => l.id === selectedId) || null;
+  const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
   return (
     <div className="p-4 sm:p-6">
@@ -458,10 +465,40 @@ export default function OutboundLeads() {
             {B2B_REPS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Created From</label>
+          <input
+            type="date"
+            value={createdFrom}
+            onChange={(e) => setCreatedFrom(e.target.value)}
+            className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Created To</label>
+          <input
+            type="date"
+            value={createdTo}
+            onChange={(e) => setCreatedTo(e.target.value)}
+            className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white"
+          />
+        </div>
+        <button
+          onClick={() => { setOwner('all'); setCreatedFrom(''); setCreatedTo(''); }}
+          className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500"
+        >
+          Clear
+        </button>
       </div>
 
       {view === 'kanban' ? (
-        <div className="flex gap-3 overflow-x-auto pb-3">
+        <div
+          ref={kanbanScroll.ref}
+          className="flex gap-3 overflow-x-auto pb-3"
+          onDragOver={kanbanScroll.onDragOver}
+          onDragEnd={kanbanScroll.onDragEnd}
+          onDrop={kanbanScroll.onDrop}
+        >
           {OUTBOUND_STAGES.map((s) => {
             const items = byStage(s);
             const isOver = dragOverStage === s;

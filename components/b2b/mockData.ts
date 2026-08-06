@@ -3,7 +3,6 @@
 // Leads, Outbound Leads). No backend yet — mirrors the PRD v1.0 field model.
 
 export type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
-export type Priority = 'High' | 'Medium' | 'Low';
 
 // ── Inbound ──────────────────────────────────────────────────────────────────
 export type InboundStage =
@@ -11,6 +10,13 @@ export type InboundStage =
 
 export const INBOUND_STAGES: InboundStage[] = [
   'New', 'RNR', 'Followup Required', 'Quote', 'PI Shared', 'Closed', 'Lost', 'Enquiry Invalid',
+];
+
+// Two Kylas pipeline stages both feed the local "New" column — this lets the
+// New column be filtered down to just one of them.
+export const NEW_KYLAS_STAGES: { id: number; label: string }[] = [
+  { id: 220515, label: 'B2B Qualified' },
+  { id: 220290, label: 'Won' },
 ];
 
 export type ProductCategory = 'Tiles' | 'Plywood' | 'Laminate' | 'Liner Laminate' | 'Panel' | 'Others';
@@ -36,16 +42,33 @@ export interface CallLogEntry {
   note?: string;
 }
 
+// One deal ticket from the Django `ticket` table (via /crm/leads/), matched to a
+// B2B lead by phone. Kylas is not consulted — escalated deals live in their own
+// CRM section.
+export interface LeadDeal {
+  id: string;                // cart number / ENQ id
+  ticketId?: number;
+  status: string;            // In Cart / Order Placed / Order Lost / …
+  cartValue: number;
+  cartItems?: string;
+  branch?: string;
+  assignedTo?: string;
+  createdAt?: string;
+  followUpDate?: string;
+  closureDate?: string;
+  lostReason?: string;
+}
+
 export interface InboundLead {
   id: string;
   company: string;
   contactName: string;
   phone: string;
   ownerId?: number;          // Kylas owner id (for notes lookup)
-  accountType: AccountType;
+  accountType?: AccountType;
   city?: string;
   stage: InboundStage;
-  priority: Priority;
+  kylasStage?: number;      // raw Kylas pipelineStage id — only meaningful while stage === 'New'
   owner: string;
   source: 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Google' | 'Other';
   urgency: 'Immediate need' | 'Planning' | 'Just browsing';
@@ -163,31 +186,6 @@ export const KAM_STAGE_COLORS: Record<KamStage, string> = {
   'Closed':            '#22C55E',
   'Lost':              '#EF4444',
 };
-
-export const PRIORITY_COLORS: Record<Priority, string> = {
-  High:   '#EF4444',
-  Medium: '#F59E0B',
-  Low:    '#6B7280',
-};
-
-// ── Seed data (mirrors the reference designs verbatim) ────────────────────────
-export const INBOUND_LEADS: InboundLead[] = [
-  { id: 'IB-01', company: 'Ramesh Traders', contactName: 'Ramesh', phone: '9876543210', accountType: 'Retailer', city: 'Bengaluru', stage: 'New', priority: 'High', owner: 'Krishna Bhagavatula', source: 'Website form', urgency: 'Immediate need', value: 412000, followUpNote: 'Call 1', overdueHours: 122.0,
-    timeline: '2 weeks', requirementBrief: 'Bulk tiles for showroom', categories: ['Tiles'],
-    calls: [{ label: 'Call 1', outcome: null, overdueHours: 122.0 }, { label: 'Call 2', outcome: null }, { label: 'Call 3', outcome: null }, { label: 'Call 4', outcome: null }] },
-  { id: 'IB-02', company: 'Shree Interiors', contactName: 'Shree', phone: '9876500021', accountType: 'Interior Designer', city: 'Bengaluru', stage: 'RNR', priority: 'Medium', owner: 'Krishna Bhagavatula', source: 'WhatsApp', urgency: 'Planning', value: 0, followUpNote: 'Call 2', overdueHours: 122.3,
-    timeline: '1 month', requirementBrief: 'Plywood for 3 residential projects', categories: [],
-    calls: [{ label: 'Call 1', outcome: 'RNR', ts: '12 Jul 11:37 am' }, { label: 'Call 2', outcome: null, overdueHours: 122.3 }, { label: 'Call 3', outcome: null }, { label: 'Call 4', outcome: null }] },
-  { id: 'IB-03', company: 'Vasavi Constructions', contactName: 'Vasavi', phone: '9876511122', accountType: 'Contractor', city: 'Bengaluru', stage: 'Followup Required', priority: 'High', owner: 'Krishna Bhagavatula', source: 'Referral', urgency: 'Planning', value: 0,
-    timeline: '3 weeks', requirementBrief: 'Laminates for office fit-out', categories: ['Laminate'],
-    calls: [{ label: 'Call 1', outcome: 'Connected', ts: '10 Jul 4:12 pm' }, { label: 'Call 2', outcome: null }, { label: 'Call 3', outcome: null }, { label: 'Call 4', outcome: null }] },
-  { id: 'IB-04', company: 'Om Sai Builders', contactName: 'Om Sai', phone: '9876522233', accountType: 'Builder', city: 'Bengaluru', stage: 'PI Shared', priority: 'High', owner: 'Krishna Bhagavatula', source: 'Google', urgency: 'Immediate need', value: 412000, expectedClosure: '2026-07-20',
-    timeline: '1 week', requirementBrief: 'Panels + tiles for 2 towers', categories: ['Panel', 'Tiles'],
-    calls: [{ label: 'Call 1', outcome: 'Connected', ts: '8 Jul 10:02 am' }, { label: 'Call 2', outcome: 'Connected', ts: '11 Jul 3:40 pm' }, { label: 'Call 3', outcome: null }, { label: 'Call 4', outcome: null }] },
-  { id: 'IB-05', company: 'Nova Homes', contactName: 'Nova', phone: '9876533344', accountType: 'Builder', city: 'Bengaluru', stage: 'Lost', priority: 'Low', owner: 'Krishna Bhagavatula', source: 'Walk-in', urgency: 'Just browsing', value: 0,
-    timeline: 'No timeline', requirementBrief: 'Just browsing options', categories: [],
-    calls: [{ label: 'Call 1', outcome: 'RNR', ts: '5 Jul 1:15 pm' }, { label: 'Call 2', outcome: 'RNR', ts: '7 Jul 6:30 pm' }, { label: 'Call 3', outcome: null }, { label: 'Call 4', outcome: null }] },
-];
 
 export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 

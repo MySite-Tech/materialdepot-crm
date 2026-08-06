@@ -2,28 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  INBOUND_STAGES, INBOUND_STAGE_COLORS, PRIORITY_COLORS, KYLAS_LEAD_CATEGORIES, KAM_STAGES,
-  fmtINR, type InboundLead, type InboundStage, type Priority,
-  type LeadNote, type CallLogEntry,
+  INBOUND_STAGES, INBOUND_STAGE_COLORS, KYLAS_LEAD_CATEGORIES, KAM_STAGES, NEW_KYLAS_STAGES,
+  fmtINR, type InboundLead, type InboundStage,
+  type LeadNote, type CallLogEntry, type LeadDeal,
 } from './mockData';
-import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, createInboundCallLog, CALL_OUTCOME_OPTIONS, type CallOutcome, updateInboundLeadKylas, fetchInboundLeadDetail, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
+import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, createInboundCallLog, CALL_OUTCOME_OPTIONS, type CallOutcome, updateInboundLeadKylas, fetchInboundLeadDetail, fetchCallLogSummary, fetchLeadDeals, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
-import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, type ExportFormat, type ExportScope } from './exportUtils';
+import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, type ExportFormat, type ExportScope } from './exportUtils';
 
-const INBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Priority', 'Owner', 'Source', 'Value'];
+const INBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Timeline', 'Owner', 'Source', 'Value'];
 const inboundToRow = (l: InboundLead): (string | number)[] => [
-  l.company || '', l.phone || '', l.accountType || '', l.stage || '', l.priority || '',
+  l.company || '', l.phone || '', l.accountType || '', l.stage || '', l.timeline || '',
   l.owner || '', l.source || '', l.value ? l.value : '',
 ];
-
-function PriorityBadge({ p }: { p: Priority }) {
-  const c = PRIORITY_COLORS[p];
-  return (
-    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: c + '18', color: c }}>
-      {p}
-    </span>
-  );
-}
 
 function StageBadge({ s }: { s: InboundStage }) {
   const c = INBOUND_STAGE_COLORS[s];
@@ -49,9 +40,9 @@ function LeadCard({
       className="bg-white rounded-lg border border-gray-200 p-3 hover:border-[#EAB308] hover:shadow-sm transition-all cursor-pointer active:cursor-grabbing"
     >
       <div className="text-[13px] font-semibold text-gray-800 leading-tight">{lead.company}</div>
-      <div className="text-[11px] text-gray-400 mt-0.5">{lead.accountType} · {lead.phone}</div>
+      <div className="text-[11px] text-gray-400 mt-0.5">{lead.accountType || '—'} · {lead.phone}</div>
       <div className="flex items-center justify-between mt-2">
-        <PriorityBadge p={lead.priority} />
+        <span className="text-[11px] text-gray-400">{lead.timeline || '—'}</span>
         {lead.overdueHours != null ? (
           <span className="text-[10px] text-red-500 font-medium">{lead.followUpNote} · {lead.overdueHours}h overdue</span>
         ) : (
@@ -76,6 +67,19 @@ function LeadDrawer({
   const [notesLoading, setNotesLoading] = useState(true);
   const [callLogs, setCallLogs] = useState<CallLogEntry[]>([]);
   const [callsLoading, setCallsLoading] = useState(true);
+  const [summaryModal, setSummaryModal] = useState<{ loading: boolean; text?: string; error?: string } | null>(null);
+  const [deals, setDeals] = useState<LeadDeal[]>([]);
+  const [dealsLoading, setDealsLoading] = useState(true);
+
+  const openCallSummary = async (callLogId: string) => {
+    setSummaryModal({ loading: true });
+    try {
+      const text = await fetchCallLogSummary(callLogId);
+      setSummaryModal({ loading: false, text: text || 'No summary available for this call.' });
+    } catch {
+      setSummaryModal({ loading: false, error: 'Failed to load call summary. Please try again.' });
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -94,6 +98,15 @@ function LeadDrawer({
       .finally(() => { if (alive) setCallsLoading(false); });
     return () => { alive = false; };
   }, [lead.id]);
+
+  useEffect(() => {
+    let alive = true;
+    setDealsLoading(true);
+    fetchLeadDeals(lead.phone)
+      .then((d) => { if (alive) setDeals(d); })
+      .finally(() => { if (alive) setDealsLoading(false); });
+    return () => { alive = false; };
+  }, [lead.phone]);
 
   // Requirement / categories / closure are Kylas-owned — load them live on open.
   const [detailLoading, setDetailLoading] = useState(true);
@@ -189,7 +202,7 @@ function LeadDrawer({
           <div>
             <h2 className="text-lg font-bold text-gray-800">{draft.company}</h2>
             <div className="text-[12px] text-gray-400 mt-0.5 flex items-center gap-1.5">
-              {draft.phone} · {draft.accountType} · <StageBadge s={draft.stage} />
+              {draft.phone} · {draft.accountType || '—'} · <StageBadge s={draft.stage} />
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
@@ -203,14 +216,9 @@ function LeadDrawer({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Pre-sales brief</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-300">Via Kylas</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Timeline">
-                  <div className={readonlyCls}>{draft.timeline || '—'}</div>
-                </Field>
-                <Field label="Priority">
-                  <div className={readonlyCls}>{draft.priority}</div>
-                </Field>
-              </div>
+              <Field label="Timeline">
+                <div className={readonlyCls}>{draft.timeline || '—'}</div>
+              </Field>
               <Field label="Requirement brief" className="mt-3">
                 <div className={readonlyCls + ' whitespace-pre-wrap min-h-[38px]'}>{draft.requirementBrief || '—'}</div>
               </Field>
@@ -330,9 +338,77 @@ function LeadDrawer({
                         </div>
                         {c.note && <div className="text-[11px] text-gray-500 mt-0.5">{c.note}</div>}
                       </div>
+                      <button
+                        onClick={() => openCallSummary(c.id)}
+                        className="shrink-0 border border-gray-200 bg-white text-gray-600 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap hover:border-[#0F766E] hover:text-[#0F766E]"
+                      >
+                        Summary
+                      </button>
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Deals */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Deals</span>
+              {!dealsLoading && <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{deals.length} deals · deal tickets</span>}
+            </div>
+            {dealsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-[11px] text-gray-400">
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 border-t-[#0F766E] animate-spin" />
+                Loading deals…
+              </div>
+            ) : deals.length === 0 ? (
+              <p className="text-[11px] text-gray-300 text-center py-2">No deals found for this lead.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-gray-100">
+                {deals.map((d) => (
+                  <div key={d.ticketId ?? d.id} className="py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-gray-800 truncate">{d.id}</span>
+                      <span className="text-[12px] font-mono text-gray-700 whitespace-nowrap">
+                        {d.cartValue ? fmtINR(d.cartValue) : '—'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">
+                      {[
+                        d.status,
+                        d.branch,
+                        d.assignedTo,
+                        d.createdAt ? `Created ${d.createdAt}` : '',
+                        d.closureDate ? `Closure ${d.closureDate}` : '',
+                      ].filter(Boolean).join(' · ')}
+                    </div>
+                    {d.cartItems && <div className="text-[11px] text-gray-500 mt-0.5">{d.cartItems}</div>}
+                    {d.lostReason && <div className="text-[11px] text-red-500 mt-0.5">Lost: {d.lostReason}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {summaryModal && (
+            <div className="fixed inset-0 z-[1300] flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/30" onClick={() => setSummaryModal(null)} />
+              <div className="relative bg-white rounded-lg shadow-xl w-full max-w-[480px] mx-4 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[13px] font-bold text-gray-800">Call summary</span>
+                  <button onClick={() => setSummaryModal(null)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+                </div>
+                {summaryModal.loading ? (
+                  <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-gray-400">
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 border-t-[#0F766E] animate-spin" />
+                    Loading summary…
+                  </div>
+                ) : summaryModal.error ? (
+                  <p className="text-[12px] text-red-500">{summaryModal.error}</p>
+                ) : (
+                  <p className="text-[12px] text-gray-700 whitespace-pre-wrap">{summaryModal.text}</p>
+                )}
               </div>
             </div>
           )}
@@ -364,7 +440,15 @@ function LeadDrawer({
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <Field label="Expected date of closure">
-                <input type="date" value={draft.expectedClosure || ''} onChange={(e) => set('expectedClosure', e.target.value)} className={inputCls} />
+                <input
+                  type="date"
+                  value={draft.expectedClosure || ''}
+                  onChange={(e) => {
+                    const expectedClosure = e.target.value;
+                    setDraft((d) => ({ ...d, expectedClosure, stage: expectedClosure ? 'Followup Required' : d.stage }));
+                  }}
+                  className={inputCls}
+                />
               </Field>
               <Field label="Status">
                 <select value={draft.stage} onChange={(e) => set('stage', e.target.value as InboundStage)} className={inputCls}>
@@ -436,8 +520,10 @@ function Field({ label, children, className = '' }: { label: string; children: R
 export default function InboundLeads() {
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [owner, setOwner] = useState('all');
-  const [priority, setPriority] = useState('all');
   const [stage, setStage] = useState<'all' | InboundStage>('all');
+  const [newKylasStage, setNewKylasStage] = useState<'all' | number>('all'); // sub-filter within the "New" column only
+  const [createdAfter, setCreatedAfter] = useState(''); // 'YYYY-MM-DD'
+  const [createdBefore, setCreatedBefore] = useState(''); // 'YYYY-MM-DD'
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [leads, setLeads] = useState<InboundLead[]>([]);
@@ -457,17 +543,24 @@ export default function InboundLeads() {
     [owner],
   );
 
+  // "Created after"/"Created before" are passed as plain days and applied to every
+  // column: fetchInboundBoard converts them to IST instants for Kylas (New pool)
+  // and filters the promoted Supabase leads on the same window.
+
+  // Sent to Kylas as a pipelineStage rule so paging and counts reflect the filter.
+  const kylasStageFilter = newKylasStage === 'all' ? undefined : newKylasStage;
+
   const runSearch = () => setAppliedSearch(search.trim());
   const clearSearch = () => { setSearch(''); setAppliedSearch(''); };
 
   const [exporting, setExporting] = useState(false);
 
-  const fetchAllInbound = async (opts: { ownerId?: number; search?: string }): Promise<InboundLead[]> => {
+  const fetchAllInbound = async (opts: { ownerId?: number; search?: string; createdFrom?: string; createdTo?: string; kylasStage?: number }): Promise<InboundLead[]> => {
     const all: InboundLead[] = [];
     const seen = new Set<string>();
     let p = 0;
     for (;;) {
-      const res = await fetchInboundBoard({ page: p, ownerId: opts.ownerId, search: opts.search });
+      const res = await fetchInboundBoard({ page: p, ownerId: opts.ownerId, search: opts.search, createdFrom: opts.createdFrom, createdTo: opts.createdTo, kylasStage: opts.kylasStage });
       for (const l of res.leads) { if (!seen.has(l.id)) { seen.add(l.id); all.push(l); } }
       if (!res.hasMore) break;
       p += 1;
@@ -475,6 +568,10 @@ export default function InboundLeads() {
     }
     return all;
   };
+
+  // The New Type filter is applied server-side by Kylas, so only the local
+  // stage/column filter is left to apply here.
+  const matchesStageFilters = (l: InboundLead) => stage === 'all' || l.stage === stage;
 
   const handleExport = async (format: ExportFormat, scope: ExportScope) => {
     if (exporting) return;
@@ -484,10 +581,8 @@ export default function InboundLeads() {
       if (scope === 'all') {
         list = await fetchAllInbound({});
       } else {
-        list = await fetchAllInbound({ ownerId, search: appliedSearch });
-        list = list.filter((l) =>
-          (priority === 'all' || l.priority === priority) &&
-          (stage === 'all' || l.stage === stage));
+        list = await fetchAllInbound({ ownerId, search: appliedSearch, createdFrom: createdAfter, createdTo: createdBefore, kylasStage: kylasStageFilter });
+        list = list.filter(matchesStageFilters);
       }
       if (!list.length) { alert('No leads to export.'); return; }
       const name = `b2b_inbound_leads_${scope}_${todayStr()}`;
@@ -504,7 +599,7 @@ export default function InboundLeads() {
   const load = () => {
     setLoading(true);
     setError(null);
-    fetchInboundBoard({ page: 0, ownerId, search: appliedSearch })
+    fetchInboundBoard({ page: 0, ownerId, search: appliedSearch, createdFrom: createdAfter, createdTo: createdBefore, kylasStage: kylasStageFilter })
       .then((res) => {
         setLeads(res.leads);
         setPage(res.page);
@@ -515,13 +610,13 @@ export default function InboundLeads() {
       .finally(() => setLoading(false));
   };
 
-  // Refetch from page 0 whenever the owner filter or search changes.
-  useEffect(() => { load(); }, [ownerId, appliedSearch]);
+  // Refetch from page 0 whenever any server-side filter changes.
+  useEffect(() => { load(); }, [ownerId, appliedSearch, createdAfter, createdBefore, kylasStageFilter]);
 
   const loadMore = () => {
     if (loadingMore || loading || !hasMore) return;
     setLoadingMore(true);
-    fetchInboundBoard({ page: page + 1, ownerId, search: appliedSearch })
+    fetchInboundBoard({ page: page + 1, ownerId, search: appliedSearch, createdFrom: createdAfter, createdTo: createdBefore, kylasStage: kylasStageFilter })
       .then((res) => {
         setLeads((prev) => {
           const seen = new Set(prev.map((l) => l.id));
@@ -540,13 +635,13 @@ export default function InboundLeads() {
   const [listTotal, setListTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
 
-  useEffect(() => { setListPage(0); }, [ownerId, appliedSearch]);
+  useEffect(() => { setListPage(0); }, [ownerId, appliedSearch, createdAfter, createdBefore, kylasStageFilter]);
 
   useEffect(() => {
     if (view !== 'list') return;
     let alive = true;
     setListLoading(true);
-    fetchInboundBoard({ page: listPage, ownerId, search: appliedSearch })
+    fetchInboundBoard({ page: listPage, ownerId, search: appliedSearch, createdFrom: createdAfter, createdTo: createdBefore, kylasStage: kylasStageFilter })
       .then((res) => {
         if (!alive) return;
         setListLeads(res.leads);
@@ -554,23 +649,17 @@ export default function InboundLeads() {
       })
       .finally(() => { if (alive) setListLoading(false); });
     return () => { alive = false; };
-  }, [view, listPage, ownerId, appliedSearch]);
+  }, [view, listPage, ownerId, appliedSearch, createdAfter, createdBefore, kylasStageFilter]);
 
   const listTotalPages = Math.max(1, Math.ceil(listTotal / B2B_INBOUND_PAGE_SIZE));
   const listFiltered = useMemo(
-    () => listLeads.filter((l) =>
-      (priority === 'all' || l.priority === priority) &&
-      (stage === 'all' || l.stage === stage),
-    ),
-    [listLeads, priority, stage],
+    () => listLeads.filter(matchesStageFilters),
+    [listLeads, stage],
   );
 
   const ownerOptions = useMemo(() => B2B_INBOUND_OWNER_LIST.map((o) => o.name).sort(), []);
 
-  const filtered = useMemo(() => leads.filter((l) =>
-    (priority === 'all' || l.priority === priority) &&
-    (stage === 'all' || l.stage === stage)
-  ), [leads, priority, stage]);
+  const filtered = useMemo(() => leads.filter(matchesStageFilters), [leads, stage]);
 
   const byStage = (s: InboundStage) => filtered.filter((l) => l.stage === s);
 
@@ -589,6 +678,7 @@ export default function InboundLeads() {
   };
 
   const selected = leads.find((l) => l.id === selectedId) || null;
+  const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
   return (
     <div className="p-4 sm:p-6">
@@ -669,15 +759,35 @@ export default function InboundLeads() {
           </select>
         </div>
         <div>
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Priority</label>
-          <select value={priority} onChange={(e) => setPriority(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[100px]">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">New Type</label>
+          <select
+            value={newKylasStage}
+            onChange={(e) => setNewKylasStage(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px]"
+          >
             <option value="all">All</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
+            {NEW_KYLAS_STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
-        <button onClick={() => { setOwner('all'); setPriority('all'); setStage('all'); clearSearch(); }} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500">Clear</button>
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Created After</label>
+          <input
+            type="date"
+            value={createdAfter}
+            onChange={(e) => setCreatedAfter(e.target.value)}
+            className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Created Before</label>
+          <input
+            type="date"
+            value={createdBefore}
+            onChange={(e) => setCreatedBefore(e.target.value)}
+            className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white"
+          />
+        </div>
+        <button onClick={() => { setOwner('all'); setStage('all'); setNewKylasStage('all'); setCreatedAfter(''); setCreatedBefore(''); clearSearch(); }} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500">Clear</button>
       </div>
 
       {error && (
@@ -687,7 +797,13 @@ export default function InboundLeads() {
       )}
 
       {view === 'kanban' ? (
-        <div className="flex gap-3 overflow-x-auto pb-3">
+        <div
+          ref={kanbanScroll.ref}
+          className="flex gap-3 overflow-x-auto pb-3"
+          onDragOver={kanbanScroll.onDragOver}
+          onDragEnd={kanbanScroll.onDragEnd}
+          onDrop={kanbanScroll.onDrop}
+        >
           {INBOUND_STAGES.map((s) => {
             const items = byStage(s);
             const isOver = dragOverStage === s;
@@ -727,7 +843,7 @@ export default function InboundLeads() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Company', 'Contact', 'Type', 'Stage', 'Priority', 'Owner', 'Source', 'Value'].map((h) => (
+                {['Company', 'Contact', 'Type', 'Stage', 'Timeline', 'Owner', 'Source', 'Value'].map((h) => (
                   <th key={h} className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -737,9 +853,9 @@ export default function InboundLeads() {
                 <tr key={l.id} onClick={() => setSelectedId(l.id)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
                   <td className="px-3 py-2.5 font-semibold text-gray-800">{l.company}</td>
                   <td className="px-3 py-2.5 text-gray-500 font-mono">{l.phone}</td>
-                  <td className="px-3 py-2.5 text-gray-500">{l.accountType}</td>
+                  <td className="px-3 py-2.5 text-gray-500">{l.accountType || '—'}</td>
                   <td className="px-3 py-2.5"><StageBadge s={l.stage} /></td>
-                  <td className="px-3 py-2.5"><PriorityBadge p={l.priority} /></td>
+                  <td className="px-3 py-2.5 text-gray-500">{l.timeline || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500">{l.owner}</td>
                   <td className="px-3 py-2.5 text-gray-500">{l.source}</td>
                   <td className="px-3 py-2.5 font-mono text-gray-700">{l.value ? fmtINR(l.value) : '—'}</td>

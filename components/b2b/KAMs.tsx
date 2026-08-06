@@ -7,6 +7,7 @@ import {
   fmtL, type KamClient, type KamStage, type KamSource,
 } from './mockData';
 import { fetchKamClients, upsertKamClient } from '@/lib/b2bLeads';
+import { useDragAutoScroll } from './exportUtils';
 
 // Bulk-upload column order (0-indexed). Only Client Name is required.
 const UPLOAD_COLUMNS = [
@@ -328,6 +329,7 @@ export default function KAMs() {
   );
 
   const selected = clients.find((c) => c.id === selectedId) || null;
+  const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
   return (
     <div className="p-4 sm:p-6">
@@ -349,7 +351,13 @@ export default function KAMs() {
       </div>
 
       {/* ── Client board ── */}
-      <div className="flex gap-3 overflow-x-auto pb-3">
+      <div
+        ref={kanbanScroll.ref}
+        className="flex gap-3 overflow-x-auto pb-3"
+        onDragOver={kanbanScroll.onDragOver}
+        onDragEnd={kanbanScroll.onDragEnd}
+        onDrop={kanbanScroll.onDrop}
+      >
         {KAM_STAGES.map((s) => {
           const items = byStage(s);
           const isOver = dragOverStage === s;
