@@ -64,8 +64,8 @@ function isAuthFailureBody(bodyText: string): boolean {
   let code = '';
   try {
     const j = JSON.parse(bodyText);
-    detail = String(j?.detail ?? '');
-    code = String(j?.code ?? j?.messages?.[0]?.message ?? '');
+    detail = String(j?.detail ?? j?.error?.message ?? '');
+    code = String(j?.code ?? j?.error?.code ?? j?.messages?.[0]?.message ?? '');
   } catch {
     detail = bodyText;
   }
@@ -76,6 +76,16 @@ function isAuthFailureBody(bodyText: string): boolean {
     s.includes('token not valid') ||
     s.includes('not authenticated')
   );
+}
+
+function unwrapEnvelope(body: any): any {
+  if (
+    body && typeof body === 'object' && !Array.isArray(body)
+    && body.success === true && 'data' in body && 'status' in body
+  ) {
+    return body.data;
+  }
+  return body;
 }
 
 // Shared fetch helpers
@@ -98,7 +108,7 @@ async function mdFetch(path: string, init?: RequestInit, retried = false): Promi
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   if (res.status === 204) return null;
   const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  return text ? unwrapEnvelope(JSON.parse(text)) : null;
 }
 
 // ---------------------------------------------------------------------------
