@@ -247,8 +247,8 @@ export async function fetchInboundBoard(
     page, ownerIds, search, createdAfter, createdBefore, opts?.kylasStage,
   );
 
-  // A New-stage filter is about the Kylas New pool only; the DB overlay holds
-  // leads that have already moved past New, so it is skipped entirely.
+  // A New-stage filter is about the Kylas New pool only, so the DB overlay is
+  // skipped entirely.
   let dbLeads: InboundLead[] = [];
   if (page === 0 && !opts?.kylasStage) {
     try {
@@ -272,6 +272,9 @@ export async function fetchInboundBoard(
       console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
     }
   }
+  const kylasIds = new Set(kylas.leads.map((k) => k.id));
+  dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id));
+
   const dbIds = new Set(dbLeads.map((l) => l.id));
   return {
     leads: [...dbLeads, ...kylas.leads.filter((k) => !dbIds.has(k.id))],
@@ -357,6 +360,58 @@ export async function fetchB2BPipelineStats(
     lost: stats?.lost ?? EMPTY_BUCKET,
     byStatus: stats?.byStatus ?? [],
   };
+}
+
+export interface VerticalRep { name: string; contact: string }
+
+export const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
+  { label: 'Bangalore KAM', reps: [
+    { name: 'Tharun', contact: '8309230101' },
+    { name: 'Krishna Jadhav', contact: '9187200807' },
+  ] },
+  { label: 'Inbound', reps: [
+    { name: 'Mandeep Ghai', contact: '7223048042' },
+    { name: 'Hardi Patel', contact: '9187191018' },
+  ] },
+  { label: 'Outbound', reps: [
+    { name: 'Vilok Reddy', contact: '9980123308' },
+    { name: 'Prafful Bhati', contact: '8233435000' },
+  ] },
+  { label: 'HYD', reps: [
+    { name: 'Manikanta', contact: '9059903118' },
+    { name: 'Shahrukh Irshad Ali', contact: '9187200815' },
+  ] },
+];
+
+// One call per vertical carries both buckets: `active` is that vertical's open
+// pipeline, `won` is its realised revenue. Both panels read the same fetch, so
+// pipeline and revenue can never be scoped differently.
+export interface VerticalStats {
+  label: string;
+  active: CRMLeadsStatsBucket;
+  won: CRMLeadsStatsBucket;
+}
+
+export async function fetchVerticalStats(
+  range?: { from?: string; to?: string },
+): Promise<VerticalStats[]> {
+  return Promise.all(
+    B2B_VERTICALS.map(async (v) => {
+      const stats = await fetchCRMLeadsStats({
+        bm: v.reps.map((r) => r.contact).join(','),
+        createdFrom: range?.from,
+        createdTo: range?.to,
+      }).catch((e) => {
+        console.error(`[b2b] vertical stats fetch failed (${v.label})`, e);
+        return null;
+      });
+      return {
+        label: v.label,
+        active: stats?.active ?? EMPTY_BUCKET,
+        won: stats?.won ?? EMPTY_BUCKET,
+      };
+    }),
+  );
 }
 
 export async function fetchOutboundLeads(

@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { INBOUND_STAGE_COLORS, fmtL, fmtINR } from './mockData';
-import { fetchB2BData, fetchTargets, fetchB2BPipelineStats, istToday, type B2BPipelineStats } from '@/lib/b2bLeads';
+import {
+  fetchB2BData, fetchTargets, fetchB2BPipelineStats, fetchVerticalStats, istToday,
+  type B2BPipelineStats, type VerticalStats,
+} from '@/lib/b2bLeads';
 import { computeDashboard, type DashboardMetrics } from './analytics';
 
 const CLIENT_COLORS = ['#EAB308', '#C2410C'];
-const SOURCE_COLORS = ['#1A1A1A', '#EAB308', '#0F766E'];
+const SOURCE_COLORS = ['#1A1A1A', '#EAB308', '#0F766E', '#C2410C'];
 
 function MetricCard({ label, value, sub, subTone }: { label: string; value: string; sub?: string; subTone?: 'muted' | 'warn' }) {
   return (
@@ -53,6 +56,8 @@ function rangeFor(key: RangeKey, now: Date): { from?: string; to?: string } {
 export default function B2BDashboard() {
   const [d, setD] = useState<DashboardMetrics | null>(null);
   const [stats, setStats] = useState<B2BPipelineStats | null>(null);
+  const [verticals, setVerticals] = useState<VerticalStats[]>([]);
+  const [monthRevenue, setMonthRevenue] = useState(0);
   const [range, setRange] = useState<RangeKey>('month');
   const [monthlyTarget, setMonthlyTarget] = useState(0);
   const [runRate, setRunRate] = useState(0);
@@ -64,16 +69,26 @@ export default function B2BDashboard() {
     setRefreshing(true);
     try {
       const now = new Date();
-      const [data, targets, pipeline] = await Promise.all([
-        fetchB2BData(), fetchTargets(), fetchB2BPipelineStats(rangeFor(range, now)),
+      // Revenue, target % and run rate are month-to-date by definition — the
+      // target is monthly — so they ignore the range selector and always read
+      // the current month. Only the pipeline/revenue-split panels follow it,
+      // and when the selector already is 'This Month' the same fetch serves both.
+      const selected = rangeFor(range, now);
+      const [data, targets, pipeline, byVertical, monthVertical] = await Promise.all([
+        fetchB2BData(), fetchTargets(), fetchB2BPipelineStats(selected),
+        fetchVerticalStats(selected),
+        range === 'month' ? Promise.resolve(null) : fetchVerticalStats(rangeFor('month', now)),
       ]);
       const m = computeDashboard(data);
       const dayOfMonth = now.getDate();
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const revenue = (monthVertical ?? byVertical).reduce((s, v) => s + v.won.value, 0);
       setD(m);
       setStats(pipeline);
+      setVerticals(byVertical);
+      setMonthRevenue(revenue);
       setMonthlyTarget(targets.monthlyTargetL * 100000);
-      setRunRate(Math.round((m.revenueGenerated / dayOfMonth) * daysInMonth));
+      setRunRate(Math.round((revenue / dayOfMonth) * daysInMonth));
       setUpdatedAt(now);
     } finally {
       setRefreshing(false);
@@ -92,9 +107,9 @@ export default function B2BDashboard() {
   const pctActive = totalValue ? ((stats?.active.value ?? 0) / totalValue) * 100 : 0;
   const pctLost = totalValue ? ((stats?.lost.value ?? 0) / totalValue) * 100 : 0;
 
-  const achievedPct = monthlyTarget > 0 ? Math.round((d.revenueGenerated / monthlyTarget) * 100) : 0;
-  const vertical = d.pipelineByVertical;
-  const overallPipeline = vertical.inbound + vertical.outbound + vertical.kam;
+  const achievedPct = monthlyTarget > 0 ? Math.round((monthRevenue / monthlyTarget) * 100) : 0;
+  const overallPipeline = verticals.reduce((s, v) => s + v.active.value, 0);
+  const revenueBySource = verticals.map((v) => ({ source: v.label, value: v.won.value }));
   const gap = runRate - monthlyTarget;
 
   const maxStage = Math.max(...d.pipelineByStage.map((s) => s.count), 1);
@@ -192,7 +207,7 @@ export default function B2BDashboard() {
 
       {/* ── Top metric cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Revenue Generated" value={fmtL(d.revenueGenerated)} sub={`of ${fmtL(monthlyTarget)} target`} />
+        <MetricCard label="Revenue Generated" value={fmtL(monthRevenue)} sub={`of ${fmtL(monthlyTarget)} target`} />
         <MetricCard label="Target Achieved" value={`${achievedPct}%`} />
         <MetricCard label="Run Rate" value={fmtL(runRate)} sub={runRate < monthlyTarget ? 'Below required' : 'On track'} subTone={runRate < monthlyTarget ? 'warn' : 'muted'} />
         <MetricCard label="Month Projection" value={fmtL(runRate)} />
@@ -201,7 +216,7 @@ export default function B2BDashboard() {
       {/* ── Revenue vs Target ── */}
       <Panel title="Revenue vs Target" className="mt-3">
         <div className="font-mono text-lg font-bold text-black">
-          {fmtL(d.revenueGenerated)} <span className="text-sm font-normal text-gray-400">of {fmtL(monthlyTarget)}</span>
+          {fmtL(monthRevenue)} <span className="text-sm font-normal text-gray-400">of {fmtL(monthlyTarget)}</span>
         </div>
         <div className="h-2 rounded-full bg-gray-200 overflow-hidden mt-3">
           <div className="h-full bg-[#0F766E] rounded-full transition-[width] duration-500" style={{ width: `${achievedPct}%` }} />
@@ -230,16 +245,15 @@ export default function B2BDashboard() {
 
       {/* ── Pipeline by Vertical ── */}
       <Panel title="Pipeline by Vertical — Overall Pipeline" className="mt-3">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
-            { label: 'Inbound Pipeline', value: vertical.inbound },
-            { label: 'Outbound Pipeline', value: vertical.outbound },
-            { label: 'KAM Pipeline', value: vertical.kam },
-            { label: 'Overall Pipeline', value: overallPipeline, accent: true },
+            ...verticals.map((v) => ({ label: v.label, value: v.active.value, count: v.active.count, accent: false })),
+            { label: 'Overall Pipeline', value: overallPipeline, count: verticals.reduce((s, v) => s + v.active.count, 0), accent: true },
           ].map((v) => (
             <div key={v.label} className={`rounded-lg px-4 py-3 border ${v.accent ? 'border-[#0F766E]/30 bg-[#0F766E]/5' : 'border-gray-200'}`}>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{v.label}</div>
               <div className={`font-mono text-lg font-bold mt-1 ${v.accent ? 'text-[#0F766E]' : 'text-black'}`}>{fmtL(v.value)}</div>
+              <div className="text-[11px] text-gray-400 mt-0.5">{v.count} open</div>
             </div>
           ))}
         </div>
@@ -275,14 +289,14 @@ export default function B2BDashboard() {
           <div className="flex items-center gap-4">
             <ResponsiveContainer width="45%" height={150}>
               <PieChart>
-                <Pie data={d.revenueBySource.filter((s) => s.value > 0)} dataKey="value" nameKey="source" cx="50%" cy="50%" innerRadius={30} outerRadius={62} paddingAngle={2}>
-                  {d.revenueBySource.filter((s) => s.value > 0).map((_, i) => <Cell key={i} fill={SOURCE_COLORS[i % SOURCE_COLORS.length]} />)}
+                <Pie data={revenueBySource.filter((s) => s.value > 0)} dataKey="value" nameKey="source" cx="50%" cy="50%" innerRadius={30} outerRadius={62} paddingAngle={2}>
+                  {revenueBySource.filter((s) => s.value > 0).map((_, i) => <Cell key={i} fill={SOURCE_COLORS[i % SOURCE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => fmtL(Number(v))} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 flex flex-col gap-2">
-              {d.revenueBySource.map((s, i) => (
+              {revenueBySource.map((s, i) => (
                 <div key={s.source} className="flex items-center justify-between text-[13px]">
                   <span className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
