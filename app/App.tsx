@@ -441,34 +441,13 @@ function StatusBadge({ status }: { status: string }) {
 interface EditableStatusProps {
   status: string;
   lostReason?: string;
-  createdAt?: string;
-  isAdmin?: boolean;
-  onCommit: (status: string, reason?: string) => void;
 }
 
 const MARK_LOST_ELIGIBLE = new Set(['In Cart', 'Quote Approval Pending', 'Availability Check', 'Request for Availability Check']);
 
-function EditableStatus({ status, lostReason, createdAt, isAdmin = false, onCommit }: EditableStatusProps) {
-  const [pickingReason, setPickingReason] = useState(false);
-  const canMarkLost = MARK_LOST_ELIGIBLE.has(status) && canMarkLostByAge(createdAt, isAdmin);
-
-  if (pickingReason) {
-    return (
-      <select
-        autoFocus
-        value=""
-        onChange={(e) => { onCommit('Order Lost', e.target.value); setPickingReason(false); }}
-        onBlur={() => setPickingReason(false)}
-        className="py-1 px-2 text-xs border border-red-500 rounded-md outline-none"
-      >
-        <option value="" disabled>Select reason...</option>
-        {ORDER_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-      </select>
-    );
-  }
-
+function EditableStatus({ status, lostReason }: EditableStatusProps) {
   return (
-    <span onDoubleClick={() => { if (canMarkLost) setPickingReason(true); }}>
+    <span>
       <StatusBadge status={status} />
       {status === 'Order Lost' && lostReason && <div className="text-[10px] text-gray-400 mt-0.5">{lostReason}</div>}
     </span>
@@ -2183,30 +2162,6 @@ export default function App() {
     setDeleteLeadState(null);
   };
 
-  const updateStatus = (id: string, newStatus: string, lostReason?: string) => {
-    const userName = currentUser ? currentUser.name : '';
-    const oldLead = leads.find((l) => l.id === id);
-    const oldStatus = oldLead ? oldLead.status : '';
-    if (newStatus === 'Order Lost' && !canMarkLostByAge(oldLead?.createdAt, canBypassLostAge(currentUser))) {
-      alert(`Only admins and managers can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
-      return;
-    }
-    setLeads((prev) => {
-      const updated = prev.map((l) => {
-        if (l.id !== id) return l;
-        const remark: Remark = { ts: new Date().toISOString(), author: userName, text: 'Status changed from ' + l.status + ' to ' + newStatus + (lostReason ? ' (' + lostReason + ')' : '') };
-        return { ...l, status: newStatus, lostReason: newStatus === 'Order Lost' ? lostReason : '', remarks: [...(l.remarks || []), remark] };
-      });
-      const lead = updated.find((l) => l.id === id);
-      if (lead) upsertLead(lead).catch((e) => console.error('Status update failed:', e));
-      return updated;
-    });
-    if (newStatus === 'Order Lost') {
-      const ticketId = leads.find((l) => l.id === id)?.ticketId;
-      markLeadLost(id, lostReason || '', ticketId).catch((e) => console.error('Estimate lost sync failed:', e));
-    }
-  };
-
   const handleKylasSync = async (leadId: string) => {
     setKylasSync((p) => ({ ...p, [leadId]: { loading: true } }));
     try {
@@ -2988,7 +2943,7 @@ export default function App() {
                     </td>}
                     {isColVisible('projectPhase') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.projectPhase || '—'}</td>}
                     {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
-                      <EditableStatus status={l.status} lostReason={l.lostReason} createdAt={l.createdAt} isAdmin={canBypassLostAge(currentUser)} onCommit={(s, reason) => updateStatus(l.id, s, reason)} />
+                      <EditableStatus status={l.status} lostReason={l.lostReason} />
                     </td>}
                     {isColVisible('cartItems') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs max-w-[200px]">
                       <span className="whitespace-nowrap overflow-hidden text-ellipsis block">
