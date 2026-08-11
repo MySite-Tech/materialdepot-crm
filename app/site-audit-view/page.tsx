@@ -79,19 +79,20 @@ function SiteAuditViewInner() {
   }
 
   const actingAs = { id: person.id, name: person.name, email: person.email };
+  const viewRole = person.role || permissionRole;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] p-4 sm:p-6">
       <div className="mb-4">
         <div className="text-base font-bold text-black">{person.name}</div>
-        <div className="text-[12px] text-gray-400">{person.email} · {ROLE_LABELS[permissionRole || ''] || permissionRole || 'No site audit permission'}</div>
+        <div className="text-[12px] text-gray-400">{person.email} · {ROLE_LABELS[viewRole || ''] || viewRole || 'No site audit permission'}</div>
       </div>
 
-      {permissionRole === 'site_auditor' ? (
+      {viewRole === 'site_auditor' ? (
         <SiteAuditorApp actingAs={actingAs} />
-      ) : permissionRole === 'installer' ? (
+      ) : viewRole === 'installer' ? (
         <SiteInstallerApp actingAs={actingAs} />
-      ) : permissionRole === 'auditor_installer' ? (
+      ) : viewRole === 'auditor_installer' ? (
         <>
           <div className="flex gap-2 mb-4">
             <button
@@ -109,7 +110,7 @@ function SiteAuditViewInner() {
           </div>
           {combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />}
         </>
-      ) : permissionRole === 'service_mgr' ? (
+      ) : viewRole === 'service_mgr' ? (
         <>
           <div className="flex gap-2 mb-3">
             <button
