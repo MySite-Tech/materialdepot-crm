@@ -17,13 +17,15 @@
    it's already covered by SiteAuditLiveView.tsx (owned separately), which
    shows the same profiles-based location tracking for installers/auditors. */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { sbGet, sbPatch, sbPost } from './siteAuditShared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { inCity, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
 import OrdersView from './install-ops/OrdersView';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from './install-ops/QueueViews';
 import { CalendarView, ScheduleView } from './install-ops/ScheduleCalendarViews';
 import { InstallersView, SlotsView } from './install-ops/SetupViews';
 import { DeletedView, RectificationsView } from './install-ops/DataViews';
+import { FoamView, PayoutsView } from './install-ops/FoamPayoutViews';
+import type { ShadowerOption } from './install-ops/ShadowerSelect';
 import OrderDrawer from './install-ops/OrderDrawer';
 import { AddOrderOverlay, AddStaffOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from './install-ops/Overlays';
 import { Toast } from './install-ops/ui';
@@ -43,16 +45,25 @@ const TABS: Array<{ view: ViewKey; label: string }> = [
   { view: 'calendar', label: 'Schedule' },
   { view: 'slots', label: 'Slots & timings' },
   { view: 'installers', label: 'Installers' },
+  { view: 'foam', label: 'Foam Rolls' },
+  { view: 'payouts', label: 'Payouts' },
   { view: 'deleted', label: 'Deleted Orders' },
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-export default function SiteAuditInstallOpsView() {
+export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityFilter } = {}) {
   const [activeView, setActiveView] = useState<ViewKey>('orders');
-  const [orders, setOrders] = useState<InstallOrder[]>([]);
-  const [deleted, setDeleted] = useState<InstallOrder[]>([]);
+  const [rawOrders, setOrders] = useState<InstallOrder[]>([]);
+  const [rawDeleted, setDeleted] = useState<InstallOrder[]>([]);
   const [deletedLoaded, setDeletedLoaded] = useState(false);
   const [installers, setInstallers] = useState<Installer[]>([]);
+  /* Every list, counter and capacity check below runs on the city-scoped
+     slice; the drawer still looks its order up in the unscoped list so an
+     open order never vanishes mid-edit when the toggle changes. */
+  const orders = useMemo(() => inCity(rawOrders, city), [rawOrders, city]);
+  const cityInstallers = useMemo(() => inCity(installers, city), [installers, city]);
+  const deleted = useMemo(() => inCity(rawDeleted, city), [rawDeleted, city]);
+  const [shadowerPool, setShadowerPool] = useState<ShadowerOption[]>([]);
   const [connErr, setConnErr] = useState(false);
   const retryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -91,10 +102,28 @@ export default function SiteAuditInstallOpsView() {
 
   const loadInstallers = useCallback(async () => {
     try {
-      const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=id,name,email,installer_type');
-      setInstallers((Array.isArray(rows) ? rows : []).map((r: any) => ({ id: r.id, name: r.name, email: r.email, type: r.installer_type || 'flooring', zone: '', phone: '' })));
+      const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=id,name,email,installer_type,city,weekly_off,leave_dates');
+      setInstallers((Array.isArray(rows) ? rows : []).map((r: any) => ({
+        id: r.id, name: r.name, email: r.email, type: r.installer_type || 'flooring', zone: '', phone: '',
+        city: r.city || 'Bengaluru',
+        weeklyOff: r.weekly_off == null ? null : r.weekly_off,
+        leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
+      })));
     } catch {
       /* keep previous roster on transient failure */
+    }
+  }, []);
+
+  /* Shadower pool = everyone registered except store staff, whose kiosk app
+     has no login and therefore no personal shadow schedule. Deliberately a
+     separate list from `installers` so it can never leak into capacity or
+     conflict logic. */
+  const loadShadowers = useCallback(async () => {
+    try {
+      const rows = await sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name');
+      setShadowerPool((Array.isArray(rows) ? rows : []).map((r: any) => ({ name: r.name, email: r.email, role: r.role })));
+    } catch {
+      /* keep previous pool on transient failure */
     }
   }, []);
 
@@ -129,7 +158,7 @@ export default function SiteAuditInstallOpsView() {
   const reloadWithDeleted = useCallback(async () => { await Promise.all([loadOrders(), loadDeletedOrders()]); }, [loadOrders, loadDeletedOrders]);
 
   useEffect(() => {
-    Promise.all([loadInstallers(), loadOrders()]);
+    Promise.all([loadInstallers(), loadShadowers(), loadOrders()]);
     const poll = setInterval(() => { if (!document.hidden) loadOrders(); }, 60000);
     const vis = () => { if (!document.hidden) loadOrders(); };
     document.addEventListener('visibilitychange', vis);
@@ -139,7 +168,7 @@ export default function SiteAuditInstallOpsView() {
       if (retryTid.current) { clearTimeout(retryTid.current); retryTid.current = null; }
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [loadInstallers, loadOrders]);
+  }, [loadInstallers, loadShadowers, loadOrders]);
 
   function openOrder(pi: string) { setCurrentPI(pi); setDrawerNonce((n) => n + 1); }
   function closeDrawer() { setCurrentPI(null); }
@@ -167,7 +196,7 @@ export default function SiteAuditInstallOpsView() {
     if (!name) { setAoErr('Customer name is required.'); return; }
     if (!phone) { setAoErr('Customer phone is required.'); return; }
     if (!addr) { setAoErr('Address is required.'); return; }
-    if (orders.find((o) => o.pi === pi)) { setAoErr('An order with this PI number already exists.'); return; }
+    if (rawOrders.find((o) => o.pi === pi)) { setAoErr('An order with this PI number already exists.'); return; }
     const po = poRaw ? poRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
     const skus = aoSkus
       .map((row) => ({ c: (row.code || '').trim(), type: row.type || 'flooring', n: (row.name || '').trim() }))
@@ -251,7 +280,7 @@ export default function SiteAuditInstallOpsView() {
   };
   const ALERT_VIEWS: ViewKey[] = ['needaction', 'calls', 'reschedule', 'followups'];
 
-  const drawerOrder = currentPI ? orders.find((o) => o.pi === currentPI) || null : null;
+  const drawerOrder = currentPI ? rawOrders.find((o) => o.pi === currentPI) || null : null;
 
   function renderMain() {
     switch (activeView) {
@@ -281,7 +310,11 @@ export default function SiteAuditInstallOpsView() {
       case 'slots':
         return <SlotsView slotsFl={slotsFl} slotsWp={slotsWp} setSlotsFl={setSlotsFl} setSlotsWp={setSlotsWp} toast={toast} />;
       case 'installers':
-        return <InstallersView installers={installers} orders={orders} onAddStaff={() => setAsOpen(true)} />;
+        return <InstallersView installers={cityInstallers} orders={orders} onAddStaff={() => setAsOpen(true)} reload={loadInstallers} toast={toast} />;
+      case 'foam':
+        return <FoamView orders={orders} installers={cityInstallers} attribution={SM_ATTRIBUTION} toast={toast} />;
+      case 'payouts':
+        return <PayoutsView orders={orders} toast={toast} />;
       case 'deleted':
         return <DeletedView deleted={deleted} onRestore={restoreOrder} />;
       case 'rectifications':
@@ -324,7 +357,7 @@ export default function SiteAuditInstallOpsView() {
         <div className="fixed inset-0 bg-black/30 z-[900] flex justify-end" onClick={(e) => { if (e.target === e.currentTarget) closeDrawer(); }}>
           <div className="bg-white h-full w-full max-w-[600px] shadow-2xl flex flex-col" key={currentPI + ':' + drawerNonce}>
             <OrderDrawer
-              order={drawerOrder} installers={installers} slotsFl={slotsFl} slotsWp={slotsWp} attribution={SM_ATTRIBUTION}
+              order={drawerOrder} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={SM_ATTRIBUTION}
               onClose={closeDrawer} onOpenOrder={openOrder} onOpenRect={(o) => setRectOrder(o)}
               reload={loadOrders} reloadWithDeleted={reloadWithDeleted} toast={toast}
             />

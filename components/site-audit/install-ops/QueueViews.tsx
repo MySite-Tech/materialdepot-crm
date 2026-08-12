@@ -1,6 +1,6 @@
 'use client';
 
-import { Chip, EmptyRow } from './ui';
+import { Chip, EmptyRow, TypeTag } from './ui';
 import { dstr, fmtDate, opsCallDue, slotLabel, today } from './shared';
 import type { InstallOrder, SlotDef } from './types';
 
@@ -94,7 +94,7 @@ export function NeedActionView({ orders, onOpenOrder }: BaseProps) {
                 {reschedItems.map(({ o, sj }, i) => (
                   <tr key={i} className="hover:bg-gray-50 cursor-pointer" onClick={() => onOpenOrder(o.pi)}>
                     <td className={td}><span className="font-mono font-extrabold text-[#1F3A5F]">{o.pi}</span></td>
-                    <td className={td}><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${sj.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-50 text-yellow-800'}`}>{sj.type === 'wallpaper' ? 'WP' : 'FL'}</span></td>
+                    <td className={td}><TypeTag type={sj.type} /></td>
                     <td className={td}><b>{o.name}</b><div className="text-gray-500">{o.phone}</div></td>
                     <td className={td}>{fmtDate(sj.date)}</td>
                     <td className={td}><button className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold" onClick={(e) => { e.stopPropagation(); onOpenOrder(o.pi); }}>Call &amp; rebook</button></td>
@@ -160,7 +160,7 @@ export function RescheduleView({ orders, onOpenOrder, slotsFl, slotsWp }: BasePr
             {items.length ? items.map(({ o, sj }, i) => (
               <tr key={i} className="hover:bg-gray-50 cursor-pointer" onClick={() => onOpenOrder(o.pi)}>
                 <td className={td}><span className="font-mono font-extrabold text-[#1F3A5F]">{o.pi}</span></td>
-                <td className={td}><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${sj.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-50 text-yellow-800'}`}>{sj.type === 'wallpaper' ? 'WP' : 'FL'}</span></td>
+                <td className={td}><TypeTag type={sj.type} /></td>
                 <td className={td}><b>{o.name}</b><div className="text-gray-500">{o.phone}</div></td>
                 <td className={td}>{fmtDate(sj.date)} · {slotLabel(sj.slot, slotsFl, slotsWp)}</td>
                 <td className={td}><button className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold" onClick={(e) => { e.stopPropagation(); onOpenOrder(o.pi); }}>Call &amp; rebook</button></td>

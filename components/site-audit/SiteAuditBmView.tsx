@@ -1,0 +1,527 @@
+'use client';
+
+/* Business Manager dashboard — port of material-depot-site's BM_Dashboard.html.
+
+   Every site audit linked to a BM, with the completed job card, a per-segment
+   material selection the BM records against it, and the manual downstream
+   "customer journey" timeline (order placed → renders → approval → printing →
+   delivery → installed) stored in audit_orders.bm_journey.
+
+   IDENTITY STARTS FROM THE CRM'S OWN USER TABLE (the Django backend's
+   UserOrganisation, via lib/mockApi's loginWithPhone / fetchUsers), so nobody
+   needs a field-app profile just to appear in the picker. Order ownership,
+   though, prefers `audit_orders.bm_email` — see `orderBelongsToBm`:
+
+   - The logged-in CRM user IS the BM; their name and phone come from the
+     session. The session carries no email, so it's looked up once from the
+     `profiles` row sharing that phone number.
+   - Rows that carry a `bm_email` are decided by it alone. Rows that don't
+     (most legacy rows) fall back to the free-text `bm` column — matched on
+     contact digits, then on the name, which originates from this same backend
+     user list (the Kylas PO payload's `bm.name`).
+   - Legacy rows get linked in bulk from Site Audit › Users ("Link N orders"),
+     which only ever links unambiguous exact name matches. */
+
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AuditRoomCard } from './AuditRoomViews';
+import { MD_JOURNEY_STAGES, categoryFor, journeyStage, type JourneyEntry } from './auditRegistry';
+import { fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
+import { fetchUsers } from '@/lib/mockApi';
+
+const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at';
+
+const STATUS: Record<string, { l: string; c: string }> = {
+  slot_reserved: { l: 'Pre-booked (Store)', c: 'bg-sky-100 text-sky-800' },
+  slot_converted: { l: 'Pre-booking Fulfilled', c: 'bg-green-100 text-green-700' },
+  pending: { l: 'Pending', c: 'bg-gray-100 text-gray-600' },
+  created: { l: 'Service Created', c: 'bg-sky-100 text-sky-700' },
+  call_na: { l: 'Call not picked', c: 'bg-red-100 text-red-700' },
+  scheduled: { l: 'Site Audit Scheduled', c: 'bg-sky-100 text-sky-700' },
+  assigned: { l: 'Site Auditor Assigned', c: 'bg-purple-100 text-purple-700' },
+  callpending: { l: 'Call Pending (Auditor)', c: 'bg-purple-100 text-purple-700' },
+  reschedule: { l: 'To Reschedule', c: 'bg-red-100 text-red-700' },
+  onway: { l: 'On The Way', c: 'bg-amber-100 text-amber-700' },
+  atsite: { l: 'At Site', c: 'bg-amber-100 text-amber-700' },
+  completed: { l: 'Site Audit Completed', c: 'bg-green-100 text-green-700' },
+};
+
+export type BmProfile = { id?: string | number; name: string; email?: string; contact?: string; role?: string };
+
+type Order = {
+  id: string; pi: string; po: string[]; bm: string; name: string; phone: string; addr: string;
+  status: string; slot: string | null; date: string | null; auditorName: string | null; log: any[];
+};
+
+function norm(s?: string | null) {
+  return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/* `bm_email` is the authoritative link, so when an order carries one it DECIDES
+   ownership on its own — a name match must not override it, or two BMs sharing
+   a first name would each see the other's customers. Only rows with no link
+   yet fall back to the free-text `bm` (its contact digits, then its name).
+   Deliberately exact-after-normalisation, never fuzzy, for the same reason. */
+export function orderBelongsToBm(row: { bm?: string | null; bm_email?: string | null }, bm: BmProfile): boolean {
+  if (row.bm_email) return !!bm.email && norm(row.bm_email) === norm(bm.email);
+  const key = phoneKey(bm.contact);
+  if (key && phoneKey(row.bm) === key) return true;
+  const bmText = norm(row.bm);
+  return !!bmText && bmText === norm(bm.name);
+}
+
+export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?: BmProfile | null }) {
+  /* The acting BM: an explicitly-passed profile (Role Viewer / own dashboard)
+     wins, otherwise it's simply the logged-in CRM user. */
+  const [resolved, setResolved] = useState<BmProfile | null>(bm || me || null);
+  const [bmList, setBmList] = useState<BmProfile[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [openPi, setOpenPi] = useState<string | null>(null);
+
+  /* The "view another person's orders" picker is the CRM's own user roster
+     (backend UserOrganisation), so nobody needs a field-app profile to appear
+     here. Loaded lazily and best-effort — the view works without it. */
+  useEffect(() => {
+    if (bm) { setResolved(bm); return; }
+    let alive = true;
+    fetchUsers()
+      .then((users) => {
+        if (!alive) return;
+        setBmList(users.map((u) => ({ id: u.id, name: u.name, contact: u.phone, role: u.role })).filter((u) => u.name));
+      })
+      .catch(() => { /* picker is optional — the session identity already works */ });
+    return () => { alive = false; };
+  }, [bm]);
+
+  /* The CRM session gives us a name + phone but never an email, and `bm_email`
+     is now what decides ownership on linked rows — so fill the email in from
+     the field-app profile that shares this phone number, once per person. A BM
+     with no such profile simply keeps the name/phone fallback. */
+  const lookedUpRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = phoneKey(resolved?.contact);
+    if (!resolved || resolved.email || !key || lookedUpRef.current === key) return;
+    lookedUpRef.current = key;
+    let alive = true;
+    sbGet('profiles?contact=eq.' + encodeURIComponent(String(resolved.contact)) + '&select=email&limit=1')
+      .then((rows) => {
+        if (!alive || !Array.isArray(rows) || !rows[0]?.email) return;
+        setResolved((cur) => (cur && phoneKey(cur.contact) === key && !cur.email ? { ...cur, email: rows[0].email } : cur));
+      })
+      .catch(() => { /* email is an enhancement — name/phone matching still applies */ });
+    return () => { alive = false; };
+  }, [resolved]);
+
+  const load = useCallback(async () => {
+    if (!resolved) { setLoading(false); return; }
+    const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');
+    if (!Array.isArray(rows)) { setLoading(false); return; }
+    setOrders(rows.filter((r: any) => orderBelongsToBm(r, resolved)).map((r: any) => ({
+      id: r.id, pi: r.pi || '', po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+      bm: r.bm || '—', name: r.customer_name || '', phone: r.phone || '', addr: r.addr || '',
+      status: r.status || 'pending', slot: r.slot || null, date: r.date || null,
+      auditorName: r.auditor_name || null, log: r.log || [],
+    })));
+    setLoading(false);
+  }, [resolved]);
+
+  useEffect(() => {
+    setLoading(true);
+    load();
+    const tid = setInterval(() => { if (!document.hidden && !openPi) load(); }, 30000);
+    return () => clearInterval(tid);
+  }, [load, openPi]);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    orders.forEach((o) => { c[o.status] = (c[o.status] || 0) + 1; });
+    return c;
+  }, [orders]);
+
+  const list = orders.filter((o) => {
+    if (filter !== 'all' && o.status !== filter) return false;
+    if (!q) return true;
+    return [o.pi, o.name, o.phone, ...(o.po || [])].join(' ').toLowerCase().includes(q.toLowerCase());
+  });
+
+  if (!resolved) {
+    return (
+      <div>
+        <h1 className="text-lg font-bold text-black">My Orders</h1>
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-800">
+          No logged-in CRM user to attribute orders to — sign in again, or pick a person below.
+        </div>
+        {bmList.length ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {bmList.map((b) => (
+              <button key={String(b.id || b.name)} onClick={() => setResolved(b)} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left hover:border-[#EAB308]">
+                <div className="text-[13px] font-semibold text-black">{b.name}</div>
+                <div className="text-[11px] text-gray-400">{b.contact || b.role || '—'}</div>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const openOrder = orders.find((o) => o.pi === openPi) || null;
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-end gap-2">
+        <div>
+          <h1 className="text-lg font-bold text-black">My Orders</h1>
+          <p className="text-[13px] text-gray-400">Every site audit / customer journey linked to <b>{resolved.name}</b> as the BM{resolved.contact ? ' · ' + resolved.contact : ''}.</p>
+        </div>
+        {!bm && bmList.length > 1 ? (
+          <label className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            Viewing
+            <select
+              value={String(resolved.id ?? '')}
+              onChange={(e) => setResolved(bmList.find((b) => String(b.id) === e.target.value) || resolved)}
+              className="rounded-md border border-gray-200 px-2 py-1.5 text-[13px] font-normal normal-case tracking-normal text-gray-900"
+            >
+              {(bmList.some((b) => String(b.id) === String(resolved.id)) ? bmList : [resolved, ...bmList]).map((b) => (
+                <option key={String(b.id ?? b.name)} value={String(b.id ?? '')}>{b.name}{b.role ? ' · ' + b.role : ''}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1 max-w-[320px]">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, phone, PI…" className="w-full rounded-md border border-gray-200 py-2 pl-8 pr-3 text-[13.5px] outline-none focus:border-yellow-400" />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {['all', ...Object.keys(STATUS).filter((k) => counts[k])].map((k) => (
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              className={filter === k ? 'rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600'}
+            >
+              {k === 'all' ? 'All' : STATUS[k].l} ({k === 'all' ? orders.length : counts[k]})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white">
+        {loading ? (
+          <div className="flex justify-center py-10"><div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-[#EAB308]" /></div>
+        ) : list.length ? list.map((o) => {
+          const st = STATUS[o.status] || { l: o.status, c: 'bg-gray-100 text-gray-600' };
+          return (
+            <div key={o.pi} onClick={() => setOpenPi(o.pi)} className="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-bold text-gray-900">{o.name || '—'}</div>
+                <div className="text-[12px] text-gray-400">{o.pi} · {o.phone || '—'}{o.date ? ' · ' + fmtDateA(o.date) : ''}</div>
+              </div>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${st.c}`}>{st.l}</span>
+            </div>
+          );
+        }) : (
+          <div className="py-12 text-center text-[13px] text-gray-400">
+            <div className="mb-2 text-2xl">📭</div>
+            {orders.length ? 'No orders match your filters.' : 'No site audits are attributed to this person yet — an order links here when its BM field matches their name (or their contact number).'}
+          </div>
+        )}
+      </div>
+
+      {openOrder ? <BmOrderDrawer order={openOrder} bm={resolved} onClose={() => { setOpenPi(null); load(); }} /> : null}
+    </div>
+  );
+}
+
+/* ── Drawer: timeline, job card + material selection, customer journey ─── */
+function BmOrderDrawer({ order: o, bm, onClose }: { order: Order; bm: BmProfile; onClose: () => void }) {
+  const [ticked, setTicked] = useState<any>(null);
+  const [jcLoading, setJcLoading] = useState(o.status === 'completed');
+  const [journey, setJourney] = useState<JourneyEntry[] | null>(null);
+  const [msg, setMsg] = useState('');
+
+  const loadCard = useCallback(async () => {
+    const rows = await sbGet('audit_orders?id=eq.' + o.id + '&select=audit_ticked');
+    setTicked(Array.isArray(rows) && rows[0] ? rows[0].audit_ticked : null);
+    setJcLoading(false);
+  }, [o.id]);
+  const loadJourney = useCallback(async () => {
+    const rows = await sbGet('audit_orders?id=eq.' + o.id + '&select=bm_journey');
+    setJourney(Array.isArray(rows) && rows[0] && Array.isArray(rows[0].bm_journey) ? rows[0].bm_journey : []);
+  }, [o.id]);
+
+  useEffect(() => {
+    if (o.status === 'completed') loadCard();
+    loadJourney();
+  }, [o.status, loadCard, loadJourney]);
+
+  const rooms = (ticked && Array.isArray(ticked.rooms) && ticked.rooms) || [];
+  const isDraft = ticked && ticked.draft && !(ticked.sign && !ticked.sign.draft);
+
+  return (
+    <div className="fixed inset-0 z-[900] flex justify-end bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex h-full w-full max-w-[520px] flex-col bg-white shadow-2xl">
+        <div className="flex items-start gap-2 border-b border-gray-200 px-5 py-4">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{o.name || '—'}</h2>
+            <div className="mt-0.5 text-[12.5px] text-gray-400">{o.pi} · {(STATUS[o.status] || { l: o.status }).l}</div>
+          </div>
+          <button className="ml-auto h-7 w-7 shrink-0 rounded-md bg-gray-100 text-gray-500" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <Sec title="Customer">
+            <KV k="Phone" v={<a className="text-blue-600" href={'tel:' + o.phone.replace(/\s/g, '')}>{o.phone || '—'}</a>} />
+            <KV k="Address" v={o.addr ? <a className="text-blue-600" href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
+            <KV k="Date" v={o.date ? fmtDateA(o.date) : '—'} />
+            <KV k="Auditor" v={o.auditorName || '—'} />
+            <KV k="Enquiry ID" v={(o.po && o.po[0]) || '—'} />
+          </Sec>
+
+          <Sec title="Timeline">
+            {o.log && o.log.length ? o.log.slice().reverse().map((l: any, i: number) => (
+              <div key={i} className="border-b border-gray-100 py-2 last:border-b-0">
+                <div className="text-[13px] font-semibold text-gray-900">{l.who ? <b className="text-[#1F3A5F]">{l.who}</b> : null}{l.who ? ' · ' : ''}{l.t || ''}</div>
+                <div className="mt-0.5 text-[11.5px] text-gray-400">{fmtLog(l.d)}{l.by ? ' · ' + (l.by === 'auto' ? 'system' : l.by) : ''}</div>
+              </div>
+            )) : <div className="text-[12.5px] text-gray-400">No activity logged yet.</div>}
+          </Sec>
+
+          <Sec title="Job Card">
+            {o.status !== 'completed' ? <div className="text-[12.5px] text-gray-400">Not available yet — the site audit has not been completed.</div>
+              : jcLoading ? <div className="text-[12.5px] text-gray-400">Loading…</div>
+                : !rooms.length ? <div className="text-[12.5px] text-gray-400">No job card details recorded.</div>
+                  : (
+                    <>
+                      {isDraft
+                        ? <div className="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-800">⚠️ Job card is still a draft — not yet signed off by the client.</div>
+                        : ticked.sign ? <div className="mb-2.5 rounded-lg bg-green-50 px-3 py-2 text-[12.5px] font-bold text-green-700">✓ Signed off by the client{ticked.sign.name ? ' — ' + ticked.sign.name : ''}</div> : null}
+                      {rooms.map((r: any, i: number) => (
+                        <Fragment key={i}>
+                          <AuditRoomCard room={r} index={i} />
+                          <MaterialSection room={r} roomIdx={i} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadCard(); }} />
+                        </Fragment>
+                      ))}
+                    </>
+                  )}
+          </Sec>
+
+          <Sec title="Customer Journey">
+            <JourneyTimeline entries={journey} />
+            <JourneyAddForm entries={journey || []} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadJourney(); }} />
+          </Sec>
+        </div>
+
+        {msg ? <div className="border-t border-gray-100 bg-green-50 px-5 py-2 text-[12.5px] font-semibold text-green-700">{msg}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-5 border-b border-gray-100 pb-4 last:border-b-0">
+      <h3 className="mb-2.5 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">{title}</h3>
+      {children}
+    </div>
+  );
+}
+function KV({ k, v }: { k: string; v: React.ReactNode }) {
+  return <div className="flex gap-3 py-0.5 text-[13px]"><span className="w-24 shrink-0 text-gray-400">{k}</span><span className="min-w-0 text-gray-900">{v}</span></div>;
+}
+
+/* ── Material selection (v2 rooms only) ───────────────────────────────────
+   Legacy rooms have no `segments[]` to hang a per-segment material choice on,
+   and are being phased out, so this section is deliberately v2-only. */
+function MaterialSection({ room, roomIdx, orderId, bm, onSaved }: { room: any; roomIdx: number; orderId: string; bm: BmProfile; onSaved: (m: string) => void }) {
+  if (!(room?.v >= 2) || !Array.isArray(room.segments) || !room.segments.length) return null;
+  const cat = categoryFor(room.category);
+  const multi = !!(cat.segment && cat.segment.model === 'multi');
+  return (
+    <div className="mb-3.5 rounded-lg border border-dashed border-blue-400 bg-blue-50/40 p-2.5">
+      <div className="mb-2 text-[12px] font-extrabold text-[#1F3A5F]">🎨 Material selection</div>
+      {room.segments.map((s: any, si: number) => (
+        <MaterialCard
+          key={si}
+          label={multi ? (cat.segment!.segLabel || 'Segment') + ' ' + (si + 1) + (s.facing ? ' — ' + s.facing : '') : (cat.segment?.segLabel || 'Area')}
+          seg={s} roomIdx={roomIdx} segIdx={si} orderId={orderId} bm={bm} onSaved={onSaved}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MaterialCard({ label, seg, roomIdx, segIdx, orderId, bm, onSaved }: {
+  label: string; seg: any; roomIdx: number; segIdx: number; orderId: string; bm: BmProfile; onSaved: (m: string) => void;
+}) {
+  const [editing, setEditing] = useState(!seg.material);
+  const [sku, setSku] = useState(seg.material?.sku || '');
+  const [name, setName] = useState(seg.material?.productName || '');
+  const [url, setUrl] = useState(seg.material?.url || '');
+  const [image, setImage] = useState<string | null>(seg.material?.image || null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [fetching, setFetching] = useState(false);
+
+  if (!editing && seg.material) {
+    return (
+      <div className="mb-1.5 rounded-lg border border-gray-200 bg-white p-2">
+        <div className="mb-1.5 text-[11.5px] font-bold text-[#1F3A5F]">{label}</div>
+        <div className="flex items-center gap-2">
+          {seg.material.image ? <img src={seg.material.image} alt="" className="h-11 w-11 shrink-0 rounded-md border border-gray-200 object-cover" /> : null}
+          <div className="min-w-0 flex-1 text-[12px]">
+            <div className="font-bold">{seg.material.productName || seg.material.sku || '—'}</div>
+            {seg.material.sku ? <div className="text-[11px] text-gray-400">SKU: {seg.material.sku}</div> : null}
+          </div>
+          <button className="shrink-0 rounded-md bg-gray-100 px-3 py-1.5 text-[12px] font-bold text-[#1F3A5F]" onClick={() => setEditing(true)}>Edit</button>
+        </div>
+      </div>
+    );
+  }
+
+  async function fetchImage() {
+    setErr('');
+    if (!url.trim()) { setErr('Paste a materialdepot.com product URL first.'); return; }
+    setFetching(true);
+    try {
+      const r = await fetch('/api/site-audit/fetch-og-image?url=' + encodeURIComponent(url.trim()));
+      const j = await r.json();
+      if (j.image) setImage(j.image);
+      else setErr(j.error ? 'Could not fetch an image from that page.' : 'No preview image found on that page.');
+    } catch {
+      setErr('Could not reach the image fetcher — try again.');
+    }
+    setFetching(false);
+  }
+
+  /* Always re-fetch audit_ticked immediately before merging rather than
+     trusting the copy this drawer loaded with — the field app autosaves the
+     same blob, so a stale write here could clobber a concurrent one. */
+  async function save() {
+    setErr('');
+    if (!sku.trim() && !name.trim() && !url.trim()) { setErr('Enter at least a SKU, product name, or URL.'); return; }
+    setBusy(true);
+    try {
+      const rows = await sbGet('audit_orders?id=eq.' + orderId + '&select=audit_ticked');
+      const fresh = Array.isArray(rows) && rows[0] ? rows[0].audit_ticked : null;
+      if (!fresh || !Array.isArray(fresh.rooms)) throw new Error('Could not load the latest job card — reload and try again.');
+      const room = fresh.rooms[roomIdx];
+      if (!room || !(room.v >= 2) || !Array.isArray(room.segments) || !room.segments[segIdx]) throw new Error('That room/segment could not be found — reload and try again.');
+      room.segments[segIdx].material = {
+        sku: sku.trim(), productName: name.trim(), url: url.trim(), image: image || null,
+        by: { email: bm.email || '', name: bm.name }, at: new Date().toISOString(),
+      };
+      await sbPatch('audit_orders', orderId, { audit_ticked: fresh });
+      setEditing(false);
+      onSaved('Material saved for ' + label);
+    } catch (e: any) {
+      setErr('Save failed — ' + (e?.message || 'try again'));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mb-1.5 rounded-lg border border-gray-200 bg-white p-2">
+      <div className="mb-1.5 text-[11.5px] font-bold text-[#1F3A5F]">{label}</div>
+      <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU code" className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" />
+      <div className="mb-1.5 flex gap-1.5">
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="materialdepot.com product URL" className="flex-1 rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" />
+        <button disabled={fetching} onClick={fetchImage} className="shrink-0 whitespace-nowrap rounded-md bg-[#1F3A5F] px-2.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-60">{fetching ? 'Fetching…' : 'Fetch image'}</button>
+      </div>
+      <div className="mb-1.5">{image ? <img src={image} alt="" className="h-11 w-11 rounded-md border border-gray-200 object-cover" /> : <div className="text-[11px] text-gray-400">No image yet — paste a URL and click Fetch image.</div>}</div>
+      <div className="flex gap-1.5">
+        <button disabled={busy} onClick={save} className="rounded-md bg-green-700 px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60">{busy ? 'Saving…' : 'Save'}</button>
+        {seg.material ? <button onClick={() => setEditing(false)} className="rounded-md bg-gray-100 px-3 py-1.5 text-[12px] font-bold text-gray-500">Cancel</button> : null}
+      </div>
+      {err ? <div className="mt-1 text-[11.5px] text-red-600">{err}</div> : null}
+    </div>
+  );
+}
+
+/* ── Journey ───────────────────────────────────────────────────────────── */
+function JourneyTimeline({ entries }: { entries: JourneyEntry[] | null }) {
+  if (entries === null) return <div className="text-[12.5px] text-gray-400">Loading…</div>;
+  if (!entries.length) return <div className="text-[12.5px] text-gray-400">No journey entries logged yet.</div>;
+  const sorted = entries.slice().sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+  return (
+    <>
+      {sorted.map((e) => {
+        const st = journeyStage(e.stage);
+        return (
+          <div key={e.id} className="border-b border-gray-100 py-2 last:border-b-0">
+            <div className="text-[13px] font-bold">
+              {st.icon} {st.label}
+              {e.round ? <span className="text-gray-400"> · Round {e.round}</span> : null}
+              {e.decision === 'approved' ? <span className="text-green-700"> ✓ Approved</span> : e.decision === 'changes_requested' ? <span className="text-red-600"> ✎ Changes requested</span> : null}
+            </div>
+            {e.note ? <div className="mt-0.5 text-[12px]">{e.note}</div> : null}
+            {e.refId ? <div className="mt-0.5 text-[11.5px] text-gray-400">Ref: {e.refId}</div> : null}
+            <div className="mt-0.5 text-[11.5px] text-gray-400">{e.by?.name ? e.by.name + ' · ' : ''}{fmtLog(e.ts)}{e.by?.role ? ' · ' + e.by.role : ''}</div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/* Appends to bm_journey. Same fresh-fetch-before-write pattern as the material
+   save — BM, SM and Admin can all append to the same array. */
+function JourneyAddForm({ entries, orderId, bm, onSaved }: { entries: JourneyEntry[]; orderId: string; bm: BmProfile; onSaved: (m: string) => void }) {
+  const [stage, setStage] = useState(MD_JOURNEY_STAGES[0].k);
+  const cfg = journeyStage(stage);
+  const priorChanges = entries.filter((e) => e.decision === 'changes_requested').length;
+  const [round, setRound] = useState('');
+  const [decision, setDecision] = useState('');
+  const [refId, setRefId] = useState('');
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    setErr(''); setBusy(true);
+    try {
+      const rows = await sbGet('audit_orders?id=eq.' + orderId + '&select=bm_journey');
+      const fresh: JourneyEntry[] = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].bm_journey) ? rows[0].bm_journey : [];
+      fresh.push({
+        id: 'j_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        ts: new Date().toISOString(),
+        stage,
+        round: cfg.hasRound ? parseInt(round || String(priorChanges + 1), 10) || null : null,
+        decision: (cfg.hasDecision ? (decision || null) : null) as JourneyEntry['decision'],
+        note: note.trim(), refId: cfg.hasRef ? refId.trim() : '',
+        by: { email: bm.email || '', name: bm.name, role: 'bm' },
+      });
+      await sbPatch('audit_orders', orderId, { bm_journey: fresh });
+      setNote(''); setRefId(''); setDecision(''); setRound('');
+      onSaved('Journey entry added');
+    } catch (e: any) {
+      setErr('Failed — ' + (e?.message || 'try again'));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mt-2.5 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+      <select value={stage} onChange={(e) => setStage(e.target.value)} className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]">
+        {MD_JOURNEY_STAGES.map((s) => <option key={s.k} value={s.k}>{s.icon} {s.label}</option>)}
+      </select>
+      {cfg.hasRound ? <input type="number" min={1} value={round} onChange={(e) => setRound(e.target.value)} placeholder={'Round # (default ' + (priorChanges + 1) + ')'} className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" /> : null}
+      {cfg.hasDecision ? (
+        <select value={decision} onChange={(e) => setDecision(e.target.value)} className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]">
+          <option value="">— Client decision —</option>
+          <option value="approved">Approved</option>
+          <option value="changes_requested">Changes requested</option>
+        </select>
+      ) : null}
+      {cfg.hasRef ? <input value={refId} onChange={(e) => setRefId(e.target.value)} placeholder={cfg.refLabel || 'Reference'} className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" /> : null}
+      <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" className="mb-1.5 min-h-[50px] w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" />
+      {err ? <div className="mb-1 text-[11.5px] text-red-600">{err}</div> : null}
+      <button disabled={busy} onClick={add} className="rounded-md bg-green-700 px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60">{busy ? 'Saving…' : '+ Add entry'}</button>
+    </div>
+  );
+}

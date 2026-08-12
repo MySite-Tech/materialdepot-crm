@@ -17,8 +17,9 @@ const ROLES: Record<string, { label: string; ico: string }> = {
   installer: { label: 'Site Installer', ico: '🔧' },
   auditor_installer: { label: 'Auditor + Installer', ico: '🔍🔧' },
   store_staff: { label: 'Store Team', ico: '🏪' },
+  bm: { label: 'Business Manager', ico: '💼' },
 };
-const ROLE_ORDER = ['service_mgr', 'site_auditor', 'installer', 'auditor_installer', 'store_staff'];
+const ROLE_ORDER = ['service_mgr', 'site_auditor', 'installer', 'auditor_installer', 'bm', 'store_staff'];
 
 const AVATAR_COLORS = ['#EAB308', '#1F3A5F', '#0EA5E9', '#16A34A', '#DB2777', '#7C3AED', '#EA580C'];
 function avatarColor(name: string): string {
@@ -53,7 +54,7 @@ export default function SiteAuditRoleViewerView() {
     <div>
       <div className="mb-5">
         <h1 className="text-lg font-bold text-black">Role Viewer</h1>
-        <p className="text-[13px] text-gray-400 mt-0.5">Pick a role, then a person, to open their dashboard in a new tab.</p>
+        <p className="text-[13px] text-gray-400 mt-0.5">Pick a role, then a person, to open their dashboard in a new tab. 👁 opens their shadowing schedule instead.</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
@@ -129,6 +130,13 @@ export default function SiteAuditRoleViewerView() {
                   <div className="text-[13px] font-semibold text-black truncate">{p.name}</div>
                   <div className="text-[11px] text-gray-400 truncate">{p.email}</div>
                 </div>
+                <span
+                  title="Open their shadowing schedule"
+                  className="shrink-0 rounded-md bg-purple-50 px-1.5 py-1 text-[12px] text-purple-700 hover:bg-purple-100"
+                  onClick={(e) => { e.preventDefault(); window.open(`/site-audit-view?person=${encodeURIComponent(p.email)}&view=shadowing`, '_blank', 'noopener'); }}
+                >
+                  👁
+                </span>
                 <span className="shrink-0 text-gray-300 text-sm group-hover:text-[#EAB308]">↗</span>
               </a>
             ))}

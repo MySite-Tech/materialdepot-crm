@@ -5,8 +5,8 @@
    parameters instead, so the same math works against React state without
    reintroducing module-level mutable globals. */
 
-import { SQFT_PER_ROLL } from '../siteAuditShared';
-import type { Assignment, InstallOrder, Installer, SlotDef, Subjob } from './types';
+import { SQFT_PER_ROLL, publishSlotConfig } from '../siteAuditShared';
+import type { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
 export { SQFT_PER_ROLL };
 
@@ -14,6 +14,7 @@ export const INSTALL_SKU = 'SVC-INSTALL-001';
 export const CUSTOM_WP_SKU = 'WP-CUST';
 export const FLOOR_DAY_CAP = 1;
 export const WP_DAY_SLOTS = 3;
+export const WALLPANEL_DAY_CAP = 1;   // wall-panel jobs/installer/day — mirrors flooring's full-day cadence
 
 export const DEFAULT_SLOTS_FL: SlotDef[] = [
   { id: 'sf1', label: '9 AM – 12 PM' },
@@ -44,11 +45,15 @@ export function loadSlots(kind: 'fl' | 'wp'): SlotDef[] {
   return fallback;
 }
 export function saveSlots(kind: 'fl' | 'wp', slots: SlotDef[]) {
+  const key = kind === 'fl' ? LS_KEY_FL : LS_KEY_WP;
   try {
-    localStorage.setItem(kind === 'fl' ? LS_KEY_FL : LS_KEY_WP, JSON.stringify(slots));
+    localStorage.setItem(key, JSON.stringify(slots));
   } catch {
     /* best-effort local persistence */
   }
+  // …and share them, so people reading these ids on another device (shadowers
+  // especially) see the office's labels rather than the stock ones.
+  void publishSlotConfig(key, slots);
 }
 
 export function slotsForWp(rolls: number): number {
@@ -130,6 +135,7 @@ export function mapUrl(a: string) {
 
 export function mapInstallRow(r: any): InstallOrder {
   return {
+    city: r.city || 'Bengaluru',
     id: r.id,
     pi: r.pi || '',
     po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
@@ -183,6 +189,19 @@ export function flLoad(orders: InstallOrder[], id: string, date: string): number
   let n = 0;
   orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
     if (sj.type !== 'flooring') return;
+    subjobAssignList(sj).forEach((a) => {
+      if (a.installer_id !== id) return;
+      const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : [];
+      if (dates.includes(date)) n++;
+    });
+  }));
+  return n;
+}
+/* Wall panels follow flooring's full-day cadence — 1 job per installer per day. */
+export function wpnlLoad(orders: InstallOrder[], id: string, date: string): number {
+  let n = 0;
+  orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
+    if (sj.type !== 'wallpanel') return;
     subjobAssignList(sj).forEach((a) => {
       if (a.installer_id !== id) return;
       const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : [];
@@ -261,15 +280,82 @@ export function fmtLogLocal(d?: string | null): string {
   return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + ts;
 }
 
-export function emptySkuRow(grp: 'flooring' | 'wallpaper') {
-  return grp === 'flooring' ? { sku: '', name: '', sqft: '', link: '' } : { sku: '', name: '', sqft: '' };
+export function emptySkuRow(grp: InstallCategory) {
+  return grp === 'wallpaper' ? { sku: '', name: '', sqft: '' } : { sku: '', name: '', sqft: '', link: '' };
 }
-export function skuQtyField(grp: 'flooring' | 'wallpaper') {
-  return grp === 'wallpaper' ? { label: 'Area to be wallpapered (sq.ft)', ph: 'e.g. 120' } : { label: 'Area of installation (sq.ft)', ph: 'e.g. 180' };
+export function skuQtyField(grp: InstallCategory) {
+  if (grp === 'wallpaper') return { label: 'Area to be wallpapered (sq.ft)', ph: 'e.g. 120' };
+  if (grp === 'wallpanel') return { label: 'Area of wall panel installation (sq.ft)', ph: 'e.g. 150' };
+  return { label: 'Area of installation (sq.ft)', ph: 'e.g. 180' };
 }
 export function rollHintText(sqft: string | number | undefined) {
   const n = parseFloat(String(sqft ?? '')) || 0;
   if (!n) return SQFT_PER_ROLL + ' sq.ft = 1 roll, rounded up';
   const r = Math.ceil(n / SQFT_PER_ROLL);
   return '= ' + r + ' roll' + (r === 1 ? '' : 's') + ' · ' + SQFT_PER_ROLL + ' sq.ft = 1 roll';
+}
+
+/* ── Per-SKU sub-job split / merge ─────────────────────────────────────────
+   A category's sub-job can be split so some of its SKUs move into their own
+   sub-job with an independent installer, date, delivery and job card (e.g. a
+   standard + a customized wallpaper delivered on different days). All of the
+   existing per-sub-job machinery already handles N same-type sub-jobs
+   generically, so splitting needs no new tracking concepts. */
+
+/* True once a CATEGORY has been split into 2+ sub-jobs. Distinct from a plain
+   mixed (1 flooring + 1 wallpaper) order — the flat SKU editor can't map back
+   onto 2+ same-type sub-jobs, so it hides itself when this is true. */
+export function isSplit(o: InstallOrder): boolean {
+  if (!o.subjobs) return false;
+  const n = (t: InstallCategory) => o.subjobs!.filter((sj) => sj.type === t).length;
+  return n('flooring') > 1 || n('wallpaper') > 1 || n('wallpanel') > 1;
+}
+
+/* Mint a stable, collision-free sub-job id: the base (sj_fl/sj_wp/sj_wpl)
+   counts as suffix 0, new ids are max-existing-suffix + 1, so an id is never
+   re-issued even after a merge-then-resplit (a length-based id would). Never
+   keyed on SKU code — codes can repeat. */
+export function mintSubjobId(o: InstallOrder, baseType: InstallCategory): string {
+  const base = baseType === 'wallpaper' ? 'sj_wp' : baseType === 'wallpanel' ? 'sj_wpl' : 'sj_fl';
+  const re = new RegExp('^' + base + '(?:_(\\d+))?$');
+  let mx = -1;
+  (o.subjobs || []).forEach((sj) => {
+    const m = re.exec(sj.id || '');
+    if (m) mx = Math.max(mx, m[1] ? parseInt(m[1], 10) : 0);
+  });
+  return base + '_' + (mx + 1);
+}
+
+/* Fallback accessors — a sub-job's own field wins once an SM has diverged it
+   (split orders), otherwise the order-level field applies, so nothing needs a
+   backfill migration. */
+export function sjDeliveryDate(o: InstallOrder, sj: Subjob): string | null {
+  return sj.deliveryDate !== undefined ? sj.deliveryDate ?? null : o.deliveryDate;
+}
+export function sjCustomWp(o: InstallOrder, sj: Subjob): boolean {
+  if (sj.customWp !== undefined && sj.customWp !== null) return !!sj.customWp;
+  return sj.type === 'wallpaper' ? !!o.customWp : false;
+}
+
+/* Short per-sub-job label distinguishing 2+ same-type sub-jobs in list and
+   calendar UIs: plain FL/WP/WPL when the category isn't split, plus
+   Custom/Std (or the first SKU) when it is. */
+export function sjShortLabel(o: InstallOrder, sj: Subjob): string {
+  const tag = sj.type === 'wallpaper' ? 'WP' : sj.type === 'wallpanel' ? 'WPL' : 'FL';
+  const sameType = (o.subjobs || []).filter((s) => s.type === sj.type).length;
+  if (sameType < 2) return tag;
+  const suffix = sj.type === 'wallpaper'
+    ? (sjCustomWp(o, sj) ? 'Custom' : 'Std')
+    : (sj.items && sj.items[0] && sj.items[0].sku) || '';
+  return suffix ? tag + ' · ' + suffix : tag;
+}
+
+/* Assignment list of a sub-job, with a legacy single-installer sub-job
+   normalised into the same shape. */
+export function sjEffectiveAssignments(sj: Subjob): Assignment[] {
+  if (Array.isArray(sj.assignments) && sj.assignments.length) return sj.assignments;
+  if (sj.installer_email || sj.installer) {
+    return [{ installer_id: sj.installer || '', installer_email: sj.installer_email || '', installer_name: '', mode: 'standard', date: sj.date, dates: [], primary: true }];
+  }
+  return [];
 }

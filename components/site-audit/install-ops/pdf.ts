@@ -4,9 +4,10 @@
    — both apps produce the same document for the same completed job. */
 
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 import { fmtDate } from './shared';
 import { installerById } from './shared';
+import { categoryFor } from '../auditRegistry';
+import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfHeader, mdPdfInstallRoom } from '../pdfBrand';
 import type { InstallOrder, Installer, JobCard, Subjob } from './types';
 
 async function compressForPdf(dataUrl: string | null | undefined): Promise<string | null> {
@@ -33,10 +34,11 @@ async function compressForPdf(dataUrl: string | null | undefined): Promise<strin
 }
 
 export async function genInstallPDFSM(o: InstallOrder, sj: Subjob, jobcard: JobCard, installers: Installer[]): Promise<void> {
+  await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
   let y = M;
-  const navy: [number, number, number] = [31, 58, 95], blue: [number, number, number] = [46, 108, 168], muted: [number, number, number] = [90, 100, 120];
+  const navy = MD_INK, muted = MD_MUTED;
   const rooms = jobcard.rooms || [];
   const primaryAssign = sj.assignments && (sj.assignments.find((a) => a.primary) || sj.assignments[0]);
   const installerName = (primaryAssign && primaryAssign.installer_name)
@@ -45,39 +47,21 @@ export async function genInstallPDFSM(o: InstallOrder, sj: Subjob, jobcard: JobC
     || '—';
 
   function hdr() {
-    doc.setFillColor(...navy); doc.rect(M, y, 34, 34, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('MD', M + 9, y + 22);
-    doc.setFontSize(10); doc.setTextColor(...blue); doc.text('MATERIAL DEPOT', M + 44, y + 13); doc.setFontSize(15); doc.setTextColor(...navy); doc.text('Installation Job Card', M + 44, y + 30);
-    y += 46; doc.setDrawColor(...navy); doc.setLineWidth(1.2); doc.line(M, y, W - M, y); y += 14;
+    y = mdPdfHeader(doc, { title: 'Installation Job Card', right: o.pi, M });
+    return y;
   }
   hdr();
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 130, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-    body: [['Proforma Invoice No.', o.pi || ''], ['Client Name', o.name || ''], ['Client Mobile', o.phone || ''], ['Site Address', o.addr || ''], ['BM', o.bm || ''], ['Installer', installerName], ['Type', sj.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring'], ['Date', fmtDate(sj.date)]],
-  });
-  y = doc.lastAutoTable.finalY + 10;
+  y = mdInfoTable(doc, y, [['Proforma Invoice No.', o.pi || ''], ['Client Name', o.name || ''], ['Client Mobile', o.phone || ''], ['Site Address', o.addr || ''], ['BM', o.bm || ''], ['Installer', installerName], ['Type', categoryFor(sj.type).pdfLabel], ['Date', fmtDate(sj.date)]], M);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rooms installed', M, y + 4); y += 10;
-  doc.autoTable({ startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 8.5 }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] }, head: [['#', 'Room', 'SKU', 'Qty']], body: rooms.map((r, i) => [String(i + 1), r.name || '-', r.sku || '-', r.qty || '-']) });
+  doc.autoTable(mdBrandGrid({ startY: y, margin: { left: M, right: M }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] }, head: [['#', 'Room', 'Category', 'SKU']], body: rooms.map((r, i) => [String(i + 1), r.name || '-', categoryFor(r.category || sj.type).pdfLabel, r.sku || '-']) }));
 
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
     doc.addPage(); y = M; hdr();
+    const cat = categoryFor(r.category || sj.type);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Room ' + (i + 1) + ': ' + (r.name || '-'), M, y + 2); y += 14;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text('SKU: ' + (r.sku || '-') + (r.qty ? ' · Qty: ' + r.qty : ''), M, y + 10); y += 24;
-    const photos = r.photos && r.photos.length ? r.photos : r.photo ? [r.photo] : [];
-    for (let pi = 0; pi < photos.length; pi++) {
-      const ph = await compressForPdf(photos[pi]);
-      if (ph) {
-        const iw = W - 2 * M, ih = iw * 0.6;
-        if (y + ih > H - M) { doc.addPage(); y = M; hdr(); }
-        doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text(pi === 0 ? 'Photo after installation' : 'Photo ' + (pi + 1), M, y);
-        try { doc.addImage(ph, 'JPEG', M, y + 6, iw, ih); } catch { /* skip unrenderable image */ }
-        y += ih + 18;
-      }
-    }
-    if (r.comments) {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...navy); doc.text('Comments', M, y); y += 12;
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); doc.text(doc.splitTextToSize(r.comments, W - 2 * M), M, y);
-    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text(cat.pdfLabel + '  ·  SKU: ' + (r.sku || '-'), M, y + 10); y += 24;
+    y = await mdPdfInstallRoom(doc, r, y, { M, W, H, compress: compressForPdf, header: () => mdPdfHeader(doc, { title: 'Installation Job Card', right: o.pi, M }) });
   }
 
   doc.addPage(); y = M; hdr();

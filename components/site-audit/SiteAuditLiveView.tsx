@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { sbGet } from './siteAuditShared';
+import { inCity, sbGet, type CityFilter } from './siteAuditShared';
 
 function todayStr(d: Date) {
   const z = (n: number) => (n < 10 ? '0' + n : n);
@@ -27,7 +27,7 @@ type State = {
   wOrds: Record<string, Ord[]>;
 };
 
-export default function SiteAuditLiveView() {
+export default function SiteAuditLiveView({ city = 'all' }: { city?: CityFilter } = {}) {
   const [state, setState] = useState<State>({ loading: true, error: false, workers: [], wOrds: {} });
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -46,7 +46,7 @@ export default function SiteAuditLiveView() {
           'install_orders_slim?select=pi,addr,subjobs,status&status=not.in.(deleted,pending,deliv_ontime,deliv_delayed)'
         ),
         sbGet(
-          'profiles?select=name,email,role,last_lat,last_lng,last_loc_at,last_order_pi&role=in.(site_auditor,installer,auditor_installer)'
+          'profiles?select=name,email,role,last_lat,last_lng,last_loc_at,last_order_pi,city&role=in.(site_auditor,installer,auditor_installer)'
         ),
       ]);
       if (!alive) return;
@@ -54,8 +54,10 @@ export default function SiteAuditLiveView() {
         setState({ loading: false, error: true, workers: [], wOrds: {} });
         return;
       }
+      // City scope — the map only shows staff based in the selected city.
+      const scopedProfs = inCity(allProfs as any[], city);
       const profMap: Record<string, Profile> = {};
-      for (const p of allProfs) profMap[p.email] = p;
+      for (const p of scopedProfs) profMap[p.email] = p;
       const wOrds: Record<string, Ord[]> = {};
       const addOrd = (email: string | undefined, e: Ord) => {
         if (!email) return;
@@ -118,7 +120,7 @@ export default function SiteAuditLiveView() {
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [city]);
 
   const { workers, wOrds } = state;
   const workerCN = (email: string) => {

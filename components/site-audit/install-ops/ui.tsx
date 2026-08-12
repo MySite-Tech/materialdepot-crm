@@ -7,7 +7,8 @@
 
 import type { ReactElement } from 'react';
 import { fmtDate, installerById, STATUS } from './shared';
-import type { InstallOrder, Installer, Subjob } from './types';
+import { typeTag } from '../auditRegistry';
+import type { InstallCategory, InstallOrder, Installer, Subjob } from './types';
 
 export function Chip({ st }: { st: string }) {
   const s = STATUS[st] || { l: st, badge: 'bg-gray-100 text-gray-600' };
@@ -43,6 +44,7 @@ export function OrderCategoryPills({ o }: { o: InstallOrder }) {
         ? <span key="wp" className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-orange-100 text-orange-800">Custom WP</span>
         : <span key="wp" className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-purple-100 text-purple-700">Wallpaper</span>);
     }
+    if (o.service.wallpanel && o.service.wallpanel.length) cats.push(<span key="wpl" className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-teal-100 text-teal-700">Wall Panels</span>);
     if (cats.length) return <div className="flex flex-wrap gap-1">{cats}</div>;
   }
   const seen: Record<string, boolean> = {};
@@ -55,6 +57,7 @@ export function OrderCategoryPills({ o }: { o: InstallOrder }) {
         ? <span key="wp" className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-orange-100 text-orange-800">Custom WP</span>
         : <span key="wp" className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-purple-100 text-purple-700">Wallpaper</span>);
     }
+    if (s.type === 'wallpanel' && !seen.wpl) { seen.wpl = true; cats.push(<span key="wpl" className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-teal-100 text-teal-700">Wall Panels</span>); }
   });
   return cats.length ? <div className="flex flex-wrap gap-1">{cats}</div> : <span className="text-gray-400">—</span>;
 }
@@ -72,8 +75,8 @@ export function SubjobSummary({ o, installers }: { o: InstallOrder; installers: 
         const names = asgns.map((a: any) => a.installer_name || 'Unassigned').join(', ') || 'Unassigned';
         return (
           <span key={i} className="block max-w-[220px] truncate text-[12px] text-gray-600" title={`${fmtDate(sj.date)} · ${names} · ${(STATUS[sj.status] || { l: sj.status }).l}`}>
-            <span className={`inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${sj.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-50 text-yellow-800'}`}>
-              {sj.type === 'wallpaper' ? 'WP' : 'FL'}
+            <span className={`inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${sjTypeClass(sj.type)}`}>
+              {typeTag(sj.type)}
             </span>
             {fmtDate(sj.date)} · {names} · {(STATUS[sj.status] || { l: sj.status }).l}
           </span>
@@ -83,10 +86,18 @@ export function SubjobSummary({ o, installers }: { o: InstallOrder; installers: 
   );
 }
 
-export function TypeTag({ type }: { type: 'flooring' | 'wallpaper' }) {
+/* Shared per-track tag colour — single source so badges across the list, queues and calendar can't
+   drift from each other as categories are added. */
+export function sjTypeClass(type: InstallCategory | string): string {
   return type === 'wallpaper'
-    ? <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">WP</span>
-    : <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-50 text-yellow-800">FL</span>;
+    ? 'bg-purple-100 text-purple-700'
+    : type === 'wallpanel'
+      ? 'bg-teal-100 text-teal-700'
+      : 'bg-yellow-50 text-yellow-800';
+}
+
+export function TypeTag({ type }: { type: InstallCategory | string }) {
+  return <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${sjTypeClass(type)}`}>{typeTag(type)}</span>;
 }
 
 export function StatTile({ n, l, colorClass, onClick }: { n: number | string; l: string; colorClass: string; onClick?: () => void }) {

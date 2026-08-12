@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { sbGetLong, SQFT_PER_ROLL } from './siteAuditShared';
+import { inCity, sbGetLong, SQFT_PER_ROLL, type CityFilter } from './siteAuditShared';
+import { typeLabel } from './auditRegistry';
 
 /* ---- ANALYTICS HELPERS (ported verbatim from material-depot-site Admin.jsx lines 202-334) ---- */
 function _anDstr(d: Date) {
@@ -26,7 +27,7 @@ function _anInstallAttempts(installs: any[], from: string, to: string) {
       const isCompleted = ['completed', 'partial'].includes(sj.status);
       const dates = new Set<string>();
       if (isCompleted) {
-        const complKey = (sj.type === 'wallpaper' ? 'Wallpaper' : 'Flooring') + ' installation completed';
+        const complKey = typeLabel(sj.type) + ' installation completed';
         for (const l of o.log || []) {
           if (l.t && l.d && l.t.startsWith(complKey)) {
             const cd = _anDateIST(l.d);
@@ -188,7 +189,7 @@ interface AnalyticsState {
   data: AnalyticsData | null;
 }
 
-export default function SiteAuditAnalyticsView() {
+export default function SiteAuditAnalyticsView({ city = 'all' }: { city?: CityFilter } = {}) {
   const [analyticsFrom, setAnalyticsFrom] = useState(() => {
     const t = new Date();
     t.setDate(t.getDate() - 6);
@@ -210,9 +211,9 @@ export default function SiteAuditAnalyticsView() {
       let installRes: any, auditRes: any, ratingsRes: any;
       try {
         [installRes, auditRes, ratingsRes] = await Promise.all([
-          sbGetLong('install_orders_slim?select=pi,status,subjobs,service,delivery_date,created_at&status=neq.deleted'),
+          sbGetLong('install_orders_slim?select=pi,status,subjobs,service,delivery_date,created_at,city&status=neq.deleted'),
           sbGetLong(
-            'audit_orders?select=pi,status,date,slot,auditor_name,auditor_email,phone,log,created_at&status=not.in.(deleted,slot_reserved,slot_converted)'
+            'audit_orders?select=pi,status,date,slot,auditor_name,auditor_email,phone,log,created_at,city&status=not.in.(deleted,slot_reserved,slot_converted)'
           ),
           sbGetLong('ratings?select=order_type,pi,q1_score,q2_score,q3_score,created_at,staff_name,staff_email'),
         ]);
@@ -220,6 +221,10 @@ export default function SiteAuditAnalyticsView() {
         if (alive) setState({ loading: false, error: true, data: null });
         return;
       }
+      // City scope (header toggle) — applied to the two order sets before any
+      // metric is computed, so every tile/chart below reflects the choice.
+      if (Array.isArray(installRes)) installRes = inCity(installRes, city);
+      if (Array.isArray(auditRes)) auditRes = inCity(auditRes, city);
       // delivMeta and installLogRes are independent enrichments of installRes —
       // neither depends on the other's result, so fetch them concurrently
       // instead of one-after-another (saves one full network round-trip).
@@ -231,6 +236,18 @@ export default function SiteAuditAnalyticsView() {
         sbGetLong('install_orders?select=pi,phone,log&status=neq.deleted&created_at=gte.2026-07-01').catch(() => []),
       ]);
       ratingsRes = ratingsFallback;
+      /* `ratings` has no city of its own — it's scoped through the order it
+         belongs to, matched on (order_type, pi) exactly as every rating metric
+         below already keys them. Without this, NPS/ratings/job-card % would
+         keep reporting both cities while every other tile respects the toggle.
+         Applied after the fallback re-fetch so a first-attempt timeout can't
+         slip an unfiltered set through. Ratings whose parent order isn't in the
+         city-scoped set (or is deleted/pre-booking) drop out. */
+      if (city !== 'all' && Array.isArray(ratingsRes)) {
+        const iPis = new Set((Array.isArray(installRes) ? installRes : []).map((o: any) => o.pi));
+        const aPis = new Set((Array.isArray(auditRes) ? auditRes : []).map((o: any) => o.pi));
+        ratingsRes = ratingsRes.filter((r: any) => (r.order_type === 'install' ? iPis.has(r.pi) : r.order_type === 'audit' ? aPis.has(r.pi) : false));
+      }
       if (Array.isArray(installRes) && Array.isArray(delivMeta)) {
         const dm: Record<string, any> = {};
         for (const r of delivMeta) dm[r.pi] = r.original_delivery_date || null;
@@ -258,7 +275,7 @@ export default function SiteAuditAnalyticsView() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [city]);
 
   if (state.loading)
     return <div className="text-center py-8 text-[13px] text-gray-400">Loading…</div>;
@@ -807,7 +824,8 @@ function AnalyticsBody({
         <b>Multi-attempt counting:</b> Each subjob date = one attempt. Rescheduled orders appear once per scheduled date found in the date range (log
         parsing used for post-July 2026 data).
         <br />
-        <b>NPS, ratings &amp; Job Card %:</b> Filtered by selected date range.
+        <b>NPS, ratings &amp; Job Card %:</b> Filtered by selected date range. With a city selected, ratings are matched to their order&apos;s city (the ratings
+        table has no city of its own).
         <br />
         <b>NPS:</b> Promoters Q1 ≥ 9, Detractors Q1 ≤ 7. Range −100 to +100.
       </div>

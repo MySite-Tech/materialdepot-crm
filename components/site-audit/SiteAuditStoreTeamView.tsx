@@ -32,6 +32,11 @@ const SLOT_DEFS: SlotDef[] = [
   { id: '16:00', label: '4:00 PM', rangeEnd: '5:00 PM', startMin: 960, endMin: 1020, group: 'Evening' },
   { id: '17:00', label: '5:00 PM', rangeEnd: '6:00 PM', startMin: 1020, endMin: 1080, group: 'Evening' },
 ];
+/* Strong evening cutoff: after this time (local) the store can no longer pre-book TOMORROW's
+   morning slots — the service manager leaves early and can't absorb a last-minute morning booking
+   made the evening before. Later slots tomorrow and all slots on later days stay open. SMs are
+   unaffected; this is Store-Team-only. */
+const MORNING_CUTOFF_MIN = 18 * 60; // 6:00 PM
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /* ── Local date helpers (mirrors material-depot-site's lib/dates.js; not
@@ -47,6 +52,16 @@ const today = (() => {
   t.setHours(0, 0, 0, 0);
   return t;
 })();
+
+/* True when `date` is tomorrow and the local clock is past the morning cutoff — used to hide
+   tomorrow's morning slots from the store's booking list. */
+function morningCutoffHit(date: string): boolean {
+  const tmr = new Date(today);
+  tmr.setDate(tmr.getDate() + 1);
+  if (date !== dstr(tmr)) return false;
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes() >= MORNING_CUTOFF_MIN;
+}
 
 /* ── Business logic (verbatim from StoreTeam.jsx) ─────────────────────────── */
 function fmtSlotId(id: string) {
@@ -153,12 +168,18 @@ export default function SiteAuditStoreTeamView() {
             date +
             '&status=neq.deleted'
         ),
-        sbGet('profiles?select=id,active_from&role=in.(site_auditor,auditor_installer)'),
+        sbGet('profiles?select=id,active_from,weekly_off,leave_dates&role=in.(site_auditor,auditor_installer)'),
       ]);
       const orderList = Array.isArray(orders) ? orders : [];
-      const activeAuditors = (Array.isArray(auditors) ? auditors : []).filter(
-        (a: any) => !a.active_from || a.active_from <= date
-      );
+      // An auditor before their start date, on their weekly off, or on leave
+      // isn't available — so they must not inflate this store's slots-left
+      // count either (same rule the SM's Auditors & caps view applies).
+      const activeAuditors = (Array.isArray(auditors) ? auditors : []).filter((a: any) => {
+        if (a.active_from && a.active_from > date) return false;
+        if (a.weekly_off != null && new Date(date + 'T00:00:00').getDay() === a.weekly_off) return false;
+        if (Array.isArray(a.leave_dates) && a.leave_dates.includes(date)) return false;
+        return true;
+      });
       setDayOrders(orderList);
       setAuditorCount(activeAuditors.length || 1);
       setLoading(false);
@@ -384,14 +405,19 @@ function SlotContent({
   return (
     <div className="flex flex-col gap-6">
       {(['Morning', 'Afternoon', 'Evening'] as const).map((grp) => {
-        const slots = SLOT_DEFS.filter((s) => s.group === grp && (nowMin === null || s.startMin > nowMin));
+        const cutMorning = grp === 'Morning' && morningCutoffHit(date);
+        const slots = cutMorning ? [] : SLOT_DEFS.filter((s) => s.group === grp && (nowMin === null || s.startMin > nowMin));
         return (
           <div key={grp}>
             <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
               {grp}
             </div>
             {!slots.length ? (
-              <div className="text-[13px] text-gray-400 px-1">No upcoming slots</div>
+              <div className="text-[13px] text-gray-400 px-1">
+                {cutMorning
+                  ? 'Morning slots for tomorrow close at 6:00 PM. Please pick an afternoon/evening slot, or a morning slot on a later day.'
+                  : 'No upcoming slots'}
+              </div>
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
                 {slots.map((sl) => {
@@ -576,6 +602,8 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
   const [fl, setFl] = useState(false);
   const [wp, setWp] = useState(false);
   const [cwp, setCwp] = useState(false);
+  const [cnc, setCnc] = useState(false);
+  const [wpnl, setWpnl] = useState(false);
   const [err, setErr] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -612,6 +640,8 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
     if (fl) cats.push('Wooden Flooring');
     if (wp) cats.push('Standard Wallpapers');
     if (cwp) cats.push('Custom Wallpapers');
+    if (cnc) cats.push('CNC');
+    if (wpnl) cats.push('Wall Panels');
 
     setSubmitting(true);
     try {
@@ -723,6 +753,14 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
             <label className="flex items-center gap-2 text-[13px] text-gray-700">
               <input type="checkbox" checked={cwp} onChange={(e) => setCwp(e.target.checked)} />
               <span>Custom Wallpapers</span>
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={cnc} onChange={(e) => setCnc(e.target.checked)} />
+              <span>CNC</span>
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={wpnl} onChange={(e) => setWpnl(e.target.checked)} />
+              <span>Wall Panels</span>
             </label>
           </div>
         </div>

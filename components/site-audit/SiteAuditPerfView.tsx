@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { sbGet, ROLES, initials } from './siteAuditShared';
+import { inCity, sbGet, ROLES, initials, type CityFilter } from './siteAuditShared';
 
 interface PerfState {
   loading: boolean;
@@ -18,7 +18,7 @@ interface Stats {
   pct: number;
 }
 
-export default function SiteAuditPerfView() {
+export default function SiteAuditPerfView({ city = 'all' }: { city?: CityFilter } = {}) {
   const [state, setState] = useState<PerfState>({ loading: true, field: [], auditOrders: [], installOrders: [] });
 
   useEffect(() => {
@@ -26,22 +26,23 @@ export default function SiteAuditPerfView() {
     (async () => {
       const [usersRes, auditRes, installRes] = await Promise.all([
         sbGet('profiles?select=*&role=neq.admin&order=name.asc'),
-        sbGet('audit_orders?select=auditor_email,status,created_at,created_by_email&status=not.in.(deleted,slot_reserved,slot_converted)'),
-        sbGet('install_orders_slim?select=subjobs,status,created_at,created_by_email'),
+        sbGet('audit_orders?select=auditor_email,status,created_at,created_by_email,city&status=not.in.(deleted,slot_reserved,slot_converted)'),
+        sbGet('install_orders_slim?select=subjobs,status,created_at,created_by_email,city'),
       ]);
       if (!alive) return;
-      const field = Array.isArray(usersRes) ? usersRes.filter((u: any) => u.role !== 'admin') : [];
+      // City scope — staff are scoped by profiles.city, orders by their own city.
+      const field = Array.isArray(usersRes) ? inCity(usersRes.filter((u: any) => u.role !== 'admin'), city) : [];
       setState({
         loading: false,
         field,
-        auditOrders: Array.isArray(auditRes) ? auditRes : [],
-        installOrders: Array.isArray(installRes) ? installRes : [],
+        auditOrders: Array.isArray(auditRes) ? inCity(auditRes, city) : [],
+        installOrders: Array.isArray(installRes) ? inCity(installRes, city) : [],
       });
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [city]);
 
   if (state.loading) {
     return (

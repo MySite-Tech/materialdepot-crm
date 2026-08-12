@@ -122,6 +122,83 @@ export async function sbPatch(t: string, id: string, b: any): Promise<void> {
   }
 }
 
+/* ── app_settings ─────────────────────────────────────────────────────────
+   Tiny key→jsonb settings table. `knownId` lets a re-save skip the lookup.
+   Used by the foam/payout config and by the shared slot windows below. */
+export async function loadSetting(key: string): Promise<{ id: string | null; value: any }> {
+  try {
+    const r = await sbGet('app_settings?key=eq.' + encodeURIComponent(key) + '&select=id,value');
+    if (Array.isArray(r) && r.length) return { id: r[0].id, value: r[0].value || {} };
+  } catch {
+    /* table may not exist yet — treat as unset */
+  }
+  return { id: null, value: {} };
+}
+export async function saveSetting(key: string, value: any, knownId: string | null): Promise<string | null> {
+  if (knownId) {
+    await sbPatch('app_settings', knownId, { value, updated_at: new Date().toISOString() });
+    return knownId;
+  }
+  const ex = await sbGet('app_settings?key=eq.' + encodeURIComponent(key) + '&select=id').catch(() => null);
+  if (Array.isArray(ex) && ex.length) {
+    await sbPatch('app_settings', ex[0].id, { value, updated_at: new Date().toISOString() });
+    return ex[0].id;
+  }
+  const c = await sbPost('app_settings', { key, value });
+  return Array.isArray(c) && c[0] ? c[0].id : null;
+}
+
+/* Slot windows are configured per dashboard in localStorage (the original's
+   design, kept so an SM's own device keeps working offline and unchanged), but
+   everyone ELSE — a shadower on their own phone, an admin on a fresh browser —
+   has no copy of that config and would otherwise read stock labels for an
+   id the office renamed. So each save also mirrors the windows into
+   app_settings under `slots.<key>`, and readers with no local copy fall back
+   to that. Best-effort in both directions: a failed mirror only costs the
+   sharing, never the local save. */
+export async function publishSlotConfig(key: string, slots: Array<{ id: string; label: string }>) {
+  try {
+    await saveSetting('slots.' + key, { slots }, null);
+  } catch {
+    /* sharing is an enhancement — the local config already saved */
+  }
+}
+export async function fetchSharedSlotLabels(keys: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const got = await Promise.all(keys.map((k) => loadSetting('slots.' + k).catch(() => ({ value: null }))));
+  for (const g of got) {
+    const list = g && g.value && Array.isArray(g.value.slots) ? g.value.slots : null;
+    if (list) for (const s of list) if (s && s.id && s.label) out[s.id] = s.label;
+  }
+  return out;
+}
+
+/* PATCH every row matching a PostgREST filter, returning how many were
+   changed. Only for backfills that would otherwise be hundreds of sequential
+   id-PATCHes (linking legacy audit_orders to a BM account). Pass a filter
+   narrow enough to be safe on its own — this cannot be undone per row. */
+export async function sbPatchWhere(t: string, filter: string, b: any): Promise<number> {
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 30000);
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/' + t + '?' + filter, {
+      method: 'PATCH',
+      headers: { ...H, Prefer: 'return=representation' },
+      body: JSON.stringify(b),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.message || j.error || 'DB error ' + r.status);
+    }
+    const j = await r.json().catch(() => []);
+    invalidateTable(t);
+    return Array.isArray(j) ? j.length : 0;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 /* Long-timeout PATCH (90s) for heavy payloads — job-card writes with photos
    embedded as base64/URLs can be large and slow on mobile connections. */
 export async function sbPatchLong(t: string, id: string, b: any): Promise<void> {
@@ -205,7 +282,74 @@ export const ROLES: Record<string, { label: string; color: string }> = {
   installer: { label: 'Site Installer', color: '#1f7a3f' },
   auditor_installer: { label: 'Auditor + Installer', color: '#0f6e74' },
   store_staff: { label: 'Store Team', color: '#9a6200' },
+  bm: { label: 'Business Manager', color: '#b45309' },
 };
+
+/* ── Shadowers ────────────────────────────────────────────────────────────
+   A site audit / installation sub-job can be shadowed (observed) by ANY
+   number of registered people, of any role. They ride the existing
+   shadower_email / shadower_name text columns comma-joined, so this needs no
+   schema change — same encoding material-depot-site writes. */
+export type Shadower = { email: string; name: string };
+
+export function parseShadowers(emailStr?: string | null, nameStr?: string | null): Shadower[] {
+  const es = String(emailStr || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const ns = String(nameStr || '').split(',').map((s) => s.trim());
+  return es.map((e, i) => ({ email: e, name: ns[i] || e }));
+}
+export function joinShadowers(list: Shadower[]): { email: string | null; name: string | null } {
+  const clean = (list || []).filter((s) => s && s.email);
+  if (!clean.length) return { email: null, name: null };
+  return { email: clean.map((s) => s.email).join(','), name: clean.map((s) => s.name || s.email).join(',') };
+}
+
+/* ── Availability (profiles.weekly_off / profiles.leave_dates) ─────────────
+   A weekday number (0=Sun) the person is always off, plus explicit leave
+   dates. Both are advisory at assignment time — the SM can still override,
+   exactly like the source app. */
+export const WDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export type Availability = { weeklyOff: number | null; leaveDates: string[] };
+
+export function isOffDay(a: Partial<Availability> | null | undefined, ds?: string | null): boolean {
+  if (!a || !ds) return false;
+  if (a.weeklyOff != null && new Date(ds + 'T00:00:00').getDay() === a.weeklyOff) return true;
+  if (Array.isArray(a.leaveDates) && a.leaveDates.includes(ds)) return true;
+  return false;
+}
+export function offDayReason(a: Partial<Availability> | null | undefined, ds?: string | null): string {
+  if (!isOffDay(a, ds)) return '';
+  return Array.isArray(a?.leaveDates) && ds && a!.leaveDates!.includes(ds) ? 'on leave' : 'weekly off';
+}
+
+/* ── City scope ───────────────────────────────────────────────────────────
+   Rows without a city are Bengaluru (the original city) — matching
+   material-depot-site's `(o.city||'Bengaluru')` default everywhere. */
+export const CITIES = ['Bengaluru', 'Hyderabad'];
+export type CityFilter = 'all' | string;
+
+export function cityOf(row: { city?: string | null } | null | undefined): string {
+  return (row && row.city) || 'Bengaluru';
+}
+export function inCity<T extends { city?: string | null }>(list: T[], city: CityFilter): T[] {
+  return city === 'all' ? list : list.filter((r) => cityOf(r) === city);
+}
+export function loadCityFilter(): CityFilter {
+  if (typeof window === 'undefined') return 'all';
+  try { return localStorage.getItem('md_city') || 'all'; } catch { return 'all'; }
+}
+export function saveCityFilter(c: CityFilter) {
+  try { localStorage.setItem('md_city', c); } catch { /* best-effort */ }
+}
+
+/* Digits-only last-10 of a phone number — the CRM logs users in by phone
+   (app/App.tsx `loginWithPhone`), while the Site Audit project stores staff
+   numbers in `profiles.contact` with inconsistent +91 / spacing. Compare
+   through this on both sides. */
+export function phoneKey(p?: string | null): string {
+  const d = String(p || '').replace(/\D/g, '');
+  return d.length > 10 ? d.slice(-10) : d;
+}
 
 // CRM individual_permissions slugs (set via the Admin > Users tab) that grant
 // a Site Audit sub-view, mapped to the same role keys ROLES above uses.

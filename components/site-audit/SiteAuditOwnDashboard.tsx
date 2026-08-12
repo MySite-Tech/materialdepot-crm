@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { sbGet } from './siteAuditShared';
+import { CITIES, loadCityFilter, saveCityFilter, sbGet, type CityFilter } from './siteAuditShared';
 import SiteAuditorApp from './SiteAuditorApp';
 import SiteInstallerApp from './SiteInstallerApp';
 import SiteAuditJobsView from './SiteAuditJobsView';
 import SiteAuditPerfView from './SiteAuditPerfView';
 import SiteAuditAnalyticsView from './SiteAuditAnalyticsView';
 import SiteAuditInstallOpsView from './SiteAuditInstallOpsView';
+import SiteAuditOpsView from './SiteAuditOpsView';
+import SiteShadowerApp from './SiteShadowerApp';
+import SiteAuditBmView from './SiteAuditBmView';
 
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
@@ -23,7 +26,13 @@ export default function SiteAuditOwnDashboard({ contact, permissionRole }: { con
   const [loading, setLoading] = useState(true);
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
   const [smTab, setSmTab] = useState<'audit' | 'install'>('audit');
-  const [smAuditSubTab, setSmAuditSubTab] = useState<'jobs' | 'perf' | 'analytics' | 'live'>('jobs');
+  const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
+  /* Shadowing is cross-role — anyone can be picked to observe a job — so this
+     toggle sits above the role-specific dashboards rather than inside one. */
+  const [shadowing, setShadowing] = useState(false);
+  /* Same cross-view city context as the admin rail (shared md_city key). */
+  const [city, setCity] = useState<CityFilter>('all');
+  useEffect(() => { setCity(loadCityFilter()); }, []);
 
   useEffect(() => {
     if (!contact) { setLoading(false); return; }
@@ -48,16 +57,37 @@ export default function SiteAuditOwnDashboard({ contact, permissionRole }: { con
   }
 
   const actingAs = { id: person.id, name: person.name, email: person.email };
+  const shadowBar = (
+    <div className="flex justify-end border-b border-gray-200 bg-white px-6 py-2">
+      <button
+        onClick={() => setShadowing((v) => !v)}
+        className={`rounded-md px-3 py-1.5 text-[12.5px] font-extrabold ${shadowing ? 'bg-[#1F3A5F] text-white' : 'bg-purple-50 text-purple-700'}`}
+      >
+        {shadowing ? '← Back to my dashboard' : '👁 My shadowing'}
+      </button>
+    </div>
+  );
+
+  if (shadowing) {
+    return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteShadowerApp actingAs={actingAs} /></div></div>;
+  }
+
+  // A BM's own dashboard is their order list, regardless of the CRM sub-role
+  // permission (which only covers the auditor/installer/SM apps).
+  if (person.role === 'bm') {
+    return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact }} /></div></div>;
+  }
 
   if (permissionRole === 'site_auditor') {
-    return <div className="p-4 sm:p-6"><SiteAuditorApp actingAs={actingAs} /></div>;
+    return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditorApp actingAs={actingAs} /></div></div>;
   }
   if (permissionRole === 'installer') {
-    return <div className="p-4 sm:p-6"><SiteInstallerApp actingAs={actingAs} /></div>;
+    return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteInstallerApp actingAs={actingAs} /></div></div>;
   }
   if (permissionRole === 'auditor_installer') {
     return (
       <div>
+        {shadowBar}
         <div className="bg-white border-b border-gray-200">
           <div className="px-6 flex gap-0">
             {([['auditor', 'Auditor view'], ['installer', 'Installer view']] as const).map(([k, label]) => (
@@ -80,8 +110,9 @@ export default function SiteAuditOwnDashboard({ contact, permissionRole }: { con
   if (permissionRole === 'service_mgr') {
     return (
       <div>
+        {shadowBar}
         <div className="bg-white border-b border-gray-200">
-          <div className="px-6 flex gap-0">
+          <div className="px-6 flex gap-0 items-center">
             {([['audit', 'Audit Dashboard'], ['install', 'Install Dashboard']] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -91,12 +122,25 @@ export default function SiteAuditOwnDashboard({ contact, permissionRole }: { con
                 {label}
               </button>
             ))}
+            <div className="ml-auto flex shrink-0 items-center gap-2 pl-4">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="sm-city">City</label>
+              <select
+                id="sm-city"
+                value={city}
+                onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
+                className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
+              >
+                <option value="all">All Cities</option>
+                {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <div className="p-4 sm:p-6">
           {smTab === 'audit' && (
             <div className="flex gap-2 flex-wrap mb-4">
               {([
+                ['ops', 'Audit Ops'],
                 ['jobs', 'Job Overview'],
                 ['perf', 'Performance'],
                 ['analytics', 'Analytics'],
@@ -113,23 +157,28 @@ export default function SiteAuditOwnDashboard({ contact, permissionRole }: { con
             </div>
           )}
           {smTab === 'install' ? (
-            <SiteAuditInstallOpsView />
+            <SiteAuditInstallOpsView city={city} />
+          ) : smAuditSubTab === 'ops' ? (
+            <SiteAuditOpsView city={city} />
           ) : smAuditSubTab === 'jobs' ? (
-            <SiteAuditJobsView />
+            <SiteAuditJobsView city={city} />
           ) : smAuditSubTab === 'perf' ? (
-            <SiteAuditPerfView />
+            <SiteAuditPerfView city={city} />
           ) : smAuditSubTab === 'analytics' ? (
-            <SiteAuditAnalyticsView />
+            <SiteAuditAnalyticsView city={city} />
           ) : (
-            <SiteAuditLiveView />
+            <SiteAuditLiveView city={city} />
           )}
         </div>
       </div>
     );
   }
   return (
-    <div className="p-6 text-center text-sm text-gray-400">
-      No Site Audit dashboard permission set for this account. Ask an admin to grant a Site Audit sub-role under Admin &gt; Users.
+    <div>
+      {shadowBar}
+      <div className="p-6 text-center text-sm text-gray-400">
+          Ask an admin to grant a Site Audit sub-role under Admin &gt; Users.
+      </div>
     </div>
   );
 }

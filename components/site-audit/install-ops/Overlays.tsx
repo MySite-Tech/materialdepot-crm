@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { sbPatch, sbPost } from '../siteAuditShared';
-import { getToken } from '@/lib/mockApi';
+import { addUser, getToken } from '@/lib/mockApi';
 import type { InstallOrder, SkuType } from './types';
 
 /* ── Add / Edit Order ─────────────────────────────────────────────────── */
@@ -64,6 +64,7 @@ export function AddOrderOverlay({ open, ao, setAo, aoSkus, setAoSkus, aoCwp, set
                 <select className="px-2.5 py-2 border border-gray-200 rounded-md text-[13px] w-full box-border outline-none focus:border-blue-400 w-32" value={row.type} onChange={(e) => setSku(i, 'type', e.target.value)}>
                   <option value="flooring">Flooring</option>
                   <option value="wallpaper">Wallpaper</option>
+                  <option value="wallpanel">Wall Panels</option>
                 </select>
               </div>
             ))}
@@ -209,7 +210,7 @@ export function RectOverlay({ order, onClose, reload, toast, attribution }: { or
     if (!newPi.trim()) { setErr('Enter a PI number for the new order.'); return; }
     setBusy(true);
     try {
-      const rectSvc = { rectification_of: o.pi, issue: issue.trim(), flooring: (o.service && o.service.flooring) || [], wallpaper: (o.service && o.service.wallpaper) || [] };
+      const rectSvc = { rectification_of: o.pi, issue: issue.trim(), flooring: (o.service && o.service.flooring) || [], wallpaper: (o.service && o.service.wallpaper) || [], wallpanel: (o.service && o.service.wallpanel) || [] };
       const base = {
         pi: newPi.trim(), po: (o.po || []).join(','), skus: o.skus || [], bm: o.bm, customer_name: o.name, phone: o.phone, addr: o.addr,
         status: 'pending', service: rectSvc, log: [{ t: 'Rectification order for ' + o.pi, d: new Date().toISOString(), by: 'manual', who: attribution }], created_by_email: attribution,
@@ -264,30 +265,68 @@ export function RectOverlay({ order, onClose, reload, toast, attribution }: { or
 }
 
 /* ── Add Staff ────────────────────────────────────────────────────────── */
+/* Site-audit sub-role → the CRM permission slug that routes this person to
+   their own field dashboard (see siteAuditShared's SITE_AUDIT_PERMISSION_TO_ROLE). */
+const CRM_PERMISSION_FOR: Record<string, string> = {
+  site_auditor: 'site_audit.site_auditor',
+  installer: 'site_audit.installer',
+  auditor_installer: 'site_audit.auditor_installer',
+};
+
+/* ONE place to add a field staff member. Writes BOTH sides in a single submit:
+   the Supabase `profiles` row the field PWAs log into (email-keyed, plus the
+   contact number that bridges the two systems), and the CRM/backend
+   UserOrganisation row that lets them sign into this CRM and be picked up by
+   permissions. Previously each had to be created separately in a different
+   screen, with nothing joining them — an installer added here couldn't log
+   into the CRM, and one added under Admin > Users had no field-app login. */
 export function AddStaffOverlay({ open, onClose, reload, toast }: { open: boolean; onClose: () => void; reload: () => Promise<void>; toast: (m: string) => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [roleVal, setRoleVal] = useState('installer_flooring');
+  const [makeCrmUser, setMakeCrmUser] = useState(true);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setName(''); setEmail(''); setRoleVal('installer_flooring'); setErr(''); } }, [open]);
+  useEffect(() => { if (open) { setName(''); setEmail(''); setPhone(''); setRoleVal('installer_flooring'); setMakeCrmUser(true); setErr(''); } }, [open]);
 
   if (!open) return null;
 
   async function submit() {
     setErr('');
-    const nm = name.trim(); const em = email.trim().toLowerCase();
+    const nm = name.trim(); const em = email.trim().toLowerCase(); const ph = phone.trim().replace(/\D/g, '');
     if (!nm) { setErr('Name is required.'); return; }
     if (!em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setErr('Enter a valid email address.'); return; }
+    if (!/^\d{10}$/.test(ph)) { setErr('Phone must be 10 digits — it is what links this person to their CRM login.'); return; }
     const role = roleVal === 'site_auditor' ? 'site_auditor' : roleVal.startsWith('auditor_installer') ? 'auditor_installer' : 'installer';
-    const installer_type = roleVal === 'installer_flooring' || roleVal === 'auditor_installer_flooring' ? 'flooring' : roleVal === 'installer_wallpaper' || roleVal === 'auditor_installer_wallpaper' ? 'wallpaper' : null;
+    const installer_type = roleVal === 'installer_flooring' || roleVal === 'auditor_installer_flooring'
+      ? 'flooring'
+      : roleVal === 'installer_wallpaper' || roleVal === 'auditor_installer_wallpaper'
+        ? 'wallpaper'
+        : roleVal === 'installer_wallpanel' || roleVal === 'auditor_installer_wallpanel'
+          ? 'wallpanel'
+          : null;
     setBusy(true);
     try {
-      await sbPost('profiles', { name: nm, email: em, role, installer_type, passcode: null });
+      await sbPost('profiles', { name: nm, email: em, contact: ph, role, installer_type, passcode: null });
+      // The CRM login is best-effort and reported separately: the field-app
+      // profile is the part that must not be lost, and a duplicate-phone or
+      // permission error on the backend shouldn't roll it back.
+      let crmNote = '';
+      if (makeCrmUser) {
+        try {
+          // `crm.site_audit` grants the tab itself; the `site_audit.*` slug is
+          // only a sub-permission picking which view inside it they land on —
+          // without both they'd sign in to a CRM with no tabs at all.
+          await addUser({ name: nm, phone: ph, role: 'post_sales', individualPermissions: ['crm.site_audit', CRM_PERMISSION_FOR[role]] });
+        } catch (e: any) {
+          crmNote = ' · ⚠ CRM login NOT created (' + (e?.message || 'backend error') + ') — add it under Admin > Users';
+        }
+      }
       await reload();
       onClose();
-      toast('Staff member added — they will set their PIN on first login');
+      toast('Staff member added — they will set their PIN on first login' + crmNote);
     } catch (e: any) {
       setErr('Failed: ' + (e?.message || 'unknown error'));
     }
@@ -301,15 +340,22 @@ export function AddStaffOverlay({ open, onClose, reload, toast }: { open: boolea
         <div className="px-5 py-4 flex flex-col gap-3.5">
           <Field label="Full Name *"><input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} className="px-2.5 py-2 border border-gray-200 rounded-md text-[13px] w-full box-border outline-none focus:border-blue-400" /></Field>
           <Field label="Email *"><input placeholder="name@example.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="px-2.5 py-2 border border-gray-200 rounded-md text-[13px] w-full box-border outline-none focus:border-blue-400" /></Field>
+          <Field label="Phone * (10 digits — links their field app and CRM logins)"><input placeholder="9876543210" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} className="px-2.5 py-2 border border-gray-200 rounded-md text-[13px] w-full box-border outline-none focus:border-blue-400" /></Field>
           <Field label="Role *">
             <select className="px-2.5 py-2 border border-gray-200 rounded-md text-[13px] w-full box-border outline-none focus:border-blue-400" value={roleVal} onChange={(e) => setRoleVal(e.target.value)}>
               <option value="installer_flooring">Flooring Installer</option>
               <option value="installer_wallpaper">Wallpaper Installer</option>
+              <option value="installer_wallpanel">Wall Panel Installer</option>
               <option value="site_auditor">Site Auditor</option>
               <option value="auditor_installer_flooring">Auditor + Flooring Installer</option>
               <option value="auditor_installer_wallpaper">Auditor + Wallpaper Installer</option>
+              <option value="auditor_installer_wallpanel">Auditor + Wall Panel Installer</option>
             </select>
           </Field>
+          <label className="flex items-start gap-2 rounded-md border border-gray-200 px-3 py-2.5 text-[12.5px] text-gray-700">
+            <input type="checkbox" checked={makeCrmUser} onChange={(e) => setMakeCrmUser(e.target.checked)} className="mt-0.5 accent-[#1F3A5F]" />
+            <span>Also create their <b>CRM login</b> so they can sign in here and see their own dashboard. Leave ticked unless they already exist under Admin &gt; Users.</span>
+          </label>
           <div className="rounded-md border-l-4 border-blue-400 bg-blue-50 px-3 py-2.5 text-[12px] text-[#1F3A5F]">Passcode will be set by the staff member on their first login. You will not see their PIN.</div>
           {err ? <div className="bg-red-50 text-red-600 rounded-md px-3 py-2 text-[12.5px] font-semibold">{err}</div> : null}
         </div>

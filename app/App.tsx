@@ -2629,7 +2629,7 @@ export default function App() {
         siteAuditSubRole ? (
           <SiteAuditOwnDashboard contact={currentUser?.phone || ''} permissionRole={siteAuditSubRole} />
         ) : (
-          <SiteAuditRail />
+          <SiteAuditRail user={currentUser ? { name: currentUser.name, phone: currentUser.phone, role: currentUser.role } : null} />
         )
       )}
 

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
 import {
   SignaturePad,
@@ -11,6 +10,24 @@ import {
   ArrivalCameraModal,
   DocScannerModal,
 } from '@/components/site-audit/fieldAppShared';
+import {
+  CATEGORY_LIST,
+  MD_CATEGORIES,
+  categoryFor,
+  typeLabel,
+  type FieldValues,
+} from '@/components/site-audit/auditRegistry';
+import { AuditRoomCard } from '@/components/site-audit/AuditRoomViews';
+import {
+  MD_INK,
+  MD_MUTED,
+  loadBrandLogo,
+  mdBrandGrid,
+  mdInfoTable,
+  mdPdfAuditRoom,
+  mdPdfHeader,
+  mdPdfInstallRoom,
+} from '@/components/site-audit/pdfBrand';
 
 /* Idiomatic React rewrite of material-depot-site's app/src/pages/SiteInstaller.jsx
    (1283 lines, vanilla DOM/innerHTML SPA). Business logic, status flow, validation
@@ -36,16 +53,23 @@ type LogEntry = {
 
 type SkuLine = { code: string; skuName: string; link: string; qty: string };
 
+/* Flat v2 installation room — installed-detail fields come from the category registry's
+   installFields, so a new product category needs no change here. The legacy
+   {qty,height,width} keys are still read (older records) but never written. */
 type PersistedRoom = {
+  v?: number;
+  category?: string;
   name: string;
   sku: string;
-  qty: string;
-  height: string;
-  width: string;
+  fields?: FieldValues;
   photos: string[];
   /** Legacy single-photo field from older persisted records — reads only. */
   photo?: string;
   comments: string;
+  /** Legacy pre-v2 fields — read-only, kept so old job cards still render. */
+  qty?: string;
+  height?: string;
+  width?: string;
 };
 
 type Room = PersistedRoom & { id: number };
@@ -66,7 +90,7 @@ type Job = {
   phone: string;
   addr: string;
   bm: string;
-  type: 'flooring' | 'wallpaper';
+  type: string;
   date: string | null;
   slot: string | null;
   slots: string[];
@@ -164,14 +188,7 @@ const DEFAULT_LOG_MESSAGES: Record<string, string> = {
   completed: 'Installation completed',
 };
 
-const AUDIT_FL_FIELDS: [string, string][] = [
-  ['Area (sq.ft)', 'area'], ['Boxes', 'boxes'], ['Skirting (nos)', 'skirt'], ['Skirting height (mm)', 'skirtH'],
-  ['L-profile', 'lprof'], ['R-profile / Reducer', 'rprof'], ['T-profile', 'tprof'], ['Corner beading', 'corner'],
-];
-const AUDIT_WP_FIELDS: [string, string][] = [
-  ['Wall area (sq.ft)', 'warea'], ['No. of rolls', 'rolls'], ['Pattern repeat (mm)', 'repeat'],
-  ['Match type', 'match'], ['Adhesive (packs)', 'adh'], ['Primer needed', 'primer'],
-];
+/* Legacy audit field dicts removed — superseded by MD_CATEGORIES in auditRegistry.ts. */
 
 function slotLabel(id: string | null, slots: Record<string, { label: string; start: number }>): string {
   if (!id) return '—';
@@ -192,37 +209,55 @@ function slotsLabel(j: Job, slots: Record<string, { label: string; start: number
   return slotLabel(j.slot, slots) || '—';
 }
 
+/* The sub-job's own type picks the room's starting category; an unknown type falls back to
+   flooring (same rule as the field app). */
+function categoryForJob(job: Job | null, restore?: Partial<PersistedRoom>): string {
+  const t = (restore && (restore.category || (restore as any).type)) || job?.type;
+  return t && MD_CATEGORIES[t] ? t : 'flooring';
+}
+
 function appendRoomState(rooms: Room[], seqRef: { current: number }, job: Job | null, restore?: Partial<PersistedRoom>): Room[] {
   const id = ++seqRef.current;
   const firstSku = job?.sku[0];
+  const category = categoryForJob(job, restore);
   const room: Room = restore
     ? {
         id,
+        v: 2,
+        category,
         name: restore.name || '',
         sku: restore.sku || '',
-        qty: restore.qty || '',
-        height: restore.height || '',
-        width: restore.width || '',
+        fields: { ...(restore.fields || {}) },
         photos: restore.photos || (restore.photo ? [restore.photo] : []),
-        comments: restore.comments || '',
+        comments: restore.comments || (restore as any).notes || '',
       }
     : {
         id,
+        v: 2,
+        category,
         name: '',
         sku: firstSku ? firstSku.code : '',
-        qty: firstSku && firstSku.qty ? firstSku.qty : '',
-        height: '',
-        width: '',
+        fields: {},
         photos: [],
         comments: '',
       };
   return [...rooms, room];
 }
 function collectRooms(rooms: Room[]): PersistedRoom[] {
-  return rooms.map(({ id: _id, ...rest }) => rest);
+  return rooms.map(({ id: _id, ...rest }) => ({
+    ...rest,
+    v: 2,
+    category: rest.category || 'flooring',
+    fields: { ...(rest.fields || {}) },
+    photos: rest.photos || [],
+    comments: rest.comments || '',
+  }));
 }
 
-function resizeAndUpload(dataURL: string): Promise<string> {
+/* Downscale only — the upload happens separately so the thumbnail can appear immediately (see
+   handleFilesForRoom). On a weak site connection the old upload-then-show order left workers
+   waiting up to ~20s and re-taking photos they had already captured. */
+function resizeDataUrl(dataURL: string): Promise<string> {
   return new Promise((resolve) => {
     const im = new Image();
     im.onload = () => {
@@ -232,8 +267,7 @@ function resizeAndUpload(dataURL: string): Promise<string> {
         cv.width = Math.round(im.width * s);
         cv.height = Math.round(im.height * s);
         cv.getContext('2d')!.drawImage(im, 0, 0, cv.width, cv.height);
-        const out = cv.toDataURL('image/jpeg', 0.88);
-        uploadPhoto(out).then(resolve).catch(() => resolve(out));
+        resolve(cv.toDataURL('image/jpeg', 0.88));
       } catch {
         resolve(dataURL);
       }
@@ -294,48 +328,33 @@ function renderSketch(r: any): string | null {
 
 /* ── PDF generators (verbatim port of genPDF / genAuditPDF, lines 871-983) ── */
 async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
+  await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
   let y = M;
-  const navy: [number, number, number] = [31, 58, 95], blue: [number, number, number] = [46, 108, 168], muted: [number, number, number] = [90, 100, 120];
+  const navy = MD_INK, muted = MD_MUTED;
   const rooms = job.jobcard?.rooms || [];
+  const isPartial = !!job.jobcard?.draft;
+  const cardTitle = 'Installation Job Card';
   function header() {
-    doc.setFillColor(...navy); doc.rect(M, y, 34, 34, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('MD', M + 9, y + 22);
-    doc.setFontSize(10); doc.setTextColor(...blue); doc.text('MATERIAL DEPOT', M + 44, y + 13); doc.setFontSize(15); doc.setTextColor(...navy); doc.text('Installation Job Card', M + 44, y + 30);
-    y += 46; doc.setDrawColor(...navy); doc.setLineWidth(1.2); doc.line(M, y, W - M, y); y += 14;
+    y = mdPdfHeader(doc, { title: cardTitle, right: job.pi, M });
+    return y;
   }
   header();
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 130, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-    body: [['Proforma Invoice No.', job.pi], ['Client Name', job.name], ['Client Mobile', job.phone], ['Site Address', job.addr], ['BM', job.bm], ['Installer', installerName], ['Type', job.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring'], ['Date', fmtDateA(job.date)]],
-  });
-  y = doc.lastAutoTable.finalY + 10;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rooms installed', M, y + 4); y += 10;
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 8.5 }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
-    head: [['#', 'Room', 'SKU No.', 'Qty', 'H × W']], body: rooms.map((r, i) => [String(i + 1), r.name || '-', r.sku || '-', r.qty || '-', [r.height, r.width].filter(Boolean).join(' × ') || '-']),
-  });
+  y = mdInfoTable(doc, y, [['Proforma Invoice No.', job.pi], ['Client Name', job.name], ['Client Mobile', job.phone], ['Site Address', job.addr], ['BM', job.bm], ['Installer', installerName], ['Type', categoryFor(job.type).pdfLabel], ['Date', fmtDateA(job.date)]], M);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text(isPartial ? 'Rooms installed so far' : 'Rooms installed', M, y + 4); y += 10;
+  doc.autoTable(mdBrandGrid({
+    startY: y, margin: { left: M, right: M }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
+    head: [['#', 'Room', 'Category', 'SKU No.']], body: rooms.map((r, i) => [String(i + 1), r.name || '-', categoryFor(r.category || job.type).pdfLabel, r.sku || 'NA']),
+  }));
 
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
     doc.addPage(); y = M; header();
+    const cat = categoryFor(r.category || job.type);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Room ' + (i + 1) + ': ' + (r.name || '-'), M, y + 2); y += 14;
-    const hwStr = (r.height || r.width) ? (' · H×W: ' + [r.height, r.width].filter(Boolean).join(' × ')) : '';
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text('SKU: ' + (r.sku || '-') + (r.qty ? ' · Qty: ' + r.qty : '') + hwStr, M, y + 10); y += 24;
-    const rPhotos = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
-    const piw = W - 2 * M, pih = piw * 0.6;
-    for (let pi = 0; pi < rPhotos.length; pi++) {
-      const ph = await compressForPdf(rPhotos[pi]);
-      if (!ph) continue;
-      if (y + pih + 20 > H - M) { doc.addPage(); y = M; header(); }
-      doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text(pi === 0 ? 'Photo after installation' : 'Additional photo ' + (pi + 1), M, y);
-      try { doc.addImage(ph, 'JPEG', M, y + 6, piw, pih); } catch { /* skip unrenderable image */ }
-      y += pih + 18;
-    }
-    if (r.comments) {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...navy); doc.text('Comments', M, y); y += 12;
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); doc.text(doc.splitTextToSize(r.comments, W - 2 * M), M, y);
-    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text(cat.pdfLabel + '  ·  SKU: ' + (r.sku || '-'), M, y + 10); y += 24;
+    y = await mdPdfInstallRoom(doc, r, y, { M, W, H, compress: compressForPdf, header: () => mdPdfHeader(doc, { title: cardTitle, right: job.pi, M }) });
   }
 
   doc.addPage(); y = M; header();
@@ -363,54 +382,30 @@ async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
 }
 
 async function genAuditReportPDF(order: { pi: string; name: string; phone: string; addr: string; bm: string; date: string | null }, ticked: any): Promise<void> {
+  await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
   let y = M;
-  const navy: [number, number, number] = [31, 58, 95], blue: [number, number, number] = [46, 108, 168], muted: [number, number, number] = [90, 100, 120];
+  const navy = MD_INK, muted = MD_MUTED;
   const rooms = ticked.rooms || [];
   function header() {
-    doc.setFillColor(...navy); doc.rect(M, y, 34, 34, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('MD', M + 9, y + 22);
-    doc.setFontSize(10); doc.setTextColor(...blue); doc.text('MATERIAL DEPOT', M + 44, y + 13); doc.setFontSize(15); doc.setTextColor(...navy); doc.text('Site Audit Job Card', M + 44, y + 30);
-    y += 46; doc.setDrawColor(...navy); doc.setLineWidth(1.2); doc.line(M, y, W - M, y); y += 14;
+    y = mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M });
+    return y;
   }
   header();
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 130, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-    body: [['Proforma Invoice No.', order.pi], ['Client Name', order.name], ['Client Mobile', order.phone], ['Site Address', order.addr], ['BM', order.bm], ['Auditor', ticked.auditor || '—'], ['Date', fmtDateA(order.date)]],
-  });
-  y = doc.lastAutoTable.finalY + 10;
+  y = mdInfoTable(doc, y, [['Proforma Invoice No.', order.pi], ['Client Name', order.name], ['Client Mobile', order.phone], ['Site Address', order.addr], ['BM', order.bm], ['Auditor', ticked.auditor || '—'], ['Date', fmtDateA(order.date)]], M);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rooms summary', M, y + 4); y += 10;
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 8.5 }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
-    head: [['#', 'Room', 'Type', 'SKU No.']], body: rooms.map((r: any, i: number) => [String(i + 1), r.name || '-', r.type === 'wallpaper' ? 'Wallpaper' : 'Flooring', r.sku || 'NA']),
-  });
+  doc.autoTable(mdBrandGrid({
+    startY: y, margin: { left: M, right: M }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
+    head: [['#', 'Room', 'Type', 'SKU No.']], body: rooms.map((r: any, i: number) => [String(i + 1), r.name || '-', categoryFor(r.category || r.type).pdfLabel, r.sku || 'NA']),
+  }));
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
     doc.addPage(); y = M; header();
-    const fields = r.type === 'wallpaper' ? AUDIT_WP_FIELDS : AUDIT_FL_FIELDS;
+    const cat = categoryFor(r.category || r.type);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Room ' + (i + 1) + ': ' + (r.name || '-'), M, y + 2); y += 14;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text((r.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring') + '  ·  SKU: ' + (r.sku || 'NA'), M, y + 10); y += 24;
-    doc.autoTable({
-      startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 9 }, styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 230, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-      head: [['Calculation', 'Value']], body: fields.map(([label, k]) => [label, (r.calc && r.calc[k]) || '']),
-    });
-    y = doc.lastAutoTable.finalY + 12;
-    const colW = (W - 2 * M - 12) / 2, ih = colW * 0.78;
-    const sketchImg = renderSketch(r);
-    if (sketchImg) { doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text('2D Diagram', M, y); try { doc.addImage(sketchImg, 'JPEG', M, y + 6, colW, ih); } catch { /* skip */ } }
-    const auPhotos = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
-    if (auPhotos.length) { const p0 = await compressForPdf(auPhotos[0]); if (p0) { doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text('Room Photo', M + colW + 12, y); try { doc.addImage(p0, 'JPEG', M + colW + 12, y + 6, colW, ih); } catch { /* skip */ } } }
-    y += ih + 18;
-    for (let ap = 1; ap < auPhotos.length; ap++) {
-      const ph = await compressForPdf(auPhotos[ap]);
-      if (!ph) continue;
-      if (y + colW * 0.78 + 20 > H - M) { doc.addPage(); y = M; header(); }
-      doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text('Room Photo ' + (ap + 1), M, y);
-      const aw = W - 2 * M, ah = aw * 0.6;
-      try { doc.addImage(ph, 'JPEG', M, y + 6, aw, ah); } catch { /* skip */ }
-      y += ah + 18;
-    }
-    if (r.notes) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...navy); doc.text('Notes', M, y); y += 12; doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); doc.text(doc.splitTextToSize(r.notes, W - 2 * M), M, y); }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text(cat.pdfLabel + '  ·  SKU: ' + (r.sku || 'NA'), M, y + 10); y += 24;
+    y = await mdPdfAuditRoom(doc, r, y, { M, W, H, compress: compressForPdf, sketchImg: renderSketch(r), header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }) });
   }
   doc.addPage(); y = M; header();
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
@@ -481,7 +476,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const days = useMemo(() => Array.from({ length: 37 }, (_, i) => addDays(today, i - 30)), []);
   const todayStr = dstr(today);
 
-  const [installerType, setInstallerType] = useState<'flooring' | 'wallpaper'>('flooring');
+  const [installerType, setInstallerType] = useState<string>('flooring');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selDay, setSelDay] = useState(todayStr);
   const [screen, setScreen] = useState<'list' | 'detail'>('list');
@@ -782,7 +777,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     for (const r of rooms) {
       if (!r.name.trim()) return 'Enter a room name';
       if (!r.sku.trim()) return 'Enter the SKU code';
-      if (!r.qty || !r.qty.trim()) return 'Enter the quantity for ' + (r.name || 'each room');
       if (!r.photos || !r.photos.length) return 'Add at least one photo for ' + (r.name || 'each room');
     }
     return null;
@@ -819,7 +813,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           }
         }
         const freshLog: LogEntry[] = Array.isArray(parentRows[0].log) ? [...parentRows[0].log] : [];
-        freshLog.push({ t: (job.type === 'wallpaper' ? 'Wallpaper' : 'Flooring') + ' installation done (additional installer: ' + actingAs.name + ')', d: new Date().toISOString(), by: 'auto' });
+        freshLog.push({ t: typeLabel(job.type) + ' installation done (additional installer: ' + actingAs.name + ')', d: new Date().toISOString(), by: 'auto' });
         const parentStatus = rollupStatus(subjobs, parentRows[0].status || 'completed');
         await sbPatch('install_orders', job.id, { subjobs, status: parentStatus, log: freshLog });
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
@@ -849,7 +843,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     try { sigImg = await uploadPhoto(rawSig); } catch { /* keep raw captured data URL */ }
     const newJobcard: JobCard = { rooms, sign: { img: sigImg, name: signName, ratings: jcRatings } };
     job.jobcard = newJobcard;
-    const newParentLog = [...(job.parentLog || []), { t: (job.type === 'wallpaper' ? 'Wallpaper' : 'Flooring') + ' installation completed', d: new Date().toISOString(), by: 'auto', who: actingAs.name }];
+    const newParentLog = [...(job.parentLog || []), { t: typeLabel(job.type) + ' installation completed', d: new Date().toISOString(), by: 'auto', who: actingAs.name }];
     setFinishBusy(true);
     toast('Saving...');
     try {
@@ -889,7 +883,9 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
       setFinishBusy(false);
       return;
     }
-    await genInstallerPDF(job, actingAs.name);
+    // The job is already saved above — a PDF failure (jsPDF OOM on a low-end phone, a CORS-tainted
+    // image) must never leave the worker stuck on a disabled "Saving…" button thinking it didn't finish.
+    try { await genInstallerPDF(job, actingAs.name); } catch (e) { console.error('PDF:', e); }
     await loadJobs();
     setJobCardOpen(false);
     setScreen('detail');
@@ -899,6 +895,9 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   }, [actingAs.email, actingAs.name, jcRatings, signName, loadJobs, toast]);
 
   /* ── Photo handling for job-card rooms ─────────────────────────────────── */
+  const swapRoomPhoto = useCallback((roomId: number, from: string, to: string) => {
+    updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, photos: r.photos.map((p) => (p === from ? to : p)) } : r)));
+  }, [updateRooms]);
   const addPhotoToRoom = useCallback((roomId: number, url: string) => {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, photos: [...r.photos, url] } : r)));
   }, [updateRooms]);
@@ -911,6 +910,14 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const updateRoomField = useCallback((roomId: number, field: keyof PersistedRoom, value: string) => {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, [field]: value } : r)));
   }, [updateRooms]);
+  // Switching category clears the captured install fields — they belong to the old category's
+  // installFields set (same as the field app).
+  const updateRoomCategory = useCallback((roomId: number, category: string) => {
+    updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, category, fields: {} } : r)));
+  }, [updateRooms]);
+  const updateRoomInstallField = useCallback((roomId: number, k: string, value: string) => {
+    updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, fields: { ...(r.fields || {}), [k]: value } } : r)));
+  }, [updateRooms]);
 
   const handleFilesForRoom = useCallback(async (roomId: number, files: FileList | null) => {
     if (!files || !files.length) return;
@@ -920,10 +927,13 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         rd.onload = () => resolve(rd.result as string);
         rd.readAsDataURL(file);
       });
-      const uploaded = await resizeAndUpload(dataURL);
-      addPhotoToRoom(roomId, uploaded);
+      const resized = await resizeDataUrl(dataURL);
+      addPhotoToRoom(roomId, resized);
+      uploadPhoto(resized)
+        .then((url) => swapRoomPhoto(roomId, resized, url))
+        .catch(() => { /* keep the inline base64 — the draft/job card still carries the photo */ });
     }
-  }, [addPhotoToRoom]);
+  }, [addPhotoToRoom, swapRoomPhoto]);
 
   /* ── Audit report (read-only), source lines 483-514 ───────────────────── */
   const [auditState, setAuditState] = useState<{ loading: boolean; error: 'none' | 'network' | null; ticked: any; auditorName: string | null; date: string | null }>({ loading: true, error: null, ticked: null, auditorName: null, date: null });
@@ -965,8 +975,11 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const sj = (rows[0].subjobs || []).find((s: any) => s.id === job.sjId);
         if (sj && sj.jobcard) jobcard = sj.jobcard;
       }
-      if (jobcard) await genInstallerPDF({ ...job, jobcard }, actingAs.name);
-      else toast('Job card not available');
+      if (!jobcard) toast('Job card not available');
+      else {
+        try { await genInstallerPDF({ ...job, jobcard }, actingAs.name); }
+        catch (e) { console.error('PDF:', e); toast('PDF generation failed — try again'); }
+      }
     } finally {
       setPdfBusy(false);
     }
@@ -996,7 +1009,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-black">My Installations</h1>
-          <p className="text-[13px] text-gray-500">{actingAs.name} · {installerType === 'wallpaper' ? 'Wallpaper' : 'Flooring'} Installer</p>
+          <p className="text-[13px] text-gray-500">{actingAs.name} · {typeLabel(installerType)} Installer</p>
         </div>
       </div>
 
@@ -1074,6 +1087,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           onAddRoom={handleAddRoom}
           onRemoveRoom={removeRoom}
           onRoomField={updateRoomField}
+          onRoomCategory={updateRoomCategory}
+          onRoomInstallField={updateRoomInstallField}
           onRoomFiles={handleFilesForRoom}
           onRoomRemovePhoto={removePhotoFromRoom}
           onOpenScanner={(roomId) => setScanTargetRoomId(roomId)}
@@ -1235,8 +1250,8 @@ function JobCardTile({ job, slots, variant, onClick }: { job: Job; slots: Record
       <div className="mt-1 text-sm font-bold text-black">{job.name}</div>
       <div className="text-[12px] text-gray-500">{job.addr}</div>
       <div className="mt-2 flex items-center justify-between">
-        <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${job.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700'}`}>
-          {job.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring'}
+        <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${job.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : job.type === 'wallpanel' ? 'bg-teal-100 text-teal-700' : 'bg-yellow-100 text-yellow-800'}`}>
+          {categoryFor(job.type).pdfLabel}
         </span>
         <StatusPill status={job.status} />
       </div>
@@ -1386,7 +1401,7 @@ function JobDetailScreen({
                   </div>
                 ))}
               </div>
-              <div className="text-gray-400">Type</div><div>{job.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring'}</div>
+              <div className="text-gray-400">Type</div><div>{categoryFor(job.type).pdfLabel}</div>
               <div className="text-gray-400">Your role</div>
               <div>{job.isPrimary ? <span className="rounded-md bg-yellow-50 px-2.5 py-0.5 font-bold text-amber-800">★ Primary installer</span> : <span className="text-gray-500">Additional installer</span>}</div>
               <div className="text-gray-400">Your BM</div><div>{job.bm}</div>
@@ -1440,26 +1455,11 @@ function AuditReportOverlay({
                   <div className="text-gray-400">Rooms audited</div><div>{rooms.length}</div>
                 </div>
               </div>
-              {rooms.map((r: any, i: number) => {
-                const fields = r.type === 'wallpaper' ? AUDIT_WP_FIELDS : AUDIT_FL_FIELDS;
-                const calc = fields.filter(([, k]) => r.calc && r.calc[k]);
-                return (
-                  <div key={i} className="mb-3 rounded-lg border border-gray-200 p-4">
-                    <div className="text-sm font-bold text-gray-900">Room {i + 1}: {r.name || '—'}</div>
-                    {calc.length ? (
-                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
-                        {calc.map(([label, k]) => (
-                          <div key={k}>
-                            <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
-                            <div className="text-[13px] text-gray-900">{r.calc[k]}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <div className="mt-1 text-[13px] text-gray-400">No measurements recorded.</div>}
-                    {r.notes && <div className="mt-2 text-[13px] text-gray-500">{r.notes}</div>}
-                  </div>
-                );
-              })}
+              {/* Shared renderer — v2 segment audits (walls, prerequisites, per-segment photos) and
+                  legacy single-block audits display identically here and in the SM dashboard. */}
+              {rooms.map((r: any, i: number) => (
+                <AuditRoomCard key={i} room={r} index={i} />
+              ))}
               <button onClick={onDownload} className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Download Audit PDF</button>
             </>
           )}
@@ -1471,11 +1471,13 @@ function AuditReportOverlay({
 
 /* ── Job card wizard overlay ────────────────────────────────────────────── */
 function RoomBlock({
-  room, index, onField, onFiles, onOpenScanner, onRemovePhoto, onRemove, onOpenLightbox,
+  room, index, onField, onCategory, onInstallField, onFiles, onOpenScanner, onRemovePhoto, onRemove, onOpenLightbox,
 }: {
   room: Room;
   index: number;
   onField: (field: keyof PersistedRoom, value: string) => void;
+  onCategory: (category: string) => void;
+  onInstallField: (k: string, value: string) => void;
   onFiles: (files: FileList | null) => void;
   onOpenScanner: () => void;
   onRemovePhoto: (idx: number) => void;
@@ -1484,6 +1486,7 @@ function RoomBlock({
 }) {
   const camRef = useRef<HTMLInputElement | null>(null);
   const galRef = useRef<HTMLInputElement | null>(null);
+  const cat = categoryFor(room.category);
   return (
     <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -1491,25 +1494,36 @@ function RoomBlock({
         <button onClick={onRemove} className="text-xs font-semibold text-red-600 hover:underline">Remove</button>
       </div>
 
+      <label className="mb-1 block text-[12px] font-semibold">Product category</label>
+      <select
+        value={room.category || 'flooring'}
+        onChange={(e) => onCategory(e.target.value)}
+        className="mb-3 w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400"
+      >
+        {CATEGORY_LIST.map((c) => (
+          <option key={c.id} value={c.id}>{c.label}</option>
+        ))}
+      </select>
+
       <label className="mb-1 block text-[12px] font-semibold">Room name <span className="text-red-600">★</span></label>
       <input value={room.name} onChange={(e) => onField('name', e.target.value)} placeholder="e.g. Living Room" className="mb-3 w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
 
       <label className="mb-1 block text-[12px] font-semibold">SKU Code <span className="text-red-600">★</span></label>
       <input value={room.sku} onChange={(e) => onField('sku', e.target.value)} placeholder="e.g. SKU code" className="mb-3 w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
 
-      <label className="mb-1 block text-[12px] font-semibold">Quantity <span className="text-red-600">★</span></label>
-      <input value={room.qty} onChange={(e) => onField('qty', e.target.value)} placeholder="e.g. 12 boxes / 20 sq.ft / 5 rolls" className="mb-3 w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
-
-      <div className="mb-3 flex gap-3">
-        <div className="flex-1">
-          <label className="mb-1 block text-[12px] font-semibold">Height</label>
-          <input value={room.height} onChange={(e) => onField('height', e.target.value)} placeholder="e.g. 10 ft" className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
+      {/* Installed-detail fields come from the category registry — a new product category adapts
+          automatically, no change needed here. */}
+      {(cat.installFields || []).map((f) => (
+        <div key={f.k}>
+          <label className="mb-1 block text-[12px] font-semibold">{f.label}</label>
+          <input
+            inputMode={f.input === 'decimal' ? 'decimal' : undefined}
+            value={String(room.fields?.[f.k] ?? '')}
+            onChange={(e) => onInstallField(f.k, e.target.value)}
+            className="mb-3 w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400"
+          />
         </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-[12px] font-semibold">Width</label>
-          <input value={room.width} onChange={(e) => onField('width', e.target.value)} placeholder="e.g. 12 ft" className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
-        </div>
-      </div>
+      ))}
 
       <label className="mb-1 block text-[12px] font-semibold">Photos after installation <span className="text-red-600">★</span></label>
       <div className="mb-2 flex flex-wrap gap-2">
@@ -1537,7 +1551,7 @@ function RoomBlock({
 
 function JobCardWizardOverlay({
   job, installerName, rooms, stage, ratings, signName, saveStatus, finishBusy, signPadRef,
-  onBack, onAddRoom, onRemoveRoom, onRoomField, onRoomFiles, onRoomRemovePhoto, onOpenScanner, onOpenLightbox,
+  onBack, onAddRoom, onRemoveRoom, onRoomField, onRoomCategory, onRoomInstallField, onRoomFiles, onRoomRemovePhoto, onOpenScanner, onOpenLightbox,
   onFinishCard, onBackToRooms, onProceed, onBackFromHandoff, onClientReady, onTcsBack, onTcsProceed,
   onRatingsChange, onRatingsBack, onRatingsNext, onSignBack, onSignNameChange, onFinishInstallation,
 }: {
@@ -1554,6 +1568,8 @@ function JobCardWizardOverlay({
   onAddRoom: () => void;
   onRemoveRoom: (id: number) => void;
   onRoomField: (id: number, field: keyof PersistedRoom, value: string) => void;
+  onRoomCategory: (id: number, category: string) => void;
+  onRoomInstallField: (id: number, k: string, value: string) => void;
   onRoomFiles: (id: number, files: FileList | null) => void;
   onRoomRemovePhoto: (id: number, idx: number) => void;
   onOpenScanner: (id: number) => void;
@@ -1600,6 +1616,8 @@ function JobCardWizardOverlay({
                   room={r}
                   index={i}
                   onField={(field, value) => onRoomField(r.id, field, value)}
+                  onCategory={(category) => onRoomCategory(r.id, category)}
+                  onInstallField={(k, value) => onRoomInstallField(r.id, k, value)}
                   onFiles={(files) => onRoomFiles(r.id, files)}
                   onOpenScanner={() => onOpenScanner(r.id)}
                   onRemovePhoto={(idx) => onRoomRemovePhoto(r.id, idx)}
@@ -1628,10 +1646,16 @@ function JobCardWizardOverlay({
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="rounded-md bg-[#1F3A5F] px-2.5 py-0.5 text-[12px] font-bold text-white">Room {i + 1}</span>
                     <b className="text-[15px]">{r.name}</b>
+                    <span className="rounded-md bg-yellow-100 px-2 py-0.5 text-[11px] font-bold text-yellow-800">{categoryFor(r.category).pdfLabel}</span>
                     {r.sku && <span className="text-[12px] text-gray-400">SKU: {r.sku}</span>}
-                    {r.qty && <span className="text-[12px] text-gray-400">Qty: {r.qty}</span>}
-                    {(r.height || r.width) && <span className="text-[12px] text-gray-400">{[r.height && 'H: ' + r.height, r.width && 'W: ' + r.width].filter(Boolean).join(' · ')}</span>}
                   </div>
+                  {(categoryFor(r.category).installFields || [])
+                    .filter((f) => String(r.fields?.[f.k] ?? '') !== '')
+                    .map((f) => (
+                      <div key={f.k} className="text-[12px] text-gray-500">
+                        {f.label}: <span className="text-gray-900">{String(r.fields?.[f.k])}</span>
+                      </div>
+                    ))}
                   {r.photos.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-2">
                       {r.photos.map((p, pi) => (

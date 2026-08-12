@@ -2,20 +2,32 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import { sbGet, JOB_STATUS, fmtDateA, fmtLog } from './siteAuditShared';
+import {
+  inCity, joinShadowers, parseShadowers, sbGet, sbPatch, JOB_STATUS, fmtDateA, fmtLog,
+  type CityFilter, type Shadower,
+} from './siteAuditShared';
+import ShadowerSelect, { type ShadowerOption } from './install-ops/ShadowerSelect';
+import { categoryFor } from './auditRegistry';
+import { AuditRoomCard, InstallRoomCard } from './AuditRoomViews';
+import {
+  MD_INK,
+  MD_MUTED,
+  loadBrandLogo,
+  mdBrandGrid,
+  mdInfoTable,
+  mdPdfHeader,
+  mdPdfInstallRoom,
+} from './pdfBrand';
+/* The audit job-card PDF lives with Audit Ops now — both views build the same document. */
+import { compressForPdf, genAuditPDF } from './audit-ops/pdf';
 
 /* Read-only port of JobsView + JobDetailModal from material-depot-site's
    Admin.jsx (app/src/pages/Admin.jsx lines 787-1063). No writes — the only
    "action" here is client-side PDF generation (genAuditPDF/genInstallPDF),
    ported verbatim from the same file (lines 95-200). */
 
-/* ---- job card field defs (verbatim, lines 74-80) ---- */
-const AUDIT_FL_FIELDS: [string, string][] = [['Area (sq.ft)', 'area'], ['Boxes', 'boxes'], ['Skirting (nos)', 'skirt'], ['Skirting height (mm)', 'skirtH'], ['L-profile', 'lprof'], ['R-profile / Reducer', 'rprof'], ['T-profile', 'tprof'], ['Corner beading', 'corner']];
-const AUDIT_WP_FIELDS: [string, string][] = [['Wall area (sq.ft)', 'warea'], ['No. of rolls', 'rolls'], ['Pattern repeat (mm)', 'repeat'], ['Match type', 'match'], ['Adhesive (packs)', 'adh'], ['Primer', 'primer']];
-const FLOOR_FIELDS_A = [{ k: 'area', label: 'Area (sq.ft)' }, { k: 'boxes', label: 'Boxes' }, { k: 'skirt', label: 'Skirting (nos)' }, { k: 'skirtH', label: 'Skirting height (mm)' }, { k: 'lprof', label: 'L-profile (nos)' }, { k: 'rprof', label: 'R-profile / Reducer (nos)' }, { k: 'tprof', label: 'T-profile (nos)' }, { k: 'corner', label: 'Corner beading (nos)' }];
-const WALL_FIELDS_A = [{ k: 'warea', label: 'Wall area (sq.ft)' }, { k: 'rolls', label: 'No. of rolls' }, { k: 'repeat', label: 'Pattern repeat (mm)' }, { k: 'match', label: 'Match type' }, { k: 'adh', label: 'Adhesive (packs)' }, { k: 'primer', label: 'Primer needed' }];
-function fieldsForA(t: string) { return t === 'wallpaper' ? WALL_FIELDS_A : FLOOR_FIELDS_A; }
+/* Legacy audit field dicts removed — superseded by MD_CATEGORIES in auditRegistry.ts, which drives
+   both the on-screen room cards and the PDF bodies (v2 segment audits + legacy rooms). */
 
 const STATUS_BADGE_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600',
@@ -37,130 +49,27 @@ function JobChip({ s }: { s: string }) {
   return <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${color}`}>{st.l}</span>;
 }
 
-/* ---- sketch/photo helpers for PDF generation (verbatim, lines 81-93) ---- */
-function renderSketchA(r: any): string | null {
-  if (!r.sketchStrokes || !r.sketchStrokes.length) return null;
-  const W = 1000, H = 500;
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d');
-  if (!x) return null;
-  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
-  const s = Math.round(22 * (W / 360)); x.fillStyle = '#b2b8c1';
-  for (let yy = s; yy < H; yy += s) for (let xx = s; xx < W; xx += s) { x.beginPath(); x.arc(xx, yy, 2, 0, 7); x.fill(); }
-  x.strokeStyle = '#1F3A5F'; x.lineWidth = 3.2; x.lineJoin = 'round'; x.lineCap = 'round';
-  for (const st of r.sketchStrokes) {
-    if (st.length < 1) continue;
-    x.beginPath();
-    st.forEach((p: any, i: number) => { const X = p.x * W, Y = p.y * H; i ? x.lineTo(X, Y) : x.moveTo(X, Y); });
-    x.stroke();
-  }
-  return c.toDataURL('image/jpeg', 0.85);
-}
-async function _compressAdmin(dataUrl: string | null | undefined): Promise<string | null> {
-  if (!dataUrl) return null;
-  return new Promise((res) => {
-    const im = new Image();
-    if (dataUrl.startsWith('http')) im.crossOrigin = 'anonymous';
-    im.onload = () => {
-      try {
-        const s = Math.min(1, 1600 / Math.max(im.width, im.height));
-        const w = Math.round(im.width * s), h = Math.round(im.height * s);
-        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-        cv.getContext('2d')!.drawImage(im, 0, 0, w, h);
-        res(cv.toDataURL('image/jpeg', 0.88));
-      } catch (e) { res(null); }
-    };
-    im.onerror = () => res(null);
-    im.src = dataUrl;
-  });
-}
-
-/* ---- PDF generators (verbatim, lines 95-200) ---- */
-async function genAuditPDF(order: any, ticked: any) {
-  const doc: any = new jsPDF('p', 'pt', 'a4');
-  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40; let y = M;
-  const navy: [number, number, number] = [31, 58, 95], blue: [number, number, number] = [46, 108, 168], muted: [number, number, number] = [90, 100, 120];
-  const rooms = ticked.rooms || [];
-  function header() {
-    doc.setFillColor(...navy); doc.rect(M, y, 34, 34, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('MD', M + 9, y + 22);
-    doc.setFontSize(10); doc.setTextColor(...blue); doc.text('MATERIAL DEPOT', M + 44, y + 13); doc.setFontSize(15); doc.setTextColor(...navy); doc.text('Site Audit Job Card', M + 44, y + 30); y += 46; doc.setDrawColor(...navy); doc.setLineWidth(1.2); doc.line(M, y, W - M, y); y += 14;
-  }
-  header();
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 130, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-    body: [['Proforma Invoice No.', order.pi || ''], ['Client Name', order.customer_name || ''], ['Client Mobile', order.phone || ''], ['Site Address', order.addr || ''], ['BM', order.bm || ''], ['Auditor', ticked.auditor || '—'], ['Date', fmtDateA(order.date)]],
-  });
-  y = doc.lastAutoTable.finalY + 10;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rooms summary', M, y + 4); y += 10;
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 8.5 }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
-    head: [['#', 'Room', 'Type', 'SKU No.']], body: rooms.map((r: any, i: number) => [String(i + 1), r.name || '-', r.type === 'wallpaper' ? 'Wallpaper' : 'Flooring', r.sku || 'NA']),
-  });
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i];
-    doc.addPage(); y = M; header();
-    const fields = fieldsForA(r.type);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Room ' + (i + 1) + ': ' + (r.name || '-'), M, y + 2); y += 14;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text((r.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring') + '  ·  SKU: ' + (r.sku || 'NA'), M, y + 10); y += 24;
-    doc.autoTable({
-      startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 9 }, styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 230, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-      head: [['Calculation', 'Value']], body: fields.map((f) => [f.label, (r.calc && r.calc[f.k]) || '']),
-    });
-    y = doc.lastAutoTable.finalY + 12; const colW = (W - 2 * M - 12) / 2; const ih = colW * 0.78;
-    const sketchImg = renderSketchA(r);
-    if (sketchImg) { doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text('2D Diagram', M, y); try { doc.addImage(sketchImg, 'JPEG', M, y + 6, colW, ih); } catch (e) { } }
-    const rPhotosA = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
-    if (rPhotosA.length) { const p0 = await _compressAdmin(rPhotosA[0]); if (p0) { doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text('Room Photo', M + colW + 12, y); try { doc.addImage(p0, 'JPEG', M + colW + 12, y + 6, colW, ih); } catch (e) { } } }
-    y += ih + 18;
-    for (let ap = 1; ap < rPhotosA.length; ap++) { const xp = await _compressAdmin(rPhotosA[ap]); if (!xp) continue; if (y + colW * 0.78 + 20 > H - M) { doc.addPage(); y = M; header(); } doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text('Room Photo ' + (ap + 1), M, y); const aw = W - 2 * M, ah = aw * 0.6; try { doc.addImage(xp, 'JPEG', M, y + 6, aw, ah); } catch (e) { } y += ah + 18; }
-    if (r.notes) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...navy); doc.text('Notes', M, y); y += 12; doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); const ls = doc.splitTextToSize(r.notes, W - 2 * M); doc.text(ls, M, y); }
-  }
-  doc.addPage(); y = M; header();
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
-  doc.text(doc.splitTextToSize('I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided.', W - 2 * M), M, y); y += 58;
-  const RA = ticked.sign && ticked.sign.ratings;
-  if (RA) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...navy); doc.text('Client Feedback', M, y); y += 12;
-    doc.autoTable({
-      startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 4 }, columnStyles: { 0: { cellWidth: 260, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-      body: [['Overall Site Audit experience', String(RA.q1 || '—') + ' / 10'], ['Site Auditor behaviour', String(RA.q2 || '—') + ' / 10'], ['Site cleanliness after audit', String(RA.q3 || '—') + ' / 10'], ...(RA.comments ? [['Comments', RA.comments]] : [])].filter(Boolean),
-    });
-    y = doc.lastAutoTable.finalY + 10;
-  }
-  doc.setFontSize(10); doc.setTextColor(...muted);
-  doc.text('Client name: ' + ((ticked.sign && ticked.sign.name) || order.customer_name || ''), M, y); y += 18;
-  doc.text('Date: ' + fmtDateA(order.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (ticked.sign && ticked.sign.img) { const si = await _compressAdmin(ticked.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch (e) { } }
-  doc.setDrawColor(...muted); doc.setLineWidth(.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
-  doc.save(('SiteAudit_' + (order.customer_name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
-}
-
 async function genInstallPDF(order: any, sj: any, jobcard: any, installerName: string) {
+  await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40; let y = M;
-  const navy: [number, number, number] = [31, 58, 95], blue: [number, number, number] = [46, 108, 168], muted: [number, number, number] = [90, 100, 120];
+  const navy = MD_INK, muted = MD_MUTED;
   const rooms = jobcard.rooms || [];
-  function header() { doc.setFillColor(...navy); doc.rect(M, y, 34, 34, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('MD', M + 9, y + 22); doc.setFontSize(10); doc.setTextColor(...blue); doc.text('MATERIAL DEPOT', M + 44, y + 13); doc.setFontSize(15); doc.setTextColor(...navy); doc.text('Installation Job Card', M + 44, y + 30); y += 46; doc.setDrawColor(...navy); doc.setLineWidth(1.2); doc.line(M, y, W - M, y); y += 14; }
+  function header() {
+    y = mdPdfHeader(doc, { title: 'Installation Job Card', right: order.pi, M });
+    return y;
+  }
   header();
-  doc.autoTable({
-    startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] }, columnStyles: { 0: { cellWidth: 130, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-    body: [['Proforma Invoice No.', order.pi || ''], ['Client Name', order.customer_name || ''], ['Client Mobile', order.phone || ''], ['Site Address', order.addr || ''], ['BM', order.bm || ''], ['Installer', installerName || '—'], ['Type', sj.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring'], ['Date', fmtDateA(sj.date)]],
-  });
-  y = doc.lastAutoTable.finalY + 10;
+  y = mdInfoTable(doc, y, [['Proforma Invoice No.', order.pi || ''], ['Client Name', order.customer_name || ''], ['Client Mobile', order.phone || ''], ['Site Address', order.addr || ''], ['BM', order.bm || ''], ['Installer', installerName || '—'], ['Type', categoryFor(sj.type).pdfLabel], ['Date', fmtDateA(sj.date)]], M);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rooms installed', M, y + 4); y += 10;
-  doc.autoTable({ startY: y, margin: { left: M, right: M }, theme: 'grid', headStyles: { fillColor: navy, fontSize: 8.5 }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] }, head: [['#', 'Room', 'SKU No.']], body: rooms.map((r: any, i: number) => [String(i + 1), r.name || '-', r.sku || '-']) });
+  doc.autoTable(mdBrandGrid({ startY: y, margin: { left: M, right: M }, styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] }, head: [['#', 'Room', 'Category', 'SKU No.']], body: rooms.map((r: any, i: number) => [String(i + 1), r.name || '-', categoryFor(r.category || sj.type).pdfLabel, r.sku || '-']) }));
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
     doc.addPage(); y = M; header();
+    const cat = categoryFor(r.category || sj.type);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Room ' + (i + 1) + ': ' + (r.name || '-'), M, y + 2); y += 14;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text('SKU: ' + (r.sku || '-'), M, y + 10); y += 24;
-    const rPhotosI = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
-    const aiw = W - 2 * M, aih = aiw * 0.6;
-    for (let ip = 0; ip < rPhotosI.length; ip++) { const ph = await _compressAdmin(rPhotosI[ip]); if (!ph) continue; if (y + aih + 20 > H - M) { doc.addPage(); y = M; header(); } doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text(ip === 0 ? 'Photo after installation' : 'Additional photo ' + (ip + 1), M, y); try { doc.addImage(ph, 'JPEG', M, y + 6, aiw, aih); } catch (e) { } y += aih + 18; }
-    if (r.comments) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...navy); doc.text('Comments', M, y); y += 12; doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); doc.text(doc.splitTextToSize(r.comments, W - 2 * M), M, y); }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted); doc.text(cat.pdfLabel + '  ·  SKU: ' + (r.sku || '-'), M, y + 10); y += 24;
+    y = await mdPdfInstallRoom(doc, r, y, { M, W, H, compress: compressForPdf, header: () => mdPdfHeader(doc, { title: 'Installation Job Card', right: order.pi, M }) });
   }
   doc.addPage(); y = M; header();
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
@@ -177,26 +86,12 @@ async function genInstallPDF(order: any, sj: any, jobcard: any, installerName: s
   }
   doc.setFontSize(10); doc.setTextColor(...muted); doc.text('Client name: ' + ((jobcard.sign && jobcard.sign.name) || order.customer_name || ''), M, y); y += 18; doc.text('Date: ' + fmtDateA(sj.date), M, y);
   const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (jobcard.sign && jobcard.sign.img) { const si = await _compressAdmin(jobcard.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch (e) { } }
+  if (jobcard.sign && jobcard.sign.img) { const si = await compressForPdf(jobcard.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch (e) { } }
   doc.setDrawColor(...muted); doc.setLineWidth(.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
   doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
   doc.save(('Installation_' + (order.customer_name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }
 
-/* ---- Job Detail Modal sub-components (verbatim, lines 915-945) ---- */
-function JdRoomCardAudit({ r, i }: { r: any; i: number }) {
-  const fields = r.type === 'wallpaper' ? AUDIT_WP_FIELDS : AUDIT_FL_FIELDS;
-  const meas = fields.filter(([, k]) => r.calc && r.calc[k]);
-  const photos = (r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []));
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 mb-3">
-      <div className="text-[13px] font-bold text-gray-900">Room {i + 1}: {r.name || '—'} · {r.type === 'wallpaper' ? 'Wallpaper' : 'Flooring'} · SKU: {r.sku || 'NA'}</div>
-      {meas.length ? <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">{meas.map(([l, k]) => <div key={k}><div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{l}</div><div className="text-[13px] text-gray-900">{r.calc[k]}</div></div>)}</div> : null}
-      {photos.length ? <div className="mt-2 flex flex-wrap gap-2">{photos.slice(0, 4).map((p: string, pi: number) => <img key={pi} src={p} className="w-20 object-cover rounded-md cursor-pointer" style={{ height: 60 }} onClick={(e) => window.open((e.target as HTMLImageElement).src)} />)}</div> : null}
-      {r.notes ? <div className="text-xs text-gray-400 mt-2">Notes: {r.notes}</div> : null}
-    </div>
-  );
-}
 
 function JdLog({ log }: { log: any[] }) {
   return (
@@ -260,7 +155,7 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
     const hasSign = at && at.sign && at.sign.img;
     const isDraft = at && !Array.isArray(at) && at.draft && !hasSign;
     const hasCard = rooms.length || hasSign;
-    const roomsEls = rooms.map((r: any, i: number) => <JdRoomCardAudit key={i} r={r} i={i} />);
+    const roomsEls = rooms.map((r: any, i: number) => <AuditRoomCard key={i} room={r} index={i} />);
     const signEl = hasSign ? <div className="text-[13px] mt-1.5">Signed by <b>{at.sign.name || '—'}</b>{at.sign.ratings ? <>{` · ⭐ ${at.sign.ratings.q1}/10 · 👤 ${at.sign.ratings.q2}/10 · 🧹 ${at.sign.ratings.q3 || '—'}/10`}</> : null}</div> : null;
     let jcSection;
     if (isDraft) jcSection = <div className="mt-4"><div className="text-xs font-bold uppercase tracking-wider text-yellow-700 mb-3 pb-2 border-b border-gray-100">⚠️ Job Card Draft — {rooms.length} room{rooms.length !== 1 ? 's' : ''} recorded, client sign-off not yet completed</div>{roomsEls}</div>;
@@ -276,6 +171,7 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
           <div className="flex text-[13px]"><span className="w-28 shrink-0 text-gray-400">Date / Slot</span><span>{fdt(o.date)} · {o.slot || '—'}</span></div>
           <div className="flex text-[13px]"><span className="w-28 shrink-0 text-gray-400">Auditor</span><span>{o.auditor_name || '—'}</span></div>
         </div>
+        <div className="px-6"><AuditShadowers order={o} /></div>
         <div className="px-6">{jcSection}</div>
         <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
           {hasCard ? <button className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:opacity-90" onClick={() => genAuditPDF(o, at)}>{isDraft ? '📥 Download Draft PDF (missing signature)' : '📥 Download Job Card PDF'}</button> : null}
@@ -303,7 +199,7 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
           const hasCard = rooms.length || hasSign;
           const asgns = sj.assignments && sj.assignments.length ? sj.assignments : (sj.installer_email ? [{ installer_email: sj.installer_email, installer_name: '—' }] : []);
           const names = asgns.map((a: any) => a.installer_name || a.installer_email || '—').join(', ');
-          const typeLabel = sj.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring';
+          const typeLabel = categoryFor(sj.type).pdfLabel;
           const signEl = hasSign ? <div className="text-[13px] mt-1.5">Signed by <b>{jc.sign.name || '—'}</b>{jc.sign.ratings ? <>{` · ⭐ ${jc.sign.ratings.q1}/10 · 👤 ${jc.sign.ratings.q2}/10 · 🧹 ${jc.sign.ratings.q3 || '—'}/10`}</> : null}</div> : null;
           function dl() {
             const a2 = sj.assignments && sj.assignments.length ? sj.assignments : [];
@@ -315,18 +211,12 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
             <div className="px-6 py-4 border-t border-gray-100" key={si}>
               <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100 flex items-center gap-2">{typeLabel} · <JobChip s={sj.status} /></div>
               <div className="flex text-[13px]"><span className="w-28 shrink-0 text-gray-400">Installer(s)</span><span>{names}</span></div>
+              {parseShadowers(sj.shadower_email, sj.shadower_name).length ? (
+                <div className="flex text-[13px]"><span className="w-28 shrink-0 text-gray-400">Shadowed by</span><span className="text-purple-700 font-semibold">👁 {parseShadowers(sj.shadower_email, sj.shadower_name).map((x) => x.name).join(', ')}</span></div>
+              ) : null}
               {rooms.length
                 ? <div className="mt-2.5">
-                    {rooms.map((r: any, i: number) => {
-                      const photos = (r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []));
-                      return (
-                        <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 mb-3" key={i}>
-                          <div className="text-[13px] font-bold text-gray-900">Room {i + 1}: {r.name || '—'}{r.sku ? ` · SKU: ${r.sku}` : ''}{r.qty ? ` · ${r.qty}` : ''}</div>
-                          {photos.length ? <div className="mt-2 flex flex-wrap gap-2">{photos.slice(0, 4).map((p: string, pi: number) => <img key={pi} src={p} className="w-20 object-cover rounded-md cursor-pointer" style={{ height: 60 }} onClick={(e) => window.open((e.target as HTMLImageElement).src)} />)}</div> : null}
-                          {r.comments ? <div className="text-xs text-gray-400 mt-1">{r.comments}</div> : null}
-                        </div>
-                      );
-                    })}
+                    {rooms.map((r: any, i: number) => <InstallRoomCard key={i} room={r} index={i} />)}
                     {signEl}
                   </div>
                 : (!hasCard ? <div className="text-xs text-gray-400 mt-2">No job card data yet.</div> : <div className="text-xs text-yellow-700 mt-2">⚠️ Job card draft — not yet completed</div>)}
@@ -337,6 +227,56 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
       <div className="flex gap-2 px-6 py-4 border-t border-gray-100">{closeBtn}</div>
       {o.log && o.log.length ? <div className="px-6 pb-5"><div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">Activity</div><div>{<JdLog log={o.log} />}</div></div> : null}
     </>
+  );
+}
+
+/* Audit-side "Shadowed by" — the only writable control in this otherwise
+   read-only view. Installation shadowers are assigned in Install Ops (next to
+   the installer assignment they belong to); audits have no assignment surface
+   in this CRM, so they're edited here. Multiple shadowers of any role are
+   allowed; they persist comma-joined on audit_orders. */
+function AuditShadowers({ order: o }: { order: any }) {
+  const [pool, setPool] = useState<ShadowerOption[]>([]);
+  const [value, setValue] = useState<Shadower[]>(() => parseShadowers(o.shadower_email, o.shadower_name));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name').then((rows) => {
+      if (alive && Array.isArray(rows)) setPool(rows.map((r: any) => ({ name: r.name, email: r.email, role: r.role })));
+    });
+    return () => { alive = false; };
+  }, []);
+
+  async function save() {
+    setBusy(true); setMsg('');
+    try {
+      const prev = parseShadowers(o.shadower_email, o.shadower_name);
+      const joined = joinShadowers(value);
+      const prevSet = new Set(prev.map((s) => s.email)), nextSet = new Set(value.map((s) => s.email));
+      const added = value.filter((s) => !prevSet.has(s.email)), removed = prev.filter((s) => !nextSet.has(s.email));
+      const now = new Date().toISOString();
+      const log = [...(o.log || [])];
+      if (added.length) log.push({ t: 'Shadower(s) assigned: ' + added.map((s) => s.name).join(', ') + ' (observing this audit)', d: now, by: 'manual', who: 'Service Manager (CRM)' });
+      if (removed.length) log.push({ t: 'Shadower(s) removed: ' + removed.map((s) => s.name).join(', '), d: now, by: 'manual', who: 'Service Manager (CRM)' });
+      await sbPatch('audit_orders', String(o.id), { shadower_email: joined.email, shadower_name: joined.name, log });
+      o.shadower_email = joined.email; o.shadower_name = joined.name; o.log = log;
+      setMsg('Shadowers saved');
+    } catch (e: any) {
+      setMsg('Save failed — ' + (e?.message || 'try again'));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-gray-200 p-3">
+      <ShadowerSelect options={pool} value={value} onChange={setValue} label="Shadowed by (optional) — anyone observing this audit" />
+      <div className="mt-2 flex items-center gap-2">
+        <button disabled={busy} onClick={save} className="rounded-md bg-[#1F3A5F] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60">{busy ? 'Saving…' : 'Save shadowers'}</button>
+        {msg ? <span className="text-[11.5px] text-gray-500">{msg}</span> : null}
+      </div>
+    </div>
   );
 }
 
@@ -354,7 +294,7 @@ type Job = {
 
 const FILTER_KEYS = ['all', 'audit', 'install', 'pending', 'assigned', 'scheduled', 'onway', 'atsite', 'completed', 'reschedule'];
 
-export default function SiteAuditJobsView() {
+export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter } = {}) {
   const [loading, setLoading] = useState(true);
   const [realJobs, setRealJobs] = useState<Job[]>([]);
   const [jobsFilter, setJobsFilter] = useState('all');
@@ -367,15 +307,16 @@ export default function SiteAuditJobsView() {
     const nameMap: Record<string, string> = {};
     async function load() {
       const [auditRes, installRes, profileRes] = await Promise.all([
-        sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
-        sbGet('install_orders_slim?select=pi,customer_name,addr,subjobs,status,delivery_date&status=neq.deleted&order=created_at.desc'),
+        sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date,city&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
+        sbGet('install_orders_slim?select=pi,customer_name,addr,subjobs,status,delivery_date,city&status=neq.deleted&order=created_at.desc'),
         sbGet('profiles?select=name,email&role=neq.admin'),
       ]);
       if (!alive) return;
       if (Array.isArray(profileRes)) profileRes.forEach((p: any) => { nameMap[p.email] = p.name; });
       const jobs: Job[] = [];
+      // City scope — the header toggle filters both job types by their own city.
       if (Array.isArray(auditRes)) {
-        auditRes.forEach((r: any) => jobs.push({
+        inCity(auditRes, city).forEach((r: any) => jobs.push({
           id: r.pi || '—', type: 'audit',
           customer: r.customer_name || '—', addr: r.addr || '—',
           assignee: r.auditor_name || (r.auditor_email ? nameMap[r.auditor_email] : null),
@@ -383,7 +324,7 @@ export default function SiteAuditJobsView() {
         }));
       }
       if (Array.isArray(installRes)) {
-        installRes.forEach((r: any) => {
+        inCity(installRes, city).forEach((r: any) => {
           const emails = [...new Set((r.subjobs || []).flatMap((sj: any) => {
             if (sj.assignments && sj.assignments.length) return sj.assignments.map((a: any) => a.installer_email).filter(Boolean);
             return sj.installer_email ? [sj.installer_email] : [];
@@ -408,7 +349,7 @@ export default function SiteAuditJobsView() {
     load();
     const tid = setInterval(() => { if (!document.hidden) load(); }, 30000);
     return () => { alive = false; clearInterval(tid); };
-  }, []);
+  }, [city]);
 
   const jc = useMemo(() => {
     const c = { total: realJobs.length, active: 0, done: 0, unassigned: 0 };

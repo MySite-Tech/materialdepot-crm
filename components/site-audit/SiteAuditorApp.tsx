@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 import { cn } from '@/lib/utils';
 import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
 import {
@@ -15,6 +14,29 @@ import {
   type SketchStroke,
   type LocationTracker,
 } from '@/components/site-audit/fieldAppShared';
+import {
+  CATEGORY_LIST,
+  MD_CATEGORIES,
+  categoryFor,
+  computeDerived,
+  normalizeRoom,
+  prereqFlagged,
+  segmentPrereqRows,
+  segmentRows,
+  type CategoryDef,
+  type FieldValues,
+  type PrereqEntry,
+} from '@/components/site-audit/auditRegistry';
+import {
+  MD_INK,
+  MD_MUTED,
+  mdBrandGrid,
+  mdCompress,
+  mdInfoTable,
+  mdPdfAuditRoom,
+  mdPdfHeader,
+  loadBrandLogo,
+} from '@/components/site-audit/pdfBrand';
 
 /* Idiomatic React port of material-depot-site's app/src/pages/SiteAuditor.jsx.
    Identity is supplied via the actingAs prop (Role Viewer) instead of a
@@ -36,14 +58,26 @@ type LogEntry = {
 };
 type LogExtra = Partial<Pick<LogEntry, 'arrivalPhoto' | 'lat' | 'lng'>>;
 
+/* One measured segment of a room — a wall for the multi-segment categories (wallpaper / CNC /
+   wall panels), the single floor for flooring. `sid` is local-only; the serialized room writes it
+   out as `id`. */
+type Segment = {
+  sid: number;
+  facing: string | null;
+  photos: string[];
+  fields: FieldValues;
+  prereq: Record<string, PrereqEntry>;
+};
+
 type Room = {
   id: number;
-  type: 'flooring' | 'wallpaper';
+  category: string;
   name: string;
   sku: string;
-  photos: string[];
-  calc: Record<string, string>;
+  variant: string | null;
   notes: string;
+  segments: Segment[];
+  nextSid: number;
   sketchStrokes: SketchStroke[];
 };
 
@@ -53,7 +87,9 @@ type SignData = {
   ratings: { q1: number; q2: number; q3: number; comments: string };
 };
 
-type JobCard = { rooms: Room[]; sign?: SignData | null };
+/* Rooms are stored in their serialized v2 shape (see serializeRoom) — the same shape written to
+   audit_orders.audit_ticked, so the PDF and the SM dashboard read one format. */
+type JobCard = { rooms: any[]; sign?: SignData | null };
 
 type Order = {
   id: string;
@@ -103,30 +139,36 @@ const DEFAULT_LOG_TEXT: Record<string, string> = {
   completed: 'Site audit completed',
 };
 
-type FieldDef = { k: string; label: string; ph?: string; type?: 'select'; opts?: readonly string[] };
+/* Legacy audit field dicts removed — superseded by MD_CATEGORIES in auditRegistry.ts. */
 
-const FLOOR_FIELDS: FieldDef[] = [
-  { k: 'area', label: 'Area (sq.ft)', ph: 'e.g. 180' },
-  { k: 'boxes', label: 'Boxes' },
-  { k: 'skirt', label: 'Skirting (nos)' },
-  { k: 'skirtH', label: 'Skirting height (mm)' },
-  { k: 'lprof', label: 'L-profile (nos)' },
-  { k: 'rprof', label: 'R-profile / Reducer (nos)' },
-  { k: 'tprof', label: 'T-profile (nos)' },
-  { k: 'corner', label: 'Corner beading (nos)' },
-];
+/* Serialized (DB / draft) shape of one captured room — v2 segments. */
+function serializeRoom(r: Room) {
+  return {
+    v: 2,
+    category: r.category,
+    name: r.name,
+    sku: r.sku,
+    variant: r.variant || null,
+    notes: r.notes,
+    sketchStrokes: r.sketchStrokes || [],
+    segments: (r.segments || []).map((s) => ({
+      id: s.sid,
+      facing: s.facing || null,
+      fields: { ...s.fields },
+      photos: (s.photos || []).slice(),
+      prereq: { ...s.prereq },
+      flagged: prereqFlagged(s),
+    })),
+  };
+}
 
-const WALL_FIELDS: FieldDef[] = [
-  { k: 'warea', label: 'Wall area (sq.ft)' },
-  { k: 'rolls', label: 'No. of rolls' },
-  { k: 'repeat', label: 'Pattern repeat (mm)' },
-  { k: 'match', label: 'Match type', type: 'select', opts: ['Straight', 'Offset', 'Free'] },
-  { k: 'adh', label: 'Adhesive (packs)' },
-  { k: 'primer', label: 'Primer needed', type: 'select', opts: ['No', 'Yes'] },
-];
-
-function fieldsFor(t: string): FieldDef[] {
-  return t === 'wallpaper' ? WALL_FIELDS : FLOOR_FIELDS;
+/* Draft written to the DB on autosave — photos are dropped per segment (they can be multi-MB
+   base64 until each upload swaps in its Storage URL). */
+function draftPayload(rooms: Room[]) {
+  return rooms.map((r) => {
+    const { segments, ...rest } = serializeRoom(r);
+    return { ...rest, segments: segments.map(({ photos, ...s }) => s) };
+  });
 }
 
 const MD_TC = `Material Depot — Client Acknowledgement
@@ -335,41 +377,23 @@ function renderSketchData(sketchStrokes: SketchStroke[] | undefined): string | n
 }
 
 async function genPDF(order: Order, auditorName: string): Promise<string> {
+  await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
   let y = M;
-  const navy: [number, number, number] = [31, 58, 95];
-  const blue: [number, number, number] = [46, 108, 168];
-  const muted: [number, number, number] = [90, 100, 120];
-  const rooms = order.jobcard?.rooms || [];
+  const navy = MD_INK;
+  const muted = MD_MUTED;
+  const rooms: any[] = order.jobcard?.rooms || [];
 
   function header() {
-    doc.setFillColor(...navy);
-    doc.rect(M, y, 34, 34, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('MD', M + 9, y + 22);
-    doc.setFontSize(10);
-    doc.setTextColor(...blue);
-    doc.text('MATERIAL DEPOT', M + 44, y + 13);
-    doc.setFontSize(15);
-    doc.setTextColor(...navy);
-    doc.text('Site Audit Job Card', M + 44, y + 30);
-    y += 46;
-    doc.setDrawColor(...navy);
-    doc.setLineWidth(1.2);
-    doc.line(M, y, W - M, y);
-    y += 14;
+    y = mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M });
+    return y;
   }
   header();
-  doc.autoTable({
-    startY: y,
-    margin: { left: M, right: M },
-    theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] },
-    columnStyles: { 0: { cellWidth: 130, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-    body: [
+  y = mdInfoTable(
+    doc,
+    y,
+    [
       ['Proforma Invoice No.', order.pi],
       ['Client Name', order.name],
       ['Client Mobile', order.phone],
@@ -378,29 +402,29 @@ async function genPDF(order: Order, auditorName: string): Promise<string> {
       ['Auditor', auditorName],
       ['Date', fmtDateA(order.date)],
     ],
-  });
-  y = doc.lastAutoTable.finalY + 10;
+    M,
+  );
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...navy);
   doc.text('Rooms summary', M, y + 4);
   y += 10;
-  doc.autoTable({
-    startY: y,
-    margin: { left: M, right: M },
-    theme: 'grid',
-    headStyles: { fillColor: navy, fontSize: 8.5 },
-    styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
-    head: [['#', 'Room', 'Type', 'SKU No.']],
-    body: rooms.map((r, i) => [String(i + 1), r.name || '-', r.type === 'wallpaper' ? 'Wallpaper' : 'Flooring', r.sku || 'NA']),
-  });
+  doc.autoTable(
+    mdBrandGrid({
+      startY: y,
+      margin: { left: M, right: M },
+      styles: { fontSize: 8.5, cellPadding: 4, lineColor: [210, 216, 225] },
+      head: [['#', 'Room', 'Type', 'SKU No.']],
+      body: rooms.map((r, i) => [String(i + 1), r.name || '-', categoryFor(r.category || r.type).pdfLabel, r.sku || 'NA']),
+    }),
+  );
 
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
     doc.addPage();
     y = M;
     header();
-    const fields = fieldsFor(r.type);
+    const cat = categoryFor(r.category || r.type);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...navy);
@@ -409,72 +433,16 @@ async function genPDF(order: Order, auditorName: string): Promise<string> {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(...muted);
-    doc.text((r.type === 'wallpaper' ? 'Wallpaper' : 'Wooden Flooring') + '  ·  SKU: ' + (r.sku || 'NA'), M, y + 10);
+    doc.text(cat.pdfLabel + '  ·  SKU: ' + (r.sku || 'NA'), M, y + 10);
     y += 24;
-    doc.autoTable({
-      startY: y,
-      margin: { left: M, right: M },
-      theme: 'grid',
-      headStyles: { fillColor: navy, fontSize: 9 },
-      styles: { fontSize: 9, cellPadding: 5, lineColor: [210, 216, 225] },
-      columnStyles: { 0: { cellWidth: 230, fontStyle: 'bold', textColor: navy, fillColor: [238, 243, 249] } },
-      head: [['Calculation', 'Value']],
-      body: fields.map((f) => [f.label, r.calc[f.k] || '']),
+    y = await mdPdfAuditRoom(doc, r, y, {
+      M,
+      W,
+      H,
+      compress: (d) => mdCompress(d),
+      sketchImg: renderSketchData(r.sketchStrokes),
+      header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }),
     });
-    y = doc.lastAutoTable.finalY + 12;
-    const colW = (W - 2 * M - 12) / 2, ih = colW * 0.78;
-    const sketchImg = renderSketchData(r.sketchStrokes);
-    const rPhotos = r.photos || [];
-    if (sketchImg) {
-      doc.setFontSize(8.5);
-      doc.setTextColor(...muted);
-      doc.text('2D Diagram', M, y);
-      try {
-        doc.addImage(sketchImg, 'JPEG', M, y + 6, colW, ih);
-      } catch {}
-    }
-    if (rPhotos.length) {
-      const photo = await compressImageDataUrl(rPhotos[0]);
-      if (photo) {
-        const px = M + (sketchImg ? colW + 12 : 0);
-        doc.setFontSize(8.5);
-        doc.setTextColor(...muted);
-        doc.text('Room Photo', px, y);
-        try {
-          doc.addImage(photo, 'JPEG', px, y + 6, colW, ih);
-        } catch {}
-      }
-    }
-    y += ih + 18;
-    for (let pi = 1; pi < rPhotos.length; pi++) {
-      const xp = await compressImageDataUrl(rPhotos[pi]);
-      if (xp) {
-        if (y + colW * 0.78 + 20 > H - M) {
-          doc.addPage();
-          y = M;
-          header();
-        }
-        doc.setFontSize(8.5);
-        doc.setTextColor(...muted);
-        doc.text('Room Photo ' + (pi + 1), M, y);
-        const xw = W - 2 * M, xh = xw * 0.6;
-        try {
-          doc.addImage(xp, 'JPEG', M, y + 6, xw, xh);
-        } catch {}
-        y += xh + 18;
-      }
-    }
-    if (r.notes) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
-      doc.setTextColor(...navy);
-      doc.text('Notes', M, y);
-      y += 12;
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(40, 40, 40);
-      const ls = doc.splitTextToSize(r.notes, W - 2 * M);
-      doc.text(ls, M, y);
-    }
   }
 
   doc.addPage();
@@ -1310,7 +1278,275 @@ function JobDetailsHeader({ order, actingAs }: { order: Order; actingAs: ActingA
 
 type RoomPatch = Partial<Room> | ((r: Room) => Partial<Room>);
 
+function blankSegment(catKey: string, sid: number): Segment {
+  const cat = MD_CATEGORIES[catKey] || MD_CATEGORIES.flooring;
+  const fields: FieldValues = {};
+  (cat.fields || []).forEach((f) => {
+    if (f.default !== undefined) fields[f.k] = f.default;
+  });
+  computeDerived(cat, fields);
+  return { sid, facing: null, photos: [], fields, prereq: {} };
+}
+
+/* Value a select-type field shows when nothing has been picked yet — the registry's first option,
+   matching the field app (so e.g. flooring's Skirting type reads "None" and its dependent rows
+   stay hidden until the auditor changes it). */
+function fieldValue(seg: Segment, f: { k: string; input?: string; opts?: string[] }): string {
+  const v = seg.fields[f.k];
+  if (v !== undefined && v !== null && v !== '') return String(v);
+  if (f.input === 'select') return (f.opts && f.opts[0]) || '';
+  return '';
+}
+
+const GROUP_LABEL_CLS = 'mt-2.5 text-[11px] font-extrabold uppercase tracking-wider text-gray-400';
+
+/* Grouped measurement inputs for one segment. Derived fields are read-only and recomputed on
+   every keystroke by the registry's own formulas. */
+function SegmentFields({
+  cat,
+  seg,
+  onFields,
+}: {
+  cat: CategoryDef;
+  seg: Segment;
+  onFields: (next: FieldValues) => void;
+}) {
+  const visible = (cat.fields || []).filter((f) => !f.showIf || f.showIf(seg.fields));
+  const groups: { group: string; fields: typeof visible }[] = [];
+  visible.forEach((f) => {
+    const last = groups[groups.length - 1];
+    if (last && last.group === f.group) last.fields.push(f);
+    else groups.push({ group: f.group, fields: [f] });
+  });
+
+  const setField = (k: string, value: string) => {
+    const next: FieldValues = { ...seg.fields, [k]: value };
+    computeDerived(cat, next);
+    onFields(next);
+  };
+
+  return (
+    <>
+      {groups.map((g) => (
+        <div key={g.group}>
+          <div className={GROUP_LABEL_CLS}>{g.group}</div>
+          <div className="mt-1 grid grid-cols-2 gap-3">
+            {g.fields.map((f) => (
+              <div key={f.k}>
+                <label className="text-xs text-gray-500">{f.label}</label>
+                {f.input === 'select' ? (
+                  <select
+                    value={fieldValue(seg, f)}
+                    onChange={(e) => setField(f.k, e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                  >
+                    {(f.opts ?? []).map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                ) : f.derived ? (
+                  <input
+                    value={fieldValue(seg, f)}
+                    readOnly
+                    className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
+                  />
+                ) : (
+                  <input
+                    inputMode={f.input === 'decimal' ? 'decimal' : undefined}
+                    value={fieldValue(seg, f)}
+                    onChange={(e) => setField(f.k, e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/* Per-segment site-readiness checklist (OK / Not OK / N/A + optional note). A "Not OK" is a soft
+   flag — it never blocks completion, it's recorded for the SM to review. */
+function SegmentPrereqs({
+  cat,
+  seg,
+  onPrereq,
+}: {
+  cat: CategoryDef;
+  seg: Segment;
+  onPrereq: (next: Record<string, PrereqEntry>) => void;
+}) {
+  if (!cat.prerequisites?.length) return null;
+  const set = (k: string, patch: Partial<PrereqEntry>) => {
+    const cur = seg.prereq[k] || { status: '', note: '' };
+    onPrereq({ ...seg.prereq, [k]: { ...cur, ...patch } });
+  };
+  return (
+    <div>
+      <div className={GROUP_LABEL_CLS}>Site readiness checks</div>
+      {cat.prerequisites.map((p) => {
+        const cur = seg.prereq[p.k] || { status: '', note: '' };
+        return (
+          <div key={p.k} className="flex flex-col gap-1 border-b border-gray-100 py-1.5">
+            <div className="text-[13px] text-gray-800">{p.label}</div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                value={cur.status || ''}
+                onChange={(e) => set(p.k, { status: e.target.value })}
+                className={cn(
+                  'shrink-0 rounded-md border px-2 py-1 text-xs font-semibold',
+                  cur.status === 'Not OK'
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : cur.status === 'OK'
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white text-gray-600',
+                )}
+              >
+                <option value="">Set…</option>
+                <option value="OK">OK</option>
+                <option value="Not OK">Not OK</option>
+                <option value="N/A">N/A</option>
+              </select>
+              <input
+                value={cur.note || ''}
+                onChange={(e) => set(p.k, { note: e.target.value })}
+                placeholder="Note (optional)"
+                className="min-w-[130px] flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs"
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ---- room editor (rooms phase of the job card wizard) ---- */
+function SegmentPhotos({
+  photos,
+  label,
+  onAdd,
+  onSwap,
+  onRemoveAt,
+}: {
+  photos: string[];
+  label: string;
+  onAdd: (url: string) => void;
+  onSwap: (from: string, to: string) => void;
+  onRemoveAt: (idx: number) => void;
+}) {
+  const camInputRef = useRef<HTMLInputElement | null>(null);
+  const galInputRef = useRef<HTMLInputElement | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Show the photo instantly (local base64), THEN upload to Storage in the background and swap the
+  // URL in when it lands. Waiting on the upload first meant the thumbnail only appeared after up to
+  // ~20s on a weak site connection, so auditors thought it hadn't attached and re-took it.
+  const handleFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files || !files.length) return;
+      setUploading(true);
+      for (const file of Array.from(files)) {
+        const dataUrl: string = await new Promise((resolve) => {
+          const rd = new FileReader();
+          rd.onload = () => resolve(rd.result as string);
+          rd.readAsDataURL(file);
+        });
+        const resized = (await resizeImageDataUrl(dataUrl, 1600, 0.88)) || dataUrl;
+        onAdd(resized);
+        uploadPhoto(resized)
+          .then((url) => onSwap(resized, url))
+          .catch(() => { /* keep the inline base64 — the draft/job card still carries the photo */ });
+      }
+      setUploading(false);
+    },
+    [onAdd, onSwap],
+  );
+
+  return (
+    <div className="mt-2">
+      <label className="text-xs text-gray-500">{label}</label>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {photos.map((p, idx) => (
+          <div key={idx} className="relative h-20 w-20 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={p}
+              alt=""
+              className="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover"
+              onClick={() => window.open(p, '_blank')}
+            />
+            <button
+              type="button"
+              onClick={() => onRemoveAt(idx)}
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold leading-none text-white"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <input
+        ref={camInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={galInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => camInputRef.current?.click()}
+          disabled={uploading}
+          className="flex-1 rounded-md border border-gray-200 bg-white py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          📷 Camera
+        </button>
+        <button
+          type="button"
+          onClick={() => galInputRef.current?.click()}
+          disabled={uploading}
+          className="flex-1 rounded-md border border-gray-200 bg-white py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          🖼 Gallery
+        </button>
+        <button
+          type="button"
+          onClick={() => setScannerOpen(true)}
+          disabled={uploading}
+          className="flex-1 rounded-md border border-gray-200 bg-white py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          📄 Scan
+        </button>
+      </div>
+      {uploading && <div className="mt-1.5 text-[11px] text-gray-400">Adding photo…</div>}
+      {scannerOpen && (
+        <DocScannerModal open={scannerOpen} onClose={() => setScannerOpen(false)} onScanned={(url) => onAdd(url)} />
+      )}
+    </div>
+  );
+}
+
 function RoomEditor({
   room,
   index,
@@ -1322,39 +1558,16 @@ function RoomEditor({
   onChange: (patch: RoomPatch) => void;
   onRemove: () => void;
 }) {
-  const camInputRef = useRef<HTMLInputElement | null>(null);
-  const galInputRef = useRef<HTMLInputElement | null>(null);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const cat = categoryFor(room.category);
+  const multi = cat.segment.model === 'multi';
+  const flagged = room.segments.some((s) => prereqFlagged(s));
 
-  const handleFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files || !files.length) return;
-      setUploading(true);
-      for (const file of Array.from(files)) {
-        const dataUrl: string = await new Promise((resolve) => {
-          const rd = new FileReader();
-          rd.onload = () => resolve(rd.result as string);
-          rd.readAsDataURL(file);
-        });
-        const resized = await resizeImageDataUrl(dataUrl, 1600, 0.88);
-        let url = resized || dataUrl;
-        if (resized) {
-          try {
-            url = await uploadPhoto(resized);
-          } catch {
-            url = resized;
-          }
-        }
-        const finalUrl = url;
-        onChange((r) => ({ photos: [...r.photos, finalUrl] }));
-      }
-      setUploading(false);
+  const patchSegment = useCallback(
+    (sid: number, patch: Partial<Segment>) => {
+      onChange((r) => ({ segments: r.segments.map((s) => (s.sid === sid ? { ...s, ...patch } : s)) }));
     },
     [onChange],
   );
-
-  const fields = fieldsFor(room.type);
 
   return (
     <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
@@ -1369,24 +1582,25 @@ function RoomEditor({
         </button>
       </div>
 
-      <div className="mb-3 inline-flex overflow-hidden rounded-lg border border-gray-200">
-        <button
-          type="button"
-          onClick={() => onChange({ type: 'flooring', calc: {} })}
-          className={cn('px-3 py-1.5 text-xs font-semibold', room.type === 'flooring' ? 'bg-[#1F3A5F] text-white' : 'bg-white text-gray-600')}
+      <div>
+        <label className="text-xs text-gray-500">Product category</label>
+        <select
+          value={room.category}
+          onChange={(e) => {
+            const category = e.target.value;
+            onChange({ category, variant: null, segments: [blankSegment(category, 1)], nextSid: 1 });
+          }}
+          className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
         >
-          Wooden Flooring
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange({ type: 'wallpaper', calc: {} })}
-          className={cn('px-3 py-1.5 text-xs font-semibold', room.type === 'wallpaper' ? 'bg-[#1F3A5F] text-white' : 'bg-white text-gray-600')}
-        >
-          Wallpaper
-        </button>
+          {CATEGORY_LIST.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-xs text-gray-500">Room name</label>
           <input
@@ -1407,78 +1621,117 @@ function RoomEditor({
         </div>
       </div>
 
-      <div className="mt-3">
-        <label className="text-xs text-gray-500">Room photos</label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {room.photos.map((p, idx) => (
-            <div key={idx} className="relative h-20 w-20 shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={p}
-                alt=""
-                className="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover"
-                onClick={() => window.open(p, '_blank')}
-              />
+      {cat.variants && (
+        <div className="mt-3">
+          <label className="text-xs text-gray-500">{cat.label} type</label>
+          <select
+            value={room.variant || ''}
+            onChange={(e) => onChange({ variant: e.target.value || null })}
+            className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+          >
+            <option value="">Select…</option>
+            {cat.variants.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {room.category === 'wallpaper' && (
+        <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800">
+          📏 Wall height &amp; width are now entered in millimetres (mm), not inches — the calculated area still shows
+          in sq.ft.
+        </div>
+      )}
+
+      {room.segments.map((seg, si) => (
+        <div key={seg.sid} className="mt-3 rounded-xl border-[1.5px] border-gray-200 bg-[#fbfcfe] p-3">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="text-sm font-extrabold text-[#1F3A5F]">
+              {cat.segment.segLabel}
+              {multi ? ` ${si + 1}` : ''}
+            </div>
+            {multi && (
               <button
                 type="button"
-                onClick={() => onChange((r) => ({ photos: r.photos.filter((_, i) => i !== idx) }))}
-                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold leading-none text-white"
+                onClick={() => onChange((r) => ({ segments: r.segments.filter((s) => s.sid !== seg.sid) }))}
+                className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700 hover:bg-red-100"
               >
-                ×
+                Remove
               </button>
+            )}
+          </div>
+
+          {cat.segment.facing && (
+            <div>
+              <label className="text-xs text-gray-500">Facing direction</label>
+              <select
+                value={seg.facing || ''}
+                onChange={(e) => patchSegment(seg.sid, { facing: e.target.value || null })}
+                className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+              >
+                <option value="">Select…</option>
+                {(cat.segment.facingOpts ?? []).map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
             </div>
-          ))}
+          )}
+
+          <SegmentFields cat={cat} seg={seg} onFields={(fields) => patchSegment(seg.sid, { fields })} />
+
+          <SegmentPhotos
+            photos={seg.photos}
+            label={multi ? `${cat.segment.segLabel} photos` : 'Photos'}
+            onAdd={(url) =>
+              onChange((r) => ({
+                segments: r.segments.map((s) => (s.sid === seg.sid ? { ...s, photos: [...s.photos, url] } : s)),
+              }))
+            }
+            onSwap={(from, to) =>
+              onChange((r) => ({
+                segments: r.segments.map((s) =>
+                  s.sid === seg.sid ? { ...s, photos: s.photos.map((p) => (p === from ? to : p)) } : s,
+                ),
+              }))
+            }
+            onRemoveAt={(idx) =>
+              onChange((r) => ({
+                segments: r.segments.map((s) =>
+                  s.sid === seg.sid ? { ...s, photos: s.photos.filter((_, i) => i !== idx) } : s,
+                ),
+              }))
+            }
+          />
+
+          <SegmentPrereqs cat={cat} seg={seg} onPrereq={(prereq) => patchSegment(seg.sid, { prereq })} />
         </div>
-        <input
-          ref={camInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e: ChangeEvent<HTMLInputElement>) => {
-            handleFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={galInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e: ChangeEvent<HTMLInputElement>) => {
-            handleFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            onClick={() => camInputRef.current?.click()}
-            disabled={uploading}
-            className="flex-1 rounded-md border border-gray-200 bg-white py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            📷 Camera
-          </button>
-          <button
-            type="button"
-            onClick={() => galInputRef.current?.click()}
-            disabled={uploading}
-            className="flex-1 rounded-md border border-gray-200 bg-white py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            🖼 Gallery
-          </button>
-          <button
-            type="button"
-            onClick={() => setScannerOpen(true)}
-            disabled={uploading}
-            className="flex-1 rounded-md border border-gray-200 bg-white py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            📄 Scan
-          </button>
+      ))}
+
+      {multi && (
+        <button
+          type="button"
+          onClick={() =>
+            onChange((r) => ({
+              segments: [...r.segments, blankSegment(r.category, r.nextSid + 1)],
+              nextSid: r.nextSid + 1,
+            }))
+          }
+          className="mt-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          + {cat.segment.addLabel || 'Add'}
+        </button>
+      )}
+
+      {flagged && (
+        <div className="mt-2.5 rounded-lg bg-red-50 px-2.5 py-2 text-[12.5px] font-semibold text-red-800">
+          One or more site-readiness checks are marked Not OK — recorded for the SM to review.
         </div>
-        {uploading && <div className="mt-1.5 text-[11px] text-gray-400">Uploading…</div>}
-      </div>
+      )}
 
       <div className="mt-3">
         <label className="text-xs text-gray-500">2D diagram (draw on the dotted sheet)</label>
@@ -1506,124 +1759,155 @@ function RoomEditor({
       </div>
 
       <div className="mt-3">
-        <label className="text-xs text-gray-500">Calculations</label>
-        <div className="mt-1.5 grid grid-cols-2 gap-3">
-          {fields.map((f) => (
-            <div key={f.k}>
-              <label className="text-xs text-gray-500">{f.label}</label>
-              {f.type === 'select' ? (
-                <select
-                  value={room.calc[f.k] ?? ''}
-                  onChange={(e) => onChange((r) => ({ calc: { ...r.calc, [f.k]: e.target.value } }))}
-                  className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                >
-                  <option value="" disabled hidden />
-                  {(f.opts ?? []).map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  inputMode="decimal"
-                  placeholder={f.ph}
-                  value={room.calc[f.k] || ''}
-                  onChange={(e) => onChange((r) => ({ calc: { ...r.calc, [f.k]: e.target.value } }))}
-                  className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <label className="text-xs text-gray-500">Notes</label>
+        <label className="text-xs text-gray-500">Room notes</label>
         <textarea
           value={room.notes}
           onChange={(e) => onChange({ notes: e.target.value })}
-          placeholder="Site notes, access, special instructions…"
+          placeholder="Access, special instructions…"
           className="mt-1.5 min-h-[70px] w-full resize-y rounded-md border border-gray-200 p-2 text-sm"
         />
       </div>
-
-      {scannerOpen && (
-        <DocScannerModal
-          open={scannerOpen}
-          onClose={() => setScannerOpen(false)}
-          onScanned={(url) => onChange((r) => ({ photos: [...r.photos, url] }))}
-        />
-      )}
     </div>
   );
 }
 
 /* ---- room review card (review phase summary) ---- */
 function RoomReviewCard({ room, index }: { room: Room; index: number }) {
-  const fields = fieldsFor(room.type).filter((f) => room.calc[f.k]);
+  const cat = categoryFor(room.category);
+  const multi = cat.segment.model === 'multi';
   const sketchImg = useMemo(() => renderSketchData(room.sketchStrokes), [room.sketchStrokes]);
+  const segs = useMemo(
+    () =>
+      room.segments.map((s) => ({
+        seg: s,
+        rows: segmentRows(cat, { ...s, id: s.sid }, true),
+        prq: segmentPrereqRows(cat, { ...s, id: s.sid }),
+        flagged: prereqFlagged(s),
+      })),
+    [room.segments, cat],
+  );
+
   return (
     <div className="mb-3 rounded-lg border border-gray-200 bg-white p-4">
-      <div className="mb-2.5 flex flex-wrap items-center gap-2">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-[#1F3A5F] px-2.5 py-0.5 text-xs font-bold text-white">Room {index + 1}</span>
         <b className="text-[15px]">{room.name || '(unnamed)'}</b>
-        <span
-          className={cn(
-            'rounded-md px-2 py-0.5 text-[11px] font-bold',
-            room.type === 'wallpaper' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-800',
-          )}
-        >
-          {room.type === 'wallpaper' ? 'Wallpaper' : 'Flooring'}
+        <span className="rounded-md bg-yellow-100 px-2 py-0.5 text-[11px] font-bold text-yellow-800">
+          {cat.pdfLabel}
+          {room.variant ? ` · ${room.variant}` : ''}
         </span>
         {room.sku && <span className="text-[11.5px] text-gray-500">SKU: {room.sku}</span>}
       </div>
-      {fields.length ? (
-        <div className="mb-2.5 grid grid-cols-2 gap-x-4 gap-y-1">
-          {fields.map((f) => (
-            <div key={f.k} className="contents">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{f.label}</div>
-              <div className="text-[13px] text-gray-900">{room.calc[f.k]}</div>
+
+      {segs.map(({ seg, rows, prq, flagged }, si) => (
+        <div key={seg.sid} className="mt-2 rounded-lg border border-gray-200 p-2.5">
+          {multi && (
+            <div className="mb-1.5 text-[13px] font-extrabold text-[#1F3A5F]">
+              {cat.segment.segLabel} {si + 1}
+              {seg.facing ? ` — ${seg.facing}` : ''}
+              {flagged && <span className="ml-1 text-red-600">⚠</span>}
             </div>
-          ))}
+          )}
+          {rows.length ? (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {rows.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+                  <div className="text-[13px] text-gray-900">{value}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400">No measurements recorded.</div>
+          )}
+          {prq.length > 0 && (
+            <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
+              {prq.map(([label, status, note]) => (
+                <div key={label} className="contents">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+                  <div
+                    className={cn(
+                      'text-[13px]',
+                      status === 'Not OK' ? 'text-red-600' : status === 'OK' ? 'text-green-700' : 'text-gray-500',
+                    )}
+                  >
+                    {status}
+                    {note ? ` - ${note}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {seg.photos.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {seg.photos.map((p, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={p} alt="" className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="mb-2.5 text-xs text-gray-400">No measurements recorded.</div>
-      )}
+      ))}
+
       {sketchImg && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sketchImg} alt="Room sketch" className="mb-2 w-full rounded-lg border border-gray-200" />
+        <img src={sketchImg} alt="Room sketch" className="mt-2 w-full rounded-lg border border-gray-200" />
       )}
-      {room.photos.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {room.photos.map((p, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={p} alt="" className="h-[72px] w-[72px] rounded-lg border border-gray-200 object-cover" />
-          ))}
-        </div>
+      {room.notes && (
+        <div className="mt-2 border-l-2 border-gray-200 pl-2.5 text-[12.5px] text-gray-500">{room.notes}</div>
       )}
-      {room.notes && <div className="border-l-2 border-gray-200 pl-2.5 text-[12.5px] text-gray-500">{room.notes}</div>}
     </div>
   );
 }
 
+
 /* ---- job card wizard (rooms -> review -> pass-to-client -> terms -> ratings -> sign -> done) ---- */
 type WizardPhase = 'rooms' | 'review' | 'pass' | 'terms' | 'ratings' | 'sign' | 'done';
 
-function makeRoom(id: number, type: 'flooring' | 'wallpaper'): Room {
-  return { id, type, name: '', sku: '', photos: [], calc: {}, notes: '', sketchStrokes: [] };
+/* The order's first non-audit SKU picks the starting category, exactly like the field app; an SKU
+   `type` the registry doesn't know falls back to flooring. */
+function initialCategory(order: Order): string {
+  const t = order.skus[0]?.type;
+  return t && MD_CATEGORIES[t] ? t : 'flooring';
 }
 
-function normalizeRestoredRoom(r: any, id: number): Room {
+function makeRoom(id: number, category: string): Room {
   return {
     id,
-    type: r.type === 'wallpaper' ? 'wallpaper' : 'flooring',
-    name: r.name || '',
-    sku: r.sku || '',
-    photos: r.photos || (r.photo ? [r.photo] : []),
-    calc: { ...(r.calc || {}) },
-    notes: r.notes || '',
-    sketchStrokes: r.sketchStrokes || [],
+    category,
+    name: '',
+    sku: '',
+    variant: null,
+    notes: '',
+    segments: [blankSegment(category, 1)],
+    nextSid: 1,
+    sketchStrokes: [],
+  };
+}
+
+/* Restores a saved room — either a v2 {segments} room or a legacy {type,calc,photos} one, which
+   normalizeRoom folds into a single segment so it stays editable. */
+function normalizeRestoredRoom(r: any, id: number): Room {
+  const nr = normalizeRoom(r);
+  const category = MD_CATEGORIES[nr.category] ? nr.category : 'flooring';
+  let sid = 0;
+  const segments: Segment[] = (nr.segments || []).map((s) => ({
+    sid: ++sid,
+    facing: s.facing || null,
+    photos: (s.photos || []).slice(),
+    fields: { ...(s.fields || {}) },
+    prereq: { ...(s.prereq || {}) },
+  }));
+  return {
+    id,
+    category,
+    name: nr.name || '',
+    sku: nr.sku || '',
+    variant: nr.variant || null,
+    notes: nr.notes || '',
+    segments: segments.length ? segments : [blankSegment(category, 1)],
+    nextSid: Math.max(sid, 1),
+    sketchStrokes: (nr.sketchStrokes as SketchStroke[]) || [],
   };
 }
 
@@ -1694,8 +1978,7 @@ function JobCardWizard({
         const withIds = restoredRooms.map((r) => normalizeRestoredRoom(r, ++seqRef.current));
         setRooms(withIds);
       } else {
-        const firstType: 'flooring' | 'wallpaper' = order.skus[0]?.type === 'wallpaper' ? 'wallpaper' : 'flooring';
-        setRooms([makeRoom(++seqRef.current, firstType)]);
+        setRooms([makeRoom(++seqRef.current, initialCategory(order))]);
       }
       skipNextAutosave.current = true;
       setInitialized(true);
@@ -1713,7 +1996,7 @@ function JobCardWizard({
       return;
     }
     try {
-      localStorage.setItem('md_audit_' + order.pi, JSON.stringify({ rooms, ts: Date.now() }));
+      localStorage.setItem('md_audit_' + order.pi, JSON.stringify({ rooms: rooms.map(serializeRoom), ts: Date.now() }));
     } catch {}
     setSaveStatus('saving');
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
@@ -1729,7 +2012,7 @@ function JobCardWizard({
         return;
       }
       try {
-        const draftRooms = rooms.map(({ photos, ...rest }) => rest);
+        const draftRooms = draftPayload(rooms);
         if (autosaveSeqRef.current !== mySeq || completionWriteRef.current) return;
         await sbPatch('audit_orders', order.id, { audit_ticked: { draft: true, rooms: draftRooms } });
         if (completionWriteRef.current) {
@@ -1766,15 +2049,14 @@ function JobCardWizard({
     autosaveTimerRef.current = null;
     if (completionWriteRef.current || !order.id) return;
     try {
-      const draftRooms = rooms.map(({ photos, ...rest }) => rest);
+      const draftRooms = draftPayload(rooms);
       await sbPatch('audit_orders', order.id, { audit_ticked: { draft: true, rooms: draftRooms } });
     } catch { /* best-effort — localStorage draft still covers this device */ }
   }, [rooms, order.id]);
 
   const addRoom = useCallback(() => {
-    const firstType: 'flooring' | 'wallpaper' = order.skus[0]?.type === 'wallpaper' ? 'wallpaper' : 'flooring';
-    setRooms((prev) => [...prev, makeRoom(++seqRef.current, firstType)]);
-  }, [order.skus]);
+    setRooms((prev) => [...prev, makeRoom(++seqRef.current, initialCategory(order))]);
+  }, [order]);
 
   const removeRoom = useCallback((id: number) => {
     setRooms((prev) => prev.filter((r) => r.id !== id));
@@ -1802,7 +2084,7 @@ function JobCardWizard({
     let signImg = rawSignImg;
     try { signImg = await uploadPhoto(rawSignImg); } catch { /* keep raw captured data URL */ }
     const signData: SignData = { img: signImg, name: signName, ratings };
-    const finishedRooms = rooms.map((r) => ({ ...r }));
+    const finishedRooms = rooms.map(serializeRoom);
     const newLogEntry: LogEntry = {
       t: 'Site audit completed · JobCard signed',
       d: new Date().toISOString(),
@@ -1829,15 +2111,7 @@ function JobCardWizard({
         auditor: actingAs.name,
         date: dstr(todayMidnight()),
         sign: signData,
-        rooms: finishedRooms.map((r) => ({
-          name: r.name,
-          type: r.type,
-          sku: r.sku,
-          calc: r.calc || {},
-          notes: r.notes || '',
-          photos: r.photos || [],
-          sketchStrokes: r.sketchStrokes || [],
-        })),
+        rooms: finishedRooms,
       };
       completionWriteRef.current = { audit_ticked: ticked };
       try {
@@ -1930,7 +2204,8 @@ function JobCardWizard({
             <div>
               <JobDetailsHeader order={order} actingAs={actingAs} />
               <div className="my-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[12.5px] text-blue-900">
-                Add a room for every space audited. Pick the room type — calculation fields match Flooring or Wallpaper.
+                Add a room for every space audited. Pick the product category — measurement fields and
+                site-readiness checks adapt automatically.
               </div>
               {rooms.map((r, i) => (
                 <RoomEditor key={r.id} room={r} index={i} onChange={(patch) => updateRoom(r.id, patch)} onRemove={() => removeRoom(r.id)} />
@@ -2118,7 +2393,11 @@ function JobCardWizard({
                     <div key={r.id} className="flex text-[13px]">
                       <span className="w-20 shrink-0 text-gray-400">Room {i + 1}</span>
                       <span>
-                        {r.name || '(unnamed)'} · {r.type === 'wallpaper' ? 'Wallpaper' : 'Flooring'} · SKU {r.sku || 'NA'}
+                        {r.name || '(unnamed)'} · {categoryFor(r.category).pdfLabel}
+                        {r.variant ? ` (${r.variant})` : ''} · SKU {r.sku || 'NA'}
+                        {categoryFor(r.category).segment.model === 'multi'
+                          ? ` · ${r.segments.length} ${categoryFor(r.category).segment.segLabel.toLowerCase()}${r.segments.length === 1 ? '' : 's'}`
+                          : ''}
                       </span>
                     </div>
                   ))}
@@ -2340,7 +2619,7 @@ export default function SiteAuditorApp({ actingAs }: { actingAs: ActingAs }) {
             order={curOrder}
             actingAs={actingAs}
             onBack={(draftRooms) => {
-              updateOrder(curOrder.pi, (o) => ({ ...o, jobcard: { rooms: draftRooms } }));
+              updateOrder(curOrder.pi, (o) => ({ ...o, jobcard: { rooms: draftRooms.map(serializeRoom) } }));
               setScreen({ name: 'detail', pi: curOrder.pi });
             }}
             onCompleted={(updatedOrder) => updateOrder(curOrder.pi, () => updatedOrder)}

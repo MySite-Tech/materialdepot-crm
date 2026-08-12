@@ -5,7 +5,11 @@
    (jsonb blobs) to match that file's own pragmatic `any` usage rather than
    over-modeling columns neither app fully constrains. */
 
-export type SkuType = 'flooring' | 'wallpaper' | 'install';
+/* Wall Panels ('wallpanel') is a full third installation track alongside flooring and wallpaper. */
+export type SkuType = 'flooring' | 'wallpaper' | 'wallpanel' | 'install';
+
+/* The three schedulable installation categories (excludes the 'install' service SKU itself). */
+export type InstallCategory = 'flooring' | 'wallpaper' | 'wallpanel';
 
 export interface SkuItem {
   c: string;
@@ -27,6 +31,7 @@ export interface ServiceSkuRow {
 export interface ServiceData {
   flooring?: ServiceSkuRow[];
   wallpaper?: ServiceSkuRow[];
+  wallpanel?: ServiceSkuRow[];
   audit_by?: 'material_depot' | 'customer' | null;
   follow_up_date?: string | null;
   rectification_raised?: boolean;
@@ -49,12 +54,19 @@ export interface Assignment {
 }
 
 export interface RoomEntry {
+  /* v2 install rooms carry {v:2,category,fields}; older rows carry the flat qty/height/width keys. */
+  v?: number;
+  category?: string;
   name?: string;
   sku?: string;
+  fields?: Record<string, string | number>;
   qty?: string;
+  height?: string;
+  width?: string;
   photos?: string[];
   photo?: string;
   comments?: string;
+  notes?: string;
 }
 
 export interface JobCard {
@@ -65,7 +77,7 @@ export interface JobCard {
 
 export interface Subjob {
   id: string;
-  type: 'flooring' | 'wallpaper';
+  type: InstallCategory;
   items: ServiceSkuRow[];
   date: string | null;
   slot: string | null;
@@ -74,6 +86,16 @@ export interface Subjob {
   assignments: Assignment[];
   status: string;
   jobcard?: JobCard | null;
+  /* Comma-joined observers (any role, any number) — see parseShadowers. */
+  shadower_email?: string | null;
+  shadower_name?: string | null;
+  /* Per-sub-job overrides that fall back to the order-level field until an SM
+     diverges them (set when a category is split per-SKU). */
+  deliveryDate?: string | null;
+  originalDeliveryDate?: string | null;
+  customWp?: boolean;
+  customWpStage?: string | null;
+  customWpMeta?: Record<string, any>;
 }
 
 export interface LogEntry {
@@ -87,6 +109,7 @@ export interface LogEntry {
 }
 
 export interface InstallOrder {
+  city?: string;
   id: string | number | null;
   pi: string;
   po: string[];
@@ -109,9 +132,14 @@ export interface Installer {
   id: string;
   name: string;
   email: string;
-  type: 'flooring' | 'wallpaper';
+  type: InstallCategory;
   zone: string;
   phone: string;
+  city?: string;
+  /* profiles.weekly_off (0=Sun) / profiles.leave_dates — advisory at
+     assignment time (the SM can override with a logged reason). */
+  weeklyOff?: number | null;
+  leaveDates?: string[];
 }
 
 export interface SlotDef {
@@ -129,8 +157,39 @@ export type ViewKey =
   | 'calendar'
   | 'slots'
   | 'installers'
+  | 'foam'
+  | 'payouts'
   | 'deleted'
   | 'rectifications';
+
+/* Rows of `foam_ledger` — every foam hand-out to a flooring installer.
+   Balance = Σ issued here − Σ consumed (derived from completed/partial
+   flooring jobs), so this table only ever grows. */
+export interface FoamLedgerRow {
+  id: string;
+  installer_id?: string | null;
+  installer_email?: string | null;
+  installer_name?: string | null;
+  sqft: number | string;
+  note?: string | null;
+  created_by?: string | null;
+  created_at?: string;
+}
+
+export interface FoamConfig {
+  threshold: number;
+  tracking_start: string;
+}
+
+/* Per-sqft / per-roll payout rates. The global default lives in
+   `app_settings.payout_rates`; `profiles.pay_rates` overrides it per
+   installer (blank fields fall back to the global rate). */
+export interface PayRates {
+  fl_sqft?: number | null;
+  wp_std_roll?: number | null;
+  wp_custom_sqft?: number | null;
+  wpnl_sqft?: number | null;
+}
 
 /* Attribution string used for `log.who` — this CRM view has no per-person
    session/impersonation (unlike the original's getSession()), so every
