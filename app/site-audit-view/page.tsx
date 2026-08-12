@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { CITIES, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/siteAuditShared';
+import { CITIES, decodePerson, initials, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/siteAuditShared';
 import SiteAuditorApp from '@/components/site-audit/SiteAuditorApp';
 import SiteInstallerApp from '@/components/site-audit/SiteInstallerApp';
 import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
@@ -37,7 +37,9 @@ type Person = { id: string; name: string; email: string; role: string; contact?:
 
 function SiteAuditViewInner() {
   const searchParams = useSearchParams();
-  const email = searchParams.get('person') || '';
+  // `?p=` is the encoded form the Role Viewer links now use; `?person=` stays
+  // supported so links people already bookmarked keep working.
+  const email = decodePerson(searchParams.get('p') || '') || searchParams.get('person') || '';
   // ?view=shadowing opens the person's read-only shadowing schedule instead of
   // their own dashboard — shadowing is cross-role, so it's available for anyone.
   const wantShadowing = searchParams.get('view') === 'shadowing';
@@ -90,87 +92,113 @@ function SiteAuditViewInner() {
   const actingAs = { id: person.id, name: person.name, email: person.email };
   const viewRole = person.role || permissionRole;
 
-  return (
-    <div className="min-h-screen bg-[#FAFAFA] p-4 sm:p-6">
-      <div className="mb-4">
-        <div className="text-base font-bold text-black">{person.name}</div>
-        <div className="text-[12px] text-gray-400">{person.email} · {ROLE_LABELS[viewRole || ''] || viewRole || 'No site audit permission'}</div>
-      </div>
+  /* One header bar owns the whole top of the page: who you're viewing, the
+     city, and the role's primary tabs — so the page has a single navigation
+     level above whatever the embedded dashboard renders, instead of the three
+     differently-styled pill rows this used to stack. Underline tabs + the
+     CRM's standard select, matching the Site Audit rail in-app. */
+  const cityPicker = (
+    <div className="flex shrink-0 items-center gap-2">
+      <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="sav-city">City</label>
+      <select
+        id="sav-city"
+        value={city}
+        onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
+        className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
+      >
+        <option value="all">All Cities</option>
+        {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </div>
+  );
 
-      {wantShadowing ? (
-        <SiteShadowerApp actingAs={actingAs} />
-      ) : person.role === 'bm' ? (
-        <SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact: person.contact }} />
-      ) : viewRole === 'site_auditor' ? (
-        <SiteAuditorApp actingAs={actingAs} />
-      ) : viewRole === 'installer' ? (
-        <SiteInstallerApp actingAs={actingAs} />
-      ) : viewRole === 'auditor_installer' ? (
-        <>
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setCombinedView('auditor')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${combinedView === 'auditor' ? 'bg-[#1A1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'}`}
-            >
-              Auditor view
-            </button>
-            <button
-              onClick={() => setCombinedView('installer')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${combinedView === 'installer' ? 'bg-[#1A1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'}`}
-            >
-              Installer view
-            </button>
+  const isSm = viewRole === 'service_mgr' && !wantShadowing && person.role !== 'bm';
+  const isCombined = viewRole === 'auditor_installer' && !wantShadowing && person.role !== 'bm';
+  const showCity = isSm;
+
+  type Tab = { key: string; label: string };
+  const primaryTabs: Tab[] = isSm
+    ? [{ key: 'audit', label: 'Audit Dashboard' }, { key: 'install', label: 'Install Dashboard' }]
+    : isCombined
+      ? [{ key: 'auditor', label: 'Auditor view' }, { key: 'installer', label: 'Installer view' }]
+      : [];
+  const activePrimary = isSm ? smTab : isCombined ? combinedView : '';
+  const pickPrimary = (k: string) => (isSm ? setSmTab(k as 'audit' | 'install') : setCombinedView(k as 'auditor' | 'installer'));
+
+  const auditSubTabs: Tab[] = [
+    { key: 'ops', label: 'Audit Ops' },
+    { key: 'jobs', label: 'Job Overview' },
+    { key: 'perf', label: 'Performance' },
+    { key: 'analytics', label: 'Analytics' },
+    { key: 'live', label: 'Live' },
+  ];
+  const showSubTabs = isSm && smTab === 'audit';
+
+  return (
+    <div className="min-h-screen bg-[#FAFAFA]">
+      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white">
+        <div className="flex flex-wrap items-center gap-3 px-4 pt-3.5 sm:px-6">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1F3A5F] text-[12px] font-bold text-white">
+            {initials(person.name)}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-bold leading-tight text-black">{person.name}</div>
+            <div className="truncate text-[11.5px] text-gray-400">
+              {person.email} · {ROLE_LABELS[viewRole || ''] || viewRole || 'No site audit permission'}
+            </div>
           </div>
-          {combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />}
-        </>
-      ) : viewRole === 'service_mgr' ? (
-        <>
-          <div className="flex gap-2 mb-3 items-center">
-            <button
-              onClick={() => setSmTab('audit')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${smTab === 'audit' ? 'bg-[#1A1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'}`}
-            >
-              Audit Dashboard
-            </button>
-            <button
-              onClick={() => setSmTab('install')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${smTab === 'install' ? 'bg-[#1A1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'}`}
-            >
-              Install Dashboard
-            </button>
-            <div className="ml-auto flex shrink-0 items-center gap-2 pl-4">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="sav-city">City</label>
-              <select
-                id="sav-city"
-                value={city}
-                onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
-                className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-amber-700">
+            {wantShadowing ? 'Shadowing preview' : 'Preview'}
+          </span>
+          {showCity ? <div className="ml-auto">{cityPicker}</div> : null}
+        </div>
+
+        {primaryTabs.length ? (
+          <div className="mt-2.5 flex items-center gap-0 overflow-x-auto px-4 sm:px-6">
+            {primaryTabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => pickPrimary(t.key)}
+                className={`whitespace-nowrap border-b-2 bg-transparent px-4 py-2.5 text-[13px] font-semibold ${
+                  activePrimary === t.key ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'
+                }`}
               >
-                <option value="all">All Cities</option>
-                {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
+                {t.label}
+              </button>
+            ))}
           </div>
-          {smTab === 'audit' && (
-            <div className="flex gap-2 flex-wrap mb-3">
-              {([
-                ['ops', 'Audit Ops'],
-                ['jobs', 'Job Overview'],
-                ['perf', 'Performance'],
-                ['analytics', 'Analytics'],
-                ['live', 'Live'],
-              ] as const).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setSmAuditSubTab(k)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-semibold ${smAuditSubTab === k ? 'bg-[#EAB308] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          {smTab === 'install' ? (
+        ) : <div className="h-3.5" />}
+      </header>
+
+      <div className="px-4 py-4 sm:px-6 sm:py-5">
+        {showSubTabs ? (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {auditSubTabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setSmAuditSubTab(t.key as typeof smAuditSubTab)}
+                className={`rounded-full px-3 py-1.5 text-[11.5px] font-semibold ${
+                  smAuditSubTab === t.key ? 'bg-[#1A1A1A] text-white' : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-400'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {wantShadowing ? (
+          <SiteShadowerApp actingAs={actingAs} />
+        ) : person.role === 'bm' ? (
+          <SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact: person.contact }} />
+        ) : viewRole === 'site_auditor' ? (
+          <SiteAuditorApp actingAs={actingAs} />
+        ) : viewRole === 'installer' ? (
+          <SiteInstallerApp actingAs={actingAs} />
+        ) : isCombined ? (
+          combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
+        ) : isSm ? (
+          smTab === 'install' ? (
             <SiteAuditInstallOpsView city={city} />
           ) : smAuditSubTab === 'ops' ? (
             <SiteAuditOpsView city={city} />
@@ -182,13 +210,13 @@ function SiteAuditViewInner() {
             <SiteAuditAnalyticsView city={city} />
           ) : (
             <SiteAuditLiveView city={city} />
-          )}
-        </>
-      ) : (
-        <div className="text-sm text-gray-400">
-          No Site Audit dashboard permission set for this account. Ask an admin to grant a Site Audit sub-role under Admin &gt; Users.
-        </div>
-      )}
+          )
+        ) : (
+          <div className="text-sm text-gray-400">
+            No Site Audit dashboard permission set for this account. Ask an admin to grant a Site Audit sub-role under Admin &gt; Users.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

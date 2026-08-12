@@ -346,6 +346,27 @@ export function saveCityFilter(c: CityFilter) {
    (app/App.tsx `loginWithPhone`), while the Site Audit project stores staff
    numbers in `profiles.contact` with inconsistent +91 / spacing. Compare
    through this on both sides. */
+/* The Role Viewer's preview links carry whose dashboard to open. Passing the
+   raw email put a staff address in the address bar (and in history, and in any
+   pasted link), so it travels base64url-encoded as `?p=`. This is tidiness, not
+   access control — the route still requires a CRM session, and anyone can
+   decode the value. `?person=` is still read for older links/bookmarks. */
+export function encodePerson(email: string): string {
+  try {
+    return btoa(String(email)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch {
+    return '';
+  }
+}
+export function decodePerson(v: string): string {
+  try {
+    const b = v.replace(/-/g, '+').replace(/_/g, '/');
+    return atob(b + '='.repeat((4 - (b.length % 4)) % 4));
+  } catch {
+    return '';
+  }
+}
+
 export function phoneKey(p?: string | null): string {
   const d = String(p || '').replace(/\D/g, '');
   return d.length > 10 ? d.slice(-10) : d;

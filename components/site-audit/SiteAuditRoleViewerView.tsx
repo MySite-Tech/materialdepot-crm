@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { sbGet } from './siteAuditShared';
+import { encodePerson, sbGet } from './siteAuditShared';
 
 /* Role/person picker mirroring the original Admin Console's Role Viewer. The
    original embeds an iframe and swaps localStorage to impersonate a login;
@@ -115,7 +115,7 @@ export default function SiteAuditRoleViewerView() {
             {list.map((p) => (
               <a
                 key={p.email}
-                href={`/site-audit-view?person=${encodeURIComponent(p.email)}`}
+                href={`/site-audit-view?p=${encodePerson(p.email)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 transition-all hover:border-[#EAB308] hover:shadow-sm"
@@ -133,7 +133,7 @@ export default function SiteAuditRoleViewerView() {
                 <span
                   title="Open their shadowing schedule"
                   className="shrink-0 rounded-md bg-purple-50 px-1.5 py-1 text-[12px] text-purple-700 hover:bg-purple-100"
-                  onClick={(e) => { e.preventDefault(); window.open(`/site-audit-view?person=${encodeURIComponent(p.email)}&view=shadowing`, '_blank', 'noopener'); }}
+                  onClick={(e) => { e.preventDefault(); window.open(`/site-audit-view?p=${encodePerson(p.email)}&view=shadowing`, '_blank', 'noopener'); }}
                 >
                   👁
                 </span>
