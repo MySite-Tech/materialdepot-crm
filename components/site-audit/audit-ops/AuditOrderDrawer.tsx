@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuditRoomCard } from '../AuditRoomViews';
+import RoomSkuEditor, { auditRoomSkuSaver } from '../RoomSkuEditor';
 import ShadowerSelect, { type ShadowerOption } from '../install-ops/ShadowerSelect';
 import { MD_JOURNEY_STAGES, journeyStage, type JourneyEntry } from '../auditRegistry';
 import {
@@ -627,7 +628,13 @@ export default function AuditOrderDrawer({
                 {rooms.length ? (
                   <div className="mt-3">
                     <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-gray-400">Rooms audited</div>
-                    {rooms.map((r: any, i: number) => <AuditRoomCard key={i} room={r} index={i} />)}
+                    <Note tone="blue">The SKU printed on the job card comes from what the auditor entered on site. Missing or wrong? Fix it here — the card and the PDF update together.</Note>
+                    {rooms.map((r: any, i: number) => (
+                      <div key={i}>
+                        <AuditRoomCard room={r} index={i} />
+                        <RoomSkuEditor room={r} save={auditRoomSkuSaver(String(o.id), i, attribution)} toast={toast} onSaved={(t) => { setTicked(t); reload(); }} />
+                      </div>
+                    ))}
                   </div>
                 ) : null}
               </Section>

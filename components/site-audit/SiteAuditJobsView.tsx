@@ -9,6 +9,10 @@ import {
 import ShadowerSelect, { type ShadowerOption } from './install-ops/ShadowerSelect';
 import { categoryFor } from './auditRegistry';
 import { AuditRoomCard, InstallRoomCard } from './AuditRoomViews';
+import RoomSkuEditor, { auditRoomSkuSaver, installRoomSkuSaver } from './RoomSkuEditor';
+
+/* Who the activity log credits for edits made from this view. */
+const JOBS_ATTRIBUTION = 'Service Manager (CRM)';
 import {
   MD_INK,
   MD_MUTED,
@@ -155,7 +159,17 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
     const hasSign = at && at.sign && at.sign.img;
     const isDraft = at && !Array.isArray(at) && at.draft && !hasSign;
     const hasCard = rooms.length || hasSign;
-    const roomsEls = rooms.map((r: any, i: number) => <AuditRoomCard key={i} room={r} index={i} />);
+    /* Same SKU editor as the Audit Ops drawer — this modal is where an SM is
+       already standing when they spot a card printing "SKU: NA". Saving swaps
+       in the re-fetched audit_ticked, so the PDF button below picks it up
+       without reopening. */
+    const setTicked = (t: any) => setState((s) => ({ ...s, ticked: t }));
+    const roomsEls = rooms.map((r: any, i: number) => (
+      <div key={i}>
+        <AuditRoomCard room={r} index={i} />
+        <RoomSkuEditor room={r} save={auditRoomSkuSaver(String(o.id), i, JOBS_ATTRIBUTION)} onSaved={setTicked} />
+      </div>
+    ));
     const signEl = hasSign ? <div className="text-[13px] mt-1.5">Signed by <b>{at.sign.name || '—'}</b>{at.sign.ratings ? <>{` · ⭐ ${at.sign.ratings.q1}/10 · 👤 ${at.sign.ratings.q2}/10 · 🧹 ${at.sign.ratings.q3 || '—'}/10`}</> : null}</div> : null;
     let jcSection;
     if (isDraft) jcSection = <div className="mt-4"><div className="text-xs font-bold uppercase tracking-wider text-yellow-700 mb-3 pb-2 border-b border-gray-100">⚠️ Job Card Draft — {rooms.length} room{rooms.length !== 1 ? 's' : ''} recorded, client sign-off not yet completed</div>{roomsEls}</div>;
@@ -216,7 +230,21 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
               ) : null}
               {rooms.length
                 ? <div className="mt-2.5">
-                    {rooms.map((r: any, i: number) => <InstallRoomCard key={i} room={r} index={i} />)}
+                    {rooms.map((r: any, i: number) => (
+                      <div key={i}>
+                        <InstallRoomCard room={r} index={i} />
+                        {/* Swapping the saved jobcard back into state keeps the
+                            PDF button below in sync without reopening. */}
+                        <RoomSkuEditor
+                          room={r}
+                          save={installRoomSkuSaver(String(o.id), String(sj.id), i, JOBS_ATTRIBUTION)}
+                          onSaved={(card) => setState((s) => ({
+                            ...s,
+                            subjobs: (s.subjobs || []).map((x: any) => (String(x.id) === String(sj.id) ? { ...x, jobcard: card } : x)),
+                          }))}
+                        />
+                      </div>
+                    ))}
                     {signEl}
                   </div>
                 : (!hasCard ? <div className="text-xs text-gray-400 mt-2">No job card data yet.</div> : <div className="text-xs text-yellow-700 mt-2">⚠️ Job card draft — not yet completed</div>)}

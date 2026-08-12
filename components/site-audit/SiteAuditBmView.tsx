@@ -24,6 +24,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuditRoomCard } from './AuditRoomViews';
+import RoomSkuEditor, { auditRoomSkuSaver } from './RoomSkuEditor';
 import { MD_JOURNEY_STAGES, categoryFor, journeyStage, type JourneyEntry } from './auditRegistry';
 import { fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
@@ -303,6 +304,15 @@ function BmOrderDrawer({ order: o, bm, onClose }: { order: Order; bm: BmProfile;
                       {rooms.map((r: any, i: number) => (
                         <Fragment key={i}>
                           <AuditRoomCard room={r} index={i} />
+                          {/* The BM already writes into this same blob (material
+                              selection below), so the room SKU the auditor left
+                              blank is theirs to fill too — it's what prints on
+                              the card they send the client. */}
+                          <RoomSkuEditor
+                            room={r}
+                            save={auditRoomSkuSaver(String(o.id), i, (bm.name || 'BM') + ' (BM)')}
+                            onSaved={() => { setMsg('Room SKU saved'); loadCard(); }}
+                          />
                           <MaterialSection room={r} roomIdx={i} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadCard(); }} />
                         </Fragment>
                       ))}
