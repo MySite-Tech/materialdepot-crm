@@ -117,7 +117,7 @@ function JdLog({ log }: { log: any[] }) {
 
 type JobDetailState = { loading: boolean; error: string | null; kind: 'audit' | 'install' | null; order: any; ticked: any; subjobs: any };
 
-function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 'install'; closeModal: () => void }) {
+export function JobDetailModal({ pi, type, closeModal, attribution = JOBS_ATTRIBUTION, hideClose = false }: { pi: string; type: 'audit' | 'install'; closeModal: () => void; attribution?: string; hideClose?: boolean }) {
   const [state, setState] = useState<JobDetailState>({ loading: true, error: null, kind: null, order: null, ticked: null, subjobs: null });
 
   useEffect(() => {
@@ -143,7 +143,9 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
   }, [pi, type]);
 
   const fdt = (ds: string | null) => { if (!ds) return '—'; const d = new Date(ds + 'T00:00'); return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
-  const closeBtn = <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:bg-gray-50" onClick={closeModal}>Close</button>;
+  /* Stacked on a page (audit + install together) there is nothing to close back
+     to, so the caller drops the button rather than showing a dead one. */
+  const closeBtn = hideClose ? null : <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:bg-gray-50" onClick={closeModal}>Close</button>;
 
   if (state.loading) return (
     <div className="flex items-center justify-center py-10">
@@ -167,7 +169,7 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
     const roomsEls = rooms.map((r: any, i: number) => (
       <div key={i}>
         <AuditRoomCard room={r} index={i} />
-        <RoomSkuEditor room={r} save={auditRoomSkuSaver(String(o.id), i, JOBS_ATTRIBUTION)} onSaved={setTicked} />
+        <RoomSkuEditor room={r} save={auditRoomSkuSaver(String(o.id), i, attribution)} onSaved={setTicked} />
       </div>
     ));
     const signEl = hasSign ? <div className="text-[13px] mt-1.5">Signed by <b>{at.sign.name || '—'}</b>{at.sign.ratings ? <>{` · ⭐ ${at.sign.ratings.q1}/10 · 👤 ${at.sign.ratings.q2}/10 · 🧹 ${at.sign.ratings.q3 || '—'}/10`}</> : null}</div> : null;
@@ -237,7 +239,7 @@ function JobDetailModal({ pi, type, closeModal }: { pi: string; type: 'audit' | 
                             PDF button below in sync without reopening. */}
                         <RoomSkuEditor
                           room={r}
-                          save={installRoomSkuSaver(String(o.id), String(sj.id), i, JOBS_ATTRIBUTION)}
+                          save={installRoomSkuSaver(String(o.id), String(sj.id), i, attribution)}
                           onSaved={(card) => setState((s) => ({
                             ...s,
                             subjobs: (s.subjobs || []).map((x: any) => (String(x.id) === String(sj.id) ? { ...x, jobcard: card } : x)),

@@ -25,6 +25,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuditRoomCard } from './AuditRoomViews';
 import RoomSkuEditor, { auditRoomSkuSaver } from './RoomSkuEditor';
+import LinkInstallSection from './LinkInstallSection';
 import { MD_JOURNEY_STAGES, categoryFor, journeyStage, type JourneyEntry } from './auditRegistry';
 import { fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
@@ -318,6 +319,15 @@ function BmOrderDrawer({ order: o, bm, onClose }: { order: Order; bm: BmProfile;
                       ))}
                     </>
                   )}
+          </Sec>
+
+          <Sec title="Linked Installation">
+            <LinkInstallSection
+              auditPi={o.pi}
+              auditPhone={o.phone}
+              attribution={(bm.name || 'BM') + ' (BM)'}
+              onMsg={setMsg}
+            />
           </Sec>
 
           <Sec title="Customer Journey">
