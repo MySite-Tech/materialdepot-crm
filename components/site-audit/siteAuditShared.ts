@@ -283,6 +283,7 @@ export const ROLES: Record<string, { label: string; color: string }> = {
   auditor_installer: { label: 'Auditor + Installer', color: '#0f6e74' },
   store_staff: { label: 'Store Team', color: '#9a6200' },
   bm: { label: 'Business Manager', color: '#b45309' },
+  coe: { label: 'Category Ops Executive', color: '#0369a1' },
 };
 
 /* ── Shadowers ────────────────────────────────────────────────────────────
@@ -380,6 +381,8 @@ export const SITE_AUDIT_PERMISSION_TO_ROLE: Record<string, string> = {
   'site_audit.installer': 'installer',
   'site_audit.service_manager': 'service_mgr',
   'site_audit.auditor_installer': 'auditor_installer',
+  'site_audit.bm': 'bm',
+  'site_audit.coe': 'coe',
 };
 
 export function siteAuditRoleFromPermissions(perms: string[] | undefined | null): string | null {
@@ -389,6 +392,28 @@ export function siteAuditRoleFromPermissions(perms: string[] | undefined | null)
     if (role) return role;
   }
   return null;
+}
+
+/* Provisions/updates the Site Audit `profiles` row for someone granted a
+   Site Audit sub-role from the CRM's own Admin > Users screen — the mirror
+   of what SiteAuditUsersView.tsx's "Create CRM login" already does in the
+   other direction. Keeps a person's field-app identity (name/role/contact)
+   in sync with their CRM record without a second manual entry screen.
+   Matched by email (profiles' natural unique key, unlike phone which the
+   field apps don't always have yet); a profile that already exists under
+   that email is updated in place rather than duplicated. */
+export async function upsertSiteAuditProfile({ name, email, phone, role }: {
+  name: string; email: string; phone: string; role: string;
+}): Promise<void> {
+  const em = email.trim().toLowerCase();
+  if (!em) return;
+  const existing = await sbGet('profiles?email=eq.' + encodeURIComponent(em) + '&select=id').catch(() => null);
+  const body = { name, role, contact: phone || null };
+  if (Array.isArray(existing) && existing[0]) {
+    await sbPatch('profiles', existing[0].id, body);
+  } else {
+    await sbPost('profiles', { ...body, email: em, city: 'Bengaluru', installer_type: 'flooring', passcode: null });
+  }
 }
 
 export const JOB_STATUS: Record<string, { l: string; c: string }> = {

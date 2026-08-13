@@ -38,6 +38,7 @@ const ROLE_OPTIONS: Array<[string, string]> = [
   ['installer', 'Site Installer'],
   ['auditor_installer', 'Site Auditor + Installer'],
   ['bm', 'Business Manager'],
+  ['coe', 'Category Ops Executive'],
   ['admin', 'Admin'],
 ];
 const INSTALLER_TYPES: Array<[string, string]> = [

@@ -12,6 +12,7 @@ import SiteAuditInstallOpsView from './SiteAuditInstallOpsView';
 import SiteAuditOpsView from './SiteAuditOpsView';
 import SiteShadowerApp from './SiteShadowerApp';
 import SiteAuditBmView from './SiteAuditBmView';
+import SiteAuditCoeView from './SiteAuditCoeView';
 
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
@@ -76,6 +77,12 @@ export default function SiteAuditOwnDashboard({ contact, permissionRole }: { con
   // permission (which only covers the auditor/installer/SM apps).
   if (person.role === 'bm') {
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact }} /></div></div>;
+  }
+
+  // Same pattern as BM — a COE's own dashboard is the follow-up queue,
+  // regardless of the CRM sub-role permission.
+  if (person.role === 'coe') {
+    return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} /></div></div>;
   }
 
   if (permissionRole === 'site_auditor') {
