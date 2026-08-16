@@ -33,12 +33,15 @@ const mockApi = {
 // NOTE: Backend data shows ID 48 actually stores categories, 81 stores user_type
 const USER_TYPE_PROPERTY_ID = 81;
 const CATEGORIES_PROPERTY_ID = 48;
+// Free-text "Location" property — captured as Locality, optional
+const LOCALITY_PROPERTY_ID = 2;
 
 interface FormData {
   phoneNumber: string;
   name: string;
   userType: string | null;
   categories: string[];
+  locality: string;
   projectType: null;
   propertyType: null;
   propertyName: string;
@@ -163,9 +166,10 @@ function PhoneStep({ phoneNumber, onPhoneChange, onSubmit, isLoading }: {
   );
 }
 
-function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryToggle, onSubmit, isLoading, userTypeProp, categoriesProp }: {
+function UserProfileStep({ formData, onNameChange, onLocalityChange, onUserTypeChange, onCategoryToggle, onSubmit, isLoading, userTypeProp, categoriesProp }: {
   formData: FormData;
   onNameChange: (v: string) => void;
+  onLocalityChange: (v: string) => void;
   onUserTypeChange: (v: string) => void;
   onCategoryToggle: (v: string) => void;
   onSubmit: () => void;
@@ -191,6 +195,18 @@ function UserProfileStep({ formData, onNameChange, onUserTypeChange, onCategoryT
           placeholder="Enter your name"
           value={formData.name}
           onChange={(e) => onNameChange(e.target.value)}
+          className="h-12 w-full border border-gray-300 rounded-md px-3 py-2"
+        />
+      </div>
+      <div className="space-y-3">
+        <label className="text-base font-medium text-gray-900">
+          Locality <span className="text-gray-400 text-sm font-normal">(optional)</span>
+        </label>
+        <input
+          type="text"
+          placeholder="Society name / Area / Pincode"
+          value={formData.locality}
+          onChange={(e) => onLocalityChange(e.target.value)}
           className="h-12 w-full border border-gray-300 rounded-md px-3 py-2"
         />
       </div>
@@ -406,6 +422,7 @@ export default function StoreVisitFormSimple() {
     name: '',
     userType: null,
     categories: [],
+    locality: '',
     projectType: null,
     propertyType: null,
     propertyName: '',
@@ -486,6 +503,10 @@ export default function StoreVisitFormSimple() {
         if (props[81]) {
           updates.userType = props[81];
         }
+        // ID 2 stores locality (free text)
+        if (props[2]) {
+          updates.locality = props[2];
+        }
       }
 
       if (Object.keys(updates).length > 0) {
@@ -522,6 +543,7 @@ export default function StoreVisitFormSimple() {
         const properties: Array<{ property_id: number; value: string }> = [];
         if (formData.userType) properties.push({ property_id: USER_TYPE_PROPERTY_ID, value: formData.userType });
         if (formData.categories.length > 0) properties.push({ property_id: CATEGORIES_PROPERTY_ID, value: formData.categories.join(', ') });
+        if (formData.locality.trim()) properties.push({ property_id: LOCALITY_PROPERTY_ID, value: formData.locality.trim() });
         if (properties.length > 0) saves.push(saveUserProperties(userId, properties));
       }
 
@@ -565,7 +587,7 @@ export default function StoreVisitFormSimple() {
       // Reset form for next visitor
       setTimeout(() => {
         setCurrentStep(1);
-        setFormData({ phoneNumber: '', name: '', userType: null, categories: [], projectType: null, propertyType: null, propertyName: '' });
+        setFormData({ phoneNumber: '', name: '', userType: null, categories: [], locality: '', projectType: null, propertyType: null, propertyName: '' });
         setUserId(null);
         setSelectedBM(null);
         setBMs([]);
@@ -632,6 +654,7 @@ export default function StoreVisitFormSimple() {
             <UserProfileStep
               formData={formData}
               onNameChange={name => setFormData(prev => ({ ...prev, name }))}
+              onLocalityChange={locality => setFormData(prev => ({ ...prev, locality }))}
               onUserTypeChange={userType => setFormData(prev => ({ ...prev, userType }))}
               onCategoryToggle={handleCategoryToggle}
               onSubmit={handleFinalSubmit}
