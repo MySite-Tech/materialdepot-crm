@@ -237,10 +237,13 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
     if (!nextStep) return;
     setLoading(true);
     try {
+      console.log('Advancing movement, vsmId:', request.vsmId, 'nextStep:', nextStep.key);
       if (nextStep.key === 'change_in_progress' && request.vsmId) {
-        await displayApi('movement_in_progress', { vsm_id: request.vsmId });
+        const res = await displayApi('movement_in_progress', { vsm_id: request.vsmId });
+        console.log('movement_in_progress response:', JSON.stringify(res, null, 2));
       } else if (nextStep.key === 'request_completed' && request.vsmId) {
-        await displayApi('movement_complete', { vsm_id: request.vsmId });
+        const res = await displayApi('movement_complete', { vsm_id: request.vsmId });
+        console.log('movement_complete response:', JSON.stringify(res, null, 2));
       }
       onStatusChange(nextStep.key);
       toast.show(`Status updated to "${nextStep.label}"`);
@@ -439,8 +442,10 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           display_type_to: data.displayType,
           location_string_to: data.locationString,
         });
+        console.log('movement_initiate response:', JSON.stringify(apiData, null, 2));
         const inner = apiData?.data ?? apiData;
         const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
+        console.log('Extracted vsmId:', vsmId);
         setChangeRequest({
           status: 'change_initiated',
           vsmId,

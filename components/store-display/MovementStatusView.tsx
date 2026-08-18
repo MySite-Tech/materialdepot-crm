@@ -68,6 +68,7 @@ export function MovementStatusView() {
     try {
       const data = await displayApi('fetch_movements');
       const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
+      console.log('Movement item FULL:', list[0] ? JSON.stringify(list[0], null, 2) : 'empty');
       setItems(list);
     } catch (e: any) {
       setError(e?.message || 'Failed to fetch movements');

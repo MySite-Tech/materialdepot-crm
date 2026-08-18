@@ -34,11 +34,12 @@ export async function POST(req: NextRequest) {
     switch (_action) {
       // ── Variant Store Movement ──────────────────────────────────
       case 'fetch_locations': {
+        const token = getToken(req);
         const { branch_id, branch_name, page = 1, search, category, display_type, is_active, is_deleted, page_size = 30 } = payload;
         if (branch_name) {
           const res = await fetch(`${API_BASE}/fetch-variant-locations/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(token),
             body: JSON.stringify({ branch_name }),
           });
           return proxyResponse(res);
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
             ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
             : `${API_BASE}/fetch-variant-locations/?all=True`;
           url += `&page=${page}&page_size=${page_size}`;
-          const res = await fetch(url);
+          const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
           if (!res.ok) {
             return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });
           }
@@ -69,7 +70,8 @@ export async function POST(req: NextRequest) {
             ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
             : `${API_BASE}/fetch-variant-locations/?all=True`;
           url += `&page=${fetchPage}&page_size=${fetchSize}`;
-          const res = await fetch(url);
+          if (search) url += `&product_name=${encodeURIComponent(search)}`;
+          const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
           if (!res.ok) break;
           const data = await res.json().catch(() => ({}));
           const items = data?.data ?? [];
