@@ -6,6 +6,7 @@ import { ProductDetailPanel } from './ProductDetailPanel';
 
 interface VariantLocationRow {
   id: number;
+  location_id: number | null;
   branch_id: string;
   branch_name: string;
   variant_handle: string;
@@ -45,7 +46,7 @@ export function StoreProducts() {
   useEffect(() => {
     (async () => {
       try {
-        const params: Record<string, any> = { is_active: true, page_size: 1000 };
+        const params: Record<string, any> = { page_size: 500 };
         if (selectedStore !== 'All') {
           params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
         }
@@ -63,7 +64,6 @@ export function StoreProducts() {
     setError(null);
     try {
       const params: Record<string, any> = {
-        is_active: true,
         page: pageNum,
         page_size: PAGE_SIZE,
       };

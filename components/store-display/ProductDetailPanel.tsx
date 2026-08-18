@@ -434,12 +434,13 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
       if (positionChanged) {
         const apiData = await displayApi('movement_initiate', {
           variant_handle: item.variant_handle,
-          from_location_id: item.id,
+          from_location_id: item.location_id ?? item.id,
           quantity: data.quantity,
           display_type_to: data.displayType,
           location_string_to: data.locationString,
         });
-        const vsmId = apiData?.vsm_id || apiData?.id;
+        const inner = apiData?.data ?? apiData;
+        const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
         setChangeRequest({
           status: 'change_initiated',
           vsmId,
@@ -463,11 +464,12 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
       const apiReason = reason === 'discontinued_permanently' ? 'retired_from_store_display' : 'removed_temporarily';
       const apiData = await displayApi('removal_initiate', {
         variant_handle: item.variant_handle,
-        location_id: item.id,
+        location_id: item.location_id ?? item.id,
         removal_reason: apiReason,
         additional_remarks: reason === 'discontinued_permanently' ? 'Discontinued permanently' : 'Removed temporarily',
       });
-      const vsmId = apiData?.vsm_id || apiData?.id;
+      const inner = apiData?.data ?? apiData;
+      const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
       setRemovalState({ reason, status: 'removal_initiated', vsmId });
       toast.show('Removal initiated');
     } catch (err: any) {
@@ -552,7 +554,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
         <div className="border-t border-gray-100 px-6 py-4">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Full Location Path</div>
           <div className="bg-gray-50 rounded px-3 py-2 font-mono text-[13px] text-gray-700">
-            {storeName}/{item.category}/{item.location_string}
+            {item.branch_name || storeName}/{item.category}/{item.location_string}
           </div>
         </div>
 

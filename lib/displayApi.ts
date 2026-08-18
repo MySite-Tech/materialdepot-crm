@@ -1,6 +1,7 @@
 export function flattenLocationRow(row: any) {
   return {
     id: row.id,
+    location_id: row.location?.id ?? null,
     branch_id: row.location?.branch_id ?? '',
     branch_name: row.location?.branch ?? '',
     variant_handle: row.variant?.variant_handle ?? '',
