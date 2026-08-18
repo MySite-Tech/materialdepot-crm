@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { displayApi, flattenLocationRow } from '../../lib/displayApi';
+import { getImageUrl } from '../../lib/imageUrl';
 import { STORES, STORE_CODE_TO_BRANCH_ID, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 
 interface VariantLocationRow {
@@ -36,31 +37,35 @@ export function DiscontinuedList() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [truncated, setTruncated] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
 
+  /* Facets over the whole scope rather than one page of it — see StoreProducts. */
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
-        const params: Record<string, any> = { is_deleted: true, page_size: 1000 };
+        const params: Record<string, any> = {};
         if (selectedStore !== 'All') {
           params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
         }
-        const data = await displayApi('fetch_locations', params);
-        const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
-        const rows = raw.map(flattenLocationRow);
-        const cats = Array.from(new Set(rows.map((r: any) => r.category).filter(Boolean))).sort() as string[];
-        const dts = Array.from(new Set(rows.map((r: any) => r.display_type).filter(Boolean))).sort() as string[];
-        setCategories(['All', ...cats]);
-        setDisplayTypes(['All', ...dts]);
+        const data = await displayApi('fetch_facets', params);
+        if (!alive) return;
+        setCategories(['All', ...(data?.categories ?? [])]);
+        setDisplayTypes(['All', ...(data?.display_types ?? [])]);
       } catch {}
     })();
+    return () => { alive = false; };
   }, [selectedStore]);
 
+  const reqRef = useRef(0);
+
   const fetchPage = useCallback(async (storeCode: string, pageNum: number, category: string, displayType: string, searchQ: string) => {
+    const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -77,15 +82,18 @@ export function DiscontinuedList() {
       if (searchQ.trim()) params.search = searchQ.trim();
 
       const data = await displayApi('fetch_locations', params);
+      if (reqId !== reqRef.current) return;
       const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
       const rows = raw.map(flattenLocationRow);
       const count = data?.total_count ?? data?.count ?? rows.length;
       setItems(rows as VariantLocationRow[]);
       setTotalCount(count);
+      setTruncated(!!data?.truncated);
     } catch (e: any) {
+      if (reqId !== reqRef.current) return;
       setError(e.message || 'Failed to load products');
     } finally {
-      setLoading(false);
+      if (reqId === reqRef.current) setLoading(false);
     }
   }, []);
 
@@ -130,6 +138,12 @@ export function DiscontinuedList() {
         </div>
       </div>
 
+      {truncated && (
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
+          Scanned the first 25,000 catalogue rows only — this list is incomplete for All Stores. Pick a store to see its full discontinued list.
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="py-16 text-center text-gray-400">Loading discontinued products...</div>
@@ -162,7 +176,7 @@ export function DiscontinuedList() {
                       <td className="px-3 py-2">
                         <div className="w-10 h-10 rounded bg-gray-100 overflow-hidden flex-shrink-0">
                           {item.image_url ? (
-                            <img src={item.image_url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            <img src={getImageUrl(item.image_url, 80)} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">—</div>
                           )}
