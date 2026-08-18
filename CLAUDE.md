@@ -164,6 +164,17 @@ runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
   `roster` to auditor/installer/SM roles.
 - Field staff are not assigned to a store **anywhere** in either system, so
   per-store performance is genuinely unavailable, not just unimplemented.
+- **A service manager must only ever see EXECUTION analytics.** In `material-depot-site`,
+  `Admin.html`'s Analytics is five tabs (Category, Execution, Week on week, Penetration,
+  Targets) and only Execution is field-ops; the rest carry revenue, AOV and store targets, and
+  a `service_mgr` session is pinned to Execution in three places (forced in `renderAnalytics`,
+  filtered out of the tab bar, and re-checked in `anSetTab`). **This repo has no commercial
+  analytics at all** — `SiteAuditAnalyticsView.tsx` is the pre-V3 execution-only port — so
+  there is currently nothing to gate here. If those tabs (or a Metabase-backed equivalent) are
+  ever ported into the CRM, the role gate has to come with them, or every service manager gets
+  the order book. Related: this repo's Role Viewer renders each role's components inline rather
+  than copying the original's iframe + localStorage impersonation, which is also why the
+  2026-08-18 preview-leak bug in that app (its note 112) has no counterpart here.
 - Site Audit `profiles` rows double as login identities on the still-live public
   `material-depot-site.vercel.app/Login.html` (email + 4-digit passcode, no OTP).
   Never create a profile with `passcode: null`; use `randomPasscode()`.
