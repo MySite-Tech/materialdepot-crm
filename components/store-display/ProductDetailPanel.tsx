@@ -1,10 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { displayApi } from '../../lib/displayApi';
+import { getImageUrl } from '../../lib/imageUrl';
 
 interface VariantLocationRow {
   id: number;
   location_id: number | null;
+  branch_id?: string;
+  is_active?: boolean;
   variant_handle: string;
   product_name: string;
   sku: string | null;
@@ -27,7 +30,7 @@ interface Props {
 
 type RemovalReason = 'discontinued_permanently' | 'removed_temporarily';
 type RemovalStatus = 'removal_initiated' | 'removal_in_progress' | 'removal_completed';
-type ChangeStatus = 'change_initiated' | 'change_in_progress' | 'request_completed';
+type ChangeStatus = 'change_initiated' | 'change_in_progress' | 'request_completed' | 'request_cancelled';
 
 interface ChangeLocationRequest {
   status: ChangeStatus;
@@ -100,7 +103,12 @@ function ChangeLocationDialog({ open, onClose, initialData, onSave }: {
     }
   }, [open, initialData]);
 
-  const positionChanged = locationString !== initialData.locationString;
+  /* A display-type change is a physical re-placement just like a location
+     change — the movement API has a `display_type_to` field for exactly that.
+     Keying this on the location string alone sent display-type edits down the
+     "save directly" path, which saves nothing. */
+  const positionChanged = locationString !== initialData.locationString
+    || displayType.toLowerCase() !== initialData.displayType.toLowerCase();
 
   const handleSave = () => {
     onSave({ displayType, locationString, quantity }, positionChanged);
@@ -134,13 +142,18 @@ function ChangeLocationDialog({ open, onClose, initialData, onSave }: {
 
           {positionChanged && (
             <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-[11px] text-amber-800">
-              Position is changing from <strong>{initialData.locationString}</strong> to <strong>{locationString}</strong>. This will initiate a tracked change request that the store manager must complete.
+              {locationString !== initialData.locationString ? (
+                <>Position is changing from <strong>{initialData.locationString}</strong> to <strong>{locationString}</strong>.</>
+              ) : (
+                <>Display type is changing to <strong>{displayType}</strong>.</>
+              )}{' '}
+              This will initiate a tracked change request that the store manager must complete.
             </div>
           )}
 
           {!positionChanged && (
             <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-[11px] text-blue-800">
-              Only display type or quantity is changing — this will be saved directly.
+              Quantity on its own can&apos;t be changed here — use the bulk sheet upload under Admin. Change the location or display type to raise a tracked request.
             </div>
           )}
         </div>
@@ -233,19 +246,26 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
   const toast = useToast();
 
   const currentIdx = CHANGE_STEPS.findIndex(s => s.key === request.status);
-  const nextStep = currentIdx < CHANGE_STEPS.length - 1 ? CHANGE_STEPS[currentIdx + 1] : null;
+  // findIndex returns -1 for a cancelled request (it is not on the ladder), and
+  // -1 + 1 = 0 would offer "Initiated" as the next step on a dead request.
+  const nextStep = currentIdx >= 0 && currentIdx < CHANGE_STEPS.length - 1 ? CHANGE_STEPS[currentIdx + 1] : null;
 
   const handleAdvance = async () => {
     if (!nextStep) return;
+    /* Without a vsm_id there is no movement to advance. The old code skipped
+       the API call, moved the local badge on anyway and reported success — so
+       a failed id extraction looked exactly like a completed hand-off while
+       the store's actual movement sat untouched. */
+    if (!request.vsmId) {
+      toast.show('This change request has no movement ID — reopen the product and initiate it again.', 'error');
+      return;
+    }
     setLoading(true);
     try {
-      console.log('Advancing movement, vsmId:', request.vsmId, 'nextStep:', nextStep.key);
-      if (nextStep.key === 'change_in_progress' && request.vsmId) {
-        const res = await displayApi('movement_in_progress', { vsm_id: request.vsmId });
-        console.log('movement_in_progress response:', JSON.stringify(res, null, 2));
-      } else if (nextStep.key === 'request_completed' && request.vsmId) {
-        const res = await displayApi('movement_complete', { vsm_id: request.vsmId });
-        console.log('movement_complete response:', JSON.stringify(res, null, 2));
+      if (nextStep.key === 'change_in_progress') {
+        await displayApi('movement_in_progress', { vsm_id: request.vsmId });
+      } else if (nextStep.key === 'request_completed') {
+        await displayApi('movement_complete', { vsm_id: request.vsmId });
       }
       onStatusChange(nextStep.key);
       toast.show(`Status updated to "${nextStep.label}"`);
@@ -262,7 +282,9 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
     try {
       await displayApi('cancel_movement', { vsm_id: request.vsmId });
       toast.show('Movement cancelled');
-      onStatusChange('request_completed');
+      // Cancelled, not completed — reporting a rejected move as "Completed"
+      // told the store the product had been relocated when it never moved.
+      onStatusChange('request_cancelled');
     } catch (err: any) {
       toast.show(err.message || 'Failed to cancel', 'error');
     } finally {
@@ -274,6 +296,7 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
     change_initiated: 'bg-amber-50 text-amber-700',
     change_in_progress: 'bg-blue-50 text-blue-700',
     request_completed: 'bg-green-50 text-green-700',
+    request_cancelled: 'bg-red-50 text-red-600',
   };
 
   return (
@@ -282,7 +305,7 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
       <div className="flex items-center justify-between mb-3">
         <span className="text-[13px] font-bold text-gray-800">Location Change Status</span>
         <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${statusColors[request.status]}`}>
-          {CHANGE_STEPS.find(s => s.key === request.status)?.label}
+          {CHANGE_STEPS.find(s => s.key === request.status)?.label ?? 'Cancelled'}
         </span>
       </div>
 
@@ -444,10 +467,8 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           display_type_to: data.displayType,
           location_string_to: data.locationString,
         });
-        console.log('movement_initiate response:', JSON.stringify(apiData, null, 2));
         const inner = apiData?.data ?? apiData;
         const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
-        console.log('Extracted vsmId:', vsmId);
         setChangeRequest({
           status: 'change_initiated',
           vsmId,
@@ -458,8 +479,11 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
         });
         toast.show('Change request initiated');
       } else {
-        setItem(prev => ({ ...prev, quantity: data.quantity, display_type: data.displayType }));
-        toast.show('Changes saved successfully');
+        /* There is no endpoint that persists a quantity-only edit — movement and
+           removal are the only writes this screen has. It used to set local
+           state and report "Changes saved successfully", so the number sat there
+           looking saved until the next reload silently restored the old one. */
+        toast.show('Quantity is only editable through the bulk sheet upload in Admin — nothing was changed.', 'error');
       }
     } catch (err: any) {
       toast.show(err.message || 'Failed to save changes', 'error');
@@ -496,7 +520,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
         <div className="flex gap-6 p-6">
           <a href={materialDepotUrl} target="_blank" rel="noopener noreferrer" className="block w-48 h-48 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 hover:opacity-90 transition-opacity">
             {item.image_url ? (
-              <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
+              <img src={getImageUrl(item.image_url, 400)} alt={item.product_name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-300 text-sm">No image</div>
             )}

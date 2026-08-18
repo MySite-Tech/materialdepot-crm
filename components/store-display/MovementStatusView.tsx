@@ -68,7 +68,6 @@ export function MovementStatusView() {
     try {
       const data = await displayApi('fetch_movements');
       const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
-      console.log('Movement item FULL:', list[0] ? JSON.stringify(list[0], null, 2) : 'empty');
       setItems(list);
     } catch (e: any) {
       setError(e?.message || 'Failed to fetch movements');
@@ -136,6 +135,7 @@ export function MovementStatusView() {
   };
 
   const handleReject = async (vsmId: number) => {
+    if (!window.confirm(`Reject movement #${vsmId}? This cancels it upstream and can't be undone from here.`)) return;
     setActionLoading(prev => ({ ...prev, [`reject-${vsmId}`]: true }));
     try {
       await displayApi('cancel_movement', { vsm_id: vsmId });
@@ -152,9 +152,10 @@ export function MovementStatusView() {
   const handleBulkAdvance = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
+    if (!window.confirm(`Advance ${ids.length} movement${ids.length === 1 ? '' : 's'} to the next stage?`)) return;
     setBulkLoading('approve');
     let success = 0;
-    let fail = 0;
+    const failedIds: number[] = [];
     for (const vsmId of ids) {
       const item = items.find(i => getVsmId(i) === vsmId);
       if (!item) continue;
@@ -165,29 +166,34 @@ export function MovementStatusView() {
         await displayApi(action, { vsm_id: vsmId });
         setItems(prev => prev.map(i => getVsmId(i) === vsmId ? { ...i, status: nextStatus, ...(nextStatus === 'completed' ? { completed_at: new Date().toISOString() } : {}) } : i));
         success++;
-      } catch { fail++; }
+      } catch { failedIds.push(vsmId); }
     }
     setSelected(new Set());
     setBulkLoading(null);
-    setToast({ msg: `Advanced ${success}${fail ? `, ${fail} failed` : ''}`, type: fail ? 'error' : 'success' });
+    const fail = failedIds.length;
+    if (fail) console.error('[storeDisplay] advanced failed for vsm_ids', failedIds);
+    setToast({ msg: `Advanced ${success}${fail ? `, ${fail} failed (#${failedIds.slice(0, 5).join(', #')})` : ''}`, type: fail ? 'error' : 'success' });
   };
 
   const handleBulkReject = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
+    if (!window.confirm(`Reject ${ids.length} movement${ids.length === 1 ? '' : 's'}? This cancels them upstream and can't be undone from here.`)) return;
     setBulkLoading('reject');
     let success = 0;
-    let fail = 0;
+    const failedIds: number[] = [];
     for (const vsmId of ids) {
       try {
         await displayApi('cancel_movement', { vsm_id: vsmId });
         setItems(prev => prev.map(i => getVsmId(i) === vsmId ? { ...i, status: 'cancelled', cancelled_at: new Date().toISOString() } : i));
         success++;
-      } catch { fail++; }
+      } catch { failedIds.push(vsmId); }
     }
     setSelected(new Set());
     setBulkLoading(null);
-    setToast({ msg: `Rejected ${success}${fail ? `, ${fail} failed` : ''}`, type: fail ? 'error' : 'success' });
+    const fail = failedIds.length;
+    if (fail) console.error('[storeDisplay] rejected failed for vsm_ids', failedIds);
+    setToast({ msg: `Rejected ${success}${fail ? `, ${fail} failed (#${failedIds.slice(0, 5).join(', #')})` : ''}`, type: fail ? 'error' : 'success' });
   };
 
   return (

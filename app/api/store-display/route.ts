@@ -4,10 +4,14 @@ export const dynamic = 'force-dynamic';
 
 const API_BASE = process.env.API_BASE_URL || 'https://api-dev2.materialdepot.in/apiV1';
 
+/* Thrown by getToken so the catch-all below can answer 401 instead of folding
+   a missing login into a generic 500. */
+class AuthError extends Error {}
+
 function getToken(req: NextRequest): string {
   const auth = req.headers.get('authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  if (!token) throw new Error('Not authenticated');
+  if (!token) throw new AuthError('Not authenticated');
   return token;
 }
 
@@ -16,6 +20,56 @@ function authHeaders(token: string) {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
   };
+}
+
+const SCAN_PAGE_SIZE = 1000;
+/* Upstream exposes no server-side search, so filtering means holding the rows
+   here. A branch listing arrives whole in one request; the cross-branch
+   `all=True` listing has to be walked, and 71k+ rows is more than one request
+   should drag through this function — hence a cap, reported honestly to the
+   caller rather than silently trimming the result. */
+const SCAN_MAX_PAGES = 25;
+const SCAN_CONCURRENCY = 6;
+
+async function scanLocations(
+  token: string,
+  { branch_id }: { branch_id?: string | number; is_deleted?: boolean },
+): Promise<{ items: any[]; truncated: boolean }> {
+  const get = async (page: number) => {
+    const url = branch_id
+      ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}&page=${page}&page_size=${SCAN_PAGE_SIZE}`
+      : `${API_BASE}/fetch-variant-locations/?all=True&page=${page}&page_size=${SCAN_PAGE_SIZE}`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) return null;
+    return res.json().catch(() => null);
+  };
+
+  const first = await get(1);
+  const firstBatch = first?.data ?? [];
+  if (!firstBatch.length) return { items: [], truncated: false };
+
+  // A branch listing ignores pagination upstream — page 1 already holds the
+  // whole branch, so there is nothing further to ask for.
+  if (branch_id) return { items: firstBatch, truncated: false };
+
+  const totalPages = Math.max(1, first?.total_pages ?? 1);
+  const wanted = Math.min(totalPages, SCAN_MAX_PAGES);
+  const items = [...firstBatch];
+
+  /* Fetched in bounded parallel rather than one after another: the cross-branch
+     table is 70k+ rows, and walking it a page at a time made every filtered
+     search wait on ~25 sequential round-trips. */
+  for (let page = 2; page <= wanted; page += SCAN_CONCURRENCY) {
+    const batch = [];
+    for (let i = page; i < Math.min(page + SCAN_CONCURRENCY, wanted + 1); i++) batch.push(get(i));
+    const results = await Promise.all(batch);
+    for (const r of results) {
+      const rows = r?.data ?? [];
+      if (rows.length) items.push(...rows);
+    }
+  }
+
+  return { items, truncated: totalPages > wanted };
 }
 
 async function proxyResponse(apiRes: Response) {
@@ -33,6 +87,31 @@ export async function POST(req: NextRequest) {
 
     switch (_action) {
       // ── Variant Store Movement ──────────────────────────────────
+      /* Returns the distinct categories / display types across the WHOLE scope,
+         not just whatever landed on page 1. Both list screens used to build
+         their dropdowns from a single 500-row page, which on a 71k-row table
+         meant the filter options were an arbitrary sample. */
+      case 'fetch_facets': {
+        const token = getToken(req);
+        const { branch_id, is_deleted } = payload;
+        const scan = await scanLocations(token, { branch_id, is_deleted });
+        const categories = new Set<string>();
+        const displayTypes = new Set<string>();
+        for (const item of scan.items) {
+          const c = item.location?.category;
+          const d = item.location?.display_type;
+          if (c) categories.add(c);
+          if (d) displayTypes.add(d);
+        }
+        return NextResponse.json({
+          status: true,
+          categories: [...categories].sort(),
+          display_types: [...displayTypes].sort(),
+          truncated: scan.truncated,
+          scanned: scan.items.length,
+        });
+      }
+
       case 'fetch_locations': {
         const token = getToken(req);
         const { branch_id, branch_name, page = 1, search, category, display_type, is_active, is_deleted, page_size = 30 } = payload;
@@ -45,13 +124,18 @@ export async function POST(req: NextRequest) {
           return proxyResponse(res);
         }
 
-        const needsFilter = search || category || display_type || is_active !== undefined || is_deleted !== undefined;
+        const pageNum = Math.max(1, Number(page) || 1);
+        const size = Math.max(1, Number(page_size) || 30);
+        const needsFilter = !!(search || category || display_type || is_active !== undefined || is_deleted !== undefined);
 
-        if (!needsFilter) {
-          let url = branch_id
-            ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
-            : `${API_BASE}/fetch-variant-locations/?all=True`;
-          url += `&page=${page}&page_size=${page_size}`;
+        /* Upstream can only paginate the `all=True` listing. The branch_id
+           listing ignores page/page_size entirely and returns every row for the
+           branch — so asking it for "page 3, 30 rows" used to hand the browser
+           all 20,630 Whitefield rows AND a page count derived from them, i.e.
+           688 pages that every one of them rendered in full. Anything scoped to
+           a branch is therefore paged here, over the rows we already hold. */
+        if (!needsFilter && !branch_id) {
+          const url = `${API_BASE}/fetch-variant-locations/?all=True&page=${pageNum}&page_size=${size}`;
           const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
           if (!res.ok) {
             return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });
@@ -60,31 +144,11 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(data);
         }
 
-        const allItems: any[] = [];
-        const fetchSize = 1000;
-        let fetchPage = 1;
-        const maxPages = 10;
-
-        while (fetchPage <= maxPages) {
-          let url = branch_id
-            ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
-            : `${API_BASE}/fetch-variant-locations/?all=True`;
-          url += `&page=${fetchPage}&page_size=${fetchSize}`;
-          if (search) url += `&product_name=${encodeURIComponent(search)}`;
-          const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-          if (!res.ok) break;
-          const data = await res.json().catch(() => ({}));
-          const items = data?.data ?? [];
-          if (items.length === 0) break;
-          allItems.push(...items);
-          if (fetchPage >= (data?.total_pages ?? 1)) break;
-          fetchPage++;
-        }
-
-        let filtered = allItems;
+        const scan = await scanLocations(token, { branch_id, is_deleted: undefined });
+        let filtered = scan.items;
 
         if (search) {
-          const q = search.toLowerCase();
+          const q = String(search).toLowerCase();
           filtered = filtered.filter((item: any) => {
             const v = item.variant ?? {};
             const l = item.location ?? {};
@@ -112,17 +176,21 @@ export async function POST(req: NextRequest) {
         }
 
         const total_count = filtered.length;
-        const total_pages = Math.max(1, Math.ceil(total_count / page_size));
-        const start = (page - 1) * page_size;
-        const paged = filtered.slice(start, start + page_size);
+        const total_pages = Math.max(1, Math.ceil(total_count / size));
+        const start = (pageNum - 1) * size;
+        const paged = filtered.slice(start, start + size);
 
         return NextResponse.json({
           status: true,
           data: paged,
-          page,
-          page_size,
+          page: pageNum,
+          page_size: size,
           total_count,
           total_pages,
+          /* Never let a capped scan pass for a complete one — the callers
+             surface this, see StoreProducts/DiscontinuedList. */
+          truncated: scan.truncated,
+          scanned: scan.items.length,
         });
       }
 
@@ -267,11 +335,15 @@ export async function POST(req: NextRequest) {
 
       // ── EC Products (md-api-proxy) ──────────────────────────────
       case 'get_ec_products': {
+        // This was the one action that forwarded no Authorization header. The
+        // upstream requires one (it answers 401 without it), so the "Get all EC
+        // Products" button could never have worked.
+        const token = getToken(req);
         const { branch_name } = payload;
         if (!branch_name) return NextResponse.json({ error: 'branch_name is required' }, { status: 400 });
         const res = await fetch(`${API_BASE}/fetch-variant-locations/`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(token),
           body: JSON.stringify({ branch_name }),
         });
         return proxyResponse(res);
@@ -281,6 +353,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Unknown action: ${_action}` }, { status: 400 });
     }
   } catch (err: any) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }

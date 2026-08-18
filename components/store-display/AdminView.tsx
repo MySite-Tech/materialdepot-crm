@@ -2,14 +2,21 @@
 import { useState } from 'react';
 import { displayApi } from '../../lib/displayApi';
 
+/* branch_name must match OrganisationBranch.branch_name EXACTLY. The backend
+   lower-cases and de-spaces the value first, but only to hit a four-entry
+   shortcut map (jpnagar/yelahanka/whitefield/gachibowli); every other branch
+   falls through to `get(branch_name=...)`, which is case-sensitive. The
+   lower-case names below therefore resolved for four ECs and raised "Branch not
+   found" for Kompally, HSR Layout and Basaveshwara Nagar. The stored form is
+   upper-case, and it satisfies both paths. */
 const EC_BRANCHES = [
-  { id: '1', name: 'JP NAGAR', branch_name: 'jp nagar' },
-  { id: '2', name: 'YELAHANKA', branch_name: 'yelahanka' },
-  { id: '36', name: 'WHITEFIELD', branch_name: 'whitefield' },
-  { id: '71', name: 'KOMPALLY', branch_name: 'kompally' },
-  { id: '104', name: 'HSR LAYOUT', branch_name: 'hsr layout' },
-  { id: '69', name: 'GACHIBOWLI', branch_name: 'gachibowli' },
-  { id: '137', name: 'BASAVESHWARA NAGAR', branch_name: 'basaveshwara nagar' },
+  { id: '1', name: 'JP NAGAR', branch_name: 'JP NAGAR' },
+  { id: '2', name: 'YELAHANKA', branch_name: 'YELAHANKA' },
+  { id: '36', name: 'WHITEFIELD', branch_name: 'WHITEFIELD' },
+  { id: '71', name: 'KOMPALLY', branch_name: 'KOMPALLY' },
+  { id: '104', name: 'HSR LAYOUT', branch_name: 'HSR LAYOUT' },
+  { id: '69', name: 'GACHIBOWLI', branch_name: 'GACHIBOWLI' },
+  { id: '137', name: 'BASAVESHWARA NAGAR', branch_name: 'BASAVESHWARA NAGAR' },
 ];
 
 const REFERENCE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1KoOuZ1MikOtrkfVIf849CnBUD4zAoJ5QrtJn2H9KIio/edit?gid=995116475#gid=995116475';
@@ -17,7 +24,12 @@ const CHANGE_REQ_REFERENCE_URL = 'https://docs.google.com/spreadsheets/d/1jxVcfD
 
 const DISPLAY_TYPES = ['panel_display', 'shelves', 'drawer', 'catalogue', 'flaps', 'slots', 'wall_display', 'floor_stand'];
 
-const DELETE_PASSCODE = '181997';
+/* Deliberately NOT a passcode. The previous gate compared against a literal
+   sitting in the client bundle, which anyone could read in devtools, and the
+   /api/store-display `delete_locations` action never checked it — so it stopped
+   nobody while looking like it did. A typed confirmation is honest about being
+   a slip guard; real enforcement has to live on the server. */
+const DELETE_CONFIRM_WORD = 'DELETE';
 
 // ─── Bulk Upload Section ────────────────────────────────────────────────────
 function BulkUploadSection() {
@@ -223,7 +235,7 @@ function DeleteLocationsSection() {
   const [result, setResult] = useState<string | null>(null);
 
   const handlePasscode = () => {
-    if (passcode === DELETE_PASSCODE) {
+    if (passcode.trim().toUpperCase() === DELETE_CONFIRM_WORD) {
       setVerified(true);
     } else {
       setPasscode('');
@@ -233,6 +245,7 @@ function DeleteLocationsSection() {
   const handleDelete = async () => {
     const ids = idsText.split(/[\s,]+/).map(s => s.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n));
     if (ids.length === 0) return;
+    if (!window.confirm(`Permanently delete ${ids.length} store location${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
     setDeleting(true);
     setResult(null);
     try {
@@ -249,15 +262,15 @@ function DeleteLocationsSection() {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5">
       <h3 className="text-[13px] font-bold text-red-600 mb-1">Delete Store Locations</h3>
-      <p className="text-[11px] text-gray-400 mb-3">Remove variant store locations by ID (passcode required)</p>
+      <p className="text-[11px] text-gray-400 mb-3">Remove variant store locations by ID (permanent)</p>
 
       {!verified ? (
         <div className="flex gap-2 items-end">
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Passcode</label>
-            <input type="password" className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-[160px]" placeholder="6-digit passcode" maxLength={6} value={passcode} onChange={(e) => setPasscode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePasscode()} />
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Type {DELETE_CONFIRM_WORD} to unlock</label>
+            <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-[160px]" placeholder={DELETE_CONFIRM_WORD} value={passcode} onChange={(e) => setPasscode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePasscode()} />
           </div>
-          <button onClick={handlePasscode} disabled={passcode.length < 6} className="px-4 py-2 text-[13px] font-semibold bg-gray-800 text-white rounded-md cursor-pointer disabled:opacity-50 disabled:cursor-default">
+          <button onClick={handlePasscode} disabled={!passcode.trim()} className="px-4 py-2 text-[13px] font-semibold bg-gray-800 text-white rounded-md cursor-pointer disabled:opacity-50 disabled:cursor-default">
             Unlock
           </button>
         </div>

@@ -16,7 +16,7 @@
      doesn't have to be entered twice in two different screens. */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CITIES, ROLES, fmtDate, initials, phoneKey, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost } from './siteAuditShared';
+import { CITIES, ROLES, fmtDate, initials, phoneKey, planSiteAuditRoleSync, randomPasscode, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from './siteAuditShared';
 import { addUser, fetchUsers } from '@/lib/mockApi';
 
 type ProfileRow = {
@@ -38,6 +38,8 @@ const ROLE_OPTIONS: Array<[string, string]> = [
   ['installer', 'Site Installer'],
   ['auditor_installer', 'Site Auditor + Installer'],
   ['bm', 'Business Manager'],
+  ['branch_mgr', 'Branch Manager'],
+  ['coe', 'Category Ops Executive'],
   ['admin', 'Admin'],
 ];
 const INSTALLER_TYPES: Array<[string, string]> = [
@@ -74,7 +76,7 @@ function RoleBadge({ role }: { role: string }) {
 
 export default function SiteAuditUsersView() {
   const [rows, setRows] = useState<ProfileRow[]>([]);
-  const [crmUsers, setCrmUsers] = useState<Array<{ name: string; phone: string }>>([]);
+  const [crmUsers, setCrmUsers] = useState<Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[] }>>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
@@ -93,7 +95,7 @@ export default function SiteAuditUsersView() {
     if (!Array.isArray(res)) { setErr('Could not load users.'); setLoading(false); return; }
     setErr('');
     setRows(res);
-    setCrmUsers((users as Array<{ name: string; phone: string }>) || []);
+    setCrmUsers((users as Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[] }>) || []);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -233,6 +235,67 @@ export default function SiteAuditUsersView() {
     flash('✓ Linked ' + ok + ' order(s) to a BM account');
   }
 
+  /* ── CRM permission → Site Audit role sync ─────────────────────────────
+     The company's master employee/permission list lives in the CRM's own
+     Django backend (fetchUsers()); this derives each person's Site Audit
+     role from their CRM permission instead of assigning it twice by hand.
+     Pure computation lives in planSiteAuditRoleSync (siteAuditShared.ts) —
+     this is just the preview/confirm/apply UI around it, matching the
+     linkAllSuggested/linkBmOrders pattern above. */
+  const roleSync = useMemo(() => planSiteAuditRoleSync(crmUsers, rows), [crmUsers, rows]);
+  const [syncingRoles, setSyncingRoles] = useState(false);
+  const [roleSyncPanel, setRoleSyncPanel] = useState(false);
+
+  const roleSyncTotal = roleSync.ready.length + roleSync.noProfileYet.length;
+
+  async function applyRoleSync() {
+    if (!roleSyncTotal) return;
+    const updateLines = roleSync.ready.map((r) => r.name + ': ' + r.currentRole + ' → ' + r.targetRole + (r.branch ? ' (branch: ' + r.branch + ')' : ''));
+    const createLines = roleSync.noProfileYet.map((r) => r.name + ': (new account) → ' + r.targetRole + (r.branch ? ' (branch: ' + r.branch + ')' : ''));
+    const preview = [...updateLines, ...createLines].slice(0, 12).join('\n');
+    if (!window.confirm(
+      'Sync ' + roleSyncTotal + ' role(s) from CRM permissions? (' + roleSync.ready.length + ' update' + (roleSync.ready.length === 1 ? '' : 's') + ', ' + roleSync.noProfileYet.length + ' new account' + (roleSync.noProfileYet.length === 1 ? '' : 's') + ')\n\n' + preview
+      + (updateLines.length + createLines.length > 12 ? '\n…and ' + (updateLines.length + createLines.length - 12) + ' more' : '')
+      + '\n\nNew accounts get a random passcode (nobody needs it — their access is via this CRM login, not a direct passcode login) and can then be linked to any matching orders.\n\nTheir Site Audit dashboard changes immediately.'
+    )) return;
+    setSyncingRoles(true);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const r of roleSync.ready) {
+      try {
+        // Only ever ADD a branch. `branch: null` in the plan means "the CRM has
+        // no single branch to record", which must not wipe one an admin set by
+        // hand — so the column is omitted rather than nulled.
+        await sbPatch('profiles', r.profileId, r.branch ? { role: r.targetRole, branch: r.branch } : { role: r.targetRole });
+        ok++;
+      } catch (e: any) {
+        failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');
+      }
+    }
+    for (const r of roleSync.noProfileYet) {
+      try {
+        await sbPost('profiles', {
+          name: r.name, role: r.targetRole, contact: r.phone,
+          ...(r.branch ? { branch: r.branch } : {}),
+          email: syntheticSiteAuditEmail(r.phone), city: 'Bengaluru', installer_type: 'flooring', passcode: randomPasscode(),
+        });
+        ok++;
+      } catch (e: any) {
+        failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');
+      }
+    }
+    setSyncingRoles(false);
+    await load();
+    // A bare count hid WHICH rows failed, leaving no way to retry the right
+    // ones — a half-applied sync is the state most in need of detail.
+    if (failed.length) {
+      console.error('[siteAudit] role sync failures', failed);
+      flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' — failed: ' + failed.slice(0, 3).join(', ') + (failed.length > 3 ? ' and ' + (failed.length - 3) + ' more (see console)' : ''));
+    } else {
+      flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' role(s)');
+    }
+  }
+
   async function resetPasscode(u: ProfileRow) {
     if (!window.confirm(`Reset ${u.name}'s passcode? They will be asked to create a new one on their next sign-in.`)) return;
     try {
@@ -320,6 +383,64 @@ export default function SiteAuditUsersView() {
                           {bmProfiles.map((p) => <option key={p.id} value={p.email}>{p.name} · {p.email}</option>)}
                         </select>
                         {n.auto ? <span className="ml-2 text-[11px] font-bold text-green-700">exact match</span> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Skips alone don't raise the banner: `field_worker` and oversight roles
+          are permanent, by-design skips, so including them left a banner up
+          forever announcing "0 changes". It only shows when there is something
+          to act on — and the skip detail is still one click away from there. */}
+      {roleSyncTotal || roleSync.noLongerEntitled.length ? (
+        <div className="mb-3 rounded-md border-l-4 border-indigo-500 bg-indigo-50 px-3 py-2.5 text-[12.5px] text-indigo-900">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>
+              <b>{roleSyncTotal}</b> CRM permission change{roleSyncTotal === 1 ? '' : 's'} not yet reflected here.
+            </span>
+            {roleSyncTotal ? (
+              <button onClick={applyRoleSync} disabled={syncingRoles} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
+                {syncingRoles ? 'Syncing…' : 'Sync ' + roleSyncTotal + ' role' + (roleSyncTotal === 1 ? '' : 's') + ' from CRM permissions'}
+              </button>
+            ) : null}
+            {roleSync.skipped.length || roleSync.noLongerEntitled.length ? (
+              <button onClick={() => setRoleSyncPanel((v) => !v)} className="rounded-md border border-indigo-300 bg-white px-2.5 py-1 text-[12px] font-bold text-indigo-800">
+                {roleSyncPanel ? 'Hide details' : 'See details (' + roleSync.skipped.length + ' skipped)'}
+              </button>
+            ) : null}
+          </div>
+          {roleSyncPanel ? (
+            <div className="mt-2.5 max-h-[320px] overflow-y-auto rounded-md border border-indigo-200 bg-white">
+              <table className="w-full">
+                <thead>
+                  <tr>{['Name', 'Status', 'Detail'].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {roleSync.noLongerEntitled.map((r) => (
+                    <tr key={'gone-' + r.profileId} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{r.name}</td>
+                      <td className="px-3 py-2 text-[12.5px] text-gray-500">No longer entitled</td>
+                      <td className="px-3 py-2 text-[12.5px] text-gray-500">CRM permission &quot;{r.crmPermission}&quot; maps to no access, but still has role &quot;{ROLES[r.currentRole]?.label || r.currentRole}&quot; — remove by hand if intended</td>
+                    </tr>
+                  ))}
+                  {roleSync.skipped.map((r, i) => (
+                    <tr key={'skip-' + i} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{r.name}</td>
+                      <td className="px-3 py-2 text-[12.5px] text-gray-500">Skipped</td>
+                      <td className="px-3 py-2 text-[12.5px] text-gray-500">
+                        {r.reason === 'field_worker' ? 'CRM permission is "field_worker" — can\'t tell auditor from installer, left as-is'
+                          : r.reason === 'protected_role' ? 'Current role is hand-assigned (Category Ops Executive, Store Team, or Content Team) — never auto-changed'
+                          : r.reason === 'field_work_role' ? 'Already a site auditor / installer — their jobs are keyed to that role, so a CRM permission never demotes them. Change it by hand if they really have moved off field work.'
+                          : r.reason === 'oversight_role' ? 'CRM admin/tech — their Site Audit access is the company-wide view from this CRM login; no field-app profile needed either way'
+                          : r.reason === 'ambiguous_phone' ? 'Phone number matches multiple people — needs a human to disambiguate'
+                          : 'CRM permission not recognised — never guessed at'}
                       </td>
                     </tr>
                   ))}

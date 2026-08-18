@@ -11,7 +11,7 @@ import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
 import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
 import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
-import { siteAuditRoleFromPermissions } from '@/components/site-audit/siteAuditShared';
+import { siteAuditRoleForCrmRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
@@ -109,12 +109,13 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
   admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
   tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps'],
-  sales:        ['leads', 'sales', 'footfall'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
+  store_manager:['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'siteAudit'],
+  sales:        ['leads', 'sales', 'footfall', 'siteAudit'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
-  b2b_sales:    ['b2bSales'],
-  b2b_KAM:      ['b2bSales'],
-  b2b_manager:  ['b2bSales'],
+  b2b_sales:    ['b2bSales', 'siteAudit'],
+  b2b_KAM:      ['b2bSales', 'siteAudit'],
+  b2b_manager:  ['b2bSales', 'siteAudit'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
@@ -146,6 +147,8 @@ const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
   ['site_audit.installer', 'Site Installer'],
   ['site_audit.service_manager', 'Service Manager'],
   ['site_audit.auditor_installer', 'Auditor + Installer'],
+  ['site_audit.bm', 'Business Manager'],
+  ['site_audit.coe', 'Category Ops Executive'],
 ];
 
 const TAB_LABELS: Record<MainTab, string> = {
@@ -266,6 +269,27 @@ const APPOINTMENT_TRACKER_ROLES = new Set([
   'retail',                        // → Receptionist view
 ]);
 
+/* Roles that always see the Site Audit tab, regardless of individual
+   permissions — same force-add pattern as B2B_SALES_ROLES above, and for the
+   same reason: `crm.site_audit` is a per-user checkbox almost nobody has, so
+   role defaults alone left every BM and store manager without the tab. What
+   they see INSIDE it is decided per role, not shared — see
+   SITE_AUDIT_OVERSIGHT_ROLES and siteAuditRoleForCrmRole. */
+const SITE_AUDIT_ROLES = new Set([
+  'superadmin', 'admin', 'tech',                        // → company-wide oversight rail
+  'sales', 'b2b_sales', 'b2b_KAM', 'b2b_manager',       // → their own order book (BM)
+  'manager', 'store_manager',                           // → their store's rollup
+  'delivery_manager', 'post_sales', 'procurement',      // → Service Manager dashboards
+]);
+
+/* The ONLY roles that get the company-wide oversight rail (Users, Role Viewer,
+   every job in every city). Everyone else lands on their own scoped dashboard.
+   This is a deny-by-default gate on purpose: the tab used to fall through to
+   the rail whenever a user had no `site_audit.*` sub-permission, which is the
+   normal state for a BM — granting them the tab without this check would have
+   handed them the whole company's field ops. */
+const SITE_AUDIT_OVERSIGHT_ROLES = new Set(['superadmin', 'admin', 'tech']);
+
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
   let tabs: Array<MainTab>;
@@ -280,6 +304,9 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   }
   if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
     tabs = [...tabs, 'appointmentTracker'];
+  }
+  if (SITE_AUDIT_ROLES.has(user?.role ?? '') && !tabs.includes('siteAudit')) {
+    tabs = [...tabs, 'siteAudit'];
   }
   if (['superadmin', 'admin', 'tech'].includes(user?.role ?? '') && !tabs.includes('storeDisplay')) {
     tabs = [...tabs, 'storeDisplay'];
@@ -1232,12 +1259,14 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState('sales');
   const [newPermissions, setNewPermissions] = useState<string[]>(() => defaultPermissionsForRole('sales'));
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<string | number | null>(null);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editBranches, setEditBranches] = useState<string[]>([]);
   const [editPermissions, setEditPermissions] = useState<string[]>([]);
@@ -1256,11 +1285,22 @@ function AdminDashboard() {
     if (!newName.trim() || !newPhone.trim()) { setError('Name and phone are required'); return; }
     if (!/^\d{10}$/.test(newPhone.trim())) { setError('Phone must be 10 digits'); return; }
     if (users.some((u) => u.phone === newPhone.trim())) { setError('Phone already exists'); return; }
+    const siteAuditRole = siteAuditRoleFromPermissions(newPermissions);
+    if (siteAuditRole && !newEmail.trim()) { setError('Email is required for a Site Audit role (Business Manager, Site Auditor, etc.)'); return; }
     setError('');
     try {
       const user = await addUser({ name: newName.trim(), phone: newPhone.trim(), role: newRole, individualPermissions: newPermissions });
       setUsers((prev) => [...prev, user]);
-      setNewName(''); setNewPhone(''); setNewRole('sales'); setNewPermissions([]);
+      // Best-effort: the CRM login above is the source of truth for access;
+      // this only keeps their Site Audit field-app identity (profiles row,
+      // in material-depot-site's own Supabase project) in step with it, so a
+      // Business Manager/Site Auditor/etc. added here doesn't also need
+      // entering by hand in Site Audit's own Users tab.
+      if (siteAuditRole) {
+        upsertSiteAuditProfile({ name: newName.trim(), email: newEmail.trim(), phone: newPhone.trim(), role: siteAuditRole })
+          .catch((e) => console.error('[AdminDashboard] Site Audit profile sync failed', e));
+      }
+      setNewName(''); setNewPhone(''); setNewEmail(''); setNewRole('sales'); setNewPermissions([]);
     } catch (e: any) {
       setError(e.message || 'Failed to add user');
     }
@@ -1277,7 +1317,7 @@ function AdminDashboard() {
   };
 
   const startEdit = (u: AppUser) => {
-    setEditId(u.id); setEditName(u.name); setEditPhone(u.phone); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
+    setEditId(u.id); setEditName(u.name); setEditPhone(u.phone); setEditEmail(''); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
     setEditPermissions(u.individualPermissions?.length ? u.individualPermissions : defaultPermissionsForRole(u.role));
   };
 
@@ -1290,6 +1330,15 @@ function AdminDashboard() {
       await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole, individualPermissions: editPermissions });
       await updateUserBranches(editId!, editBranches);
       setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches, individualPermissions: editPermissions } : u));
+      // Only touches the Site Audit profile when an email was actually typed
+      // here — editing an existing account (branch access, a permission
+      // tweak) shouldn't demand an email it's never needed before. Leave it
+      // blank and this is a no-op; fill it in to (re)link or fix the role.
+      const siteAuditRole = siteAuditRoleFromPermissions(editPermissions);
+      if (siteAuditRole && editEmail.trim()) {
+        upsertSiteAuditProfile({ name: editName.trim(), email: editEmail.trim(), phone: editPhone.trim(), role: siteAuditRole })
+          .catch((e) => console.error('[AdminDashboard] Site Audit profile sync failed', e));
+      }
       setEditId(null);
     } catch (e: any) {
       setError(e.message || 'Failed to update user');
@@ -1340,11 +1389,16 @@ function AdminDashboard() {
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Phone</label>
                   <input className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono w-full text-center" value={newPhone} onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ''))} placeholder="9876543210" maxLength={10} />
                 </div>
+                <div className="flex-1 min-w-[170px]">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Email (for Site Audit roles)</label>
+                  <input type="email" className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="name@materialdepot.com" />
+                </div>
                 <div className="w-[130px]">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
                   <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => { setNewRole(e.target.value); setNewPermissions(defaultPermissionsForRole(e.target.value)); }}>
                     <option value="sales">Sales</option>
                     <option value="manager">Manager</option>
+                    <option value="store_manager">Store Manager</option>
                     <option value="retail">Retail</option>
                     <option value="admin">Admin</option>
                     <option value="tech">Tech</option>
@@ -1394,6 +1448,7 @@ function AdminDashboard() {
                               <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => { setEditRole(e.target.value); setEditPermissions(defaultPermissionsForRole(e.target.value)); }}>
                                 <option value="sales">Sales</option>
                                 <option value="manager">Manager</option>
+                                <option value="store_manager">Store Manager</option>
                                 <option value="retail">Retail</option>
                                 <option value="admin">Admin</option>
                               </select>
@@ -1403,6 +1458,15 @@ function AdminDashboard() {
                             </td>
                             <td className="px-4 py-2 min-w-[180px]">
                               <PermissionChecklist value={editPermissions} onChange={setEditPermissions} hideLabel />
+                              {siteAuditRoleFromPermissions(editPermissions) ? (
+                                <input
+                                  type="email"
+                                  className="mt-1.5 px-2 py-1 text-[11.5px] border border-gray-200 rounded outline-none w-full"
+                                  value={editEmail}
+                                  onChange={(e) => setEditEmail(e.target.value)}
+                                  placeholder="email to (re)link Site Audit profile"
+                                />
+                              ) : null}
                             </td>
                             <td className="px-4 py-2 text-center whitespace-nowrap">
                               <button className="text-[#EAB308] text-xs font-semibold cursor-pointer bg-transparent border-none mr-2" onClick={handleSaveEdit}>Save</button>
@@ -1741,7 +1805,13 @@ export default function App() {
   // Derive allowed tabs — per-user CRM permissions override role defaults.
   const allowedTabs = resolveAllowedTabs(currentUser);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
+  /* The hand-set `site_audit.*` sub-permission is an OVERRIDE; the CRM role is
+     the default. Almost nobody has the sub-permission, so deriving the
+     dashboard from the CRM role is what actually gets a BM to their orders and
+     a store manager to their store. */
   const siteAuditSubRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
+  const siteAuditRole = siteAuditSubRole ?? siteAuditRoleForCrmRole(currentUser?.role);
+  const siteAuditIsOversight = SITE_AUDIT_OVERSIGHT_ROLES.has(currentUser?.role ?? '') && !siteAuditSubRole;
 
   useEffect(() => {
     try {
@@ -2632,10 +2702,15 @@ export default function App() {
       )}
 
       {mainTab === 'siteAudit' && (
-        siteAuditSubRole ? (
-          <SiteAuditOwnDashboard contact={currentUser?.phone || ''} permissionRole={siteAuditSubRole} />
-        ) : (
+        siteAuditIsOversight ? (
           <SiteAuditRail user={currentUser ? { name: currentUser.name, phone: currentUser.phone, role: currentUser.role } : null} />
+        ) : (
+          <SiteAuditOwnDashboard
+            contact={currentUser?.phone || ''}
+            permissionRole={siteAuditRole}
+            crmName={currentUser?.name || ''}
+            allowedBranches={currentUser?.allowedBranches || []}
+          />
         )
       )}
 

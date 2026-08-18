@@ -1307,6 +1307,7 @@ function _mapUserOrg(u: Record<string, unknown>): import('../types/crm').AppUser
     individualPermissions: Array.isArray(u.individual_permissions)
       ? (u.individual_permissions as string[])
       : [],
+    active: u.status !== false,
   };
 }
 

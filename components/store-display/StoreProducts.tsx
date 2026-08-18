@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { displayApi, flattenLocationRow } from '../../lib/displayApi';
+import { getImageUrl } from '../../lib/imageUrl';
 import { STORES, STORE_CODE_TO_BRANCH_ID, STORE_NAMES, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 import { ProductDetailPanel } from './ProductDetailPanel';
 
@@ -37,29 +38,39 @@ export function StoreProducts() {
   const [categories, setCategories] = useState<string[]>(['All']);
   const [page, setPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<VariantLocationRow | null>(null);
+  const [truncated, setTruncated] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
 
+  /* Categories come from a scan of the whole scope, not from whichever 500 rows
+     happened to be on page 1 of a 71k-row table — that made the dropdown an
+     arbitrary sample of the real category list. */
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
-        const params: Record<string, any> = { page_size: 500 };
+        const params: Record<string, any> = {};
         if (selectedStore !== 'All') {
           params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
         }
-        const data = await displayApi('fetch_locations', params);
-        const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
-        const rows = raw.map(flattenLocationRow);
-        const unique = Array.from(new Set(rows.map((r: any) => r.category).filter(Boolean))).sort() as string[];
-        setCategories(['All', ...unique]);
+        const data = await displayApi('fetch_facets', params);
+        if (!alive) return;
+        setCategories(['All', ...(data?.categories ?? [])]);
       } catch {}
     })();
+    return () => { alive = false; };
   }, [selectedStore]);
 
+  /* Guards against out-of-order responses: changing store and page in the same
+     interaction fires two overlapping requests, and the slower one used to be
+     able to land last and repaint the table with the wrong page. */
+  const reqRef = useRef(0);
+
   const fetchPage = useCallback(async (storeCode: string, pageNum: number, category: string, searchQ: string) => {
+    const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -74,15 +85,18 @@ export function StoreProducts() {
       if (searchQ.trim()) params.search = searchQ.trim();
 
       const data = await displayApi('fetch_locations', params);
+      if (reqId !== reqRef.current) return;
       const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
       const rows = raw.map(flattenLocationRow);
       const count = data?.total_count ?? data?.count ?? rows.length;
       setItems(rows as VariantLocationRow[]);
       setTotalCount(count);
+      setTruncated(!!data?.truncated);
     } catch (e: any) {
+      if (reqId !== reqRef.current) return;
       setError(e.message || 'Failed to load products');
     } finally {
-      setLoading(false);
+      if (reqId === reqRef.current) setLoading(false);
     }
   }, []);
 
@@ -152,6 +166,12 @@ export function StoreProducts() {
         </div>
       </div>
 
+      {truncated && (
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
+          Showing matches from the first 25,000 rows only — the catalogue is larger than one search can scan. Pick a store to search it completely.
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="py-16 text-center text-gray-400">Loading products...</div>
@@ -187,7 +207,7 @@ export function StoreProducts() {
                       <td className="px-3 py-2">
                         <div className="w-10 h-10 rounded bg-gray-100 overflow-hidden flex-shrink-0">
                           {item.image_url ? (
-                            <img src={item.image_url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            <img src={getImageUrl(item.image_url, 80)} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">—</div>
                           )}
