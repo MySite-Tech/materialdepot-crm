@@ -139,13 +139,24 @@ export default function SiteAuditOwnDashboard({
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditBranchManagerView branches={managerBranches} contact={contact} city={city} /></div></div>;
   }
 
-  if (permissionRole === 'site_auditor') {
+  /* Which of the app dashboards below to render. `permissionRole` (the hand-set
+     sub-permission, else the CRM role) normally decides — but it can name a
+     role that has no app of its own down here: a BM or branch manager whose
+     field-app profile says they actually audit sites, or run a service desk.
+     The three person.role branches above already caught the reverse case; this
+     catches the rest, so nobody with a real, working field-app profile lands on
+     "ask an admin to grant a sub-role" while their own dashboard exists. The
+     sub-permission still wins whenever it names something renderable. */
+  const APP_ROLES = new Set(['site_auditor', 'installer', 'auditor_installer', 'service_mgr']);
+  const viewRole = permissionRole && APP_ROLES.has(permissionRole) ? permissionRole : person.role;
+
+  if (viewRole === 'site_auditor') {
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditorApp actingAs={actingAs} /></div></div>;
   }
-  if (permissionRole === 'installer') {
+  if (viewRole === 'installer') {
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteInstallerApp actingAs={actingAs} /></div></div>;
   }
-  if (permissionRole === 'auditor_installer') {
+  if (viewRole === 'auditor_installer') {
     return (
       <div>
         {shadowBar}
@@ -168,7 +179,7 @@ export default function SiteAuditOwnDashboard({
       </div>
     );
   }
-  if (permissionRole === 'service_mgr') {
+  if (viewRole === 'service_mgr') {
     return (
       <div>
         {shadowBar}
