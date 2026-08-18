@@ -18,6 +18,7 @@ import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
 import B2BSalesCRM from '@/components/b2b/B2BSalesCRM';
 import AppointmentTrackerClient from '@/components/appointment-tracker/AppointmentTrackerClient';
+import StoreDisplayTab from '@/components/store-display/StoreDisplayTab';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem } from '../types/crm';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -103,11 +104,11 @@ const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings']
 
 // Tabs each role is allowed to see.
 // Keys match the mainTab union; values are the tab keys visible to that role.
-type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker' | 'siteAudit';
+type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker' | 'siteAudit' | 'storeDisplay';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps', 'siteAudit'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
   manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps'],
   sales:        ['leads', 'sales', 'footfall'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
@@ -130,6 +131,7 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.nps', 'nps'],
   ['crm.site_audit', 'siteAudit'],
   ['crm.appointment_tracker', 'appointmentTracker'],
+  ['crm.store_display', 'storeDisplay'],
 ];
 
 // Sub-permissions nested under crm.site_audit: they only matter once a user
@@ -151,6 +153,7 @@ const TAB_LABELS: Record<MainTab, string> = {
   reportCard: 'Report Card', storeVisit: 'Store Visit Form', sales: 'Escalation visibility',
   b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
   appointmentTracker: 'Appointment Tracker',
+  storeDisplay: 'Store Display',
 };
 
 // Reverse of PERMISSION_TAB_ORDER — used to pre-check the permission list from a role's default tabs.
@@ -277,6 +280,9 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   }
   if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
     tabs = [...tabs, 'appointmentTracker'];
+  }
+  if (['superadmin', 'admin', 'tech'].includes(user?.role ?? '') && !tabs.includes('storeDisplay')) {
+    tabs = [...tabs, 'storeDisplay'];
   }
   return tabs;
 };
@@ -1718,7 +1724,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [permsLoaded, setPermsLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'appointmentTracker', 'siteAudit'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'appointmentTracker', 'siteAudit', 'storeDisplay'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
@@ -2580,7 +2586,7 @@ export default function App() {
       </header>
 
       <div className="bg-[#1A1A1A] border-t border-gray-700 px-2 sm:px-6 flex overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'b2bSales' as const, label: 'B2B Sales' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'siteAudit' as const, label: 'Site Audit' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }])
+        {([{ key: 'leads' as const, label: 'Leads' }, { key: 'dashboard' as const, label: 'Dashboard' }, { key: 'footfall' as const, label: 'Footfall' }, { key: 'weeklyFunnel' as const, label: 'Weekly Funnel' }, { key: 'reportCard' as const, label: 'Report Card' }, { key: 'storeVisit' as const, label: 'Store Visit Form' }, { key: 'sales' as const, label: 'Escalation visibility' }, { key: 'b2bSales' as const, label: 'B2B Sales' }, { key: 'admin' as const, label: 'Admin' }, { key: 'nps' as const, label: 'NPS' }, { key: 'siteAudit' as const, label: 'Site Audit' }, { key: 'appointmentTracker' as const, label: 'Appointment Tracker' }, { key: 'storeDisplay' as const, label: 'Store Display' }])
           .filter(t => t.key === 'appointmentTracker'
             ? canSeeAppointmentTracker
             : allowedTabs.includes(t.key))
@@ -2644,6 +2650,8 @@ export default function App() {
       {mainTab === 'appointmentTracker' && canSeeAppointmentTracker && (
         <AppointmentTrackerClient currentUser={currentUser} />
       )}
+
+      {mainTab === 'storeDisplay' && <StoreDisplayTab userRole={currentUser?.role ?? ''} />}
 
       {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200">
