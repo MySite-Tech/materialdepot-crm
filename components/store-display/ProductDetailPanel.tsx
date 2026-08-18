@@ -4,6 +4,7 @@ import { displayApi } from '../../lib/displayApi';
 
 interface VariantLocationRow {
   id: number;
+  location_id: number | null;
   variant_handle: string;
   product_name: string;
   sku: string | null;
@@ -15,6 +16,7 @@ interface VariantLocationRow {
   quantity: number;
   private_label_product_name: string | null;
   private_label_brand: string | null;
+  branch_name?: string;
 }
 
 interface Props {
