@@ -11,7 +11,7 @@ import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
 import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
 import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
-import { siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
+import { siteAuditRoleForCrmRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
@@ -108,12 +108,13 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit'],
   admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit'],
   tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps', 'siteAudit'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps'],
-  sales:        ['leads', 'sales', 'footfall'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
+  store_manager:['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'siteAudit'],
+  sales:        ['leads', 'sales', 'footfall', 'siteAudit'],
   retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
-  b2b_sales:    ['b2bSales'],
-  b2b_KAM:      ['b2bSales'],
-  b2b_manager:  ['b2bSales'],
+  b2b_sales:    ['b2bSales', 'siteAudit'],
+  b2b_KAM:      ['b2bSales', 'siteAudit'],
+  b2b_manager:  ['b2bSales', 'siteAudit'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
@@ -265,6 +266,27 @@ const APPOINTMENT_TRACKER_ROLES = new Set([
   'retail',                        // → Receptionist view
 ]);
 
+/* Roles that always see the Site Audit tab, regardless of individual
+   permissions — same force-add pattern as B2B_SALES_ROLES above, and for the
+   same reason: `crm.site_audit` is a per-user checkbox almost nobody has, so
+   role defaults alone left every BM and store manager without the tab. What
+   they see INSIDE it is decided per role, not shared — see
+   SITE_AUDIT_OVERSIGHT_ROLES and siteAuditRoleForCrmRole. */
+const SITE_AUDIT_ROLES = new Set([
+  'superadmin', 'admin', 'tech',                        // → company-wide oversight rail
+  'sales', 'b2b_sales', 'b2b_KAM', 'b2b_manager',       // → their own order book (BM)
+  'manager', 'store_manager',                           // → their store's rollup
+  'delivery_manager', 'post_sales', 'procurement',      // → Service Manager dashboards
+]);
+
+/* The ONLY roles that get the company-wide oversight rail (Users, Role Viewer,
+   every job in every city). Everyone else lands on their own scoped dashboard.
+   This is a deny-by-default gate on purpose: the tab used to fall through to
+   the rail whenever a user had no `site_audit.*` sub-permission, which is the
+   normal state for a BM — granting them the tab without this check would have
+   handed them the whole company's field ops. */
+const SITE_AUDIT_OVERSIGHT_ROLES = new Set(['superadmin', 'admin', 'tech']);
+
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
   let tabs: Array<MainTab>;
@@ -279,6 +301,9 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   }
   if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
     tabs = [...tabs, 'appointmentTracker'];
+  }
+  if (SITE_AUDIT_ROLES.has(user?.role ?? '') && !tabs.includes('siteAudit')) {
+    tabs = [...tabs, 'siteAudit'];
   }
   return tabs;
 };
@@ -1772,7 +1797,13 @@ export default function App() {
   // Derive allowed tabs — per-user CRM permissions override role defaults.
   const allowedTabs = resolveAllowedTabs(currentUser);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
+  /* The hand-set `site_audit.*` sub-permission is an OVERRIDE; the CRM role is
+     the default. Almost nobody has the sub-permission, so deriving the
+     dashboard from the CRM role is what actually gets a BM to their orders and
+     a store manager to their store. */
   const siteAuditSubRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
+  const siteAuditRole = siteAuditSubRole ?? siteAuditRoleForCrmRole(currentUser?.role);
+  const siteAuditIsOversight = SITE_AUDIT_OVERSIGHT_ROLES.has(currentUser?.role ?? '') && !siteAuditSubRole;
 
   useEffect(() => {
     try {
@@ -2663,10 +2694,15 @@ export default function App() {
       )}
 
       {mainTab === 'siteAudit' && (
-        siteAuditSubRole ? (
-          <SiteAuditOwnDashboard contact={currentUser?.phone || ''} permissionRole={siteAuditSubRole} />
-        ) : (
+        siteAuditIsOversight ? (
           <SiteAuditRail user={currentUser ? { name: currentUser.name, phone: currentUser.phone, role: currentUser.role } : null} />
+        ) : (
+          <SiteAuditOwnDashboard
+            contact={currentUser?.phone || ''}
+            permissionRole={siteAuditRole}
+            crmName={currentUser?.name || ''}
+            allowedBranches={currentUser?.allowedBranches || []}
+          />
         )
       )}
 

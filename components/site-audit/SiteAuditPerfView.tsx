@@ -18,7 +18,7 @@ interface Stats {
   pct: number;
 }
 
-export default function SiteAuditPerfView({ city = 'all' }: { city?: CityFilter } = {}) {
+export default function SiteAuditPerfView({ city = 'all', roster = null }: { city?: CityFilter; roster?: string[] | null } = {}) {
   const [state, setState] = useState<PerfState>({ loading: true, field: [], auditOrders: [], installOrders: [] });
 
   useEffect(() => {
@@ -31,7 +31,12 @@ export default function SiteAuditPerfView({ city = 'all' }: { city?: CityFilter 
       ]);
       if (!alive) return;
       // City scope — staff are scoped by profiles.city, orders by their own city.
-      const field = Array.isArray(usersRes) ? inCity(usersRes.filter((u: any) => u.role !== 'admin'), city) : [];
+      // `roster` (a list of emails) additionally narrows staff to a single
+      // branch, for the Branch Manager rollup view — every other caller
+      // passes no roster, so their behavior is unchanged.
+      const field = Array.isArray(usersRes)
+        ? inCity(usersRes.filter((u: any) => u.role !== 'admin' && (!roster || roster.includes(u.email))), city)
+        : [];
       setState({
         loading: false,
         field,
@@ -42,7 +47,7 @@ export default function SiteAuditPerfView({ city = 'all' }: { city?: CityFilter 
     return () => {
       alive = false;
     };
-  }, [city]);
+  }, [city, roster]);
 
   if (state.loading) {
     return (

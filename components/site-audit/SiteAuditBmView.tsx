@@ -28,11 +28,12 @@ import RoomSkuEditor, { auditRoomSkuSaver } from './RoomSkuEditor';
 import LinkInstallSection from './LinkInstallSection';
 import { MD_JOURNEY_STAGES, categoryFor, journeyStage, type JourneyEntry } from './auditRegistry';
 import { fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
+import { InstallOrdersList, WallpaperOrdersList, useOwnedExtras } from './ownedOrders';
 import { fetchUsers } from '@/lib/mockApi';
 
-const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at';
+export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at';
 
-const STATUS: Record<string, { l: string; c: string }> = {
+export const STATUS: Record<string, { l: string; c: string }> = {
   slot_reserved: { l: 'Pre-booked (Store)', c: 'bg-sky-100 text-sky-800' },
   slot_converted: { l: 'Pre-booking Fulfilled', c: 'bg-green-100 text-green-700' },
   pending: { l: 'Pending', c: 'bg-gray-100 text-gray-600' },
@@ -47,7 +48,16 @@ const STATUS: Record<string, { l: string; c: string }> = {
   completed: { l: 'Site Audit Completed', c: 'bg-green-100 text-green-700' },
 };
 
-export type BmProfile = { id?: string | number; name: string; email?: string; contact?: string; role?: string };
+/* `aliases` are ADDITIONAL exact names for the same person, never fuzzy
+   variants. They exist because the same human is recorded under two
+   authoritative names: the field-app profile's `name` and the CRM's own
+   `f_name + l_name`. The CRM sync created many profiles from a short display
+   name ("Anubhab", "Pranab") while order rows carry the CRM's full name
+   ("Anubhab Sarkar", "Pranab Das"), so matching on the profile name alone
+   loses those orders. Both names come from records already tied to this
+   person by an exact phone match, so trusting either is still exact matching
+   — nothing here compares partial or similar strings. */
+export type BmProfile = { id?: string | number; name: string; email?: string; contact?: string; role?: string; aliases?: string[] };
 
 type Order = {
   id: string; pi: string; po: string[]; bm: string; name: string; phone: string; addr: string;
@@ -68,7 +78,18 @@ export function orderBelongsToBm(row: { bm?: string | null; bm_email?: string | 
   const key = phoneKey(bm.contact);
   if (key && phoneKey(row.bm) === key) return true;
   const bmText = norm(row.bm);
-  return !!bmText && bmText === norm(bm.name);
+  if (!bmText) return false;
+  return bmNames(bm).has(bmText);
+}
+
+/* Every exact name this person is known by, normalised. */
+export function bmNames(bm: BmProfile): Set<string> {
+  const out = new Set<string>();
+  for (const n of [bm.name, ...(bm.aliases || [])]) {
+    const v = norm(n);
+    if (v) out.add(v);
+  }
+  return out;
 }
 
 export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?: BmProfile | null }) {
@@ -81,6 +102,8 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
   const [openPi, setOpenPi] = useState<string | null>(null);
+  /* A BM's order book is three tables, not one — see ownedOrders.tsx. */
+  const [book, setBook] = useState<'audits' | 'installs' | 'wallpaper'>('audits');
 
   /* The "view another person's orders" picker is the CRM's own user roster
      (backend UserOrganisation), so nobody needs a field-app profile to appear
@@ -148,6 +171,12 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     return [o.pi, o.name, o.phone, ...(o.po || [])].join(' ').toLowerCase().includes(q.toLowerCase());
   });
 
+  /* Installations and wallpaper runs for the same person. Called before the
+     early return below so the hook order never changes between renders. */
+  const people = useMemo(() => (resolved ? [resolved] : []), [resolved]);
+  const extrasKey = resolved ? [resolved.email || '', phoneKey(resolved.contact), resolved.name, ...(resolved.aliases || [])].join('|') : '';
+  const extras = useOwnedExtras(people, extrasKey);
+
   if (!resolved) {
     return (
       <div>
@@ -176,7 +205,7 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <div>
           <h1 className="text-lg font-bold text-black">My Orders</h1>
-          <p className="text-[13px] text-gray-400">Every site audit / customer journey linked to <b>{resolved.name}</b> as the BM{resolved.contact ? ' · ' + resolved.contact : ''}.</p>
+          <p className="text-[13px] text-gray-400">Every site audit, installation and custom-wallpaper run linked to <b>{resolved.name}</b> as the BM{resolved.contact ? ' · ' + resolved.contact : ''}.</p>
         </div>
         {!bm && bmList.length > 1 ? (
           <label className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
@@ -194,6 +223,26 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
         ) : null}
       </div>
 
+      <div className="mb-4 flex gap-0 overflow-x-auto border-b border-gray-200">
+        {([
+          ['audits', 'Site Audits', orders.length],
+          ['installs', 'Installations', extras.installs.length],
+          ['wallpaper', 'Wallpaper', extras.wallpapers.length],
+        ] as const).map(([k, label, n]) => (
+          <button
+            key={k}
+            onClick={() => setBook(k)}
+            className={`whitespace-nowrap px-4 py-2.5 text-[13px] font-semibold border-b-2 cursor-pointer bg-transparent ${book === k ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          >
+            {label} ({n})
+          </button>
+        ))}
+      </div>
+
+      {book === 'installs' ? <InstallOrdersList orders={extras.installs} loading={extras.loading} /> : null}
+      {book === 'wallpaper' ? <WallpaperOrdersList orders={extras.wallpapers} loading={extras.loading} /> : null}
+
+      {book === 'audits' ? <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1 max-w-[320px]">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
@@ -235,6 +284,7 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
       </div>
 
       {openOrder ? <BmOrderDrawer order={openOrder} bm={resolved} onClose={() => { setOpenPi(null); load(); }} /> : null}
+      </> : null}
     </div>
   );
 }

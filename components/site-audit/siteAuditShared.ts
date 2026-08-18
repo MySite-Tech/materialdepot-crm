@@ -284,6 +284,7 @@ export const ROLES: Record<string, { label: string; color: string }> = {
   store_staff: { label: 'Store Team', color: '#9a6200' },
   bm: { label: 'Business Manager', color: '#b45309' },
   coe: { label: 'Category Ops Executive', color: '#0369a1' },
+  branch_mgr: { label: 'Branch Manager', color: '#be123c' },
 };
 
 /* ── Shadowers ────────────────────────────────────────────────────────────
@@ -416,6 +417,173 @@ export async function upsertSiteAuditProfile({ name, email, phone, role }: {
   }
 }
 
+/* ── CRM permission_name → Site Audit role ─────────────────────────────────
+   The company's master employee/permission list lives in the CRM's own
+   Django backend (lib/mockApi.ts fetchUsers(), permission_name values like
+   'sales'/'manager'/'delivery'/'procurement'), separate from the Site Audit
+   role above. This maps that permission to the Site Audit role it should
+   grant, so access here is derived from the CRM instead of assigned twice by
+   hand. `null` means "should have NO Site Audit access" — a real, meaningful
+   target the sync surfaces but never auto-applies (see planSiteAuditRoleSync
+   below — revoking is a human decision, granting isn't). Confirmed with the
+   business 2026-08: accounts/retail/customer_success/data/pre_sales/tech get
+   none; b2b_KAM/b2b_manager/b2b_sales/sales are BMs; delivery/delivery_manager/
+   post_sales/procurement are Service Managers; manager/store_manager are the
+   new branch-rollup role. */
+export const CRM_ROLE_TO_SITE_AUDIT_ROLE: Record<string, string | null> = {
+  admin: 'admin',
+  accounts: null,
+  retail: null,
+  customer_success: null,
+  data: null,
+  pre_sales: null,
+  tech: null,
+  b2b_KAM: 'bm',
+  b2b_manager: 'bm',
+  b2b_sales: 'bm',
+  sales: 'bm',
+  delivery: 'service_mgr',
+  delivery_manager: 'service_mgr',
+  post_sales: 'service_mgr',
+  procurement: 'service_mgr',
+  manager: 'branch_mgr',
+  store_manager: 'branch_mgr',
+};
+
+/* `field_worker` covers both site auditors and installers with nothing in the
+   CRM permission to tell them apart, so it's deliberately absent from the map
+   above rather than mapped to null — null means "revoke," this means "hands
+   off, don't even compare." Any permission_name this map has never heard of
+   (a future addition on the Django side) is treated the same way: never guess
+   at a mapping, just skip. */
+export const FIELD_WORKER_SKIP = 'skip' as const;
+
+export function siteAuditTargetForCrmPermission(perm: string): string | null | typeof FIELD_WORKER_SKIP {
+  if (perm === 'field_worker') return FIELD_WORKER_SKIP;
+  if (perm in CRM_ROLE_TO_SITE_AUDIT_ROLE) return CRM_ROLE_TO_SITE_AUDIT_ROLE[perm];
+  return FIELD_WORKER_SKIP;
+}
+
+/* Roles a CRM-permission sync must never touch, regardless of what the
+   person's CRM permission computes to: `store_staff` has no CRM counterpart
+   at all (sourced entirely outside the CRM, from the field app's own kiosk
+   flow); `coe` and `content_team` are hand-assigned with no CRM permission
+   mapping to either. A naive sync reading "no matching CRM role" (or a CRM
+   role that happens to map to something else) as license to overwrite any
+   of these would silently clobber a real, intentional assignment. */
+const PROTECTED_ROLES = new Set(['store_staff', 'coe', 'content_team']);
+
+export type SiteAuditRoleSyncCrmUser = { id: string | number; name: string; phone: string; role: string; allowedBranches?: string[] };
+export type SiteAuditRoleSyncProfile = { id: string; name: string; email: string; role: string; contact: string | null };
+
+export type SiteAuditRoleSyncPlan = {
+  ready: Array<{ profileId: string; name: string; email: string; crmPermission: string; currentRole: string; targetRole: string; branch: string | null }>;
+  noProfileYet: Array<{ crmUserId: string | number; name: string; phone: string; crmPermission: string; targetRole: string; branch: string | null }>;
+  skipped: Array<{ name: string; reason: 'field_worker' | 'protected_role' | 'ambiguous_phone' | 'unmapped_permission' }>;
+  noLongerEntitled: Array<{ profileId: string; name: string; email: string; currentRole: string; crmPermission: string }>;
+};
+
+/* Pure — no network calls, so it's cheap to unit-test and safe to preview
+   before any write happens. Buckets every CRM user / Site Audit profile pair
+   by phoneKey() (the CRM has no email at all, only phone — see fetchUsers()),
+   applying the protection rules above in order: ambiguous match, then
+   protected role, then field_worker, then the mapping. Nothing in `ready` or
+   `noProfileYet` is ever written by this function itself — the caller decides
+   whether/when to apply it, after a human reviews the preview. */
+export function planSiteAuditRoleSync(
+  crmUsers: SiteAuditRoleSyncCrmUser[],
+  profiles: SiteAuditRoleSyncProfile[],
+): SiteAuditRoleSyncPlan {
+  const plan: SiteAuditRoleSyncPlan = { ready: [], noProfileYet: [], skipped: [], noLongerEntitled: [] };
+
+  const profilesByPhone = new Map<string, SiteAuditRoleSyncProfile[]>();
+  for (const p of profiles) {
+    const key = phoneKey(p.contact);
+    if (!key) continue;
+    const list = profilesByPhone.get(key) || [];
+    list.push(p);
+    profilesByPhone.set(key, list);
+  }
+  const crmByPhone = new Map<string, SiteAuditRoleSyncCrmUser[]>();
+  for (const u of crmUsers) {
+    const key = phoneKey(u.phone);
+    if (!key) continue;
+    const list = crmByPhone.get(key) || [];
+    list.push(u);
+    crmByPhone.set(key, list);
+  }
+
+  for (const crmUser of crmUsers) {
+    const key = phoneKey(crmUser.phone);
+    const matchedProfiles = key ? profilesByPhone.get(key) || [] : [];
+    const matchedCrmUsers = key ? crmByPhone.get(key) || [] : [];
+
+    // Ambiguous either direction (0 or 2+ matches) — never guess.
+    if (matchedProfiles.length > 1 || matchedCrmUsers.length > 1) {
+      plan.skipped.push({ name: crmUser.name, reason: 'ambiguous_phone' });
+      continue;
+    }
+    const profile = matchedProfiles[0] || null;
+
+    if (profile && PROTECTED_ROLES.has(profile.role)) {
+      plan.skipped.push({ name: crmUser.name, reason: 'protected_role' });
+      continue;
+    }
+    if (crmUser.role === 'field_worker') {
+      plan.skipped.push({ name: crmUser.name, reason: 'field_worker' });
+      continue;
+    }
+
+    const target = siteAuditTargetForCrmPermission(crmUser.role);
+    const branch = crmUser.allowedBranches?.[0] ?? null;
+
+    if (target === FIELD_WORKER_SKIP) {
+      plan.skipped.push({ name: crmUser.name, reason: 'unmapped_permission' });
+      continue;
+    }
+    if (target === null) {
+      if (profile && profile.role) {
+        plan.noLongerEntitled.push({ profileId: profile.id, name: profile.name, email: profile.email, currentRole: profile.role, crmPermission: crmUser.role });
+      }
+      continue;
+    }
+    // Real target role from here on.
+    if (!profile) {
+      plan.noProfileYet.push({ crmUserId: crmUser.id, name: crmUser.name, phone: crmUser.phone, crmPermission: crmUser.role, targetRole: target, branch });
+      continue;
+    }
+    if (profile.role === target) continue; // already correct, nothing to do
+
+    plan.ready.push({ profileId: profile.id, name: profile.name, email: profile.email, crmPermission: crmUser.role, currentRole: profile.role, targetRole: target, branch });
+  }
+
+  return plan;
+}
+
+/* A stable, deterministic placeholder identity for a CRM user who has no
+   Site Audit profile yet (the CRM has no email at all — see planSiteAuditRoleSync
+   above). This is never meant to be typed in or logged into anywhere — the
+   person's real access is entirely via their CRM session, which resolves Site
+   Audit identity by phone (profiles.contact), not by this email at all (see
+   SiteAuditOwnDashboard). It exists purely so profiles.email can keep serving
+   as the join key other code already relies on (bm_email on audit_orders,
+   Role Viewer's person list, etc.) — same value every time for the same
+   phone, so re-running the sync never creates a duplicate profile. */
+export function syntheticSiteAuditEmail(phone: string): string {
+  return 'crm.' + phoneKey(phone) + '@site-audit.internal';
+}
+
+/* A random 4-digit passcode (this table's existing format — see
+   upsertSiteAuditProfile, which instead sets `passcode: null` when a person
+   IS expected to set their own PIN on first direct login). For a profile
+   auto-created by the CRM sync, nobody is ever meant to use the separate
+   material-depot-site Login.html page at all — a real, random, uncommunicated
+   passcode blocks that page's "first login sets the PIN" flow from letting
+   anyone opportunistically claim the account there. */
+export function randomPasscode(): string {
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
+
 export const JOB_STATUS: Record<string, { l: string; c: string }> = {
   pending: { l: 'Pending', c: 'c-pending' },
   created: { l: 'Service Created', c: 'c-scheduled' },
@@ -453,4 +621,22 @@ export function fmtLog(d?: string | null) {
   if (isNaN(dt.getTime())) return '—';
   const ts = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + ts;
+}
+
+/* ── CRM role → the Site Audit dashboard that role should land on ───────────
+   The sub-permission slugs above (`site_audit.*`) are set by hand per person
+   in Admin > Users, and almost nobody has one — which is why BMs and store
+   managers saw nothing in the Site Audit tab even once it was granted. Their
+   CRM permission already says what they are, so derive the dashboard from it
+   and use the hand-set sub-permission only as an override.
+
+   Returns null when the CRM role implies no dashboard of its own: `admin`
+   (which gets the company-wide oversight rail instead, not a personal
+   dashboard), anything mapped to null ("no Site Audit access"), and
+   `field_worker`/unknown permissions, which can't be resolved to auditor vs
+   installer without a human — see siteAuditTargetForCrmPermission. */
+export function siteAuditRoleForCrmRole(crmRole?: string | null): string | null {
+  const target = siteAuditTargetForCrmPermission(String(crmRole || ''));
+  if (target === FIELD_WORKER_SKIP || target === null || target === 'admin') return null;
+  return target;
 }

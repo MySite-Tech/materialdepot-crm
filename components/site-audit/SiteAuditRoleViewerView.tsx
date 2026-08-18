@@ -13,6 +13,7 @@ import SiteAuditOpsView from './SiteAuditOpsView';
 import SiteShadowerApp from './SiteShadowerApp';
 import SiteAuditBmView from './SiteAuditBmView';
 import SiteAuditCoeView from './SiteAuditCoeView';
+import SiteAuditBranchManagerView from './SiteAuditBranchManagerView';
 
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
@@ -33,8 +34,9 @@ const ROLES: Record<string, { label: string; ico: string }> = {
   store_staff: { label: 'Store Team', ico: '🏪' },
   bm: { label: 'Business Manager', ico: '💼' },
   coe: { label: 'Category Ops Executive', ico: '📞' },
+  branch_mgr: { label: 'Branch Manager', ico: '🏬' },
 };
-const ROLE_ORDER = ['service_mgr', 'site_auditor', 'installer', 'auditor_installer', 'bm', 'coe', 'store_staff'];
+const ROLE_ORDER = ['service_mgr', 'site_auditor', 'installer', 'auditor_installer', 'bm', 'coe', 'branch_mgr', 'store_staff'];
 
 const AVATAR_COLORS = ['#EAB308', '#1F3A5F', '#0EA5E9', '#16A34A', '#DB2777', '#7C3AED', '#EA580C'];
 function avatarColor(name: string): string {
@@ -43,7 +45,7 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-type Person = { id: string; name: string; email: string; role: string };
+type Person = { id: string; name: string; email: string; role: string; branch: string | null; contact: string | null };
 
 export default function SiteAuditRoleViewerView() {
   const [persons, setPersons] = useState<Record<string, Person[]>>({});
@@ -54,7 +56,7 @@ export default function SiteAuditRoleViewerView() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const rows = await sbGet('profiles?role=neq.admin&select=id,name,email,role&order=name.asc');
+      const rows = await sbGet('profiles?role=neq.admin&select=id,name,email,role,branch,contact&order=name.asc');
       if (!alive) return;
       const map: Record<string, Person[]> = {};
       if (Array.isArray(rows)) rows.forEach((p: Person) => { if (!map[p.role]) map[p.role] = []; map[p.role].push(p); });
@@ -207,8 +209,13 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
   const actingAs = { id: person.id, name: person.name, email: person.email };
 
   if (shadowing) return <SiteShadowerApp actingAs={actingAs} />;
-  if (person.role === 'bm') return <SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email }} />;
+  if (person.role === 'bm') return <SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact: person.contact || undefined }} />;
   if (person.role === 'coe') return <SiteAuditCoeView city={city} who={person.name} />;
+  /* `branches={null}` + contact makes the preview resolve the store the same
+     way the real person's session does — from their CRM Branch Access — so an
+     admin sees what they'd actually see, not a guess off the blank
+     profiles.branch column. An explicit branch on the profile still wins. */
+  if (person.role === 'branch_mgr') return <SiteAuditBranchManagerView branches={person.branch ? [person.branch] : null} contact={person.contact} city={city} />;
   if (person.role === 'site_auditor') return <SiteAuditorApp actingAs={actingAs} />;
   if (person.role === 'installer') return <SiteInstallerApp actingAs={actingAs} />;
 
