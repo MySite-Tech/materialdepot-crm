@@ -47,6 +47,11 @@ export interface AppUser {
   role: string;
   allowedBranches?: string[];
   individualPermissions?: string[];
+  /* UserOrganisation.status — false for a deactivated employee. The Admin >
+     Users screen still lists them (that's where they get managed), so this is
+     not filtered at the API; anything that derives ACCESS or a staff roster
+     from this list has to check it. */
+  active?: boolean;
 }
 
 export interface Branch {

@@ -76,12 +76,17 @@ export default function SiteAuditOwnDashboard({
   if (loading) {
     return <div className="p-6 text-center text-sm text-gray-400">Loading…</div>;
   }
-  /* Stores in scope for a store manager: an explicit branch on the field-app
-     profile wins, then the CRM session's own Branch Access, and `null` finally
-     lets the rollup resolve it from the CRM roster by phone. */
-  const managerBranches = person?.branch
-    ? [person.branch]
-    : (allowedBranches && allowedBranches.length ? allowedBranches : null);
+  /* Stores in scope for a store manager. The CRM session's own Branch Access
+     comes FIRST: it is the live source of truth, it is a list, and it is what
+     the admin screen edits. `profiles.branch` is a single text column written
+     by the role sync, so letting it win would silently narrow a two-store
+     manager to one store the moment a sync stamped it. It stays as the
+     fallback for someone whose CRM record has no branches (a field-app profile
+     an admin scoped by hand), and `null` finally lets the rollup resolve it
+     from the CRM roster by phone. */
+  const managerBranches = allowedBranches && allowedBranches.length
+    ? allowedBranches
+    : (person?.branch ? [person.branch] : null);
 
   if (!person) {
     /* Read-only roles work off the CRM session alone — see the note above. */

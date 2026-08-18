@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, fmtLog } from '../siteAuditShared';
 import {
   BUCKETS, CHECKPOINTS, OUTCOMES, addDays, bucketFor, categoriesFor, checkpointState,
-  coeCalls, daysBetween, followupRows, mapUrl, orderPlacedFor, patchCoe, todayStr,
+  coeCalls, daysBetween, followupRows, loadOrderLog, mapUrl, orderPlacedFor, patchCoe, todayStr,
   type BucketKey, type CheckpointState, type CoeInstall, type CoeOrder, type FollowupRow as Row,
 } from './shared';
 
@@ -44,7 +44,9 @@ export default function Followups({ orders, installByPhone, who, onChanged }: {
   const [bucket, setBucket] = useState<BucketKey>('overdue');
   const [bucketPicked, setBucketPicked] = useState(false);
   const [q, setQ] = useState('');
-  const [openPi, setOpenPi] = useState<string | null>(null);
+  // Keyed by row id, not `pi` — pi is free text with no uniqueness guarantee,
+  // so a blank or repeated one would collide React keys and open the wrong row.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const all = useMemo(() => followupRows(orders, installByPhone), [orders, installByPhone]);
   const counts = useMemo(() => {
@@ -61,7 +63,7 @@ export default function Followups({ orders, installByPhone, who, onChanged }: {
     .filter((r) => !q || [r.o.pi, r.o.name, r.o.phone, r.o.bm, r.o.auditorName].join(' ').toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => String(a.nextDue?.dueOn || '9999').localeCompare(String(b.nextDue?.dueOn || '9999')));
 
-  const openRow = openPi ? all.find((r) => r.o.pi === openPi) || null : null;
+  const openRow = openId ? all.find((r) => r.o.id === openId) || null : null;
 
   return (
     <div>
@@ -103,7 +105,7 @@ export default function Followups({ orders, installByPhone, who, onChanged }: {
               ))}</tr>
             </thead>
             <tbody>
-              {list.map((r) => <FollowupRow key={r.o.pi} row={r} onOpen={() => setOpenPi(r.o.pi)} />)}
+              {list.map((r) => <FollowupRow key={r.o.id} row={r} onOpen={() => setOpenId(r.o.id)} />)}
             </tbody>
           </table>
         ) : (
@@ -117,7 +119,7 @@ export default function Followups({ orders, installByPhone, who, onChanged }: {
       {openRow ? (
         <FollowupDrawer
           order={openRow.o} installByPhone={installByPhone} who={who}
-          onClose={() => { setOpenPi(null); onChanged(); }}
+          onClose={() => { setOpenId(null); onChanged(); }}
         />
       ) : null}
     </div>
@@ -166,6 +168,13 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 function FollowupDrawer({ order: o, installByPhone, who, onClose }: { order: CoeOrder; installByPhone: Map<string, CoeInstall[]>; who: string; onClose: () => void }) {
   const [, force] = useState(0);
   const [msg, setMsg] = useState('');
+  // Fetched per order rather than carried by the list — see AUDIT_COLS.
+  const [log, setLog] = useState<any[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadOrderLog(o.id).then((l) => { if (alive) setLog(l); }).catch(() => { if (alive) setLog([]); });
+    return () => { alive = false; };
+  }, [o.id]);
   const today = todayStr();
   const t = o.coeTrack || {};
   const calls = coeCalls(o).slice().sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
@@ -261,7 +270,8 @@ function FollowupDrawer({ order: o, installByPhone, who, onClose }: { order: Coe
           </Sec>
 
           <Sec title="Order timeline">
-            {o.log && o.log.length ? o.log.slice().reverse().slice(0, 30).map((l: any, i: number) => (
+            {log === null ? <div className="text-[12.5px] text-gray-400">Loading…</div>
+              : log.length ? log.slice().reverse().slice(0, 30).map((l: any, i: number) => (
               <div key={i} className="border-b border-gray-100 py-2 last:border-b-0">
                 <div className="text-[13px] font-bold">{l.who ? <b className="text-[#1F3A5F]">{l.who}</b> : null}{l.who ? ' · ' : ''}{l.t || ''}</div>
                 <div className="mt-0.5 text-[11.5px] text-gray-400">{fmtLog(l.d)}</div>

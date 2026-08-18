@@ -11,7 +11,7 @@
    source repo learned the hard way). */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { inCity, sbGet, type CityFilter } from './siteAuditShared';
+import { inCity, phoneKey, sbGet, type CityFilter } from './siteAuditShared';
 import { AUDIT_COLS, INSTALL_COLS, mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder } from './coe-ops/shared';
 import type { WpRow } from './coe-ops/wpTrack';
 import Followups from './coe-ops/Followups';
@@ -57,9 +57,11 @@ export default function SiteAuditCoeView({ city, who }: { city?: CityFilter; who
   const installByPhone = useMemo(() => {
     const m = new Map<string, CoeInstall[]>();
     installs.forEach((io) => {
-      if (!io.phone) return;
-      if (!m.has(io.phone)) m.set(io.phone, []);
-      m.get(io.phone)!.push(io);
+      // Normalised, not raw — orderPlacedFor looks up by phoneKey too.
+      const key = phoneKey(io.phone);
+      if (!key) return;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(io);
     });
     // oldest first, so orderPlacedFor picks the FIRST order after the audit,
     // not the latest.

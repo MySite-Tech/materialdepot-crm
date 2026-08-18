@@ -2,7 +2,7 @@
    material-depot-site's COE_Dashboard.html (site-audit → order conversion
    call queue). See CLAUDE.md note 102 in that repo for the full spec. */
 
-import { sbGet, sbPatch, sbPost } from '../siteAuditShared';
+import { phoneKey, sbGet, sbPatch, sbPost } from '../siteAuditShared';
 import { WP_ROUND_KEYS, wpRounds, wpStageLabel, type WpNext, type WpRow } from './wpTrack';
 
 export type CoeCall = { id: string; ts: string; stage: string; who: string; outcome: string; note: string; by?: { email?: string; name?: string } };
@@ -18,12 +18,18 @@ export type CoeTrack = {
 export type CoeOrder = {
   id: string; pi: string; po: string[]; skus: any[]; bm: string; bmEmail: string | null;
   name: string; phone: string; addr: string; status: string; service: any; slot: string | null;
-  date: string | null; auditorName: string | null; createdAt: string | null; log: any[];
+  date: string | null; auditorName: string | null; createdAt: string | null;
   city: string | null; coeTrack: CoeTrack;
 };
 export type CoeInstall = { id: string; pi: string; po: string[]; phone: string; name: string; createdAt: string | null; status: string; customWp: boolean; deliveryDate: string | null };
 
-export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at,city,coe_track';
+/* `log` is deliberately NOT here. It is jsonb averaging ~7 KB a row — on the
+   completed-audit set that is 1.8 MB of the ~1.9 MB this view re-fetches every
+   30 seconds — and it is read in exactly one place, the drawer's "Order
+   timeline", for one order at a time. It is fetched per order on open instead
+   (loadOrderLog below). patchCoe re-reads it before every write regardless, so
+   nothing that mutates the log depends on the list carrying it. */
+export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,created_at,city,coe_track';
 export const INSTALL_COLS = 'id,pi,po,phone,customer_name,created_at,status,custom_wp,delivery_date';
 
 export function mapCoeAudit(r: any): CoeOrder {
@@ -32,7 +38,7 @@ export function mapCoeAudit(r: any): CoeOrder {
     skus: r.skus || [], bm: r.bm || '—', bmEmail: r.bm_email || null,
     name: r.customer_name || '', phone: r.phone || '', addr: r.addr || '',
     status: r.status || 'pending', service: r.service || null, slot: r.slot || null, date: r.date || null,
-    auditorName: r.auditor_name || null, createdAt: r.created_at || null, log: r.log || [],
+    auditorName: r.auditor_name || null, createdAt: r.created_at || null,
     city: r.city || null, coeTrack: (r.coe_track && typeof r.coe_track === 'object') ? r.coe_track : {},
   };
 }
@@ -105,11 +111,24 @@ export function orderPlacedFor(o: CoeOrder, installsByPhone: Map<string, CoeInst
   const man = o.coeTrack?.order_placed || null;
   if (man && man.at) return { ...man, auto: false };
   const anchor = anchorDate(o);
-  if (!anchor || !o.phone) return null;
-  const list = installsByPhone.get(o.phone) || [];
+  const key = phoneKey(o.phone);
+  if (!anchor || !key) return null;
+  // Keyed through phoneKey on BOTH sides (see CoeView's installByPhone) — the
+  // two tables are filled in by different apps and a stray +91 or space on
+  // either would silently break the join, leaving the COE chasing D+3/D+14 on
+  // a client who has already ordered.
+  const list = installsByPhone.get(key) || [];
   const hit = list.find((io) => io.createdAt && String(io.createdAt).slice(0, 10) >= anchor);
   if (!hit) return null;
   return { auto: true, kind: 'installation', ref: hit.pi || '', at: hit.createdAt!, orderId: hit.id };
+}
+
+/* The drawer's "Order timeline" — every actor's activity on this order, not
+   just the COE's. One order, on open. Returns [] on any failure: a missing
+   timeline must never block the call-logging the drawer exists for. */
+export async function loadOrderLog(orderId: string): Promise<any[]> {
+  const rows = await sbGet('audit_orders?id=eq.' + orderId + '&select=log');
+  return Array.isArray(rows) && rows[0] && Array.isArray(rows[0].log) ? rows[0].log : [];
 }
 
 export function coeCalls(o: CoeOrder): CoeCall[] {

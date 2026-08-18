@@ -1398,6 +1398,7 @@ function AdminDashboard() {
                   <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => { setNewRole(e.target.value); setNewPermissions(defaultPermissionsForRole(e.target.value)); }}>
                     <option value="sales">Sales</option>
                     <option value="manager">Manager</option>
+                    <option value="store_manager">Store Manager</option>
                     <option value="retail">Retail</option>
                     <option value="admin">Admin</option>
                     <option value="tech">Tech</option>
@@ -1447,6 +1448,7 @@ function AdminDashboard() {
                               <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => { setEditRole(e.target.value); setEditPermissions(defaultPermissionsForRole(e.target.value)); }}>
                                 <option value="sales">Sales</option>
                                 <option value="manager">Manager</option>
+                                <option value="store_manager">Store Manager</option>
                                 <option value="retail">Retail</option>
                                 <option value="admin">Admin</option>
                               </select>

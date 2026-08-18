@@ -21,7 +21,9 @@
    branches" for lead visibility, and quietly reading it the same way here would
    put every BM's orders in every manager's store. Those people are counted and
    named in a notice instead, so the gap is visible and fixable rather than
-   silently wrong.
+   silently wrong. That rule binds the manager VIEWING this page just as much as
+   the BMs it rolls up: an unscoped manager gets the same notice and an empty
+   dashboard, never the whole company's field ops.
 
    Order attribution reuses SiteAuditBmView's `orderBelongsToBm` unmodified,
    called once per BM in the store and unioned — the same function a BM's own
@@ -30,7 +32,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, phoneKey, sbGet, siteAuditRoleForCrmRole, type CityFilter } from './siteAuditShared';
 import SiteAuditPerfView from './SiteAuditPerfView';
-import { AUDIT_COLS, STATUS, orderBelongsToBm, type BmProfile } from './SiteAuditBmView';
+import { STATUS, orderBelongsToBm, type BmProfile } from './SiteAuditBmView';
 import { InstallOrdersList, WallpaperOrdersList, loadOwnedInstalls, loadOwnedWallpapers, type OwnedInstall } from './ownedOrders';
 import type { WpRow } from './coe-ops/wpTrack';
 import { fetchUsers } from '@/lib/mockApi';
@@ -57,6 +59,14 @@ type Scope = {
    roles it can actually measure and let its own empty state speak otherwise. */
 const FIELD_WORK_ROLES = new Set(['site_auditor', 'installer', 'auditor_installer', 'service_mgr']);
 
+/* Only the columns RollupOrder actually maps, plus the two `orderBelongsToBm`
+   needs to attribute a row. Reusing SiteAuditBmView's AUDIT_COLS pulled `log`
+   and `skus` as well — jsonb that averages ~7 KB a row and is never read here,
+   which made this list 1.9 MB per poll (every 30s, per open tab) to render
+   107 KB of it. The BM's own dashboard still needs the wide select; it opens a
+   drawer over these rows, this view doesn't. */
+const ROLLUP_AUDIT_COLS = 'id,pi,bm,bm_email,customer_name,phone,status,date,created_at';
+
 const EMPTY_SCOPE: Scope = { branches: [], roster: [], bms: [], rosterEmails: [], unassigned: 0, crmReachable: false };
 
 export default function SiteAuditBranchManagerView({
@@ -77,6 +87,7 @@ export default function SiteAuditBranchManagerView({
   const [scope, setScope] = useState<Scope>(EMPTY_SCOPE);
   const [scopeReady, setScopeReady] = useState(false);
   const [notFoundInCrm, setNotFoundInCrm] = useState(false);
+  const [noBranchAccess, setNoBranchAccess] = useState(false);
   const [audits, setAudits] = useState<RollupOrder[]>([]);
   const [installs, setInstalls] = useState<OwnedInstall[]>([]);
   const [wallpapers, setWallpapers] = useState<WpRow[]>([]);
@@ -109,16 +120,36 @@ export default function SiteAuditBranchManagerView({
       }
 
       const crmReachable = Array.isArray(crmUsers);
-      const users = Array.isArray(crmUsers) ? crmUsers : [];
+      const allUsers = Array.isArray(crmUsers) ? crmUsers : [];
+      // Deactivated employees stay in the CRM roster so Admin > Users can
+      // manage them, but they are not this store's staff and their old orders
+      // must not roll up as if someone still owns them.
+      const users = allUsers.filter((u) => u.active !== false);
 
       let inScope = branches;
+      let unscopedManager = false;
       if (inScope === null) {
         const key = phoneKey(contact);
-        const me = key ? users.find((u) => phoneKey(u.phone) === key) : undefined;
-        if (!me && crmReachable) { setNotFoundInCrm(true); setScope({ ...EMPTY_SCOPE, crmReachable }); setScopeReady(true); return; }
+        const me = key ? allUsers.find((u) => phoneKey(u.phone) === key) : undefined;
+        if (!me && crmReachable) { setNotFoundInCrm(true); setNoBranchAccess(false); setScope({ ...EMPTY_SCOPE, crmReachable }); setScopeReady(true); return; }
         inScope = me?.allowedBranches || [];
+        /* A manager with no Branch Access has no store, NOT every store. The
+           same rule this view already applies to the BMs it rolls up (see the
+           `unassigned` notice) has to apply to the manager themselves —
+           reading "unset" as "all" is what would silently hand one store's
+           manager the whole company's field ops. An explicitly-passed empty
+           list still means every store: that's Role Viewer/an admin asking
+           for the unscoped view on purpose, not an unfilled field. */
+        unscopedManager = inScope.length === 0;
       }
       setNotFoundInCrm(false);
+
+      setNoBranchAccess(unscopedManager);
+      if (unscopedManager) {
+        setScope({ ...EMPTY_SCOPE, crmReachable });
+        setScopeReady(true);
+        return;
+      }
 
       const everyStore = inScope.length === 0;
       const wanted = new Set(inScope.map((b) => b.trim().toLowerCase()));
@@ -191,7 +222,7 @@ export default function SiteAuditBranchManagerView({
     setLoading(true);
     const run = async () => {
       const [auditRows, installRows, wpRows] = await Promise.all([
-        sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc'),
+        sbGet('audit_orders?select=' + ROLLUP_AUDIT_COLS + '&status=neq.deleted&order=created_at.desc'),
         loadOwnedInstalls(scope.bms),
         loadOwnedWallpapers(scope.bms),
       ]);
@@ -231,6 +262,15 @@ export default function SiteAuditBranchManagerView({
 
   if (!scopeReady) {
     return <div className="flex justify-center py-10"><div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-[#EAB308]" /></div>;
+  }
+
+  if (noBranchAccess) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-800">
+        No Branch Access is set on this CRM account, so there&apos;s no store to roll up. Ask an admin to set it in Admin &gt; Users &gt; Branch Access.
+        <div className="mt-1 text-[12px] font-normal">Until then this stays empty on purpose — an unset store means no store, not every store.</div>
+      </div>
+    );
   }
 
   if (notFoundInCrm) {

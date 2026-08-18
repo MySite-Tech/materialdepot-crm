@@ -260,21 +260,40 @@ export default function SiteAuditUsersView() {
     )) return;
     setSyncingRoles(true);
     let ok = 0;
+    const failed: string[] = [];
     for (const r of roleSync.ready) {
-      try { await sbPatch('profiles', r.profileId, { role: r.targetRole, branch: r.branch }); ok++; } catch { /* keep going; report the total */ }
+      try {
+        // Only ever ADD a branch. `branch: null` in the plan means "the CRM has
+        // no single branch to record", which must not wipe one an admin set by
+        // hand — so the column is omitted rather than nulled.
+        await sbPatch('profiles', r.profileId, r.branch ? { role: r.targetRole, branch: r.branch } : { role: r.targetRole });
+        ok++;
+      } catch (e: any) {
+        failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');
+      }
     }
     for (const r of roleSync.noProfileYet) {
       try {
         await sbPost('profiles', {
-          name: r.name, role: r.targetRole, branch: r.branch, contact: r.phone,
+          name: r.name, role: r.targetRole, contact: r.phone,
+          ...(r.branch ? { branch: r.branch } : {}),
           email: syntheticSiteAuditEmail(r.phone), city: 'Bengaluru', installer_type: 'flooring', passcode: randomPasscode(),
         });
         ok++;
-      } catch { /* keep going; report the total */ }
+      } catch (e: any) {
+        failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');
+      }
     }
     setSyncingRoles(false);
     await load();
-    flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' role(s)');
+    // A bare count hid WHICH rows failed, leaving no way to retry the right
+    // ones — a half-applied sync is the state most in need of detail.
+    if (failed.length) {
+      console.error('[siteAudit] role sync failures', failed);
+      flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' — failed: ' + failed.slice(0, 3).join(', ') + (failed.length > 3 ? ' and ' + (failed.length - 3) + ' more (see console)' : ''));
+    } else {
+      flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' role(s)');
+    }
   }
 
   async function resetPasscode(u: ProfileRow) {
@@ -374,7 +393,11 @@ export default function SiteAuditUsersView() {
         </div>
       ) : null}
 
-      {roleSyncTotal || roleSync.skipped.length || roleSync.noLongerEntitled.length ? (
+      {/* Skips alone don't raise the banner: `field_worker` and oversight roles
+          are permanent, by-design skips, so including them left a banner up
+          forever announcing "0 changes". It only shows when there is something
+          to act on — and the skip detail is still one click away from there. */}
+      {roleSyncTotal || roleSync.noLongerEntitled.length ? (
         <div className="mb-3 rounded-md border-l-4 border-indigo-500 bg-indigo-50 px-3 py-2.5 text-[12.5px] text-indigo-900">
           <div className="flex flex-wrap items-center gap-2">
             <span>
@@ -414,7 +437,9 @@ export default function SiteAuditUsersView() {
                       <td className="px-3 py-2 text-[12.5px] text-gray-500">
                         {r.reason === 'field_worker' ? 'CRM permission is "field_worker" — can\'t tell auditor from installer, left as-is'
                           : r.reason === 'protected_role' ? 'Current role is hand-assigned (Category Ops Executive, Store Team, or Content Team) — never auto-changed'
-                          : r.reason === 'ambiguous_phone' ? 'Phone number matches zero or multiple people — needs a human to disambiguate'
+                          : r.reason === 'field_work_role' ? 'Already a site auditor / installer — their jobs are keyed to that role, so a CRM permission never demotes them. Change it by hand if they really have moved off field work.'
+                          : r.reason === 'oversight_role' ? 'CRM admin/tech — their Site Audit access is the company-wide view from this CRM login; no field-app profile needed either way'
+                          : r.reason === 'ambiguous_phone' ? 'Phone number matches multiple people — needs a human to disambiguate'
                           : 'CRM permission not recognised — never guessed at'}
                       </td>
                     </tr>

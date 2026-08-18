@@ -139,6 +139,30 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     return () => { alive = false; };
   }, [resolved]);
 
+  /* Fill in the CRM's own name for this person as an order-matching alias when
+     the caller didn't supply one. A BM's own session passes it (SiteAuditOwnDashboard
+     knows it from the CRM login), but Role Viewer's admin preview only has the
+     field-app profile — so without this the preview matched on the profile name
+     alone and showed a DIFFERENT, smaller order list than the person actually
+     sees, which defeats the point of previewing. Same exact phone match the
+     email lookup above uses; nothing here compares partial or similar strings. */
+  const aliasLookedUpRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = phoneKey(resolved?.contact);
+    if (!resolved || resolved.aliases?.length || !key || aliasLookedUpRef.current === key) return;
+    aliasLookedUpRef.current = key;
+    let alive = true;
+    fetchUsers()
+      .then((users) => {
+        if (!alive) return;
+        const hit = users.find((u) => phoneKey(u.phone) === key);
+        if (!hit?.name) return;
+        setResolved((cur) => (cur && phoneKey(cur.contact) === key && !cur.aliases?.length ? { ...cur, aliases: [hit.name] } : cur));
+      })
+      .catch(() => { /* alias is an enhancement — the profile name still matches */ });
+    return () => { alive = false; };
+  }, [resolved]);
+
   const load = useCallback(async () => {
     if (!resolved) { setLoading(false); return; }
     const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');

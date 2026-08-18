@@ -5,7 +5,7 @@ import {
   addDays, anchorDate, categoriesFor, followupRows, todayStr,
   type CoeInstall, type CoeOrder, type FollowupRow,
 } from './shared';
-import { WP_STAGES, WP_VENDORS, wpBucket, wpDurations, wpEverReached, wpFmtDur, wpNext, wpSla, wpStageLabel, type WpBucketKey, type WpNext, type WpRow, type WpSla } from './wpTrack';
+import { WP_STAGES, WP_VENDORS, wpBucket, wpDurations, wpEverReached, wpFmtDur, wpNext, wpSla, wpStageAt, wpStageLabel, type WpBucketKey, type WpNext, type WpRow, type WpSla } from './wpTrack';
 
 function median(xs: number[]): number | null {
   if (!xs.length) return null;
@@ -39,10 +39,20 @@ export default function Insights({ orders, installByPhone, wpRows }: {
   const nReviewed = A.filter((r) => r.cps.find((c) => c.k === 'd1' && c.state === 'done')).length;
   const nPlaced = A.filter((r) => r.placed).length;
   const nLost = A.filter((r) => r.o.coeTrack.result === 'lost').length;
+  // Counted directly rather than as nAudits - nPlaced - nLost: a row can be
+  // both order-placed and marked lost (the client ordered, then the COE closed
+  // it out), which double-subtracts and can drive the tile negative.
+  const nOpen = A.filter((r) => !r.placed && r.o.coeTrack.result !== 'lost').length;
   const nChasePending = A.filter((r) => r.bucket === 'overdue' || r.bucket === 'today').length;
 
-  // --- production funnel: how many of the tracked POs ever reached each step ---
-  const reached = (k: string) => W.filter((x) => !!x.r.stages?.[k]?.at || (WP_STAGES.map((s) => s.k).includes(k) && wpEverReached(x.r, k))).length;
+  /* --- production funnel: how many of the tracked POs ever reached each step ---
+     Reads through wpStageAt, NOT row.stages[k]: the four render/approval steps
+     are stored per round inside rounds[], so a raw stages[] lookup finds
+     nothing for them and the funnel reported them as never reached. That
+     understated "Approved by client" by 19 of 81 POs and drew a 19-order
+     cliff at client approval that never happened — in the one tab whose whole
+     job is locating where things really stall. */
+  const reached = (k: string) => W.filter((x) => !!wpStageAt(x.r, k) || wpEverReached(x.r, k)).length;
   const prodFunnel = WP_STAGES.map((s) => ({ s, n: reached(s.k) }));
 
   // --- per-stage time + breach, split by vendor ---
@@ -101,7 +111,7 @@ export default function Insights({ orders, installByPhone, wpRows }: {
             <div className="mt-3 flex flex-wrap gap-4 text-[12.5px] text-gray-400">
               <div><b className="text-[15px] text-red-600">{nChasePending}</b> awaiting a call right now</div>
               <div><b className="text-[15px] text-gray-900">{nLost}</b> explicitly marked lost</div>
-              <div><b className="text-[15px] text-gray-900">{nAudits - nPlaced - nLost}</b> neither ordered nor closed out</div>
+              <div><b className="text-[15px] text-gray-900">{nOpen}</b> neither ordered nor closed out</div>
             </div>
           </>
         ) : <div className="text-[13px] text-gray-400">No completed site audits in this range.</div>}
@@ -183,7 +193,10 @@ function FunnelBars({ steps, total }: { steps: Array<{ l: string; n: number }>; 
       {steps.map((s, i) => {
         const w = total ? Math.max(2, Math.round((s.n / total) * 100)) : 0;
         const prev = i ? steps[i - 1].n : null;
-        const drop = prev != null ? prev - s.n : null;
+        // A later step can legitimately show MORE rows than the one before it
+        // (back-filled data, a step never explicitly stamped), and "↓ -3 lost
+        // here" reads as a bug. Only report a real decrease.
+        const drop = prev != null && prev > s.n ? prev - s.n : null;
         return (
           <div key={s.l} className="mb-2.5">
             <div className="flex items-baseline gap-2 text-[12.5px]">
