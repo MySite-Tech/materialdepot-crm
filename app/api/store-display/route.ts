@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     switch (_action) {
       // ── Variant Store Movement ──────────────────────────────────
       case 'fetch_locations': {
-        const { branch_id, branch_name, page, search, category, display_type, is_active, is_deleted, page_size } = payload;
+        const { branch_id, branch_name, page = 1, search, category, display_type, is_active, is_deleted, page_size = 30 } = payload;
         if (branch_name) {
           const res = await fetch(`${API_BASE}/fetch-variant-locations/`, {
             method: 'POST',
@@ -43,22 +43,85 @@ export async function POST(req: NextRequest) {
           });
           return proxyResponse(res);
         }
-        let url = branch_id
-          ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
-          : `${API_BASE}/fetch-variant-locations/?all=True`;
-        if (page) url += `&page=${page}`;
-        if (page_size) url += `&page_size=${page_size}`;
-        if (search) url += `&search=${encodeURIComponent(search)}`;
-        if (category) url += `&category=${encodeURIComponent(category)}`;
-        if (display_type) url += `&display_type=${encodeURIComponent(display_type)}`;
-        if (is_active !== undefined) url += `&is_active=${is_active}`;
-        if (is_deleted !== undefined) url += `&is_deleted=${is_deleted}`;
-        const res = await fetch(url);
-        if (!res.ok) {
-          return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });
+
+        const needsFilter = search || category || display_type || is_active !== undefined || is_deleted !== undefined;
+
+        if (!needsFilter) {
+          let url = branch_id
+            ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
+            : `${API_BASE}/fetch-variant-locations/?all=True`;
+          url += `&page=${page}&page_size=${page_size}`;
+          const res = await fetch(url);
+          if (!res.ok) {
+            return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });
+          }
+          const data = await res.json().catch(() => ({}));
+          return NextResponse.json(data);
         }
-        const data = await res.json().catch(() => ({}));
-        return NextResponse.json(data);
+
+        const allItems: any[] = [];
+        const fetchSize = 1000;
+        let fetchPage = 1;
+        const maxPages = 10;
+
+        while (fetchPage <= maxPages) {
+          let url = branch_id
+            ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
+            : `${API_BASE}/fetch-variant-locations/?all=True`;
+          url += `&page=${fetchPage}&page_size=${fetchSize}`;
+          const res = await fetch(url);
+          if (!res.ok) break;
+          const data = await res.json().catch(() => ({}));
+          const items = data?.data ?? [];
+          if (items.length === 0) break;
+          allItems.push(...items);
+          if (fetchPage >= (data?.total_pages ?? 1)) break;
+          fetchPage++;
+        }
+
+        let filtered = allItems;
+
+        if (search) {
+          const q = search.toLowerCase();
+          filtered = filtered.filter((item: any) => {
+            const v = item.variant ?? {};
+            const l = item.location ?? {};
+            return (
+              (v.product_name ?? '').toLowerCase().includes(q) ||
+              (v.sku ?? '').toLowerCase().includes(q) ||
+              (v.variant_handle ?? '').toLowerCase().includes(q) ||
+              (v.private_label_product_name ?? '').toLowerCase().includes(q) ||
+              (l.location_string ?? '').toLowerCase().includes(q)
+            );
+          });
+        }
+
+        if (category) {
+          filtered = filtered.filter((item: any) => item.location?.category === category);
+        }
+        if (display_type) {
+          filtered = filtered.filter((item: any) => item.location?.display_type === display_type);
+        }
+        if (is_active !== undefined) {
+          filtered = filtered.filter((item: any) => item.location?.is_active === is_active);
+        }
+        if (is_deleted !== undefined) {
+          filtered = filtered.filter((item: any) => item.variant?.is_deleted === is_deleted);
+        }
+
+        const total_count = filtered.length;
+        const total_pages = Math.max(1, Math.ceil(total_count / page_size));
+        const start = (page - 1) * page_size;
+        const paged = filtered.slice(start, start + page_size);
+
+        return NextResponse.json({
+          status: true,
+          data: paged,
+          page,
+          page_size,
+          total_count,
+          total_pages,
+        });
       }
 
       case 'fetch_movements': {
