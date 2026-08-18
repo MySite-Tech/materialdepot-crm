@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     switch (_action) {
       // ── Variant Store Movement ──────────────────────────────────
       case 'fetch_locations': {
-        const { branch_id, branch_name, page, search } = payload;
+        const { branch_id, branch_name, page, search, category, display_type, is_active, is_deleted, page_size } = payload;
         if (branch_name) {
           const res = await fetch(`${API_BASE}/fetch-variant-locations/`, {
             method: 'POST',
@@ -47,7 +47,12 @@ export async function POST(req: NextRequest) {
           ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
           : `${API_BASE}/fetch-variant-locations/?all=True`;
         if (page) url += `&page=${page}`;
+        if (page_size) url += `&page_size=${page_size}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (category) url += `&category=${encodeURIComponent(category)}`;
+        if (display_type) url += `&display_type=${encodeURIComponent(display_type)}`;
+        if (is_active !== undefined) url += `&is_active=${is_active}`;
+        if (is_deleted !== undefined) url += `&is_deleted=${is_deleted}`;
         const res = await fetch(url);
         if (!res.ok) {
           return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });

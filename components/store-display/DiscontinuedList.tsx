@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { getDisplaySupabase, STORES, STORE_CODE_TO_BRANCH_ID, STORE_NAMES, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
+import { displayApi } from '../../lib/displayApi';
+import { STORES, STORE_CODE_TO_BRANCH_ID, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 
 interface VariantLocationRow {
   id: number;
@@ -41,25 +42,19 @@ export function DiscontinuedList() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Fetch filter options
   useEffect(() => {
     (async () => {
       try {
-        const sb = getDisplaySupabase();
-        let q = sb
-          .from('variant_locations_cache')
-          .select('category, display_type')
-          .eq('is_deleted', true);
+        const params: Record<string, any> = { is_deleted: true, page_size: 1000 };
         if (selectedStore !== 'All') {
-          q = q.eq('branch_id', STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore);
+          params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
         }
-        const { data } = await q;
-        if (data) {
-          const cats = Array.from(new Set(data.map((r: any) => r.category).filter(Boolean))).sort() as string[];
-          const dts = Array.from(new Set(data.map((r: any) => r.display_type).filter(Boolean))).sort() as string[];
-          setCategories(['All', ...cats]);
-          setDisplayTypes(['All', ...dts]);
-        }
+        const data = await displayApi('fetch_locations', params);
+        const results = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
+        const cats = Array.from(new Set(results.map((r: any) => r.category).filter(Boolean))).sort() as string[];
+        const dts = Array.from(new Set(results.map((r: any) => r.display_type).filter(Boolean))).sort() as string[];
+        setCategories(['All', ...cats]);
+        setDisplayTypes(['All', ...dts]);
       } catch {}
     })();
   }, [selectedStore]);
@@ -68,35 +63,23 @@ export function DiscontinuedList() {
     setLoading(true);
     setError(null);
     try {
-      const sb = getDisplaySupabase();
-      const from = (pageNum - 1) * PAGE_SIZE;
-
-      let query = sb
-        .from('variant_locations_cache')
-        .select('*', { count: 'exact' })
-        .eq('is_deleted', true)
-        .order('product_name', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
-
+      const params: Record<string, any> = {
+        is_deleted: true,
+        page: pageNum,
+        page_size: PAGE_SIZE,
+      };
       if (storeCode !== 'All') {
-        query = query.eq('branch_id', STORE_CODE_TO_BRANCH_ID[storeCode] || storeCode);
+        params.branch_id = STORE_CODE_TO_BRANCH_ID[storeCode] || storeCode;
       }
-      if (category !== 'All') {
-        query = query.eq('category', category);
-      }
-      if (displayType !== 'All') {
-        query = query.eq('display_type', displayType);
-      }
-      if (searchQ.trim()) {
-        query = query.or(
-          `product_name.ilike.%${searchQ}%,sku.ilike.%${searchQ}%,variant_handle.ilike.%${searchQ}%,location_string.ilike.%${searchQ}%`
-        );
-      }
+      if (category !== 'All') params.category = category;
+      if (displayType !== 'All') params.display_type = displayType;
+      if (searchQ.trim()) params.search = searchQ.trim();
 
-      const { data, count, error: fetchError } = await query;
-      if (fetchError) throw new Error(fetchError.message);
-      setItems((data || []) as VariantLocationRow[]);
-      setTotalCount(count ?? 0);
+      const data = await displayApi('fetch_locations', params);
+      const results = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
+      const count = data?.count ?? results.length;
+      setItems(results as VariantLocationRow[]);
+      setTotalCount(count);
     } catch (e: any) {
       setError(e.message || 'Failed to load products');
     } finally {

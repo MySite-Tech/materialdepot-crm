@@ -1,18 +1,3 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-let _client: SupabaseClient | null = null;
-
-export function getDisplaySupabase(): SupabaseClient {
-  if (_client) return _client;
-  const url = process.env.NEXT_PUBLIC_DISPLAY_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_DISPLAY_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('Display Supabase env vars not set');
-  }
-  _client = createClient(url, key);
-  return _client;
-}
-
 export const STORE_CODE_TO_BRANCH_ID: Record<string, string> = {
   JP_ec: '1',
   YE_ec: '2',
