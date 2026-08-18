@@ -4,6 +4,10 @@ import { displayApi } from '../../lib/displayApi';
 
 interface VariantLocationRow {
   id: number;
+  location_id?: number | null;
+  branch_id?: string;
+  branch_name?: string;
+  is_active?: boolean;
   variant_handle: string;
   product_name: string;
   sku: string | null;
