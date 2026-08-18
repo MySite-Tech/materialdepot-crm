@@ -51,6 +51,22 @@ const BUCKET_TEXT: Record<Bucket, string> = {
 
 const isSubmitted = (r: NPSRow) => r.status === 'submitted' && r.score != null;
 
+// A customer holds one review, which the tracker attaches to every visit row of
+// theirs. Counting rows would count a repeat visitor once per visit, so anything
+// measuring customers or reviews collapses them to their latest visit first.
+const customerKey = (r: NPSRow) => (r.contact != null ? `c:${r.contact}` : `f:${r.id}`);
+const visitedAt = (r: NPSRow) => `${r.visit_date} ${r.time}`;
+
+function uniqueCustomers(rows: NPSRow[]): NPSRow[] {
+  const latest: Record<string, NPSRow> = {};
+  rows.forEach(r => {
+    const k = customerKey(r);
+    if (!latest[k] || visitedAt(r) > visitedAt(latest[k])) latest[k] = r;
+  });
+  return Object.values(latest);
+}
+const uniqueReviews = (rows: NPSRow[]) => uniqueCustomers(rows.filter(isSubmitted));
+
 const fmtDate = (d: string) =>
   d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const fmtPhone = (c: number | null) => (c == null ? '—' : `+91 ${c}`);
@@ -85,7 +101,7 @@ function presetRange(key: string): { from: string; to: string } {
 
 // ── NPS math (client-side, from tracker rows) ──────────────────────────────────
 function npsOf(rows: NPSRow[]): number | null {
-  const c = rows.filter(isSubmitted);
+  const c = uniqueReviews(rows);
   if (!c.length) return null;
   let p = 0, d = 0;
   c.forEach(r => { const b = catOf(r.score!); if (b === 'promoter') p++; else if (b === 'detractor') d++; });
@@ -115,16 +131,18 @@ interface Metrics {
   nps: number | null; total: number; responseRate: number | null;
   promoterPct: number | null; detractorPct: number | null; avg: number | null;
 }
-// `base` is already search + BM filtered. responseRate is measured over the full
-// base (all footfalls) and ignores the understood/category chips.
+// `base` is already search + BM filtered. responseRate is the conversion of unique
+// footfall into unique reviews, so it is measured over the full base (all footfalls)
+// and ignores the understood/category chips.
 function computeMetrics(base: NPSRow[], u: Understood, c: CatFilter): Metrics {
   const analysis = base.filter(r => okUnderstood(r, u) && okCategory(r, c));
-  const completed = analysis.filter(isSubmitted);
+  const completed = uniqueReviews(analysis);
   const total = completed.length;
+  const customers = uniqueCustomers(base).length;
   return {
     nps: npsOf(analysis),
     total,
-    responseRate: base.length ? Math.round(base.filter(isSubmitted).length / base.length * 100) : null,
+    responseRate: customers ? Math.round(uniqueReviews(base).length / customers * 100) : null,
     promoterPct: total ? Math.round(completed.filter(r => catOf(r.score!) === 'promoter').length / total * 100) : null,
     detractorPct: total ? Math.round(completed.filter(r => catOf(r.score!) === 'detractor').length / total * 100) : null,
     avg: total ? completed.reduce((a, r) => a + r.score!, 0) / total : null,
@@ -544,8 +562,9 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     const map: Record<string, NPSRow[]> = {};
     let guard = 0;
     for (let d = from; d <= to && guard < 400; d = addDaysISO(d, 1), guard++) map[d] = [];
-    analysis.forEach(r => { if (map[r.visit_date]) map[r.visit_date].push(r); });
-    return Object.keys(map).sort().map(d => ({ date: d.slice(5), nps: npsOf(map[d]), responses: map[d].filter(isSubmitted).length }));
+    // Deduplicate before bucketing, so a repeat visitor lands on one day only.
+    uniqueReviews(analysis).forEach(r => { if (map[r.visit_date]) map[r.visit_date].push(r); });
+    return Object.keys(map).sort().map(d => ({ date: d.slice(5), nps: npsOf(map[d]), responses: map[d].length }));
   }, [analysis, from, to]);
   const trendHasData = trend.some(p => p.nps != null);
 
@@ -553,7 +572,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     const names = Array.from(new Set(analysis.map(r => r.store).filter(Boolean))) as string[];
     return names.map(s => {
       const rs = analysis.filter(r => r.store === s);
-      const comp = rs.filter(isSubmitted);
+      const comp = uniqueReviews(rs);
       return {
         store: s,
         nps: npsOf(rs),
@@ -577,46 +596,47 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     [storeData],
   );
 
-  // Response rate is measured over every footfall in `base` (pending + submitted),
-  // so it deliberately ignores the understood/category chips.
+  // Conversion is unique footfall vs unique reviews, over every footfall in `base`
+  // (pending + submitted), so it deliberately ignores the understood/category chips.
   const storeResponseData = useMemo(() => {
     const names = Array.from(new Set(base.map(r => r.store).filter(Boolean))) as string[];
     return names.map(s => {
       const rs = base.filter(r => r.store === s);
-      const responses = rs.filter(isSubmitted).length;
+      const footfalls = uniqueCustomers(rs).length;
+      const responses = uniqueReviews(rs).length;
       return {
         store: s,
-        footfalls: rs.length,
+        footfalls,
         responses,
-        pending: rs.length - responses,
-        rate: rs.length ? Math.round(responses / rs.length * 100) : 0,
+        pending: footfalls - responses,
+        rate: footfalls ? Math.round(responses / footfalls * 100) : 0,
       };
     }).sort((a, b) => b.rate - a.rate || b.footfalls - a.footfalls);
   }, [base]);
 
+  // Totalled over `base`, not summed across stores: one customer can visit two.
   const responseTotals = useMemo(() => {
-    const footfalls = storeResponseData.reduce((a, d) => a + d.footfalls, 0);
-    const responses = storeResponseData.reduce((a, d) => a + d.responses, 0);
+    const footfalls = uniqueCustomers(base).length;
+    const responses = uniqueReviews(base).length;
     return { footfalls, responses, pending: footfalls - responses, rate: footfalls ? Math.round(responses / footfalls * 100) : 0 };
-  }, [storeResponseData]);
+  }, [base]);
 
   const bmChartData = useMemo(() => {
     const names = Array.from(new Set(analysis.map(r => r.bm).filter(Boolean))) as string[];
     return names.map(n => {
       const rs = analysis.filter(r => r.bm === n);
-      const comp = rs.filter(isSubmitted);
-      return { bm: n, nps: npsOf(rs) ?? 0, count: comp.length };
+      return { bm: n, nps: npsOf(rs) ?? 0, count: uniqueReviews(rs).length };
     }).filter(d => d.count > 0).sort((a, b) => b.count - a.count).slice(0, 10).sort((a, b) => b.nps - a.nps);
   }, [analysis]);
 
   const dist = useMemo(() => {
-    const comp = analysis.filter(isSubmitted);
+    const comp = uniqueReviews(analysis);
     return Array.from({ length: 11 }, (_, s) => ({ score: s, count: comp.filter(r => r.score === s).length }));
   }, [analysis]);
   const distHasData = dist.some(d => d.count > 0);
 
   const reasonData = useMemo(() => {
-    const noRows = analysis.filter(r => r.status === 'submitted' && r.understood === false);
+    const noRows = uniqueCustomers(analysis.filter(r => r.status === 'submitted' && r.understood === false));
     const counts: Record<string, number> = {};
     Q3_OPTIONS.forEach(o => { counts[o] = 0; });
     noRows.forEach(r => (r.better || []).forEach(b => { if (b in counts) counts[b]++; }));
@@ -625,8 +645,9 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
   }, [analysis]);
 
   // ── tracker rows ────────────────────────────────────────────────────────────
-  const pendingRows = useMemo(() => base.filter(r => r.status === 'pending'), [base]);
-  const completedRows = useMemo(() => analysis.filter(isSubmitted), [analysis]);
+  // One row per customer on both lists, so customers - reviews = pending holds.
+  const pendingRows = useMemo(() => uniqueCustomers(base.filter(r => r.status === 'pending')), [base]);
+  const completedRows = useMemo(() => uniqueReviews(analysis), [analysis]);
 
   const sortedRows = useMemo(() => {
     const list = (subTab === 'pending' ? pendingRows : completedRows).slice();
@@ -746,7 +767,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-4 text-[13.5px] text-gray-500">
             {subTab === 'pending' ? (
               <>
-                <span><b className="text-gray-900 font-bold">{pendingRows.length}</b> visits have not filled the NPS survey yet</span>
+                <span><b className="text-gray-900 font-bold">{pendingRows.length}</b> customers have not filled the NPS survey yet</span>
                 <span>Stale (3+ days) <b className={`font-bold ${staleCount > 0 ? 'text-red-600' : 'text-gray-900'}`}>{staleCount}</b></span>
                 <span>Avg wait <b className="text-gray-900 font-bold">{avgWait === '—' ? '—' : `${avgWait}d`}</b></span>
               </>
@@ -848,7 +869,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
             <KpiTile label="Total Responses" accent="#14B8A6"
               value={String(cur.total)}
               delta={<Delta cur={cur.total} prev={prev.total} dir={1} />} />
-            <KpiTile label="Response Rate" accent={C.passive}
+            <KpiTile label="Conversion %" accent={C.passive}
               value={cur.responseRate == null ? '—' : `${cur.responseRate}%`}
               delta={<Delta cur={cur.responseRate} prev={prev.responseRate} unit=" pp" dir={1} />} />
             <KpiTile label="Promoters" accent={C.promoter}
@@ -919,17 +940,17 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
           </div>
 
           {/* Response rate by store */}
-          <ChartCard title="Response rate by store" caption="Responses collected vs total footfalls · sorted highest to lowest">
+          <ChartCard title="Conversion by store" caption="Unique customers who reviewed vs unique footfall · sorted highest to lowest">
             {storeResponseData.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px]">
                   <thead>
                     <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <th className="px-4 py-2.5">Store</th>
-                      <th className="px-4 py-2.5 text-right">Footfalls</th>
-                      <th className="px-4 py-2.5 text-right">Responses</th>
+                      <th className="px-4 py-2.5 text-right">Customers</th>
+                      <th className="px-4 py-2.5 text-right">Reviews</th>
                       <th className="px-4 py-2.5 text-right">Pending</th>
-                      <th className="px-4 py-2.5 text-right">Response Rate</th>
+                      <th className="px-4 py-2.5 text-right">Conversion %</th>
                       <th className="px-4 py-2.5 w-[180px]"></th>
                     </tr>
                   </thead>
