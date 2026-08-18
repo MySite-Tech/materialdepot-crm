@@ -1,7 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { StoreProducts } from './StoreProducts';
-// import { LiveMappingView } from './LiveMappingView';
 import { MovementStatusView } from './MovementStatusView';
 import { AdminView } from './AdminView';
 import { DiscontinuedList } from './DiscontinuedList';
@@ -48,7 +47,6 @@ export default function StoreDisplayTab({ userRole }: { userRole: string }) {
 
       {subTab === 'products' && <StoreProducts />}
       {subTab === 'discontinued' && <DiscontinuedList />}
-      {/* {subTab === 'liveMapping' && <LiveMappingView />} */}
       {subTab === 'movements' && <MovementStatusView />}
       {subTab === 'admin' && <AdminView />}
     </div>
