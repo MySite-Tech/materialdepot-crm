@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { displayApi } from '../../lib/displayApi';
+import { displayApi, flattenLocationRow } from '../../lib/displayApi';
 import { STORES, STORE_CODE_TO_BRANCH_ID, STORE_NAMES, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 import { ProductDetailPanel } from './ProductDetailPanel';
 
@@ -50,8 +50,9 @@ export function StoreProducts() {
           params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
         }
         const data = await displayApi('fetch_locations', params);
-        const results = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
-        const unique = Array.from(new Set(results.map((r: any) => r.category).filter(Boolean))).sort() as string[];
+        const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
+        const rows = raw.map(flattenLocationRow);
+        const unique = Array.from(new Set(rows.map((r: any) => r.category).filter(Boolean))).sort() as string[];
         setCategories(['All', ...unique]);
       } catch {}
     })();
@@ -73,9 +74,10 @@ export function StoreProducts() {
       if (searchQ.trim()) params.search = searchQ.trim();
 
       const data = await displayApi('fetch_locations', params);
-      const results = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
-      const count = data?.count ?? results.length;
-      setItems(results as VariantLocationRow[]);
+      const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
+      const rows = raw.map(flattenLocationRow);
+      const count = data?.total_count ?? data?.count ?? rows.length;
+      setItems(rows as VariantLocationRow[]);
       setTotalCount(count);
     } catch (e: any) {
       setError(e.message || 'Failed to load products');

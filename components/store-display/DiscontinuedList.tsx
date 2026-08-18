@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { displayApi } from '../../lib/displayApi';
+import { displayApi, flattenLocationRow } from '../../lib/displayApi';
 import { STORES, STORE_CODE_TO_BRANCH_ID, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 
 interface VariantLocationRow {
@@ -50,9 +50,10 @@ export function DiscontinuedList() {
           params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
         }
         const data = await displayApi('fetch_locations', params);
-        const results = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
-        const cats = Array.from(new Set(results.map((r: any) => r.category).filter(Boolean))).sort() as string[];
-        const dts = Array.from(new Set(results.map((r: any) => r.display_type).filter(Boolean))).sort() as string[];
+        const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
+        const rows = raw.map(flattenLocationRow);
+        const cats = Array.from(new Set(rows.map((r: any) => r.category).filter(Boolean))).sort() as string[];
+        const dts = Array.from(new Set(rows.map((r: any) => r.display_type).filter(Boolean))).sort() as string[];
         setCategories(['All', ...cats]);
         setDisplayTypes(['All', ...dts]);
       } catch {}
@@ -76,9 +77,10 @@ export function DiscontinuedList() {
       if (searchQ.trim()) params.search = searchQ.trim();
 
       const data = await displayApi('fetch_locations', params);
-      const results = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
-      const count = data?.count ?? results.length;
-      setItems(results as VariantLocationRow[]);
+      const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
+      const rows = raw.map(flattenLocationRow);
+      const count = data?.total_count ?? data?.count ?? rows.length;
+      setItems(rows as VariantLocationRow[]);
       setTotalCount(count);
     } catch (e: any) {
       setError(e.message || 'Failed to load products');
