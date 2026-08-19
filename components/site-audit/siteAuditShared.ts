@@ -395,6 +395,59 @@ export function siteAuditRoleFromPermissions(perms: string[] | undefined | null)
   return null;
 }
 
+/* ── Who the FIELD APP says this person is ─────────────────────────────────
+   `profiles.role` here — not the CRM permission — is the company's working
+   record of who does field work: it is what Site Audit > Users edits, and the
+   CRM's Django permission list has no `service_mgr` value at all, so
+   CRM_ROLE_TO_SITE_AUDIT_ROLE can only ever *infer* a service manager from a
+   delivery/procurement-shaped permission. Real ones don't follow that shape —
+   they turned up carrying `admin` (which routed them to the company-wide rail)
+   and permissions the map has never heard of (which left them with no Site
+   Audit tab at all). So the profile is consulted first and the CRM role is the
+   fallback, for the many BMs and store managers never enrolled in the field
+   app. */
+
+/* profiles.role values that have a dashboard of their own inside
+   SiteAuditOwnDashboard. `store_staff` is deliberately absent: the store team
+   has its own standalone /store-booking route, so routing them here lands them
+   on the "ask an admin for a sub-role" dead end. `admin` is absent because an
+   admin's Site Audit home IS the oversight rail, which the CRM role grants;
+   `content_team` has no view here at all. */
+export const SITE_AUDIT_OWN_DASHBOARD_ROLES = new Set([
+  'site_auditor', 'installer', 'auditor_installer', 'service_mgr', 'bm', 'coe', 'branch_mgr',
+]);
+
+/* The one query for "my own field-app profile", shared by app/App.tsx (which
+   needs the role to decide the tab and which dashboard) and
+   SiteAuditOwnDashboard (which needs id/name/email to render it). Kept as one
+   literal so both callers produce the SAME cache key and cachedFetch collapses
+   them into a single request instead of two.
+   Matched on phoneKey() — profiles.contact is a clean 10-digit number on every
+   row that has one, so normalising the CRM's side is all that's needed. Still
+   exact matching; never a name, per orderBelongsToBm's rule. */
+export const ownProfileQuery = (phone: string): string =>
+  'profiles?contact=eq.' + encodeURIComponent(phoneKey(phone)) + '&select=id,name,email,role,branch';
+
+/* One phone can carry more than one profile row — a field-app account created
+   under a personal email alongside the company one (this exists in
+   production). Prefer the row naming a dashboard we can actually render over
+   whichever row PostgREST happened to return first. */
+export function pickOwnProfile<T extends { role?: string | null }>(rows: T[]): T | null {
+  return rows.find((r) => SITE_AUDIT_OWN_DASHBOARD_ROLES.has(String(r?.role || ''))) ?? rows[0] ?? null;
+}
+
+/* THROWS on a failed load rather than reporting "no profile": sbGet resolves a
+   PostgREST error object instead of rejecting, and `null` here means "not in
+   the field app", which the caller turns into an access decision. A dropped
+   request must never read as a revoked role. */
+export async function fetchOwnSiteAuditRole(phone: string): Promise<string | null> {
+  if (!phoneKey(phone)) return null;
+  const rows = await sbGet(ownProfileQuery(phone));
+  if (!Array.isArray(rows)) throw new Error('Site Audit profile lookup failed');
+  const role = pickOwnProfile(rows)?.role;
+  return typeof role === 'string' && role ? role : null;
+}
+
 /* Provisions/updates the Site Audit `profiles` row for someone granted a
    Site Audit sub-role from the CRM's own Admin > Users screen — the mirror
    of what SiteAuditUsersView.tsx's "Create CRM login" already does in the

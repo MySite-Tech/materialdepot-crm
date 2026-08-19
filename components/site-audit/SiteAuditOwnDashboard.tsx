@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { CITIES, loadCityFilter, saveCityFilter, sbGet, type CityFilter } from './siteAuditShared';
+import { CITIES, loadCityFilter, ownProfileQuery, pickOwnProfile, saveCityFilter, sbGet, type CityFilter } from './siteAuditShared';
 import SiteAuditorApp from './SiteAuditorApp';
 import SiteInstallerApp from './SiteInstallerApp';
 import SiteAuditJobsView from './SiteAuditJobsView';
@@ -52,6 +52,13 @@ export default function SiteAuditOwnDashboard({
 }) {
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
+  /* A failed lookup is NOT "not enrolled". sbGet resolves a PostgREST error
+     object rather than rejecting, so the old `Array.isArray(rows) ? rows[0]`
+     rendered a dropped request as "ask an admin to link your profile" — which
+     sends the reader to the wrong control entirely. House style is to name the
+     cause and offer the retry. */
+  const [loadErr, setLoadErr] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
   const [smTab, setSmTab] = useState<'audit' | 'install'>('audit');
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
@@ -62,19 +69,43 @@ export default function SiteAuditOwnDashboard({
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
 
+  /* Same query string app/App.tsx uses to resolve this person's role, so
+     sbGet's short-lived cache collapses both into one request. */
   useEffect(() => {
     if (!contact) { setLoading(false); return; }
     let alive = true;
-    sbGet('profiles?contact=eq.' + encodeURIComponent(contact) + '&select=id,name,email,role,branch&limit=1').then((rows) => {
+    sbGet(ownProfileQuery(contact)).then((rows) => {
       if (!alive) return;
-      setPerson(Array.isArray(rows) && rows[0] ? rows[0] : null);
+      if (!Array.isArray(rows)) { setLoadErr(true); setLoading(false); return; }
+      setLoadErr(false);
+      setPerson(pickOwnProfile<Person>(rows));
       setLoading(false);
-    }).catch(() => { if (alive) setLoading(false); });
+    }).catch(() => { if (alive) { setLoadErr(true); setLoading(false); } });
     return () => { alive = false; };
-  }, [contact]);
+  }, [contact, reloadTick]);
 
   if (loading) {
     return <div className="p-6 text-center text-sm text-gray-400">Loading…</div>;
+  }
+  const retryBtn = (
+    <button
+      onClick={() => { setLoading(true); setReloadTick((t) => t + 1); }}
+      className="rounded-md bg-[#1F3A5F] px-3 py-1.5 text-[12.5px] font-extrabold text-white cursor-pointer"
+    >
+      Retry
+    </button>
+  );
+  /* BMs and branch managers read off the CRM session alone, so a failed lookup
+     still leaves them a working (if unpersonalised) dashboard — they get the
+     amber notice below instead of a dead end. Everyone else needs the profile. */
+  const sessionOnlyRole = permissionRole === 'bm' || permissionRole === 'branch_mgr';
+  if (loadErr && !person && !sessionOnlyRole) {
+    return (
+      <div className="p-6 text-center text-sm text-gray-500">
+        Couldn&apos;t load your field-app profile just now — a connection problem, not a missing account.
+        <div className="mt-3">{retryBtn}</div>
+      </div>
+    );
   }
   /* Stores in scope for a store manager. The CRM session's own Branch Access
      comes FIRST: it is the live source of truth, it is a list, and it is what
@@ -88,15 +119,22 @@ export default function SiteAuditOwnDashboard({
     ? allowedBranches
     : (person?.branch ? [person.branch] : null);
 
+  const loadErrNotice = loadErr ? (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border-l-4 border-amber-400 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-900">
+      <span>Your field-app profile didn&apos;t load, so this view is running off your CRM account only.</span>
+      {retryBtn}
+    </div>
+  ) : null;
+
   if (!person) {
     /* Read-only roles work off the CRM session alone — see the note above. */
     if (permissionRole === 'branch_mgr') {
-      return <div className="p-4 sm:p-6"><SiteAuditBranchManagerView branches={managerBranches} contact={contact} city={city} /></div>;
+      return <div className="p-4 sm:p-6">{loadErrNotice}<SiteAuditBranchManagerView branches={managerBranches} contact={contact} city={city} /></div>;
     }
     /* No shadow bar here: shadowing is keyed to a real field-app profile
        (SiteShadowerApp acts as one), which is exactly what this person lacks. */
     if (permissionRole === 'bm') {
-      return <div className="p-4 sm:p-6"><SiteAuditBmView bm={{ name: crmName, contact }} /></div>;
+      return <div className="p-4 sm:p-6">{loadErrNotice}<SiteAuditBmView bm={{ name: crmName, contact }} /></div>;
     }
     return (
       <div className="p-6 text-center text-sm text-gray-400">

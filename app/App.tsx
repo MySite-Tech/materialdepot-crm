@@ -11,7 +11,10 @@ import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
 import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
 import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
-import { siteAuditRoleForCrmRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
+import {
+  CRM_ROLE_TO_SITE_AUDIT_ROLE, fetchOwnSiteAuditRole, OVERSIGHT_CRM_ROLES, ROLES as SITE_AUDIT_ROLE_LABELS,
+  SITE_AUDIT_OWN_DASHBOARD_ROLES, siteAuditRoleForCrmRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile,
+} from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
@@ -275,11 +278,19 @@ const APPOINTMENT_TRACKER_ROLES = new Set([
    role defaults alone left every BM and store manager without the tab. What
    they see INSIDE it is decided per role, not shared — see
    SITE_AUDIT_OVERSIGHT_ROLES and siteAuditRoleForCrmRole. */
-const SITE_AUDIT_ROLES = new Set([
-  'superadmin', 'admin', 'tech',                        // → company-wide oversight rail
-  'sales', 'b2b_sales', 'b2b_KAM', 'b2b_manager',       // → their own order book (BM)
-  'manager', 'store_manager',                           // → their store's rollup
-  'delivery_manager', 'post_sales', 'procurement',      // → Service Manager dashboards
+/* Derived from CRM_ROLE_TO_SITE_AUDIT_ROLE rather than hand-listed, because the
+   hand-written version silently drifted from it: `delivery` maps to
+   service_mgr there but was missing here, so those accounts got no tab. Every
+   permission the mapping grants a Site Audit role now grants the tab too, by
+   construction. `field_worker` is added explicitly — the mapping deliberately
+   refuses to guess whether one audits or installs, but they are field staff and
+   their own profile decides which app they land in. */
+const SITE_AUDIT_ROLES = new Set<string>([
+  ...OVERSIGHT_CRM_ROLES,                                       // → company-wide oversight rail
+  ...Object.entries(CRM_ROLE_TO_SITE_AUDIT_ROLE)
+    .filter(([, role]) => role !== null)
+    .map(([perm]) => perm),                                     // → BM / store rollup / Service Manager
+  'field_worker',                                               // → auditor or installer, per their profile
 ]);
 
 /* The ONLY roles that get the company-wide oversight rail (Users, Role Viewer,
@@ -290,7 +301,12 @@ const SITE_AUDIT_ROLES = new Set([
    handed them the whole company's field ops. */
 const SITE_AUDIT_OVERSIGHT_ROLES = new Set(['superadmin', 'admin', 'tech']);
 
-const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
+/* `fieldRole` is the caller's own Site Audit profiles.role, resolved
+   asynchronously (see the effect below) — it grants the tab on its own, so a
+   service manager or auditor whose CRM permission maps to no Site Audit role
+   still reaches their dashboard. Undefined until it resolves; the CRM role
+   alone decides until then, so a dropped lookup can never take a tab away. */
+const resolveAllowedTabs = (user?: AppUser | null, fieldRole?: string | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
   let tabs: Array<MainTab>;
   if (Array.isArray(perms) && perms.length > 0) {
@@ -305,7 +321,9 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
     tabs = [...tabs, 'appointmentTracker'];
   }
-  if (SITE_AUDIT_ROLES.has(user?.role ?? '') && !tabs.includes('siteAudit')) {
+  const siteAuditByRole = SITE_AUDIT_ROLES.has(user?.role ?? '')
+    || (!!fieldRole && SITE_AUDIT_OWN_DASHBOARD_ROLES.has(fieldRole));
+  if (siteAuditByRole && !tabs.includes('siteAudit')) {
     tabs = [...tabs, 'siteAudit'];
   }
   if (['superadmin', 'admin', 'tech'].includes(user?.role ?? '') && !tabs.includes('storeDisplay')) {
@@ -1802,16 +1820,49 @@ export default function App() {
     }
   }, [mainTab]);
 
+  /* What the field app itself records this person as (profiles.role, matched by
+     phone). Resolved async and left `undefined` if the lookup fails, so a
+     dropped request degrades to the CRM-role behaviour instead of revoking
+     access. Not cached: a role edited in Site Audit > Users has to take effect
+     on the next load, and a stale cache would keep showing the old dashboard. */
+  const [siteAuditFieldRole, setSiteAuditFieldRole] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    const phone = currentUser?.phone;
+    if (!phone) { setSiteAuditFieldRole(undefined); return; }
+    let alive = true;
+    fetchOwnSiteAuditRole(String(phone))
+      .then((role) => { if (alive) setSiteAuditFieldRole(role); })
+      .catch((e) => { console.error('[siteAudit] own role lookup failed', e); });
+    return () => { alive = false; };
+  }, [currentUser?.phone]);
+
   // Derive allowed tabs — per-user CRM permissions override role defaults.
-  const allowedTabs = resolveAllowedTabs(currentUser);
+  const allowedTabs = resolveAllowedTabs(currentUser, siteAuditFieldRole);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
-  /* The hand-set `site_audit.*` sub-permission is an OVERRIDE; the CRM role is
-     the default. Almost nobody has the sub-permission, so deriving the
-     dashboard from the CRM role is what actually gets a BM to their orders and
-     a store manager to their store. */
+  /* Precedence for "which Site Audit dashboard is mine":
+       1. the hand-set `site_audit.*` sub-permission — an explicit CRM override;
+       2. the field app's own profiles.role — the record ops actually maintains;
+       3. the CRM permission mapping — the fallback for the many BMs and store
+          managers who were never enrolled in the field app.
+     (2) exists because the CRM permission list has no service-manager value:
+     inferring one from delivery/procurement-shaped permissions gave real
+     service managers either the company-wide rail or no tab at all. */
   const siteAuditSubRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
-  const siteAuditRole = siteAuditSubRole ?? siteAuditRoleForCrmRole(currentUser?.role);
-  const siteAuditIsOversight = SITE_AUDIT_OVERSIGHT_ROLES.has(currentUser?.role ?? '') && !siteAuditSubRole;
+  const siteAuditOwnFieldRole = siteAuditFieldRole && SITE_AUDIT_OWN_DASHBOARD_ROLES.has(siteAuditFieldRole)
+    ? siteAuditFieldRole
+    : null;
+  const siteAuditRole = siteAuditSubRole ?? siteAuditOwnFieldRole ?? siteAuditRoleForCrmRole(currentUser?.role);
+  /* Rail eligibility is unchanged — still the CRM oversight roles only, so this
+     widens nobody's access. What changes is the DEFAULT: someone the field app
+     records as a service manager (or auditor, or BM) lands on their own
+     dashboard, and the console they were already entitled to becomes a click
+     away instead of the only thing they can see. */
+  const siteAuditRailEligible = SITE_AUDIT_OVERSIGHT_ROLES.has(currentUser?.role ?? '') && !siteAuditSubRole;
+  const siteAuditIsOversight = siteAuditRailEligible && !siteAuditOwnFieldRole;
+  /* Both an admin console and a field dashboard — a real production case (an
+     admin also enrolled as a service manager). Defaults to their own. */
+  const siteAuditCanSwitch = siteAuditRailEligible && !!siteAuditOwnFieldRole;
+  const [siteAuditShowConsole, setSiteAuditShowConsole] = useState(false);
 
   useEffect(() => {
     try {
@@ -2701,8 +2752,23 @@ export default function App() {
         <NPSDashboard branches={branches} allowedBranches={['admin', 'superadmin', 'tech'].includes(currentUser?.role ?? '') ? [] : userAllowedBranches} />
       )}
 
-      {mainTab === 'siteAudit' && (
-        siteAuditIsOversight ? (
+      {mainTab === 'siteAudit' && (<>
+        {siteAuditCanSwitch && (
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 border-b border-gray-200 bg-white px-4 py-2 sm:px-6">
+            <span className="text-[11.5px] text-gray-400">
+              Your CRM account also has the company-wide console.
+            </span>
+            <button
+              onClick={() => setSiteAuditShowConsole((v) => !v)}
+              className="rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700 cursor-pointer"
+            >
+              {siteAuditShowConsole
+                ? `← My ${SITE_AUDIT_ROLE_LABELS[siteAuditOwnFieldRole ?? '']?.label ?? 'own'} dashboard`
+                : 'Company-wide console →'}
+            </button>
+          </div>
+        )}
+        {siteAuditIsOversight || (siteAuditCanSwitch && siteAuditShowConsole) ? (
           <SiteAuditRail user={currentUser ? { name: currentUser.name, phone: currentUser.phone, role: currentUser.role } : null} />
         ) : (
           <SiteAuditOwnDashboard
@@ -2711,8 +2777,8 @@ export default function App() {
             crmName={currentUser?.name || ''}
             allowedBranches={currentUser?.allowedBranches || []}
           />
-        )
-      )}
+        )}
+      </>)}
 
       {mainTab === 'admin' && allowedTabs.includes('admin') && (
         <AdminDashboard />

@@ -16,7 +16,10 @@ npx tsc --noEmit   # typecheck — fast, run this before claiming a change compi
 ```
 
 `npx eslint <file>` reports "File ignored because no matching configuration"
-for `app/` and `components/` — use `npm run lint` (next lint) instead.
+for `app/` and `components/`, and `npm run lint` is dead too — it still runs
+`next lint`, which Next 16 removed ("Invalid project directory provided, no such
+directory: .../lint"). There is currently **no working lint command**; `npx tsc
+--noEmit` is the only automated check.
 
 ## Git
 
@@ -88,6 +91,13 @@ Consequence worth remembering: **editing `ROLE_TABS` alone does not reach anyone
 who has individual permissions set.** If a tab must be guaranteed for a role,
 add a force-add set — that is what the three existing sets are for.
 
+`siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
+which is fetched async — so that tab can appear a beat after the others. That is
+deliberate: caching it would keep showing a tab after a role was revoked in Site
+Audit > Users, and a failed fetch leaves the role `undefined` so the CRM role
+alone decides (a dropped request can never take a tab away). Nothing forces the
+user off a disallowed `?tab=`, so the late arrival can't bounce anyone.
+
 Tab render order is fixed by the literal array in the header JSX, not by the
 order tabs were resolved in.
 
@@ -104,13 +114,35 @@ Don't conflate these:
   `siteAuditShared.ts`. Business-confirmed mapping; `field_worker` is
   deliberately unmapped (nothing distinguishes auditor from installer).
 - **`site_audit.*` sub-permissions** — per-user checkboxes in Admin > Users.
-  These are an **override**; the CRM role is the default. Almost nobody has one.
+  These are an **override**; almost nobody has one.
+
+Precedence, in `App.tsx` (`siteAuditRole`): **sub-permission → `profiles.role` →
+CRM permission**. `profiles.role` sits in the middle because **the CRM
+permission list has no service-manager value at all** — `CRM_ROLE_TO_SITE_AUDIT_ROLE`
+can only *infer* one from a delivery/procurement-shaped permission, and the real
+service managers don't follow that shape. `profiles` is the record ops actually
+maintains (it is what Site Audit > Users edits), so it is consulted first;
+`fetchOwnSiteAuditRole`/`ownProfileQuery` (`siteAuditShared.ts`) resolve it by
+`phoneKey`. The CRM permission remains the fallback for the many BMs and store
+managers never enrolled in the field app.
+
+`SITE_AUDIT_OWN_DASHBOARD_ROLES` is the set of `profiles.role` values that have a
+dashboard here. `store_staff` is deliberately **out** — the store team has its own
+`/store-booking` route, so routing them into `SiteAuditOwnDashboard` dead-ends on
+"ask an admin for a sub-role". `admin` and `content_team` are out for the same
+kind of reason.
 
 Routing lives at the `mainTab === 'siteAudit'` block in `App.tsx`:
 
 - `SITE_AUDIT_OVERSIGHT_ROLES` (`superadmin`/`admin`/`tech`) → `SiteAuditRail`,
   the company-wide console (Users, Role Viewer, every job in every city).
 - Everyone else → `SiteAuditOwnDashboard`, their own scoped dashboard.
+- Someone who is **both** (an oversight CRM role *and* a field profile — a real
+  case: one person has an `admin` profile under their company email and a
+  `service_mgr` profile under a personal one) defaults to **their own
+  dashboard**, with a switcher to the console. Rail *eligibility* is still the
+  CRM oversight roles only, so this widens nobody's access — it only changes
+  which view they land on.
 
 **This gate is deny-by-default on purpose.** It previously fell through to the
 rail whenever a user had no `site_audit.*` sub-permission — the normal state for
@@ -210,6 +242,19 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
+- **A hand-written force-add set drifts from the mapping it mirrors.**
+  `SITE_AUDIT_ROLES` listed `delivery_manager`/`post_sales`/`procurement` but not
+  `delivery`, which `CRM_ROLE_TO_SITE_AUDIT_ROLE` maps to `service_mgr` — those
+  accounts got no tab at all. It is now *derived* from that map, so it can't
+  drift again. Add the permission to the map, not to two places.
+- **One phone can have several `profiles` rows** (a field-app account under a
+  personal email alongside the company one — Ashish Bhat has exactly this, and
+  the company-email row's `contact` is NULL so it can never be resolved by
+  phone). `limit=1` on a `contact=eq.` lookup picks an arbitrary one; use
+  `pickOwnProfile`, which prefers the row naming a renderable dashboard.
+- **13 of 129 profiles have a NULL `contact`.** Nothing that keys off phone —
+  own-dashboard resolution, payouts, BM attribution — can ever reach them; the
+  Users screen already surfaces this as its top amber notice.
 - **`profiles.branch` exists but is blank for every row.** Anything that scopes
   by store should read CRM Branch Access (`allowedBranches` from `fetchUsers()`)
   and match to profiles by exact phone, treating `profiles.branch` as an
