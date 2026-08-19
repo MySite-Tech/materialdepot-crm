@@ -128,12 +128,6 @@ export async function POST(req: NextRequest) {
         const size = Math.max(1, Number(page_size) || 30);
         const needsFilter = !!(search || category || display_type || is_active !== undefined || is_deleted !== undefined);
 
-        /* Upstream can only paginate the `all=True` listing. The branch_id
-           listing ignores page/page_size entirely and returns every row for the
-           branch — so asking it for "page 3, 30 rows" used to hand the browser
-           all 20,630 Whitefield rows AND a page count derived from them, i.e.
-           688 pages that every one of them rendered in full. Anything scoped to
-           a branch is therefore paged here, over the rows we already hold. */
         if (!needsFilter && !branch_id) {
           const url = `${API_BASE}/fetch-variant-locations/?all=True&page=${pageNum}&page_size=${size}`;
           const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
