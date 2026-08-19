@@ -82,6 +82,52 @@ export function orderBelongsToBm(row: { bm?: string | null; bm_email?: string | 
   return bmNames(bm).has(bmText);
 }
 
+/* A store pre-booking and the site audit it becomes are two separate
+   audit_orders rows, not one row changing state: the pre-booking is created by
+   the store booking app under its own `SRES-<STORE>-…` PI and carries the
+   enquiry ID it was booked against in `po`, and the Kylas service order later
+   arrives as its own row whose `pi` IS that enquiry ID. A BM's list therefore
+   showed the same customer twice — the slot that was held, and the audit that
+   actually got scheduled off it — which reads as two jobs.
+
+   The pre-booking is only the previous step of the same workflow, so it drops
+   out once the audit exists. "Exists" is either of:
+
+   - the linked order is really there — the pre-booking's enquiry ID matches a
+     non-pre-booking row's `pi` exactly. Same `po`→`pi` link the store
+     calendar's slot-availability check already absorbs bookings by, and it
+     covers pre-bookings nobody remembered to mark fulfilled;
+   - status `slot_converted` — a service manager confirmed in the drawer that
+     the service order was created, so the audit exists even when its row is
+     attributed to someone else and never reaches this list.
+
+   Matched on the enquiry ID alone, never on customer name or phone: both are
+   free text on the reservation form (the phone is often the store's own), so
+   matching on them would collapse two different customers into one. A
+   pre-booking still waiting on its service order stays visible — it is the
+   only record that the slot was ever held.
+
+   Takes the RAW fetched rows, before they are narrowed to one BM: whether the
+   audit was created is a question about the whole table, and the audit row may
+   carry a different (or missing) BM link than the pre-booking it came from. */
+export function isPreBooking(row: { status?: string | null }): boolean {
+  return row.status === 'slot_reserved' || row.status === 'slot_converted';
+}
+
+export function dropSupersededPreBookings<T extends { pi?: string | null; po?: string | null; status?: string | null }>(rows: T[]): T[] {
+  const realPis = new Set<string>();
+  for (const r of rows) {
+    if (isPreBooking(r) || r.status === 'deleted') continue;
+    const pi = norm(r.pi);
+    if (pi) realPis.add(pi);
+  }
+  return rows.filter((r) => {
+    if (!isPreBooking(r)) return true;
+    if (r.status === 'slot_converted') return false;
+    return !String(r.po || '').split(',').map(norm).some((enq) => enq && realPis.has(enq));
+  });
+}
+
 /* Every exact name this person is known by, normalised. */
 export function bmNames(bm: BmProfile): Set<string> {
   const out = new Set<string>();
@@ -167,7 +213,9 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     if (!resolved) { setLoading(false); return; }
     const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');
     if (!Array.isArray(rows)) { setLoading(false); return; }
-    setOrders(rows.filter((r: any) => orderBelongsToBm(r, resolved)).map((r: any) => ({
+    /* Superseded pre-bookings are dropped against the WHOLE table, before the
+       rows are narrowed to this BM — see dropSupersededPreBookings. */
+    setOrders(dropSupersededPreBookings(rows).filter((r: any) => orderBelongsToBm(r, resolved)).map((r: any) => ({
       id: r.id, pi: r.pi || '', po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
       bm: r.bm || '—', name: r.customer_name || '', phone: r.phone || '', addr: r.addr || '',
       status: r.status || 'pending', slot: r.slot || null, date: r.date || null,
