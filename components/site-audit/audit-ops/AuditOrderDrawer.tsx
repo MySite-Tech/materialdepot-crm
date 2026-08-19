@@ -38,6 +38,10 @@ interface Props {
   shadowerPool: ShadowerOption[];
   bmOptions: BmOption[];
   attribution: string;
+  /* True when the roster FAILED to load, as opposed to genuinely having nobody
+     in it — the picker's empty state has to tell those apart. */
+  auditorsErr?: boolean;
+  onRetryAuditors?: () => void;
   onClose: () => void;
   reload: () => Promise<void>;
   reloadWithDeleted: () => Promise<void>;
@@ -46,8 +50,30 @@ interface Props {
   toast: (m: string) => void;
 }
 
+/* An empty auditor picker used to read "No auditors in this city" whatever the
+   reason, which sends the SM to the city toggle for what is usually a failed
+   fetch. Each cause now names itself, and a failed load offers a way back. */
+function EmptyAuditorPool({ err, anyLoaded, onRetry }: { err: boolean; anyLoaded: boolean; onRetry?: () => void }) {
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12.5px] font-semibold text-red-700">
+        ⚠ Couldn&apos;t load the auditor list, so there&apos;s nobody to assign — this is a connection problem, not an empty roster. Retrying automatically.
+        {onRetry ? <button onClick={onRetry} className="ml-2 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-red-700">Retry now</button> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px] font-semibold text-amber-800">
+      {anyLoaded
+        ? '⚠ No auditors are registered in this city. Switch the city filter to assign someone from another city.'
+        : '⚠ No auditors are registered yet — add them under Auditors & caps before assigning.'}
+    </div>
+  );
+}
+
 export default function AuditOrderDrawer({
   order: o, orders, auditors, caps, slots, shadowerPool, bmOptions, attribution,
+  auditorsErr = false, onRetryAuditors,
   onClose, reload, reloadWithDeleted, onOpenOrder, onRaiseRect, toast,
 }: Props) {
   const todayStr = dstr(today);
@@ -573,7 +599,7 @@ export default function AuditOrderDrawer({
                         {row.conflict ? '⚠ 2h conflict' : row.overCap ? `${row.load}/${row.cap} · over cap` : `${row.load}/${row.cap}${row.full ? ' · full' : ''}`}
                       </span>
                     </button>
-                  )) : <div className="text-[13px] text-gray-400">No auditors in this city.</div>}
+                  )) : <EmptyAuditorPool err={auditorsErr} anyLoaded={!!auditors.length} onRetry={onRetryAuditors} />}
                 </div>
                 <ShadowerSelect options={shadowerPool} value={shadowers} onChange={setShadowers} label="Shadowed by (optional) — anyone observing this audit" />
               </Section>

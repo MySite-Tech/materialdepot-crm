@@ -81,6 +81,15 @@ export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter }
   const [kylasOpen, setKylasOpen] = useState(false);
   const [rectOrder, setRectOrder] = useState<AuditOrder | null>(null);
   const [addAuditorOpen, setAddAuditorOpen] = useState(false);
+  /* Distinguishes "the roster failed to load" from "nobody is registered" — the
+     picker's empty state has to say which, see loadAuditors. */
+  const [auditorsErr, setAuditorsErr] = useState(false);
+  const audRetryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Mirrored into a ref so the mount-once poll effect can read the CURRENT value
+     without listing it as a dep (which would tear down and rebuild the interval
+     on every flip). */
+  const auditorsErrRef = useRef(false);
+  auditorsErrRef.current = auditorsErr;
 
   /* City scope — every list, counter and capacity check runs on the scoped
      slice; the drawer resolves its order from the unscoped list so an open
@@ -89,17 +98,36 @@ export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter }
   const deleted = useMemo(() => inCity(rawDeleted, city), [rawDeleted, city]);
   const auditors = useMemo(() => inCity(rawAuditors, city), [rawAuditors, city]);
 
+  /* The roster is fetched once when this view mounts, but the assignment picker
+     reads it on every drawer open — so one failed fetch used to leave the picker
+     permanently empty, showing "No auditors in this city" for what is actually a
+     connection problem and giving the SM no way to assign anyone. (Same defect
+     shipped in material-depot-site's SM_Audit_Dashboard, note 113 there.)
+
+     `Array.isArray(rows) ? rows : []` was the sharp edge: sbGet resolves a
+     PostgREST ERROR OBJECT for any 4xx/5xx, so a server error was mapped to
+     "zero auditors registered" and wiped a roster that had been working. A
+     non-array is now a failed load, the last good roster survives it, and the
+     8s retry `loadOrders` already uses applies here too. */
   const loadAuditors = useCallback(async () => {
     try {
       const rows = await sbGet('profiles?role=in.(site_auditor,auditor_installer)&select=id,name,email,active_from,city,weekly_off,leave_dates');
-      setRawAuditors((Array.isArray(rows) ? rows : []).map((r: any) => ({
+      if (!Array.isArray(rows)) throw new Error('auditor roster unavailable');
+      setRawAuditors(rows.map((r: any) => ({
         id: r.id, name: r.name, email: r.email, phone: '', zone: '',
         activeFrom: r.active_from || null,
         city: r.city || 'Bengaluru',
         weeklyOff: r.weekly_off == null ? null : r.weekly_off,
         leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
       })));
-    } catch { /* keep the previous roster on a transient failure */ }
+      setAuditorsErr(false);
+      if (audRetryTid.current) { clearTimeout(audRetryTid.current); audRetryTid.current = null; }
+    } catch {
+      /* keep the previous roster on a transient failure */
+      setAuditorsErr(true);
+      if (!audRetryTid.current) audRetryTid.current = setTimeout(() => { audRetryTid.current = null; loadAuditors(); }, 8000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Shadower pool = everyone registered except store staff (their kiosk has no
@@ -150,13 +178,16 @@ export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter }
 
   useEffect(() => {
     Promise.all([loadAuditors(), loadShadowers(), loadBms(), loadOrders()]);
-    const poll = setInterval(() => { if (!document.hidden && !currentPI) loadOrders(); }, 30000);
-    const vis = () => { if (!document.hidden && !currentPI) loadOrders(); };
+    /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
+       case still costs exactly one query per tick. */
+    const poll = setInterval(() => { if (!document.hidden && !currentPI) { loadOrders(); if (auditorsErrRef.current) loadAuditors(); } }, 30000);
+    const vis = () => { if (!document.hidden && !currentPI) { loadOrders(); if (auditorsErrRef.current) loadAuditors(); } };
     document.addEventListener('visibilitychange', vis);
     return () => {
       clearInterval(poll);
       document.removeEventListener('visibilitychange', vis);
       if (retryTid.current) { clearTimeout(retryTid.current); retryTid.current = null; }
+      if (audRetryTid.current) { clearTimeout(audRetryTid.current); audRetryTid.current = null; }
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,6 +309,7 @@ export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter }
             <AuditOrderDrawer
               order={drawerOrder} orders={orders} auditors={auditors} caps={caps} slots={slots}
               shadowerPool={shadowerPool} bmOptions={bmOptions} attribution={ATTRIBUTION}
+              auditorsErr={auditorsErr} onRetryAuditors={loadAuditors}
               onClose={() => setCurrentPI(null)} reload={loadOrders} reloadWithDeleted={reloadWithDeleted}
               onOpenOrder={openOrder} onRaiseRect={(o) => setRectOrder(o)} toast={toast}
             />

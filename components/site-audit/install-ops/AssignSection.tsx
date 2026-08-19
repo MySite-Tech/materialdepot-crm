@@ -28,12 +28,36 @@ interface Props {
   slotsFl: SlotDef[];
   slotsWp: SlotDef[];
   attribution: string;
+  /* True when the roster FAILED to load, as opposed to genuinely having nobody
+     of this trade — an empty <select> alone reads as "the team is full". */
+  installersErr?: boolean;
+  onRetryInstallers?: () => void;
   reload: () => Promise<void>;
   toast: (m: string) => void;
   onOpenOrder: (pi: string) => void;
 }
 
-export default function AssignSection({ order: o, subjob: sj, installers, shadowerPool, city, slotsFl, slotsWp, attribution, reload, toast, onOpenOrder }: Props) {
+/* An empty pool has three different causes and an empty dropdown states none of
+   them, sending the SM chasing a capacity problem that isn't there. */
+function EmptyInstallerPool({ err, anyLoaded, type, onRetry }: { err: boolean; anyLoaded: boolean; type: string; onRetry?: () => void }) {
+  if (err) {
+    return (
+      <div className="mb-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] font-semibold text-red-700">
+        ⚠ Couldn&apos;t load the installer list, so there&apos;s nobody to assign — this is a connection problem, not a full team. Retrying automatically.
+        {onRetry ? <button onClick={onRetry} className="ml-2 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-red-700">Retry now</button> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="mb-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] font-semibold text-amber-800">
+      {anyLoaded
+        ? `⚠ No ${type} installers are registered in this city. Switch the city filter, or add them under Installers.`
+        : '⚠ No installers are registered yet — add them under Installers before assigning.'}
+    </div>
+  );
+}
+
+export default function AssignSection({ order: o, subjob: sj, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr = false, onRetryInstallers, reload, toast, onOpenOrder }: Props) {
   const [, setTick] = useState(0);
   const redraw = () => setTick((x) => x + 1);
 
@@ -287,6 +311,8 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
 
   return (
     <div>
+      {/* Shown in BOTH modes — the dropdown is equally empty in either. */}
+      {pool.length ? null : <EmptyInstallerPool err={installersErr} anyLoaded={!!installers.length} type={sj.type} onRetry={onRetryInstallers} />}
       <div className="flex rounded-md border border-gray-200 overflow-hidden mb-3 text-[12.5px] font-semibold">
         <div className={`flex-1 text-center py-1.5 cursor-pointer ${!customMode ? 'bg-[#1F3A5F] text-white' : 'bg-white text-gray-600'}`} onClick={() => setMode('standard')}>Standard</div>
         <div className={`flex-1 text-center py-1.5 cursor-pointer ${customMode ? 'bg-[#1F3A5F] text-white' : 'bg-white text-gray-600'}`} onClick={() => setMode('custom')}>Custom / Multi-day</div>

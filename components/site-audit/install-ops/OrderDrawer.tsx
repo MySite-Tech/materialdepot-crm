@@ -52,6 +52,9 @@ interface Props {
   slotsFl: SlotDef[];
   slotsWp: SlotDef[];
   attribution: string;
+  /* Passed straight through to AssignSection's empty-pool notice. */
+  installersErr?: boolean;
+  onRetryInstallers?: () => void;
   onClose: () => void;
   onOpenOrder: (pi: string) => void;
   onOpenRect: (o: InstallOrder) => void;
@@ -60,7 +63,7 @@ interface Props {
   toast: (m: string) => void;
 }
 
-export default function OrderDrawer({ order: o, installers, shadowerPool, city, slotsFl, slotsWp, attribution, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {
+export default function OrderDrawer({ order: o, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr, onRetryInstallers, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {
   const [draft, setDraft] = useState<DraftState>(() => buildInitDraft(o));
   const [splitSjId, setSplitSjId] = useState<string | null>(null);
   const [grpOn, setGrpOn] = useState(() => { const d = buildInitDraft(o); return { flooring: d.flooring.length > 0, wallpaper: d.wallpaper.length > 0, wallpanel: d.wallpanel.length > 0 }; });
@@ -423,7 +426,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
                     : <div className="text-[12px] text-green-700 mb-2.5">{typeLabel(sj.type)} — 1 full day per installer visit</div>}
                   <SjDeliveryRow order={o} subjob={sj} onSave={saveSjDelivery} />
                   {sj.status === 'completed' ? <DownloadJobCardBtn order={o} sjId={sj.id} installers={installers} toast={toast} /> : null}
-                  <AssignSection order={o} subjob={sj} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution} reload={reload} toast={toast} onOpenOrder={onOpenOrder} />
+                  <AssignSection order={o} subjob={sj} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution} installersErr={installersErr} onRetryInstallers={onRetryInstallers} reload={reload} toast={toast} onOpenOrder={onOpenOrder} />
                   <div className="flex flex-wrap gap-2 mt-2">
                     {!['completed', 'partial'].includes(sj.status) && (sj.items || []).length > 1 ? (
                       <button className="bg-white border border-gray-200 text-gray-700 px-2.5 py-1.5 rounded-md text-[12px] font-semibold" onClick={() => setSplitSjId(sj.id)}>✂ Split into separate visits…</button>

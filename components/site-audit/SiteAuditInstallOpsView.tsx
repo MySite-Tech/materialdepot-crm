@@ -99,19 +99,37 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
   const [kylasOpen, setKylasOpen] = useState(false);
   const [rectOrder, setRectOrder] = useState<InstallOrder | null>(null);
   const [asOpen, setAsOpen] = useState(false);
+  /* "Roster failed to load" vs "nobody registered" — the picker's empty state
+     has to say which, see loadInstallers. */
+  const [installersErr, setInstallersErr] = useState(false);
+  const instRetryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const installersErrRef = useRef(false);
+  installersErrRef.current = installersErr;
 
+  /* Fetched once on mount but read by the assignment picker on every drawer
+     open, so one failed fetch left the installer dropdown empty for as long as
+     the view stayed mounted — see SiteAuditOpsView's loadAuditors for the full
+     story. `Array.isArray(rows) ? rows : []` is the sharp edge: sbGet resolves a
+     PostgREST error object on any 4xx/5xx, which mapped a server error onto
+     "zero installers" and wiped a roster that had been working. */
   const loadInstallers = useCallback(async () => {
     try {
       const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=id,name,email,installer_type,city,weekly_off,leave_dates');
-      setInstallers((Array.isArray(rows) ? rows : []).map((r: any) => ({
+      if (!Array.isArray(rows)) throw new Error('installer roster unavailable');
+      setInstallers(rows.map((r: any) => ({
         id: r.id, name: r.name, email: r.email, type: r.installer_type || 'flooring', zone: '', phone: '',
         city: r.city || 'Bengaluru',
         weeklyOff: r.weekly_off == null ? null : r.weekly_off,
         leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
       })));
+      setInstallersErr(false);
+      if (instRetryTid.current) { clearTimeout(instRetryTid.current); instRetryTid.current = null; }
     } catch {
       /* keep previous roster on transient failure */
+      setInstallersErr(true);
+      if (!instRetryTid.current) instRetryTid.current = setTimeout(() => { instRetryTid.current = null; loadInstallers(); }, 8000);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Shadower pool = everyone registered except store staff, whose kiosk app
@@ -159,13 +177,16 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
 
   useEffect(() => {
     Promise.all([loadInstallers(), loadShadowers(), loadOrders()]);
-    const poll = setInterval(() => { if (!document.hidden) loadOrders(); }, 60000);
-    const vis = () => { if (!document.hidden) loadOrders(); };
+    /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
+       case still costs exactly one query per tick. */
+    const poll = setInterval(() => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } }, 60000);
+    const vis = () => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } };
     document.addEventListener('visibilitychange', vis);
     return () => {
       clearInterval(poll);
       document.removeEventListener('visibilitychange', vis);
       if (retryTid.current) { clearTimeout(retryTid.current); retryTid.current = null; }
+      if (instRetryTid.current) { clearTimeout(instRetryTid.current); instRetryTid.current = null; }
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [loadInstallers, loadShadowers, loadOrders]);
@@ -358,6 +379,7 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
           <div className="bg-white h-full w-full max-w-[600px] shadow-2xl flex flex-col" key={currentPI + ':' + drawerNonce}>
             <OrderDrawer
               order={drawerOrder} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={SM_ATTRIBUTION}
+              installersErr={installersErr} onRetryInstallers={loadInstallers}
               onClose={closeDrawer} onOpenOrder={openOrder} onOpenRect={(o) => setRectOrder(o)}
               reload={loadOrders} reloadWithDeleted={reloadWithDeleted} toast={toast}
             />
