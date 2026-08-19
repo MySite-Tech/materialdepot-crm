@@ -65,10 +65,20 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
   // installerById below still resolves against the FULL roster so an existing
   // cross-city assignment keeps rendering its installer's name.
   const pool = useMemo(() => inCity(installers.filter((i) => i.type === sj.type), city), [installers, sj.type, city]);
-  // A split sub-job can carry its own delivery date — an installer can't visit
-  // before THIS sub-job's material lands, not the order's.
+  // A split sub-job can carry its own delivery date — the warning below has to
+  // be about THIS sub-job's material landing, not the order's.
   const sjDeliv = sjDeliveryDate(o, sj);
-  const minDate = (sjDeliv && sjDeliv >= dstr(today)) ? sjDeliv : dstr(today);
+  /* Pickers open from TODAY, never from the delivery date. Material routinely
+     lands before its recorded delivery date, and a hard `min` of
+     max(today, delivery) greyed out tomorrow with no explanation at all — SMs
+     read it as a broken calendar. The delivery date is a SOFT gate now:
+     `delivFloor` drives the amber note under the Date field plus a confirm and
+     a logged override on save, the same shape as the availability override in
+     saveAssign. Do NOT fold delivFloor back into `min`. */
+  const minDate = dstr(today);
+  const delivFloor = (sjDeliv && sjDeliv > minDate) ? sjDeliv : '';
+  const beforeDeliv = (d?: string | null) => !!(delivFloor && d && d < delivFloor);
+  const confirmEarly = (d: string) => window.confirm(`${fmtDate(d)} is BEFORE the material delivery date (${fmtDate(delivFloor)}).\n\nOnly book this if the material is already at site. Continue?`);
 
   const assignsRef = useRef<Assignment[] | null>(null);
   if (assignsRef.current === null) {
@@ -84,6 +94,10 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
      assignments), and cleared whenever the slot/assignment is cleared — a
      shadower has nothing to observe once the visit is gone. */
   const [shadowers, setShadowers] = useState<Shadower[]>(() => parseShadowers(sj.shadower_email, sj.shadower_name));
+  /* Mirrors the Step-1 date input purely so the delivery warning can react to
+     typing — the authoritative value still comes off stepDateRef at Book-slot
+     time, keeping the input uncontrolled like the rest of this section. */
+  const [pickedDate, setPickedDate] = useState<string>(() => sj.date || (sj.assignments && sj.assignments[0] && sj.assignments[0].date) || delivFloor || dstr(today));
 
   const customModeRef = useRef(assignsRef.current.length > 0 && assignsRef.current[0].mode === 'custom');
   const editingSlotRef = useRef(sj.status === 'reschedule' || !sj.date);
@@ -155,6 +169,11 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
     const d = stepDateRef.current ? stepDateRef.current.value : '';
     const t = (stepTimeRef.current && stepTimeRef.current.value) || '09:00';
     if (!d) { toast('Please set a date for the slot'); return; }
+    let delivOverride = '';
+    if (beforeDeliv(d)) {
+      if (!confirmEarly(d)) return;
+      delivOverride = ' · ⚠ booked before delivery (' + fmtDate(delivFloor) + ') — SM override';
+    }
     const wasResched = sj.status === 'reschedule';
     const remark = remarkRef.current ? (remarkRef.current.value || '').trim() : '';
     if (wasResched && !remark) { toast('Please enter a reason for the reschedule'); return; }
@@ -166,7 +185,7 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
     const nextSubjobs = replaceSubjob(nextSj);
     const nextStatus = syncParentStatus(nextSubjobs, o.status);
     const logLabel = wasResched ? sj.type + ' slot rescheduled' + (remark ? ' — ' + remark : '') : sj.type + ' slot booked';
-    const nextLog = [...o.log, { t: logLabel + ': ' + fmtDate(d) + ' · ' + slotLabel(t, slotsFl, slotsWp), d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
+    const nextLog = [...o.log, { t: logLabel + ': ' + fmtDate(d) + ' · ' + slotLabel(t, slotsFl, slotsWp) + delivOverride, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
     if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
     toast(wasResched ? 'Slot rescheduled' : 'Slot booked');
@@ -189,12 +208,21 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
   const saveAssign = async () => {
     const valid = assigns.filter((a) => a.installer_id);
     if (!valid.length) { toast('Select at least one installer'); return; }
+    let delivOverrideNote = '';
     if (customMode) {
       const missingDate = valid.find((a) => !a.dates || !a.dates.length);
       if (missingDate) { toast('Please set dates for each installer before saving'); return; }
       if (sj.type === 'wallpaper') {
         const missingSlots = valid.find((a) => !a.slots || !a.slots.length || !a.slots[0]);
         if (missingSlots) { toast('Please set a start time for each wallpaper installer'); return; }
+      }
+      /* Custom mode owns its own dates, so it asks here rather than inheriting
+         Step 1's confirm. */
+      const early = valid.filter((a) => beforeDeliv((a.dates && a.dates[0]) || a.date));
+      if (early.length) {
+        const firstEarly = (early[0].dates && early[0].dates[0]) || early[0].date || '';
+        if (!confirmEarly(firstEarly)) return;
+        delivOverrideNote = ' · ⚠ starts before delivery (' + fmtDate(delivFloor) + ') — SM override';
       }
     } else {
       const d = sj.date;
@@ -244,7 +272,7 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
       ...(addedSh.length ? [{ t: 'Shadower(s) assigned: ' + addedSh.map((s) => s.name).join(', ') + ' (observing ' + sj.type + ' installation)', d: new Date().toISOString(), by: 'manual' as const, who: attribution }] : []),
       ...(removedSh.length ? [{ t: 'Shadower(s) removed from ' + sj.type + ' installation: ' + removedSh.map((s) => s.name).join(', '), d: new Date().toISOString(), by: 'manual' as const, who: attribution }] : []),
     ];
-    const nextLog = [...o.log, ...shLogs, { t: logLabel + ': ' + valid.map((a) => a.installer_name).join(', ') + availOverrideNote, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
+    const nextLog = [...o.log, ...shLogs, { t: logLabel + ': ' + valid.map((a) => a.installer_name).join(', ') + delivOverrideNote + availOverrideNote, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
     if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
     toast(wasResched ? 'Rescheduled' : 'Assignments saved');
@@ -350,14 +378,19 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
                 {sj.type === 'wallpaper' ? <div className="text-[11.5px] text-gray-500">{rolls} roll{rolls === 1 ? '' : 's'} → {slotsN * 3}h of work. Choose date &amp; start time.</div> : null}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10.5px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Date</label>
-                    <input ref={stepDateRef} type="date" className="w-full px-2 py-1.5 border border-gray-200 rounded-md text-[13px]" min={minDate} defaultValue={curDate || dstr(today)} />
+                    <label className="block text-[10.5px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Date{delivFloor ? <span className="normal-case font-normal tracking-normal text-gray-400"> · delivery {fmtDate(delivFloor)}</span> : null}</label>
+                    <input ref={stepDateRef} type="date" className="w-full px-2 py-1.5 border border-gray-200 rounded-md text-[13px]" min={minDate} defaultValue={curDate || delivFloor || dstr(today)} onChange={(e) => setPickedDate(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-[10.5px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Start time</label>
                     <input ref={stepTimeRef} type="time" className="border border-gray-200 rounded-md px-2.5 py-1.5 text-[13px] font-bold text-[#1F3A5F] bg-white w-full" defaultValue={curTime} />
                   </div>
                 </div>
+                {beforeDeliv(pickedDate) ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11.5px] font-semibold text-amber-800">
+                    ⚠ Before the material delivery date ({fmtDate(delivFloor)}) — book it only if the material is already at site.
+                  </div>
+                ) : null}
                 {sj.status === 'reschedule' ? (
                   <div>
                     <label className="block text-[10.5px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Reschedule reason <span className="text-red-600">*</span></label>
