@@ -112,7 +112,9 @@ Don't conflate these:
   `delivery`, `b2b_sales`, `field_worker`, … Mapped to the above by
   `CRM_ROLE_TO_SITE_AUDIT_ROLE` / `siteAuditRoleForCrmRole` in
   `siteAuditShared.ts`. Business-confirmed mapping; `field_worker` is
-  deliberately unmapped (nothing distinguishes auditor from installer).
+  deliberately unmapped (nothing distinguishes auditor from installer) — meaning
+  the role *sync* won't touch them, but it still force-adds the Site Audit tab,
+  and their own `profiles.role` picks which app they land in.
 - **`site_audit.*` sub-permissions** — per-user checkboxes in Admin > Users.
   These are an **override**; almost nobody has one.
 
@@ -121,9 +123,9 @@ CRM permission**. `profiles.role` sits in the middle because **the CRM
 permission list has no service-manager value at all** — `CRM_ROLE_TO_SITE_AUDIT_ROLE`
 can only *infer* one from a delivery/procurement-shaped permission, and the real
 service managers don't follow that shape. `profiles` is the record ops actually
-maintains (it is what Site Audit > Users edits), so it is consulted first;
-`fetchOwnSiteAuditRole`/`ownProfileQuery` (`siteAuditShared.ts`) resolve it by
-`phoneKey`. The CRM permission remains the fallback for the many BMs and store
+maintains (it is what Site Audit > Users edits), so it is consulted ahead of the
+CRM permission; `fetchOwnSiteAuditRole`/`ownProfileQuery` (`siteAuditShared.ts`)
+resolve it by `phoneKey`. The CRM permission remains the fallback for the many BMs and store
 managers never enrolled in the field app.
 
 `SITE_AUDIT_OWN_DASHBOARD_ROLES` is the set of `profiles.role` values that have a
