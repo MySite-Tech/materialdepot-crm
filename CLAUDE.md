@@ -141,10 +141,72 @@ attribute, the question is "which profile or `bm_email` link is missing", not
 "should the match be looser". Same rule holds for the COE's imported
 `wp_production` rows with a blank `bm`.
 
-Tables (Site Audit Supabase): `audit_orders` (site audits, has `bm_email`),
+Tables (Site Audit Supabase): `audit_orders` (site audits **and** store
+pre-bookings — see the next section; has `bm_email`),
 `install_orders` / `install_orders_slim` view (installations, **no `bm_email`
 column** — always resolves by name/phone), `wp_production` (custom wallpaper
 runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
+
+## A pre-booking and the audit it becomes are two rows, not one
+
+`Store_Team_App` books a slot before the Kylas enquiry exists, so the two halves
+of one job live in separate `audit_orders` rows:
+
+| | `pi` | `po` | status |
+|---|---|---|---|
+| Store pre-booking | `SRES-<STORE>-<ts>` | the enquiry ID | `slot_reserved` → `slot_converted` |
+| The real site audit | that enquiry ID | the MD order id | `pending` → … → `completed` |
+
+**The pre-booking's `po` IS the other row's `pi`.** That exact link — not the
+customer name, not the phone — is how the two are tied together; it is what
+`Store_Team_App`'s slot-availability check already absorbs bookings by, and what
+`dropSupersededPreBookings` (`SiteAuditBmView.tsx`) uses. Name and phone are free
+text on the reservation form (the phone is often the *store's* own number, shared
+across unrelated bookings), so matching on them merges different customers — the
+same rule as **Order attribution** above.
+
+Every list that shows a BM their own orders drops a pre-booking once the audit
+exists — either the linked order is provably present, or an SM marked it
+`slot_converted` ("service created"). Applied to the RAW rows **before** they are
+narrowed to one BM, since whether the audit exists is a question about the whole
+table and the audit row may carry a different (or missing) BM link than the
+pre-booking. A pre-booking still waiting on its service order stays visible: it
+is the only record that the slot was ever held.
+
+The ops/SM views take the opposite approach and filter both statuses out of the
+main list with a dedicated pre-booking filter (`audit-ops/Views.tsx`) — that is
+deliberate, not an inconsistency. Don't unify them.
+
+## `Array.isArray(rows) ? rows : []` turns a server error into empty data
+
+`sbGet` (`siteAuditShared.ts`) returns `r.json()` **without checking `r.ok`**, so
+any 4xx/5xx resolves a PostgREST *error object*, not a throw. Callers that write
+`Array.isArray(rows) ? rows : []` therefore render a server error as legitimately
+empty — indistinguishable from "nothing matched".
+
+Harmless for a count or a badge. **Dangerous for anything a workflow is gated
+on.** It hard-blocked assignment in both ops views (fixed 2026-08-19, commit
+`c589ec8`): the auditor/installer rosters load once when the view mounts but the
+assignment picker reads them on every drawer open, so one failed fetch emptied
+the picker for as long as the view stayed mounted, and the empty state blamed the
+city filter for what was a connection problem.
+
+The shape to copy when a load feeds a picker or a gate — see `loadAuditors` in
+`SiteAuditOpsView.tsx`:
+
+- a non-array response **throws** (it is a failed load, not an empty roster);
+- the last good data survives the failure, so a blip can't blank a working picker;
+- retry on the same 8s backoff `loadOrders` uses, self-clearing on success, plus
+  the poll and `visibilitychange` **only while the load is known broken** (the
+  error flag mirrored into a ref, so the mount-once poll effect reads the current
+  value without rebuilding its interval);
+- the empty state distinguishes *couldn't load* from *genuinely none* — house
+  style is soft-gate-and-surface, and "No auditors in this city" for a dropped
+  request sends the SM to the wrong control entirely.
+
+`loadShadowers`, `loadBms` and the deploy-safe `detect*` probes share the pattern
+but degrade safely (optional shadower, free-text BM fallback, feature stays
+inert). Leave them; they are not gates.
 
 ## Known landmines
 
@@ -178,6 +240,14 @@ runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 - Site Audit `profiles` rows double as login identities on the still-live public
   `material-depot-site.vercel.app/Login.html` (email + 4-digit passcode, no OTP).
   Never create a profile with `passcode: null`; use `randomPasscode()`.
+- **A reference list loaded once on mount, but read on every drawer open, breaks
+  permanently on one failed fetch.** That is what killed auditor assignment;
+  `loadOrders`-style retry + a self-describing empty state is the fix, not a
+  louder `console.error`. See the `Array.isArray` section above.
+- **`SiteAuditBranchManagerView`'s `ROLLUP_AUDIT_COLS` is deliberately narrower
+  than `AUDIT_COLS`** (dropping `log`/`skus` cut this list from 1.9 MB per poll to
+  107 KB) — but it must keep `po`, which is never rendered and exists only so
+  `dropSupersededPreBookings` can tell a held slot from the audit it became.
 
 ## House style
 
