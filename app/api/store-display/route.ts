@@ -126,16 +126,28 @@ export async function POST(req: NextRequest) {
 
         const pageNum = Math.max(1, Number(page) || 1);
         const size = Math.max(1, Number(page_size) || 30);
-        const needsFilter = !!(search || category || display_type || is_active !== undefined || is_deleted !== undefined);
+        const needsLocalFilter = !!(category || display_type || is_active !== undefined || is_deleted !== undefined);
 
-        if (!needsFilter && !branch_id) {
-          const url = `${API_BASE}/fetch-variant-locations/?all=True&page=${pageNum}&page_size=${size}`;
+        if (!needsLocalFilter) {
+          let url = branch_id
+            ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
+            : `${API_BASE}/fetch-variant-locations/?all=True`;
+          url += `&page=${pageNum}&page_size=${size}`;
+          if (search) url += `&product_name=${encodeURIComponent(search)}`;
           const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-          if (!res.ok) {
+          if (res.ok) {
+            const text = await res.text();
+            try {
+              const data = JSON.parse(text);
+              return NextResponse.json(data);
+            } catch {
+              // Backend returned non-JSON (e.g. "Backend call failure") — fall through to scanLocations
+            }
+          }
+          // If no search, don't fall through — return the error
+          if (!search) {
             return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });
           }
-          const data = await res.json().catch(() => ({}));
-          return NextResponse.json(data);
         }
 
         const scan = await scanLocations(token, { branch_id, is_deleted: undefined });
