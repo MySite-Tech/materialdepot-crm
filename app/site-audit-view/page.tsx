@@ -13,6 +13,7 @@ import SiteAuditInstallOpsView from '@/components/site-audit/SiteAuditInstallOps
 import SiteAuditOpsView from '@/components/site-audit/SiteAuditOpsView';
 import SiteShadowerApp from '@/components/site-audit/SiteShadowerApp';
 import SiteAuditBmView from '@/components/site-audit/SiteAuditBmView';
+import SiteAuditCoeView from '@/components/site-audit/SiteAuditCoeView';
 
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/SiteAuditLiveView'), { ssr: false });
@@ -31,6 +32,7 @@ const ROLE_LABELS: Record<string, string> = {
   installer: 'Site Installer',
   auditor_installer: 'Auditor + Installer',
   bm: 'Business Manager',
+  coe: 'Category Ops Executive',
 };
 
 type Person = { id: string; name: string; email: string; role: string; contact?: string };
@@ -53,6 +55,10 @@ function SiteAuditViewInner() {
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
+  /* Same read-only switcher as SiteAuditOwnDashboard/SiteAuditRoleViewerView —
+     a COE's own dashboard is their follow-up queue, but they can look at the
+     Service Manager view (orders, ops/perf/analytics) alongside it. */
+  const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
 
   useEffect(() => {
     try {
@@ -129,7 +135,8 @@ function SiteAuditViewInner() {
     </div>
   );
 
-  const isSm = viewRole === 'service_mgr' && !wantShadowing && person.role !== 'bm';
+  const isCoe = person.role === 'coe' && !wantShadowing;
+  const isSm = (viewRole === 'service_mgr' || (isCoe && coeShowServiceMgr)) && !wantShadowing && person.role !== 'bm';
   const isCombined = viewRole === 'auditor_installer' && !wantShadowing && person.role !== 'bm';
   const showCity = isSm;
 
@@ -167,7 +174,15 @@ function SiteAuditViewInner() {
           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-amber-700">
             {wantShadowing ? 'Shadowing preview' : 'Preview'}
           </span>
-          {showCity ? <div className="ml-auto">{cityPicker}</div> : null}
+          {isCoe ? (
+            <button
+              onClick={() => setCoeShowServiceMgr((v) => !v)}
+              className="ml-auto shrink-0 rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700 cursor-pointer"
+            >
+              {coeShowServiceMgr ? '← Their dashboard' : 'Service Manager dashboard →'}
+            </button>
+          ) : null}
+          {showCity ? <div className={isCoe ? '' : 'ml-auto'}>{cityPicker}</div> : null}
         </div>
 
         {primaryTabs.length ? (
@@ -212,6 +227,8 @@ function SiteAuditViewInner() {
           <SiteAuditorApp actingAs={actingAs} />
         ) : viewRole === 'installer' ? (
           <SiteInstallerApp actingAs={actingAs} />
+        ) : isCoe && !coeShowServiceMgr ? (
+          <SiteAuditCoeView city={city} who={person.name} />
         ) : isCombined ? (
           combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
         ) : isSm ? (
