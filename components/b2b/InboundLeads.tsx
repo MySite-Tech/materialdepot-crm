@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   INBOUND_STAGES, INBOUND_STAGE_COLORS, KYLAS_LEAD_CATEGORIES, KAM_STAGES, NEW_KYLAS_STAGES,
   fmtINR, type InboundLead, type InboundStage,
-  type LeadNote, type CallLogEntry, type LeadDeal,
+  type LeadNote, type CallLogEntry, type LeadDeal, B2B_LOST_REASONS,
 } from './mockData';
 import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, createInboundCallLog, CALL_OUTCOME_OPTIONS, type CallOutcome, updateInboundLeadKylas, fetchInboundLeadDetail, fetchCallLogSummary, fetchLeadDeals, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
-import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, type ExportFormat, type ExportScope } from './exportUtils';
+import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, LostReasonSelect, type ExportFormat, type ExportScope } from './exportUtils';
 
 const INBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Timeline', 'Owner', 'Source', 'Value'];
 const inboundToRow = (l: InboundLead): (string | number)[] => [
@@ -489,7 +489,12 @@ function LeadDrawer({
 
             {draft.stage === 'Lost' && (
               <Field label="Lost reason" className="mt-3">
-                <textarea value={draft.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)} rows={3} className={inputCls + ' resize-none'} />
+                <LostReasonSelect
+                  value={draft.lostReason || ''}
+                  options={B2B_LOST_REASONS}
+                  onChange={(v) => set('lostReason', v)}
+                  className={inputCls}
+                />
               </Field>
             )}
           </div>

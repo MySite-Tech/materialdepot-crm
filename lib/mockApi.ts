@@ -821,6 +821,27 @@ export interface CRMLeadsStats {
   byStatus: CRMLeadsStatsByStatus[];
 }
 
+// Lifetime deal totals for many clients at once, keyed by the phone the backend
+// matched. One request for a whole board — /crm/leads/stats/?q=<phone> per client
+// does an unindexed icontains over a cast of client__contact and does not scale.
+export interface ClientOrderHistoryRow {
+  orders: number;
+  lifetimeValue: number;
+  openValue: number;
+  enquiries: number;
+  enquiryValue: number;
+  furthestStatus: string | null;
+}
+
+export async function fetchClientOrderHistoriesApi(
+  phones: string[],
+): Promise<Record<string, ClientOrderHistoryRow>> {
+  if (!phones.length) return {};
+  const params = new URLSearchParams({ phones: phones.join(',') });
+  const data = await mdFetch(`/crm/leads/client-order-history/?${params.toString()}`);
+  return (data || {}) as Record<string, ClientOrderHistoryRow>;
+}
+
 export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pageSize'> = {}): Promise<CRMLeadsStats> {
   const params = new URLSearchParams();
   if (query.branch) params.set('branch', query.branch);

@@ -124,3 +124,22 @@ export function ExportButton({
     </div>
   );
 }
+
+// Lost-reason picker. Any value already stored that isn't one of the options is
+// kept as an extra option rather than silently reset to blank — these boards
+// used a free-text box until now, so historical reasons must survive an edit.
+export function LostReasonSelect({ value, options, onChange, className }: {
+  value: string;
+  options: readonly string[];
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const legacy = value && !options.includes(value) ? value : null;
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+      <option value="">Select a reason…</option>
+      {options.map((r) => <option key={r} value={r}>{r}</option>)}
+      {legacy && <option value={legacy}>{legacy} (previously recorded)</option>}
+    </select>
+  );
+}
