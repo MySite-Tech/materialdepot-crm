@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { jsPDF } from 'jspdf';
 import { cn } from '@/lib/utils';
 import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
+import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/omsService';
 import {
   SketchCanvas,
   SignaturePad,
@@ -235,6 +236,7 @@ async function retryPendingCompletions() {
   if (retryingCompletion) return;
   retryingCompletion = true;
   try {
+    await retryQueuedServiceConfirms();
     const pKeys = Object.keys(localStorage).filter((k) => k.startsWith('md_audit_ps_'));
     for (const k of pKeys) {
       try {
@@ -2099,6 +2101,13 @@ function JobCardWizard({
         await sbPatch('audit_orders', order.id, { status: 'completed', log: newLog });
         try {
           localStorage.removeItem('md_audit_ps_' + order.pi);
+        } catch {}
+        // The audit happened → confirm the OMS SERVICE leg, which is what raises its invoice.
+        // Queues itself for retry on failure; a legacy-PO order has no leg and is skipped.
+        try {
+          const poRows = await sbGet('audit_orders?id=eq.' + order.id + '&select=po');
+          const po = Array.isArray(poRows) && poRows[0] ? poRows[0].po : null;
+          await confirmServicePerformed(po, 'Site audit completed by ' + actingAs.name);
         } catch {}
       } catch {
         showToast('Status not saved — will retry automatically');

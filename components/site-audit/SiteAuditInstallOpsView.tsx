@@ -18,6 +18,7 @@
    shows the same profiles-based location tracking for installers/auditors. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { poFieldFor } from './omsService';
 import { inCity, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
 import OrdersView from './install-ops/OrdersView';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from './install-ops/QueueViews';
@@ -261,7 +262,7 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
     const skusRows = (r.skus || []).filter((s: any) => s.variant_handle);
     setAo({
       pi: r.estimate_lead_id || '',
-      po: r.po_number || '',
+      po: poFieldFor(r),
       name: (r.customer && r.customer.name) || '',
       phone: r.customer && r.customer.contact ? String(r.customer.contact) : '',
       bm: (r.bm && r.bm.name) || '',

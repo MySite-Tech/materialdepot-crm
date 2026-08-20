@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CITIES, inCity, sbGet, sbPatch, type CityFilter } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
+import { poFieldFor } from './omsService';
 import AuditOrderDrawer from './audit-ops/AuditOrderDrawer';
 import {
   AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, SlotsView, TodayView,
@@ -213,7 +214,7 @@ export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter }
     setKylasOpen(false);
     setAo({
       pi: r.estimate_lead_id || '',
-      po: r.po_number || '',
+      po: poFieldFor(r),
       name: (r.customer && r.customer.name) || '',
       phone: r.customer && r.customer.contact ? String(r.customer.contact) : '',
       addr: (r.shipping_address && r.shipping_address.address) || '',
