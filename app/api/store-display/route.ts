@@ -31,33 +31,7 @@ const SCAN_PAGE_SIZE = 1000;
 const SCAN_MAX_PAGES = 25;
 const SCAN_CONCURRENCY = 6;
 
-/* The cross-branch scan drags up to 25k rows through this function, and both the
-   facet build and every page of a filtered listing re-trigger it — paging 1→2→3
-   of an all-stores search used to re-scan the whole table three times, and the
-   facet call scans it once more. Cache the scanned rows briefly so facets, the
-   listing, and paging share a single scan. The rows are the shared
-   product-location catalog (identical for every caller, not per-user), so the
-   cache is keyed by scope alone; the short TTL bounds how long a movement or
-   removal can stay hidden from a browse screen. */
-const SCAN_TTL_MS = 60_000;
-const scanCache = new Map<string, { at: number; data: { items: any[]; truncated: boolean } }>();
-
 async function scanLocations(
-  token: string,
-  opts: { branch_id?: string | number; is_deleted?: boolean },
-): Promise<{ items: any[]; truncated: boolean }> {
-  const key = opts.branch_id ? `b:${opts.branch_id}` : 'all';
-  const hit = scanCache.get(key);
-  if (hit && Date.now() - hit.at < SCAN_TTL_MS) return hit.data;
-  const data = await runScan(token, opts);
-  /* Never cache an empty scan: runScan swallows a failed upstream fetch as an
-     empty batch (the `if (!res.ok) return null` below), and pinning that for the
-     full TTL would blank the screen even after upstream recovered. */
-  if (data.items.length) scanCache.set(key, { at: Date.now(), data });
-  return data;
-}
-
-async function runScan(
   token: string,
   { branch_id }: { branch_id?: string | number; is_deleted?: boolean },
 ): Promise<{ items: any[]; truncated: boolean }> {

@@ -33,17 +33,20 @@ export function StoreProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Search only fires on submit (Enter / button), never on keystroke — the
+  // upstream has no server-side search, so each query drags a full scan through
+  // the DB; debouncing every keystroke still fired one scan per pause.
+  const [submittedSearch, setSubmittedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categories, setCategories] = useState<string[]>(['All']);
   const [page, setPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<VariantLocationRow | null>(null);
   const [truncated, setTruncated] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(t);
-  }, [search]);
+  const submitSearch = () => {
+    setPage(1);
+    setSubmittedSearch(search.trim());
+  };
 
   /* Categories come from a scan of the whole scope, not from whichever 500 rows
      happened to be on page 1 of a 71k-row table — that made the dropdown an
@@ -101,10 +104,10 @@ export function StoreProducts() {
   }, []);
 
   useEffect(() => {
-    fetchPage(selectedStore, page, selectedCategory, debouncedSearch);
-  }, [selectedStore, page, selectedCategory, debouncedSearch, fetchPage]);
+    fetchPage(selectedStore, page, selectedCategory, submittedSearch);
+  }, [selectedStore, page, selectedCategory, submittedSearch, fetchPage]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch, selectedCategory, selectedStore]);
+  useEffect(() => { setPage(1); }, [selectedCategory, selectedStore]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -151,13 +154,23 @@ export function StoreProducts() {
         </div>
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Search</label>
-          <input
-            type="text"
-            placeholder="Search by name, SKU, handle..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by name, SKU, handle..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitSearch(); }}
+              className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full"
+            />
+            <button
+              type="button"
+              onClick={submitSearch}
+              className="px-4 py-2 text-[13px] font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 whitespace-nowrap"
+            >
+              Search
+            </button>
+          </div>
         </div>
         <div className="self-end">
           <span className="text-[12px] text-gray-400">
