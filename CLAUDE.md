@@ -81,15 +81,24 @@ React inputs here ignore synthetic `type` events; set values via the native
 
 `resolveAllowedTabs(user)` decides which tabs render:
 
-1. If `user.individualPermissions` is **non-empty**, it wins outright — tabs come
-   from `PERMISSION_TAB_ORDER` and `ROLE_TABS` is ignored entirely.
-2. Otherwise `ROLE_TABS[role]`, falling back to `DEFAULT_ROLE_TABS`.
-3. Then **force-add sets** append regardless of either: `B2B_SALES_ROLES`,
-   `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`.
+1. If `user.individualPermissions` is **non-empty** it is the WHOLE answer —
+   tabs come from `PERMISSION_TAB_ORDER`, and an absent slug means "no".
+2. Only if the list is empty/NULL: `ROLE_TABS[role]` (falling back to
+   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES`,
+   `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
+   is a **bootstrap for un-migrated accounts only**.
 
-Consequence worth remembering: **editing `ROLE_TABS` alone does not reach anyone
-who has individual permissions set.** If a tab must be guaranteed for a role,
-add a force-add set — that is what the three existing sets are for.
+`permission_name` is an HR cost-centre label, not an access level — it says
+`tech` for a Service Manager and `admin` for Category/Delivery/Marketing staff —
+so nothing may be gated on it. Anything a role must guarantee has to exist as a
+slug on those people; **adding a role to a force-add set no longer reaches
+anyone who has a permission list**, which is nearly everyone. The 2026-08-20
+backfill wrote the slugs for every force-add set (see below).
+
+`?tab=` is validated against `VALID_MAIN_TABS` **and** clamped to the user's own
+tabs into `effectiveTab`; every render block keys off `effectiveTab`, never
+`mainTab`. Before that, only Admin and Appointment Tracker re-checked at render,
+so every other tab was reachable by typing its name.
 
 `siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
 which is fetched async — so that tab can appear a beat after the others. That is
@@ -116,39 +125,29 @@ Don't conflate these:
   the role *sync* won't touch them, but it still force-adds the Site Audit tab,
   and their own `profiles.role` picks which app they land in.
 - **`site_audit.*` sub-permissions** — per-user checkboxes in Admin > Users.
-  These are an **override**; almost nobody has one.
+  These are now the ONLY thing that grants a Site Audit view; the CRM role is
+  not consulted. Slugs: `site_audit.admin` (oversight rail), `.bm`,
+  `.branch_mgr`, `.service_manager`, `.site_auditor`, `.installer`,
+  `.auditor_installer`, `.coe`. `site_audit.admin` and `.branch_mgr` were added
+  2026-08-20 — before that oversight was the *absence* of a sub-role combined
+  with `permission_name in (admin, superadmin, tech)`, which is how 26 accounts
+  that were never granted `crm.site_audit` reached the company-wide rail, and
+  `branch_mgr` had no slug at all.
 
-Precedence, in `App.tsx` (`siteAuditRole`): **sub-permission → `profiles.role` →
-CRM permission**. `profiles.role` sits in the middle because **the CRM
-permission list has no service-manager value at all** — `CRM_ROLE_TO_SITE_AUDIT_ROLE`
-can only *infer* one from a delivery/procurement-shaped permission, and the real
-service managers don't follow that shape. `profiles` is the record ops actually
-maintains (it is what Site Audit > Users edits), so it is consulted ahead of the
-CRM permission; `fetchOwnSiteAuditRole`/`ownProfileQuery` (`siteAuditShared.ts`)
-resolve it by `phoneKey`. The CRM permission remains the fallback for the many BMs and store
-managers never enrolled in the field app.
+Routing lives at the `effectiveTab === 'siteAudit'` block in `App.tsx`:
 
-`SITE_AUDIT_OWN_DASHBOARD_ROLES` is the set of `profiles.role` values that have a
-dashboard here. `store_staff` is deliberately **out** — the store team has its own
-`/store-booking` route, so routing them into `SiteAuditOwnDashboard` dead-ends on
-"ask an admin for a sub-role". `admin` and `content_team` are out for the same
-kind of reason.
+- `site_audit.admin` → `SiteAuditRail`, the company-wide console (Users, Role
+  Viewer, every job in every city).
+- Any other `site_audit.*` slug → `SiteAuditOwnDashboard`, their own scoped
+  dashboard.
+- No slug → the dashboard's soft-gate message, NOT the rail.
 
-Routing lives at the `mainTab === 'siteAudit'` block in `App.tsx`:
-
-- `SITE_AUDIT_OVERSIGHT_ROLES` (`superadmin`/`admin`/`tech`) → `SiteAuditRail`,
-  the company-wide console (Users, Role Viewer, every job in every city).
-- Everyone else → `SiteAuditOwnDashboard`, their own scoped dashboard.
-- Someone who is **both** (an oversight CRM role *and* a field profile — a real
-  case: one person has an `admin` profile under their company email and a
-  `service_mgr` profile under a personal one) defaults to **their own
-  dashboard**, with a switcher to the console. Rail *eligibility* is still the
-  CRM oversight roles only, so this widens nobody's access — it only changes
-  which view they land on.
-
-**This gate is deny-by-default on purpose.** It previously fell through to the
-rail whenever a user had no `site_audit.*` sub-permission — the normal state for
-a BM — so any widening of Site Audit access must keep non-admins off the rail.
+**This gate is deny-by-default on purpose**, and it must stay keyed to the slug.
+Twice now the fallback has been the bug: first falling through to the rail when
+a user had no sub-role, then deriving the sub-role from `permission_name`.
+`/site-audit-view?person=` renders someone else's dashboard, so it requires
+`site_audit.admin` too — a session alone was never authorisation, and profile
+emails are enumerable through the field app's public anon key.
 
 A missing `profiles` row is not a dead end for read-only roles: a BM or store
 manager renders from the CRM session alone. Roles that *do* field work

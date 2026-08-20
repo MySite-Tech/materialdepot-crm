@@ -47,11 +47,35 @@ function avatarColor(name: string): string {
 
 type Person = { id: string; name: string; email: string; role: string; branch: string | null; contact: string | null };
 
+/* Profiles the CRM sync created carry `crm.<phone>@site-audit.internal` (see
+   syntheticSiteAuditEmail) — an addressable-looking string that is not an
+   address and tells a human nothing. Show the phone it encodes instead, which
+   is what someone scanning this list actually recognises. Real emails are
+   shown as-is. */
+const SYNTHETIC_DOMAIN = '@site-audit.internal';
+function subtitleFor(p: Person): string {
+  if (!p.email.endsWith(SYNTHETIC_DOMAIN)) return p.email;
+  return p.contact || p.email.slice(0, -SYNTHETIC_DOMAIN.length).replace(/^crm\./, '');
+}
+
+/* Name, phone and email all match — someone looking for a person has whichever
+   of the three is to hand, and the phone is often the only one they know. */
+function matchesQuery(p: Person, q: string): boolean {
+  if (!q) return true;
+  const needle = q.trim().toLowerCase();
+  if (!needle) return true;
+  return p.name.toLowerCase().includes(needle)
+    || p.email.toLowerCase().includes(needle)
+    || (p.contact || '').includes(needle)
+    || subtitleFor(p).toLowerCase().includes(needle);
+}
+
 export default function SiteAuditRoleViewerView() {
   const [persons, setPersons] = useState<Record<string, Person[]>>({});
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<{ person: Person; shadowing: boolean } | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -66,13 +90,56 @@ export default function SiteAuditRoleViewerView() {
     return () => { alive = false; };
   }, []);
 
-  const list = role ? (persons[role] || []) : [];
+  /* A query searches EVERY role, not just the selected one: the whole point of
+     looking someone up is that you do not know which bucket they are in.
+     Selecting a role still narrows, so the two compose. store_staff is excluded
+     because it is a shared kiosk, not a person with a dashboard to preview. */
+  const searching = query.trim().length > 0;
+  const list = searching
+    ? ROLE_ORDER
+        .filter((k) => k !== 'store_staff' && (!role || k === role))
+        .flatMap((k) => (persons[k] || []).filter((p) => matchesQuery(p, query)))
+    : role ? (persons[role] || []) : [];
 
   return (
     <div>
       <div className="mb-5">
         <h1 className="text-lg font-bold text-black">Role Viewer</h1>
         <p className="text-[13px] text-gray-400 mt-0.5">Pick a role, then a person. 👁 previews their dashboard right here; ↗ opens it in a new tab instead.</p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[240px] flex-1 max-w-[420px]">
+          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-gray-400">⌕</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search anyone by name, phone or email…"
+            className="w-full rounded-md border border-gray-200 bg-white py-2 pl-7 pr-8 text-[13px] outline-none focus:border-[#0F766E]"
+          />
+          {query ? (
+            <button
+              onClick={() => setQuery('')}
+              title="Clear"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded px-1.5 text-[13px] text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+        {role ? (
+          <button
+            onClick={() => setRole(null)}
+            className="rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[12px] font-semibold text-gray-600 hover:border-gray-300"
+          >
+            {ROLES[role]?.label} ×
+          </button>
+        ) : null}
+        {searching ? (
+          <span className="text-[12px] text-gray-400">
+            {list.length} {list.length === 1 ? 'match' : 'matches'}{role ? ' in ' + ROLES[role]?.label : ' across all roles'}
+          </span>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
@@ -116,39 +183,52 @@ export default function SiteAuditRoleViewerView() {
 
       {loading ? (
         <div className="text-center text-gray-400 text-[13px] py-10">Loading…</div>
-      ) : !role ? (
+      ) : !role && !searching ? (
         <div className="text-center text-gray-400 text-[13px] py-10 border border-dashed border-gray-200 rounded-lg">
-          👆 Select a role above to see its members
+          👆 Select a role above, or search for someone by name or phone
         </div>
       ) : !list.length ? (
         <div className="text-center text-gray-400 text-[13px] py-10 border border-dashed border-gray-200 rounded-lg">
-          No {ROLES[role].label}s found.
+          {searching ? <>Nobody matches “{query}”{role ? ' in ' + ROLES[role].label : ''}.</> : <>No {ROLES[role!].label}s found.</>}
         </div>
       ) : (
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
-            {ROLES[role].label} · {list.length} {list.length === 1 ? 'member' : 'members'}
+            {searching ? 'Results' : ROLES[role!].label} · {list.length} {list.length === 1 ? 'member' : 'members'}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* 87 Business Managers in a full-height grid pushed everything below
+              it (including the inline preview) off-screen. Cap it and let the
+              list scroll inside its own box instead of the page. */}
+          <div className="max-h-[560px] overflow-y-auto rounded-lg pr-0.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
             {list.map((p) => (
               <a
                 key={p.email}
                 href={`/site-audit-view?p=${encodePerson(p.email)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`group flex items-center gap-3 rounded-lg border bg-white px-4 py-3 transition-all hover:border-[#EAB308] hover:shadow-sm ${
+                className={`group flex items-center gap-2.5 rounded-lg border bg-white px-3 py-2.5 transition-all hover:border-[#EAB308] hover:shadow-sm ${
                   previewing?.person.email === p.email ? 'border-[#EAB308] ring-1 ring-[#EAB308]' : 'border-gray-200'
                 }`}
               >
                 <div
-                  className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                  className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold"
                   style={{ background: avatarColor(p.name) }}
                 >
                   {p.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold text-black truncate">{p.name}</div>
-                  <div className="text-[11px] text-gray-400 truncate">{p.email}</div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[11px] text-gray-400 truncate">{subtitleFor(p)}</span>
+                    {/* Only when results span roles — inside a single role it
+                        would repeat the heading on all 87 cards. */}
+                    {searching && !role ? (
+                      <span className="shrink-0 rounded-full bg-gray-100 px-1.5 text-[9.5px] font-semibold uppercase tracking-wide text-gray-500">
+                        {ROLES[p.role]?.label || p.role}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <span
                   title="Preview their dashboard here"
@@ -160,6 +240,7 @@ export default function SiteAuditRoleViewerView() {
                 <span className="shrink-0 text-gray-300 text-sm group-hover:text-[#EAB308]">↗</span>
               </a>
             ))}
+          </div>
           </div>
         </div>
       )}

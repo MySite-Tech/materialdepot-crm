@@ -11,10 +11,7 @@ import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
 import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
 import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
-import {
-  CRM_ROLE_TO_SITE_AUDIT_ROLE, fetchOwnSiteAuditRole, OVERSIGHT_CRM_ROLES, ROLES as SITE_AUDIT_ROLE_LABELS,
-  SITE_AUDIT_OWN_DASHBOARD_ROLES, siteAuditRoleForCrmRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile,
-} from '@/components/site-audit/siteAuditShared';
+import { isSiteAuditOversightRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
@@ -141,16 +138,18 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
 // Sub-permissions nested under crm.site_audit: they only matter once a user
 // already has the siteAudit tab, and pick which view within it they land on
 // (mirrors the roles the separate field-app profiles table used to drive).
-// '' (Admin) is a pseudo-slug — it's never stored, it just means "no sub-role",
-// which is what makes App.tsx render the oversight SiteAuditRail instead of a
-// field-worker's own dashboard.
+// Every view is a real stored slug, oversight included — '' means "granted the
+// tab but no view", which the dashboard soft-gates with a message rather than
+// falling through to the company-wide rail the way it used to.
 const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
-  ['', 'Admin'],
+  ['', 'None — no dashboard'],
+  ['site_audit.admin', 'Admin (company-wide oversight)'],
   ['site_audit.site_auditor', 'Site Auditor'],
   ['site_audit.installer', 'Site Installer'],
   ['site_audit.service_manager', 'Service Manager'],
   ['site_audit.auditor_installer', 'Auditor + Installer'],
   ['site_audit.bm', 'Business Manager'],
+  ['site_audit.branch_mgr', 'Branch Manager'],
   ['site_audit.coe', 'Category Ops Executive'],
 ];
 
@@ -276,60 +275,57 @@ const APPOINTMENT_TRACKER_ROLES = new Set([
    permissions — same force-add pattern as B2B_SALES_ROLES above, and for the
    same reason: `crm.site_audit` is a per-user checkbox almost nobody has, so
    role defaults alone left every BM and store manager without the tab. What
-   they see INSIDE it is decided per role, not shared — see
-   SITE_AUDIT_OVERSIGHT_ROLES and siteAuditRoleForCrmRole. */
-/* Derived from CRM_ROLE_TO_SITE_AUDIT_ROLE rather than hand-listed, because the
-   hand-written version silently drifted from it: `delivery` maps to
-   service_mgr there but was missing here, so those accounts got no tab. Every
-   permission the mapping grants a Site Audit role now grants the tab too, by
-   construction. `field_worker` is added explicitly — the mapping deliberately
-   refuses to guess whether one audits or installs, but they are field staff and
-   their own profile decides which app they land in. */
-const SITE_AUDIT_ROLES = new Set<string>([
-  ...OVERSIGHT_CRM_ROLES,                                       // → company-wide oversight rail
-  ...Object.entries(CRM_ROLE_TO_SITE_AUDIT_ROLE)
-    .filter(([, role]) => role !== null)
-    .map(([perm]) => perm),                                     // → BM / store rollup / Service Manager
-  'field_worker',                                               // → auditor or installer, per their profile
+   they see INSIDE it is decided by their `site_audit.*` slug — see
+   siteAuditRoleFromPermissions. */
+const SITE_AUDIT_ROLES = new Set([
+  'superadmin', 'admin', 'tech',                        // → company-wide oversight rail
+  'sales', 'b2b_sales', 'b2b_KAM', 'b2b_manager',       // → their own order book (BM)
+  'manager', 'store_manager',                           // → their store's rollup
+  'delivery_manager', 'post_sales', 'procurement',      // → Service Manager dashboards
 ]);
 
-/* The ONLY roles that get the company-wide oversight rail (Users, Role Viewer,
-   every job in every city). Everyone else lands on their own scoped dashboard.
-   This is a deny-by-default gate on purpose: the tab used to fall through to
-   the rail whenever a user had no `site_audit.*` sub-permission, which is the
-   normal state for a BM — granting them the tab without this check would have
-   handed them the whole company's field ops. */
-const SITE_AUDIT_OVERSIGHT_ROLES = new Set(['superadmin', 'admin', 'tech']);
+/* Access is decided by permission, never by role. `permission_name` is an HR
+   cost-centre label — it says `tech` for a Service Manager and `admin` for
+   category, delivery and marketing staff — so anything keyed to it grants the
+   same view to everyone who happens to share a label, and cannot be withheld
+   from one of them. Every role-keyed force-add below is therefore a BOOTSTRAP
+   ONLY, applied to accounts that have no permission list recorded yet.
 
-/* `fieldRole` is the caller's own Site Audit profiles.role, resolved
-   asynchronously (see the effect below) — it grants the tab on its own, so a
-   service manager or auditor whose CRM permission maps to no Site Audit role
-   still reaches their dashboard. Undefined until it resolves; the CRM role
-   alone decides until then, so a dropped lookup can never take a tab away. */
-const resolveAllowedTabs = (user?: AppUser | null, fieldRole?: string | null): Array<MainTab> => {
+   Once a list exists it is the whole answer: a slug that is absent means "no",
+   including for a tab the person's role used to force-add. That is the point —
+   `crm.site_audit` was deliberately left off 26 of the 30 accounts that were
+   nonetheless reaching the company-wide oversight rail. */
+const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
-  let tabs: Array<MainTab>;
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
-    tabs = PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
-  } else {
-    tabs = ROLE_TABS[user?.role ?? ''] ?? DEFAULT_ROLE_TABS;
+    return PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
   }
+  // Un-migrated account: no list recorded, so fall back to the role defaults.
+  let tabs: Array<MainTab> = ROLE_TABS[user?.role ?? ''] ?? DEFAULT_ROLE_TABS;
   if (B2B_SALES_ROLES.has(user?.role ?? '') && !tabs.includes('b2bSales')) {
     tabs = [...tabs, 'b2bSales'];
   }
   if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
     tabs = [...tabs, 'appointmentTracker'];
   }
-  const siteAuditByRole = SITE_AUDIT_ROLES.has(user?.role ?? '')
-    || (!!fieldRole && SITE_AUDIT_OWN_DASHBOARD_ROLES.has(fieldRole));
-  if (siteAuditByRole && !tabs.includes('siteAudit')) {
+  if (SITE_AUDIT_ROLES.has(user?.role ?? '') && !tabs.includes('siteAudit')) {
     tabs = [...tabs, 'siteAudit'];
   }
   if (['superadmin', 'admin', 'tech'].includes(user?.role ?? '') && !tabs.includes('storeDisplay')) {
     tabs = [...tabs, 'storeDisplay'];
   }
   return tabs;
+};
+
+/* Sub-tabs of Store Display that expose stock movement and its admin controls.
+   Role-keyed for un-migrated accounts only, like the force-adds above. */
+const STORE_DISPLAY_ADMIN_SLUG = 'crm.store_display_admin';
+const STORE_DISPLAY_ADMIN_ROLES = new Set(['superadmin', 'admin', 'tech', 'manager']);
+const canAdminStoreDisplay = (user?: AppUser | null): boolean => {
+  const perms = user?.individualPermissions;
+  if (Array.isArray(perms) && perms.length > 0) return perms.includes(STORE_DISPLAY_ADMIN_SLUG);
+  return STORE_DISPLAY_ADMIN_ROLES.has(user?.role ?? '');
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -1304,7 +1300,9 @@ function AdminDashboard() {
     if (!/^\d{10}$/.test(newPhone.trim())) { setError('Phone must be 10 digits'); return; }
     if (users.some((u) => u.phone === newPhone.trim())) { setError('Phone already exists'); return; }
     const siteAuditRole = siteAuditRoleFromPermissions(newPermissions);
-    if (siteAuditRole && !newEmail.trim()) { setError('Email is required for a Site Audit role (Business Manager, Site Auditor, etc.)'); return; }
+    // Oversight is a console with no field-app profile behind it — see
+    // upsertSiteAuditProfile — so it is the one sub-role needing no email.
+    if (siteAuditRole && !isSiteAuditOversightRole(siteAuditRole) && !newEmail.trim()) { setError('Email is required for a Site Audit role (Business Manager, Site Auditor, etc.)'); return; }
     setError('');
     try {
       const user = await addUser({ name: newName.trim(), phone: newPhone.trim(), role: newRole, individualPermissions: newPermissions });
@@ -1811,58 +1809,34 @@ export default function App() {
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
 
+  // Derive allowed tabs — per-user CRM permissions override role defaults.
+  const allowedTabs = resolveAllowedTabs(currentUser);
+  const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
+  /* `?tab=` is a request, not an authorisation. It was validated against the
+     list of tabs that exist but never against this user's own tabs, and only
+     the Admin and Appointment Tracker panels re-checked at render — so every
+     other tab was reachable by typing its name, the header merely hid the
+     button. Clamp once, here, and render off this instead of `mainTab`. */
+  const effectiveTab: MainTab | null = allowedTabs.includes(mainTab)
+    ? mainTab
+    : (allowedTabs[0] ?? null);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!effectiveTab) return;
     const url = new URL(window.location.href);
-    if (url.searchParams.get('tab') !== mainTab) {
-      url.searchParams.set('tab', mainTab);
+    if (url.searchParams.get('tab') !== effectiveTab) {
+      url.searchParams.set('tab', effectiveTab);
       window.history.replaceState({}, '', url.toString());
     }
-  }, [mainTab]);
-
-  /* What the field app itself records this person as (profiles.role, matched by
-     phone). Resolved async and left `undefined` if the lookup fails, so a
-     dropped request degrades to the CRM-role behaviour instead of revoking
-     access. Not cached: a role edited in Site Audit > Users has to take effect
-     on the next load, and a stale cache would keep showing the old dashboard. */
-  const [siteAuditFieldRole, setSiteAuditFieldRole] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    const phone = currentUser?.phone;
-    if (!phone) { setSiteAuditFieldRole(undefined); return; }
-    let alive = true;
-    fetchOwnSiteAuditRole(String(phone))
-      .then((role) => { if (alive) setSiteAuditFieldRole(role); })
-      .catch((e) => { console.error('[siteAudit] own role lookup failed', e); });
-    return () => { alive = false; };
-  }, [currentUser?.phone]);
-
-  // Derive allowed tabs — per-user CRM permissions override role defaults.
-  const allowedTabs = resolveAllowedTabs(currentUser, siteAuditFieldRole);
-  const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
-  /* Precedence for "which Site Audit dashboard is mine":
-       1. the hand-set `site_audit.*` sub-permission — an explicit CRM override;
-       2. the field app's own profiles.role — the record ops actually maintains;
-       3. the CRM permission mapping — the fallback for the many BMs and store
-          managers who were never enrolled in the field app.
-     (2) exists because the CRM permission list has no service-manager value:
-     inferring one from delivery/procurement-shaped permissions gave real
-     service managers either the company-wide rail or no tab at all. */
-  const siteAuditSubRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
-  const siteAuditOwnFieldRole = siteAuditFieldRole && SITE_AUDIT_OWN_DASHBOARD_ROLES.has(siteAuditFieldRole)
-    ? siteAuditFieldRole
-    : null;
-  const siteAuditRole = siteAuditSubRole ?? siteAuditOwnFieldRole ?? siteAuditRoleForCrmRole(currentUser?.role);
-  /* Rail eligibility is unchanged — still the CRM oversight roles only, so this
-     widens nobody's access. What changes is the DEFAULT: someone the field app
-     records as a service manager (or auditor, or BM) lands on their own
-     dashboard, and the console they were already entitled to becomes a click
-     away instead of the only thing they can see. */
-  const siteAuditRailEligible = SITE_AUDIT_OVERSIGHT_ROLES.has(currentUser?.role ?? '') && !siteAuditSubRole;
-  const siteAuditIsOversight = siteAuditRailEligible && !siteAuditOwnFieldRole;
-  /* Both an admin console and a field dashboard — a real production case (an
-     admin also enrolled as a service manager). Defaults to their own. */
-  const siteAuditCanSwitch = siteAuditRailEligible && !!siteAuditOwnFieldRole;
-  const [siteAuditShowConsole, setSiteAuditShowConsole] = useState(false);
+  }, [effectiveTab]);
+  /* Which Site Audit view this person gets, from their `site_audit.*` slug and
+     nothing else. It used to fall back to the CRM role, which is how a Service
+     Manager carrying the `tech` label reached the company-wide oversight rail;
+     the roles are backfilled into slugs instead (see the sub-role picker in
+     Admin > Users). No slug means the tab soft-gates with a message. */
+  const siteAuditRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
+  const siteAuditIsOversight = isSiteAuditOversightRole(siteAuditRole);
 
   useEffect(() => {
     try {
@@ -2005,7 +1979,7 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
     const needsBranches = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard'].includes(mainTab);
-    const needsUsers = mainTab === 'leads';
+    const needsUsers = effectiveTab === 'leads';
     if (!needsBranches && !needsUsers) return;
     let cancelled = false;
     Promise.all([
@@ -2721,54 +2695,39 @@ export default function App() {
                 }
                 setMainTab(t.key);
               }}
-              className={`px-3 sm:px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors whitespace-nowrap ${mainTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              className={`px-3 sm:px-4 py-2 text-[12px] font-semibold border-b-2 cursor-pointer bg-transparent transition-colors whitespace-nowrap ${effectiveTab === t.key ? 'border-[#EAB308] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
             >
               {t.label}
             </button>
           ))}
       </div>
 
-      {mainTab === 'dashboard' && (
+      {effectiveTab === 'dashboard' && (
         <Dashboard branches={branches} allowedBranches={userAllowedBranches} orderLostOnly={currentUser?.role === 'retail'} />
       )}
 
-      {mainTab === 'footfall' && (
+      {effectiveTab === 'footfall' && (
         <FootfallTab branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
-      {mainTab === 'weeklyFunnel' && (
+      {effectiveTab === 'weeklyFunnel' && (
         <WeeklyFunnelDashboard branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
-      {mainTab === 'reportCard' && (
+      {effectiveTab === 'reportCard' && (
         <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} currentUserPhone={currentUser?.phone ?? ''} />
       )}
 
-      {mainTab === 'storeVisit' && (
+      {effectiveTab === 'storeVisit' && (
         <StoreVisitWrapper />
       )}
 
-      {mainTab === 'nps' && (
-        <NPSDashboard branches={branches} allowedBranches={['admin', 'superadmin', 'tech'].includes(currentUser?.role ?? '') ? [] : userAllowedBranches} />
+      {effectiveTab === 'nps' && (
+        <NPSDashboard branches={branches} allowedBranches={userAllowedBranches} />
       )}
 
-      {mainTab === 'siteAudit' && (<>
-        {siteAuditCanSwitch && (
-          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 border-b border-gray-200 bg-white px-4 py-2 sm:px-6">
-            <span className="text-[11.5px] text-gray-400">
-              Your CRM account also has the company-wide console.
-            </span>
-            <button
-              onClick={() => setSiteAuditShowConsole((v) => !v)}
-              className="rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700 cursor-pointer"
-            >
-              {siteAuditShowConsole
-                ? `← My ${SITE_AUDIT_ROLE_LABELS[siteAuditOwnFieldRole ?? '']?.label ?? 'own'} dashboard`
-                : 'Company-wide console →'}
-            </button>
-          </div>
-        )}
-        {siteAuditIsOversight || (siteAuditCanSwitch && siteAuditShowConsole) ? (
+      {effectiveTab === 'siteAudit' && (
+        siteAuditIsOversight ? (
           <SiteAuditRail user={currentUser ? { name: currentUser.name, phone: currentUser.phone, role: currentUser.role } : null} />
         ) : (
           <SiteAuditOwnDashboard
@@ -2777,24 +2736,30 @@ export default function App() {
             crmName={currentUser?.name || ''}
             allowedBranches={currentUser?.allowedBranches || []}
           />
-        )}
-      </>)}
+        )
+      )}
 
-      {mainTab === 'admin' && allowedTabs.includes('admin') && (
+      {effectiveTab === 'admin' && (
         <AdminDashboard />
       )}
 
-      {mainTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
+      {effectiveTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
 
-      {mainTab === 'b2bSales' && <B2BSalesCRM />}
+      {effectiveTab === 'b2bSales' && <B2BSalesCRM />}
 
-      {mainTab === 'appointmentTracker' && canSeeAppointmentTracker && (
+      {effectiveTab === 'appointmentTracker' && (
         <AppointmentTrackerClient currentUser={currentUser} />
       )}
 
-      {mainTab === 'storeDisplay' && <StoreDisplayTab userRole={currentUser?.role ?? ''} />}
+      {effectiveTab === 'storeDisplay' && <StoreDisplayTab isAdmin={canAdminStoreDisplay(currentUser)} />}
 
-      {mainTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
+      {!effectiveTab && (
+        <div className="p-10 text-center text-sm text-gray-400">
+          No CRM tabs are enabled for this account. Ask an admin to grant permissions under Admin &gt; Users.
+        </div>
+      )}
+
+      {effectiveTab === 'leads' && <div className="px-3 py-3 sm:px-6 sm:py-4">
         <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200">
           <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:flex sm:justify-between sm:gap-4">
             <div>
