@@ -62,6 +62,11 @@ export default function SiteAuditOwnDashboard({
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
   const [smTab, setSmTab] = useState<'audit' | 'install'>('audit');
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
+  /* A COE's landing view stays their own follow-up queue; this only toggles a
+     read-only look at the Service Manager dashboard (orders, timeline logs,
+     ops/perf/analytics) alongside it — same switcher pattern as
+     `siteAuditCanSwitch` in app/App.tsx. */
+  const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
   /* Shadowing is cross-role — anyone can be picked to observe a job — so this
      toggle sits above the role-specific dashboards rather than inside one. */
   const [shadowing, setShadowing] = useState(false);
@@ -159,16 +164,102 @@ export default function SiteAuditOwnDashboard({
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteShadowerApp actingAs={actingAs} /></div></div>;
   }
 
+  /* The Service Manager dashboard's tabs (Audit/Install, then Ops/Jobs/
+     Perf/Analytics/Live) and its city filter — pulled out so the COE's
+     read-only switcher below can render the identical view a service_mgr
+     lands on directly, instead of a second copy that drifts from it. */
+  const renderServiceMgrDashboard = () => (
+    <>
+      <div className="bg-white border-b border-gray-200">
+        <div className="px-6 flex gap-0 items-center">
+          {([['audit', 'Audit Dashboard'], ['install', 'Install Dashboard']] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setSmTab(k)}
+              className={`px-5 py-3 text-[13px] font-semibold border-b-2 cursor-pointer bg-transparent ${smTab === k ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              {label}
+            </button>
+          ))}
+          <div className="ml-auto flex shrink-0 items-center gap-2 pl-4">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="sm-city">City</label>
+            <select
+              id="sm-city"
+              value={city}
+              onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
+              className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
+            >
+              <option value="all">All Cities</option>
+              {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+      <div className="p-4 sm:p-6">
+        {smTab === 'audit' && (
+          <div className="flex gap-2 flex-wrap mb-4">
+            {([
+              ['ops', 'Audit Ops'],
+              ['jobs', 'Job Overview'],
+              ['perf', 'Performance'],
+              ['analytics', 'Analytics'],
+              ['live', 'Live'],
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setSmAuditSubTab(k)}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${smAuditSubTab === k ? 'bg-[#EAB308] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {smTab === 'install' ? (
+          <SiteAuditInstallOpsView city={city} />
+        ) : smAuditSubTab === 'ops' ? (
+          <SiteAuditOpsView city={city} />
+        ) : smAuditSubTab === 'jobs' ? (
+          <SiteAuditJobsView city={city} />
+        ) : smAuditSubTab === 'perf' ? (
+          <SiteAuditPerfView city={city} />
+        ) : smAuditSubTab === 'analytics' ? (
+          <SiteAuditAnalyticsView city={city} />
+        ) : (
+          <SiteAuditLiveView city={city} />
+        )}
+      </div>
+    </>
+  );
+
   // A BM's own dashboard is their order list, regardless of the CRM sub-role
   // permission (which only covers the auditor/installer/SM apps).
   if (person.role === 'bm') {
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact, aliases: crmName ? [crmName] : [] }} /></div></div>;
   }
 
-  // Same pattern as BM — a COE's own dashboard is the follow-up queue,
-  // regardless of the CRM sub-role permission.
+  /* A COE's own dashboard is the follow-up queue, same pattern as BM — but a
+     COE also needs to see what the Service Manager sees (orders, timeline
+     logs, ops/perf/analytics) without that becoming their default landing
+     view. The switcher only changes what's on screen, not which dashboard
+     they land on next time. */
   if (person.role === 'coe') {
-    return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} /></div></div>;
+    return (
+      <div>
+        {shadowBar}
+        <div className="flex justify-end border-b border-gray-200 bg-white px-6 py-2">
+          <button
+            onClick={() => setCoeShowServiceMgr((v) => !v)}
+            className="rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700 cursor-pointer"
+          >
+            {coeShowServiceMgr ? '← My dashboard' : 'Service Manager dashboard →'}
+          </button>
+        </div>
+        {coeShowServiceMgr
+          ? renderServiceMgrDashboard()
+          : <div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} /></div>}
+      </div>
+    );
   }
 
   // Same pattern again — a Branch Manager's own dashboard is their branch's
@@ -218,70 +309,7 @@ export default function SiteAuditOwnDashboard({
     );
   }
   if (viewRole === 'service_mgr') {
-    return (
-      <div>
-        {shadowBar}
-        <div className="bg-white border-b border-gray-200">
-          <div className="px-6 flex gap-0 items-center">
-            {([['audit', 'Audit Dashboard'], ['install', 'Install Dashboard']] as const).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setSmTab(k)}
-                className={`px-5 py-3 text-[13px] font-semibold border-b-2 cursor-pointer bg-transparent ${smTab === k ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-              >
-                {label}
-              </button>
-            ))}
-            <div className="ml-auto flex shrink-0 items-center gap-2 pl-4">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="sm-city">City</label>
-              <select
-                id="sm-city"
-                value={city}
-                onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
-                className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
-              >
-                <option value="all">All Cities</option>
-                {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-        <div className="p-4 sm:p-6">
-          {smTab === 'audit' && (
-            <div className="flex gap-2 flex-wrap mb-4">
-              {([
-                ['ops', 'Audit Ops'],
-                ['jobs', 'Job Overview'],
-                ['perf', 'Performance'],
-                ['analytics', 'Analytics'],
-                ['live', 'Live'],
-              ] as const).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setSmAuditSubTab(k)}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${smAuditSubTab === k ? 'bg-[#EAB308] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          {smTab === 'install' ? (
-            <SiteAuditInstallOpsView city={city} />
-          ) : smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} />
-          ) : smAuditSubTab === 'jobs' ? (
-            <SiteAuditJobsView city={city} />
-          ) : smAuditSubTab === 'perf' ? (
-            <SiteAuditPerfView city={city} />
-          ) : smAuditSubTab === 'analytics' ? (
-            <SiteAuditAnalyticsView city={city} />
-          ) : (
-            <SiteAuditLiveView city={city} />
-          )}
-        </div>
-      </div>
-    );
+    return <div>{shadowBar}{renderServiceMgrDashboard()}</div>;
   }
   return (
     <div>
