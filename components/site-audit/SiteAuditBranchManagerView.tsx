@@ -32,7 +32,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, phoneKey, sbGet, siteAuditRoleForCrmRole, type CityFilter } from './siteAuditShared';
 import SiteAuditPerfView from './SiteAuditPerfView';
-import { STATUS, orderBelongsToBm, type BmProfile } from './SiteAuditBmView';
+import { STATUS, dropSupersededPreBookings, orderBelongsToBm, type BmProfile } from './SiteAuditBmView';
 import { InstallOrdersList, WallpaperOrdersList, loadOwnedInstalls, loadOwnedWallpapers, type OwnedInstall } from './ownedOrders';
 import type { WpRow } from './coe-ops/wpTrack';
 import { fetchUsers } from '@/lib/mockApi';
@@ -65,7 +65,10 @@ const FIELD_WORK_ROLES = new Set(['site_auditor', 'installer', 'auditor_installe
    which made this list 1.9 MB per poll (every 30s, per open tab) to render
    107 KB of it. The BM's own dashboard still needs the wide select; it opens a
    drawer over these rows, this view doesn't. */
-const ROLLUP_AUDIT_COLS = 'id,pi,bm,bm_email,customer_name,phone,status,date,created_at';
+/* `po` is not rendered here — it carries the enquiry ID a store pre-booking
+   was raised against, which dropSupersededPreBookings needs to tell a held slot
+   apart from the audit that came out of it. */
+const ROLLUP_AUDIT_COLS = 'id,pi,po,bm,bm_email,customer_name,phone,status,date,created_at';
 
 const EMPTY_SCOPE: Scope = { branches: [], roster: [], bms: [], rosterEmails: [], unassigned: 0, crmReachable: false };
 
@@ -227,7 +230,9 @@ export default function SiteAuditBranchManagerView({
         loadOwnedWallpapers(scope.bms),
       ]);
       if (!alive) return;
-      const list = Array.isArray(auditRows) ? auditRows : [];
+      /* Dropped against the whole table, before the rows are narrowed to this
+         store's BMs — see dropSupersededPreBookings. */
+      const list = dropSupersededPreBookings(Array.isArray(auditRows) ? auditRows : []);
       setAudits(
         list
           .filter((r: any) => scope.bms.some((bm) => orderBelongsToBm(r, bm)))

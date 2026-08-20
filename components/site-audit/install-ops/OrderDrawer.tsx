@@ -52,6 +52,9 @@ interface Props {
   slotsFl: SlotDef[];
   slotsWp: SlotDef[];
   attribution: string;
+  /* Passed straight through to AssignSection's empty-pool notice. */
+  installersErr?: boolean;
+  onRetryInstallers?: () => void;
   onClose: () => void;
   onOpenOrder: (pi: string) => void;
   onOpenRect: (o: InstallOrder) => void;
@@ -60,7 +63,7 @@ interface Props {
   toast: (m: string) => void;
 }
 
-export default function OrderDrawer({ order: o, installers, shadowerPool, city, slotsFl, slotsWp, attribution, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {
+export default function OrderDrawer({ order: o, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr, onRetryInstallers, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {
   const [draft, setDraft] = useState<DraftState>(() => buildInitDraft(o));
   const [splitSjId, setSplitSjId] = useState<string | null>(null);
   const [grpOn, setGrpOn] = useState(() => { const d = buildInitDraft(o); return { flooring: d.flooring.length > 0, wallpaper: d.wallpaper.length > 0, wallpanel: d.wallpanel.length > 0 }; });
@@ -422,8 +425,10 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
                     ? <div className="flex items-center justify-between rounded-md bg-purple-50 px-3 py-2 mb-2.5 text-[12.5px] text-purple-800"><span>{totalSqft ? totalSqft + ' sq.ft → ' : ''}{rolls} roll{rolls === 1 ? '' : 's'} → <strong>{slotsN} slot{slotsN > 1 ? 's' : ''} · {slotsN * 3} hours</strong></span><span className="text-lg">🕐</span></div>
                     : <div className="text-[12px] text-green-700 mb-2.5">{typeLabel(sj.type)} — 1 full day per installer visit</div>}
                   <SjDeliveryRow order={o} subjob={sj} onSave={saveSjDelivery} />
-                  {sj.status === 'completed' ? <DownloadJobCardBtn order={o} sjId={sj.id} installers={installers} toast={toast} /> : null}
-                  <AssignSection order={o} subjob={sj} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution} reload={reload} toast={toast} onOpenOrder={onOpenOrder} />
+                  {sj.status === 'completed' || (sj.status === 'partial' && sj.jobcard && (sj.jobcard.rooms || []).length)
+                    ? <DownloadJobCardBtn order={o} sjId={sj.id} installers={installers} toast={toast} partial={sj.status === 'partial'} />
+                    : null}
+                  <AssignSection order={o} subjob={sj} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution} installersErr={installersErr} onRetryInstallers={onRetryInstallers} reload={reload} toast={toast} onOpenOrder={onOpenOrder} />
                   <div className="flex flex-wrap gap-2 mt-2">
                     {!['completed', 'partial'].includes(sj.status) && (sj.items || []).length > 1 ? (
                       <button className="bg-white border border-gray-200 text-gray-700 px-2.5 py-1.5 rounded-md text-[12px] font-semibold" onClick={() => setSplitSjId(sj.id)}>✂ Split into separate visits…</button>
@@ -673,9 +678,12 @@ function SkuRow({
   );
 }
 
-function DownloadJobCardBtn({ order: o, sjId, installers, toast }: { order: InstallOrder; sjId: string; installers: Installer[]; toast: (m: string) => void }) {
+// `partial` only changes the wording: a partially-completed sub-job's job card is downloadable
+// even though it has no client signature yet, and the label has to say so or it reads as final.
+function DownloadJobCardBtn({ order: o, sjId, installers, toast, partial }: { order: InstallOrder; sjId: string; installers: Installer[]; toast: (m: string) => void; partial?: boolean }) {
+  const IDLE = partial ? '📥 Download partial Job Card PDF' : '📥 Download Job Card PDF';
   const [busy, setBusy] = useState(false);
-  const [label, setLabel] = useState('📥 Download Job Card PDF');
+  const [label, setLabel] = useState(IDLE);
   return (
     <button
       className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-xs font-semibold mb-2.5 disabled:opacity-60"
@@ -687,12 +695,12 @@ function DownloadJobCardBtn({ order: o, sjId, installers, toast }: { order: Inst
           const freshSj = ((Array.isArray(rows) && rows[0] && rows[0].subjobs) || []).find((s: any) => s.id === sjId);
           const sj = o.subjobs!.find((s) => s.id === sjId)!;
           const jobcard = (freshSj && freshSj.jobcard) || (sj && sj.jobcard) || null;
-          if (!jobcard) { toast('Job card not submitted yet — installer must complete and sign it first'); setBusy(false); setLabel('📥 Download Job Card PDF'); return; }
+          if (!jobcard) { toast('Job card not submitted yet — installer must fill it in on site first'); setBusy(false); setLabel(IDLE); return; }
           await genInstallPDFSM(o, freshSj || sj, jobcard, installers);
         } catch (e: any) {
           toast('PDF failed: ' + (e?.message || 'unknown error'));
         }
-        setBusy(false); setLabel('📥 Download Job Card PDF');
+        setBusy(false); setLabel(IDLE);
       }}
     >
       {label}

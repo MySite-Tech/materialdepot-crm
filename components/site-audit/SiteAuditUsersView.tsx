@@ -16,7 +16,7 @@
      doesn't have to be entered twice in two different screens. */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CITIES, ROLES, fmtDate, initials, phoneKey, planSiteAuditRoleSync, randomPasscode, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from './siteAuditShared';
+import { CITIES, ROLES, fmtDate, initials, phoneKey, planSiteAuditRoleSync, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost } from './siteAuditShared';
 import { addUser, fetchUsers } from '@/lib/mockApi';
 
 type ProfileRow = {
@@ -246,17 +246,27 @@ export default function SiteAuditUsersView() {
   const [syncingRoles, setSyncingRoles] = useState(false);
   const [roleSyncPanel, setRoleSyncPanel] = useState(false);
 
-  const roleSyncTotal = roleSync.ready.length + roleSync.noProfileYet.length;
+  /* Only role CORRECTIONS on existing profiles are actionable. `noProfileYet`
+     used to be counted here, from when a field-app profile was required to see
+     any Site Audit dashboard — but a BM, branch manager or service manager now
+     renders from their CRM session and their `site_audit.*` slug, so a missing
+     profile is no longer a gap to close. Counting it put ~70 rows behind a
+     button that would provision that many logins on the public field-app
+     sign-in for desk staff who never do field work. It is dropped from the UI
+     entirely: with nothing actionable the banner now stays down, which is the
+     point — it was reporting 71 changes that nobody needed to make. The plan
+     still returns it for anyone who wants the list. */
+  const roleSyncTotal = roleSync.ready.length;
 
   async function applyRoleSync() {
     if (!roleSyncTotal) return;
     const updateLines = roleSync.ready.map((r) => r.name + ': ' + r.currentRole + ' → ' + r.targetRole + (r.branch ? ' (branch: ' + r.branch + ')' : ''));
-    const createLines = roleSync.noProfileYet.map((r) => r.name + ': (new account) → ' + r.targetRole + (r.branch ? ' (branch: ' + r.branch + ')' : ''));
-    const preview = [...updateLines, ...createLines].slice(0, 12).join('\n');
+    const preview = updateLines.slice(0, 12).join('\n');
     if (!window.confirm(
-      'Sync ' + roleSyncTotal + ' role(s) from CRM permissions? (' + roleSync.ready.length + ' update' + (roleSync.ready.length === 1 ? '' : 's') + ', ' + roleSync.noProfileYet.length + ' new account' + (roleSync.noProfileYet.length === 1 ? '' : 's') + ')\n\n' + preview
-      + (updateLines.length + createLines.length > 12 ? '\n…and ' + (updateLines.length + createLines.length - 12) + ' more' : '')
-      + '\n\nNew accounts get a random passcode (nobody needs it — their access is via this CRM login, not a direct passcode login) and can then be linked to any matching orders.\n\nTheir Site Audit dashboard changes immediately.'
+      'Correct ' + roleSyncTotal + ' field-app role' + (roleSyncTotal === 1 ? '' : 's') + ' from CRM permissions?\n\n' + preview
+      + (updateLines.length > 12 ? '\n…and ' + (updateLines.length - 12) + ' more' : '')
+      + '\n\nThis only edits profiles that already exist; it never creates one.'
+      + '\n\nTheir Site Audit dashboard changes immediately.'
     )) return;
     setSyncingRoles(true);
     let ok = 0;
@@ -267,18 +277,6 @@ export default function SiteAuditUsersView() {
         // no single branch to record", which must not wipe one an admin set by
         // hand — so the column is omitted rather than nulled.
         await sbPatch('profiles', r.profileId, r.branch ? { role: r.targetRole, branch: r.branch } : { role: r.targetRole });
-        ok++;
-      } catch (e: any) {
-        failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');
-      }
-    }
-    for (const r of roleSync.noProfileYet) {
-      try {
-        await sbPost('profiles', {
-          name: r.name, role: r.targetRole, contact: r.phone,
-          ...(r.branch ? { branch: r.branch } : {}),
-          email: syntheticSiteAuditEmail(r.phone), city: 'Bengaluru', installer_type: 'flooring', passcode: randomPasscode(),
-        });
         ok++;
       } catch (e: any) {
         failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');

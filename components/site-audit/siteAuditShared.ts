@@ -374,6 +374,22 @@ export function phoneKey(p?: string | null): string {
   return d.length > 10 ? d.slice(-10) : d;
 }
 
+/* The company-wide oversight rail, as a real slug rather than the absence of
+   one. It used to be implied by permission_name being admin/tech, which meant
+   the widest view in the product could not be withheld from anyone carrying
+   those roles for unrelated reasons (finance, category, delivery) — 26 of the
+   30 accounts that reached the rail had never been granted `crm.site_audit` at
+   all. Only a permission can grant it now, so it can also be revoked. */
+export const SITE_AUDIT_ADMIN_ROLE = 'admin';
+
+/* Oversight has no field-app profile: it is a console over everyone else's
+   work, not a person's own dashboard. Callers that provision a `profiles` row
+   from a granted sub-role must skip this one, or every CRM admin silently
+   becomes a field-app `admin` login. */
+export function isSiteAuditOversightRole(role?: string | null): boolean {
+  return role === SITE_AUDIT_ADMIN_ROLE;
+}
+
 // CRM individual_permissions slugs (set via the Admin > Users tab) that grant
 // a Site Audit sub-view, mapped to the same role keys ROLES above uses.
 // Replaces the old profiles.role-driven routing in app/site-audit-view/page.tsx.
@@ -384,7 +400,10 @@ export const SITE_AUDIT_PERMISSION_TO_ROLE: Record<string, string> = {
   'site_audit.auditor_installer': 'auditor_installer',
   'site_audit.bm': 'bm',
   'site_audit.coe': 'coe',
+  'site_audit.branch_mgr': 'branch_mgr',
+  'site_audit.admin': SITE_AUDIT_ADMIN_ROLE,
 };
+
 
 export function siteAuditRoleFromPermissions(perms: string[] | undefined | null): string | null {
   if (!Array.isArray(perms)) return null;
@@ -393,6 +412,59 @@ export function siteAuditRoleFromPermissions(perms: string[] | undefined | null)
     if (role) return role;
   }
   return null;
+}
+
+/* ── Who the FIELD APP says this person is ─────────────────────────────────
+   `profiles.role` here — not the CRM permission — is the company's working
+   record of who does field work: it is what Site Audit > Users edits, and the
+   CRM's Django permission list has no `service_mgr` value at all, so
+   CRM_ROLE_TO_SITE_AUDIT_ROLE can only ever *infer* a service manager from a
+   delivery/procurement-shaped permission. Real ones don't follow that shape —
+   they turned up carrying `admin` (which routed them to the company-wide rail)
+   and permissions the map has never heard of (which left them with no Site
+   Audit tab at all). So the profile is consulted first and the CRM role is the
+   fallback, for the many BMs and store managers never enrolled in the field
+   app. */
+
+/* profiles.role values that have a dashboard of their own inside
+   SiteAuditOwnDashboard. `store_staff` is deliberately absent: the store team
+   has its own standalone /store-booking route, so routing them here lands them
+   on the "ask an admin for a sub-role" dead end. `admin` is absent because an
+   admin's Site Audit home IS the oversight rail, which the CRM role grants;
+   `content_team` has no view here at all. */
+export const SITE_AUDIT_OWN_DASHBOARD_ROLES = new Set([
+  'site_auditor', 'installer', 'auditor_installer', 'service_mgr', 'bm', 'coe', 'branch_mgr',
+]);
+
+/* The one query for "my own field-app profile", shared by app/App.tsx (which
+   needs the role to decide the tab and which dashboard) and
+   SiteAuditOwnDashboard (which needs id/name/email to render it). Kept as one
+   literal so both callers produce the SAME cache key and cachedFetch collapses
+   them into a single request instead of two.
+   Matched on phoneKey() — profiles.contact is a clean 10-digit number on every
+   row that has one, so normalising the CRM's side is all that's needed. Still
+   exact matching; never a name, per orderBelongsToBm's rule. */
+export const ownProfileQuery = (phone: string): string =>
+  'profiles?contact=eq.' + encodeURIComponent(phoneKey(phone)) + '&select=id,name,email,role,branch';
+
+/* One phone can carry more than one profile row — a field-app account created
+   under a personal email alongside the company one (this exists in
+   production). Prefer the row naming a dashboard we can actually render over
+   whichever row PostgREST happened to return first. */
+export function pickOwnProfile<T extends { role?: string | null }>(rows: T[]): T | null {
+  return rows.find((r) => SITE_AUDIT_OWN_DASHBOARD_ROLES.has(String(r?.role || ''))) ?? rows[0] ?? null;
+}
+
+/* THROWS on a failed load rather than reporting "no profile": sbGet resolves a
+   PostgREST error object instead of rejecting, and `null` here means "not in
+   the field app", which the caller turns into an access decision. A dropped
+   request must never read as a revoked role. */
+export async function fetchOwnSiteAuditRole(phone: string): Promise<string | null> {
+  if (!phoneKey(phone)) return null;
+  const rows = await sbGet(ownProfileQuery(phone));
+  if (!Array.isArray(rows)) throw new Error('Site Audit profile lookup failed');
+  const role = pickOwnProfile(rows)?.role;
+  return typeof role === 'string' && role ? role : null;
 }
 
 /* Provisions/updates the Site Audit `profiles` row for someone granted a
@@ -408,6 +480,8 @@ export async function upsertSiteAuditProfile({ name, email, phone, role }: {
 }): Promise<void> {
   const em = email.trim().toLowerCase();
   if (!em) return;
+  // Oversight is a console, not a person's dashboard — it has no profile row.
+  if (isSiteAuditOversightRole(role)) return;
   const existing = await sbGet('profiles?email=eq.' + encodeURIComponent(em) + '&select=id').catch(() => null);
   const body = { name, role, contact: phone || null };
   if (Array.isArray(existing) && existing[0]) {
@@ -481,7 +555,16 @@ export function siteAuditTargetForCrmPermission(perm: string): string | null | t
    mapping to either. A naive sync reading "no matching CRM role" (or a CRM
    role that happens to map to something else) as license to overwrite any
    of these would silently clobber a real, intentional assignment. */
-const PROTECTED_ROLES = new Set(['store_staff', 'coe', 'content_team']);
+const PROTECTED_ROLES = new Set(['store_staff', 'coe', 'content_team', 'service_mgr']);
+
+/* `service_mgr` joined that set for the same reason the field-work roles are
+   exempt below: nothing in a CRM permission can disprove it. A service manager
+   routinely carries `manager` or `sales` as their cost centre, and the sync used
+   to read that as licence to demote a real service desk to the branch rollup —
+   it would have flipped uo 10 (profile service_mgr, CRM role manager) straight
+   back after a human had corrected it. Promotion still works: someone whose CRM
+   role already maps to service_mgr matches the target and is a no-op, so this
+   only ever blocks the demotion. */
 
 /* Roles that DO the field work. Their jobs are keyed to the profile — an
    auditor's queue is `audit_orders.auditor_email`, an installer's is their own

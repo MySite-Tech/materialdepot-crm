@@ -16,7 +16,10 @@ npx tsc --noEmit   # typecheck — fast, run this before claiming a change compi
 ```
 
 `npx eslint <file>` reports "File ignored because no matching configuration"
-for `app/` and `components/` — use `npm run lint` (next lint) instead.
+for `app/` and `components/`, and `npm run lint` is dead too — it still runs
+`next lint`, which Next 16 removed ("Invalid project directory provided, no such
+directory: .../lint"). There is currently **no working lint command**; `npx tsc
+--noEmit` is the only automated check.
 
 ## Git
 
@@ -78,15 +81,31 @@ React inputs here ignore synthetic `type` events; set values via the native
 
 `resolveAllowedTabs(user)` decides which tabs render:
 
-1. If `user.individualPermissions` is **non-empty**, it wins outright — tabs come
-   from `PERMISSION_TAB_ORDER` and `ROLE_TABS` is ignored entirely.
-2. Otherwise `ROLE_TABS[role]`, falling back to `DEFAULT_ROLE_TABS`.
-3. Then **force-add sets** append regardless of either: `B2B_SALES_ROLES`,
-   `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`.
+1. If `user.individualPermissions` is **non-empty** it is the WHOLE answer —
+   tabs come from `PERMISSION_TAB_ORDER`, and an absent slug means "no".
+2. Only if the list is empty/NULL: `ROLE_TABS[role]` (falling back to
+   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES`,
+   `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
+   is a **bootstrap for un-migrated accounts only**.
 
-Consequence worth remembering: **editing `ROLE_TABS` alone does not reach anyone
-who has individual permissions set.** If a tab must be guaranteed for a role,
-add a force-add set — that is what the three existing sets are for.
+`permission_name` is an HR cost-centre label, not an access level — it says
+`tech` for a Service Manager and `admin` for Category/Delivery/Marketing staff —
+so nothing may be gated on it. Anything a role must guarantee has to exist as a
+slug on those people; **adding a role to a force-add set no longer reaches
+anyone who has a permission list**, which is nearly everyone. The 2026-08-20
+backfill wrote the slugs for every force-add set (see below).
+
+`?tab=` is validated against `VALID_MAIN_TABS` **and** clamped to the user's own
+tabs into `effectiveTab`; every render block keys off `effectiveTab`, never
+`mainTab`. Before that, only Admin and Appointment Tracker re-checked at render,
+so every other tab was reachable by typing its name.
+
+`siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
+which is fetched async — so that tab can appear a beat after the others. That is
+deliberate: caching it would keep showing a tab after a role was revoked in Site
+Audit > Users, and a failed fetch leaves the role `undefined` so the CRM role
+alone decides (a dropped request can never take a tab away). Nothing forces the
+user off a disallowed `?tab=`, so the late arrival can't bounce anyone.
 
 Tab render order is fixed by the literal array in the header JSX, not by the
 order tabs were resolved in.
@@ -102,19 +121,33 @@ Don't conflate these:
   `delivery`, `b2b_sales`, `field_worker`, … Mapped to the above by
   `CRM_ROLE_TO_SITE_AUDIT_ROLE` / `siteAuditRoleForCrmRole` in
   `siteAuditShared.ts`. Business-confirmed mapping; `field_worker` is
-  deliberately unmapped (nothing distinguishes auditor from installer).
+  deliberately unmapped (nothing distinguishes auditor from installer) — meaning
+  the role *sync* won't touch them, but it still force-adds the Site Audit tab,
+  and their own `profiles.role` picks which app they land in.
 - **`site_audit.*` sub-permissions** — per-user checkboxes in Admin > Users.
-  These are an **override**; the CRM role is the default. Almost nobody has one.
+  These are now the ONLY thing that grants a Site Audit view; the CRM role is
+  not consulted. Slugs: `site_audit.admin` (oversight rail), `.bm`,
+  `.branch_mgr`, `.service_manager`, `.site_auditor`, `.installer`,
+  `.auditor_installer`, `.coe`. `site_audit.admin` and `.branch_mgr` were added
+  2026-08-20 — before that oversight was the *absence* of a sub-role combined
+  with `permission_name in (admin, superadmin, tech)`, which is how 26 accounts
+  that were never granted `crm.site_audit` reached the company-wide rail, and
+  `branch_mgr` had no slug at all.
 
-Routing lives at the `mainTab === 'siteAudit'` block in `App.tsx`:
+Routing lives at the `effectiveTab === 'siteAudit'` block in `App.tsx`:
 
-- `SITE_AUDIT_OVERSIGHT_ROLES` (`superadmin`/`admin`/`tech`) → `SiteAuditRail`,
-  the company-wide console (Users, Role Viewer, every job in every city).
-- Everyone else → `SiteAuditOwnDashboard`, their own scoped dashboard.
+- `site_audit.admin` → `SiteAuditRail`, the company-wide console (Users, Role
+  Viewer, every job in every city).
+- Any other `site_audit.*` slug → `SiteAuditOwnDashboard`, their own scoped
+  dashboard.
+- No slug → the dashboard's soft-gate message, NOT the rail.
 
-**This gate is deny-by-default on purpose.** It previously fell through to the
-rail whenever a user had no `site_audit.*` sub-permission — the normal state for
-a BM — so any widening of Site Audit access must keep non-admins off the rail.
+**This gate is deny-by-default on purpose**, and it must stay keyed to the slug.
+Twice now the fallback has been the bug: first falling through to the rail when
+a user had no sub-role, then deriving the sub-role from `permission_name`.
+`/site-audit-view?person=` renders someone else's dashboard, so it requires
+`site_audit.admin` too — a session alone was never authorisation, and profile
+emails are enumerable through the field app's public anon key.
 
 A missing `profiles` row is not a dead end for read-only roles: a BM or store
 manager renders from the CRM session alone. Roles that *do* field work
@@ -141,13 +174,88 @@ attribute, the question is "which profile or `bm_email` link is missing", not
 "should the match be looser". Same rule holds for the COE's imported
 `wp_production` rows with a blank `bm`.
 
-Tables (Site Audit Supabase): `audit_orders` (site audits, has `bm_email`),
+Tables (Site Audit Supabase): `audit_orders` (site audits **and** store
+pre-bookings — see the next section; has `bm_email`),
 `install_orders` / `install_orders_slim` view (installations, **no `bm_email`
 column** — always resolves by name/phone), `wp_production` (custom wallpaper
 runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 
+## A pre-booking and the audit it becomes are two rows, not one
+
+`Store_Team_App` books a slot before the Kylas enquiry exists, so the two halves
+of one job live in separate `audit_orders` rows:
+
+| | `pi` | `po` | status |
+|---|---|---|---|
+| Store pre-booking | `SRES-<STORE>-<ts>` | the enquiry ID | `slot_reserved` → `slot_converted` |
+| The real site audit | that enquiry ID | the MD order id | `pending` → … → `completed` |
+
+**The pre-booking's `po` IS the other row's `pi`.** That exact link — not the
+customer name, not the phone — is how the two are tied together; it is what
+`Store_Team_App`'s slot-availability check already absorbs bookings by, and what
+`dropSupersededPreBookings` (`SiteAuditBmView.tsx`) uses. Name and phone are free
+text on the reservation form (the phone is often the *store's* own number, shared
+across unrelated bookings), so matching on them merges different customers — the
+same rule as **Order attribution** above.
+
+Every list that shows a BM their own orders drops a pre-booking once the audit
+exists — either the linked order is provably present, or an SM marked it
+`slot_converted` ("service created"). Applied to the RAW rows **before** they are
+narrowed to one BM, since whether the audit exists is a question about the whole
+table and the audit row may carry a different (or missing) BM link than the
+pre-booking. A pre-booking still waiting on its service order stays visible: it
+is the only record that the slot was ever held.
+
+The ops/SM views take the opposite approach and filter both statuses out of the
+main list with a dedicated pre-booking filter (`audit-ops/Views.tsx`) — that is
+deliberate, not an inconsistency. Don't unify them.
+
+## `Array.isArray(rows) ? rows : []` turns a server error into empty data
+
+`sbGet` (`siteAuditShared.ts`) returns `r.json()` **without checking `r.ok`**, so
+any 4xx/5xx resolves a PostgREST *error object*, not a throw. Callers that write
+`Array.isArray(rows) ? rows : []` therefore render a server error as legitimately
+empty — indistinguishable from "nothing matched".
+
+Harmless for a count or a badge. **Dangerous for anything a workflow is gated
+on.** It hard-blocked assignment in both ops views (fixed 2026-08-19, commit
+`c589ec8`): the auditor/installer rosters load once when the view mounts but the
+assignment picker reads them on every drawer open, so one failed fetch emptied
+the picker for as long as the view stayed mounted, and the empty state blamed the
+city filter for what was a connection problem.
+
+The shape to copy when a load feeds a picker or a gate — see `loadAuditors` in
+`SiteAuditOpsView.tsx`:
+
+- a non-array response **throws** (it is a failed load, not an empty roster);
+- the last good data survives the failure, so a blip can't blank a working picker;
+- retry on the same 8s backoff `loadOrders` uses, self-clearing on success, plus
+  the poll and `visibilitychange` **only while the load is known broken** (the
+  error flag mirrored into a ref, so the mount-once poll effect reads the current
+  value without rebuilding its interval);
+- the empty state distinguishes *couldn't load* from *genuinely none* — house
+  style is soft-gate-and-surface, and "No auditors in this city" for a dropped
+  request sends the SM to the wrong control entirely.
+
+`loadShadowers`, `loadBms` and the deploy-safe `detect*` probes share the pattern
+but degrade safely (optional shadower, free-text BM fallback, feature stays
+inert). Leave them; they are not gates.
+
 ## Known landmines
 
+- **A hand-written force-add set drifts from the mapping it mirrors.**
+  `SITE_AUDIT_ROLES` listed `delivery_manager`/`post_sales`/`procurement` but not
+  `delivery`, which `CRM_ROLE_TO_SITE_AUDIT_ROLE` maps to `service_mgr` — those
+  accounts got no tab at all. It is now *derived* from that map, so it can't
+  drift again. Add the permission to the map, not to two places.
+- **One phone can have several `profiles` rows** (a field-app account under a
+  personal email alongside the company one — Ashish Bhat has exactly this, and
+  the company-email row's `contact` is NULL so it can never be resolved by
+  phone). `limit=1` on a `contact=eq.` lookup picks an arbitrary one; use
+  `pickOwnProfile`, which prefers the row naming a renderable dashboard.
+- **13 of 129 profiles have a NULL `contact`.** Nothing that keys off phone —
+  own-dashboard resolution, payouts, BM attribution — can ever reach them; the
+  Users screen already surfaces this as its top amber notice.
 - **`profiles.branch` exists but is blank for every row.** Anything that scopes
   by store should read CRM Branch Access (`allowedBranches` from `fetchUsers()`)
   and match to profiles by exact phone, treating `profiles.branch` as an
@@ -178,6 +286,14 @@ runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 - Site Audit `profiles` rows double as login identities on the still-live public
   `material-depot-site.vercel.app/Login.html` (email + 4-digit passcode, no OTP).
   Never create a profile with `passcode: null`; use `randomPasscode()`.
+- **A reference list loaded once on mount, but read on every drawer open, breaks
+  permanently on one failed fetch.** That is what killed auditor assignment;
+  `loadOrders`-style retry + a self-describing empty state is the fix, not a
+  louder `console.error`. See the `Array.isArray` section above.
+- **`SiteAuditBranchManagerView`'s `ROLLUP_AUDIT_COLS` is deliberately narrower
+  than `AUDIT_COLS`** (dropping `log`/`skus` cut this list from 1.9 MB per poll to
+  107 KB) — but it must keep `po`, which is never rendered and exists only so
+  `dropSupersededPreBookings` can tell a held slot from the audit it became.
 
 ## House style
 

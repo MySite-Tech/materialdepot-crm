@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { CITIES, decodePerson, initials, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/siteAuditShared';
+import { CITIES, decodePerson, initials, isSiteAuditOversightRole, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/siteAuditShared';
 import SiteAuditorApp from '@/components/site-audit/SiteAuditorApp';
 import SiteInstallerApp from '@/components/site-audit/SiteInstallerApp';
 import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
@@ -44,6 +44,7 @@ function SiteAuditViewInner() {
   // their own dashboard — shadowing is cross-role, so it's available for anyone.
   const wantShadowing = searchParams.get('view') === 'shadowing';
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const [mayPreview, setMayPreview] = useState(false);
   const [permissionRole, setPermissionRole] = useState<string | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,10 +58,19 @@ function SiteAuditViewInner() {
     try {
       const stored = localStorage.getItem('materialdepot_user');
       setLoggedIn(!!stored);
-      setPermissionRole(siteAuditRoleFromPermissions(stored ? JSON.parse(stored)?.individualPermissions : null));
+      const own = siteAuditRoleFromPermissions(stored ? JSON.parse(stored)?.individualPermissions : null);
+      setPermissionRole(own);
+      /* This route renders SOMEONE ELSE's dashboard by email, so holding a
+         session was never enough authorisation — it is the Role Viewer's
+         preview target, and the Role Viewer belongs to oversight. Profile
+         emails are readable through the field app's public anon key, so
+         without this check any logged-in account could enumerate them and
+         read every auditor's, installer's and BM's dashboard. */
+      setMayPreview(isSiteAuditOversightRole(own));
     } catch {
       setLoggedIn(false);
       setPermissionRole(null);
+      setMayPreview(false);
     }
   }, []);
 
@@ -82,6 +92,13 @@ function SiteAuditViewInner() {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">
         Please <a href="/" className="text-[#EAB308] font-semibold underline">log in to the CRM</a> first.
+      </div>
+    );
+  }
+  if (!mayPreview) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6 text-center text-sm text-gray-500">
+        This preview is limited to Site Audit oversight accounts.
       </div>
     );
   }

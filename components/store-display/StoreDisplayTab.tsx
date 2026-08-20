@@ -5,8 +5,6 @@ import { MovementStatusView } from './MovementStatusView';
 import { AdminView } from './AdminView';
 import { DiscontinuedList } from './DiscontinuedList';
 
-const ADMIN_ROLES = ['superadmin', 'admin', 'tech', 'manager'];
-
 const ALL_SUB_TABS = [
   { key: 'products', label: 'Store Products', restricted: false },
   // { key: 'liveMapping', label: 'Live Mapping', restricted: true },
@@ -17,13 +15,15 @@ const ALL_SUB_TABS = [
 
 type SubTab = (typeof ALL_SUB_TABS)[number]['key'];
 
-export default function StoreDisplayTab({ userRole }: { userRole: string }) {
+/* `isAdmin` is resolved from the caller's permission slug, not their
+   permission_name — see canAdminStoreDisplay in app/App.tsx. */
+export default function StoreDisplayTab({ isAdmin }: { isAdmin: boolean }) {
   const [subTab, setSubTab] = useState<SubTab>('products');
 
-  const visibleTabs = useMemo(() => {
-    const isAdmin = ADMIN_ROLES.includes(userRole);
-    return ALL_SUB_TABS.filter(t => !t.restricted || isAdmin);
-  }, [userRole]);
+  const visibleTabs = useMemo(
+    () => ALL_SUB_TABS.filter(t => !t.restricted || isAdmin),
+    [isAdmin],
+  );
 
   return (
     <div className="flex flex-col">
