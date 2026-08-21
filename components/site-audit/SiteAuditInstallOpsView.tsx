@@ -2,13 +2,13 @@
 
 /* Install Ops — port of material-depot-site's app/src/pages/SMInstall.jsx
    (the Service Manager's installation-order operations center) into this
-   CRM. Self-contained, no required props (like SiteAuditJobsView) — this is
-   an ops dashboard for whoever's logged into the CRM, not a per-person
-   impersonated view, so every write is attributed to a fixed label
-   (SM_ATTRIBUTION) instead of a real logged-in user's name (this CRM has no
-   auth/session context to draw one from — same deliberate deviation already
-   made in SiteAuditStoreTeamView.tsx, which attributes writes to the
-   selected store name instead of a person).
+   CRM. The caller (SiteAuditOwnDashboard / site-audit-view / Role Viewer)
+   already knows who's looking at it — the `attribution` prop carries that
+   real name through so activity-log entries aren't all attributed to the
+   same generic `SM_ATTRIBUTION` fallback (still used for a caller that
+   genuinely has no resolved person, same deliberate deviation as
+   SiteAuditStoreTeamView.tsx, which attributes writes to the selected store
+   name instead of a person).
 
    Internal navigation is this view's OWN flat horizontal tab bar (styled
    like SiteAuditRail.tsx's outer tab bar), not the original's left rail —
@@ -30,7 +30,7 @@ import OrderDrawer from './install-ops/OrderDrawer';
 import { AddOrderOverlay, AddStaffOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from './install-ops/Overlays';
 import { Toast } from './install-ops/ui';
 import {
-  DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, INSTALL_SKU, dstr, loadSlots, mapInstallRow, needActionCount, opsCallDue, today,
+  DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, INSTALL_SKU, detectAuditBy, dstr, loadSlots, mapInstallRow, needActionCount, opsCallDue, today,
 } from './install-ops/shared';
 import { SM_ATTRIBUTION } from './install-ops/types';
 import type { InstallOrder, Installer, SlotDef, ViewKey } from './install-ops/types';
@@ -51,7 +51,7 @@ const TABS: Array<{ view: ViewKey; label: string }> = [
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityFilter } = {}) {
+export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM_ATTRIBUTION }: { city?: CityFilter; attribution?: string } = {}) {
   const [activeView, setActiveView] = useState<ViewKey>('orders');
   const [rawOrders, setOrders] = useState<InstallOrder[]>([]);
   const [rawDeleted, setDeleted] = useState<InstallOrder[]>([]);
@@ -224,8 +224,20 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
       .filter((s) => s.c)
       .map((s) => ({ c: s.c, n: s.n || s.c, type: s.type, audit: false }));
     skus.push({ c: INSTALL_SKU, n: 'Installation', type: 'install', audit: false });
-    const logEntry = { t: 'Order added manually by ' + SM_ATTRIBUTION, d: new Date().toISOString() };
+    const logEntries: Array<{ t: string; d: string; by?: string; who?: string }> = [
+      { t: 'Order added manually by ' + attribution, d: new Date().toISOString() },
+    ];
     setAoBusy(true);
+    // Live lookup at creation time (not a locally-cached phone set) so it's
+    // always accurate to the moment and never needs a manual refresh.
+    const auditBy = await detectAuditBy(phone);
+    if (auditBy) {
+      logEntries.push({
+        t: 'Site audit type auto-detected: ' + (auditBy === 'material_depot' ? 'Material Depot audit (phone match)' : 'Customer self-audit (no matching site audit found)'),
+        d: new Date().toISOString(), by: 'auto', who: attribution,
+      });
+    }
+    const service = auditBy ? { audit_by: auditBy } : null;
     const payload = {
       pi, po: po.join(','), skus, bm,
       customer_name: name, phone, addr,
@@ -234,8 +246,9 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
       original_delivery_date: delivery || null,
       custom_wp: customWp,
       status: 'pending',
-      log: [logEntry],
-      created_by_email: SM_ATTRIBUTION,
+      service,
+      log: logEntries,
+      created_by_email: attribution,
     };
     try {
       const existing = await sbGet('install_orders?select=id&pi=eq.' + encodeURIComponent(pi) + '&status=neq.deleted&limit=1').catch(() => []);
@@ -244,8 +257,8 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
       if (existingId) { await sbPatch('install_orders', String(existingId), payload); savedId = existingId; }
       else { const saved = await sbPost('install_orders', payload); const row = Array.isArray(saved) ? saved[0] : saved; savedId = row ? row.id : null; }
       const newOrder: InstallOrder = {
-        id: savedId, pi, po, skus: skus as any, bm, name, phone, addr, matchedAudit: false, auditBy: null,
-        deliveryDate: delivery || null, customWp, status: 'pending', subjobs: null, service: null, log: [logEntry as any],
+        id: savedId, pi, po, skus: skus as any, bm, name, phone, addr, matchedAudit: false, auditBy,
+        deliveryDate: delivery || null, customWp, status: 'pending', subjobs: null, service: service as any, log: logEntries as any,
       };
       setOrders((prev) => [newOrder, ...prev]);
       closeAddOrder();
@@ -333,7 +346,7 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
       case 'installers':
         return <InstallersView installers={cityInstallers} orders={orders} onAddStaff={() => setAsOpen(true)} reload={loadInstallers} toast={toast} />;
       case 'foam':
-        return <FoamView orders={orders} installers={cityInstallers} attribution={SM_ATTRIBUTION} toast={toast} />;
+        return <FoamView orders={orders} installers={cityInstallers} attribution={attribution} toast={toast} />;
       case 'payouts':
         return <PayoutsView orders={orders} toast={toast} />;
       case 'deleted':
@@ -378,7 +391,7 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
         <div className="fixed inset-0 bg-black/30 z-[900] flex justify-end" onClick={(e) => { if (e.target === e.currentTarget) closeDrawer(); }}>
           <div className="bg-white h-full w-full max-w-[600px] shadow-2xl flex flex-col" key={currentPI + ':' + drawerNonce}>
             <OrderDrawer
-              order={drawerOrder} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={SM_ATTRIBUTION}
+              order={drawerOrder} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution}
               installersErr={installersErr} onRetryInstallers={loadInstallers}
               onClose={closeDrawer} onOpenOrder={openOrder} onOpenRect={(o) => setRectOrder(o)}
               reload={loadOrders} reloadWithDeleted={reloadWithDeleted} toast={toast}
@@ -394,7 +407,7 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
         aoErr={aoErr} aoKylasNote={aoKylasNote} aoBusy={aoBusy} onClose={closeAddOrder} onAddSku={addSkuRow} onSubmit={submitAddOrder}
       />
       <KylasOverlay open={kylasOpen} orders={orders} onClose={() => setKylasOpen(false)} onUse={usePORow} />
-      <RectOverlay order={rectOrder} onClose={() => setRectOrder(null)} reload={loadOrders} toast={toast} attribution={SM_ATTRIBUTION} />
+      <RectOverlay order={rectOrder} onClose={() => setRectOrder(null)} reload={loadOrders} toast={toast} attribution={attribution} />
       <AddStaffOverlay open={asOpen} onClose={() => setAsOpen(false)} reload={loadInstallers} toast={toast} />
     </div>
   );

@@ -8,9 +8,12 @@
    only possible in the legacy app, without which the auditor's own app never
    receives a job.
 
-   Like Install Ops this has no per-person session, so writes are attributed to
-   a fixed label ("Service Manager (CRM)"). Live Locations is deliberately not
-   a tab here: it's the shared Live view in the outer Site Audit rail. */
+   Every caller that reaches this view already knows who's looking at it (the
+   CRM session's own name, resolved via SiteAuditOwnDashboard/site-audit-view/
+   Role Viewer) — the `attribution` prop carries that through so activity-log
+   entries show a real name instead of the generic fallback below. Live
+   Locations is deliberately not a tab here: it's the shared Live view in the
+   outer Site Audit rail. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CITIES, inCity, sbGet, sbPatch, type CityFilter } from './siteAuditShared';
@@ -26,7 +29,9 @@ import {
 } from './audit-ops/shared';
 import type { ShadowerOption } from './install-ops/ShadowerSelect';
 
-const ATTRIBUTION = 'Service Manager (CRM)';
+/* Fallback only for a caller that genuinely can't resolve a person (there
+   currently isn't one, but this keeps the view usable if that ever changes). */
+const DEFAULT_ATTRIBUTION = 'Service Manager (CRM)';
 
 const TABS: Array<{ view: AuditViewKey; label: string }> = [
   { view: 'orders', label: 'Orders' },
@@ -40,7 +45,8 @@ const TABS: Array<{ view: AuditViewKey; label: string }> = [
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter } = {}) {
+export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_ATTRIBUTION }: { city?: CityFilter; attribution?: string } = {}) {
+  const ATTRIBUTION = attribution;
   const [view, setView] = useState<AuditViewKey>('orders');
   const [rawOrders, setRawOrders] = useState<AuditOrder[]>([]);
   const [rawDeleted, setRawDeleted] = useState<AuditOrder[]>([]);

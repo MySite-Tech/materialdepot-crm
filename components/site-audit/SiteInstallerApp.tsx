@@ -643,6 +643,17 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const subjobs = parent.subjobs || [];
         const sj = subjobs.find((s: any) => s.id === job.sjId);
         if (!sj) { toast('Job not found — please refresh'); return; }
+        const curStatus = sj.assignments && sj.assignments.length
+          ? (sj.assignments.find((a: any) => a.installer_email === actingAs.email)?.status ?? sj.status)
+          : sj.status;
+        // Someone else (an SM rebooking after a reschedule, another
+        // assignee) may have moved this sub-job since it was loaded — writing
+        // this transition on top of that would silently clobber it.
+        if (curStatus !== job.status) {
+          toast('This job was just updated — refresh to see the latest before trying again');
+          await loadJobs();
+          return;
+        }
         const dbSt = st === 'scheduled' ? 'assigned' : st;
         if (sj.assignments && sj.assignments.length) {
           const myA = sj.assignments.find((a: any) => a.installer_email === actingAs.email);

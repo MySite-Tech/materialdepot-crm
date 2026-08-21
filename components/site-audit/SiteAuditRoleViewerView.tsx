@@ -319,7 +319,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
         </div>
       </div>
       {smTab === 'install' ? (
-        <SiteAuditInstallOpsView city={city} />
+        <SiteAuditInstallOpsView city={city} attribution={person.name} />
       ) : (
         <div>
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -336,7 +336,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
             ))}
           </div>
           {smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} />
+            <SiteAuditOpsView city={city} attribution={person.name} />
           ) : smAuditSubTab === 'jobs' ? (
             <SiteAuditJobsView city={city} />
           ) : smAuditSubTab === 'perf' ? (

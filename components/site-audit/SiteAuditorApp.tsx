@@ -790,10 +790,12 @@ function JobListView({
 /* ---- reschedule form ---- */
 function RescheduleForm({
   showToast,
+  busy,
   onCancel,
   onConfirm,
 }: {
   showToast: (m: string) => void;
+  busy: boolean;
   onCancel: () => void;
   onConfirm: (reason: string, followUp: string) => void;
 }) {
@@ -831,12 +833,14 @@ function RescheduleForm({
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          disabled={busy}
+          className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="button"
+          disabled={busy}
           onClick={() => {
             if (!reason.trim()) {
               showToast('Please enter a reason for rescheduling');
@@ -844,9 +848,9 @@ function RescheduleForm({
             }
             onConfirm(reason.trim(), followUp.trim());
           }}
-          className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white hover:opacity-90"
+          className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
         >
-          Confirm Reschedule
+          {busy ? 'Submitting…' : 'Confirm Reschedule'}
         </button>
       </div>
     </div>
@@ -1052,8 +1056,8 @@ function JobDetailView({
   // stale `order.log` closure twice, and whichever sbPatch lands last silently
   // drops the other tap's log entry.
   const adv = useCallback(
-    async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra) => {
-      if (advBusy) return;
+    async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra): Promise<boolean> => {
+      if (advBusy) return false;
       setAdvBusy(true);
       try {
         const logText = logOverride || DEFAULT_LOG_TEXT[st] || st;
@@ -1062,13 +1066,24 @@ function JobDetailView({
         let newLog = [...order.log, entry];
         if (order.id) {
           try {
-            const rows = await sbGet('audit_orders?id=eq.' + order.id + '&select=log');
-            const freshLog: LogEntry[] = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].log) ? rows[0].log : order.log;
+            const rows = await sbGet('audit_orders?id=eq.' + order.id + '&select=log,status');
+            const fresh = Array.isArray(rows) && rows[0] ? rows[0] : null;
+            // The screen's `order.status` can go stale — an SM action (e.g.
+            // rebooking after a reschedule) can land between this button being
+            // shown and tapped. Without this check a delayed/duplicate tap
+            // here would silently overwrite whatever the SM just set, which is
+            // exactly what made a rebooked slot "revert" to reschedule.
+            if (fresh && fresh.status !== order.status) {
+              showToast('This job was just updated — refresh to see the latest before trying again');
+              await refreshJobs();
+              return false;
+            }
+            const freshLog: LogEntry[] = fresh && Array.isArray(fresh.log) ? fresh.log : order.log;
             newLog = [...freshLog, entry];
             await sbPatch('audit_orders', order.id, { status: dbStatus, log: newLog });
           } catch {
             showToast('Network error — try again');
-            return;
+            return false;
           }
         }
         if (st === 'atsite') locationTracker.start(order.pi);
@@ -1076,6 +1091,7 @@ function JobDetailView({
         onUpdateOrder((o) => ({ ...o, status: st, log: newLog }));
         await refreshJobs();
         showToast(toastMsg);
+        return true;
       } finally {
         setAdvBusy(false);
       }
@@ -1136,11 +1152,18 @@ function JobDetailView({
       {reschedOpen ? (
         <RescheduleForm
           showToast={showToast}
+          busy={advBusy}
           onCancel={() => setReschedOpen(false)}
           onConfirm={async (reason, followUp) => {
             const logMsg = 'Reschedule requested: ' + reason + (followUp ? ` · Follow-up: ${followUp}` : '');
+            // Wait for adv() to actually succeed before closing the form —
+            // closing it up front (as this used to) left the Confirm button
+            // fully clickable for the whole round trip, so a slow/flaky
+            // connection invited repeat taps that each wrote their own
+            // duplicate "Reschedule requested" log entry.
+            const ok = await adv('reschedule', 'Sent to SM to reschedule', logMsg);
+            if (!ok) return;
             setReschedOpen(false);
-            await adv('reschedule', 'Sent to SM to reschedule', logMsg);
             if (followUp && order.id) {
               try {
                 await sbPatch('audit_orders', order.id, { service: { ...order.service, follow_up_date: followUp } });

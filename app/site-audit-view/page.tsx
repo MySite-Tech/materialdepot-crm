@@ -233,9 +233,9 @@ function SiteAuditViewInner() {
           combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
         ) : isSm ? (
           smTab === 'install' ? (
-            <SiteAuditInstallOpsView city={city} />
+            <SiteAuditInstallOpsView city={city} attribution={person.name} />
           ) : smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} />
+            <SiteAuditOpsView city={city} attribution={person.name} />
           ) : smAuditSubTab === 'jobs' ? (
             <SiteAuditJobsView city={city} />
           ) : smAuditSubTab === 'perf' ? (
