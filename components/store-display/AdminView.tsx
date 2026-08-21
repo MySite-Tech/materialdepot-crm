@@ -1,6 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { displayApi } from '../../lib/displayApi';
+import {
+  bulkUploadLocations,
+  bulkChangeInitiate,
+  bulkChangeComplete,
+  cancelMovement,
+  getEcProducts,
+  deleteLocations,
+} from '../../lib/displayApi';
 
 /* branch_name must match OrganisationBranch.branch_name EXACTLY. The backend
    lower-cases and de-spaces the value first, but only to hit a four-entry
@@ -26,9 +33,9 @@ const DISPLAY_TYPES = ['panel_display', 'shelves', 'drawer', 'catalogue', 'flaps
 
 /* Deliberately NOT a passcode. The previous gate compared against a literal
    sitting in the client bundle, which anyone could read in devtools, and the
-   /api/store-display `delete_locations` action never checked it — so it stopped
-   nobody while looking like it did. A typed confirmation is honest about being
-   a slip guard; real enforcement has to live on the server. */
+   delete-locations endpoint never checked it — so it stopped nobody while
+   looking like it did. A typed confirmation is honest about being a slip
+   guard; real enforcement has to live on the server. */
 const DELETE_CONFIRM_WORD = 'DELETE';
 
 // ─── Bulk Upload Section ────────────────────────────────────────────────────
@@ -42,7 +49,7 @@ function BulkUploadSection() {
     setLoading(true);
     setResult(null);
     try {
-      const data = await displayApi('bulk_upload', { gsheet: gsheetUrl.trim() });
+      const data = await bulkUploadLocations(gsheetUrl.trim());
       setResult(typeof data === 'object' ? JSON.stringify(data, null, 2) : 'Success — bulk upload submitted for processing.');
       setGsheetUrl('');
     } catch (e: any) {
@@ -97,7 +104,7 @@ function BulkUploadSection() {
 }
 
 // ─── Manage Change Requests ─────────────────────────────────────────────────
-function GsheetAction({ title, description, apiAction, extraInfo }: { title: string; description: string; apiAction: string; extraInfo?: string }) {
+function GsheetAction({ title, description, onSubmit, extraInfo }: { title: string; description: string; onSubmit: (gsheet: string) => Promise<any>; extraInfo?: string }) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -107,7 +114,7 @@ function GsheetAction({ title, description, apiAction, extraInfo }: { title: str
     setLoading(true);
     setResult(null);
     try {
-      const data = await displayApi(apiAction, { gsheet: url.trim() });
+      const data = await onSubmit(url.trim());
       setResult(typeof data === 'object' ? JSON.stringify(data, null, 2) : 'Success — submitted for processing.');
       setUrl('');
     } catch (e: any) {
@@ -148,7 +155,7 @@ function CancelMovementSection() {
     setLoading(true);
     setResult(null);
     try {
-      const data = await displayApi('cancel_movement', { vsm_id: id });
+      const data = await cancelMovement(id);
       setResult(JSON.stringify(data, null, 2));
       setVsmId('');
     } catch (e: any) {
@@ -185,7 +192,7 @@ function GetEcProductsSection() {
     setSheetUrl(null);
     try {
       const branch = EC_BRANCHES.find(b => b.id === selectedBranch);
-      const data = await displayApi('get_ec_products', { branch_name: branch?.branch_name });
+      const data = await getEcProducts(branch?.branch_name || '');
       const url = data?.google_sheet_url || data?.sheet_url || data?.gsheet || data?.url || (typeof data === 'string' ? data : null);
       setSheetUrl(url || JSON.stringify(data, null, 2));
     } catch (e: any) {
@@ -245,11 +252,11 @@ function DeleteLocationsSection() {
   const handleDelete = async () => {
     const ids = idsText.split(/[\s,]+/).map(s => s.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n));
     if (ids.length === 0) return;
-    if (!window.confirm(`Permanently delete ${ids.length} store location${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    if (!window.confirm(`Deactivate ${ids.length} store location${ids.length === 1 ? '' : 's'}? They will be hidden from the store; re-adding the variant reactivates them.`)) return;
     setDeleting(true);
     setResult(null);
     try {
-      const data = await displayApi('delete_locations', { vsl_ids: ids });
+      const data = await deleteLocations(ids);
       setResult(JSON.stringify(data, null, 2));
       setIdsText('');
     } catch (e: any) {
@@ -261,8 +268,8 @@ function DeleteLocationsSection() {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5">
-      <h3 className="text-[13px] font-bold text-red-600 mb-1">Delete Store Locations</h3>
-      <p className="text-[11px] text-gray-400 mb-3">Remove variant store locations by ID (permanent)</p>
+      <h3 className="text-[13px] font-bold text-red-600 mb-1">Deactivate Store Locations</h3>
+      <p className="text-[11px] text-gray-400 mb-3">Hide variant store locations by ID (soft-delete — reversible by re-adding)</p>
 
       {!verified ? (
         <div className="flex gap-2 items-end">
@@ -282,7 +289,7 @@ function DeleteLocationsSection() {
             <p className="text-[10px] text-gray-400 mt-1">Use the <code className="font-mono font-medium">id</code> column from <code className="font-mono font-medium">variant_store_location</code>. One per line or comma-separated.</p>
           </div>
           <button onClick={handleDelete} disabled={deleting || !idsText.trim()} className="px-4 py-2 text-[13px] font-semibold bg-red-500 text-white rounded-md cursor-pointer disabled:opacity-50 disabled:cursor-default">
-            {deleting ? 'Deleting...' : 'Delete Locations'}
+            {deleting ? 'Deactivating...' : 'Deactivate Locations'}
           </button>
           {result && <pre className={`mt-2 text-[11px] px-3 py-2 rounded overflow-auto max-h-32 ${result.startsWith('Error') ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-700'}`}>{result}</pre>}
         </>
@@ -304,13 +311,13 @@ export function AdminView() {
         <GsheetAction
           title="Bulk Change Initiate"
           description="Initiate bulk location changes via Google Sheets"
-          apiAction="bulk_change_initiate"
+          onSubmit={bulkChangeInitiate}
           extraInfo='Set the "confirm" column to "No".'
         />
         <GsheetAction
           title="Bulk Change Complete"
           description="Complete bulk location changes via Google Sheets"
-          apiAction="bulk_change_complete"
+          onSubmit={bulkChangeComplete}
           extraInfo='Use the same sheet and set the "confirm" column to "Yes".'
         />
         <CancelMovementSection />

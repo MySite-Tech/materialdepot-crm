@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { displayApi } from '../../lib/displayApi';
+import { initiateMovement, completeMovement, cancelMovement } from '../../lib/displayApi';
 import { getImageUrl } from '../../lib/imageUrl';
 
 interface VariantLocationRow {
@@ -29,8 +29,9 @@ interface Props {
 }
 
 type RemovalReason = 'discontinued_permanently' | 'removed_temporarily';
-type RemovalStatus = 'removal_initiated' | 'removal_in_progress' | 'removal_completed';
-type ChangeStatus = 'change_initiated' | 'change_in_progress' | 'request_completed' | 'request_cancelled';
+// Two-step lifecycle: the backend only has "initiated" and "completed".
+type RemovalStatus = 'removal_initiated' | 'removal_completed';
+type ChangeStatus = 'change_initiated' | 'request_completed' | 'request_cancelled';
 
 interface ChangeLocationRequest {
   status: ChangeStatus;
@@ -45,13 +46,11 @@ const DISPLAY_TYPES = ['shelves', 'drawer', 'catalogue', 'panel_display', 'flaps
 
 const CHANGE_STEPS: { key: ChangeStatus; label: string }[] = [
   { key: 'change_initiated', label: 'Initiated' },
-  { key: 'change_in_progress', label: 'In Progress' },
   { key: 'request_completed', label: 'Completed' },
 ];
 
 const REMOVAL_STEPS: { key: RemovalStatus; label: string }[] = [
   { key: 'removal_initiated', label: 'Initiated' },
-  { key: 'removal_in_progress', label: 'In Progress' },
   { key: 'removal_completed', label: 'Completed' },
 ];
 
@@ -236,54 +235,69 @@ function RemoveFromDisplayDialog({ open, onClose, productName, storeName, onConf
   );
 }
 
+// ─── Step ladder (shared) ─────────────────────────────────────────────────────
+function StepLadder<T extends string>({ steps, currentIdx }: { steps: { key: T; label: string }[]; currentIdx: number }) {
+  return (
+    <div className="flex items-center gap-1 mb-3">
+      {steps.map((step, i) => {
+        const isComplete = i <= currentIdx;
+        const isCurrent = i === currentIdx;
+        return (
+          <div key={step.key} className="flex items-center gap-1 flex-1">
+            <div className="flex flex-col items-center gap-1 flex-1">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isComplete ? (isCurrent ? 'bg-amber-400 text-white' : 'bg-green-500 text-white') : 'bg-gray-200 text-gray-400'}`}>
+                {isComplete ? '✓' : i + 1}
+              </div>
+              <span className={`text-[10px] text-center leading-tight ${isComplete ? 'font-medium text-gray-700' : 'text-gray-400'}`}>{step.label}</span>
+            </div>
+            {i < steps.length - 1 && <div className={`h-0.5 w-4 ${i < currentIdx ? 'bg-green-500' : 'bg-gray-200'}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Change Location Status Tracker ─────────────────────────────────────────
 function ChangeLocationStatusTracker({ request, onStatusChange }: {
   request: ChangeLocationRequest;
-  onStatusChange: (status: ChangeStatus, vsmId?: number) => void;
+  onStatusChange: (status: ChangeStatus) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const toast = useToast();
 
   const currentIdx = CHANGE_STEPS.findIndex(s => s.key === request.status);
-  // findIndex returns -1 for a cancelled request (it is not on the ladder), and
-  // -1 + 1 = 0 would offer "Initiated" as the next step on a dead request.
-  const nextStep = currentIdx >= 0 && currentIdx < CHANGE_STEPS.length - 1 ? CHANGE_STEPS[currentIdx + 1] : null;
 
-  const handleAdvance = async () => {
-    if (!nextStep) return;
-    /* Without a vsm_id there is no movement to advance. The old code skipped
-       the API call, moved the local badge on anyway and reported success — so
-       a failed id extraction looked exactly like a completed hand-off while
-       the store's actual movement sat untouched. */
+  const handleComplete = async () => {
+    /* Without a vsm_id there is no movement to complete. Reporting success and
+       moving the badge on anyway would tell the store the product had been
+       relocated while its actual movement sat untouched. */
     if (!request.vsmId) {
       toast.show('This change request has no movement ID — reopen the product and initiate it again.', 'error');
       return;
     }
     setLoading(true);
     try {
-      if (nextStep.key === 'change_in_progress') {
-        await displayApi('movement_in_progress', { vsm_id: request.vsmId });
-      } else if (nextStep.key === 'request_completed') {
-        await displayApi('movement_complete', { vsm_id: request.vsmId });
-      }
-      onStatusChange(nextStep.key);
-      toast.show(`Status updated to "${nextStep.label}"`);
+      await completeMovement(request.vsmId);
+      onStatusChange('request_completed');
+      toast.show('Movement completed — product relocated');
     } catch (err: any) {
-      toast.show(err.message || 'Failed to advance status', 'error');
+      toast.show(err.message || 'Failed to complete', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  /* The backend only reverses a COMPLETED move (it puts the stock back), so
+     "Cancel" is an undo offered after completion — not a way to discard a
+     still-pending request. */
   const handleCancel = async () => {
     if (!request.vsmId) return;
     setCancelLoading(true);
     try {
-      await displayApi('cancel_movement', { vsm_id: request.vsmId });
-      toast.show('Movement cancelled');
-      // Cancelled, not completed — reporting a rejected move as "Completed"
-      // told the store the product had been relocated when it never moved.
+      await cancelMovement(request.vsmId);
+      toast.show('Movement cancelled — product returned to its original location');
       onStatusChange('request_cancelled');
     } catch (err: any) {
       toast.show(err.message || 'Failed to cancel', 'error');
@@ -294,7 +308,6 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
 
   const statusColors: Record<ChangeStatus, string> = {
     change_initiated: 'bg-amber-50 text-amber-700',
-    change_in_progress: 'bg-blue-50 text-blue-700',
     request_completed: 'bg-green-50 text-green-700',
     request_cancelled: 'bg-red-50 text-red-600',
   };
@@ -314,24 +327,7 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
         <div><span className="text-gray-400">To: </span><span className="font-mono font-medium text-gray-700">{request.newLocationString}</span></div>
       </div>
 
-      {/* Progress Steps */}
-      <div className="flex items-center gap-1 mb-3">
-        {CHANGE_STEPS.map((step, i) => {
-          const isComplete = i <= currentIdx;
-          const isCurrent = i === currentIdx;
-          return (
-            <div key={step.key} className="flex items-center gap-1 flex-1">
-              <div className="flex flex-col items-center gap-1 flex-1">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isComplete ? (isCurrent ? 'bg-amber-400 text-white' : 'bg-green-500 text-white') : 'bg-gray-200 text-gray-400'}`}>
-                  {isComplete ? '✓' : i + 1}
-                </div>
-                <span className={`text-[10px] text-center leading-tight ${isComplete ? 'font-medium text-gray-700' : 'text-gray-400'}`}>{step.label}</span>
-              </div>
-              {i < CHANGE_STEPS.length - 1 && <div className={`h-0.5 w-4 ${i < currentIdx ? 'bg-green-500' : 'bg-gray-200'}`} />}
-            </div>
-          );
-        })}
-      </div>
+      {request.status !== 'request_cancelled' && <StepLadder steps={CHANGE_STEPS} currentIdx={currentIdx} />}
 
       {request.status === 'request_completed' && (
         <div className="bg-green-50 border border-green-200 rounded px-3 py-2 text-[11px] text-green-800 mb-3">
@@ -339,15 +335,15 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
         </div>
       )}
 
-      {nextStep && (
-        <button onClick={handleAdvance} disabled={loading || cancelLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-default mb-2">
-          {loading ? 'Updating...' : `Mark as "${nextStep.label}"`}
+      {request.status === 'change_initiated' && (
+        <button onClick={handleComplete} disabled={loading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-green-600 rounded-md cursor-pointer hover:bg-green-700 disabled:opacity-50 disabled:cursor-default mb-2">
+          {loading ? 'Completing...' : 'Mark as Completed'}
         </button>
       )}
 
-      {request.vsmId && request.status !== 'request_completed' && (
-        <button onClick={handleCancel} disabled={loading || cancelLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-red-500 rounded-md cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default">
-          {cancelLoading ? 'Cancelling...' : 'Cancel Movement'}
+      {request.status === 'request_completed' && request.vsmId && (
+        <button onClick={handleCancel} disabled={cancelLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-red-500 rounded-md cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default">
+          {cancelLoading ? 'Cancelling...' : 'Cancel Movement (undo)'}
         </button>
       )}
     </div>
@@ -365,22 +361,20 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
   const toast = useToast();
 
   const currentIdx = REMOVAL_STEPS.findIndex(s => s.key === status);
-  const nextStep = currentIdx < REMOVAL_STEPS.length - 1 ? REMOVAL_STEPS[currentIdx + 1] : null;
   const isPermanent = reason === 'discontinued_permanently';
 
-  const handleAdvance = async () => {
-    if (!nextStep) return;
+  const handleComplete = async () => {
+    if (!vsmId) {
+      toast.show('This removal has no movement ID — reopen the product and initiate it again.', 'error');
+      return;
+    }
     setLoading(true);
     try {
-      if (nextStep.key === 'removal_in_progress' && vsmId) {
-        await displayApi('removal_in_progress', { vsm_id: vsmId });
-      } else if (nextStep.key === 'removal_completed' && vsmId) {
-        await displayApi('removal_complete', { vsm_id: vsmId });
-      }
-      onStatusChange(nextStep.key);
-      toast.show(`Status updated to "${nextStep.label}"`);
+      await completeMovement(vsmId);
+      onStatusChange('removal_completed');
+      toast.show('Removal completed');
     } catch (err: any) {
-      toast.show(err.message || 'Failed to advance status', 'error');
+      toast.show(err.message || 'Failed to complete removal', 'error');
     } finally {
       setLoading(false);
     }
@@ -388,7 +382,6 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
 
   const statusColors: Record<RemovalStatus, string> = {
     removal_initiated: 'bg-amber-50 text-amber-700',
-    removal_in_progress: 'bg-blue-50 text-blue-700',
     removal_completed: 'bg-red-50 text-red-600',
   };
 
@@ -407,24 +400,7 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
         <span className="font-medium text-gray-700">{isPermanent ? 'Discontinued Permanently' : 'Removed Temporarily'}</span>
       </div>
 
-      {/* Progress Steps */}
-      <div className="flex items-center gap-1 mb-3">
-        {REMOVAL_STEPS.map((step, i) => {
-          const isComplete = i <= currentIdx;
-          const isCurrent = i === currentIdx;
-          return (
-            <div key={step.key} className="flex items-center gap-1 flex-1">
-              <div className="flex flex-col items-center gap-1 flex-1">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isComplete ? (isCurrent ? 'bg-amber-400 text-white' : 'bg-green-500 text-white') : 'bg-gray-200 text-gray-400'}`}>
-                  {isComplete ? '✓' : i + 1}
-                </div>
-                <span className={`text-[10px] text-center leading-tight ${isComplete ? 'font-medium text-gray-700' : 'text-gray-400'}`}>{step.label}</span>
-              </div>
-              {i < REMOVAL_STEPS.length - 1 && <div className={`h-0.5 w-4 ${i < currentIdx ? 'bg-green-500' : 'bg-gray-200'}`} />}
-            </div>
-          );
-        })}
-      </div>
+      <StepLadder steps={REMOVAL_STEPS} currentIdx={currentIdx} />
 
       {status === 'removal_completed' && isPermanent && (
         <div className="bg-red-50 border border-red-200 rounded px-3 py-2 text-[11px] text-red-700 mb-3">
@@ -437,9 +413,9 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
         </div>
       )}
 
-      {nextStep && (
-        <button onClick={handleAdvance} disabled={loading} className="w-full px-4 py-2 text-[13px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-default">
-          {loading ? 'Updating...' : `Mark as "${nextStep.label}"`}
+      {status === 'removal_initiated' && (
+        <button onClick={handleComplete} disabled={loading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-green-600 rounded-md cursor-pointer hover:bg-green-700 disabled:opacity-50 disabled:cursor-default">
+          {loading ? 'Completing...' : 'Mark as Completed'}
         </button>
       )}
     </div>
@@ -448,7 +424,7 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
 
 // ─── Main Product Detail Panel ──────────────────────────────────────────────
 export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Props) {
-  const [item, setItem] = useState(initialItem);
+  const [item] = useState(initialItem);
   const [changeLocationOpen, setChangeLocationOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [changeRequest, setChangeRequest] = useState<ChangeLocationRequest | null>(null);
@@ -458,33 +434,31 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
   const materialDepotUrl = `https://materialdepot.com/${item.variant_handle}/product`;
 
   const handleChangeLocationSave = async (data: { displayType: string; locationString: string; quantity: number }, positionChanged: boolean) => {
+    if (!positionChanged) {
+      /* There is no endpoint that persists a quantity-only edit — movement and
+         removal are the only writes this screen has. */
+      toast.show('Quantity is only editable through the bulk sheet upload in Admin — nothing was changed.', 'error');
+      return;
+    }
     try {
-      if (positionChanged) {
-        const apiData = await displayApi('movement_initiate', {
-          variant_handle: item.variant_handle,
-          from_location_id: item.location_id ?? item.id,
-          quantity: data.quantity,
-          display_type_to: data.displayType,
-          location_string_to: data.locationString,
-        });
-        const inner = apiData?.data ?? apiData;
-        const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
-        setChangeRequest({
-          status: 'change_initiated',
-          vsmId,
-          newLocationString: data.locationString,
-          oldLocationString: item.location_string,
-          displayType: data.displayType,
-          quantity: data.quantity,
-        });
-        toast.show('Change request initiated');
-      } else {
-        /* There is no endpoint that persists a quantity-only edit — movement and
-           removal are the only writes this screen has. It used to set local
-           state and report "Changes saved successfully", so the number sat there
-           looking saved until the next reload silently restored the old one. */
-        toast.show('Quantity is only editable through the bulk sheet upload in Admin — nothing was changed.', 'error');
-      }
+      const apiData = await initiateMovement({
+        movement_type: 'move_display',
+        variant_handle: item.variant_handle,
+        from_location_id: item.location_id ?? item.id,
+        quantity: data.quantity,
+        display_type_to: data.displayType,
+        location_string_to: data.locationString,
+      });
+      const vsmId = apiData?.vsm_id ?? apiData?.data?.vsm_id ?? apiData?.id;
+      setChangeRequest({
+        status: 'change_initiated',
+        vsmId,
+        newLocationString: data.locationString,
+        oldLocationString: item.location_string,
+        displayType: data.displayType,
+        quantity: data.quantity,
+      });
+      toast.show('Change request initiated');
     } catch (err: any) {
       toast.show(err.message || 'Failed to save changes', 'error');
     }
@@ -492,15 +466,18 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
 
   const handleRemovalConfirm = async (reason: RemovalReason) => {
     try {
-      const apiReason = reason === 'discontinued_permanently' ? 'retired_from_store_display' : 'removed_temporarily';
-      const apiData = await displayApi('removal_initiate', {
+      /* Backend removal_reason vocabulary is {discontinued_permanently,
+         retired_from_store_display}; "temporary" maps to the latter (removed
+         from THIS store's display, not discontinued on the website). */
+      const apiReason = reason === 'discontinued_permanently' ? 'discontinued_permanently' : 'retired_from_store_display';
+      const apiData = await initiateMovement({
+        movement_type: 'remove_display',
         variant_handle: item.variant_handle,
         location_id: item.location_id ?? item.id,
         removal_reason: apiReason,
         additional_remarks: reason === 'discontinued_permanently' ? 'Discontinued permanently' : 'Removed temporarily',
       });
-      const inner = apiData?.data ?? apiData;
-      const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
+      const vsmId = apiData?.vsm_id ?? apiData?.data?.vsm_id ?? apiData?.id;
       setRemovalState({ reason, status: 'removal_initiated', vsmId });
       toast.show('Removal initiated');
     } catch (err: any) {

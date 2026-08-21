@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { displayApi } from '../../lib/displayApi';
+import { fetchMovements, completeMovement, type MovementType } from '../../lib/displayApi';
 
 interface MovementItem {
   id?: number;
@@ -8,16 +8,16 @@ interface MovementItem {
   change_request_type: string;
   removal_reason: string | null;
   from_location: {
-    branch: string;
-    category: string;
-    display_type: string;
-    location_string: string;
-  };
+    branch?: string;
+    category?: string;
+    display_type?: string;
+    location_string?: string;
+  } | null;
   to_location: {
     branch?: string;
-    display_type: string;
-    location_string: string;
-  };
+    display_type?: string;
+    location_string?: string;
+  } | null;
   quantity: number;
   variant: {
     product_name: string;
@@ -27,7 +27,6 @@ interface MovementItem {
   created_at: string;
   modified_at: string;
   completed_at: string | null;
-  cancelled_at?: string | null;
 }
 
 function formatDate(d: string | null | undefined) {
@@ -37,12 +36,18 @@ function formatDate(d: string | null | undefined) {
   } catch { return '—'; }
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  initiated: 'bg-blue-50 text-blue-700',
-  in_progress: 'bg-amber-50 text-amber-700',
-  completed: 'bg-green-50 text-green-700',
-  cancelled: 'bg-red-50 text-red-600',
+const TYPE_LABELS: Record<string, string> = {
+  add_display: 'Add',
+  move_display: 'Move',
+  remove_display: 'Remove',
 };
+
+const TYPE_FILTERS: { key: 'all' | MovementType; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'add_display', label: 'Add' },
+  { key: 'move_display', label: 'Move' },
+  { key: 'remove_display', label: 'Remove' },
+];
 
 function getVsmId(item: MovementItem): number | null {
   return item.vsm_id ?? item.id ?? null;
@@ -52,9 +57,9 @@ export function MovementStatusView() {
   const [items, setItems] = useState<MovementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | MovementType>('all');
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
-  const [bulkLoading, setBulkLoading] = useState<'approve' | 'reject' | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
@@ -64,11 +69,14 @@ export function MovementStatusView() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const fetchMovements = async () => {
+  const loadMovements = async () => {
+    setLoading(true);
     try {
-      const data = await displayApi('fetch_movements');
+      // Backend returns the movements still awaiting completion (status=initiated).
+      const data = await fetchMovements();
       const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
       setItems(list);
+      setError(null);
     } catch (e: any) {
       setError(e?.message || 'Failed to fetch movements');
     } finally {
@@ -76,18 +84,14 @@ export function MovementStatusView() {
     }
   };
 
-  useEffect(() => { fetchMovements(); }, []);
+  useEffect(() => { loadMovements(); }, []);
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return items;
-    return items.filter(i => i.status === statusFilter);
-  }, [items, statusFilter]);
+    if (typeFilter === 'all') return items;
+    return items.filter(i => i.change_request_type === typeFilter);
+  }, [items, typeFilter]);
 
-  const actionableItems = useMemo(() => {
-    return filtered.filter(i => i.status === 'initiated' || i.status === 'in_progress');
-  }, [filtered]);
-
-  const allSelected = actionableItems.length > 0 && actionableItems.every(i => {
+  const allSelected = filtered.length > 0 && filtered.every(i => {
     const vid = getVsmId(i);
     return vid !== null && selected.has(vid);
   });
@@ -96,104 +100,56 @@ export function MovementStatusView() {
     if (allSelected) {
       setSelected(new Set());
     } else {
-      const newSet = new Set<number>();
-      actionableItems.forEach(i => {
-        const vid = getVsmId(i);
-        if (vid !== null) newSet.add(vid);
-      });
-      setSelected(newSet);
+      const next = new Set<number>();
+      filtered.forEach(i => { const vid = getVsmId(i); if (vid !== null) next.add(vid); });
+      setSelected(next);
     }
   };
 
   const toggleSelect = (vsmId: number) => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(vsmId)) next.delete(vsmId);
-      else next.add(vsmId);
+      if (next.has(vsmId)) next.delete(vsmId); else next.add(vsmId);
       return next;
     });
   };
 
-  const handleAdvance = async (vsmId: number, currentStatus: string) => {
-    const isInitiated = currentStatus === 'initiated';
-    const action = isInitiated ? 'movement_in_progress' : 'movement_complete';
-    const nextStatus = isInitiated ? 'in_progress' : 'completed';
-    const label = isInitiated ? 'started' : 'completed';
-    setActionLoading(prev => ({ ...prev, [`advance-${vsmId}`]: true }));
+  const removeRow = (vsmId: number) => {
+    setItems(prev => prev.filter(i => getVsmId(i) !== vsmId));
+    setSelected(prev => { const n = new Set(prev); n.delete(vsmId); return n; });
+  };
+
+  const handleComplete = async (vsmId: number) => {
+    setActionLoading(prev => ({ ...prev, [`complete-${vsmId}`]: true }));
     try {
-      await displayApi(action, { vsm_id: vsmId });
-      setItems(prev => prev.map(i => getVsmId(i) === vsmId ? { ...i, status: nextStatus, ...(nextStatus === 'completed' ? { completed_at: new Date().toISOString() } : {}) } : i));
-      if (nextStatus === 'completed') {
-        setSelected(prev => { const n = new Set(prev); n.delete(vsmId); return n; });
-      }
-      setToast({ msg: `Movement #${vsmId} ${label}`, type: 'success' });
+      await completeMovement(vsmId);
+      removeRow(vsmId);
+      setToast({ msg: `Movement #${vsmId} completed`, type: 'success' });
     } catch (e: any) {
-      setToast({ msg: e.message || `Failed to advance`, type: 'error' });
+      setToast({ msg: e.message || 'Failed to complete', type: 'error' });
     } finally {
-      setActionLoading(prev => ({ ...prev, [`advance-${vsmId}`]: false }));
+      setActionLoading(prev => ({ ...prev, [`complete-${vsmId}`]: false }));
     }
   };
 
-  const handleReject = async (vsmId: number) => {
-    if (!window.confirm(`Reject movement #${vsmId}? This cancels it upstream and can't be undone from here.`)) return;
-    setActionLoading(prev => ({ ...prev, [`reject-${vsmId}`]: true }));
-    try {
-      await displayApi('cancel_movement', { vsm_id: vsmId });
-      setItems(prev => prev.map(i => getVsmId(i) === vsmId ? { ...i, status: 'cancelled', cancelled_at: new Date().toISOString() } : i));
-      setSelected(prev => { const n = new Set(prev); n.delete(vsmId); return n; });
-      setToast({ msg: `Movement #${vsmId} rejected`, type: 'success' });
-    } catch (e: any) {
-      setToast({ msg: e.message || 'Failed to reject', type: 'error' });
-    } finally {
-      setActionLoading(prev => ({ ...prev, [`reject-${vsmId}`]: false }));
-    }
-  };
-
-  const handleBulkAdvance = async () => {
+  const handleBulkComplete = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    if (!window.confirm(`Advance ${ids.length} movement${ids.length === 1 ? '' : 's'} to the next stage?`)) return;
-    setBulkLoading('approve');
-    let success = 0;
-    const failedIds: number[] = [];
-    for (const vsmId of ids) {
-      const item = items.find(i => getVsmId(i) === vsmId);
-      if (!item) continue;
-      const isInitiated = item.status === 'initiated';
-      const action = isInitiated ? 'movement_in_progress' : 'movement_complete';
-      const nextStatus = isInitiated ? 'in_progress' : 'completed';
-      try {
-        await displayApi(action, { vsm_id: vsmId });
-        setItems(prev => prev.map(i => getVsmId(i) === vsmId ? { ...i, status: nextStatus, ...(nextStatus === 'completed' ? { completed_at: new Date().toISOString() } : {}) } : i));
-        success++;
-      } catch { failedIds.push(vsmId); }
-    }
-    setSelected(new Set());
-    setBulkLoading(null);
-    const fail = failedIds.length;
-    if (fail) console.error('[storeDisplay] advanced failed for vsm_ids', failedIds);
-    setToast({ msg: `Advanced ${success}${fail ? `, ${fail} failed (#${failedIds.slice(0, 5).join(', #')})` : ''}`, type: fail ? 'error' : 'success' });
-  };
-
-  const handleBulkReject = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    if (!window.confirm(`Reject ${ids.length} movement${ids.length === 1 ? '' : 's'}? This cancels them upstream and can't be undone from here.`)) return;
-    setBulkLoading('reject');
+    if (!window.confirm(`Complete ${ids.length} movement${ids.length === 1 ? '' : 's'}?`)) return;
+    setBulkLoading(true);
     let success = 0;
     const failedIds: number[] = [];
     for (const vsmId of ids) {
       try {
-        await displayApi('cancel_movement', { vsm_id: vsmId });
-        setItems(prev => prev.map(i => getVsmId(i) === vsmId ? { ...i, status: 'cancelled', cancelled_at: new Date().toISOString() } : i));
+        await completeMovement(vsmId);
+        removeRow(vsmId);
         success++;
       } catch { failedIds.push(vsmId); }
     }
-    setSelected(new Set());
-    setBulkLoading(null);
+    setBulkLoading(false);
     const fail = failedIds.length;
-    if (fail) console.error('[storeDisplay] rejected failed for vsm_ids', failedIds);
-    setToast({ msg: `Rejected ${success}${fail ? `, ${fail} failed (#${failedIds.slice(0, 5).join(', #')})` : ''}`, type: fail ? 'error' : 'success' });
+    if (fail) console.error('[storeDisplay] complete failed for vsm_ids', failedIds);
+    setToast({ msg: `Completed ${success}${fail ? `, ${fail} failed (#${failedIds.slice(0, 5).join(', #')})` : ''}`, type: fail ? 'error' : 'success' });
   };
 
   return (
@@ -205,23 +161,26 @@ export function MovementStatusView() {
       )}
 
       <div className="flex items-center gap-4 mb-4 flex-wrap">
-        <h2 className="text-[15px] font-bold text-gray-800">Movement Status</h2>
+        <h2 className="text-[15px] font-bold text-gray-800">Pending Movements</h2>
         <div className="flex gap-1">
-          {['all', 'initiated', 'in_progress', 'completed', 'cancelled'].map(s => (
+          {TYPE_FILTERS.map(t => (
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
+              key={t.key}
+              onClick={() => setTypeFilter(t.key)}
               className={`px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer border ${
-                statusFilter === s
+                typeFilter === t.key
                   ? 'bg-[#EAB308] text-white border-[#EAB308]'
                   : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
               }`}
             >
-              {s === 'all' ? 'All' : s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              {t.label}
             </button>
           ))}
         </div>
-        <span className="text-[12px] text-gray-400 ml-auto">{filtered.length} movement{filtered.length !== 1 ? 's' : ''}</span>
+        <button onClick={loadMovements} className="px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer border bg-white text-gray-500 border-gray-200 hover:border-gray-300">
+          ↻ Refresh
+        </button>
+        <span className="text-[12px] text-gray-400 ml-auto">{filtered.length} awaiting completion</span>
       </div>
 
       {/* Bulk actions bar */}
@@ -230,18 +189,11 @@ export function MovementStatusView() {
           <span className="text-[13px] font-medium text-gray-700">{selected.size} selected</span>
           <div className="flex gap-2 ml-auto">
             <button
-              onClick={handleBulkAdvance}
-              disabled={!!bulkLoading}
+              onClick={handleBulkComplete}
+              disabled={bulkLoading}
               className="px-4 py-1.5 text-[12px] font-semibold text-white bg-green-600 rounded-md cursor-pointer hover:bg-green-700 disabled:opacity-50 disabled:cursor-default"
             >
-              {bulkLoading === 'approve' ? 'Processing...' : `Advance All (${selected.size})`}
-            </button>
-            <button
-              onClick={handleBulkReject}
-              disabled={!!bulkLoading}
-              className="px-4 py-1.5 text-[12px] font-semibold text-white bg-red-500 rounded-md cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default"
-            >
-              {bulkLoading === 'reject' ? 'Rejecting...' : `Reject All (${selected.size})`}
+              {bulkLoading ? 'Processing...' : `Complete All (${selected.size})`}
             </button>
             <button
               onClick={() => setSelected(new Set())}
@@ -258,7 +210,7 @@ export function MovementStatusView() {
       ) : error ? (
         <div className="py-16 text-center text-red-500">{error}</div>
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-gray-400">No movements found</div>
+        <div className="py-16 text-center text-gray-400">No pending movements</div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -266,43 +218,28 @@ export function MovementStatusView() {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-3 py-2.5 w-[40px]">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleSelectAll}
-                      className="cursor-pointer"
-                      title="Select all actionable"
-                    />
+                    <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="cursor-pointer" title="Select all" />
                   </th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 min-w-[200px]">Product</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">From</th>
                   <th className="text-center px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qty</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">To</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Type</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Dates</th>
-                  <th className="text-center px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 min-w-[160px]">Actions</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Created</th>
+                  <th className="text-center px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 min-w-[120px]">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((item, idx) => {
                   const vsmId = getVsmId(item);
-                  const isActionable = item.status === 'initiated' || item.status === 'in_progress';
                   const isSelected = vsmId !== null && selected.has(vsmId);
-                  const advanceLoading = vsmId !== null && actionLoading[`advance-${vsmId}`];
-                  const rejectLoading = vsmId !== null && actionLoading[`reject-${vsmId}`];
-                  const advanceLabel = item.status === 'initiated' ? 'Start' : 'Complete';
+                  const completeLoading = vsmId !== null && actionLoading[`complete-${vsmId}`];
 
                   return (
                     <tr key={vsmId ?? idx} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-3 py-2 text-center">
-                        {isActionable && vsmId !== null ? (
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelect(vsmId)}
-                            className="cursor-pointer"
-                          />
+                        {vsmId !== null ? (
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(vsmId)} className="cursor-pointer" />
                         ) : (
                           <span className="text-gray-200">—</span>
                         )}
@@ -314,41 +251,27 @@ export function MovementStatusView() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-[11px] text-gray-600">
-                        {[item.from_location?.branch, item.from_location?.category, item.from_location?.display_type, item.from_location?.location_string].filter(Boolean).join(' · ')}
+                        {[item.from_location?.branch, item.from_location?.category, item.from_location?.display_type, item.from_location?.location_string].filter(Boolean).join(' · ') || '—'}
                       </td>
                       <td className="px-3 py-2 text-center text-gray-600">{item.quantity}</td>
                       <td className="px-3 py-2 text-[11px] text-gray-600">
-                        {[item.to_location?.display_type, item.to_location?.location_string].filter(Boolean).join(' · ')}
+                        {[item.to_location?.display_type, item.to_location?.location_string].filter(Boolean).join(' · ') || '—'}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {item.status}
+                        <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700">
+                          {TYPE_LABELS[item.change_request_type] || item.change_request_type}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-[11px] text-gray-600">{item.change_request_type}</td>
-                      <td className="px-3 py-2 text-[11px] text-gray-400 space-y-0.5">
-                        <div>Created: {formatDate(item.created_at)}</div>
-                        {item.completed_at && <div>Completed: {formatDate(item.completed_at)}</div>}
-                        {item.cancelled_at && <div>Cancelled: {formatDate(item.cancelled_at)}</div>}
-                      </td>
+                      <td className="px-3 py-2 text-[11px] text-gray-400">{formatDate(item.created_at)}</td>
                       <td className="px-3 py-2 text-center">
-                        {isActionable && vsmId !== null ? (
-                          <div className="flex gap-1.5 justify-center">
-                            <button
-                              onClick={() => handleAdvance(vsmId, item.status)}
-                              disabled={!!advanceLoading || !!rejectLoading || !!bulkLoading}
-                              className="px-3 py-1 text-[11px] font-semibold text-white bg-green-600 rounded cursor-pointer hover:bg-green-700 disabled:opacity-50 disabled:cursor-default"
-                            >
-                              {advanceLoading ? '...' : advanceLabel}
-                            </button>
-                            <button
-                              onClick={() => handleReject(vsmId)}
-                              disabled={!!advanceLoading || !!rejectLoading || !!bulkLoading}
-                              className="px-3 py-1 text-[11px] font-semibold text-white bg-red-500 rounded cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default"
-                            >
-                              {rejectLoading ? '...' : 'Reject'}
-                            </button>
-                          </div>
+                        {vsmId !== null ? (
+                          <button
+                            onClick={() => handleComplete(vsmId)}
+                            disabled={!!completeLoading || bulkLoading}
+                            className="px-3 py-1 text-[11px] font-semibold text-white bg-green-600 rounded cursor-pointer hover:bg-green-700 disabled:opacity-50 disabled:cursor-default"
+                          >
+                            {completeLoading ? '...' : 'Complete'}
+                          </button>
                         ) : (
                           <span className="text-[11px] text-gray-300">—</span>
                         )}

@@ -4,11 +4,13 @@ import { StoreProducts } from './StoreProducts';
 import { MovementStatusView } from './MovementStatusView';
 import { AdminView } from './AdminView';
 import { DiscontinuedList } from './DiscontinuedList';
+import { RemovedList } from './RemovedList';
 
 const ALL_SUB_TABS = [
   { key: 'products', label: 'Store Products', restricted: false },
   // { key: 'liveMapping', label: 'Live Mapping', restricted: true },
   { key: 'discontinued', label: 'Discontinued List', restricted: false },
+  { key: 'removed', label: 'Removed', restricted: false },
   { key: 'movements', label: 'Movement Status', restricted: true },
   { key: 'admin', label: 'Admin', restricted: true },
 ] as const;
@@ -47,6 +49,7 @@ export default function StoreDisplayTab({ isAdmin }: { isAdmin: boolean }) {
 
       {subTab === 'products' && <StoreProducts />}
       {subTab === 'discontinued' && <DiscontinuedList />}
+      {subTab === 'removed' && <RemovedList />}
       {subTab === 'movements' && <MovementStatusView />}
       {subTab === 'admin' && <AdminView />}
     </div>

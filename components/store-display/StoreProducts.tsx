@@ -1,9 +1,10 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { displayApi, flattenLocationRow } from '../../lib/displayApi';
+import { fetchLocations, fetchFacets, flattenLocationRow } from '../../lib/displayApi';
 import { getImageUrl } from '../../lib/imageUrl';
 import { STORES, STORE_CODE_TO_BRANCH_ID, STORE_NAMES, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 import { ProductDetailPanel } from './ProductDetailPanel';
+import { AddToDisplayDialog } from './AddToDisplayDialog';
 
 interface VariantLocationRow {
   id: number;
@@ -42,6 +43,7 @@ export function StoreProducts() {
   const [page, setPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<VariantLocationRow | null>(null);
   const [truncated, setTruncated] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const submitSearch = () => {
     setPage(1);
@@ -55,11 +57,8 @@ export function StoreProducts() {
     let alive = true;
     (async () => {
       try {
-        const params: Record<string, any> = {};
-        if (selectedStore !== 'All') {
-          params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
-        }
-        const data = await displayApi('fetch_facets', params);
+        const branchId = selectedStore !== 'All' ? (STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore) : undefined;
+        const data = await fetchFacets(branchId);
         if (!alive) return;
         setCategories(['All', ...(data?.categories ?? [])]);
       } catch {}
@@ -87,11 +86,11 @@ export function StoreProducts() {
       if (category !== 'All') params.category = category;
       if (searchQ.trim()) params.search = searchQ.trim();
 
-      const data = await displayApi('fetch_locations', params);
+      const data = await fetchLocations(params);
       if (reqId !== reqRef.current) return;
-      const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
+      const raw = data?.data ?? [];
       const rows = raw.map(flattenLocationRow);
-      const count = data?.total_count ?? data?.count ?? rows.length;
+      const count = data?.total_count ?? rows.length;
       setItems(rows as VariantLocationRow[]);
       setTotalCount(count);
       setTruncated(!!data?.truncated);
@@ -172,12 +171,26 @@ export function StoreProducts() {
             </button>
           </div>
         </div>
-        <div className="self-end">
+        <div className="self-end flex items-center gap-3">
           <span className="text-[12px] text-gray-400">
             {loading ? 'Loading...' : `${totalCount} products`}
           </span>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="px-4 py-2 text-[13px] font-semibold text-white bg-[#EAB308] rounded-md cursor-pointer hover:bg-[#CA9A06] whitespace-nowrap"
+          >
+            + Add to Display
+          </button>
         </div>
       </div>
+
+      <AddToDisplayDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        defaultStoreCode={selectedStore !== 'All' ? selectedStore : ''}
+        onAdded={() => fetchPage(selectedStore, page, selectedCategory, submittedSearch)}
+      />
 
       {truncated && (
         <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
