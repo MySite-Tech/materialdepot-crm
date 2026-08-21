@@ -129,19 +129,40 @@ function auditPayload(r: BackendRow, now: string): Record<string, any> {
   };
 }
 
-/* Which trade an installation SKU belongs to — the same product-name test
-   SiteAuditInstallOpsView's usePORow uses when it pre-fills the form, plus wall
-   panels, which the form offers as a third type. */
-function skuType(s: { handle: string; name: string; category: string }): string {
+/* Which trade a line belongs to, or null when nothing in it says. Deliberately
+   positive-match only: the endpoint reports every product on the sales order, and
+   an order can carry things no installer touches (a napkin ring and a soap dish
+   rode along with ENQ2026082187214's SPC floor). Defaulting the unknowns to
+   flooring the way the form's own guess does would list those as material to
+   fit. */
+function tradeOf(s: { handle: string; name: string; category: string }): string | null {
   const hay = (s.name + ' ' + s.category + ' ' + s.handle).toLowerCase();
-  if (hay.includes('panel')) return 'wallpanel';
-  if (hay.includes('wallpaper') || hay.includes('wall paper')) return 'wallpaper';
-  return 'flooring';
+  if (/panel|wpc|charcoal/.test(hay)) return 'wallpanel';
+  if (/wallpaper|wall paper|^wp-|\bwp-/.test(hay)) return 'wallpaper';
+  if (/floor|laminate|spc|skirting|beading|reducer|profile|\btf-|\blf-|\bsp-|\bef-/.test(hay)) return 'flooring';
+  return null;
+}
+
+/* The trade the SERVICE line is for — 'installation-00030-woonden-flooring-…',
+   '…-standard-wall-paper-installation-…'. This is what the goods are filtered
+   against, so an install order lists the floor and its profiles but not the
+   bathroom fittings that shared the order. */
+function serviceTrade(r: BackendRow): string | null {
+  for (const s of r.skus || []) {
+    const handle = String(s.variant_handle || '');
+    if (s.is_service !== true && !handle.startsWith('installation-')) continue;
+    const t = tradeOf({ handle, name: s.product_name || '', category: s.category_name || '' });
+    if (t) return t;
+  }
+  return null;
 }
 
 function installPayload(r: BackendRow, now: string): Record<string, any> {
-  const ordered = orderedSkus(r);
-  const skus: Array<Record<string, any>> = ordered.map((s) => ({ c: s.handle, n: s.name, type: skuType(s), audit: false }));
+  const trade = serviceTrade(r);
+  const ordered = orderedSkus(r)
+    .map((s) => ({ ...s, trade: tradeOf(s) }))
+    .filter((s) => (trade ? s.trade === trade : s.trade !== null));
+  const skus: Array<Record<string, any>> = ordered.map((s) => ({ c: s.handle, n: s.name, type: s.trade || trade || 'flooring', audit: false }));
   skus.push({ c: INSTALL_SKU, n: 'Installation', type: 'install', audit: false });
   const custom = /custom|cwp/i.test(handleText(r));
   return {
