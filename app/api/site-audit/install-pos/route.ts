@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 // Vercel rewrite `/api/pos` -> https://api-dev2.materialdepot.in/apiV1/site-audit-installation-pos/
 // (see that repo's vercel.json). The Install Ops "Pending POs" overlay here
 // calls this route instead of hitting the legacy app's rewrite directly.
-const MD_API_BASE = process.env.MD_API_BASE_URL || "https://api.materialdepot.com/apiV1";
+// Same backend host the rest of the CRM talks to (lib/mockApi.ts) — hardcoded
+// for the same reason: one host, no per-environment variable to forget, and the
+// 403 that a wrong one produces looks like "nothing to import".
+const MD_API_BASE = "https://api-dev2.materialdepot.in/apiV1";
 
 const PASSTHROUGH_PARAMS = ["type", "page_size", "search", "status", "page"];
 
