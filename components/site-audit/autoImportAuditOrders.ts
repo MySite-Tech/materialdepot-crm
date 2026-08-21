@@ -173,7 +173,14 @@ async function fetchBackendRows(kind: Kind): Promise<BackendRow[]> {
     headers: token ? { Authorization: 'Bearer ' + token } : undefined,
   });
   const data = await res.json().catch(() => null);
-  if (!data || data.error || !Array.isArray(data.results)) return [];
+  if (!data || data.error || !Array.isArray(data.results)) {
+    /* Silence here reads exactly like "the backend has nothing to import", which
+       is the wrong conclusion to draw from a 403 — the proxy answers that when
+       MD_API_BASE_URL is unset and it falls back to a Cloudflare-challenged
+       host. Say so instead of importing nothing quietly. */
+    console.warn('[site-audit] auto-import skipped:', (data && data.error) || `HTTP ${res.status}`);
+    return [];
+  }
   return data.results;
 }
 
