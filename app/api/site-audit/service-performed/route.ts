@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 // Proxies to the Django `ServicePerformedView` (oms/api/views/stages.py), which requires
 // IsInternalOrgUser — the caller's CRM token is forwarded straight through, same as ../install-pos.
 // Idempotent upstream: confirming twice records nothing new and cannot double-bill.
-const MD_API_BASE = process.env.MD_API_BASE_URL || "https://api.materialdepot.com/apiV1";
+// Same backend host the rest of the CRM talks to (lib/mockApi.ts).
+const MD_API_BASE = "https://api-dev2.materialdepot.in/apiV1";
 
 // The synthetic PO number the site-audit PO list hands out for an OMS service leg, e.g.
 // "SO417-S2562" → stage 2562. Legacy PO numbers ("MD8202681094") carry no leg and are skipped.
