@@ -45,7 +45,6 @@ const DISPLAY_TYPES = ['shelves', 'drawer', 'catalogue', 'panel_display', 'flaps
 
 const CHANGE_STEPS: { key: ChangeStatus; label: string }[] = [
   { key: 'change_initiated', label: 'Initiated' },
-  { key: 'change_in_progress', label: 'In Progress' },
   { key: 'request_completed', label: 'Completed' },
 ];
 
@@ -242,53 +241,54 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
   onStatusChange: (status: ChangeStatus, vsmId?: number) => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [revertLoading, setRevertLoading] = useState(false);
   const toast = useToast();
 
   const currentIdx = CHANGE_STEPS.findIndex(s => s.key === request.status);
-  // findIndex returns -1 for a cancelled request (it is not on the ladder), and
-  // -1 + 1 = 0 would offer "Initiated" as the next step on a dead request.
   const nextStep = currentIdx >= 0 && currentIdx < CHANGE_STEPS.length - 1 ? CHANGE_STEPS[currentIdx + 1] : null;
 
   const handleAdvance = async () => {
     if (!nextStep) return;
-    /* Without a vsm_id there is no movement to advance. The old code skipped
-       the API call, moved the local badge on anyway and reported success — so
-       a failed id extraction looked exactly like a completed hand-off while
-       the store's actual movement sat untouched. */
     if (!request.vsmId) {
       toast.show('This change request has no movement ID — reopen the product and initiate it again.', 'error');
       return;
     }
     setLoading(true);
     try {
-      if (nextStep.key === 'change_in_progress') {
+      if (request.status === 'change_initiated') {
         await displayApi('movement_in_progress', { vsm_id: request.vsmId });
+        await displayApi('movement_complete', { vsm_id: request.vsmId });
+        onStatusChange('request_completed');
+        toast.show('Change request completed');
       } else if (nextStep.key === 'request_completed') {
         await displayApi('movement_complete', { vsm_id: request.vsmId });
+        onStatusChange('request_completed');
+        toast.show('Change request completed');
       }
-      onStatusChange(nextStep.key);
-      toast.show(`Status updated to "${nextStep.label}"`);
     } catch (err: any) {
-      toast.show(err.message || 'Failed to advance status', 'error');
+      toast.show(err.message || 'Failed to complete', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCancel = async () => {
+  const handleRevert = async () => {
     if (!request.vsmId) return;
-    setCancelLoading(true);
+    setRevertLoading(true);
     try {
-      await displayApi('cancel_movement', { vsm_id: request.vsmId });
-      toast.show('Movement cancelled');
-      // Cancelled, not completed — reporting a rejected move as "Completed"
-      // told the store the product had been relocated when it never moved.
+      if (request.status === 'change_initiated') {
+        await displayApi('movement_in_progress', { vsm_id: request.vsmId });
+        await displayApi('movement_complete', { vsm_id: request.vsmId });
+      } else if (request.status === 'change_in_progress') {
+        await displayApi('movement_complete', { vsm_id: request.vsmId });
+      }
+      await displayApi('revert_movement', { vsm_id: request.vsmId });
       onStatusChange('request_cancelled');
+      toast.show('Movement cancelled — product moved back to original location');
     } catch (err: any) {
       toast.show(err.message || 'Failed to cancel', 'error');
     } finally {
-      setCancelLoading(false);
+      setRevertLoading(false);
     }
   };
 
@@ -339,16 +339,22 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
         </div>
       )}
 
-      {nextStep && (
-        <button onClick={handleAdvance} disabled={loading || cancelLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-default mb-2">
-          {loading ? 'Updating...' : `Mark as "${nextStep.label}"`}
+      {request.status !== 'request_completed' && request.status !== 'request_cancelled' && request.vsmId && (
+        <button onClick={handleAdvance} disabled={loading || revertLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-green-600 rounded-md cursor-pointer hover:bg-green-700 disabled:opacity-50 disabled:cursor-default mb-2">
+          {loading ? 'Completing...' : 'Mark as Completed'}
         </button>
       )}
 
-      {request.vsmId && request.status !== 'request_completed' && (
-        <button onClick={handleCancel} disabled={loading || cancelLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-red-500 rounded-md cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default">
-          {cancelLoading ? 'Cancelling...' : 'Cancel Movement'}
+      {request.status !== 'request_completed' && request.status !== 'request_cancelled' && request.vsmId && (
+        <button onClick={handleRevert} disabled={loading || revertLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md cursor-pointer hover:bg-red-100 disabled:opacity-50 disabled:cursor-default mb-2">
+          {revertLoading ? 'Cancelling...' : 'Cancel Movement'}
         </button>
+      )}
+
+      {request.status !== 'request_completed' && request.status !== 'request_cancelled' && !request.vsmId && (
+        <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-[11px] text-amber-800">
+          A change request is in progress. Only the person who initiated it can complete or cancel it from their device.
+        </div>
       )}
     </div>
   );
@@ -447,13 +453,78 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
 }
 
 // ─── Main Product Detail Panel ──────────────────────────────────────────────
+function changeRequestKey(handle: string) { return `sd_change_${handle}`; }
+function removalStateKey(handle: string) { return `sd_removal_${handle}`; }
+
+function loadStored<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Props) {
   const [item, setItem] = useState(initialItem);
   const [changeLocationOpen, setChangeLocationOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  const [changeRequest, setChangeRequest] = useState<ChangeLocationRequest | null>(null);
-  const [removalState, setRemovalState] = useState<{ reason: RemovalReason; status: RemovalStatus; vsmId?: number } | null>(null);
+  const [changeRequest, setChangeRequest] = useState<ChangeLocationRequest | null>(
+    () => loadStored<ChangeLocationRequest>(changeRequestKey(initialItem.variant_handle))
+  );
+  const [removalState, setRemovalState] = useState<{ reason: RemovalReason; status: RemovalStatus; vsmId?: number } | null>(
+    () => loadStored(removalStateKey(initialItem.variant_handle))
+  );
   const toast = useToast();
+
+  useEffect(() => {
+    const key = changeRequestKey(item.variant_handle);
+    if (changeRequest && changeRequest.status !== 'request_completed' && changeRequest.status !== 'request_cancelled') {
+      localStorage.setItem(key, JSON.stringify(changeRequest));
+    } else {
+      localStorage.removeItem(key);
+    }
+  }, [changeRequest, item.variant_handle]);
+
+  useEffect(() => {
+    const key = removalStateKey(item.variant_handle);
+    if (removalState && removalState.status !== 'removal_completed') {
+      localStorage.setItem(key, JSON.stringify(removalState));
+    } else {
+      localStorage.removeItem(key);
+    }
+  }, [removalState, item.variant_handle]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await displayApi('fetch_movements');
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
+        const active = list.find((m: any) =>
+          m.variant?.product_name === item.product_name
+          && m.from_location?.location_string === item.location_string
+          && m.status !== 'completed' && m.status !== 'cancelled'
+        );
+        if (active) {
+          const statusMap: Record<string, ChangeStatus> = {
+            initiated: 'change_initiated',
+            in_progress: 'change_in_progress',
+          };
+          const backendId = active.id ?? active.vsm_id;
+          const stored = loadStored<ChangeLocationRequest>(changeRequestKey(item.variant_handle));
+          setChangeRequest({
+            status: statusMap[active.status] ?? 'change_initiated',
+            vsmId: backendId ?? stored?.vsmId,
+            newLocationString: active.to_location?.location_string ?? '',
+            oldLocationString: active.from_location?.location_string ?? item.location_string,
+            displayType: active.to_location?.display_type ?? item.display_type,
+            quantity: active.quantity ?? item.quantity,
+          });
+        }
+      } catch { /* non-critical — localStorage state is the fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, [item.product_name, item.location_string, item.variant_handle, item.display_type, item.quantity]);
 
   const materialDepotUrl = `https://materialdepot.com/${item.variant_handle}/product`;
 
@@ -468,7 +539,11 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           location_string_to: data.locationString,
         });
         const inner = apiData?.data ?? apiData;
-        const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
+        let vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
+        if (!vsmId && typeof inner === 'string') {
+          const match = inner.match(/\bid\s+(\d+)/);
+          if (match) vsmId = Number(match[1]);
+        }
         setChangeRequest({
           status: 'change_initiated',
           vsmId,
@@ -500,7 +575,11 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
         additional_remarks: reason === 'discontinued_permanently' ? 'Discontinued permanently' : 'Removed temporarily',
       });
       const inner = apiData?.data ?? apiData;
-      const vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
+      let vsmId = inner?.vsm_id || inner?.id || apiData?.vsm_id || apiData?.id;
+      if (!vsmId && typeof inner === 'string') {
+        const match = inner.match(/\bid\s+(\d+)/);
+        if (match) vsmId = Number(match[1]);
+      }
       setRemovalState({ reason, status: 'removal_initiated', vsmId });
       toast.show('Removal initiated');
     } catch (err: any) {
@@ -589,6 +668,27 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </div>
         </div>
 
+        {/* Status Trackers */}
+        {changeRequest && (
+          <div className="border-t border-gray-100 px-6 py-4">
+            <ChangeLocationStatusTracker
+              request={changeRequest}
+              onStatusChange={(newStatus) => setChangeRequest(prev => prev ? { ...prev, status: newStatus } : prev)}
+            />
+          </div>
+        )}
+
+        {removalState && (
+          <div className="border-t border-gray-100 px-6 py-4">
+            <RemovalStatusTracker
+              status={removalState.status}
+              reason={removalState.reason}
+              vsmId={removalState.vsmId}
+              onStatusChange={(newStatus) => setRemovalState(prev => prev ? { ...prev, status: newStatus } : prev)}
+            />
+          </div>
+        )}
+
         {/* Actions */}
         <div className="border-t border-gray-100 px-6 py-4">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Actions</div>
@@ -620,23 +720,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </a>
         </div>
       </div>
-
-      {/* Status Trackers */}
-      {changeRequest && (
-        <ChangeLocationStatusTracker
-          request={changeRequest}
-          onStatusChange={(newStatus) => setChangeRequest(prev => prev ? { ...prev, status: newStatus } : prev)}
-        />
-      )}
-
-      {removalState && (
-        <RemovalStatusTracker
-          status={removalState.status}
-          reason={removalState.reason}
-          vsmId={removalState.vsmId}
-          onStatusChange={(newStatus) => setRemovalState(prev => prev ? { ...prev, status: newStatus } : prev)}
-        />
-      )}
 
       {/* Dialogs */}
       <ChangeLocationDialog

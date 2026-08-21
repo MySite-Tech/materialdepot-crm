@@ -248,10 +248,10 @@ export async function POST(req: NextRequest) {
         return proxyResponse(res);
       }
 
-      case 'cancel_movement': {
+      case 'revert_movement': {
         const token = getToken(req);
-        const { vsm_id } = payload;
-        if (!vsm_id || typeof vsm_id !== 'number') {
+        const vsm_id = Number(payload.vsm_id);
+        if (!vsm_id || isNaN(vsm_id)) {
           return NextResponse.json({ error: 'vsm_id is required and must be a number' }, { status: 400 });
         }
         const res = await fetch(`${API_BASE}/cancel-variant-store-movement/`, {
