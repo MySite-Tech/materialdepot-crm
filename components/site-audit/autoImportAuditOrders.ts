@@ -53,7 +53,7 @@ type BackendRow = {
   customer?: { name?: string; contact?: number | string } | null;
   shipping_address?: { address?: string; city?: string } | null;
   bm?: { name?: string } | null;
-  skus?: Array<{ variant_handle?: string; product_name?: string; category_name?: string }> | null;
+  skus?: Array<{ variant_handle?: string; product_name?: string; category_name?: string; is_service?: boolean | null }> | null;
 };
 
 function cityOfRow(r: BackendRow): string {
@@ -61,20 +61,19 @@ function cityOfRow(r: BackendRow): string {
   return CITIES.find((known) => known.toLowerCase() === c.trim().toLowerCase()) || CITIES[0];
 }
 
-/* The service line itself is the job, not a thing to install — it is represented
-   by the AUDIT_SKU / INSTALL_SKU marker both forms append, so carrying it
-   through as a SKU as well would show the auditor a phantom room to measure.
+/* The goods the job is about, without the service line — that one is the job
+   itself and is already represented by the AUDIT_SKU / INSTALL_SKU marker both
+   forms append, so passing it through as a SKU too would show the installer a
+   phantom material to fit.
 
-   Worth knowing what this leaves behind: an OMS row's `skus` are the SERVICE
-   stage's own allocation items, so in practice it is the service line ALONE —
-   the wallpaper or flooring being installed is a different stage and never
-   appears here. The manual import has exactly the same blind spot (which is why
-   an SM types the product codes into the form), so an auto-imported install
-   order arrives with no goods SKUs and needs the same edit. Its trade is still
-   recoverable, because the service handle names it — see `handleText`. */
+   `is_service` is the authority (the backend sets it from `Variant.is_service`);
+   the handle prefix is the fallback for a row serialised before the endpoint
+   started sending the flag, and for legacy PO rows. A row that predates the
+   backend sending the ordered goods at all yields nothing here — the order still
+   imports, it just needs its SKUs typed in, exactly as a manual import does. */
 function orderedSkus(r: BackendRow): Array<{ handle: string; name: string; category: string }> {
   return (r.skus || [])
-    .filter((s) => s.variant_handle && !/^installation-/.test(String(s.variant_handle)))
+    .filter((s) => s.variant_handle && s.is_service !== true && !/^installation-/.test(String(s.variant_handle)))
     .map((s) => ({
       handle: String(s.variant_handle),
       name: s.product_name || String(s.variant_handle),
@@ -152,6 +151,11 @@ function installPayload(r: BackendRow, now: string): Record<string, any> {
     delivery_date: r.delivery_date || null,
     original_delivery_date: r.delivery_date || null,
     custom_wp: custom,
+    /* Explicit, because the column defaults to `[]` and an empty array is
+       TRUTHY: `isSplit`, the drawer's sub-job section and the sub-jobs column all
+       branch on `o.subjobs` and would read a planned-but-empty order instead of
+       an unplanned one. Hand-made rows carry null; so must these. */
+    subjobs: null,
   };
 }
 
