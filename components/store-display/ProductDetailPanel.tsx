@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { cancelMovement, completeMovement, initiateMovement } from '../../lib/displayApi';
+import { cancelMovement, completeMovement, initiateMovement, fetchMovements } from '../../lib/displayApi';
 import { getImageUrl } from '../../lib/imageUrl';
 
 interface VariantLocationRow {
@@ -297,9 +297,8 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
     setRevertLoading(true);
     try {
       await cancelMovement(request.vsmId);
-      toast.show('Movement cancelled — product returned to its original location');
       onStatusChange('request_cancelled');
-      toast.show('Movement cancelled — product moved back to original location');
+      toast.show('Movement cancelled — product returned to its original location');
     } catch (err: any) {
       toast.show(err.message || 'Failed to cancel', 'error');
     } finally {
@@ -343,8 +342,8 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
       )}
 
       {request.status === 'request_completed' && request.vsmId && (
-        <button onClick={handleCancel} disabled={cancelLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-red-500 rounded-md cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default">
-          {cancelLoading ? 'Cancelling...' : 'Cancel Movement (undo)'}
+        <button onClick={handleCancel} disabled={revertLoading} className="w-full px-4 py-2 text-[13px] font-semibold text-white bg-red-500 rounded-md cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default">
+          {revertLoading ? 'Cancelling...' : 'Cancel Movement (undo)'}
         </button>
       )}
 
@@ -474,23 +473,22 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
     let cancelled = false;
     (async () => {
       try {
-        const data = await displayApi('fetch_movements');
+        const data = await fetchMovements();
         if (cancelled) return;
         const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
+        // Only unfinished move requests for this exact variant + source location.
         const active = list.find((m: any) =>
-          m.variant?.product_name === item.product_name
+          m.change_request_type === 'move_display'
+          && m.variant?.product_name === item.product_name
           && m.from_location?.location_string === item.location_string
           && m.status !== 'completed' && m.status !== 'cancelled'
         );
         if (active) {
-          const statusMap: Record<string, ChangeStatus> = {
-            initiated: 'change_initiated',
-            in_progress: 'change_in_progress',
-          };
           const backendId = active.id ?? active.vsm_id;
           const stored = loadStored<ChangeLocationRequest>(changeRequestKey(item.variant_handle));
           setChangeRequest({
-            status: statusMap[active.status] ?? 'change_initiated',
+            // Backend returns only initiated movements, so it's always this step.
+            status: 'change_initiated',
             vsmId: backendId ?? stored?.vsmId,
             newLocationString: active.to_location?.location_string ?? '',
             oldLocationString: active.from_location?.location_string ?? item.location_string,

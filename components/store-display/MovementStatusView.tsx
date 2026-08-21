@@ -53,11 +53,6 @@ function getVsmId(item: MovementItem): number | null {
   return item.id ?? item.vsm_id ?? null;
 }
 
-async function approveMovement(vsmId: number) {
-  await displayApi('movement_in_progress', { vsm_id: vsmId });
-  await displayApi('movement_complete', { vsm_id: vsmId });
-}
-
 export function MovementStatusView() {
   const [items, setItems] = useState<MovementItem[]>([]);
   const [loading, setLoading] = useState(true);
