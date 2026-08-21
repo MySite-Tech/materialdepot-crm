@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CITIES, inCity, sbGet, sbPatch, type CityFilter } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
 import { poFieldFor } from './omsService';
+import { autoImportAuditOrders } from './autoImportAuditOrders';
 import AuditOrderDrawer from './audit-ops/AuditOrderDrawer';
 import {
   AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, SlotsView, TodayView,
@@ -179,6 +180,13 @@ export default function SiteAuditOpsView({ city = 'all' }: { city?: CityFilter }
 
   useEffect(() => {
     Promise.all([loadAuditors(), loadShadowers(), loadBms(), loadOrders()]);
+    /* Jobs the backend already has but nobody imported are pulled in here, so
+       Pending POs is a fallback rather than the only way in. */
+    autoImportAuditOrders().then((added) => {
+      if (!added) return;
+      loadOrders();
+      toast(added + (added === 1 ? ' new audit order' : ' new audit orders') + ' imported from the backend');
+    });
     /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
        case still costs exactly one query per tick. */
     const poll = setInterval(() => { if (!document.hidden && !currentPI) { loadOrders(); if (auditorsErrRef.current) loadAuditors(); } }, 30000);

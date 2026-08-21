@@ -6,6 +6,7 @@ import {
   inCity, joinShadowers, parseShadowers, sbGet, sbPatch, JOB_STATUS, fmtDateA, fmtLog,
   type CityFilter, type Shadower,
 } from './siteAuditShared';
+import { autoImportAuditOrders } from './autoImportAuditOrders';
 import ShadowerSelect, { type ShadowerOption } from './install-ops/ShadowerSelect';
 import { categoryFor } from './auditRegistry';
 import { AuditRoomCard, InstallRoomCard } from './AuditRoomViews';
@@ -376,6 +377,9 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
       setLoading(false);
     }
     setLoading(true);
+    /* Backend site audits that nobody has imported yet would otherwise be
+       missing from this overview entirely — see autoImportAuditOrders. */
+    autoImportAuditOrders().then(() => { if (alive) load(); });
     load();
     const tid = setInterval(() => { if (!document.hidden) load(); }, 30000);
     return () => { alive = false; clearInterval(tid); };
