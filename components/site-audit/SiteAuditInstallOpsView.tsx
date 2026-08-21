@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from './omsService';
+import { autoImportInstallOrders } from './autoImportAuditOrders';
 import { inCity, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
 import OrdersView from './install-ops/OrdersView';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from './install-ops/QueueViews';
@@ -178,6 +179,13 @@ export default function SiteAuditInstallOpsView({ city = 'all' }: { city?: CityF
 
   useEffect(() => {
     Promise.all([loadInstallers(), loadShadowers(), loadOrders()]);
+    /* Jobs the backend already has but nobody imported are pulled in here, so
+       Pending POs is a fallback rather than the only way in. */
+    autoImportInstallOrders().then((added) => {
+      if (!added) return;
+      loadOrders();
+      toast(added + (added === 1 ? ' new installation order' : ' new installation orders') + ' imported from the backend');
+    });
     /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
        case still costs exactly one query per tick. */
     const poll = setInterval(() => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } }, 60000);
