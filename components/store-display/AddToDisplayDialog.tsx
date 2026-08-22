@@ -12,13 +12,21 @@ interface Props {
   onAdded?: () => void;
 }
 
-/* Places a variant at a store display location via an add_display movement.
-   Two-step by design (initiate → complete): initiating registers the pending
-   movement (it also shows in Pending Movements); "Complete now" applies it
-   immediately so the row appears in the list without a second trip. */
+function extractVariantHandle(input: string): string {
+  const trimmed = input.trim();
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.includes('materialdepot.com')) {
+      const segments = url.pathname.split('/').filter(Boolean);
+      if (segments.length > 0) return segments[0];
+    }
+  } catch {}
+  return trimmed;
+}
+
 export function AddToDisplayDialog({ open, onClose, defaultStoreCode = '', onAdded }: Props) {
   const [storeCode, setStoreCode] = useState(defaultStoreCode);
-  const [variantHandle, setVariantHandle] = useState('');
+  const [rawInput, setRawInput] = useState('');
   const [displayType, setDisplayType] = useState('shelves');
   const [locationString, setLocationString] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -26,10 +34,13 @@ export function AddToDisplayDialog({ open, onClose, defaultStoreCode = '', onAdd
   const [vsmId, setVsmId] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  const variantHandle = extractVariantHandle(rawInput);
+  const isUrl = rawInput.trim() !== variantHandle && variantHandle.length > 0;
+
   useEffect(() => {
     if (open) {
       setStoreCode(defaultStoreCode);
-      setVariantHandle('');
+      setRawInput('');
       setDisplayType('shelves');
       setLocationString('');
       setQuantity(1);
@@ -42,7 +53,7 @@ export function AddToDisplayDialog({ open, onClose, defaultStoreCode = '', onAdd
   if (!open) return null;
 
   const branchId = storeCode ? (STORE_CODE_TO_BRANCH_ID[storeCode] || storeCode) : '';
-  const canInitiate = !!(branchId && variantHandle.trim() && locationString.trim() && quantity > 0);
+  const canInitiate = !!(branchId && variantHandle && locationString.trim() && quantity > 0);
 
   const handleInitiate = async () => {
     if (!canInitiate) return;
@@ -51,7 +62,7 @@ export function AddToDisplayDialog({ open, onClose, defaultStoreCode = '', onAdd
     try {
       const data = await initiateMovement({
         movement_type: 'add_display',
-        variant_handle: variantHandle.trim(),
+        variant_handle: variantHandle,
         branch_id: branchId,
         display_type_to: displayType,
         location_string_to: locationString.trim(),
@@ -99,8 +110,11 @@ export function AddToDisplayDialog({ open, onClose, defaultStoreCode = '', onAdd
             </div>
 
             <div>
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Variant Handle</label>
-              <input className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-mono" placeholder="e.g., somany-glazed-vitrified-..." value={variantHandle} onChange={(e) => setVariantHandle(e.target.value)} disabled={!!vsmId} />
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Product URL or Variant Handle</label>
+              <input className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none" placeholder="Paste product URL or variant handle" value={rawInput} onChange={(e) => setRawInput(e.target.value)} disabled={!!vsmId} />
+              {isUrl && variantHandle && (
+                <div className="mt-1 text-[11px] text-gray-500">Handle: <span className="font-mono text-gray-700">{variantHandle}</span></div>
+              )}
             </div>
 
             <div>

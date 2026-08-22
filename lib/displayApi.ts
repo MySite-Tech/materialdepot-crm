@@ -100,6 +100,13 @@ export async function fetchLocationsByBranchName(branch_name: string): Promise<a
   });
 }
 
+export async function lookupVariantLocation(variant_handle: string): Promise<any | null> {
+  const query = locationsQuery({ variant_handle, page_size: 1 });
+  const data = await mdFetch(`/fetch-variant-locations/?${query}`);
+  const rows = data?.data ?? [];
+  return rows.length > 0 ? flattenLocationRow(rows[0]) : null;
+}
+
 // ─── Movements (unified v2, two-step: initiated → completed) ──────────────────
 
 export type MovementType = 'add_display' | 'move_display' | 'remove_display';
