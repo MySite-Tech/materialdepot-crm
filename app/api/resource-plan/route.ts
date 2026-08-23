@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { getCached, setCache } from "@/lib/cache";
 import { rateLimitedFetch } from "@/lib/rateLimiter";
 import { readPlan, writePlan, type RotaBranchData } from "@/lib/rotaPlan";
-import { BRANCHES, type Branch } from "@/lib/appt-shared";
+import { isValidBranchName, type Branch } from "@/lib/appt-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +89,9 @@ export async function PUT(request: NextRequest) {
   const partial: Partial<Record<Branch, RotaBranchData>> = {};
   const unknownBranches: string[] = [];
   for (const [name, data] of Object.entries(rawBranches as Record<string, unknown>)) {
-    if (!(BRANCHES as readonly string[]).includes(name)) { unknownBranches.push(name); continue; }
+    // Any CRM branch name is valid (the list is fetched, not hardcoded); this
+    // only keeps junk keys out of the table.
+    if (!isValidBranchName(name)) { unknownBranches.push(name); continue; }
     if (!data || typeof data !== "object") continue;
     const d = data as Partial<RotaBranchData>;
     partial[name as Branch] = {

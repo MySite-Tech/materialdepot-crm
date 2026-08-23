@@ -1905,6 +1905,9 @@ export default function App() {
   const [kylasModalInput, setKylasModalInput] = useState('');
   const [kylasModalResult, setKylasModalResult] = useState<{ loading?: boolean; ok?: boolean; msg?: string; link?: string } | null>(null);
   const [branches, setBranches] = useState<string[]>(DEFAULT_BRANCHES);
+  // DEFAULT_BRANCHES is a seed, not the real list — the Appointment Tracker keeps
+  // its own branch list until this says the CRM's has actually arrived.
+  const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
   const [dbReady, setDbReady] = useState(false);
   const [leadsLoading, setLeadsLoading] = useState(false);
@@ -1978,7 +1981,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const needsBranches = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard'].includes(mainTab);
+    const needsBranches = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'appointmentTracker'].includes(mainTab);
     const needsUsers = effectiveTab === 'leads';
     if (!needsBranches && !needsUsers) return;
     let cancelled = false;
@@ -1987,7 +1990,10 @@ export default function App() {
       needsUsers ? fetchUsers().catch(() => []) : Promise.resolve(null),
     ]).then(([dbBranches, dbUsers]) => {
       if (cancelled) return;
-      if (dbBranches && dbBranches.length > 0) setBranches(dbBranches.map((b: { name: string }) => b.name));
+      if (dbBranches && dbBranches.length > 0) {
+        setBranches(dbBranches.map((b: { name: string }) => b.name));
+        setBranchesLoaded(true);
+      }
       if (dbUsers) setCrmUsers(dbUsers);
     });
     return () => { cancelled = true; };
@@ -2748,7 +2754,7 @@ export default function App() {
       {effectiveTab === 'b2bSales' && <B2BSalesCRM />}
 
       {effectiveTab === 'appointmentTracker' && (
-        <AppointmentTrackerClient currentUser={currentUser} />
+        <AppointmentTrackerClient currentUser={currentUser} branches={branchesLoaded ? branches : undefined} />
       )}
 
       {effectiveTab === 'storeDisplay' && <StoreDisplayTab isAdmin={canAdminStoreDisplay(currentUser)} />}

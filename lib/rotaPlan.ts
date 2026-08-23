@@ -10,7 +10,7 @@
 // from a client component.
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { BRANCHES, Branch } from "./appt-shared";
+import { BRANCHES, Branch, isValidBranchName } from "./appt-shared";
 
 export type RotaMember = { id: string; name: string };
 export type RotaBranchData = { members: RotaMember[]; weeks: Record<string, Record<string, string>> };
@@ -58,7 +58,10 @@ export async function readPlan(): Promise<RotaPlan> {
 
   const plan = emptyPlan();
   for (const row of (data ?? []) as Row[]) {
-    if (!(BRANCHES as readonly string[]).includes(row.branch)) continue;
+    // The branch list is CRM data now (see appt-shared), so a stored row for a
+    // branch this build's seed list has never heard of is still that branch's
+    // roster — return it rather than silently dropping it.
+    if (!isValidBranchName(row.branch)) continue;
     plan.branches[row.branch as Branch] = {
       members: Array.isArray(row.members) ? row.members : [],
       weeks: row.weeks && typeof row.weeks === "object" ? row.weeks : {},
@@ -77,7 +80,7 @@ export async function writePlan(
   updatedBy?: string,
 ): Promise<Branch[]> {
   const rows = (Object.entries(partial) as [Branch, RotaBranchData][])
-    .filter(([b]) => (BRANCHES as readonly string[]).includes(b))
+    .filter(([b]) => isValidBranchName(b))
     .map(([branch, data]) => ({
       branch,
       members: Array.isArray(data?.members) ? data.members : [],

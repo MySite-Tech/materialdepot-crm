@@ -19,6 +19,10 @@ const KYLAS_API_BASE =
 // date fields silently return zero rows), so we scope by `companyBusinessType`
 // — the branch enum, which IS queryable — and drop leads with no visit date
 // here. Callers slice by branch and date window themselves.
+// Fallback only: the live list is read from the picklist itself (below), so a
+// branch added in Kylas is swept without a code change here. Adding one to the
+// CRM's branch table alone is not enough — a lead's location has to be one of
+// these enum values for the sweep to return it at all.
 const BRANCH_ENUM_VALUES = [
   "JP_NAGAR_EC",
   "YELAHANKA_EC",
@@ -27,6 +31,35 @@ const BRANCH_ENUM_VALUES = [
   "KOMPALLY_EC",
   "HSR_EC",
 ];
+
+// `companyBusinessType` is labelled "Appointment Location" in Kylas.
+const BRANCH_FIELD_ID = 2202881;
+const BRANCH_ENUM_CACHE_KEY = "appointments:branch-enums:v1";
+const BRANCH_ENUM_TTL_MS = 3_600_000; // 1h — the picklist changes when a store opens
+
+type PicklistValue = { name?: string; deleted?: boolean; disabled?: boolean };
+
+/** Live appointment-location enum values, falling back to the constant above. */
+async function branchEnumValues(apiKey: string): Promise<string[]> {
+  const cached = getCached(BRANCH_ENUM_CACHE_KEY) as string[] | null;
+  if (cached) return cached;
+  try {
+    const res = await rateLimitedFetch(`${KYLAS_API_BASE}/fields/${BRANCH_FIELD_ID}`, {
+      headers: { "api-key": apiKey },
+    });
+    if (!res.ok) return BRANCH_ENUM_VALUES;
+    const data = (await res.json()) as { field?: { picklist?: { values?: PicklistValue[] } } };
+    const values = (data.field?.picklist?.values ?? [])
+      .filter((v) => !v.deleted && !v.disabled && typeof v.name === "string" && v.name)
+      .map((v) => v.name as string);
+    // An empty list would silently sweep nothing — treat it as a failed read.
+    if (values.length === 0) return BRANCH_ENUM_VALUES;
+    setCache(BRANCH_ENUM_CACHE_KEY, values, BRANCH_ENUM_TTL_MS);
+    return values;
+  } catch {
+    return BRANCH_ENUM_VALUES;
+  }
+}
 
 // Only what the tracker actually renders. `customFieldValues` is requested for
 // cfVisitScheduled alone, and is dropped from the response after hoisting it.
@@ -98,11 +131,12 @@ type Payload = {
 };
 
 async function sweep(apiKey: string): Promise<Payload> {
+  const enums = await branchEnumValues(apiKey);
   const body = {
     fields: FIELDS,
     jsonRule: {
       condition: "OR",
-      rules: BRANCH_ENUM_VALUES.map((v) => ({
+      rules: enums.map((v) => ({
         id: "companyBusinessType",
         field: "companyBusinessType",
         type: "string",
