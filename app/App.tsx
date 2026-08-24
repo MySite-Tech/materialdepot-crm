@@ -11,7 +11,7 @@ import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
 import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
 import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
-import { isSiteAuditOversightRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
+import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES, isSiteAuditOversightRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
@@ -161,9 +161,12 @@ const TAB_LABELS: Record<MainTab, string> = {
   storeDisplay: 'Store Display',
 };
 
-// Reverse of PERMISSION_TAB_ORDER — used to pre-check the permission list from a role's default tabs.
+// Reverse of PERMISSION_TAB_ORDER — used to pre-check the permission list from
+// a role's default tabs. Delegates to defaultTabsForRole (defined below, but
+// only ever called at render time, well after module init) so this can never
+// drift from what resolveAllowedTabs actually grants an un-migrated account.
 const defaultPermissionsForRole = (role: string): string[] => {
-  const tabs = new Set(ROLE_TABS[role] ?? DEFAULT_ROLE_TABS);
+  const tabs = new Set(defaultTabsForRole(role));
   return PERMISSION_TAB_ORDER.filter(([, tab]) => tabs.has(tab)).map(([slug]) => slug);
 };
 
@@ -276,12 +279,23 @@ const APPOINTMENT_TRACKER_ROLES = new Set([
    same reason: `crm.site_audit` is a per-user checkbox almost nobody has, so
    role defaults alone left every BM and store manager without the tab. What
    they see INSIDE it is decided by their `site_audit.*` slug — see
-   siteAuditRoleFromPermissions. */
+   siteAuditRoleFromPermissions.
+
+   DERIVED from CRM_ROLE_TO_SITE_AUDIT_ROLE (siteAuditShared.ts) rather than
+   hand-copied — a hand-copied version already drifted from that map once
+   (delivery_manager/post_sales/procurement got added but plain `delivery`,
+   which the map also routes to a Service Manager dashboard, did not). Add a
+   role to the map to grant it the tab; never list one here directly, or it
+   will drift again the same way. `field_worker` is the one addition that
+   can't come from the map — it's deliberately absent there because the CRM
+   can't tell an auditor from an installer from that permission name alone,
+   but that's a narrower question than "should this person see the tab," and
+   SiteAuditOwnDashboard already falls back to their field-app profile role
+   when no `site_audit.*` CRM slug is set. */
 const SITE_AUDIT_ROLES = new Set([
-  'superadmin', 'admin', 'tech',                        // → company-wide oversight rail
-  'sales', 'b2b_sales', 'b2b_KAM', 'b2b_manager',       // → their own order book (BM)
-  'manager', 'store_manager',                           // → their store's rollup
-  'delivery_manager', 'post_sales', 'procurement',      // → Service Manager dashboards
+  ...OVERSIGHT_CRM_ROLES,
+  ...Object.keys(CRM_ROLE_TO_SITE_AUDIT_ROLE).filter((k) => CRM_ROLE_TO_SITE_AUDIT_ROLE[k]),
+  'field_worker',
 ]);
 
 /* Access is decided by permission, never by role. `permission_name` is an HR
@@ -294,7 +308,30 @@ const SITE_AUDIT_ROLES = new Set([
    Once a list exists it is the whole answer: a slug that is absent means "no",
    including for a tab the person's role used to force-add. That is the point —
    `crm.site_audit` was deliberately left off 26 of the 30 accounts that were
-   nonetheless reaching the company-wide oversight rail. */
+   nonetheless reaching the company-wide oversight rail.
+
+   Shared with defaultPermissionsForRole (above) so the Admin > Users
+   permission checklist can never again pre-fill a set that omits a tab this
+   role gets for free — that gap is what silently stripped Site Audit from
+   any field_worker/delivery_manager/post_sales/procurement account the
+   moment an admin opened their row and hit Save for an unrelated edit. */
+const defaultTabsForRole = (role: string): Array<MainTab> => {
+  let tabs: Array<MainTab> = ROLE_TABS[role] ?? DEFAULT_ROLE_TABS;
+  if (B2B_SALES_ROLES.has(role) && !tabs.includes('b2bSales')) {
+    tabs = [...tabs, 'b2bSales'];
+  }
+  if (APPOINTMENT_TRACKER_ROLES.has(role) && !tabs.includes('appointmentTracker')) {
+    tabs = [...tabs, 'appointmentTracker'];
+  }
+  if (SITE_AUDIT_ROLES.has(role) && !tabs.includes('siteAudit')) {
+    tabs = [...tabs, 'siteAudit'];
+  }
+  if (['superadmin', 'admin', 'tech'].includes(role) && !tabs.includes('storeDisplay')) {
+    tabs = [...tabs, 'storeDisplay'];
+  }
+  return tabs;
+};
+
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) {
@@ -302,20 +339,7 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
     return PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
   }
   // Un-migrated account: no list recorded, so fall back to the role defaults.
-  let tabs: Array<MainTab> = ROLE_TABS[user?.role ?? ''] ?? DEFAULT_ROLE_TABS;
-  if (B2B_SALES_ROLES.has(user?.role ?? '') && !tabs.includes('b2bSales')) {
-    tabs = [...tabs, 'b2bSales'];
-  }
-  if (APPOINTMENT_TRACKER_ROLES.has(user?.role ?? '') && !tabs.includes('appointmentTracker')) {
-    tabs = [...tabs, 'appointmentTracker'];
-  }
-  if (SITE_AUDIT_ROLES.has(user?.role ?? '') && !tabs.includes('siteAudit')) {
-    tabs = [...tabs, 'siteAudit'];
-  }
-  if (['superadmin', 'admin', 'tech'].includes(user?.role ?? '') && !tabs.includes('storeDisplay')) {
-    tabs = [...tabs, 'storeDisplay'];
-  }
-  return tabs;
+  return defaultTabsForRole(user?.role ?? '');
 };
 
 /* Sub-tabs of Store Display that expose stock movement and its admin controls.
@@ -1508,6 +1532,14 @@ function AdminDashboard() {
                               {(u.individualPermissions || []).length === 0
                                 ? <span className="text-[11px] text-gray-400">Role-based</span>
                                 : <span className="text-[11px] text-gray-600">{u.individualPermissions!.length} set</span>
+                              }
+                              {/* A saved (non-empty) list permanently disables the role-based
+                                  fallback in resolveAllowedTabs — this is the one shape that
+                                  code alone can't self-heal, so surface it instead of leaving
+                                  it silent. Fixed by re-opening Edit and checking Site Audit. */}
+                              {(u.individualPermissions || []).length > 0 && SITE_AUDIT_ROLES.has(u.role ?? '') && !u.individualPermissions!.includes('crm.site_audit')
+                                ? <div className="mt-0.5 text-[10.5px] font-semibold text-amber-700">⚠ Missing Site Audit</div>
+                                : null
                               }
                             </td>
                             <td className="px-4 py-2.5 text-center whitespace-nowrap">

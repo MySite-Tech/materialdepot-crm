@@ -244,10 +244,33 @@ inert). Leave them; they are not gates.
 ## Known landmines
 
 - **A hand-written force-add set drifts from the mapping it mirrors.**
-  `SITE_AUDIT_ROLES` listed `delivery_manager`/`post_sales`/`procurement` but not
-  `delivery`, which `CRM_ROLE_TO_SITE_AUDIT_ROLE` maps to `service_mgr` — those
-  accounts got no tab at all. It is now *derived* from that map, so it can't
-  drift again. Add the permission to the map, not to two places.
+  `SITE_AUDIT_ROLES` (`app/App.tsx`) listed `delivery_manager`/`post_sales`/
+  `procurement` but not `delivery`, which `CRM_ROLE_TO_SITE_AUDIT_ROLE` maps to
+  `service_mgr` — those accounts got no tab at all. A prior fix claimed to make
+  it *derived* from that map but didn't actually change the code, so the exact
+  same class of bug recurred: `field_worker` (site auditors/installers) was
+  never in the hand-copied set either, and three field workers reported no
+  Site Audit tab at all (2026-08-24) before this was caught. It is now
+  genuinely derived — `SITE_AUDIT_ROLES = new Set([...OVERSIGHT_CRM_ROLES,
+  ...Object.keys(CRM_ROLE_TO_SITE_AUDIT_ROLE).filter(k => map[k]),
+  'field_worker'])` — so it can't drift again. Add the permission to the map,
+  not to a second hand-written list. `field_worker` itself stays a manual
+  addition on top: it's deliberately absent from the map (the CRM can't tell
+  an auditor from an installer by permission name alone), a narrower question
+  than "does this role see the tab at all."
+- **`defaultPermissionsForRole` had the identical drift, one level up.** It
+  pre-checks the permission checklist in Admin > Users' Add/Edit forms and
+  used to compute defaults from `ROLE_TABS` alone, without the three
+  `resolveAllowedTabs` force-add sets. For any role missing from `ROLE_TABS`
+  (`field_worker`, `delivery_manager`, `post_sales`, `procurement`), opening
+  that person's row and hitting Save for an unrelated edit (e.g. a phone
+  number) silently saved a permission list missing `crm.site_audit` —
+  and once `individualPermissions` is non-empty, `resolveAllowedTabs`'s
+  role-based fallback never applies again, so the tab was gone for good. Both
+  functions now share one `defaultTabsForRole(role)` helper, so they can't
+  diverge. Admin > Users flags any already-saved account this already broke
+  (`⚠ Missing Site Audit` in the Permissions column) — that's a one-time
+  backfill gap code can't self-heal; re-open Edit and check the box.
 - **One phone can have several `profiles` rows** (a field-app account under a
   personal email alongside the company one — Ashish Bhat has exactly this, and
   the company-email row's `contact` is NULL so it can never be resolved by
