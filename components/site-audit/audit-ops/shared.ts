@@ -7,8 +7,10 @@
    runs against React state. The one genuine module-level thing kept as-is is
    CAPS, because in the source it is a device-local localStorage setting too. */
 
-import { publishSlotConfig } from '../siteAuditShared';
+import { publishSlotConfig, requireNote } from '../siteAuditShared';
 import type { Availability } from '../siteAuditShared';
+
+export { requireNote };
 
 export const AUDIT_SKU = 'SVC-AUDIT-001';
 
@@ -299,17 +301,6 @@ export function auditorNameOf(o: AuditOrder, auditors: Auditor[]): string | null
   if (!o.auditor) return null;
   const a = auditorById(auditors, o.auditor);
   return a ? a.name : o.auditorName || '?';
-}
-
-/* Mandatory note for any manual SM action (status change, backward move,
-   follow-up). Returns the trimmed note, or null if cancelled/left blank —
-   callers MUST abort and write nothing on null. */
-export function requireNote(actionLabel: string, preface?: string): string | null {
-  const raw = window.prompt((preface ? preface + '\n\n' : '') + 'Add a note for this action (required):\n' + actionLabel);
-  if (raw === null) return null;
-  const note = raw.trim();
-  if (!note) return null;
-  return note;
 }
 
 export function mapUrl(a: string) {

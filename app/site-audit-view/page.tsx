@@ -48,6 +48,10 @@ function SiteAuditViewInner() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [mayPreview, setMayPreview] = useState(false);
   const [permissionRole, setPermissionRole] = useState<string | null>(null);
+  /* Attribution fallback when the Site Audit profile has no name on file
+     (e.g. an un-synced BM/SM) — the CRM session's own name, same pattern as
+     SiteAuditOwnDashboard's crmName. */
+  const [crmName, setCrmName] = useState('');
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
@@ -64,8 +68,10 @@ function SiteAuditViewInner() {
     try {
       const stored = localStorage.getItem('materialdepot_user');
       setLoggedIn(!!stored);
-      const own = siteAuditRoleFromPermissions(stored ? JSON.parse(stored)?.individualPermissions : null);
+      const parsed = stored ? JSON.parse(stored) : null;
+      const own = siteAuditRoleFromPermissions(parsed?.individualPermissions);
       setPermissionRole(own);
+      setCrmName(parsed?.name || '');
       /* This route renders SOMEONE ELSE's dashboard by email, so holding a
          session was never enough authorisation — it is the Role Viewer's
          preview target, and the Role Viewer belongs to oversight. Profile
@@ -233,9 +239,9 @@ function SiteAuditViewInner() {
           combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
         ) : isSm ? (
           smTab === 'install' ? (
-            <SiteAuditInstallOpsView city={city} attribution={person.name} />
+            <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
           ) : smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} attribution={person.name} />
+            <SiteAuditOpsView city={city} attribution={person.name || crmName} />
           ) : smAuditSubTab === 'jobs' ? (
             <SiteAuditJobsView city={city} />
           ) : smAuditSubTab === 'perf' ? (

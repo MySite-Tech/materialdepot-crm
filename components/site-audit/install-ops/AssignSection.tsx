@@ -12,7 +12,7 @@
    root view. */
 
 import { useMemo, useRef, useState } from 'react';
-import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch, type CityFilter, type Shadower } from '../siteAuditShared';
+import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, requireNote, sbPatch, type CityFilter, type Shadower } from '../siteAuditShared';
 import ShadowerSelect, { type ShadowerOption } from './ShadowerSelect';
 import {
   dateRange, fmtDate, installerById, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
@@ -249,6 +249,9 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
     const wasResched = sj.status === 'reschedule';
     const remark = remarkRef.current ? (remarkRef.current.value || '').trim() : '';
     if (wasResched && !remark) { toast('Please enter a reason for the reschedule'); return; }
+    /* A reschedule already carries a mandatory remark above — don't prompt twice. */
+    const assignNote = wasResched ? remark : requireNote('Assign ' + sj.type + ' installer(s): ' + valid.map((a) => a.installer_name).join(', '));
+    if (assignNote === null) return;
 
     const joined = joinShadowers(shadowers);
     const prevSh = parseShadowers(sj.shadower_email, sj.shadower_name);
@@ -272,7 +275,8 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
       ...(addedSh.length ? [{ t: 'Shadower(s) assigned: ' + addedSh.map((s) => s.name).join(', ') + ' (observing ' + sj.type + ' installation)', d: new Date().toISOString(), by: 'manual' as const, who: attribution }] : []),
       ...(removedSh.length ? [{ t: 'Shadower(s) removed from ' + sj.type + ' installation: ' + removedSh.map((s) => s.name).join(', '), d: new Date().toISOString(), by: 'manual' as const, who: attribution }] : []),
     ];
-    const nextLog = [...o.log, ...shLogs, { t: logLabel + ': ' + valid.map((a) => a.installer_name).join(', ') + delivOverrideNote + availOverrideNote, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
+    const noteSuffix = wasResched ? '' : ' — note: "' + assignNote + '"';
+    const nextLog = [...o.log, ...shLogs, { t: logLabel + ': ' + valid.map((a) => a.installer_name).join(', ') + delivOverrideNote + availOverrideNote + noteSuffix, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
     if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
     toast(wasResched ? 'Rescheduled' : 'Assignments saved');

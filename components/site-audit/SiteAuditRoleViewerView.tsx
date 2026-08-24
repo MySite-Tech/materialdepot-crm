@@ -290,6 +290,16 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
      shouldn't be the one place a COE's Service Manager visibility doesn't
      reach. */
   const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
+  /* Attribution fallback if the previewed profile has no name on file — the
+     CRM viewer's own session name, same pattern as SiteAuditOwnDashboard's
+     crmName / site-audit-view's page-level fallback. */
+  const [crmName, setCrmName] = useState('');
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('materialdepot_user');
+      setCrmName(stored ? JSON.parse(stored)?.name || '' : '');
+    } catch { setCrmName(''); }
+  }, []);
 
   const actingAs = { id: person.id, name: person.name, email: person.email };
 
@@ -319,7 +329,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
         </div>
       </div>
       {smTab === 'install' ? (
-        <SiteAuditInstallOpsView city={city} attribution={person.name} />
+        <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
       ) : (
         <div>
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -336,7 +346,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
             ))}
           </div>
           {smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} attribution={person.name} />
+            <SiteAuditOpsView city={city} attribution={person.name || crmName} />
           ) : smAuditSubTab === 'jobs' ? (
             <SiteAuditJobsView city={city} />
           ) : smAuditSubTab === 'perf' ? (
