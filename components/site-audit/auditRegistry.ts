@@ -13,6 +13,11 @@ const n = (x: unknown): number => {
 const r2 = (x: number): number => Math.round(x * 100) / 100;
 // 304.8mm (1ft) squared — converts a height(mm)*width(mm) area straight to sq.ft
 const MM2_PER_SQFT = 92903.04;
+// Every category captures its linear dimensions in ONE unit, declared as `unit` below, and always
+// derives area in sq.ft. A category whose unit depends on the room-level variant (Standard vs
+// Customized wallpaper) declares `variantUnits`/`variantFields` instead, resolved per room by
+// unitFor/fieldsFor. (height * width) / UNIT_DIV[unit] => sq.ft.
+const UNIT_DIV: Record<string, number> = { ft: 1, in: 144, mm: MM2_PER_SQFT };
 
 export type FieldValues = Record<string, string | number>;
 
@@ -23,8 +28,13 @@ export type CategoryField = {
   input?: 'decimal' | 'text' | 'select';
   opts?: string[];
   derived?: boolean;
-  compute?: (v: FieldValues, cat?: CategoryDef) => number;
+  compute?: (v: FieldValues, cat?: CategoryDef) => number | string;
   showIf?: (v: FieldValues) => boolean;
+  // Tells computeDerived to leave a manually-typed value alone (manual "Custom" area mode).
+  skipIf?: (v: FieldValues) => boolean;
+  // Tells the capture form to render this normally-read-only derived field as a plain editable
+  // input instead (manual "Custom" area mode).
+  editableIf?: (v: FieldValues) => boolean;
   default?: string;
 };
 
@@ -41,11 +51,139 @@ export type CategoryDef = {
   };
   variants: string[] | null;
   rollCoverage: number | null;
+  // Base (pre-per-variant-unit) unit + field list — also what a pre-v3 room keeps resolving to.
+  unit?: string;
+  variantUnits?: Record<string, string>;
+  variantFields?: Record<string, CategoryField[]>;
+  // Registry-driven UI copy for the capture form's unit banner/variant gate — kept here (rather
+  // than hardcoded per-category in the form) so it stays in sync with the unit it's describing.
+  unitNote?: string;
+  variantNote?: Record<string, string>;
+  variantPrompt?: string;
   fields: CategoryField[];
   prerequisites: { k: string; label: string }[];
   legacyFields: [string, string][];
   installFields: CategoryField[];
 };
+
+// Schema marker for a room written by the capture form. Bumped 2 -> 3 alongside per-variant units
+// (material-depot-site's note 109): a v2 wallpaper room captured its height/width in mm whatever
+// its variant, so v2 rooms MUST keep resolving to the base (mm) field list — see fieldsFor/unitFor.
+// Both this repo and material-depot-site read/write the SAME audit_orders rows (same Supabase
+// project), so this gate must stay in lockstep with the original's MD_ROOM_V — do not diverge it.
+export const ROOM_V = 3;
+
+type RoomLike = { v?: number; variant?: string | null } | null | undefined;
+const roomV = (room: RoomLike): number => {
+  const v = room && room.v;
+  return v === undefined || v === null ? ROOM_V : v;
+};
+
+/* ---- MANUAL AREA MODE (irregular walls/floors) -------------------------------------------
+   Some walls/floors can't be generalised as one length x height. `fields.areaMode` (absent =
+   'Normal', today's behaviour) lets the auditor switch a segment to 'Custom' and type the total
+   area directly instead. `showIf`/`skipIf`/`editableIf` are the three hooks that make this work
+   with no changes to any read-only renderer — they already render fields generically from "does
+   this field have a non-blank value", so a hidden height/width just stays blank. */
+const AREA_MODE_FIELD = (): CategoryField => ({
+  k: 'areaMode',
+  group: 'Measurements',
+  label: 'How to measure this wall/floor',
+  input: 'select',
+  opts: ['Normal', 'Custom'],
+});
+const skipDim = (v: FieldValues): boolean => v.areaMode === 'Custom';
+
+/* ---- AREA ADJUSTMENTS -------------------------------------------------------------------
+   A segment may carry `adjust: AdjustRow[]` — small add/subtract areas that belong to THIS
+   wall/floor rather than to a room of their own (a door to deduct, a niche to add), each with a
+   shape (Rectangle/Triangle compute from dimensions; Other skips dimensions and takes a typed
+   area directly), a reason and a photo. h/w are in the segment's own unit; the signed sq.ft total
+   is written into `fields.adjArea` by the capture form, so every read-only consumer just reads a
+   field. Order of the derived chain: gross area -> ± adjustments -> net area -> + wastage -> rolls. */
+export type AdjustRow = {
+  sign?: '+' | '-';
+  shape?: 'Rectangle' | 'Triangle' | 'Other';
+  h?: string | number;
+  w?: string | number;
+  area?: string | number;
+  reason?: string;
+  photos?: string[];
+};
+
+export type AdjustDisplayRow = {
+  label: string;
+  shape: string;
+  size: string;
+  area: string;
+  reason: string;
+  photos: string[];
+  neg: boolean;
+};
+
+// Effective (post-adjustment) area a wastage/roll calculation should work from.
+const effArea = (v: FieldValues): number => {
+  const a = n(v.adjArea);
+  return a ? r2(n(v.area) + a) : n(v.area);
+};
+// `adjArea` is `derived` (read-only in the form, shown by every renderer) but has NO compute —
+// computeDerived skips it and the capture form maintains it from the adjustment rows.
+const ADJ_FIELD = (): CategoryField => ({ k: 'adjArea', group: 'Measurements', label: 'Adjustments (± sq.ft)', derived: true });
+// Net area is blank (and so hidden by every renderer) unless an adjustment actually exists.
+const NET_FIELD = (): CategoryField => ({
+  k: 'netArea',
+  group: 'Measurements',
+  label: 'Net area (sq.ft)',
+  derived: true,
+  compute: (v) => (n(v.adjArea) ? r2(n(v.area) + n(v.adjArea)) : ''),
+});
+const WASTAGE_FIELDS = (): CategoryField[] => [
+  { k: 'wastagePct', group: 'Measurements', label: 'Wastage to add (%)', input: 'decimal' },
+  {
+    k: 'areaW',
+    group: 'Measurements',
+    label: 'Area incl. wastage (sq.ft)',
+    derived: true,
+    compute: (v) => r2(effArea(v) * (1 + n(v.wastagePct) / 100)),
+  },
+];
+const ROLLS_FIELD = (): CategoryField => ({
+  k: 'rolls',
+  group: 'Measurements',
+  label: 'Rolls required',
+  derived: true,
+  compute: (v, cat) => Math.ceil(n(v.areaW) / ((cat && cat.rollCoverage) || 57)) || 0,
+});
+// Wall-style measurement block (wallpaper / CNC / panels) in unit `u`.
+const WALL_FIELDS = (u: string, opts: { wastage?: boolean; rolls?: boolean; extra?: CategoryField[] } = {}): CategoryField[] => {
+  let f: CategoryField[] = [
+    AREA_MODE_FIELD(),
+    { k: 'height', group: 'Measurements', label: `Wall height (${u})`, input: 'decimal', showIf: (v) => !skipDim(v) },
+    { k: 'width', group: 'Measurements', label: `Wall width (${u})`, input: 'decimal', showIf: (v) => !skipDim(v) },
+    {
+      k: 'area',
+      group: 'Measurements',
+      label: 'Area (sq.ft)',
+      derived: true,
+      input: 'decimal',
+      skipIf: skipDim,
+      editableIf: skipDim,
+      compute: (v) => r2((n(v.height) * n(v.width)) / (UNIT_DIV[u] || 1)),
+    },
+    ADJ_FIELD(),
+    NET_FIELD(),
+  ];
+  if (opts.wastage) f = f.concat(WASTAGE_FIELDS());
+  if (opts.rolls) f = f.concat([ROLLS_FIELD()]);
+  if (opts.extra) f = f.concat(opts.extra);
+  return f;
+};
+const PROFILE_FIELDS = (): CategoryField[] => [
+  { k: 'cornerRft', group: 'Profiles', label: 'Corner beading (running ft)', input: 'decimal' },
+  { k: 'reducerRft', group: 'Profiles', label: 'Reducer profile (running ft)', input: 'decimal' },
+  { k: 'tprofRft', group: 'Profiles', label: 'T-profile (running ft)', input: 'decimal' },
+  { k: 'lprofRft', group: 'Profiles', label: 'L-profile (running ft)', input: 'decimal' },
+];
 
 const FACING_OPTS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West'];
 const WALL_SEGMENT = {
@@ -64,23 +202,37 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     segment: { model: 'single', segLabel: 'Floor', facing: false, facingOpts: null, addLabel: null },
     variants: null,
     rollCoverage: null,
-    fields: [
-      { k: 'length', group: 'Measurements', label: 'Room length (ft)', input: 'decimal' },
-      { k: 'width', group: 'Measurements', label: 'Room width (ft)', input: 'decimal' },
-      { k: 'area', group: 'Measurements', label: 'Total area (sq.ft)', derived: true, compute: (v) => r2(n(v.length) * n(v.width)) },
-      { k: 'wastagePct', group: 'Measurements', label: 'Wastage to add (%)', input: 'decimal' },
-      { k: 'areaW', group: 'Measurements', label: 'Area incl. wastage (sq.ft)', derived: true, compute: (v) => r2(n(v.area) * (1 + n(v.wastagePct) / 100)) },
-      { k: 'skirtKind', group: 'Skirting', label: 'Skirting type', input: 'select', opts: ['None', 'Normal', 'Step'] },
-      { k: 'skirtH', group: 'Skirting', label: 'Normal skirting — height (mm)', input: 'decimal', showIf: (v) => v.skirtKind === 'Normal' },
-      { k: 'skirtRft', group: 'Skirting', label: 'Normal skirting — qty (running ft)', input: 'decimal', showIf: (v) => v.skirtKind === 'Normal' },
-      { k: 'stepTileH', group: 'Skirting', label: 'Step skirting — tile height (mm)', input: 'decimal', showIf: (v) => v.skirtKind === 'Step' },
-      { k: 'stepTileT', group: 'Skirting', label: 'Step skirting — tile thickness (mm)', input: 'decimal', showIf: (v) => v.skirtKind === 'Step' },
-      { k: 'stepRft', group: 'Skirting', label: 'Step skirting — qty (running ft)', input: 'decimal', showIf: (v) => v.skirtKind === 'Step' },
-      { k: 'cornerRft', group: 'Profiles', label: 'Corner beading (running ft)', input: 'decimal' },
-      { k: 'reducerRft', group: 'Profiles', label: 'Reducer profile (running ft)', input: 'decimal' },
-      { k: 'tprofRft', group: 'Profiles', label: 'T-profile (running ft)', input: 'decimal' },
-      { k: 'lprofRft', group: 'Profiles', label: 'L-profile (running ft)', input: 'decimal' },
-    ],
+    unit: 'ft',
+    unitNote: 'Room length & width are entered in FEET (ft). Area is shown in sq.ft.',
+    fields: (
+      [
+        AREA_MODE_FIELD(),
+        { k: 'length', group: 'Measurements', label: 'Room length (ft)', input: 'decimal', showIf: (v) => !skipDim(v) },
+        { k: 'width', group: 'Measurements', label: 'Room width (ft)', input: 'decimal', showIf: (v) => !skipDim(v) },
+        {
+          k: 'area',
+          group: 'Measurements',
+          label: 'Total area (sq.ft)',
+          derived: true,
+          input: 'decimal',
+          skipIf: skipDim,
+          editableIf: skipDim,
+          compute: (v) => r2(n(v.length) * n(v.width)),
+        },
+        ADJ_FIELD(),
+        NET_FIELD(),
+      ] as CategoryField[]
+    )
+      .concat(WASTAGE_FIELDS())
+      .concat([
+        { k: 'skirtKind', group: 'Skirting', label: 'Skirting type', input: 'select', opts: ['None', 'Normal', 'Step'] },
+        { k: 'skirtH', group: 'Skirting', label: 'Normal skirting — height (mm)', input: 'decimal', showIf: (v) => v.skirtKind === 'Normal' },
+        { k: 'skirtRft', group: 'Skirting', label: 'Normal skirting — qty (running ft)', input: 'decimal', showIf: (v) => v.skirtKind === 'Normal' },
+        { k: 'stepTileH', group: 'Skirting', label: 'Step skirting — tile height (mm)', input: 'decimal', showIf: (v) => v.skirtKind === 'Step' },
+        { k: 'stepTileT', group: 'Skirting', label: 'Step skirting — tile thickness (mm)', input: 'decimal', showIf: (v) => v.skirtKind === 'Step' },
+        { k: 'stepRft', group: 'Skirting', label: 'Step skirting — qty (running ft)', input: 'decimal', showIf: (v) => v.skirtKind === 'Step' },
+      ])
+      .concat(PROFILE_FIELDS()),
     prerequisites: [
       { k: 'moisture', label: 'Subfloor moisture within threshold' },
       { k: 'level', label: 'Subfloor level / evenness within tolerance' },
@@ -111,14 +263,24 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     segment: WALL_SEGMENT,
     variants: ['Standard', 'Customized'],
     rollCoverage: 57,
-    fields: [
-      { k: 'height', group: 'Measurements', label: 'Wall height (mm)', input: 'decimal' },
-      { k: 'width', group: 'Measurements', label: 'Wall width (mm)', input: 'decimal' },
-      { k: 'area', group: 'Measurements', label: 'Area (sq.ft)', derived: true, compute: (v) => r2((n(v.height) * n(v.width)) / MM2_PER_SQFT) },
-      { k: 'wastagePct', group: 'Measurements', label: 'Wastage to add (%)', input: 'decimal' },
-      { k: 'areaW', group: 'Measurements', label: 'Area incl. wastage (sq.ft)', derived: true, compute: (v) => r2(n(v.area) * (1 + n(v.wastagePct) / 100)) },
-      { k: 'rolls', group: 'Measurements', label: 'Rolls required', derived: true, compute: (v, cat) => Math.ceil(n(v.areaW) / ((cat && cat.rollCoverage) || 57)) || 0 },
-    ],
+    // Unit depends on the room-level variant: Standard is measured in feet, Customized in
+    // millimetres. `unit`/`fields` are the pre-per-variant-unit (v2) baseline — mm for both
+    // variants — and stay here so historical v2 rooms keep rendering in the unit they were
+    // captured in (see fieldsFor/unitFor's room.v>=3 gate).
+    unit: 'mm',
+    variantUnits: { Standard: 'ft', Customized: 'mm' },
+    variantFields: {
+      Standard: WALL_FIELDS('ft', { wastage: true, rolls: true }),
+      Customized: WALL_FIELDS('mm', { wastage: true, rolls: true }),
+    },
+    variantNote: {
+      Standard: 'Standard wallpaper — wall height & width are entered in FEET (ft). Area is shown in sq.ft.',
+      Customized: 'Customized wallpaper — wall height & width are entered in MILLIMETRES (mm). Area is shown in sq.ft.',
+    },
+    variantPrompt: 'Pick Standard or Customized above — measurements are in feet for Standard and millimetres for Customized.',
+    // Baseline note for a pre-v3 room, which was captured in mm whatever its variant.
+    unitNote: 'Wall height & width are entered in MILLIMETRES (mm). Area is shown in sq.ft.',
+    fields: WALL_FIELDS('mm', { wastage: true, rolls: true }),
     prerequisites: [
       { k: 'moisture', label: 'Wall moisture within threshold' },
       { k: 'even', label: 'Wall surface even' },
@@ -147,11 +309,9 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     segment: WALL_SEGMENT,
     variants: null,
     rollCoverage: null,
-    fields: [
-      { k: 'height', group: 'Measurements', label: 'Wall height (mm)', input: 'decimal' },
-      { k: 'width', group: 'Measurements', label: 'Wall width (mm)', input: 'decimal' },
-      { k: 'area', group: 'Measurements', label: 'Area (sq.ft)', derived: true, compute: (v) => r2((n(v.height) * n(v.width)) / MM2_PER_SQFT) },
-    ],
+    unit: 'mm',
+    unitNote: 'CNC — wall height & width are entered in MILLIMETRES (mm). Area is shown in sq.ft.',
+    fields: WALL_FIELDS('mm'),
     prerequisites: [
       { k: 'moisture', label: 'Wall moisture within threshold' },
       { k: 'even', label: 'Wall surface even' },
@@ -170,17 +330,9 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     segment: WALL_SEGMENT,
     variants: null,
     rollCoverage: null,
-    fields: [
-      { k: 'height', group: 'Measurements', label: 'Wall height (in)', input: 'decimal' },
-      { k: 'width', group: 'Measurements', label: 'Wall width (in)', input: 'decimal' },
-      { k: 'area', group: 'Measurements', label: 'Area (sq.ft)', derived: true, compute: (v) => r2((n(v.height) * n(v.width)) / 144) },
-      { k: 'wastagePct', group: 'Measurements', label: 'Wastage to add (%)', input: 'decimal' },
-      { k: 'areaW', group: 'Measurements', label: 'Area incl. wastage (sq.ft)', derived: true, compute: (v) => r2(n(v.area) * (1 + n(v.wastagePct) / 100)) },
-      { k: 'cornerRft', group: 'Profiles', label: 'Corner beading (running ft)', input: 'decimal' },
-      { k: 'reducerRft', group: 'Profiles', label: 'Reducer profile (running ft)', input: 'decimal' },
-      { k: 'tprofRft', group: 'Profiles', label: 'T-profile (running ft)', input: 'decimal' },
-      { k: 'lprofRft', group: 'Profiles', label: 'L-profile (running ft)', input: 'decimal' },
-    ],
+    unit: 'in',
+    unitNote: 'Wall Panels — wall height & width are entered in INCHES (in). Area is shown in sq.ft.',
+    fields: WALL_FIELDS('in', { wastage: true, extra: PROFILE_FIELDS() }),
     prerequisites: [
       { k: 'moisture', label: 'Wall moisture within threshold' },
       { k: 'even', label: 'Wall surface even' },
@@ -207,6 +359,7 @@ export type AuditSegment = {
   fields: FieldValues;
   photos: string[];
   prereq: Record<string, PrereqEntry>;
+  adjust?: AdjustRow[];
   flagged?: boolean;
   /* BM material selection (set from BM_Dashboard on the depot-site app) — read-only here. */
   material?: { sku?: string; productName?: string; url?: string; image?: string } | null;
@@ -238,11 +391,42 @@ export function categoryFor(type?: string | null): CategoryDef {
   return (type && MD_CATEGORIES[type]) || MD_CATEGORIES.flooring;
 }
 
-/* Compute every derived field top-down (later derived read earlier). Mutates + returns `values`. */
-export function computeDerived(cat: CategoryDef | undefined, values: FieldValues): FieldValues {
-  if (!cat || !cat.fields || !values) return values;
-  cat.fields.forEach((f) => {
-    if (f.derived && typeof f.compute === 'function') {
+/* ---- PER-ROOM UNIT / FIELD RESOLUTION ------------------------------------------------------
+   A room's measurement field list is no longer just `cat.fields` — for a category with
+   per-variant units it depends on the room's `variant`, and on the room's schema version (v2
+   rooms predate per-variant units and were all captured in the base unit). ALWAYS go through
+   fieldsFor/unitFor rather than reading cat.fields directly. */
+export function needsVariant(cat: CategoryDef, room?: RoomLike): boolean {
+  return !!(cat && cat.variantFields && roomV(room) >= 3 && !(room && room.variant));
+}
+export function unitFor(cat: CategoryDef, room?: RoomLike): string {
+  if (cat.variantUnits && room && room.variant && roomV(room) >= 3) {
+    return cat.variantUnits[room.variant] || cat.unit || 'ft';
+  }
+  return cat.unit || 'ft';
+}
+export function fieldsFor(cat: CategoryDef, room?: RoomLike): CategoryField[] {
+  if (cat.variantFields && room && room.variant && roomV(room) >= 3) {
+    return cat.variantFields[room.variant] || cat.fields;
+  }
+  return cat.fields;
+}
+/* Unit banner for the capture form — per-variant where the variant decides the unit. Blank while
+   the variant is still unpicked, since the variant prompt already states both units. */
+export function unitNoteFor(cat: CategoryDef, room?: RoomLike): string {
+  if (!cat) return '';
+  if (needsVariant(cat, room)) return '';
+  if (cat.variantNote && room && room.variant && roomV(room) >= 3) return cat.variantNote[room.variant] || '';
+  return cat.unitNote || '';
+}
+
+/* Compute every derived field top-down (later derived read earlier). Mutates + returns `values`.
+   `room` selects the right field list for a per-variant-unit category — WITHOUT it a Standard
+   (feet) wallpaper wall would be computed with the Customized (mm) area formula. */
+export function computeDerived(cat: CategoryDef | undefined, values: FieldValues, room?: RoomLike): FieldValues {
+  if (!cat || !values) return values;
+  fieldsFor(cat, room).forEach((f) => {
+    if (f.derived && typeof f.compute === 'function' && !(f.skipIf && f.skipIf(values))) {
       try {
         values[f.k] = f.compute(values, cat);
       } catch {
@@ -287,10 +471,10 @@ export function normalizeRoom(room: any): AuditRoomV2 {
 }
 
 /* Values present on a segment for this category, in registry order. `isV2` picks the v2 field set
-   vs the legacy label map. */
-export function segmentRows(cat: CategoryDef, seg: AuditSegment, isV2: boolean): [string, string][] {
+   vs the legacy label map. `room` is needed to resolve a per-variant-unit category's field list. */
+export function segmentRows(cat: CategoryDef, seg: AuditSegment, isV2: boolean, room?: RoomLike): [string, string][] {
   if (isV2) {
-    return cat.fields
+    return fieldsFor(cat, room)
       .filter((f) => {
         const v = seg.fields && seg.fields[f.k];
         return v !== undefined && v !== null && String(v) !== '';
@@ -311,6 +495,60 @@ export function segmentPrereqRows(cat: CategoryDef, seg: AuditSegment): [string,
   return (cat.prerequisites || [])
     .filter((p) => seg.prereq[p.k] && seg.prereq[p.k].status)
     .map((p) => [p.label, seg.prereq[p.k].status, seg.prereq[p.k].note || ''] as [string, string, string]);
+}
+
+/* Unsigned sq.ft magnitude of one adjustment row. `shape` absent is treated as 'Rectangle',
+   reproducing the pre-shape h*w formula exactly (every live production row has no `shape`).
+   'Other' skips the unit conversion entirely — the auditor types the area straight in sq.ft. */
+function adjArea(a: AdjustRow | null | undefined, div: number): number {
+  if (!a) return 0;
+  if (a.shape === 'Other') return n(a.area);
+  const mult = a.shape === 'Triangle' ? 0.5 : 1;
+  const raw = n(a.h) * n(a.w) * mult;
+  return raw ? r2(raw / div) : 0;
+}
+/* Signed sq.ft total of a segment's area adjustments. The capture form writes this into
+   `fields.adjArea` so every read-only consumer only ever reads a plain field. */
+export function adjSum(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] | null): number {
+  const div = UNIT_DIV[unitFor(cat, room)] || 1;
+  let t = 0;
+  (adjust || []).forEach((a) => {
+    const ar = adjArea(a, div);
+    if (!ar) return;
+    t += a && a.sign === '-' ? -ar : ar;
+  });
+  return r2(t);
+}
+/* Display rows for a segment's adjustments. Empty rows (no computed/typed area) are dropped so a
+   half-typed adjustment never reaches a job card. */
+export function adjRows(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] | null): AdjustDisplayRow[] {
+  const u = unitFor(cat, room);
+  const div = UNIT_DIV[u] || 1;
+  return (adjust || [])
+    .map((a) => (a ? { a, ar: adjArea(a, div) } : null))
+    .filter((x): x is { a: AdjustRow; ar: number } => !!x && !!x.ar)
+    .map(({ a, ar }) => {
+      const shape = a.shape || 'Rectangle';
+      const neg = a.sign === '-';
+      const size = shape === 'Other' ? 'manual entry' : `${n(a.h)} × ${n(a.w)} ${u}${shape === 'Triangle' ? ' (triangle)' : ''}`;
+      return {
+        label: neg ? 'Subtract' : 'Add',
+        shape,
+        size,
+        area: `${neg ? '-' : '+'}${ar}`,
+        reason: (a.reason || '').trim(),
+        photos: (a.photos || []).slice(),
+        neg,
+      };
+    });
+}
+/* Any adjustment carrying an area but no stated reason — the capture form soft-gates on this. */
+export function adjMissingReason(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] | null): boolean {
+  return adjRows(cat, room, adjust).some((r) => !r.reason);
+}
+/* Any adjustment carrying an area but no photo — the capture form soft-gates on this too. */
+export function adjMissingPhoto(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] | null): boolean {
+  return adjRows(cat, room, adjust).some((r) => !r.photos || !r.photos.length);
 }
 
 /* Installed-detail rows for one installation room (flat v2 shape or legacy {sku,qty,height,width}). */

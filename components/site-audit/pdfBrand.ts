@@ -7,6 +7,7 @@ import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 import { MD_LOGO_H, MD_LOGO_W, brandLogoPng, loadBrandLogo } from './mdLogo';
 import {
+  adjRows,
   categoryFor,
   installRoomPhotos,
   installRoomRows,
@@ -184,7 +185,7 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
       if (nroom.variant) st += '   ·   ' + nroom.variant;
       y = mdSectionTitle(doc, st, y + 8, M) + 4;
     }
-    const rows = segmentRows(cat, seg, isV2);
+    const rows = segmentRows(cat, seg, isV2, nroom);
     if (rows.length) {
       ensure(34 + rows.length * 20);
       doc.autoTable(
@@ -194,6 +195,25 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
           head: [['Measurement', 'Value']],
           body: rows,
           columnStyles: { 0: { cellWidth: 250, fontStyle: 'bold', textColor: MD_INK, fillColor: MD_LABELFILL } },
+        }),
+      );
+      y = doc.lastAutoTable.finalY + 8;
+    }
+    const adj = isV2 ? adjRows(cat, nroom, seg.adjust) : [];
+    if (adj.length) {
+      ensure(34 + adj.length * 20);
+      doc.autoTable(
+        mdBrandGrid({
+          startY: y,
+          margin: { left: M, right: M },
+          head: [['Area adjustment', 'Shape', 'Size', 'sq.ft', 'Reason']],
+          body: adj.map((a) => [a.label, a.shape, a.size, a.area, a.reason || '—']),
+          columnStyles: {
+            0: { cellWidth: 78, fontStyle: 'bold', textColor: MD_INK, fillColor: MD_LABELFILL },
+            1: { cellWidth: 64 },
+            2: { cellWidth: 96 },
+            3: { cellWidth: 48 },
+          },
         }),
       );
       y = doc.lastAutoTable.finalY + 8;

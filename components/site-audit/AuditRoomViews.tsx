@@ -6,6 +6,7 @@
    report, the install job-card view) renders v2 segment audits and legacy rooms identically. */
 
 import {
+  adjRows,
   categoryFor,
   installRoomPhotos,
   installRoomRows,
@@ -14,6 +15,25 @@ import {
   segmentPrereqRows,
   segmentRows,
 } from './auditRegistry';
+
+function AdjustmentRows({ rows }: { rows: ReturnType<typeof adjRows> }) {
+  if (!rows.length) return null;
+  return (
+    <div className="mt-1.5 border-t border-dashed border-gray-200 pt-1.5">
+      <div className="mb-0.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-400">Area adjustments</div>
+      {rows.map((a, i) => (
+        <div key={i} className="flex flex-wrap gap-2 text-[12.5px]">
+          <span className={`font-bold ${a.neg ? 'text-red-600' : 'text-green-700'}`}>{a.area} sq.ft</span>
+          <span className="text-gray-400">
+            {a.label} {a.size}
+          </span>
+          <span>{a.reason || <i className="text-red-600">no reason given</i>}</span>
+          <span>{a.photos.length ? `${a.photos.length} photo${a.photos.length > 1 ? 's' : ''}` : <i className="text-red-600">no photo attached</i>}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function KvGrid({ rows }: { rows: [string, string, string?][] }) {
   return (
@@ -64,7 +84,8 @@ export function AuditRoomCard({ room, index }: { room: any; index: number }) {
       </div>
 
       {(nr.segments || []).map((seg, si) => {
-        const rows = segmentRows(cat, seg, isV2);
+        const rows = segmentRows(cat, seg, isV2, nr);
+        const adj = isV2 ? adjRows(cat, nr, seg.adjust) : [];
         const prq = isV2 ? segmentPrereqRows(cat, seg) : [];
         const flagged = prereqFlagged(seg);
         return (
@@ -81,6 +102,7 @@ export function AuditRoomCard({ room, index }: { room: any; index: number }) {
             ) : (
               <div className="text-xs text-gray-400">No measurements recorded.</div>
             )}
+            <AdjustmentRows rows={adj} />
             {prq.length > 0 && (
               <div className="mt-1.5">
                 <KvGrid
