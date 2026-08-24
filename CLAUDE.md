@@ -243,21 +243,25 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
-- **A hand-written force-add set drifts from the mapping it mirrors.**
-  `SITE_AUDIT_ROLES` (`app/App.tsx`) listed `delivery_manager`/`post_sales`/
-  `procurement` but not `delivery`, which `CRM_ROLE_TO_SITE_AUDIT_ROLE` maps to
-  `service_mgr` — those accounts got no tab at all. A prior fix claimed to make
-  it *derived* from that map but didn't actually change the code, so the exact
-  same class of bug recurred: `field_worker` (site auditors/installers) was
-  never in the hand-copied set either, and three field workers reported no
-  Site Audit tab at all (2026-08-24) before this was caught. It is now
-  genuinely derived — `SITE_AUDIT_ROLES = new Set([...OVERSIGHT_CRM_ROLES,
+- **A derived force-add set can still be reverted back to a hand-written one —
+  this has now happened twice.** `SITE_AUDIT_ROLES` (`app/App.tsx`) drifted
+  from `CRM_ROLE_TO_SITE_AUDIT_ROLE` once before (`delivery` mapped to
+  `service_mgr` there but was missing here), was made genuinely derived in
+  commit `3bc84a6` (2026-08-19) — `...OVERSIGHT_CRM_ROLES,
   ...Object.keys(CRM_ROLE_TO_SITE_AUDIT_ROLE).filter(k => map[k]),
-  'field_worker'])` — so it can't drift again. Add the permission to the map,
-  not to a second hand-written list. `field_worker` itself stays a manual
-  addition on top: it's deliberately absent from the map (the CRM can't tell
-  an auditor from an installer by permission name alone), a narrower question
-  than "does this role see the tab at all."
+  'field_worker'`, plus a second independent path via the caller's own field
+  profile role — and then a teammate's large same-area rewrite the very next
+  day (`a4d5469`, "site audit fixes", introducing the `site_audit.*` slug
+  system) silently reverted BOTH: back to a hand-copied literal missing
+  `field_worker` entirely, and dropped the field-profile fallback path with
+  it. Nobody noticed until three real field workers (site auditors/
+  installers) reported no Site Audit tab at all (2026-08-24). Re-fixed the
+  same way, but **if `SITE_AUDIT_ROLES` is ever touched again — especially by
+  a large unrelated-looking "site audit fixes" commit — diff it against
+  `CRM_ROLE_TO_SITE_AUDIT_ROLE` by hand rather than trusting that "it's
+  derived" still holds**; a derivation is only as durable as the next person
+  editing the same lines knowing it's there. Add a role to the map, never to
+  a second hand-written list.
 - **`defaultPermissionsForRole` had the identical drift, one level up.** It
   pre-checks the permission checklist in Admin > Users' Add/Edit forms and
   used to compute defaults from `ROLE_TABS` alone, without the three
