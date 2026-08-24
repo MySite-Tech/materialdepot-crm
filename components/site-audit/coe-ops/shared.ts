@@ -3,9 +3,13 @@
    call queue). See CLAUDE.md note 102 in that repo for the full spec. */
 
 import { phoneKey, sbGet, sbPatch, sbPost } from '../siteAuditShared';
+import { typeLabel } from '../auditRegistry';
 import { WP_ROUND_KEYS, wpRounds, wpStageLabel, type WpNext, type WpRow } from './wpTrack';
 
-export type CoeCall = { id: string; ts: string; stage: string; who: string; outcome: string; note: string; by?: { email?: string; name?: string } };
+// Q1/Q2/Q3 review scores, taken on this D+1 call rather than on-site (see note 117 in the sibling
+// material-depot-site repo — the field worker being rated handing the client the phone to score
+// them, right before signing, structurally biased every score upward).
+export type CoeCall = { id: string; ts: string; stage: string; who: string; outcome: string; note: string; ratings?: { q1: number; q2: number; q3: number }; by?: { email?: string; name?: string } };
 export type CoeOrderPlaced = { kind?: string; ref?: string; at: string; by?: { email?: string; name?: string }; auto?: boolean; orderId?: string };
 export type CoeTrack = {
   calls?: CoeCall[];
@@ -18,10 +22,24 @@ export type CoeTrack = {
 export type CoeOrder = {
   id: string; pi: string; po: string[]; skus: any[]; bm: string; bmEmail: string | null;
   name: string; phone: string; addr: string; status: string; service: any; slot: string | null;
-  date: string | null; auditorName: string | null; createdAt: string | null;
+  date: string | null; auditorName: string | null; auditorEmail: string | null; createdAt: string | null;
   city: string | null; coeTrack: CoeTrack;
 };
-export type CoeInstall = { id: string; pi: string; po: string[]; phone: string; name: string; createdAt: string | null; status: string; customWp: boolean; deliveryDate: string | null };
+export type CoeInstall = {
+  id: string; pi: string; po: string[]; phone: string; name: string; addr: string; bm: string;
+  createdAt: string | null; status: string; customWp: boolean; deliveryDate: string | null;
+  subjobs: CoeSubjob[]; log: any[];
+};
+
+// A minimal, purpose-built view of one install sub-job — this module stays self-contained rather
+// than importing install-ops/types.ts's heavier Subjob, matching how CoeOrder/CoeInstall are
+// already deliberately lean types independent of the SM ops view's data model.
+export type CoeSubjobAssignment = { installer_email?: string; installer_name?: string; primary?: boolean };
+export type CoeSubjob = {
+  id: string; type: string; status: string; assignments?: CoeSubjobAssignment[];
+  installer_email?: string | null; installer?: string | null;
+  coe_review?: { calls?: CoeCall[] };
+};
 
 /* `log` is deliberately NOT here. It is jsonb averaging ~7 KB a row — on the
    completed-audit set that is 1.8 MB of the ~1.9 MB this view re-fetches every
@@ -29,8 +47,10 @@ export type CoeInstall = { id: string; pi: string; po: string[]; phone: string; 
    timeline", for one order at a time. It is fetched per order on open instead
    (loadOrderLog below). patchCoe re-reads it before every write regardless, so
    nothing that mutates the log depends on the list carrying it. */
-export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,created_at,city,coe_track';
-export const INSTALL_COLS = 'id,pi,po,phone,customer_name,created_at,status,custom_wp,delivery_date';
+export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,auditor_email,created_at,city,coe_track';
+// addr/bm/subjobs/log added for the Install Reviews tab (note 117) — subjobs carries each
+// completed sub-job's coe_review.calls[], log is scanned for its completion date/type.
+export const INSTALL_COLS = 'id,pi,po,phone,customer_name,addr,bm,created_at,status,custom_wp,delivery_date,subjobs,log';
 
 export function mapCoeAudit(r: any): CoeOrder {
   return {
@@ -38,15 +58,18 @@ export function mapCoeAudit(r: any): CoeOrder {
     skus: r.skus || [], bm: r.bm || '—', bmEmail: r.bm_email || null,
     name: r.customer_name || '', phone: r.phone || '', addr: r.addr || '',
     status: r.status || 'pending', service: r.service || null, slot: r.slot || null, date: r.date || null,
-    auditorName: r.auditor_name || null, createdAt: r.created_at || null,
+    auditorName: r.auditor_name || null, auditorEmail: r.auditor_email || null, createdAt: r.created_at || null,
     city: r.city || null, coeTrack: (r.coe_track && typeof r.coe_track === 'object') ? r.coe_track : {},
   };
 }
 export function mapCoeInstall(r: any): CoeInstall {
   return {
     id: r.id, pi: r.pi || '', po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
-    phone: r.phone || '', name: r.customer_name || '', createdAt: r.created_at || null,
+    phone: r.phone || '', name: r.customer_name || '', addr: r.addr || '', bm: r.bm || '—',
+    createdAt: r.created_at || null,
     status: r.status || '', customWp: !!r.custom_wp, deliveryDate: r.delivery_date || null,
+    subjobs: Array.isArray(r.subjobs) ? r.subjobs : [],
+    log: Array.isArray(r.log) ? r.log : [],
   };
 }
 
@@ -235,6 +258,108 @@ export function followupRows(orders: CoeOrder[], installByPhone: Map<string, Coe
 
 export function mapUrl(a: string): string {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
+}
+
+/* ── Ratings write (note 117) ────────────────────────────────────────────
+   The `ratings` table schema is unchanged — same columns as when the on-site
+   job card wrote to it directly — only who writes and when changed.
+   staff_email/staff_name is always the field worker who did the job, never
+   the COE caller. Used by both the audit D+1 checkpoint (below) and the
+   install review tab. */
+export type JobRatingInput = {
+  orderType: 'audit' | 'install';
+  pi: string; orderId: string;
+  staffEmail: string | null; staffName: string | null;
+  q1: number; q2: number; q3: number; comments: string;
+  customerName: string; customerPhone: string;
+};
+export async function postJobRating(input: JobRatingInput): Promise<void> {
+  const body = {
+    order_type: input.orderType, pi: input.pi, order_id: input.orderId,
+    staff_email: input.staffEmail, staff_name: input.staffName,
+    q1_score: input.q1, q2_score: input.q2, q3_score: input.q3,
+    comments: input.comments || '', customer_name: input.customerName, customer_phone: input.customerPhone,
+  };
+  try {
+    await sbPost('ratings', body);
+  } catch {
+    const { q3_score, ...withoutQ3 } = body;
+    await sbPost('ratings', withoutQ3);
+  }
+}
+
+/* ── Install reviews (note 117) — one D+1 checkpoint per COMPLETED SUB-JOB,
+   not per order (a mixed order's flooring/wallpaper sub-jobs review
+   independently). Calls live inside the sub-job itself
+   (subjobs[].coe_review.calls[]) — zero schema change, same technique this
+   app already uses for shadower_email. ───────────────────────────────── */
+
+/* The day a sub-job's installation actually completed — scanned from the
+   order's own log[], the same way finishInstallation writes it
+   (`typeLabel(sj.type) + ' installation completed'`). Latest match wins. */
+export function installCompletionDate(order: CoeInstall, sj: CoeSubjob): string | null {
+  const prefix = typeLabel(sj.type) + ' installation completed';
+  let latest: string | null = null;
+  for (const l of order.log || []) {
+    if (typeof l?.t === 'string' && l.t.startsWith(prefix) && l.d) {
+      const d = String(l.d).slice(0, 10);
+      if (!latest || d > latest) latest = d;
+    }
+  }
+  return latest;
+}
+
+export function installPrimaryInstaller(sj: CoeSubjob): { email: string | null; name: string | null } {
+  const a = sj.assignments?.find((x) => x.primary) || sj.assignments?.[0];
+  return { email: a?.installer_email || sj.installer_email || null, name: a?.installer_name || sj.installer || null };
+}
+
+export type InstallReviewBucketKey = 'overdue' | 'today' | 'upcoming' | 'done';
+export const INSTALL_REVIEW_BUCKETS: Array<{ k: InstallReviewBucketKey; l: string; cls: string }> = [
+  { k: 'overdue', l: 'Overdue', cls: 's-red' },
+  { k: 'today', l: 'Due today', cls: 's-amber' },
+  { k: 'upcoming', l: 'Upcoming', cls: '' },
+  { k: 'done', l: 'Reviewed', cls: 's-green' },
+];
+export type InstallReviewRow = {
+  order: CoeInstall; sj: CoeSubjob; completedOn: string; dueOn: string;
+  installer: { email: string | null; name: string | null }; bucket: InstallReviewBucketKey;
+};
+
+/* One row per completed sub-job across every loaded install order. */
+export function installReviewRows(orders: CoeInstall[]): InstallReviewRow[] {
+  const today = todayStr();
+  const rows: InstallReviewRow[] = [];
+  orders.forEach((order) => {
+    (order.subjobs || []).forEach((sj) => {
+      if (sj.status !== 'completed') return;
+      const completedOn = installCompletionDate(order, sj);
+      if (!completedOn) return;
+      const dueOn = addDays(completedOn, 1);
+      const done = !!(sj.coe_review?.calls && sj.coe_review.calls.length);
+      const bucket: InstallReviewBucketKey = done ? 'done' : dueOn < today ? 'overdue' : dueOn === today ? 'today' : 'upcoming';
+      rows.push({ order, sj, completedOn, dueOn, installer: installPrimaryInstaller(sj), bucket });
+    });
+  });
+  return rows;
+}
+
+/* Fresh-fetch-then-append, same discipline as patchCoe — re-reads subjobs/log
+   immediately before merging so a second COE session's call is never
+   silently clobbered, and mirrors into the order's own log[] so this shows
+   up in SM/Admin/BM timelines with zero changes to those views. */
+export async function patchInstallReview(
+  orderId: string, sjId: string, mutate: (sj: CoeSubjob) => CoeSubjob, logText: string, who: string,
+): Promise<void> {
+  const rows = await sbGet('install_orders?id=eq.' + orderId + '&select=subjobs,log');
+  if (!Array.isArray(rows) || !rows[0]) throw new Error('could not re-read this order');
+  const subjobs: CoeSubjob[] = Array.isArray(rows[0].subjobs) ? rows[0].subjobs : [];
+  const idx = subjobs.findIndex((s) => s.id === sjId);
+  if (idx === -1) throw new Error('sub-job not found');
+  subjobs[idx] = mutate(JSON.parse(JSON.stringify(subjobs[idx])));
+  const log = Array.isArray(rows[0].log) ? rows[0].log : [];
+  log.push({ t: logText, d: new Date().toISOString(), by: 'manual', who });
+  await sbPatch('install_orders', orderId, { subjobs, log });
 }
 
 /* ── Custom wallpaper production writes ─────────────────────────────────── */

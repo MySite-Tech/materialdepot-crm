@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
-import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPatch, sbPatchLong, uploadPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
 import {
   SignaturePad,
   type SignaturePadHandle,
@@ -81,7 +81,9 @@ type Ratings = { q1: number; q2: number; q3: number; comments: string };
 type JobCard = {
   draft?: boolean;
   rooms: PersistedRoom[];
-  sign?: { img: string; name: string; ratings: Ratings; tcCategories?: string[] };
+  // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never
+  // on-site — optional only so historical job cards with an old sign.ratings still render.
+  sign?: { img: string; name: string; ratings?: Ratings; tcCategories?: string[] };
   installerSign?: { img: string; name: string };
 };
 
@@ -434,23 +436,6 @@ function Spinner() {
   return <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-[#EAB308]" />;
 }
 
-function StarRow({ id, value, onChange }: { id: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={`h-8 w-8 rounded-md text-xs font-bold border ${value === n ? 'bg-[#1F3A5F] text-white border-[#1F3A5F]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function CommentSheet({ open, title, onCancel, onConfirm }: { open: boolean; title: string; onCancel: () => void; onConfirm: (comment: string) => void }) {
   const [value, setValue] = useState('');
   useEffect(() => { if (open) setValue(''); }, [open]);
@@ -696,8 +681,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const completionWriteRef = useRef<{ subjobs: any[] } | null>(null);
 
   const [jcRooms, setJcRooms] = useState<Room[]>([]);
-  const [jcStage, setJcStage] = useState<'rooms' | 'review' | 'handoff' | 'tcs' | 'ratings' | 'signature' | 'installerSignoff'>('rooms');
-  const [jcRatings, setJcRatings] = useState<Ratings>({ q1: 0, q2: 0, q3: 0, comments: '' });
+  const [jcStage, setJcStage] = useState<'rooms' | 'review' | 'handoff' | 'tcs' | 'signature' | 'installerSignoff'>('rooms');
   const [signName, setSignName] = useState('');
   // Customer's uploaded signature URL, captured once they finish signing — the SAME signPadRef
   // canvas is cleared and reused for the installer's own signature on the next stage.
@@ -760,7 +744,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     completionWriteRef.current = null;
     setSaveStatus('idle');
     setJcStage('rooms');
-    setJcRatings({ q1: 0, q2: 0, q3: 0, comments: '' });
     let restoreList: PersistedRoom[] | null = null;
     try {
       const raw = localStorage.getItem('md_install_' + job.pi + '_' + job.sjId);
@@ -876,7 +859,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     try { installerSigImg = await uploadPhoto(rawInstallerSig); } catch { /* keep raw captured data URL */ }
     const newJobcard: JobCard = {
       rooms,
-      sign: { img: customerSignImg || '', name: signName, ratings: jcRatings, tcCategories: [job.type] },
+      sign: { img: customerSignImg || '', name: signName, tcCategories: [job.type] },
       installerSign: { img: installerSigImg, name: installerSignName },
     };
     job.jobcard = newJobcard;
@@ -905,15 +888,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         await sbPatchLong('install_orders', job.id, completionPatch);
         job.parentLog = newParentLog;
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
-        try {
-          await sbPost('ratings', { order_type: 'install', pi: job.pi, order_id: job.id, staff_email: actingAs.email, staff_name: actingAs.name, q1_score: jcRatings.q1, q2_score: jcRatings.q2, q3_score: jcRatings.q3, comments: jcRatings.comments || '', customer_name: job.name, customer_phone: job.phone });
-        } catch {
-          try {
-            await sbPost('ratings', { order_type: 'install', pi: job.pi, order_id: job.id, staff_email: actingAs.email, staff_name: actingAs.name, q1_score: jcRatings.q1, q2_score: jcRatings.q2, comments: jcRatings.comments || '', customer_name: job.name, customer_phone: job.phone });
-          } catch (e2) {
-            console.error('ratings write failed', e2);
-          }
-        }
       }
     } catch {
       toast("Network error — couldn't save. Try again");
@@ -929,7 +903,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setActiveKey(job.pi + '|' + job.sjId);
     toast('Job finished & sent to office');
     setFinishBusy(false);
-  }, [actingAs.email, actingAs.name, jcRatings, signName, customerSignImg, installerSignName, loadJobs, toast]);
+  }, [actingAs.email, actingAs.name, signName, customerSignImg, installerSignName, loadJobs, toast]);
 
   /* ── Photo handling for job-card rooms ─────────────────────────────────── */
   const swapRoomPhoto = useCallback((roomId: number, from: string, to: string) => {
@@ -1115,7 +1089,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           installerName={actingAs.name}
           rooms={jcRooms}
           stage={jcStage}
-          ratings={jcRatings}
           signName={signName}
           installerSignName={installerSignName}
           saveStatus={saveStatus}
@@ -1137,17 +1110,11 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           onBackFromHandoff={() => setJcStage('review')}
           onClientReady={() => setJcStage('tcs')}
           onTcsBack={() => setJcStage('handoff')}
-          onTcsProceed={() => setJcStage('ratings')}
-          onRatingsChange={setJcRatings}
-          onRatingsBack={() => setJcStage('tcs')}
-          onRatingsNext={() => {
-            if (!jcRatings.q1) { toast('Please rate the overall experience'); return; }
-            if (!jcRatings.q2) { toast('Please rate the installer'); return; }
-            if (!jcRatings.q3) { toast('Please rate the site cleanliness'); return; }
+          onTcsProceed={() => {
             setSignName(jcJobRef.current!.name);
             setJcStage('signature');
           }}
-          onSignBack={() => setJcStage('ratings')}
+          onSignBack={() => setJcStage('tcs')}
           onSignNameChange={setSignName}
           onSignNext={onSignNext}
           onInstallerSignNameChange={setInstallerSignName}
@@ -1608,17 +1575,16 @@ ${termsBlock || '[Full terms and conditions will be provided by Material Depot]'
 }
 
 function JobCardWizardOverlay({
-  job, installerName, rooms, stage, ratings, signName, installerSignName, saveStatus, finishBusy, signPadRef,
+  job, installerName, rooms, stage, signName, installerSignName, saveStatus, finishBusy, signPadRef,
   onBack, onAddRoom, onRemoveRoom, onRoomField, onRoomCategory, onRoomInstallField, onRoomFiles, onRoomRemovePhoto, onOpenScanner, onOpenLightbox,
   onFinishCard, onBackToRooms, onProceed, onBackFromHandoff, onClientReady, onTcsBack, onTcsProceed,
-  onRatingsChange, onRatingsBack, onRatingsNext, onSignBack, onSignNameChange, onSignNext,
+  onSignBack, onSignNameChange, onSignNext,
   onInstallerSignNameChange, onBackFromInstallerSignoff, onFinishInstallation,
 }: {
   job: Job;
   installerName: string;
   rooms: Room[];
-  stage: 'rooms' | 'review' | 'handoff' | 'tcs' | 'ratings' | 'signature' | 'installerSignoff';
-  ratings: Ratings;
+  stage: 'rooms' | 'review' | 'handoff' | 'tcs' | 'signature' | 'installerSignoff';
   signName: string;
   installerSignName: string;
   saveStatus: 'idle' | 'saving' | 'saved' | 'local';
@@ -1641,9 +1607,6 @@ function JobCardWizardOverlay({
   onClientReady: () => void;
   onTcsBack: () => void;
   onTcsProceed: () => void;
-  onRatingsChange: (r: Ratings) => void;
-  onRatingsBack: () => void;
-  onRatingsNext: () => void;
   onSignBack: () => void;
   onSignNameChange: (v: string) => void;
   onSignNext: () => void;
@@ -1771,38 +1734,6 @@ function JobCardWizardOverlay({
               </div>
               <button disabled={!tcAgree} onClick={onTcsProceed} className="mt-3.5 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40">Agree &amp; proceed →</button>
               <button onClick={onTcsBack} className="mt-2.5 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">← Back</button>
-            </>
-          )}
-
-          {stage === 'ratings' && (
-            <>
-              <div className="rounded-lg border border-gray-200 bg-white p-5">
-                <h2 className="mb-3.5 text-base font-bold text-black">Customer feedback</h2>
-                <p className="mb-5 text-[13px] text-gray-500">Please rate your experience. Tap a number from 1 (lowest) to 10 (highest).</p>
-                <div className="mb-5">
-                  <label className="text-sm font-semibold">1. How would you rate the overall site installation experience?</label>
-                  <StarRow id="q1" value={ratings.q1} onChange={(v) => onRatingsChange({ ...ratings, q1: v })} />
-                </div>
-                <div className="mb-5">
-                  <label className="text-sm font-semibold">2. How would you rate your site installer?</label>
-                  <StarRow id="q2" value={ratings.q2} onChange={(v) => onRatingsChange({ ...ratings, q2: v })} />
-                </div>
-                <div className="mb-5">
-                  <label className="text-sm font-semibold">3. How clean did the site installer leave the site after the installation?</label>
-                  <StarRow id="q3" value={ratings.q3} onChange={(v) => onRatingsChange({ ...ratings, q3: v })} />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold">Comments <span className="font-normal text-gray-400">(optional)</span></label>
-                  <textarea
-                    value={ratings.comments}
-                    onChange={(e) => onRatingsChange({ ...ratings, comments: e.target.value })}
-                    placeholder="Any feedback or comments…"
-                    className="mt-2.5 min-h-[90px] w-full resize-y rounded-lg border border-gray-200 p-3 text-sm outline-none focus:border-yellow-400"
-                  />
-                </div>
-              </div>
-              <button onClick={onRatingsNext} className="mt-3.5 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90">Next: Customer signature →</button>
-              <button onClick={onRatingsBack} className="mt-2.5 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">← Back to terms</button>
             </>
           )}
 

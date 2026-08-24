@@ -15,12 +15,14 @@ import { inCity, phoneKey, sbGet, type CityFilter } from './siteAuditShared';
 import { AUDIT_COLS, INSTALL_COLS, mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder } from './coe-ops/shared';
 import type { WpRow } from './coe-ops/wpTrack';
 import Followups from './coe-ops/Followups';
+import InstallReviews from './coe-ops/InstallReviews';
 import Wallpaper from './coe-ops/Wallpaper';
 import Insights from './coe-ops/Insights';
 
-type Tab = 'followups' | 'wallpaper' | 'insights';
+type Tab = 'followups' | 'installreviews' | 'wallpaper' | 'insights';
 const TABS: Array<{ k: Tab; l: string }> = [
-  { k: 'followups', l: '📞 Follow-ups' },
+  { k: 'followups', l: '📞 Audit Follow-ups' },
+  { k: 'installreviews', l: '📞 Install Reviews' },
   { k: 'wallpaper', l: '🖼️ Custom wallpaper' },
   { k: 'insights', l: '📉 Where it stalls' },
 ];
@@ -35,7 +37,10 @@ export default function SiteAuditCoeView({ city, who }: { city?: CityFilter; who
   const load = useCallback(async () => {
     const [aRows, iRows, wRows] = await Promise.all([
       sbGet('audit_orders?select=' + AUDIT_COLS + '&status=eq.completed&order=date.desc'),
-      sbGet('install_orders?select=' + INSTALL_COLS + '&status=neq.deleted&order=created_at.desc'),
+      // _slim (not the base table) — INSTALL_COLS now carries subjobs/log for the Install Reviews
+      // tab, and this is the repo's established way to add those columns without reintroducing the
+      // photo-bloat problem the base install_orders table has (see e.g. SiteAuditJobsView.tsx).
+      sbGet('install_orders_slim?select=' + INSTALL_COLS + '&status=neq.deleted&order=created_at.desc'),
       sbGet('wp_production?select=*&order=created_at.desc'),
     ]);
     if (Array.isArray(aRows)) setOrders(aRows.map(mapCoeAudit));
@@ -94,6 +99,8 @@ export default function SiteAuditCoeView({ city, who }: { city?: CityFilter; who
         <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-[#1F3A5F]" /></div>
       ) : tab === 'followups' ? (
         <Followups orders={scopedOrders} installByPhone={installByPhone} who={attribution} onChanged={load} />
+      ) : tab === 'installreviews' ? (
+        <InstallReviews installs={scopedInstalls} who={attribution} onChanged={load} />
       ) : tab === 'wallpaper' ? (
         <Wallpaper rows={scopedWp} installs={scopedInstalls} who={attribution} city={cityScope} onChanged={load} />
       ) : (

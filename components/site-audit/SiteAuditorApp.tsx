@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
 import { cn } from '@/lib/utils';
-import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPatch, sbPatchLong, uploadPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
 import {
   SketchCanvas,
   SignaturePad,
@@ -100,7 +100,9 @@ type Room = {
 type SignData = {
   img: string;
   name: string;
-  ratings: { q1: number; q2: number; q3: number; comments: string };
+  // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never on-site
+  // — this stays optional only so historical job cards with an old sign.ratings still render.
+  ratings?: { q1: number; q2: number; q3: number; comments: string };
   tcCategories?: string[];
 };
 
@@ -548,25 +550,6 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function StarRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={cn(
-            'h-8 w-8 rounded-md border text-xs font-bold',
-            value === n ? 'border-[#EAB308] bg-[#EAB308] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
-          )}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function CommentDialog({
   title,
@@ -2163,7 +2146,7 @@ function RoomReviewCard({ room, index }: { room: Room; index: number }) {
 
 
 /* ---- job card wizard (rooms -> review -> pass-to-client -> terms -> ratings -> sign -> done) ---- */
-type WizardPhase = 'rooms' | 'review' | 'pass' | 'terms' | 'ratings' | 'sign' | 'done';
+type WizardPhase = 'rooms' | 'review' | 'pass' | 'terms' | 'sign' | 'done';
 
 /* The order's first non-audit SKU picks the starting category, exactly like the field app; an SKU
    `type` the registry doesn't know falls back to flooring. */
@@ -2246,7 +2229,6 @@ function JobCardWizard({
   const [initialized, setInitialized] = useState(false);
   const [phase, setPhase] = useState<WizardPhase>('rooms');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'local'>('idle');
-  const [ratings, setRatings] = useState({ q1: 0, q2: 0, q3: 0, comments: '' });
   const [tcAgree, setTcAgree] = useState(false);
   const [signName, setSignName] = useState(order.name);
   const [completing, setCompleting] = useState(false);
@@ -2418,7 +2400,7 @@ function JobCardWizard({
     const rawSignImg = signPadRef.current.export();
     let signImg = rawSignImg;
     try { signImg = await uploadPhoto(rawSignImg); } catch { /* keep raw captured data URL */ }
-    const signData: SignData = { img: signImg, name: signName, ratings, tcCategories: [...new Set(rooms.map((r) => r.category))] };
+    const signData: SignData = { img: signImg, name: signName, tcCategories: [...new Set(rooms.map((r) => r.category))] };
     const finishedRooms = rooms.map(serializeRoom);
     const newLogEntry: LogEntry = {
       t: 'Site audit completed · JobCard signed',
@@ -2464,38 +2446,6 @@ function JobCardWizard({
         } catch {}
       }
 
-      try {
-        await sbPost('ratings', {
-          order_type: 'audit',
-          pi: order.pi,
-          order_id: order.id,
-          staff_email: actingAs.email,
-          staff_name: actingAs.name,
-          q1_score: ratings.q1,
-          q2_score: ratings.q2,
-          q3_score: ratings.q3,
-          comments: ratings.comments || '',
-          customer_name: order.name,
-          customer_phone: order.phone,
-        });
-      } catch {
-        try {
-          await sbPost('ratings', {
-            order_type: 'audit',
-            pi: order.pi,
-            order_id: order.id,
-            staff_email: actingAs.email,
-            staff_name: actingAs.name,
-            q1_score: ratings.q1,
-            q2_score: ratings.q2,
-            comments: ratings.comments || '',
-            customer_name: order.name,
-            customer_phone: order.phone,
-          });
-        } catch (e2) {
-          console.error('ratings write failed', e2);
-        }
-      }
     }
 
     locationTracker.stop();
@@ -2510,7 +2460,7 @@ function JobCardWizard({
     setCompleting(false);
     setPhase('done');
     onCompleted(updatedOrder);
-  }, [order, actingAs, ratings, rooms, signName, locationTracker, onCompleted, showToast]);
+  }, [order, actingAs, rooms, signName, locationTracker, onCompleted, showToast]);
 
   return (
     <div>
@@ -2643,74 +2593,10 @@ function JobCardWizard({
                 <button
                   type="button"
                   disabled={!tcAgree}
-                  onClick={() => setPhase('ratings')}
+                  onClick={() => setPhase('sign')}
                   className="flex-1 rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white disabled:opacity-40"
                 >
                   Agree &amp; proceed →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {phase === 'ratings' && (
-            <div>
-              <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4">
-                <h2 className="mb-3.5 text-[15px] font-bold text-gray-900">Client feedback</h2>
-                <p className="mb-4.5 text-[13.5px] text-gray-500">
-                  Please rate your experience. Tap a number from 1 (lowest) to 10 (highest).
-                </p>
-                <div className="mb-4.5">
-                  <label className="text-sm font-bold text-gray-800">1. How would you rate the overall Site Audit experience?</label>
-                  <StarRow value={ratings.q1} onChange={(n) => setRatings((r) => ({ ...r, q1: n }))} />
-                </div>
-                <div className="mb-4.5">
-                  <label className="text-sm font-bold text-gray-800">2. How would you rate your site auditor and their behaviour?</label>
-                  <StarRow value={ratings.q2} onChange={(n) => setRatings((r) => ({ ...r, q2: n }))} />
-                </div>
-                <div className="mb-4.5">
-                  <label className="text-sm font-bold text-gray-800">3. How clean did the site auditor leave the site after the audit?</label>
-                  <StarRow value={ratings.q3} onChange={(n) => setRatings((r) => ({ ...r, q3: n }))} />
-                </div>
-                <div>
-                  <label className="text-sm font-bold text-gray-800">
-                    Comments <span className="font-medium text-gray-400">(optional)</span>
-                  </label>
-                  <textarea
-                    value={ratings.comments}
-                    onChange={(e) => setRatings((r) => ({ ...r, comments: e.target.value }))}
-                    placeholder="Any feedback or comments…"
-                    className="mt-2 min-h-[80px] w-full resize-y rounded-lg border border-gray-200 p-2.5 text-[13.5px]"
-                  />
-                </div>
-              </div>
-              <div className="my-3.5 mb-6 flex gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setPhase('terms')}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                >
-                  ← Back to terms
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!ratings.q1) {
-                      showToast('Please rate the overall experience');
-                      return;
-                    }
-                    if (!ratings.q2) {
-                      showToast('Please rate the site auditor');
-                      return;
-                    }
-                    if (!ratings.q3) {
-                      showToast('Please rate the site cleanliness');
-                      return;
-                    }
-                    setPhase('sign');
-                  }}
-                  className="flex-1 rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90"
-                >
-                  Next: Signature →
                 </button>
               </div>
             </div>
@@ -2774,7 +2660,7 @@ function JobCardWizard({
               <div className="my-3.5 mb-6 flex gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setPhase('ratings')}
+                  onClick={() => setPhase('terms')}
                   className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
                 >
                   ← Back
