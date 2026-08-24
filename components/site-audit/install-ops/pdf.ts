@@ -6,8 +6,8 @@
 import { jsPDF } from 'jspdf';
 import { fmtDate } from './shared';
 import { installerById } from './shared';
-import { categoryFor } from '../auditRegistry';
-import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfHeader, mdPdfInstallRoom } from '../pdfBrand';
+import { categoryFor, mdInstallTermsBlock } from '../auditRegistry';
+import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfConsent, mdPdfHeader, mdPdfInstallRoom } from '../pdfBrand';
 import type { InstallOrder, Installer, JobCard, Subjob } from './types';
 
 async function compressForPdf(dataUrl: string | null | undefined): Promise<string | null> {
@@ -65,9 +65,6 @@ export async function genInstallPDFSM(o: InstallOrder, sj: Subjob, jobcard: JobC
   }
 
   doc.addPage(); y = M; hdr();
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
-  doc.text(doc.splitTextToSize('I confirm that the installation for the above order has been carried out by the Material Depot installer, the rooms and products listed in this Job Card have been installed, and that I am satisfied with the service provided.', W - 2 * M), M, y); y += 70;
   const RI = jobcard.sign && jobcard.sign.ratings;
   if (RI) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...navy); doc.text('Client Feedback', M, y); y += 14;
@@ -77,13 +74,15 @@ export async function genInstallPDFSM(o: InstallOrder, sj: Subjob, jobcard: JobC
     });
     y = doc.lastAutoTable.finalY + 10;
   }
-  doc.setFontSize(10); doc.setTextColor(...muted); doc.text('Client name: ' + ((jobcard.sign && jobcard.sign.name) || o.name || ''), M, y); y += 18; doc.text('Date: ' + fmtDate(sj.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (jobcard.sign && jobcard.sign.img) {
-    const si = await compressForPdf(jobcard.sign.img);
-    if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch { /* skip */ }
-  }
-  doc.setDrawColor(...muted); doc.setLineWidth(0.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y, M, W, H, compress: compressForPdf,
+    consentText: 'I confirm that the installation for the above order has been carried out by the Material Depot installer, the rooms and products listed in this Job Card have been installed, and that I am satisfied with the service provided, and that the installation was carried out in line with the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([sj.type]),
+    personName: (jobcard.sign && jobcard.sign.name) || o.name || '',
+    personDate: fmtDate(sj.date),
+    sign: jobcard.sign,
+    installerSign: jobcard.installerSign,
+    header: () => mdPdfHeader(doc, { title: 'Installation Job Card', right: o.pi, M }),
+  });
   doc.save(('Installation_' + (o.name || 'client') + '_' + (o.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }

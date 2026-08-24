@@ -25,6 +25,7 @@ import {
   categoryFor,
   computeDerived,
   fieldsFor,
+  mdInstallTermsBlock,
   needsVariant,
   normalizeRoom,
   prereqFlagged,
@@ -44,6 +45,7 @@ import {
   mdCompress,
   mdInfoTable,
   mdPdfAuditRoom,
+  mdPdfConsent,
   mdPdfHeader,
   loadBrandLogo,
 } from '@/components/site-audit/pdfBrand';
@@ -99,6 +101,7 @@ type SignData = {
   img: string;
   name: string;
   ratings: { q1: number; q2: number; q3: number; comments: string };
+  tcCategories?: string[];
 };
 
 /* Rooms are stored in their serialized v2 shape (see serializeRoom) — the same shape written to
@@ -192,7 +195,11 @@ function draftPayload(rooms: Room[]) {
   });
 }
 
-const MD_TC = `Material Depot — Client Acknowledgement
+// `termsBlock` (from mdInstallTermsBlock) fills what used to be a literal, never-written-in
+// placeholder — the install-readiness clauses for whichever categories are in this job card, so
+// the client is confirming the site is ready for installation, not just that the audit happened.
+function buildAuditTC(termsBlock: string): string {
+  return `Material Depot — Client Acknowledgement
 
 By ticking the box and signing below, I confirm that:
 
@@ -200,8 +207,10 @@ By ticking the box and signing below, I confirm that:
 • The details, measurements and room information recorded are accurate and correct.
 • I am satisfied with the service provided by the Material Depot team.
 • I consent to being contacted for quality feedback purposes if required.
+• I have read, understood and agree to the installation terms & conditions below, which explain what needs to be in place before installation can proceed.
 
-[Full terms and conditions will be provided by Material Depot]`;
+${termsBlock || '[Full terms and conditions will be provided by Material Depot]'}`;
+}
 
 /* ---- date / slot helpers (verbatim logic from source) ---- */
 function todayMidnight(): Date {
@@ -469,18 +478,6 @@ async function genPDF(order: Order, auditorName: string): Promise<string> {
   doc.addPage();
   y = M;
   header();
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(...navy);
-  doc.text('Client Acknowledgement', M, y + 4);
-  y += 26;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  doc.setTextColor(40, 40, 40);
-  const consent =
-    'I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided.';
-  doc.text(doc.splitTextToSize(consent, W - 2 * M), M, y);
-  y += 58;
   const R = order.jobcard?.sign?.ratings;
   if (R) {
     doc.setFont('helvetica', 'bold');
@@ -503,26 +500,20 @@ async function genPDF(order: Order, auditorName: string): Promise<string> {
     });
     y = doc.lastAutoTable.finalY + 12;
   }
-  doc.setFontSize(10);
-  doc.setTextColor(...muted);
-  doc.text('Client name: ' + (order.jobcard?.sign?.name || order.name), M, y);
-  y += 18;
-  doc.text('Date: ' + fmtDateA(order.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (order.jobcard?.sign?.img) {
-    const sigImg = await compressImageDataUrl(order.jobcard.sign.img);
-    if (sigImg) {
-      try {
-        doc.addImage(sigImg, 'JPEG', sx, sy - 10, sigW, sigH);
-      } catch {}
-    }
-  }
-  doc.setDrawColor(...muted);
-  doc.setLineWidth(0.8);
-  doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5);
-  doc.setTextColor(...muted);
-  doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y,
+    M,
+    W,
+    H,
+    compress: compressImageDataUrl,
+    consentText:
+      'I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided, and that I have read, understood and agree to the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([...new Set(rooms.map((r) => r.category || r.type))]),
+    personName: order.jobcard?.sign?.name || order.name,
+    personDate: fmtDateA(order.date),
+    sign: order.jobcard?.sign,
+    header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }),
+  });
   return URL.createObjectURL(doc.output('blob'));
 }
 
@@ -2427,7 +2418,7 @@ function JobCardWizard({
     const rawSignImg = signPadRef.current.export();
     let signImg = rawSignImg;
     try { signImg = await uploadPhoto(rawSignImg); } catch { /* keep raw captured data URL */ }
-    const signData: SignData = { img: signImg, name: signName, ratings };
+    const signData: SignData = { img: signImg, name: signName, ratings, tcCategories: [...new Set(rooms.map((r) => r.category))] };
     const finishedRooms = rooms.map(serializeRoom);
     const newLogEntry: LogEntry = {
       t: 'Site audit completed · JobCard signed',
@@ -2629,7 +2620,7 @@ function JobCardWizard({
               <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4">
                 <h2 className="mb-3 text-[15px] font-bold text-gray-900">Terms &amp; Conditions</h2>
                 <div className="max-h-[200px] overflow-y-auto whitespace-pre-line rounded-lg border border-gray-200 p-3.5 text-[13px] leading-relaxed text-gray-800">
-                  {MD_TC}
+                  {buildAuditTC(mdInstallTermsBlock(rooms.map((r) => r.category)))}
                 </div>
                 <label className="mt-4 flex cursor-pointer items-start gap-3">
                   <input

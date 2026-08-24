@@ -72,7 +72,8 @@ export interface RoomEntry {
 export interface JobCard {
   draft?: boolean;
   rooms?: RoomEntry[];
-  sign?: { img: string; name: string; ratings?: { q1: number; q2: number; q3: number; comments?: string } };
+  sign?: { img: string; name: string; ratings?: { q1: number; q2: number; q3: number; comments?: string }; tcCategories?: string[] };
+  installerSign?: { img: string; name: string };
 }
 
 export interface Subjob {

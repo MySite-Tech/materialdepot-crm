@@ -64,6 +64,10 @@ export type CategoryDef = {
   prerequisites: { k: string; label: string }[];
   legacyFields: [string, string][];
   installFields: CategoryField[];
+  // Installation terms & conditions bullet clauses shown at both audit and install completion
+  // (mdInstallTermsBlock). Categories with none yet contribute nothing — no branching needed
+  // elsewhere. Mirrors material-depot-site's md-audit-registry.js verbatim.
+  installTerms?: string[];
 };
 
 // Schema marker for a room written by the capture form. Bumped 2 -> 3 alongside per-variant units
@@ -255,6 +259,14 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
       { k: 'installedArea', group: 'Installed', label: 'Area installed (sq.ft)', input: 'decimal' },
       { k: 'batch', group: 'Installed', label: 'Batch / lot no.', input: 'text' },
     ],
+    installTerms: [
+      'Floor must be clean, dry, level & free from dust/seepage.',
+      "Any levelling, repair, waterproofing or moisture treatment is customer's scope.",
+      'Flooring should be acclimatised for 24–48 hours before installation.',
+      "Door trimming, skirting removal/reinstallation and major carpentry work are customer's scope unless included.",
+      'Site must be ready and furniture cleared before installation.',
+      '1-year installation warranty applies to workmanship, subject to all site requirements being fulfilled.',
+    ],
   },
   wallpaper: {
     id: 'wallpaper',
@@ -301,6 +313,14 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
       { k: 'installedRolls', group: 'Installed', label: 'Rolls used', input: 'decimal' },
       { k: 'batch', group: 'Installed', label: 'Batch / lot no.', input: 'text' },
     ],
+    installTerms: [
+      "Oil-based primer is mandatory for the 1-year installation warranty; primer & application are customer's scope.",
+      '2 coats of oil primer compulsory on MDF/HDHMR/Plywood.',
+      "Ladder/scaffolding for higher heights is customer's scope.",
+      'Surface must be smooth, dry, clean & dust-free, with no seepage/dampness.',
+      "Existing wallpaper removal & surface repairs are customer's scope unless specifically booked.",
+      'Installation may be rescheduled if the site is not ready.',
+    ],
   },
   cnc: {
     id: 'cnc',
@@ -322,6 +342,8 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     ],
     legacyFields: [],
     installFields: [],
+    // Pending — to be supplied. Contributes nothing to mdInstallTermsBlock until filled in.
+    installTerms: [],
   },
   wallpanel: {
     id: 'wallpanel',
@@ -346,6 +368,8 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
       { k: 'installedArea', group: 'Installed', label: 'Area installed (sq.ft)', input: 'decimal' },
       { k: 'batch', group: 'Installed', label: 'Batch / lot no.', input: 'text' },
     ],
+    // Pending — to be supplied. Contributes nothing to mdInstallTermsBlock until filled in.
+    installTerms: [],
   },
 };
 
@@ -389,6 +413,20 @@ export type InstallRoomV2 = {
 /* Category template for a category key / legacy `type` string. Falls back to flooring for display. */
 export function categoryFor(type?: string | null): CategoryDef {
   return (type && MD_CATEGORIES[type]) || MD_CATEGORIES.flooring;
+}
+
+/* Formatted installation-terms block for the category keys actually involved (audit: every
+   distinct room category in the job card; install: the single subjob category). Categories with
+   no installTerms yet (cnc/wallpanel) are silently skipped — no branching needed elsewhere.
+   Shared by both apps' on-screen T&C screens and the branded PDF consent page. */
+export function mdInstallTermsBlock(categoryKeys: (string | null | undefined)[]): string {
+  const seen = new Set<string>();
+  const blocks = categoryKeys
+    .filter((k): k is string => !!k && !seen.has(k) && (seen.add(k), true))
+    .map((k) => MD_CATEGORIES[k])
+    .filter((cat): cat is CategoryDef => !!cat && !!cat.installTerms && cat.installTerms.length > 0)
+    .map((cat) => cat.label + ':\n' + cat.installTerms!.map((t) => '• ' + t).join('\n'));
+  return blocks.join('\n\n');
 }
 
 /* ---- PER-ROOM UNIT / FIELD RESOLUTION ------------------------------------------------------
