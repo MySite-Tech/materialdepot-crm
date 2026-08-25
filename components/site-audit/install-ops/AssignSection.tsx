@@ -12,7 +12,8 @@
    root view. */
 
 import { useMemo, useRef, useState } from 'react';
-import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, requireNote, sbPatch, type CityFilter, type Shadower } from '../siteAuditShared';
+import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch, type CityFilter, type Shadower } from '../siteAuditShared';
+import { useNoteModal } from '../NoteModal';
 import ShadowerSelect, { type ShadowerOption } from './ShadowerSelect';
 import {
   dateRange, fmtDate, installerById, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
@@ -60,6 +61,7 @@ function EmptyInstallerPool({ err, anyLoaded, type, onRetry }: { err: boolean; a
 export default function AssignSection({ order: o, subjob: sj, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr = false, onRetryInstallers, reload, toast, onOpenOrder }: Props) {
   const [, setTick] = useState(0);
   const redraw = () => setTick((x) => x + 1);
+  const { ask: askNote, modal: noteModal } = useNoteModal();
 
   // Pool is city-scoped (an installer can only take jobs in their own city);
   // installerById below still resolves against the FULL roster so an existing
@@ -241,7 +243,7 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
       ds.forEach((d) => { if (isOffDay(inst, d)) conflicts.push(inst.name + ' on ' + fmtDate(d) + ' (' + offDayReason(inst, d) + ')'); });
     }
     if (conflicts.length) {
-      const note = (window.prompt('⚠ Unavailable: ' + conflicts.join('; ') + '.\n\nReason for assigning despite unavailability (required):') || '').trim();
+      const note = await askNote('Reason for assigning despite unavailability', '⚠ Unavailable: ' + conflicts.join('; '));
       if (!note) { toast('Reason required — nothing saved'); return; }
       availOverrideNote = ' · ⚠ assigned despite unavailability (' + conflicts.join('; ') + ') — SM override: "' + note + '"';
     }
@@ -250,7 +252,7 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
     const remark = remarkRef.current ? (remarkRef.current.value || '').trim() : '';
     if (wasResched && !remark) { toast('Please enter a reason for the reschedule'); return; }
     /* A reschedule already carries a mandatory remark above — don't prompt twice. */
-    const assignNote = wasResched ? remark : requireNote('Assign ' + sj.type + ' installer(s): ' + valid.map((a) => a.installer_name).join(', '));
+    const assignNote = wasResched ? remark : await askNote('Assign ' + sj.type + ' installer(s): ' + valid.map((a) => a.installer_name).join(', '));
     if (assignNote === null) return;
 
     const joined = joinShadowers(shadowers);
@@ -343,6 +345,7 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
 
   return (
     <div>
+      {noteModal}
       {/* Shown in BOTH modes — the dropdown is equally empty in either. */}
       {pool.length ? null : <EmptyInstallerPool err={installersErr} anyLoaded={!!installers.length} type={sj.type} onRetry={onRetryInstallers} />}
       <div className="flex rounded-md border border-gray-200 overflow-hidden mb-3 text-[12.5px] font-semibold">

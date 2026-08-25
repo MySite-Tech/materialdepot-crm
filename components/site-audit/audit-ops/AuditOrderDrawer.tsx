@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuditRoomCard } from '../AuditRoomViews';
+import { useNoteModal } from '../NoteModal';
 import RoomSkuEditor, { auditRoomSkuSaver } from '../RoomSkuEditor';
 import ShadowerSelect, { type ShadowerOption } from '../install-ops/ShadowerSelect';
 import { MD_JOURNEY_STAGES, journeyStage, type JourneyEntry } from '../auditRegistry';
@@ -22,7 +23,7 @@ import {
 } from '../siteAuditShared';
 import {
   AUTO_STATUSES, FLOW, FLOW_LABELS, STATUS, auditorById, auditorConflictOrder, auditorLoad, auditorNameOf,
-  capFor, dstr, flowIndexOf, fmtDate, mapUrl, offReason, requireNote, slotLabel, today,
+  capFor, dstr, flowIndexOf, fmtDate, mapUrl, offReason, slotLabel, today,
   type AuditOrder, type AuditSkuRow, type Auditor, type Caps, type SlotDef,
 } from './shared';
 import { genAuditPDF } from './pdf';
@@ -119,6 +120,7 @@ export default function AuditOrderDrawer({
   const [custAddr, setCustAddr] = useState(o.addr || '');
   const [journey, setJourney] = useState<JourneyEntry[] | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const { ask: askNote, modal: noteModal } = useNoteModal();
 
   const loadJourney = useCallback(async () => {
     const rows = await sbGet('audit_orders?id=eq.' + o.id + '&select=bm_journey');
@@ -158,7 +160,7 @@ export default function AuditOrderDrawer({
   async function stepBack(target: string) {
     const tIdx = FLOW.indexOf(target);
     if (tIdx >= flowIdx) return;
-    const note = requireNote('Move back to ' + STATUS[target].l);
+    const note = await askNote('Move back to ' + STATUS[target].l);
     if (note === null) return;
     const body: Record<string, any> = {
       status: target,
@@ -206,7 +208,7 @@ export default function AuditOrderDrawer({
     // Manually forcing At Site skips the auditor app's arrival confirmation,
     // which is what Analytics' Arrival On Time % matches on — flag it in the log.
     const isManualAtSite = st === 'atsite' && o.status !== 'atsite';
-    const note = requireNote('Status → ' + STATUS[st].l);
+    const note = await askNote('Status → ' + STATUS[st].l);
     if (note === null) return;
 
     const tEff = st === 'reschedule' || st === 'call_na' ? FLOW.indexOf('created') : FLOW.indexOf(st);
@@ -280,13 +282,13 @@ export default function AuditOrderDrawer({
   /* ── follow-up ───────────────────────────────────────────────────────── */
   async function setFollowUpDate() {
     if (!followUp) { toast('Pick a date first'); return; }
-    const note = requireNote('Set follow-up to ' + fmtDate(followUp));
+    const note = await askNote('Set follow-up to ' + fmtDate(followUp));
     if (note === null) return;
     await patch({ service: { ...(o.service || {}), follow_up_date: followUp }, log: logged('Follow-up set · Call client by ' + fmtDate(followUp) + ' — note: "' + note + '"') },
       'Follow-up set for ' + fmtDate(followUp));
   }
   async function clearFollowUp() {
-    const note = requireNote('Clear follow-up');
+    const note = await askNote('Clear follow-up');
     if (note === null) return;
     const svc = { ...(o.service || {}) };
     delete svc.follow_up_date;
@@ -336,7 +338,7 @@ export default function AuditOrderDrawer({
   async function assignAuditor() {
     const a = auditorById(auditors, pickedAuditor);
     if (!a) { toast('Pick an auditor first'); return; }
-    const note = requireNote('Assign auditor: ' + a.name);
+    const note = await askNote('Assign auditor: ' + a.name);
     if (note === null) return;
     const prev = parseShadowers(o.shadowerEmail, o.shadowerName);
     const joined = joinShadowers(shadowers);
@@ -460,6 +462,7 @@ export default function AuditOrderDrawer({
 
   return (
     <>
+      {noteModal}
       <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4">
         <div>
           <h2 className="text-base font-bold text-gray-900">{o.name || (o.status === 'slot_reserved' ? 'Pre-booked Slot' : '—')}</h2>

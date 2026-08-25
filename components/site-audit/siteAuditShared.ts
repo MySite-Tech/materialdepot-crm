@@ -305,18 +305,6 @@ export function joinShadowers(list: Shadower[]): { email: string | null; name: s
   return { email: clean.map((s) => s.email).join(','), name: clean.map((s) => s.name || s.email).join(',') };
 }
 
-/* Mandatory note for any manual SM action (status change, backward move,
-   follow-up, assignment). Returns the trimmed note, or null if cancelled/left
-   blank — callers MUST abort and write nothing on null. Shared by audit-ops
-   and install-ops so both trees log the same way. */
-export function requireNote(actionLabel: string, preface?: string): string | null {
-  const raw = window.prompt((preface ? preface + '\n\n' : '') + 'Add a note for this action (required):\n' + actionLabel);
-  if (raw === null) return null;
-  const note = raw.trim();
-  if (!note) return null;
-  return note;
-}
-
 /* ── Availability (profiles.weekly_off / profiles.leave_dates) ─────────────
    A weekday number (0=Sun) the person is always off, plus explicit leave
    dates. Both are advisory at assignment time — the SM can still override,
