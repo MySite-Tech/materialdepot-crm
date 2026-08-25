@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
-import { sbGet, sbPatch, sbPatchLong, uploadPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
+import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/omsService';
 import {
   SignaturePad,
   type SignaturePadHandle,
@@ -584,6 +585,9 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   /* ── Poll + visibility refresh (same pattern as elsewhere in this suite) ── */
   useEffect(() => {
     loadJobs();
+    // Drain any OMS service confirmation that failed earlier (idempotent upstream) — an
+    // unretried failure would leave a finished installation unbilled.
+    retryQueuedServiceConfirms();
     location.start(null);
     const pollId = setInterval(() => { if (!document.hidden) loadJobs(); }, 30000);
     const onVis = () => { if (!document.hidden) loadJobs(); };
@@ -626,7 +630,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     const logMsg = logOverride || DEFAULT_LOG_MESSAGES[st] || st;
     try {
       if (job.id && job.sjId) {
-        const parentRows = await sbGet('install_orders?id=eq.' + job.id + '&select=subjobs,log,status');
+        const parentRows = await sbGet('install_orders?id=eq.' + job.id + '&select=subjobs,log,status,po');
         if (!Array.isArray(parentRows) || !parentRows[0]) { toast('Job not found — please refresh'); return; }
         const parent = parentRows[0];
         const subjobs = parent.subjobs || [];
@@ -656,6 +660,13 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         freshLog.push({ t: logMsg, d: new Date().toISOString(), by: 'auto', who: actingAs.name, ...(extraLog || {}) });
         const parentStatus = rollupStatus(subjobs, parent.status || 'scheduled');
         await sbPatch('install_orders', job.id, { subjobs, status: parentStatus, log: freshLog });
+        // Whole installation done (not just one sub-job) → confirm the OMS SERVICE leg, which is what
+        // raises its invoice. A partial install must NOT bill, so this is gated on the rollup status.
+        if (parentStatus === 'completed') {
+          try {
+            await confirmServicePerformed(parent.po, 'Installation completed by ' + actingAs.name);
+          } catch {}
+        }
       }
       if (st === 'atsite') location.start(job.pi);
       else if (st === 'completed' || st === 'reschedule') location.stop();
@@ -800,7 +811,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setFinishBusy(true);
     toast('Saving...');
     try {
-      const parentRows = await sbGet('install_orders?id=eq.' + job.id + '&select=subjobs,log,status');
+      const parentRows = await sbGet('install_orders?id=eq.' + job.id + '&select=subjobs,log,status,po');
       if (Array.isArray(parentRows) && parentRows[0]) {
         const subjobs = parentRows[0].subjobs || [];
         const sj = subjobs.find((s: any) => s.id === job.sjId);
@@ -819,6 +830,13 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const parentStatus = rollupStatus(subjobs, parentRows[0].status || 'completed');
         await sbPatch('install_orders', job.id, { subjobs, status: parentStatus, log: freshLog });
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
+        // Whole installation done (not just one sub-job) → confirm the OMS SERVICE leg, which is what
+        // raises its invoice. A partial install must NOT bill, so this is gated on the rollup status.
+        if (parentStatus === 'completed') {
+          try {
+            await confirmServicePerformed(parentRows[0].po, 'Installation completed by ' + actingAs.name);
+          } catch {}
+        }
       }
     } catch {
       toast("Network error — couldn't save. Try again");
@@ -867,7 +885,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setFinishBusy(true);
     toast('Saving...');
     try {
-      const parentRows = await sbGet('install_orders?id=eq.' + job.id + '&select=subjobs,log,status');
+      const parentRows = await sbGet('install_orders?id=eq.' + job.id + '&select=subjobs,log,status,po');
       if (Array.isArray(parentRows) && parentRows[0]) {
         const subjobs = parentRows[0].subjobs || [];
         const sj = subjobs.find((s: any) => s.id === job.sjId);
@@ -883,6 +901,13 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         }
         const parentStatus = rollupStatus(subjobs, parentRows[0].status || 'completed');
         await sbPatch('install_orders', job.id, { status: parentStatus, log: newParentLog });
+        // Whole installation done (not just one sub-job) → confirm the OMS SERVICE leg, which is what
+        // raises its invoice. A partial install must NOT bill, so this is gated on the rollup status.
+        if (parentStatus === 'completed') {
+          try {
+            await confirmServicePerformed(parentRows[0].po, 'Installation completed by ' + actingAs.name);
+          } catch {}
+        }
         const completionPatch = { subjobs };
         completionWriteRef.current = completionPatch;
         await sbPatchLong('install_orders', job.id, completionPatch);

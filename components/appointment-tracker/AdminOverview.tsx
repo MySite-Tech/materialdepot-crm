@@ -6,7 +6,8 @@
 // AppointmentTrackerClient only renders this for role === "admin".
 
 import { useMemo } from "react";
-import { BRANCHES, branchFrom, ymd } from "@/lib/appt-shared";
+import { branchFrom, ymd } from "@/lib/appt-shared";
+import type { Branch } from "@/lib/appt-shared";
 import type { ApptLead as Lead, EcReadyMap } from "@/lib/appt-shared";
 import type { DateRange } from "./AppointmentTrackerClient";
 
@@ -29,10 +30,13 @@ function computeStats(leads: Lead[], ec: EcReadyMap) {
 // `allLeads` is the parent's already-fetched, all-branch feed — this view used to
 // re-sweep Kylas for the same rows. `range` is the tracker's shared date range
 // (top control bar), so this screen no longer carries a date card of its own.
-export default function AdminOverview({ allLeads, ec, range }: {
+export default function AdminOverview({ allLeads, ec, range, branches }: {
   allLeads: Lead[];
   ec: EcReadyMap;
   range: DateRange;
+  /** The tracker's branch list (CRM-fetched), so this table can't list a
+      different set of branches from the chip that scopes every other view. */
+  branches: Branch[];
 }) {
   const leads = useMemo(() => {
     const fromMs = new Date(range.from + "T00:00:00").getTime();
@@ -44,11 +48,11 @@ export default function AdminOverview({ allLeads, ec, range }: {
   }, [allLeads, range.from, range.to]);
 
   const perBranch = useMemo(() => {
-    return BRANCHES.map((b) => {
-      const scoped = leads.filter((l) => branchFrom(l.companyBusinessType) === b);
+    return branches.map((b) => {
+      const scoped = leads.filter((l) => branchFrom(l.companyBusinessType, branches) === b);
       return { branch: b, ...computeStats(scoped, ec) };
     });
-  }, [leads, ec]);
+  }, [leads, ec, branches]);
   const totals = useMemo(() => perBranch.reduce((acc, r) => ({
     total: acc.total + r.total,
     today: acc.today + r.today,
@@ -57,7 +61,7 @@ export default function AdminOverview({ allLeads, ec, range }: {
     unmarked: acc.unmarked + r.unmarked,
     visited: acc.visited + r.visited,
   }), { total: 0, today: 0, ready: 0, notReady: 0, unmarked: 0, visited: 0 }), [perBranch]);
-  const unmapped = leads.filter((l) => branchFrom(l.companyBusinessType) === null).length;
+  const unmapped = leads.filter((l) => branchFrom(l.companyBusinessType, branches) === null).length;
 
   // Per-date breakdown across all branches.
   const perDate = useMemo(() => {
@@ -93,7 +97,7 @@ export default function AdminOverview({ allLeads, ec, range }: {
 
       {unmapped > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4 text-[11px] text-amber-700">
-          ⚠ {unmapped} appointment{unmapped === 1 ? "" : "s"} without a recognised branch value in <code>companyBusinessType</code>. Check that the field uses one of: {BRANCHES.join(" · ")}.
+          ⚠ {unmapped} appointment{unmapped === 1 ? "" : "s"} without a recognised branch value in <code>companyBusinessType</code>. Check that the field uses one of: {branches.join(" · ")}.
         </div>
       )}
 

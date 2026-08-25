@@ -126,22 +126,33 @@ export async function POST(req: NextRequest) {
 
         const pageNum = Math.max(1, Number(page) || 1);
         const size = Math.max(1, Number(page_size) || 30);
-        const needsFilter = !!(search || category || display_type || is_active !== undefined || is_deleted !== undefined);
+        /* A branch_id listing is paginated locally too: upstream ignores
+           page/page_size for a branch and returns the whole branch in one shot
+           (see scanLocations), so forwarding page_size to it silently returns
+           every row on one page. Only the cross-branch all=True listing honours
+           upstream pagination. */
+        const needsLocalFilter = !!(branch_id || category || display_type || is_active !== undefined || is_deleted !== undefined);
 
-        /* Upstream can only paginate the `all=True` listing. The branch_id
-           listing ignores page/page_size entirely and returns every row for the
-           branch — so asking it for "page 3, 30 rows" used to hand the browser
-           all 20,630 Whitefield rows AND a page count derived from them, i.e.
-           688 pages that every one of them rendered in full. Anything scoped to
-           a branch is therefore paged here, over the rows we already hold. */
-        if (!needsFilter && !branch_id) {
-          const url = `${API_BASE}/fetch-variant-locations/?all=True&page=${pageNum}&page_size=${size}`;
+        if (!needsLocalFilter) {
+          let url = branch_id
+            ? `${API_BASE}/fetch-variant-locations/?branch_id=${branch_id}`
+            : `${API_BASE}/fetch-variant-locations/?all=True`;
+          url += `&page=${pageNum}&page_size=${size}`;
+          if (search) url += `&product_name=${encodeURIComponent(search)}`;
           const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-          if (!res.ok) {
+          if (res.ok) {
+            const text = await res.text();
+            try {
+              const data = JSON.parse(text);
+              return NextResponse.json(data);
+            } catch {
+              // Backend returned non-JSON (e.g. "Backend call failure") — fall through to scanLocations
+            }
+          }
+          // If no search, don't fall through — return the error
+          if (!search) {
             return NextResponse.json({ error: `API server error (${res.status})` }, { status: 502 });
           }
-          const data = await res.json().catch(() => ({}));
-          return NextResponse.json(data);
         }
 
         const scan = await scanLocations(token, { branch_id, is_deleted: undefined });
@@ -237,10 +248,10 @@ export async function POST(req: NextRequest) {
         return proxyResponse(res);
       }
 
-      case 'cancel_movement': {
+      case 'revert_movement': {
         const token = getToken(req);
-        const { vsm_id } = payload;
-        if (!vsm_id || typeof vsm_id !== 'number') {
+        const vsm_id = Number(payload.vsm_id);
+        if (!vsm_id || isNaN(vsm_id)) {
           return NextResponse.json({ error: 'vsm_id is required and must be a number' }, { status: 400 });
         }
         const res = await fetch(`${API_BASE}/cancel-variant-store-movement/`, {

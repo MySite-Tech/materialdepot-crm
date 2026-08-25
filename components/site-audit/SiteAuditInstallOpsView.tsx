@@ -18,6 +18,8 @@
    shows the same profiles-based location tracking for installers/auditors. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { poFieldFor } from './omsService';
+import { autoImportInstallOrders } from './autoImportAuditOrders';
 import { inCity, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
 import OrdersView from './install-ops/OrdersView';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from './install-ops/QueueViews';
@@ -177,6 +179,13 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
 
   useEffect(() => {
     Promise.all([loadInstallers(), loadShadowers(), loadOrders()]);
+    /* Jobs the backend already has but nobody imported are pulled in here, so
+       Pending POs is a fallback rather than the only way in. */
+    autoImportInstallOrders().then((added) => {
+      if (!added) return;
+      loadOrders();
+      toast(added + (added === 1 ? ' new installation order' : ' new installation orders') + ' imported from the backend');
+    });
     /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
        case still costs exactly one query per tick. */
     const poll = setInterval(() => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } }, 60000);
@@ -274,7 +283,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
     const skusRows = (r.skus || []).filter((s: any) => s.variant_handle);
     setAo({
       pi: r.estimate_lead_id || '',
-      po: r.po_number || '',
+      po: poFieldFor(r),
       name: (r.customer && r.customer.name) || '',
       phone: r.customer && r.customer.contact ? String(r.customer.contact) : '',
       bm: (r.bm && r.bm.name) || '',

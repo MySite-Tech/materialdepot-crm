@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 // we page through the branch/date-scoped records here and bucket into slots (the
 // "frontend" does the bucketing). Always returns { buckets } so the UI degrades
 // gracefully on any upstream issue.
-const MD_API_BASE = process.env.MD_API_BASE_URL || "https://api.materialdepot.com/apiV1";
+// Same backend host the rest of the CRM talks to (lib/mockApi.ts).
+const MD_API_BASE = "https://api-dev2.materialdepot.in/apiV1";
 
 const SLOTS: { key: string; startH: number; endH: number }[] = [
   { key: "s1", startH: 10, endH: 12 },

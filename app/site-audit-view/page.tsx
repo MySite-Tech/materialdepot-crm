@@ -14,6 +14,7 @@ import SiteAuditOpsView from '@/components/site-audit/SiteAuditOpsView';
 import SiteShadowerApp from '@/components/site-audit/SiteShadowerApp';
 import SiteAuditBmView from '@/components/site-audit/SiteAuditBmView';
 import SiteAuditCoeView from '@/components/site-audit/SiteAuditCoeView';
+import SiteAuditBranchManagerView from '@/components/site-audit/SiteAuditBranchManagerView';
 
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/SiteAuditLiveView'), { ssr: false });
@@ -33,6 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
   auditor_installer: 'Auditor + Installer',
   bm: 'Business Manager',
   coe: 'Category Ops Executive',
+  branch_mgr: 'Branch Manager',
 };
 
 type Person = { id: string; name: string; email: string; role: string; contact?: string };
@@ -141,19 +143,38 @@ function SiteAuditViewInner() {
     </div>
   );
 
-  const isCoe = person.role === 'coe' && !wantShadowing;
-  const isSm = (viewRole === 'service_mgr' || (isCoe && coeShowServiceMgr)) && !wantShadowing && person.role !== 'bm';
   const isCombined = viewRole === 'auditor_installer' && !wantShadowing && person.role !== 'bm';
-  const showCity = isSm;
+  /* A COE lands on their own follow-up queue but can switch to the Service
+     Manager dashboard, and a branch manager gets their branch rollup — same
+     two person.role branches SiteAuditOwnDashboard renders in-app. */
+  const isCoe = person.role === 'coe' && !wantShadowing;
+  const isBranchMgr = person.role === 'branch_mgr' && !wantShadowing;
+  const isSm = (viewRole === 'service_mgr' || (isCoe && coeShowServiceMgr)) && !wantShadowing && person.role !== 'bm';
+  const showSm = isSm || (isCoe && coeShowServiceMgr);
+  const showCity = showSm || isCoe || isBranchMgr;
 
   type Tab = { key: string; label: string };
-  const primaryTabs: Tab[] = isSm
+  const primaryTabs: Tab[] = showSm
     ? [{ key: 'audit', label: 'Audit Dashboard' }, { key: 'install', label: 'Install Dashboard' }]
     : isCombined
       ? [{ key: 'auditor', label: 'Auditor view' }, { key: 'installer', label: 'Installer view' }]
       : [];
-  const activePrimary = isSm ? smTab : isCombined ? combinedView : '';
-  const pickPrimary = (k: string) => (isSm ? setSmTab(k as 'audit' | 'install') : setCombinedView(k as 'auditor' | 'installer'));
+  const activePrimary = showSm ? smTab : isCombined ? combinedView : '';
+  const pickPrimary = (k: string) => (showSm ? setSmTab(k as 'audit' | 'install') : setCombinedView(k as 'auditor' | 'installer'));
+
+  const smBody = smTab === 'install' ? (
+    <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
+  ) : smAuditSubTab === 'ops' ? (
+    <SiteAuditOpsView city={city} attribution={person.name || crmName} />
+  ) : smAuditSubTab === 'jobs' ? (
+    <SiteAuditJobsView city={city} />
+  ) : smAuditSubTab === 'perf' ? (
+    <SiteAuditPerfView city={city} />
+  ) : smAuditSubTab === 'analytics' ? (
+    <SiteAuditAnalyticsView city={city} />
+  ) : (
+    <SiteAuditLiveView city={city} />
+  );
 
   const auditSubTabs: Tab[] = [
     { key: 'ops', label: 'Audit Ops' },
@@ -162,7 +183,7 @@ function SiteAuditViewInner() {
     { key: 'analytics', label: 'Analytics' },
     { key: 'live', label: 'Live' },
   ];
-  const showSubTabs = isSm && smTab === 'audit';
+  const showSubTabs = showSm && smTab === 'audit';
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
@@ -237,20 +258,22 @@ function SiteAuditViewInner() {
           <SiteAuditCoeView city={city} who={person.name} />
         ) : isCombined ? (
           combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
-        ) : isSm ? (
-          smTab === 'install' ? (
-            <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
-          ) : smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} attribution={person.name || crmName} />
-          ) : smAuditSubTab === 'jobs' ? (
-            <SiteAuditJobsView city={city} />
-          ) : smAuditSubTab === 'perf' ? (
-            <SiteAuditPerfView city={city} />
-          ) : smAuditSubTab === 'analytics' ? (
-            <SiteAuditAnalyticsView city={city} />
-          ) : (
-            <SiteAuditLiveView city={city} />
-          )
+        ) : isCoe ? (
+          <div>
+            <div className="mb-3 flex justify-end">
+              <button
+                onClick={() => setCoeShowServiceMgr((v) => !v)}
+                className="cursor-pointer rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700"
+              >
+                {coeShowServiceMgr ? '← COE dashboard' : 'Service Manager dashboard →'}
+              </button>
+            </div>
+            {coeShowServiceMgr ? smBody : <SiteAuditCoeView city={city} who={person.name} />}
+          </div>
+        ) : isBranchMgr ? (
+          <SiteAuditBranchManagerView branches={null} contact={person.contact || null} city={city} />
+        ) : showSm ? (
+          smBody
         ) : (
           <div className="text-sm text-gray-400">
             No Site Audit dashboard permission set for this account. Ask an admin to grant a Site Audit sub-role under Admin &gt; Users.

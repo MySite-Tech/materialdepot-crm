@@ -9,11 +9,22 @@
 
 import type { AppUser } from '../types/crm';
 
-// Branch enumValue must exactly match the corresponding option on Kylas's own
+// The branch list is fetched from the CRM's own branch table — the same
+// `fetchBranchList()` ('/orgainsation-branch/') the Leads and Footfall tabs
+// use, threaded in from App.tsx — so a store added there shows up here too.
+// This list is only the seed/fallback for before that fetch lands (or if it
+// fails). Each name must still match the corresponding option on Kylas's
 // `companyBusinessType` picklist, or that branch's leads won't be found (see
-// branchFrom here, and BRANCH_ENUM_VALUES in app/api/appointments/route.ts).
-export const BRANCHES = ["JP Nagar", "Yelahanka", "Whitefield", "Gachibowli", "Kompally", "HSR"] as const;
-export type Branch = (typeof BRANCHES)[number];
+// branchFrom here, and BRANCH_ENUM_VALUES in app/api/appointments/route.ts) —
+// which is what apptBranchesFromCrm normalises the CRM's spellings back to.
+export const BRANCHES = ["JP Nagar", "Yelahanka", "Whitefield", "Gachibowli", "Kompally", "HSR", "Basaveshwar Nagar"] as const;
+/** A branch label. Not a closed union any more — the list is data, not code. */
+export type Branch = string;
+
+/** Reject junk before it reaches the rota table, now that any name is valid. */
+export function isValidBranchName(name: unknown): name is Branch {
+  return typeof name === "string" && name.trim().length > 0 && name.length <= 64;
+}
 
 export const ROLES = [
   { key: "presales", label: "Presales" },
@@ -60,17 +71,48 @@ export function isApptAdmin(user: AppUser | null | undefined): boolean {
 }
 
 /**
- * EC branches this user may look at:
+ * EC branches this user may look at, out of `options` (the fetched branch list):
  *   1. admin-tier CRM roles -> all branches
- *   2. their CRM allowedBranches, fuzzy-matched to our six ECs
+ *   2. their CRM allowedBranches, fuzzy-matched to those ECs
  *   3. all branches -- a user whose CRM branches don't name an EC (or who has
  *      none set) still gets a usable tab rather than an empty dropdown.
  */
-export function apptBranchesFor(user: AppUser | null | undefined): Branch[] {
-  if (ALL_BRANCH_ROLES.has(user?.role ?? "") || isApptAdmin(user)) return [...BRANCHES];
+export function apptBranchesFor(
+  user: AppUser | null | undefined,
+  options: readonly Branch[] = BRANCHES,
+): Branch[] {
+  const all = options.length > 0 ? [...options] : [...BRANCHES];
+  if (ALL_BRANCH_ROLES.has(user?.role ?? "") || isApptAdmin(user)) return all;
   const allowed = user?.allowedBranches ?? [];
-  const matched = BRANCHES.filter((b) => allowed.some((a) => sameBranch(a, b)));
-  return matched.length > 0 ? matched : [...BRANCHES];
+  const matched = all.filter((b) => allowed.some((a) => sameBranch(a, b)));
+  return matched.length > 0 ? matched : all;
+}
+
+// CRM branches that exist for HR/reporting but never take an appointment, so
+// listing them would only ever offer an empty calendar.
+const NON_APPOINTMENT_BRANCHES = new Set(["hq", "headoffice", "corporate", "warehouse"]);
+
+/**
+ * The CRM branch list (App.tsx's `branches`, from fetchBranchList()) turned into
+ * tracker branches. CRM spellings aren't ours -- "JP Nagar EC", the long-standing
+ * "Yelankha" misspelling -- so anything that names one of our ECs is normalised
+ * back to that EC's spelling, which is what branchFrom and the Kylas enum match
+ * on. A CRM branch that names no known EC is still offered under its own name,
+ * so a newly-opened store appears here without a code change.
+ *
+ * Returns the seed list when given nothing, i.e. while the fetch is in flight
+ * or after it failed -- never an empty dropdown.
+ */
+export function apptBranchesFromCrm(crmNames: readonly string[] | undefined | null): Branch[] {
+  const out: Branch[] = [];
+  for (const raw of crmNames ?? []) {
+    const name = (raw ?? "").trim();
+    if (!name) continue;
+    if (NON_APPOINTMENT_BRANCHES.has(name.toLowerCase().replace(/[^a-z]/g, ""))) continue;
+    const canonical = BRANCHES.find((b) => sameBranch(name, b)) ?? name;
+    if (!out.includes(canonical)) out.push(canonical);
+  }
+  return out.length > 0 ? out : [...BRANCHES];
 }
 
 // CRM branch names aren't spelled identically to ours (suffixes like
@@ -78,6 +120,8 @@ export function apptBranchesFor(user: AppUser | null | undefined): Branch[] {
 // EC lists the normalized spellings it should also answer to.
 const BRANCH_ALIASES: Partial<Record<Branch, string[]>> = {
   Yelahanka: ["yelankha", "yelanka"],
+  // Kylas spells it "Basaveshwar Nagar", the CRM/branch table "Basaveshwara".
+  "Basaveshwar Nagar": ["basaveshwaranagar", "basaveshwarnagar"],
 };
 
 /** Loose branch-name compare — tolerates suffixes and known misspellings. */
@@ -91,13 +135,16 @@ function sameBranch(crmName: string, branch: Branch): boolean {
 // Resolve a lead's `companyBusinessType` value to one of our BRANCHES.
 // Kylas stores it as the raw enum key (e.g. "jp_nagar_ec", "yelahanka_ec"),
 // so we strip non-letters on both sides before substring-matching.
-export function branchFrom(companyBusinessType: unknown): Branch | null {
+export function branchFrom(
+  companyBusinessType: unknown,
+  branches: readonly Branch[] = BRANCHES,
+): Branch | null {
   const raw = typeof companyBusinessType === "string"
     ? companyBusinessType
     : (companyBusinessType as { name?: string } | null)?.name ?? "";
   const normalized = raw.toLowerCase().replace(/[^a-z]/g, "");
   if (!normalized) return null;
-  return BRANCHES.find((b) => normalized.includes(b.toLowerCase().replace(/[^a-z]/g, ""))) ?? null;
+  return branches.find((b) => normalized.includes(b.toLowerCase().replace(/[^a-z]/g, ""))) ?? null;
 }
 
 // localStorage keys — only the last-viewed branch is remembered now that

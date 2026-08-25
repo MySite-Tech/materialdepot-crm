@@ -5,13 +5,16 @@ import type { B2BData } from '@/lib/b2bLeads';
 import {
   INBOUND_STAGES, REP_TARGETS, B2B_ADMINS,
   type InboundLead, type OutboundLead, type KamClient,
-  type InboundStage, type RepRole, type TargetStore,
+  type InboundStage, type KamStage, type RepRole, type TargetStore,
 } from './mockData';
 
 // ── Stage semantics ───────────────────────────────────────────────────────────
 const isInboundDead = (l: InboundLead) => l.stage === 'Lost' || l.stage === 'Enquiry Invalid';
-const isKamActive = (c: KamClient) =>
-  c.stage === 'PI Shared' || c.stage === 'Awaiting Payment' || c.stage === 'Closed';
+// An account with a live cart counts as active, same as one with a PI out.
+const KAM_ACTIVE_STAGES: KamStage[] = [
+  'Quote Approval Pending', 'PI Shared', 'Awaiting Payment', 'Order Placed', 'Closed',
+];
+const isKamActive = (c: KamClient) => KAM_ACTIVE_STAGES.includes(c.stage);
 
 const inboundOpen = (l: InboundLead) => l.stage !== 'Closed' && !isInboundDead(l);
 const outboundOpen = (l: OutboundLead) => l.stage !== 'Closed' && l.stage !== 'Lost';
@@ -43,6 +46,9 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
   const wonInbound = inbound.filter((l) => l.stage === 'Closed');
   const wonOutbound = outbound.filter((l) => l.stage === 'Closed');
   const wonKam = kam.filter((c) => c.stage === 'Closed');
+  // Counted in the funnel's Won column but NOT in revenue: revenue stays keyed on
+  // 'Closed' so auto-advance can't silently inflate the reported figure.
+  const orderPlacedKam = kam.filter((c) => c.stage === 'Order Placed');
 
   const revInbound = sum(wonInbound.map((l) => l.value));
   const revOutbound = sum(wonOutbound.map((l) => l.value));
@@ -54,12 +60,12 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
   const inProgressCount =
     inbound.filter((l) => ['RNR', 'Followup Required', 'Quote'].includes(l.stage)).length +
     outbound.filter((l) => ['In Progress', 'Samples/Catalogues Shared'].includes(l.stage)).length +
-    kam.filter((c) => ['No Active Enquiry', 'Awaiting Payment'].includes(c.stage)).length;
+    kam.filter((c) => ['No Active Enquiry', 'Quote Approval Pending', 'Awaiting Payment'].includes(c.stage)).length;
   const piCount =
     inbound.filter((l) => l.stage === 'PI Shared').length +
     outbound.filter((l) => l.stage === 'PI Shared').length +
     kam.filter((c) => c.stage === 'PI Shared').length;
-  const wonCount = wonInbound.length + wonOutbound.length + wonKam.length;
+  const wonCount = wonInbound.length + wonOutbound.length + wonKam.length + orderPlacedKam.length;
 
   return {
     revenueGenerated: revInbound + revOutbound + revKam,

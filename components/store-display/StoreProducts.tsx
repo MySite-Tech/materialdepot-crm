@@ -1,9 +1,10 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { displayApi, flattenLocationRow } from '../../lib/displayApi';
+import { fetchLocations, fetchFacets, flattenLocationRow } from '../../lib/displayApi';
 import { getImageUrl } from '../../lib/imageUrl';
 import { STORES, STORE_CODE_TO_BRANCH_ID, STORE_NAMES, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 import { ProductDetailPanel } from './ProductDetailPanel';
+import { AddToDisplayDialog } from './AddToDisplayDialog';
 
 interface VariantLocationRow {
   id: number;
@@ -33,17 +34,21 @@ export function StoreProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Search only fires on submit (Enter / button), never on keystroke — the
+  // upstream has no server-side search, so each query drags a full scan through
+  // the DB; debouncing every keystroke still fired one scan per pause.
+  const [submittedSearch, setSubmittedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categories, setCategories] = useState<string[]>(['All']);
   const [page, setPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<VariantLocationRow | null>(null);
   const [truncated, setTruncated] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(t);
-  }, [search]);
+  const submitSearch = () => {
+    setPage(1);
+    setSubmittedSearch(search.trim());
+  };
 
   /* Categories come from a scan of the whole scope, not from whichever 500 rows
      happened to be on page 1 of a 71k-row table — that made the dropdown an
@@ -52,11 +57,8 @@ export function StoreProducts() {
     let alive = true;
     (async () => {
       try {
-        const params: Record<string, any> = {};
-        if (selectedStore !== 'All') {
-          params.branch_id = STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore;
-        }
-        const data = await displayApi('fetch_facets', params);
+        const branchId = selectedStore !== 'All' ? (STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore) : undefined;
+        const data = await fetchFacets(branchId);
         if (!alive) return;
         setCategories(['All', ...(data?.categories ?? [])]);
       } catch {}
@@ -84,11 +86,11 @@ export function StoreProducts() {
       if (category !== 'All') params.category = category;
       if (searchQ.trim()) params.search = searchQ.trim();
 
-      const data = await displayApi('fetch_locations', params);
+      const data = await fetchLocations(params);
       if (reqId !== reqRef.current) return;
-      const raw = data?.data ?? data?.results ?? (Array.isArray(data) ? data : []);
+      const raw = data?.data ?? [];
       const rows = raw.map(flattenLocationRow);
-      const count = data?.total_count ?? data?.count ?? rows.length;
+      const count = data?.total_count ?? rows.length;
       setItems(rows as VariantLocationRow[]);
       setTotalCount(count);
       setTruncated(!!data?.truncated);
@@ -101,10 +103,10 @@ export function StoreProducts() {
   }, []);
 
   useEffect(() => {
-    fetchPage(selectedStore, page, selectedCategory, debouncedSearch);
-  }, [selectedStore, page, selectedCategory, debouncedSearch, fetchPage]);
+    fetchPage(selectedStore, page, selectedCategory, submittedSearch);
+  }, [selectedStore, page, selectedCategory, submittedSearch, fetchPage]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch, selectedCategory, selectedStore]);
+  useEffect(() => { setPage(1); }, [selectedCategory, selectedStore]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -151,20 +153,44 @@ export function StoreProducts() {
         </div>
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Search</label>
-          <input
-            type="text"
-            placeholder="Search by name, SKU, handle..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by name, SKU, handle..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitSearch(); }}
+              className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full"
+            />
+            <button
+              type="button"
+              onClick={submitSearch}
+              className="px-4 py-2 text-[13px] font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 whitespace-nowrap"
+            >
+              Search
+            </button>
+          </div>
         </div>
-        <div className="self-end">
+        <div className="self-end flex items-center gap-3">
           <span className="text-[12px] text-gray-400">
             {loading ? 'Loading...' : `${totalCount} products`}
           </span>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="px-4 py-2 text-[13px] font-semibold text-white bg-[#EAB308] rounded-md cursor-pointer hover:bg-[#CA9A06] whitespace-nowrap"
+          >
+            + Add to Display
+          </button>
         </div>
       </div>
+
+      <AddToDisplayDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        defaultStoreCode={selectedStore !== 'All' ? selectedStore : ''}
+        onAdded={() => fetchPage(selectedStore, page, selectedCategory, submittedSearch)}
+      />
 
       {truncated && (
         <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">

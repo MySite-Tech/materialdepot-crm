@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BRANCHES, Branch, Role, LS,
-  apptBranchesFor, branchFrom, fetchApptFeed, loadEcReady,
+  apptBranchesFor, apptBranchesFromCrm, branchFrom, fetchApptFeed, loadEcReady,
   resolveApptRole, saveEcReady, ymd,
 } from "@/lib/appt-shared";
 import type { ApptLead as Lead, EcReadyEntry, EcReadyMap } from "@/lib/appt-shared";
@@ -129,6 +129,15 @@ function defaultPlan(): RotaPlan {
   return p;
 }
 
+// Branches the server actually has rows for, plus the seed list. Iterating the
+// stored keys (not just BRANCHES) is what keeps a branch added in the CRM after
+// this code shipped from having its roster silently dropped on every read.
+function planBranchKeys(parsed: Partial<RotaPlan> | undefined): Branch[] {
+  const keys = new Set<Branch>(BRANCHES);
+  for (const k of Object.keys(parsed?.branches ?? {})) keys.add(k);
+  return [...keys];
+}
+
 // Drop week keys far outside the useful planning window, and shift entries for
 // members no longer on the roster, so the stored JSON stays well under the
 // server's 60KB cap however long the tool stays in use.
@@ -158,7 +167,7 @@ function mergeWithDefaults(partial: unknown): RotaPlan {
   const base = defaultPlan();
   if (!partial || typeof partial !== "object") return base;
   const parsed = partial as Partial<RotaPlan>;
-  for (const b of BRANCHES) {
+  for (const b of planBranchKeys(parsed)) {
     const raw = parsed.branches?.[b];
     if (!raw || typeof raw !== "object" || !Array.isArray(raw.members)) continue;
     const members: RotaMember[] = raw.members
@@ -386,11 +395,24 @@ function DateRangeControl({ value, onChange }: {
 }
 
 // ── Root component ────────────────────────────────────────────
-export default function AppointmentTrackerClient({ currentUser }: { currentUser: AppUser | null }) {
+export default function AppointmentTrackerClient({ currentUser, branches }: {
+  currentUser: AppUser | null;
+  /**
+   * The CRM's branch list, fetched by App.tsx the same way Leads and Footfall
+   * get theirs (`fetchBranchList()`). Undefined until that lands — and left
+   * undefined if it fails — so the tracker shows its seed ECs rather than a
+   * stale default.
+   */
+  branches?: string[];
+}) {
   // Identity comes from the CRM session — no separate sign-in, and no access
   // list: the CRM role decides the view, its branch list decides the scope.
   const role: Role = resolveApptRole(currentUser);
-  const allowedBranches = useMemo(() => apptBranchesFor(currentUser), [currentUser]);
+  const branchOptions = useMemo(() => apptBranchesFromCrm(branches), [branches]);
+  const allowedBranches = useMemo(
+    () => apptBranchesFor(currentUser, branchOptions),
+    [currentUser, branchOptions],
+  );
   const [branch, setBranch] = useState<Branch>(() => allowedBranches[0] ?? "JP Nagar");
   const userName = currentUser?.name ?? "";
   const [hydrated, setHydrated] = useState(false);
@@ -446,8 +468,10 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
   // Hydrate last-viewed branch + the EC-ready map on mount (both local)
   useEffect(() => {
     try {
-      const b = localStorage.getItem(LS.BRANCH) as Branch | null;
-      if (b && (BRANCHES as readonly string[]).includes(b)) setBranch(b);
+      // Any stored name is accepted — the clamp effect above drops it once the
+      // real branch list arrives if this user may not see it.
+      const b = localStorage.getItem(LS.BRANCH);
+      if (b) setBranch(b);
     } catch { /* ignore */ }
     setEc(loadEcReady());
     setHydrated(true);
@@ -514,8 +538,8 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
 
   // Derived: scoped leads for the selected branch (admin sees per-branch views too)
   const scopedLeads = useMemo(() => {
-    return leads.filter((l) => branchFrom(l.companyBusinessType) === branch);
-  }, [leads, branch]);
+    return leads.filter((l) => branchFrom(l.companyBusinessType, branchOptions) === branch);
+  }, [leads, branch, branchOptions]);
 
   const handleEcToggle = async (l: Lead, state: "ready" | "not_ready") => {
     const entry: EcReadyEntry = { state, by: userName || "Receptionist", at: new Date().toISOString() };
@@ -631,7 +655,7 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
         <>
           <ManagerSummary leads={scopedLeads} branch={branch} ec={ec} footfall={footfall} range={range} />
           {planLoaded ? (
-            <RotaPlanner plan={plan} reloadPlan={reloadPlan} branch={branch} allowBranchSwitch={role === "admin"} />
+            <RotaPlanner plan={plan} reloadPlan={reloadPlan} branch={branch} branchOptions={allowedBranches} allowBranchSwitch={role === "admin"} />
           ) : (
             <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6 text-[12px] text-gray-400">
               Loading rota…
@@ -640,7 +664,7 @@ export default function AppointmentTrackerClient({ currentUser }: { currentUser:
         </>
       )}
       {role === "admin" && adminView === "overview" && (
-        <AdminOverview allLeads={leads} ec={ec} range={range} />
+        <AdminOverview allLeads={leads} ec={ec} range={range} branches={branchOptions} />
       )}
       </div>
     </div>
@@ -835,11 +859,13 @@ function withCodeAt(codeStr: string | undefined, dayIdx: number, value: ShiftCod
   return arr.join("");
 }
 
-function RotaPlanner({ plan, reloadPlan, branch, allowBranchSwitch = false }: {
+function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBranchSwitch = false }: {
   plan: RotaPlan;
   /** Re-reads from the server and updates the parent; returns the fresh plan. */
   reloadPlan: () => Promise<RotaPlan>;
   branch: Branch;
+  /** Same list the top branch chip offers, so the two can't disagree. */
+  branchOptions: Branch[];
   allowBranchSwitch?: boolean;
 }) {
   const [editBranch, setEditBranch] = useState<Branch>(branch);
@@ -949,7 +975,7 @@ function RotaPlanner({ plan, reloadPlan, branch, allowBranchSwitch = false }: {
         <div className="flex items-center gap-2">
           {allowBranchSwitch && (
             <select value={editBranch} onChange={(e) => setEditBranch(e.target.value as Branch)} className="border border-gray-200 rounded px-2.5 py-1 text-[12px] text-gray-700 outline-none focus:border-yellow-400 bg-white">
-              {BRANCHES.map((br) => <option key={br} value={br}>{br}</option>)}
+              {branchOptions.map((br) => <option key={br} value={br}>{br}</option>)}
             </select>
           )}
           {savingState === "saved" && <span className="text-[11px] text-green-600 font-medium">✓ Saved</span>}

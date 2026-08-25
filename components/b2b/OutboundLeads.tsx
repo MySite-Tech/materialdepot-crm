@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   OUTBOUND_STAGES, OUTBOUND_STAGE_COLORS, B2B_REPS, KAM_STAGES,
   PRODUCT_CATEGORIES,
-  fmtL, fmtINR, ordinal, type OutboundLead, type OutboundStage, type ProductCategory,
+  fmtL, fmtINR, ordinal, type OutboundLead, type OutboundStage, type ProductCategory, B2B_LOST_REASONS,
 } from './mockData';
 import { fetchOutboundLeads, upsertOutboundLead } from '@/lib/b2bLeads';
-import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, type ExportFormat, type ExportScope } from './exportUtils';
+import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, LostReasonSelect, type ExportFormat, type ExportScope } from './exportUtils';
 
 const OUTBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Segment', 'Visits', 'BDA', 'Value'];
 const outboundToRow = (l: OutboundLead): (string | number)[] => [
@@ -214,7 +214,12 @@ function LeadDrawer({
 
             {draft.stage === 'Lost' && (
               <Field label="Lost reason" className="mt-4 pt-4 border-t border-gray-100">
-                <textarea value={draft.lostReason || ''} onChange={(e) => set('lostReason', e.target.value)} rows={3} className={inputCls + ' resize-none'} />
+                <LostReasonSelect
+                  value={draft.lostReason || ''}
+                  options={B2B_LOST_REASONS}
+                  onChange={(v) => set('lostReason', v)}
+                  className={inputCls}
+                />
               </Field>
             )}
           </div>

@@ -89,7 +89,7 @@ function unwrapEnvelope(body: any): any {
 }
 
 // Shared fetch helpers
-async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
+export async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
   const token = getToken();
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -105,7 +105,20 @@ async function mdFetch(path: string, init?: RequestInit, retried = false): Promi
     }
     throw new Error('You do not have access to this resource.');
   }
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    // Surface the backend's own message when it sends one — these APIs answer
+    // {status:false, data:"<reason>"} on 400, and a bare "API error: 400"
+    // hides useful validation text (e.g. "Insufficient quantity ...").
+    let msg = `API error: ${res.status}`;
+    try {
+      const j = JSON.parse(await res.text());
+      msg = (typeof j?.data === 'string' && j.data)
+        || j?.detail || j?.message
+        || (typeof j?.error === 'string' ? j.error : j?.error?.message)
+        || msg;
+    } catch { /* non-JSON body — keep the status message */ }
+    throw new Error(msg);
+  }
   if (res.status === 204) return null;
   const text = await res.text();
   return text ? unwrapEnvelope(JSON.parse(text)) : null;
@@ -819,6 +832,27 @@ export interface CRMLeadsStats {
   won: CRMLeadsStatsBucket;
   lost: CRMLeadsStatsBucket;
   byStatus: CRMLeadsStatsByStatus[];
+}
+
+// Lifetime deal totals for many clients at once, keyed by the phone the backend
+// matched. One request for a whole board — /crm/leads/stats/?q=<phone> per client
+// does an unindexed icontains over a cast of client__contact and does not scale.
+export interface ClientOrderHistoryRow {
+  orders: number;
+  lifetimeValue: number;
+  openValue: number;
+  enquiries: number;
+  enquiryValue: number;
+  furthestStatus: string | null;
+}
+
+export async function fetchClientOrderHistoriesApi(
+  phones: string[],
+): Promise<Record<string, ClientOrderHistoryRow>> {
+  if (!phones.length) return {};
+  const params = new URLSearchParams({ phones: phones.join(',') });
+  const data = await mdFetch(`/crm/leads/client-order-history/?${params.toString()}`);
+  return (data || {}) as Record<string, ClientOrderHistoryRow>;
 }
 
 export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pageSize'> = {}): Promise<CRMLeadsStats> {

@@ -1,12 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchLocations, fetchFacets, flattenLocationRow, initiateMovement } from '../../lib/displayApi';
+import { fetchLocations, fetchFacets, flattenLocationRow } from '../../lib/displayApi';
 import { getImageUrl } from '../../lib/imageUrl';
 import { STORES, STORE_CODE_TO_BRANCH_ID, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
 
 interface VariantLocationRow {
   id: number;
-  location_id: number | null;
   branch_id: string;
   branch_name: string;
   variant_handle: string;
@@ -25,7 +24,10 @@ interface VariantLocationRow {
 
 const PAGE_SIZE = 30;
 
-export function DiscontinuedList() {
+/* Store locations that have been removed from display (VariantStoreLocation
+   is_active=false) — soft-deleted rows the normal listings hide. Covers both
+   temporary removals and permanently-discontinued products. */
+export function RemovedList() {
   const [selectedStore, setSelectedStore] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedDisplayType, setSelectedDisplayType] = useState('All');
@@ -38,55 +40,18 @@ export function DiscontinuedList() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [truncated, setTruncated] = useState(false);
-  const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
-  const [initiated, setInitiated] = useState<Record<number, boolean>>({});
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const handleRemove = async (item: VariantLocationRow) => {
-    const locationId = item.location_id;
-    if (!locationId) {
-      setToast({ msg: 'This row has no location id — cannot start a removal.', type: 'error' });
-      return;
-    }
-    setActionLoading(prev => ({ ...prev, [item.id]: true }));
-    try {
-      // Already discontinued on the website — this only clears the shelf, so use
-      // retired_from_store_display (won't re-trigger a website discontinue).
-      await initiateMovement({
-        movement_type: 'remove_display',
-        variant_handle: item.variant_handle,
-        location_id: locationId,
-        removal_reason: 'retired_from_store_display',
-        additional_remarks: 'Removed from display (discontinued item)',
-      });
-      setInitiated(prev => ({ ...prev, [item.id]: true }));
-      setToast({ msg: 'Removal initiated — complete it in Movement Status.', type: 'success' });
-    } catch (e: any) {
-      setToast({ msg: e.message || 'Failed to initiate removal', type: 'error' });
-    } finally {
-      setActionLoading(prev => ({ ...prev, [item.id]: false }));
-    }
-  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
 
-  /* Facets over the whole scope rather than one page of it — see StoreProducts. */
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const branchId = selectedStore !== 'All' ? (STORE_CODE_TO_BRANCH_ID[selectedStore] || selectedStore) : undefined;
-        const data = await fetchFacets(branchId);
+        const data = await fetchFacets(branchId, false);
         if (!alive) return;
         setCategories(['All', ...(data?.categories ?? [])]);
         setDisplayTypes(['All', ...(data?.display_types ?? [])]);
@@ -103,28 +68,23 @@ export function DiscontinuedList() {
     setError(null);
     try {
       const params: Record<string, any> = {
-        is_deleted: true,
+        is_active: false,
         page: pageNum,
         page_size: PAGE_SIZE,
       };
-      if (storeCode !== 'All') {
-        params.branch_id = STORE_CODE_TO_BRANCH_ID[storeCode] || storeCode;
-      }
+      if (storeCode !== 'All') params.branch_id = STORE_CODE_TO_BRANCH_ID[storeCode] || storeCode;
       if (category !== 'All') params.category = category;
       if (displayType !== 'All') params.display_type = displayType;
       if (searchQ.trim()) params.search = searchQ.trim();
 
       const data = await fetchLocations(params);
       if (reqId !== reqRef.current) return;
-      const raw = data?.data ?? [];
-      const rows = raw.map(flattenLocationRow);
-      const count = data?.total_count ?? rows.length;
+      const rows = (data?.data ?? []).map(flattenLocationRow);
       setItems(rows as VariantLocationRow[]);
-      setTotalCount(count);
-      setTruncated(!!data?.truncated);
+      setTotalCount(data?.total_count ?? rows.length);
     } catch (e: any) {
       if (reqId !== reqRef.current) return;
-      setError(e.message || 'Failed to load products');
+      setError(e.message || 'Failed to load removed locations');
     } finally {
       if (reqId === reqRef.current) setLoading(false);
     }
@@ -141,11 +101,6 @@ export function DiscontinuedList() {
 
   return (
     <div className="px-6 py-4">
-      {toast && (
-        <div className={`fixed bottom-4 right-4 z-[60] px-4 py-2.5 rounded-lg shadow-lg text-[13px] font-medium ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
-          {toast.msg}
-        </div>
-      )}
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div>
@@ -169,26 +124,20 @@ export function DiscontinuedList() {
         </div>
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Search</label>
-          <input type="text" placeholder="Search by name, SKU, handle..." value={search} onChange={(e) => setSearch(e.target.value)} className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full" />
+          <input type="text" placeholder="Search by product name..." value={search} onChange={(e) => setSearch(e.target.value)} className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white w-full" />
         </div>
         <div className="self-end">
-          <span className="text-[12px] text-gray-400">{loading ? 'Loading...' : `${totalCount} discontinued`}</span>
+          <span className="text-[12px] text-gray-400">{loading ? 'Loading...' : `${totalCount} removed`}</span>
         </div>
       </div>
 
-      {truncated && (
-        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
-          Scanned the first 25,000 catalogue rows only — this list is incomplete for All Stores. Pick a store to see its full discontinued list.
-        </div>
-      )}
-
       {/* Table */}
       {loading ? (
-        <div className="py-16 text-center text-gray-400">Loading discontinued products...</div>
+        <div className="py-16 text-center text-gray-400">Loading removed locations...</div>
       ) : error ? (
         <div className="py-16 text-center text-red-500">{error}</div>
       ) : items.length === 0 ? (
-        <div className="py-16 text-center text-gray-400">No discontinued products found</div>
+        <div className="py-16 text-center text-gray-400">No removed locations found</div>
       ) : (
         <>
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -205,7 +154,6 @@ export function DiscontinuedList() {
                     <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Location</th>
                     <th className="text-center px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qty</th>
                     <th className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
-                    <th className="text-center px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 min-w-[150px]">Actions</th>
                     <th className="text-center px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Link</th>
                   </tr>
                 </thead>
@@ -237,28 +185,11 @@ export function DiscontinuedList() {
                       <td className="px-3 py-2 text-center text-gray-600">{item.quantity}</td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
-                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-red-50 text-red-600">Discontinued</span>
-                          {!item.is_active && (
-                            <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600">Removed</span>
+                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600">Removed</span>
+                          {item.is_deleted && (
+                            <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-red-50 text-red-600">Discontinued</span>
                           )}
                         </div>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {item.is_active ? (
-                          initiated[item.id] ? (
-                            <span className="text-[11px] font-medium text-green-600">Removal initiated ✓</span>
-                          ) : (
-                            <button
-                              onClick={() => handleRemove(item)}
-                              disabled={!!actionLoading[item.id]}
-                              className="px-3 py-1 text-[11px] font-semibold text-white bg-red-500 rounded cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
-                            >
-                              {actionLoading[item.id] ? '...' : 'Remove from Display'}
-                            </button>
-                          )
-                        ) : (
-                          <span className="text-[11px] text-gray-300">—</span>
-                        )}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <a href={`https://materialdepot.com/${item.variant_handle}/product`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-600 hover:text-blue-800 underline">View →</a>

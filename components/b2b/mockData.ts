@@ -135,8 +135,17 @@ export interface OutboundLead {
 }
 
 // ── KAM (existing clients & converted leads) ─────────────────────────────────
-export type KamStage = 'No Active Enquiry' | 'PI Shared' | 'Awaiting Payment' | 'Closed' | 'Lost';
-export const KAM_STAGES: KamStage[] = ['No Active Enquiry', 'PI Shared', 'Awaiting Payment', 'Closed', 'Lost'];
+// Quote Approval Pending / Awaiting Payment / Order Placed are driven by the
+// client's Django deal status (see kamAutoStage.ts). PI Shared is retained
+// rather than replaced: existing rows already carry that stage string, and
+// analytics.ts reads it.
+export type KamStage =
+  | 'No Active Enquiry' | 'Quote Approval Pending'
+  | 'PI Shared' | 'Awaiting Payment' | 'Order Placed' | 'Closed' | 'Lost';
+export const KAM_STAGES: KamStage[] = [
+  'No Active Enquiry', 'Quote Approval Pending',
+  'PI Shared', 'Awaiting Payment', 'Order Placed', 'Closed', 'Lost',
+];
 
 export type KamSource = 'Existing' | 'Inbound' | 'Outbound';
 
@@ -152,7 +161,18 @@ export interface KamClient {
   kam: string;              // assigned KAM
   source: KamSource;
   notes?: LeadNote[];
+  // Logged client issues driving the account health meter. See accountHealth.ts.
+  escalations?: import('./accountHealth').Escalation[];
 }
+
+// Lost reasons for the B2B boards. Deliberately separate from ORDER_LOST_REASONS
+// in app/App.tsx — that list is the Django deal vocabulary for the Leads tab and
+// is sent to the backend; this one is B2B-board-local.
+export const B2B_LOST_REASONS = [
+  'Selection Not Liked',
+  'Price Issue',
+  'Timeline/Delivery Delay',
+] as const;
 
 export const KAMS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
@@ -180,9 +200,11 @@ export const OUTBOUND_STAGE_COLORS: Record<OutboundStage, string> = {
 };
 
 export const KAM_STAGE_COLORS: Record<KamStage, string> = {
-  'No Active Enquiry': '#9CA3AF',
+  'No Active Enquiry':      '#9CA3AF',
+  'Quote Approval Pending': '#F59E0B',
   'PI Shared':         '#EAB308',
   'Awaiting Payment':  '#3B82F6',
+  'Order Placed':      '#FB923C',
   'Closed':            '#22C55E',
   'Lost':              '#EF4444',
 };
