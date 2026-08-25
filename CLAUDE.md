@@ -321,6 +321,21 @@ inert). Leave them; they are not gates.
   than `AUDIT_COLS`** (dropping `log`/`skus` cut this list from 1.9 MB per poll to
   107 KB) — but it must keep `po`, which is never rendered and exists only so
   `dropSupersededPreBookings` can tell a held slot from the audit it became.
+- **Never gate a mandatory action note on `window.prompt()`/`window.confirm()`/
+  `window.alert()`.** They silently no-op in the contexts this app actually runs
+  in — installed PWAs and mobile webviews commonly return `null`/`false`
+  immediately with no dialog shown at all — and desktop Chrome permanently
+  disables them per-origin once a user ticks "prevent this page from creating
+  additional dialogs". The old `requireNote()` (site-audit install-ops'
+  mandatory notes for status changes, follow-up date set/clear, installer
+  assignment, added 2026-08-24) hit exactly this: a click did nothing, no
+  error, indistinguishable from a broken button (fixed 2026-08-25). Use
+  `useNoteModal()` (`components/site-audit/NoteModal.tsx`) instead — a
+  controlled in-page modal with the same "returns the trimmed note, or `null`
+  if cancelled/left blank; caller MUST abort on `null`" contract, just as real
+  DOM instead of a native dialog. `OrderDrawer.tsx`, `AssignSection.tsx` and
+  `AuditOrderDrawer.tsx` already use it — reuse it rather than reaching for
+  `window.prompt` again anywhere in Site Audit/Install.
 
 ## House style
 
