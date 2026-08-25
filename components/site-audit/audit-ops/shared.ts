@@ -7,10 +7,8 @@
    runs against React state. The one genuine module-level thing kept as-is is
    CAPS, because in the source it is a device-local localStorage setting too. */
 
-import { publishSlotConfig, requireNote } from '../siteAuditShared';
+import { publishSlotConfig } from '../siteAuditShared';
 import type { Availability } from '../siteAuditShared';
-
-export { requireNote };
 
 export const AUDIT_SKU = 'SVC-AUDIT-001';
 

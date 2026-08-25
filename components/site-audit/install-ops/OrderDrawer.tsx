@@ -7,7 +7,8 @@
    confirm/delay, follow-up date and delete are all ported verbatim. */
 
 import { useState } from 'react';
-import { requireNote, sbGet, sbPatch, type CityFilter } from '../siteAuditShared';
+import { sbGet, sbPatch, type CityFilter } from '../siteAuditShared';
+import { useNoteModal } from '../NoteModal';
 import AssignSection from './AssignSection';
 import { Chip, MapLink, Note, sjTypeClass } from './ui';
 import {
@@ -73,6 +74,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
   const [custName, setCustName] = useState(o.name || '');
   const [custPhone, setCustPhone] = useState(o.phone || '');
   const [custAddr, setCustAddr] = useState(o.addr || '');
+  const { ask: askNote, modal: noteModal } = useNoteModal();
 
   function updateDraftField(grp: InstallCategory, i: number, f: keyof ServiceSkuRow, v: string) {
     setDraft((d) => ({ ...d, [grp]: d[grp].map((r, ri) => (ri === i ? { ...r, [f]: v } : r)) }));
@@ -148,7 +150,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
         return sj;
       });
     }
-    const note = requireNote('Status → ' + STATUS[st].l);
+    const note = await askNote('Status → ' + STATUS[st].l);
     if (note === null) return;
     const overrideNote = overrideReason ? ' · ⚠ forced Completed without job card: "' + overrideReason + '" (SM override)' : '';
     const nextLog = [...o.log, { t: 'Status set to ' + STATUS[st].l + (AUTO_STATUSES.includes(st) ? ' (manually)' : '') + overrideNote + ' — note: "' + note + '"', d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
@@ -294,14 +296,14 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
 
   const setFollowUp = async () => {
     if (!fuDate) { toast('Pick a date first'); return; }
-    const note = requireNote('Set follow-up to ' + fmtDate(fuDate));
+    const note = await askNote('Set follow-up to ' + fmtDate(fuDate));
     if (note === null) return;
     const nextService = { ...(o.service || {}), follow_up_date: fuDate };
     const nextLog = [...o.log, { t: 'Follow-up set · Call client by ' + fmtDate(fuDate) + ' — note: "' + note + '"', d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
     await persist({ service: nextService, log: nextLog }, 'Follow-up set for ' + fmtDate(fuDate));
   };
   const clearFollowUp = async () => {
-    const note = requireNote('Clear follow-up');
+    const note = await askNote('Clear follow-up');
     if (note === null) return;
     const svc = { ...(o.service || {}) };
     delete (svc as any).follow_up_date;
@@ -326,6 +328,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
 
   return (
     <>
+      {noteModal}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
         <div>
           <h2 className="text-base font-bold text-gray-900">{o.name}</h2>
