@@ -336,6 +336,32 @@ inert). Leave them; they are not gates.
   DOM instead of a native dialog. `OrderDrawer.tsx`, `AssignSection.tsx` and
   `AuditOrderDrawer.tsx` already use it — reuse it rather than reaching for
   `window.prompt` again anywhere in Site Audit/Install.
+- **`branch_mgr` was added to the app on 2026-08-14 but the Site Audit
+  Supabase's `profiles_role_check` CHECK constraint (plain `role in (...)`,
+  not a Postgres enum type) was never widened to allow it — so every write
+  that sets `role='branch_mgr'` fails at the DB layer, silently in some
+  paths.** Found 2026-08-25 when 6 real branch managers (CRM `manager`/
+  `store_manager` permission) had been stuck at "0 members" for 11 days.
+  Three separate call sites hit this: `SiteAuditUsersView.tsx`'s "Add New
+  User" (`sbPost`, surfaces the raw Postgres error to the admin — this is how
+  it was found); `applyRoleSync`'s bulk "Sync roles from CRM permissions"
+  (`sbPatch`, same failure); and `upsertSiteAuditProfile()` fired from the
+  CRM's own Admin > Users when `site_audit.branch_mgr` is ticked
+  (`app/App.tsx`, fire-and-forget with `.catch(console.error)` — fails on
+  *every* save of that permission with no admin-visible error at all).
+  Migration: `site-audit-migration-002-branch-mgr-role.sql` (run against the
+  Site Audit Supabase, same as migration 001).
+  **Also worth knowing while chasing this**: a Branch Manager doesn't
+  actually need a `profiles` row to see their dashboard at all —
+  `SiteAuditOwnDashboard.tsx`'s `sessionOnlyRole` branch renders
+  `SiteAuditBranchManagerView` straight off the CRM session once
+  `permissionRole==='branch_mgr'`, which comes purely from the
+  `site_audit.branch_mgr` sub-permission slug on their CRM account (see the
+  three-role-models section above) — a `profiles` row only matters for the
+  Add-User/sync paths above, not for dashboard access itself. So if someone
+  already has a CRM login, ticking that one checkbox in Admin > Users is the
+  real fix; the migration just stops the DB from rejecting the profile-side
+  writes that go along with it.
 
 ## House style
 
