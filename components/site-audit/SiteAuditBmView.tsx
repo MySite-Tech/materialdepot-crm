@@ -28,10 +28,22 @@ import RoomSkuEditor, { auditRoomSkuSaver } from './RoomSkuEditor';
 import LinkInstallSection from './LinkInstallSection';
 import { MD_JOURNEY_STAGES, categoryFor, journeyStage, type JourneyEntry } from './auditRegistry';
 import { fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
-import { InstallOrdersList, WallpaperOrdersList, useOwnedExtras } from './ownedOrders';
+import { InstallOrdersList, WallpaperOrdersList, useOwnedExtras, type OwnedInstall } from './ownedOrders';
+import { DrawerShell, KV, Sec } from './drawerUi';
+import {
+  FUNNEL_PHONE_CAP, FUNNEL_STEPS, forgetDeals, funnelChip, funnelFor, loadDealsForPhones,
+  type DealsResult, type Funnel, type FunnelStepKey,
+} from './conversionFunnel';
+import type { WpRow } from './coe-ops/wpTrack';
 import { fetchUsers } from '@/lib/mockApi';
 
-export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at';
+/* `bm_journey` and `coe_track` ride along so the conversion funnel can be built
+   for the whole list in one pass — a manual "order placed" tick from either the
+   BM or the COE outranks anything derived. They add ~16 KB to a ~2 MB payload
+   (`log` and `skus`, already here, are almost all of it), so unlike
+   SiteAuditBranchManagerView's deliberately narrow ROLLUP_AUDIT_COLS this list
+   can afford them. */
+export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at,bm_journey,coe_track';
 
 export const STATUS: Record<string, { l: string; c: string }> = {
   slot_reserved: { l: 'Pre-booked (Store)', c: 'bg-sky-100 text-sky-800' },
@@ -62,6 +74,11 @@ export type BmProfile = { id?: string | number; name: string; email?: string; co
 type Order = {
   id: string; pi: string; po: string[]; bm: string; name: string; phone: string; addr: string;
   status: string; slot: string | null; date: string | null; auditorName: string | null; log: any[];
+  createdAt: string | null;
+  /* Only the "order placed" ticks are read here — the drawer re-fetches both
+     blobs in full, because it can write to them. */
+  journey: JourneyEntry[];
+  coePlaced: { at: string; ref?: string } | null;
 };
 
 function norm(s?: string | null) {
@@ -138,6 +155,99 @@ export function bmNames(bm: BmProfile): Set<string> {
   return out;
 }
 
+/* ── Conversion funnel plumbing ───────────────────────────────────────────
+   Ties each audit to the downstream rows this dashboard has already loaded.
+   Everything here matches on the client's exact phone digits AND on the audit
+   day: a client can have several audits and several orders, so "this number
+   ever ordered" would mark a fresh audit converted off an unrelated older one
+   — the trap coe-ops/shared.ts's `orderPlacedFor` documents, and the reason
+   this list agrees with the COE's queue instead of contradicting it. */
+
+/* The day the audit happened: `date` is the visit date, falling back to when
+   the row was created for the legacy orders that never got one. Same rule as
+   coe-ops' `anchorDate`. */
+function auditAnchor(o: Order): string | null {
+  return o.date || (o.createdAt ? String(o.createdAt).slice(0, 10) : null);
+}
+
+function buildFunnels(
+  orders: Order[],
+  deals: DealsResult | null,
+  installs: OwnedInstall[],
+  wallpapers: WpRow[],
+): Map<string, Funnel> {
+  const installByPhone = new Map<string, OwnedInstall[]>();
+  for (const i of installs) {
+    const k = phoneKey(i.phone);
+    if (!k) continue;
+    const list = installByPhone.get(k);
+    if (list) list.push(i); else installByPhone.set(k, [i]);
+  }
+  const wpByPhone = new Map<string, WpRow[]>();
+  for (const w of wallpapers) {
+    const k = phoneKey(w.phone);
+    if (!k) continue;
+    const list = wpByPhone.get(k);
+    if (list) list.push(w); else wpByPhone.set(k, [w]);
+  }
+
+  const out = new Map<string, Funnel>();
+  for (const o of orders) {
+    const key = phoneKey(o.phone);
+    const anchor = auditAnchor(o);
+    const since = (d: string | null | undefined) => !anchor || (!!d && String(d).slice(0, 10) >= anchor);
+
+    const candidates = (installByPhone.get(key) || []).filter((i) => since(i.createdAt));
+    /* A completed installation is the more informative of two candidates — it
+       carries the end of the ladder — otherwise take the earliest, which is the
+       one this audit led to. */
+    const install = candidates.find((i) => i.status === 'completed')
+      || candidates.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))[0]
+      || null;
+    const wpRun = (wpByPhone.get(key) || []).find((w) => since(w.order_placed_at || w.created_at)) || null;
+
+    /* A manual tick beats anything derived, and either of the two people who
+       can leave one counts. */
+    const journeyPlaced = o.journey.filter((e) => e.stage === 'order_placed')
+      .sort((a, b) => String(a.ts).localeCompare(String(b.ts)))[0] || null;
+    const declared = o.coePlaced || (journeyPlaced ? { at: journeyPlaced.ts, ref: journeyPlaced.refId || '' } : null);
+
+    out.set(o.id, funnelFor({
+      auditDate: anchor,
+      auditCompleted: o.status === 'completed',
+      auditCompletedAt: o.date,
+      /* `undefined` (a phone the cap skipped) and a failed request both mean
+         "we don't know", which is not the same as an empty deal list. */
+      deals: key ? (deals ? deals.byPhone.get(key) ?? null : null) : null,
+      install: install ? { pi: install.pi, createdAt: install.createdAt, status: install.status } : null,
+      wpRun: wpRun ? { pi: wpRun.pi || wpRun.md_id || '', placedAt: wpRun.order_placed_at || wpRun.created_at || null } : null,
+      declaredOrderAt: declared?.at || null,
+      declaredOrderRef: declared?.ref || '',
+    }));
+  }
+  return out;
+}
+
+/* The strip above the list: how many of this BM's audits are sitting on each
+   step. Counts a stall, not a "reached" — "12 audits reached cart" hides the
+   nine that never got past it, which is the number worth acting on. */
+function stallCounts(funnels: Map<string, Funnel>): { lost: number; byStep: Record<string, number>; done: number; unknown: number } {
+  const byStep: Record<string, number> = {};
+  let lost = 0;
+  let done = 0;
+  let unknown = 0;
+  for (const f of funnels.values()) {
+    if (f.lost) { lost++; continue; }
+    /* Counted apart from every step: an unreadable pipeline is not a drop-off,
+       and folding it into "waiting on cart" would turn one Django outage into a
+       dashboard full of clients who look like they walked away. */
+    if (f.unknownFrom) { unknown++; continue; }
+    if (!f.stalledAt) { done++; continue; }
+    byStep[f.stalledAt.k] = (byStep[f.stalledAt.k] || 0) + 1;
+  }
+  return { lost, byStep, done, unknown };
+}
+
 export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?: BmProfile | null }) {
   /* The acting BM: an explicitly-passed profile (Role Viewer / own dashboard)
      wins, otherwise it's simply the logged-in CRM user. */
@@ -150,6 +260,17 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
   const [openPi, setOpenPi] = useState<string | null>(null);
   /* A BM's order book is three tables, not one — see ownedOrders.tsx. */
   const [book, setBook] = useState<'audits' | 'installs' | 'wallpaper'>('audits');
+  /* Which conversion step the list is narrowed to — 'all', a step key meaning
+     "stalled here", or 'lost'. Separate from `filter` (the audit's own status):
+     "audit completed" and "client never built a cart" are different questions,
+     and the second is the one this dashboard exists to answer. */
+  const [stall, setStall] = useState<'all' | 'lost' | 'unknown' | FunnelStepKey>('all');
+  const [deals, setDeals] = useState<DealsResult | null>(null);
+  const [dealsLoading, setDealsLoading] = useState(false);
+  /* Bumped to re-ask Django about one client after a BM says they've just
+     raised the cart — the deal cache is module-level and deliberately outlives
+     this component, so nothing else would pick the change up. */
+  const [dealsNonce, setDealsNonce] = useState(0);
 
   /* The "view another person's orders" picker is the CRM's own user roster
      (backend UserOrganisation), so nobody needs a field-app profile to appear
@@ -220,6 +341,11 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
       bm: r.bm || '—', name: r.customer_name || '', phone: r.phone || '', addr: r.addr || '',
       status: r.status || 'pending', slot: r.slot || null, date: r.date || null,
       auditorName: r.auditor_name || null, log: r.log || [],
+      createdAt: r.created_at || null,
+      journey: Array.isArray(r.bm_journey) ? r.bm_journey : [],
+      coePlaced: (r.coe_track && r.coe_track.order_placed && r.coe_track.order_placed.at)
+        ? { at: r.coe_track.order_placed.at, ref: r.coe_track.order_placed.ref || '' }
+        : null,
     })));
     setLoading(false);
   }, [resolved]);
@@ -237,17 +363,54 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     return c;
   }, [orders]);
 
-  const list = orders.filter((o) => {
-    if (filter !== 'all' && o.status !== filter) return false;
-    if (!q) return true;
-    return [o.pi, o.name, o.phone, ...(o.po || [])].join(' ').toLowerCase().includes(q.toLowerCase());
-  });
-
   /* Installations and wallpaper runs for the same person. Called before the
      early return below so the hook order never changes between renders. */
   const people = useMemo(() => (resolved ? [resolved] : []), [resolved]);
   const extrasKey = resolved ? [resolved.email || '', phoneKey(resolved.contact), resolved.name, ...(resolved.aliases || [])].join('|') : '';
   const extras = useOwnedExtras(people, extrasKey);
+
+  /* The CRM deal pipeline for every client in this list — one request per
+     client phone, cached and capped inside loadDealsForPhones. Keyed on the set
+     of phones rather than on `orders`, so the 30s order poll doesn't re-ask
+     Django about clients whose deals are already known. Best-effort: a failure
+     leaves the funnel reporting "unknown", never "no cart". */
+  const phonesKey = useMemo(
+    () => [...new Set(orders.map((o) => phoneKey(o.phone)).filter(Boolean))].sort().join(','),
+    [orders],
+  );
+  useEffect(() => {
+    if (!phonesKey) { setDeals(null); return; }
+    let alive = true;
+    setDealsLoading(true);
+    loadDealsForPhones(phonesKey.split(','))
+      .then((r) => { if (alive) { setDeals(r); setDealsLoading(false); } })
+      .catch(() => { if (alive) setDealsLoading(false); });
+    return () => { alive = false; };
+  }, [phonesKey, dealsNonce]);
+
+  const recheckDeals = useCallback((phone: string) => {
+    forgetDeals(phone);
+    setDealsNonce((n) => n + 1);
+  }, []);
+
+  const funnels = useMemo(
+    () => buildFunnels(orders, deals, extras.installs, extras.wallpapers),
+    [orders, deals, extras.installs, extras.wallpapers],
+  );
+  const stalls = useMemo(() => stallCounts(funnels), [funnels]);
+
+  const list = orders.filter((o) => {
+    if (filter !== 'all' && o.status !== filter) return false;
+    if (stall !== 'all') {
+      const f = funnels.get(o.id);
+      if (!f) return false;
+      if (stall === 'lost') { if (!f.lost) return false; }
+      else if (stall === 'unknown') { if (f.lost || !f.unknownFrom) return false; }
+      else if (f.lost || f.unknownFrom || f.stalledAt?.k !== stall) return false;
+    }
+    if (!q) return true;
+    return [o.pi, o.name, o.phone, ...(o.po || [])].join(' ').toLowerCase().includes(q.toLowerCase());
+  });
 
   if (!resolved) {
     return (
@@ -299,7 +462,7 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
         {([
           ['audits', 'Site Audits', orders.length],
           ['installs', 'Installations', extras.installs.length],
-          ['wallpaper', 'Wallpaper', extras.wallpapers.length],
+          ['wallpaper', 'Custom Wallpaper', extras.wallpapers.length],
         ] as const).map(([k, label, n]) => (
           <button
             key={k}
@@ -311,10 +474,19 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
         ))}
       </div>
 
-      {book === 'installs' ? <InstallOrdersList orders={extras.installs} loading={extras.loading} /> : null}
+      {book === 'installs' ? <InstallOrdersList orders={extras.installs} loading={extras.loading} attribution={(resolved.name || 'BM') + ' (BM)'} /> : null}
       {book === 'wallpaper' ? <WallpaperOrdersList orders={extras.wallpapers} loading={extras.loading} /> : null}
 
       {book === 'audits' ? <>
+      <ConversionStrip
+        total={orders.length}
+        stalls={stalls}
+        active={stall}
+        onPick={setStall}
+        loading={dealsLoading && !deals}
+        deals={deals}
+      />
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1 max-w-[320px]">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
@@ -339,12 +511,13 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
         ) : list.length ? list.map((o) => {
           const st = STATUS[o.status] || { l: o.status, c: 'bg-gray-100 text-gray-600' };
           return (
-            <div key={o.pi} onClick={() => setOpenPi(o.pi)} className="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
+            <div key={o.pi} onClick={() => setOpenPi(o.pi)} className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-bold text-gray-900">{o.name || '—'}</div>
                 <div className="text-[12px] text-gray-400">{o.pi} · {o.phone || '—'}{o.date ? ' · ' + fmtDateA(o.date) : ''}</div>
+                <FunnelRowChip f={funnels.get(o.id)} />
               </div>
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${st.c}`}>{st.l}</span>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${st.c}`}>{st.l}</span>
             </div>
           );
         }) : (
@@ -355,14 +528,14 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
         )}
       </div>
 
-      {openOrder ? <BmOrderDrawer order={openOrder} bm={resolved} onClose={() => { setOpenPi(null); load(); }} /> : null}
+      {openOrder ? <BmOrderDrawer order={openOrder} bm={resolved} funnel={funnels.get(openOrder.id)} onRecheck={() => recheckDeals(openOrder.phone)} onClose={() => { setOpenPi(null); load(); }} /> : null}
       </> : null}
     </div>
   );
 }
 
 /* ── Drawer: timeline, job card + material selection, customer journey ─── */
-function BmOrderDrawer({ order: o, bm, onClose }: { order: Order; bm: BmProfile; onClose: () => void }) {
+function BmOrderDrawer({ order: o, bm, funnel, onRecheck, onClose }: { order: Order; bm: BmProfile; funnel?: Funnel; onRecheck: () => void; onClose: () => void }) {
   const [ticked, setTicked] = useState<any>(null);
   const [jcLoading, setJcLoading] = useState(o.status === 'completed');
   const [journey, setJourney] = useState<JourneyEntry[] | null>(null);
@@ -387,93 +560,76 @@ function BmOrderDrawer({ order: o, bm, onClose }: { order: Order; bm: BmProfile;
   const isDraft = ticked && ticked.draft && !(ticked.sign && !ticked.sign.draft);
 
   return (
-    <div className="fixed inset-0 z-[900] flex justify-end bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex h-full w-full max-w-[520px] flex-col bg-white shadow-2xl">
-        <div className="flex items-start gap-2 border-b border-gray-200 px-5 py-4">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">{o.name || '—'}</h2>
-            <div className="mt-0.5 text-[12.5px] text-gray-400">{o.pi} · {(STATUS[o.status] || { l: o.status }).l}</div>
+    <DrawerShell
+      title={o.name || '—'}
+      subtitle={<>{o.pi} · {(STATUS[o.status] || { l: o.status }).l}</>}
+      onClose={onClose}
+      footer={msg ? <div className="border-t border-gray-100 bg-green-50 px-5 py-2 text-[12.5px] font-semibold text-green-700">{msg}</div> : null}
+    >
+      <Sec title="Customer">
+        <KV k="Phone" v={<a className="text-blue-600" href={'tel:' + o.phone.replace(/\s/g, '')}>{o.phone || '—'}</a>} />
+        <KV k="Address" v={o.addr ? <a className="text-blue-600" href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
+        <KV k="Date" v={o.date ? fmtDateA(o.date) : '—'} />
+        <KV k="Auditor" v={o.auditorName || '—'} />
+        <KV k="Enquiry ID" v={(o.po && o.po[0]) || '—'} />
+      </Sec>
+
+      <Sec title="Timeline">
+        {o.log && o.log.length ? o.log.slice().reverse().map((l: any, i: number) => (
+          <div key={i} className="border-b border-gray-100 py-2 last:border-b-0">
+            <div className="text-[13px] font-semibold text-gray-900">{l.who ? <b className="text-[#1F3A5F]">{l.who}</b> : null}{l.who ? ' · ' : ''}{l.t || ''}</div>
+            <div className="mt-0.5 text-[11.5px] text-gray-400">{fmtLog(l.d)}{l.by ? ' · ' + (l.by === 'auto' ? 'system' : l.by) : ''}</div>
           </div>
-          <button className="ml-auto h-7 w-7 shrink-0 rounded-md bg-gray-100 text-gray-500" onClick={onClose}>✕</button>
-        </div>
+        )) : <div className="text-[12.5px] text-gray-400">No activity logged yet.</div>}
+      </Sec>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <Sec title="Customer">
-            <KV k="Phone" v={<a className="text-blue-600" href={'tel:' + o.phone.replace(/\s/g, '')}>{o.phone || '—'}</a>} />
-            <KV k="Address" v={o.addr ? <a className="text-blue-600" href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
-            <KV k="Date" v={o.date ? fmtDateA(o.date) : '—'} />
-            <KV k="Auditor" v={o.auditorName || '—'} />
-            <KV k="Enquiry ID" v={(o.po && o.po[0]) || '—'} />
-          </Sec>
+      <Sec title="Job Card">
+        {o.status !== 'completed' ? <div className="text-[12.5px] text-gray-400">Not available yet — the site audit has not been completed.</div>
+          : jcLoading ? <div className="text-[12.5px] text-gray-400">Loading…</div>
+            : !rooms.length ? <div className="text-[12.5px] text-gray-400">No job card details recorded.</div>
+              : (
+                <>
+                  {isDraft
+                    ? <div className="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-800">⚠️ Job card is still a draft — not yet signed off by the client.</div>
+                    : ticked.sign ? <div className="mb-2.5 rounded-lg bg-green-50 px-3 py-2 text-[12.5px] font-bold text-green-700">✓ Signed off by the client{ticked.sign.name ? ' — ' + ticked.sign.name : ''}</div> : null}
+                  {rooms.map((r: any, i: number) => (
+                    <Fragment key={i}>
+                      <AuditRoomCard room={r} index={i} />
+                      {/* The BM already writes into this same blob (material
+                          selection below), so the room SKU the auditor left
+                          blank is theirs to fill too — it's what prints on
+                          the card they send the client. */}
+                      <RoomSkuEditor
+                        room={r}
+                        save={auditRoomSkuSaver(String(o.id), i, (bm.name || 'BM') + ' (BM)')}
+                        onSaved={() => { setMsg('Room SKU saved'); loadCard(); }}
+                      />
+                      <MaterialSection room={r} roomIdx={i} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadCard(); }} />
+                    </Fragment>
+                  ))}
+                </>
+              )}
+      </Sec>
 
-          <Sec title="Timeline">
-            {o.log && o.log.length ? o.log.slice().reverse().map((l: any, i: number) => (
-              <div key={i} className="border-b border-gray-100 py-2 last:border-b-0">
-                <div className="text-[13px] font-semibold text-gray-900">{l.who ? <b className="text-[#1F3A5F]">{l.who}</b> : null}{l.who ? ' · ' : ''}{l.t || ''}</div>
-                <div className="mt-0.5 text-[11.5px] text-gray-400">{fmtLog(l.d)}{l.by ? ' · ' + (l.by === 'auto' ? 'system' : l.by) : ''}</div>
-              </div>
-            )) : <div className="text-[12.5px] text-gray-400">No activity logged yet.</div>}
-          </Sec>
+      <Sec title="Linked Installation">
+        <LinkInstallSection
+          auditPi={o.pi}
+          auditPhone={o.phone}
+          attribution={(bm.name || 'BM') + ' (BM)'}
+          onMsg={setMsg}
+        />
+      </Sec>
 
-          <Sec title="Job Card">
-            {o.status !== 'completed' ? <div className="text-[12.5px] text-gray-400">Not available yet — the site audit has not been completed.</div>
-              : jcLoading ? <div className="text-[12.5px] text-gray-400">Loading…</div>
-                : !rooms.length ? <div className="text-[12.5px] text-gray-400">No job card details recorded.</div>
-                  : (
-                    <>
-                      {isDraft
-                        ? <div className="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-800">⚠️ Job card is still a draft — not yet signed off by the client.</div>
-                        : ticked.sign ? <div className="mb-2.5 rounded-lg bg-green-50 px-3 py-2 text-[12.5px] font-bold text-green-700">✓ Signed off by the client{ticked.sign.name ? ' — ' + ticked.sign.name : ''}</div> : null}
-                      {rooms.map((r: any, i: number) => (
-                        <Fragment key={i}>
-                          <AuditRoomCard room={r} index={i} />
-                          {/* The BM already writes into this same blob (material
-                              selection below), so the room SKU the auditor left
-                              blank is theirs to fill too — it's what prints on
-                              the card they send the client. */}
-                          <RoomSkuEditor
-                            room={r}
-                            save={auditRoomSkuSaver(String(o.id), i, (bm.name || 'BM') + ' (BM)')}
-                            onSaved={() => { setMsg('Room SKU saved'); loadCard(); }}
-                          />
-                          <MaterialSection room={r} roomIdx={i} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadCard(); }} />
-                        </Fragment>
-                      ))}
-                    </>
-                  )}
-          </Sec>
+      <Sec title="Did it convert?">
+        <ConversionLadder f={funnel} phone={o.phone} onRecheck={onRecheck} />
+      </Sec>
 
-          <Sec title="Linked Installation">
-            <LinkInstallSection
-              auditPi={o.pi}
-              auditPhone={o.phone}
-              attribution={(bm.name || 'BM') + ' (BM)'}
-              onMsg={setMsg}
-            />
-          </Sec>
-
-          <Sec title="Customer Journey">
-            <JourneyTimeline entries={journey} />
-            <JourneyAddForm entries={journey || []} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadJourney(); }} />
-          </Sec>
-        </div>
-
-        {msg ? <div className="border-t border-gray-100 bg-green-50 px-5 py-2 text-[12.5px] font-semibold text-green-700">{msg}</div> : null}
-      </div>
-    </div>
+      <Sec title="Customer Journey">
+        <JourneyTimeline entries={journey} />
+        <JourneyAddForm entries={journey || []} orderId={o.id} bm={bm} onSaved={(m) => { setMsg(m); loadJourney(); }} />
+      </Sec>
+    </DrawerShell>
   );
-}
-
-function Sec({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-5 border-b border-gray-100 pb-4 last:border-b-0">
-      <h3 className="mb-2.5 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">{title}</h3>
-      {children}
-    </div>
-  );
-}
-function KV({ k, v }: { k: string; v: React.ReactNode }) {
-  return <div className="flex gap-3 py-0.5 text-[13px]"><span className="w-24 shrink-0 text-gray-400">{k}</span><span className="min-w-0 text-gray-900">{v}</span></div>;
 }
 
 /* ── Material selection (v2 rooms only) ───────────────────────────────────
@@ -582,6 +738,177 @@ function MaterialCard({ label, seg, roomIdx, segIdx, orderId, bm, onSaved }: {
       </div>
       {err ? <div className="mt-1 text-[11.5px] text-red-600">{err}</div> : null}
     </div>
+  );
+}
+
+/* ── Conversion funnel UI ─────────────────────────────────────────────────
+   Three views of the same derivation: a strip that counts where this BM's
+   audits are stuck, a chip on each row, and the full ladder in the drawer. */
+
+function ConversionStrip({ total, stalls, active, onPick, loading, deals }: {
+  total: number;
+  stalls: ReturnType<typeof stallCounts>;
+  active: 'all' | 'lost' | 'unknown' | FunnelStepKey;
+  onPick: (v: 'all' | 'lost' | 'unknown' | FunnelStepKey) => void;
+  loading: boolean;
+  deals: DealsResult | null;
+}) {
+  if (!total) return null;
+  /* Only the steps somebody is actually stuck on, so the strip doesn't carry
+     five zeroes. `installed` is never a stall (it's the finish line) and is
+     shown as the "converted" tile instead. */
+  const tiles = FUNNEL_STEPS.filter((st) => stalls.byStep[st.k]);
+
+  return (
+    <div className="mb-3">
+      <div className="mb-1.5 flex flex-wrap items-baseline gap-2">
+        <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">Where the client stopped</span>
+        <span className="text-[11.5px] text-gray-400">
+          After the audit: cart → quotation → order → installation. Cart, quotation and order come from this
+          client&apos;s own CRM deals, raised on or after the audit.
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={() => onPick('all')}
+          className={active === 'all' ? 'rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600'}
+        >
+          All ({total})
+        </button>
+        {tiles.map((st) => (
+          <button
+            key={st.k}
+            title={st.hint}
+            onClick={() => onPick(st.k)}
+            className={active === st.k ? 'rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600'}
+          >
+            Waiting on {st.short.toLowerCase()} ({stalls.byStep[st.k]})
+          </button>
+        ))}
+        {stalls.lost ? (
+          <button
+            onClick={() => onPick('lost')}
+            className={active === 'lost' ? 'rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700'}
+          >
+            Lost / cancelled ({stalls.lost})
+          </button>
+        ) : null}
+        {stalls.unknown ? (
+          <button
+            title="The CRM deal pipeline couldn't be read for these clients, so cart / quotation / order are unknown — not absent."
+            onClick={() => onPick('unknown')}
+            className={active === 'unknown' ? 'rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500'}
+          >
+            Pipeline unknown ({stalls.unknown})
+          </button>
+        ) : null}
+        {stalls.done ? (
+          <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700">
+            Installed ({stalls.done})
+          </span>
+        ) : null}
+      </div>
+
+      {loading ? (
+        <div className="mt-1.5 text-[11.5px] text-gray-400">Reading the CRM pipeline for these clients…</div>
+      ) : null}
+      {/* Soft-gate-and-surface: say which half is missing rather than letting a
+          dead pipeline read as "nobody built a cart". */}
+      {deals?.allFailed ? (
+        <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
+          Couldn&apos;t read the CRM deal pipeline, so cart / quotation / order are unknown below — not absent. The
+          audit and installation steps are unaffected.
+        </div>
+      ) : null}
+      {deals?.skipped ? (
+        <div className="mt-1.5 text-[11.5px] text-amber-700">
+          Cart and quotation were looked up for the first {FUNNEL_PHONE_CAP} clients only — {deals.skipped} more are
+          shown with audit and installation steps alone. Filter or search to check them.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FunnelRowChip({ f }: { f?: Funnel }) {
+  if (!f) return null;
+  const chip = funnelChip(f);
+  return (
+    <div className="mt-1">
+      <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold ${chip.badge}`}>{chip.label}</span>
+    </div>
+  );
+}
+
+/* The drawer's ladder. Every step says what proved it, because "cart created"
+   with no evidence behind it is the kind of claim a BM will be asked to defend
+   on a call. */
+function ConversionLadder({ f, phone, onRecheck }: { f?: Funnel; phone: string; onRecheck: () => void }) {
+  if (!f) return <div className="text-[12.5px] text-gray-400">Working out where this client got to…</div>;
+
+  return (
+    <>
+      {f.lost ? (
+        <div className="mb-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+          <b>Marked {f.lost.status.toLowerCase()} in the CRM{f.lost.reason ? ' — ' + f.lost.reason : ''}.</b>
+          {f.lost.at ? <span className="text-red-600"> ({fmtDateA(String(f.lost.at).slice(0, 10))})</span> : null}
+        </div>
+      ) : f.unknownFrom ? (
+        <div className="mb-2.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12.5px] text-gray-600">
+          <b>Can&apos;t tell yet — {f.unknownFrom.label.toLowerCase()} couldn&apos;t be checked.</b> This is a gap in the
+          data, not a client who went quiet.
+        </div>
+      ) : f.stalledAt ? (
+        <div className="mb-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">
+          <b>Waiting on: {f.stalledAt.label}.</b> {f.stalledAt.hint}
+        </div>
+      ) : (
+        <div className="mb-2.5 rounded-lg bg-green-50 px-3 py-2 text-[12.5px] font-bold text-green-700">
+          ✓ Audit → order → installation, all the way through.
+        </div>
+      )}
+
+      {f.steps.map((st) => (
+        <div key={st.k} className="flex gap-2.5 py-1.5">
+          {st.state === 'done' ? (
+            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#1f7a3f] text-[9px] font-extrabold text-white">✓</span>
+          ) : st.state === 'implied' ? (
+            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 border-[#1f7a3f] text-[9px] font-extrabold text-[#1f7a3f]">✓</span>
+          ) : st.state === 'unknown' ? (
+            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 border-gray-300 text-[9px] font-extrabold text-gray-400">?</span>
+          ) : (
+            <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${f.stalledAt?.k === st.k ? 'border-amber-500' : 'border-gray-200'}`} />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className={`text-[12.5px] ${st.state !== 'pending' || f.stalledAt?.k === st.k ? 'font-bold' : ''} ${st.state !== 'pending' ? 'text-gray-900' : f.stalledAt?.k === st.k ? 'text-[#1F3A5F]' : 'text-gray-400'}`}>
+              {st.label}
+            </div>
+            {st.at ? <div className="text-[11px] text-gray-400">{fmtDateA(String(st.at).slice(0, 10))}{st.ref ? ' · ' + st.ref : ''}</div> : null}
+            {st.detail ? <div className="mt-0.5 text-[11.5px] text-gray-500">{st.detail}</div> : null}
+          </div>
+        </div>
+      ))}
+
+      {f.value ? (
+        <div className="mt-2 text-[12px] text-gray-500">Cart value across these deals: <b className="text-gray-900">₹{f.value.toLocaleString('en-IN')}</b></div>
+      ) : null}
+      {f.priorDeals ? (
+        <div className="mt-1.5 border-l-2 border-gray-200 pl-2 text-[11.5px] text-gray-400">
+          {f.priorDeals} earlier {f.priorDeals === 1 ? 'enquiry' : 'enquiries'} on {phone || 'this number'}, raised before
+          this audit. Not counted — an older order can&apos;t be this audit&apos;s conversion.
+        </div>
+      ) : null}
+      {!f.pipelineKnown ? (
+        <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
+          The CRM deal pipeline couldn&apos;t be read for this client, so cart / quotation / order above are unknown
+          rather than absent.
+        </div>
+      ) : null}
+      <button className="mt-2 text-[12px] font-semibold text-blue-700" onClick={onRecheck}>
+        Re-check the CRM pipeline for this client
+      </button>
+    </>
   );
 }
 

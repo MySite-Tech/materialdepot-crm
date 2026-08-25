@@ -180,6 +180,108 @@ pre-bookings — see the next section; has `bm_email`),
 column** — always resolves by name/phone), `wp_production` (custom wallpaper
 runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 
+## The BM's order book: three tables, three drawers, one conversion funnel
+
+`SiteAuditBmView` is the BM dashboard; `ownedOrders.tsx` holds the Installations
+and Custom Wallpaper halves of it, and both are reused by
+`SiteAuditBranchManagerView`'s store rollup. Every list opens a drawer; the two
+new ones are read-only apart from declaring which site audit an installation
+came from, since scheduling stays with the SM and wallpaper production with the
+COE.
+
+**Drawer data is fetched per order on open, never added to the list select.**
+`log` is jsonb averaging ~7 KB a row and both lists poll every 30s, so the
+install/wallpaper drawers read `log`/`service`/`skus`/`notes` for the one row
+being looked at (`INSTALL_DRAWER_COLS` / `WP_DRAWER_COLS`). The one thing lifted
+into a list select is `auditBy:service->>audit_by` — PostgREST json path with an
+alias, so the row can badge audit ownership without carrying the SKU blob.
+
+**Who did the site audit** lives in `install_orders.service.audit_by`
+(`material_depot` | `customer` | unset — 192/179/57 of live rows), set by the SM
+and auto-detected at creation by `detectAuditBy`. On a Material-Depot-audited
+installation, `LinkAuditSection` finds the audit behind it:
+
+1. a declared `jobCardLinks` link wins (either direction — `LinkInstallSection`
+   writes the same pair from the audit side);
+2. else audits sharing the client's exact phone digits, **pre-bookings
+   excluded** — a `slot_reserved`/`slot_converted` row is a held slot, not the
+   audit, and its phone is often the store's own;
+3. exactly one candidate → shown as "matched by phone" with the visit date on
+   it (157 of 182 live rows land here); **two or more → nothing is picked**, the
+   BM chooses (16 rows), and that choice becomes the declared link; none → said
+   plainly (9 rows), which almost always means the audit was booked against a
+   different number.
+
+Matching on `pi` is near-useless here and measuring it is why the fallback is
+phone: only 4 of those 182 installations share a `pi` with their audit, because
+the audit is raised pre-sale and the installation post-sale against the order's
+PI. `LinkAuditSection` takes `attribution` — **omit it and the section goes
+read-only**, which is what the branch-manager rollup does: a link nobody can be
+named for is not worth writing.
+
+`WpLadder` (`coe-ops/WpLadder.tsx`) is the read-only custom-wallpaper stage
+ladder, shared by the COE's Wallpaper tab and both BM drawers so the BM can
+never be shown a stage list that has drifted from the one the COE is working. A
+custom-WP installation resolves its production run by `install_order_id` or
+exact `pi` (verified: every run with the id set agrees on `pi`), **never by
+phone** — one client's two projects share a number.
+
+## Conversion: did the audit become an order, and where did it stop
+
+`conversionFunnel.ts` answers the question the BM dashboard exists for. Six
+steps — audit → cart → quotation → order → installation ordered → installed —
+where the middle three come from the **CRM's own Django deal pipeline**
+(`/crm/leads/?q=<phone>`), which is where carts, quotations and orders actually
+live. This is the swap `coe-ops/shared.ts`'s `orderPlacedFor` comment
+anticipated ("when Material Depot's other system exposes carts and product-only
+orders, this is the ONLY function that has to change"), reached from inside the
+CRM; the two agree, in that an installation order on/after the audit day still
+counts as an order placed.
+
+Three rules that must not bend — the second and third were live bugs in the
+first draft of this module, caught by exercising `funnelFor` against synthetic
+cases before it shipped:
+
+- **Deals are scoped to the audit day**, never to the phone's whole history —
+  otherwise a fresh audit is marked converted off an unrelated order from last
+  year. Earlier deals are reported as context (`priorDeals`) and never as
+  conversion.
+- **`unknown` is a distinct state from `pending`.** A failed
+  `fetchCRMLeads` means we don't know whether a cart exists. Folding that into
+  "no cart yet" would turn one Django outage into a dashboard full of clients
+  who look like they walked away, and would send BMs to chase clients who have
+  already paid. Hence `Funnel.unknownFrom` alongside `stalledAt`, its own
+  "Pipeline unknown" tile, and `?` ticks in the ladder. (`fetchLeadDeals` in
+  `lib/mockApi` swallows its own errors into `[]` — the `Array.isArray`
+  landmine above, one level up — so this module calls `fetchCRMLeads` directly.)
+- **A lost deal is only the story when nothing else is still moving.** `lost`
+  requires no live ranked deal AND no order: a client whose first cart was
+  cancelled and whose second is in quote approval has not been lost.
+  Symmetrically, `cart_created` is proved by ANY scoped deal including a lost
+  one — a cancelled cart was still a cart.
+
+A step with no local evidence *below* one that has some is `implied`, not a gap:
+an order raised under a second phone number would otherwise render as "no cart,
+no quote, order placed". `DEAL_PIPELINE` mirrors `STATUSES` in `app/App.tsx`
+(not exported from that 3.3k-line component — `b2b/kamAutoStage.ts` re-declares
+it locally for the same reason); an unlisted status is unranked and cannot
+advance the funnel. There is deliberately **no "PI shared" step**: the deal
+vocabulary has no PI status, and the Footfall/Weekly Funnel dashboards' PI
+column is computed server-side from data this endpoint doesn't return.
+
+Cost: one request per client phone, because the batched
+`/crm/leads/client-order-history/` endpoint returns a *lifetime* furthest status
+with no dates, which cannot be scoped to an audit. Mitigated by a module-level
+cache, a concurrency pool of 4, and `FUNNEL_PHONE_CAP` — and the overflow is
+**reported in the UI**, not silently dropped. The cache outlives the component,
+so the drawer carries a "Re-check the CRM pipeline" button for a BM who has just
+raised the cart.
+
+Note this puts a Django call inside the Site Audit tab, so
+`/site-audit-view?person=` (which never authenticates) now depends on a real
+session for these three steps — it already did via `fetchUsers()`, and a failure
+degrades to `unknown` rather than to a wrong answer.
+
 ## A pre-booking and the audit it becomes are two rows, not one
 
 `Store_Team_App` books a slot before the Kylas enquiry exists, so the two halves
@@ -317,6 +419,11 @@ inert). Leave them; they are not gates.
   permanently on one failed fetch.** That is what killed auditor assignment;
   `loadOrders`-style retry + a self-describing empty state is the fix, not a
   louder `console.error`. See the `Array.isArray` section above.
+- **`AUDIT_COLS` (`SiteAuditBmView.tsx`) now also carries `bm_journey` and
+  `coe_track`**, so the conversion funnel can honour a manual "order placed"
+  tick from either the BM or the COE for the whole list in one pass. They add
+  ~16 KB to a ~2 MB payload (`log` + `skus` are almost all of it) — but do NOT
+  copy them into `ROLLUP_AUDIT_COLS`, whose whole point is being narrow.
 - **`SiteAuditBranchManagerView`'s `ROLLUP_AUDIT_COLS` is deliberately narrower
   than `AUDIT_COLS`** (dropping `log`/`skus` cut this list from 1.9 MB per poll to
   107 KB) — but it must keep `po`, which is never rendered and exists only so
@@ -372,3 +479,6 @@ inert). Leave them; they are not gates.
   `SiteAuditBranchManagerView`) instead of rendering a bare empty list.
 - Reuse the existing status/stage registries (`install-ops/shared.ts` `STATUS`,
   `coe-ops/wpTrack.ts`) rather than re-declaring labels.
+- New Site Audit drawers are built from `drawerUi.tsx` (`DrawerShell`, `Sec`,
+  `KV`) rather than a fresh copy of the slide-over markup — `Sec`/`KV` had
+  already been duplicated into two drawers before it existed.
