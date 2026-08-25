@@ -8,7 +8,14 @@ const FILTERS = ['all', 'followup', 'pending', 'deliv_delayed', 'created', 'sche
 const FILTER_LABELS: Record<string, string> = {
   all: 'All', followup: 'Follow-up set', pending: 'Pending', deliv_delayed: 'Delivery Delayed', created: 'Service Created',
   scheduled: 'Site Installation Scheduled', assigned: 'Site Installer Assigned', partial: 'Partially Completed', completed: 'Site Installation Completed',
+  unassigned: 'Unassigned installer',
 };
+
+/* A sub-job already has a date but no installer on it — the SM's top
+   priority to call and assign, easy to miss in a plain unsorted list. */
+function isUnassignedScheduled(o: InstallOrder): boolean {
+  return (o.subjobs || []).some((sj) => !!sj.date && !sj.installer_email);
+}
 
 interface Props {
   orders: InstallOrder[];
@@ -35,12 +42,14 @@ export default function OrdersView({
   Object.keys({ pending: 1, deliv_ontime: 1, deliv_delayed: 1, created: 1, call_na: 1, scheduled: 1, assigned: 1, callpending: 1, reschedule: 1, onway: 1, atsite: 1, partial: 1, completed: 1 }).forEach((k) => (c[k] = 0));
   orders.forEach((o) => (c[o.status] = (c[o.status] || 0) + 1));
   const opsDue = orders.filter(opsCallDue).length;
+  const unassignedScheduled = orders.filter(isUnassignedScheduled).length;
   const todayStr = dstr(today);
 
   const filteredOrders = orders
     .filter((o) => {
       if (filterStatus !== 'all') {
         if (filterStatus === 'opsdue') return opsCallDue(o);
+        if (filterStatus === 'unassigned') return isUnassignedScheduled(o);
         if (filterStatus === 'followup') return !!(o.service && o.service.follow_up_date);
         if (filterStatus === 'live') return ['scheduled', 'assigned', 'partial', 'onway', 'atsite'].includes(o.status);
         if (o.status !== filterStatus) return false;
@@ -53,6 +62,8 @@ export default function OrdersView({
       return true;
     })
     .sort((a, b) => {
+      const unassignedDiff = Number(isUnassignedScheduled(b)) - Number(isUnassignedScheduled(a));
+      if (unassignedDiff) return unassignedDiff;
       const da = a.deliveryDate || '', db = b.deliveryDate || '';
       return sortDelivery === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
     });
@@ -74,6 +85,7 @@ export default function OrdersView({
         <StatTile n={orders.length} l="Installation orders" colorClass="text-[#1F3A5F]" onClick={() => setFilterStatus('all')} />
         <StatTile n={opsDue} l="Ops calls due today" colorClass="text-amber-700" onClick={() => onGoView('calls')} />
         <StatTile n={c.deliv_delayed} l="Delivery delayed" colorClass="text-red-700" onClick={() => setFilterStatus('deliv_delayed')} />
+        {unassignedScheduled ? <StatTile n={unassignedScheduled} l="Unassigned installer" colorClass="text-red-700" onClick={() => setFilterStatus('unassigned')} /> : null}
         <StatTile n={c.scheduled + c.assigned + c.partial} l="Scheduled / in progress" colorClass="text-blue-700" onClick={() => setFilterStatus('live')} />
         <StatTile n={c.completed} l="Completed" colorClass="text-green-700" onClick={() => setFilterStatus('completed')} />
       </div>
@@ -107,7 +119,7 @@ export default function OrdersView({
           {filterDate ? <button onClick={() => setFilterDate('')} className="border-0 bg-red-100 text-red-600 rounded-md px-2.5 py-2 font-bold text-xs whitespace-nowrap">✕ Clear date</button> : null}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {FILTERS.map((f) => (
+          {(unassignedScheduled ? ['unassigned', ...FILTERS] : FILTERS).map((f) => (
             <button
               key={f}
               className={filterStatus === f ? 'bg-[#1A1A1A] text-white px-3 py-1.5 rounded-full text-xs font-semibold' : 'bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-xs font-semibold'}

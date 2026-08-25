@@ -78,7 +78,7 @@ export function CalendarView({
         <p className="text-[13px] text-gray-500 mt-0.5">T−3 to T+6 — click any day column to see all bookings in detail.</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 content-start">
+        <div className="flex gap-2.5 overflow-x-auto pb-1">
           {days.map((d, di) => {
             const ds = dstr(d);
             const isToday = ds === todayStr, isSel = ds === calSelDay, isPast = d < today;
@@ -87,7 +87,7 @@ export function CalendarView({
             return (
               <div
                 key={di}
-                className={`rounded-lg border bg-white overflow-hidden cursor-pointer ${isSel ? 'border-[#EAB308] ring-1 ring-[#EAB308]' : 'border-gray-200'} ${isPast ? 'opacity-60' : ''}`}
+                className={`w-[170px] shrink-0 rounded-lg border bg-white overflow-hidden cursor-pointer ${isSel ? 'border-[#EAB308] ring-1 ring-[#EAB308]' : 'border-gray-200'} ${isPast ? 'opacity-60' : ''}`}
                 onClick={(e) => { if ((e.target as HTMLElement).closest('.calmini')) return; setCalSelDay(ds); }}
               >
                 <div className={`px-3 py-2 border-b ${isToday ? 'bg-[#1F3A5F] border-[#1F3A5F]' : 'border-gray-100'}`}>

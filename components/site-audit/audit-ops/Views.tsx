@@ -59,24 +59,31 @@ export function OrdersView({
   const live = c.scheduled + c.assigned + c.onway + c.atsite;
   const mainCount = orders.filter((o) => !['slot_reserved', 'slot_converted'].includes(o.status)).length;
   const missingBm = orders.filter((o) => !o.bmEmail).length;
+  /* A date is already confirmed but no auditor is on the job — the SM's top
+     priority to call and assign, easy to miss in a plain unsorted list. */
+  const isUnassignedScheduled = (o: AuditOrder) => !o.auditor && !!o.date && !['slot_reserved', 'slot_converted'].includes(o.status);
+  const unassignedScheduled = orders.filter(isUnassignedScheduled).length;
 
   const tiles: Array<[number, string, string, string]> = [
     [mainCount, 'Live audit orders', 'text-[#1F3A5F]', 'all'],
     ...(c.slot_reserved ? [[c.slot_reserved, 'Store pre-bookings', 'text-sky-800', 'slot_reserved'] as [number, string, string, string]] : []),
     [c.pending + c.created + c.call_na, 'Need action', 'text-red-700', 'action'],
+    ...(unassignedScheduled ? [[unassignedScheduled, 'Unassigned auditor', 'text-red-700', 'unassigned'] as [number, string, string, string]] : []),
     [live, 'Scheduled / in progress', 'text-blue-700', 'live'],
     [c.reschedule, 'To reschedule', 'text-amber-700', 'reschedule'],
     [c.completed, 'Completed', 'text-green-700', 'completed'],
   ];
 
-  const filters = ['all', ...(c.slot_reserved || c.slot_converted ? ['slot_reserved'] : []), 'followup', 'pending', 'created', 'scheduled', 'assigned', 'reschedule', 'completed', ...(missingBm ? ['missing_bm'] : [])];
-  const filterLabel = (f: string) => f === 'all' ? 'All' : f === 'followup' ? 'Follow-up set' : f === 'missing_bm' ? 'Missing BM link' : f === 'action' ? 'Need action' : f === 'live' ? 'In progress' : STATUS[f]?.l || f;
+  const filters = ['all', ...(c.slot_reserved || c.slot_converted ? ['slot_reserved'] : []), 'followup', ...(unassignedScheduled ? ['unassigned'] : []), 'pending', 'created', 'scheduled', 'assigned', 'reschedule', 'completed', ...(missingBm ? ['missing_bm'] : [])];
+  const filterLabel = (f: string) => f === 'all' ? 'All' : f === 'followup' ? 'Follow-up set' : f === 'missing_bm' ? 'Missing BM link' : f === 'unassigned' ? 'Unassigned auditor' : f === 'action' ? 'Need action' : f === 'live' ? 'In progress' : STATUS[f]?.l || f;
 
   const rows = orders.filter((o) => {
     if (filterStatus === 'all') {
       if (o.status === 'slot_reserved' || o.status === 'slot_converted') return false;
     } else if (filterStatus === 'missing_bm') {
       if (o.bmEmail) return false;
+    } else if (filterStatus === 'unassigned') {
+      if (!isUnassignedScheduled(o)) return false;
     } else if (filterStatus === 'action') {
       if (!['pending', 'created', 'call_na'].includes(o.status)) return false;
     } else if (filterStatus === 'followup') {
@@ -93,7 +100,7 @@ export function OrdersView({
       return (o.pi + o.name + o.phone + o.bm + o.skus.map((s) => s.c).join()).toLowerCase().includes(q);
     }
     return true;
-  });
+  }).sort((a, b) => Number(isUnassignedScheduled(b)) - Number(isUnassignedScheduled(a)));
 
   const todayPre = orders.filter((o) => o.status === 'slot_reserved' && o.date === todayStr);
 

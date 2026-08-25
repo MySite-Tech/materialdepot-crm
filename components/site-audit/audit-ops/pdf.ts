@@ -5,9 +5,9 @@
 
 import { jsPDF } from 'jspdf';
 import { fmtDateA } from '../siteAuditShared';
-import { categoryFor } from '../auditRegistry';
+import { categoryFor, mdInstallTermsBlock } from '../auditRegistry';
 import {
-  MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfAuditRoom, mdPdfHeader,
+  MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfAuditRoom, mdPdfConsent, mdPdfHeader,
 } from '../pdfBrand';
 
 /* ---- sketch/photo helpers for PDF generation (verbatim, lines 81-93) ---- */
@@ -75,9 +75,6 @@ export async function genAuditPDF(order: any, ticked: any) {
     y = await mdPdfAuditRoom(doc, r, y, { M, W, H, compress: compressForPdf, sketchImg: renderSketchA(r), header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }) });
   }
   doc.addPage(); y = M; header();
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
-  doc.text(doc.splitTextToSize('I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided.', W - 2 * M), M, y); y += 58;
   const RA = ticked.sign && ticked.sign.ratings;
   if (RA) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...navy); doc.text('Client Feedback', M, y); y += 12;
@@ -87,13 +84,15 @@ export async function genAuditPDF(order: any, ticked: any) {
     });
     y = doc.lastAutoTable.finalY + 10;
   }
-  doc.setFontSize(10); doc.setTextColor(...muted);
-  doc.text('Client name: ' + ((ticked.sign && ticked.sign.name) || order.customer_name || ''), M, y); y += 18;
-  doc.text('Date: ' + fmtDateA(order.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (ticked.sign && ticked.sign.img) { const si = await compressForPdf(ticked.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch (e) { } }
-  doc.setDrawColor(...muted); doc.setLineWidth(.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y, M, W, H, compress: compressForPdf,
+    consentText: 'I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided, and that I have read, understood and agree to the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([...new Set<string>(rooms.map((r: any) => r.category || r.type))]),
+    personName: (ticked.sign && ticked.sign.name) || order.customer_name || '',
+    personDate: fmtDateA(order.date),
+    sign: ticked.sign,
+    header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }),
+  });
   doc.save(('SiteAudit_' + (order.customer_name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }
 

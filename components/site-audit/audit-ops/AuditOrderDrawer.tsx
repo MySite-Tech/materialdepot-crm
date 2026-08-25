@@ -113,6 +113,10 @@ export default function AuditOrderDrawer({
   const [editSlot, setEditSlot] = useState(false);
   const [bmOpen, setBmOpen] = useState(false);
   const [bmPick, setBmPick] = useState('');
+  const [custOpen, setCustOpen] = useState(false);
+  const [custName, setCustName] = useState(o.name || '');
+  const [custPhone, setCustPhone] = useState(o.phone || '');
+  const [custAddr, setCustAddr] = useState(o.addr || '');
   const [journey, setJourney] = useState<JourneyEntry[] | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -332,6 +336,8 @@ export default function AuditOrderDrawer({
   async function assignAuditor() {
     const a = auditorById(auditors, pickedAuditor);
     if (!a) { toast('Pick an auditor first'); return; }
+    const note = requireNote('Assign auditor: ' + a.name);
+    if (note === null) return;
     const prev = parseShadowers(o.shadowerEmail, o.shadowerName);
     const joined = joinShadowers(shadowers);
     const prevSet = new Set(prev.map((s) => s.email)), nextSet = new Set(shadowers.map((s) => s.email));
@@ -341,7 +347,7 @@ export default function AuditOrderDrawer({
     if (added.length) log.push({ t: 'Shadower(s) assigned: ' + added.map((s) => s.name).join(', ') + ' (observing this audit)', d: now, by: 'manual', who: attribution });
     if (removed.length) log.push({ t: 'Shadower(s) removed: ' + removed.map((s) => s.name).join(', '), d: now, by: 'manual', who: attribution });
     log.push({
-      t: 'Auditor assigned: ' + a.name + (conflictOverride ? ' · ⚠ assigned despite 2-hour scheduling conflict (SM override)' : '') + ' · SMS sent to customer with auditor details',
+      t: 'Auditor assigned: ' + a.name + (conflictOverride ? ' · ⚠ assigned despite 2-hour scheduling conflict (SM override)' : '') + ' · SMS sent to customer with auditor details' + ' — note: "' + note + '"',
       d: now, by: 'manual', who: attribution,
     });
     await patch({
@@ -362,6 +368,22 @@ export default function AuditOrderDrawer({
     if (added.length) log.push({ t: 'Shadower(s) assigned: ' + added.map((s) => s.name).join(', ') + ' (observing this audit)', d: now, by: 'manual', who: attribution });
     if (removed.length) log.push({ t: 'Shadower(s) removed: ' + removed.map((s) => s.name).join(', '), d: now, by: 'manual', who: attribution });
     await patch({ shadower_email: joined.email, shadower_name: joined.name, log }, shadowers.length ? 'Shadowers saved (' + shadowers.length + ')' : 'Shadowers cleared');
+  }
+
+  /* ── customer detail correction (OMS auto-fetch is sometimes wrong) ────── */
+  async function saveCustomer() {
+    const nm = custName.trim(), ph = custPhone.trim(), ad = custAddr.trim();
+    if (!nm || !ph || !ad) { toast('Name, phone and address are all required'); return; }
+    const changed: string[] = [];
+    if (nm !== (o.name || '')) changed.push('name');
+    if (ph !== (o.phone || '')) changed.push('phone');
+    if (ad !== (o.addr || '')) changed.push('address');
+    if (!changed.length) { toast('No changes to save'); return; }
+    await patch({
+      name: nm, phone: ph, addr: ad,
+      log: logged('Customer details corrected — ' + changed.join(', ') + ' updated'),
+    }, 'Customer details updated');
+    setCustOpen(false);
   }
 
   /* ── BM link ─────────────────────────────────────────────────────────── */
@@ -505,9 +527,25 @@ export default function AuditOrderDrawer({
             </Section>
 
             <Section title="Customer">
-              <KV k="Name" v={o.name || '—'} />
+              <KV k="Name" v={
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {o.name || '—'}
+                  <button className="rounded-md border border-gray-200 px-2 py-0.5 text-[11px] font-semibold" onClick={() => setCustOpen((v) => !v)}>
+                    {custOpen ? 'Cancel' : 'Fix details'}
+                  </button>
+                </span>
+              } />
               <KV k="Phone" v={<a className="text-blue-600" href={'tel:' + o.phone.replace(/\s/g, '')}>{o.phone || '—'}</a>} />
               <KV k="Address" v={o.addr ? <a className="text-blue-600" href={mapUrl(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
+              {custOpen ? (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <Note tone="blue">Correct any field the OMS auto-fetch got wrong (e.g. name coming through as &quot;client&quot;) — this is logged to the activity timeline.</Note>
+                  <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer name" className="w-full rounded-md border border-gray-200 px-2 py-2 text-[13px]" />
+                  <input value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Phone" className="w-full rounded-md border border-gray-200 px-2 py-2 text-[13px]" />
+                  <textarea value={custAddr} onChange={(e) => setCustAddr(e.target.value)} placeholder="Address" className="w-full rounded-md border border-gray-200 px-2 py-2 text-[13px] resize-y" />
+                  <button disabled={busy} onClick={saveCustomer} className="self-start rounded-md bg-[#1F3A5F] px-3 py-1.5 text-[12px] font-semibold text-white">Save</button>
+                </div>
+              ) : null}
             </Section>
 
             {o.service && o.status !== 'pending' ? (

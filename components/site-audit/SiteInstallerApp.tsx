@@ -15,6 +15,7 @@ import {
   CATEGORY_LIST,
   MD_CATEGORIES,
   categoryFor,
+  mdInstallTermsBlock,
   typeLabel,
   type FieldValues,
 } from '@/components/site-audit/auditRegistry';
@@ -26,6 +27,7 @@ import {
   mdBrandGrid,
   mdInfoTable,
   mdPdfAuditRoom,
+  mdPdfConsent,
   mdPdfHeader,
   mdPdfInstallRoom,
 } from '@/components/site-audit/pdfBrand';
@@ -80,7 +82,10 @@ type Ratings = { q1: number; q2: number; q3: number; comments: string };
 type JobCard = {
   draft?: boolean;
   rooms: PersistedRoom[];
-  sign?: { img: string; name: string; ratings: Ratings };
+  // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never
+  // on-site — optional only so historical job cards with an old sign.ratings still render.
+  sign?: { img: string; name: string; ratings?: Ratings; tcCategories?: string[] };
+  installerSign?: { img: string; name: string };
 };
 
 type Job = {
@@ -359,10 +364,6 @@ async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
   }
 
   doc.addPage(); y = M; header();
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
-  const consent = 'I confirm that the installation for the above order has been carried out by the Material Depot installer, the rooms and products listed in this Job Card have been installed, and that I am satisfied with the service provided.';
-  doc.text(doc.splitTextToSize(consent, W - 2 * M), M, y); y += 56;
   const R = job.jobcard?.sign?.ratings;
   if (R) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...navy); doc.text('Client Feedback', M, y); y += 14;
@@ -372,11 +373,16 @@ async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
     });
     y = doc.lastAutoTable.finalY + 12;
   }
-  doc.setFontSize(10); doc.setTextColor(...muted); doc.text('Client name: ' + (job.jobcard?.sign?.name || job.name), M, y); y += 18; doc.text('Date: ' + fmtDateA(job.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (job.jobcard?.sign?.img) { const si = await compressForPdf(job.jobcard.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch { /* skip */ } }
-  doc.setDrawColor(...muted); doc.setLineWidth(0.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y, M, W, H, compress: compressForPdf,
+    consentText: 'I confirm that the installation for the above order has been carried out by the Material Depot installer, the rooms and products listed in this Job Card have been installed, and that I am satisfied with the service provided, and that the installation was carried out in line with the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([job.type]),
+    personName: job.jobcard?.sign?.name || job.name,
+    personDate: fmtDateA(job.date),
+    sign: job.jobcard?.sign,
+    installerSign: job.jobcard?.installerSign,
+    header: () => mdPdfHeader(doc, { title: cardTitle, right: job.pi, M }),
+  });
 
   const fn = ('Installation_' + (job.name || 'client') + '_' + (job.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_');
   doc.save(fn);
@@ -409,15 +415,15 @@ async function genAuditReportPDF(order: { pi: string; name: string; phone: strin
     y = await mdPdfAuditRoom(doc, r, y, { M, W, H, compress: compressForPdf, sketchImg: renderSketch(r), header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }) });
   }
   doc.addPage(); y = M; header();
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
-  doc.text(doc.splitTextToSize('I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided.', W - 2 * M), M, y); y += 70;
-  doc.setFontSize(10); doc.setTextColor(...muted);
-  doc.text('Client name: ' + (ticked.sign?.name || order.name), M, y); y += 18; doc.text('Date: ' + fmtDateA(order.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (ticked.sign?.img) { const si = await compressForPdf(ticked.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch { /* skip */ } }
-  doc.setDrawColor(...muted); doc.setLineWidth(0.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y, M, W, H, compress: compressForPdf,
+    consentText: 'I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided, and that I have read, understood and agree to the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([...new Set<string>(rooms.map((r: any) => r.category || r.type))]),
+    personName: ticked.sign?.name || order.name,
+    personDate: fmtDateA(order.date),
+    sign: ticked.sign,
+    header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }),
+  });
   doc.save(('SiteAudit_' + (order.name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }
 
@@ -429,23 +435,6 @@ function StatusPill({ status }: { status: string }) {
 
 function Spinner() {
   return <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-[#EAB308]" />;
-}
-
-function StarRow({ id, value, onChange }: { id: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={`h-8 w-8 rounded-md text-xs font-bold border ${value === n ? 'bg-[#1F3A5F] text-white border-[#1F3A5F]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function CommentSheet({ open, title, onCancel, onConfirm }: { open: boolean; title: string; onCancel: () => void; onConfirm: (comment: string) => void }) {
@@ -647,6 +636,17 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const subjobs = parent.subjobs || [];
         const sj = subjobs.find((s: any) => s.id === job.sjId);
         if (!sj) { toast('Job not found — please refresh'); return; }
+        const curStatus = sj.assignments && sj.assignments.length
+          ? (sj.assignments.find((a: any) => a.installer_email === actingAs.email)?.status ?? sj.status)
+          : sj.status;
+        // Someone else (an SM rebooking after a reschedule, another
+        // assignee) may have moved this sub-job since it was loaded — writing
+        // this transition on top of that would silently clobber it.
+        if (curStatus !== job.status) {
+          toast('This job was just updated — refresh to see the latest before trying again');
+          await loadJobs();
+          return;
+        }
         const dbSt = st === 'scheduled' ? 'assigned' : st;
         if (sj.assignments && sj.assignments.length) {
           const myA = sj.assignments.find((a: any) => a.installer_email === actingAs.email);
@@ -692,9 +692,12 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const completionWriteRef = useRef<{ subjobs: any[] } | null>(null);
 
   const [jcRooms, setJcRooms] = useState<Room[]>([]);
-  const [jcStage, setJcStage] = useState<'rooms' | 'review' | 'handoff' | 'tcs' | 'ratings' | 'signature'>('rooms');
-  const [jcRatings, setJcRatings] = useState<Ratings>({ q1: 0, q2: 0, q3: 0, comments: '' });
+  const [jcStage, setJcStage] = useState<'rooms' | 'review' | 'handoff' | 'tcs' | 'signature' | 'installerSignoff'>('rooms');
   const [signName, setSignName] = useState('');
+  // Customer's uploaded signature URL, captured once they finish signing — the SAME signPadRef
+  // canvas is cleared and reused for the installer's own signature on the next stage.
+  const [customerSignImg, setCustomerSignImg] = useState<string | null>(null);
+  const [installerSignName, setInstallerSignName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'local'>('idle');
   const [scanTargetRoomId, setScanTargetRoomId] = useState<number | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -752,7 +755,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     completionWriteRef.current = null;
     setSaveStatus('idle');
     setJcStage('rooms');
-    setJcRatings({ q1: 0, q2: 0, q3: 0, comments: '' });
     let restoreList: PersistedRoom[] | null = null;
     try {
       const raw = localStorage.getItem('md_install_' + job.pi + '_' + job.sjId);
@@ -849,17 +851,35 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setFinishBusy(false);
   }, [actingAs.email, actingAs.name, loadJobs, toast]);
 
-  const finishInstallation = useCallback(async () => {
-    const job = jcJobRef.current;
-    if (!job) return;
+  // Customer has just signed (still on the 'signature' stage) — export + upload that signature,
+  // clear the pad, and hand off to the installer's own confirmation + signature stage. The SAME
+  // signPadRef canvas is reused, so nothing about finishInstallation's pad-export logic changes.
+  const onSignNext = useCallback(async () => {
     if (signPadRef.current!.isEmpty()) { toast("Please take the customer's signature"); return; }
-    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-    autosaveSeqRef.current++;
-    const rooms = collectRooms(jcRoomsRef.current);
     const rawSig = signPadRef.current!.export();
     let sigImg = rawSig;
     try { sigImg = await uploadPhoto(rawSig); } catch { /* keep raw captured data URL */ }
-    const newJobcard: JobCard = { rooms, sign: { img: sigImg, name: signName, ratings: jcRatings } };
+    setCustomerSignImg(sigImg);
+    signPadRef.current!.clear();
+    setInstallerSignName(actingAs.name);
+    setJcStage('installerSignoff');
+  }, [actingAs.name, toast]);
+
+  const finishInstallation = useCallback(async () => {
+    const job = jcJobRef.current;
+    if (!job) return;
+    if (signPadRef.current!.isEmpty()) { toast('Please add the installer signature'); return; }
+    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+    autosaveSeqRef.current++;
+    const rooms = collectRooms(jcRoomsRef.current);
+    const rawInstallerSig = signPadRef.current!.export();
+    let installerSigImg = rawInstallerSig;
+    try { installerSigImg = await uploadPhoto(rawInstallerSig); } catch { /* keep raw captured data URL */ }
+    const newJobcard: JobCard = {
+      rooms,
+      sign: { img: customerSignImg || '', name: signName, tcCategories: [job.type] },
+      installerSign: { img: installerSigImg, name: installerSignName },
+    };
     job.jobcard = newJobcard;
     const newParentLog = [...(job.parentLog || []), { t: typeLabel(job.type) + ' installation completed', d: new Date().toISOString(), by: 'auto', who: actingAs.name }];
     setFinishBusy(true);
@@ -893,15 +913,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         await sbPatchLong('install_orders', job.id, completionPatch);
         job.parentLog = newParentLog;
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
-        try {
-          await sbPost('ratings', { order_type: 'install', pi: job.pi, order_id: job.id, staff_email: actingAs.email, staff_name: actingAs.name, q1_score: jcRatings.q1, q2_score: jcRatings.q2, q3_score: jcRatings.q3, comments: jcRatings.comments || '', customer_name: job.name, customer_phone: job.phone });
-        } catch {
-          try {
-            await sbPost('ratings', { order_type: 'install', pi: job.pi, order_id: job.id, staff_email: actingAs.email, staff_name: actingAs.name, q1_score: jcRatings.q1, q2_score: jcRatings.q2, comments: jcRatings.comments || '', customer_name: job.name, customer_phone: job.phone });
-          } catch (e2) {
-            console.error('ratings write failed', e2);
-          }
-        }
       }
     } catch {
       toast("Network error — couldn't save. Try again");
@@ -917,7 +928,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setActiveKey(job.pi + '|' + job.sjId);
     toast('Job finished & sent to office');
     setFinishBusy(false);
-  }, [actingAs.email, actingAs.name, jcRatings, signName, loadJobs, toast]);
+  }, [actingAs.email, actingAs.name, signName, customerSignImg, installerSignName, loadJobs, toast]);
 
   /* ── Photo handling for job-card rooms ─────────────────────────────────── */
   const swapRoomPhoto = useCallback((roomId: number, from: string, to: string) => {
@@ -1103,8 +1114,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           installerName={actingAs.name}
           rooms={jcRooms}
           stage={jcStage}
-          ratings={jcRatings}
           signName={signName}
+          installerSignName={installerSignName}
           saveStatus={saveStatus}
           finishBusy={finishBusy}
           signPadRef={signPadRef}
@@ -1124,18 +1135,15 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           onBackFromHandoff={() => setJcStage('review')}
           onClientReady={() => setJcStage('tcs')}
           onTcsBack={() => setJcStage('handoff')}
-          onTcsProceed={() => setJcStage('ratings')}
-          onRatingsChange={setJcRatings}
-          onRatingsBack={() => setJcStage('tcs')}
-          onRatingsNext={() => {
-            if (!jcRatings.q1) { toast('Please rate the overall experience'); return; }
-            if (!jcRatings.q2) { toast('Please rate the installer'); return; }
-            if (!jcRatings.q3) { toast('Please rate the site cleanliness'); return; }
+          onTcsProceed={() => {
             setSignName(jcJobRef.current!.name);
             setJcStage('signature');
           }}
-          onSignBack={() => setJcStage('ratings')}
+          onSignBack={() => setJcStage('tcs')}
           onSignNameChange={setSignName}
+          onSignNext={onSignNext}
+          onInstallerSignNameChange={setInstallerSignName}
+          onBackFromInstallerSignoff={() => setJcStage('signature')}
           onFinishInstallation={finishInstallation}
         />
       )}
@@ -1574,18 +1582,36 @@ function RoomBlock({
   );
 }
 
+// `termsBlock` (from mdInstallTermsBlock) fills what used to be a literal, never-written-in
+// placeholder — the installation terms for this job's category, so the customer is confirming the
+// work was carried out per those terms, not just that it happened.
+function buildInstallTC(termsBlock: string): string {
+  return `Material Depot — Customer Acknowledgement
+
+By ticking the box and signing below, I confirm that:
+
+• The installation described in this job card has been carried out to my satisfaction.
+• The rooms, materials and details recorded are accurate and correct.
+• I am satisfied with the service provided by the Material Depot team.
+• I consent to being contacted for quality feedback purposes if required.
+• I have read, understood and agree to the installation terms & conditions below.
+
+${termsBlock || '[Full terms and conditions will be provided by Material Depot]'}`;
+}
+
 function JobCardWizardOverlay({
-  job, installerName, rooms, stage, ratings, signName, saveStatus, finishBusy, signPadRef,
+  job, installerName, rooms, stage, signName, installerSignName, saveStatus, finishBusy, signPadRef,
   onBack, onAddRoom, onRemoveRoom, onRoomField, onRoomCategory, onRoomInstallField, onRoomFiles, onRoomRemovePhoto, onOpenScanner, onOpenLightbox,
   onFinishCard, onBackToRooms, onProceed, onBackFromHandoff, onClientReady, onTcsBack, onTcsProceed,
-  onRatingsChange, onRatingsBack, onRatingsNext, onSignBack, onSignNameChange, onFinishInstallation,
+  onSignBack, onSignNameChange, onSignNext,
+  onInstallerSignNameChange, onBackFromInstallerSignoff, onFinishInstallation,
 }: {
   job: Job;
   installerName: string;
   rooms: Room[];
-  stage: 'rooms' | 'review' | 'handoff' | 'tcs' | 'ratings' | 'signature';
-  ratings: Ratings;
+  stage: 'rooms' | 'review' | 'handoff' | 'tcs' | 'signature' | 'installerSignoff';
   signName: string;
+  installerSignName: string;
   saveStatus: 'idle' | 'saving' | 'saved' | 'local';
   finishBusy: boolean;
   signPadRef: React.RefObject<SignaturePadHandle | null>;
@@ -1606,11 +1632,11 @@ function JobCardWizardOverlay({
   onClientReady: () => void;
   onTcsBack: () => void;
   onTcsProceed: () => void;
-  onRatingsChange: (r: Ratings) => void;
-  onRatingsBack: () => void;
-  onRatingsNext: () => void;
   onSignBack: () => void;
   onSignNameChange: (v: string) => void;
+  onSignNext: () => void;
+  onInstallerSignNameChange: (v: string) => void;
+  onBackFromInstallerSignoff: () => void;
   onFinishInstallation: () => void;
 }) {
   const [tcAgree, setTcAgree] = useState(false);
@@ -1724,16 +1750,7 @@ function JobCardWizardOverlay({
               <div className="rounded-lg border border-gray-200 bg-white p-5">
                 <h2 className="mb-3 text-base font-bold text-black">Terms &amp; Conditions</h2>
                 <div className="max-h-[200px] overflow-y-auto whitespace-pre-line rounded-lg border border-gray-200 p-3.5 text-[13.5px] leading-relaxed">
-                  {`Material Depot — Customer Acknowledgement
-
-By ticking the box and signing below, I confirm that:
-
-• The installation described in this job card has been carried out to my satisfaction.
-• The rooms, materials and details recorded are accurate and correct.
-• I am satisfied with the service provided by the Material Depot team.
-• I consent to being contacted for quality feedback purposes if required.
-
-[Full terms and conditions will be provided by Material Depot]`}
+                  {buildInstallTC(mdInstallTermsBlock([job.type]))}
                 </div>
                 <label className="mt-5 flex cursor-pointer items-start gap-3">
                   <input type="checkbox" checked={tcAgree} onChange={(e) => setTcAgree(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#1F3A5F]" />
@@ -1742,38 +1759,6 @@ By ticking the box and signing below, I confirm that:
               </div>
               <button disabled={!tcAgree} onClick={onTcsProceed} className="mt-3.5 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40">Agree &amp; proceed →</button>
               <button onClick={onTcsBack} className="mt-2.5 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">← Back</button>
-            </>
-          )}
-
-          {stage === 'ratings' && (
-            <>
-              <div className="rounded-lg border border-gray-200 bg-white p-5">
-                <h2 className="mb-3.5 text-base font-bold text-black">Customer feedback</h2>
-                <p className="mb-5 text-[13px] text-gray-500">Please rate your experience. Tap a number from 1 (lowest) to 10 (highest).</p>
-                <div className="mb-5">
-                  <label className="text-sm font-semibold">1. How would you rate the overall site installation experience?</label>
-                  <StarRow id="q1" value={ratings.q1} onChange={(v) => onRatingsChange({ ...ratings, q1: v })} />
-                </div>
-                <div className="mb-5">
-                  <label className="text-sm font-semibold">2. How would you rate your site installer?</label>
-                  <StarRow id="q2" value={ratings.q2} onChange={(v) => onRatingsChange({ ...ratings, q2: v })} />
-                </div>
-                <div className="mb-5">
-                  <label className="text-sm font-semibold">3. How clean did the site installer leave the site after the installation?</label>
-                  <StarRow id="q3" value={ratings.q3} onChange={(v) => onRatingsChange({ ...ratings, q3: v })} />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold">Comments <span className="font-normal text-gray-400">(optional)</span></label>
-                  <textarea
-                    value={ratings.comments}
-                    onChange={(e) => onRatingsChange({ ...ratings, comments: e.target.value })}
-                    placeholder="Any feedback or comments…"
-                    className="mt-2.5 min-h-[90px] w-full resize-y rounded-lg border border-gray-200 p-3 text-sm outline-none focus:border-yellow-400"
-                  />
-                </div>
-              </div>
-              <button onClick={onRatingsNext} className="mt-3.5 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90">Next: Customer signature →</button>
-              <button onClick={onRatingsBack} className="mt-2.5 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">← Back to terms</button>
             </>
           )}
 
@@ -1789,8 +1774,25 @@ By ticking the box and signing below, I confirm that:
                   <input value={signName} onChange={(e) => onSignNameChange(e.target.value)} className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
                 </div>
               </div>
-              <button disabled={finishBusy} onClick={onFinishInstallation} className="mt-3.5 w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50">{finishBusy ? 'Saving…' : 'Save & finish job'}</button>
+              <button onClick={onSignNext} className="mt-3.5 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90">Next: installer confirmation →</button>
               <button onClick={onSignBack} className="mt-2.5 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">← Back</button>
+            </>
+          )}
+
+          {stage === 'installerSignoff' && (
+            <>
+              <div className="rounded-lg border border-gray-200 bg-white p-5">
+                <h2 className="mb-3 text-base font-bold text-black">Installer confirmation <span className="text-red-600">★</span></h2>
+                <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-[12px] text-gray-500">I confirm this installation was carried out in line with Material Depot&apos;s installation terms &amp; conditions for the categories involved.</div>
+                <SignaturePad ref={signPadRef} className="mb-3" />
+                <button onClick={() => signPadRef.current?.clear()} className="w-full rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Clear signature</button>
+                <div className="mt-3">
+                  <label className="mb-1 block text-sm font-semibold">Installer name</label>
+                  <input value={installerSignName} onChange={(e) => onInstallerSignNameChange(e.target.value)} className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
+                </div>
+              </div>
+              <button disabled={finishBusy} onClick={onFinishInstallation} className="mt-3.5 w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50">{finishBusy ? 'Saving…' : 'Save & finish job'}</button>
+              <button onClick={onBackFromInstallerSignoff} className="mt-2.5 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">← Back</button>
             </>
           )}
         </div>

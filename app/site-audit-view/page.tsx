@@ -50,21 +50,30 @@ function SiteAuditViewInner() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [mayPreview, setMayPreview] = useState(false);
   const [permissionRole, setPermissionRole] = useState<string | null>(null);
+  /* Attribution fallback when the Site Audit profile has no name on file
+     (e.g. an un-synced BM/SM) — the CRM session's own name, same pattern as
+     SiteAuditOwnDashboard's crmName. */
+  const [crmName, setCrmName] = useState('');
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
   const [smTab, setSmTab] = useState<'audit' | 'install'>('audit');
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
-  const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
+  /* Same read-only switcher as SiteAuditOwnDashboard/SiteAuditRoleViewerView —
+     a COE's own dashboard is their follow-up queue, but they can look at the
+     Service Manager view (orders, ops/perf/analytics) alongside it. */
+  const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem('materialdepot_user');
       setLoggedIn(!!stored);
-      const own = siteAuditRoleFromPermissions(stored ? JSON.parse(stored)?.individualPermissions : null);
+      const parsed = stored ? JSON.parse(stored) : null;
+      const own = siteAuditRoleFromPermissions(parsed?.individualPermissions);
       setPermissionRole(own);
+      setCrmName(parsed?.name || '');
       /* This route renders SOMEONE ELSE's dashboard by email, so holding a
          session was never enough authorisation — it is the Role Viewer's
          preview target, and the Role Viewer belongs to oversight. Profile
@@ -134,13 +143,13 @@ function SiteAuditViewInner() {
     </div>
   );
 
-  const isSm = viewRole === 'service_mgr' && !wantShadowing && person.role !== 'bm';
   const isCombined = viewRole === 'auditor_installer' && !wantShadowing && person.role !== 'bm';
   /* A COE lands on their own follow-up queue but can switch to the Service
      Manager dashboard, and a branch manager gets their branch rollup — same
      two person.role branches SiteAuditOwnDashboard renders in-app. */
   const isCoe = person.role === 'coe' && !wantShadowing;
   const isBranchMgr = person.role === 'branch_mgr' && !wantShadowing;
+  const isSm = (viewRole === 'service_mgr' || (isCoe && coeShowServiceMgr)) && !wantShadowing && person.role !== 'bm';
   const showSm = isSm || (isCoe && coeShowServiceMgr);
   const showCity = showSm || isCoe || isBranchMgr;
 
@@ -154,9 +163,9 @@ function SiteAuditViewInner() {
   const pickPrimary = (k: string) => (showSm ? setSmTab(k as 'audit' | 'install') : setCombinedView(k as 'auditor' | 'installer'));
 
   const smBody = smTab === 'install' ? (
-    <SiteAuditInstallOpsView city={city} />
+    <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
   ) : smAuditSubTab === 'ops' ? (
-    <SiteAuditOpsView city={city} />
+    <SiteAuditOpsView city={city} attribution={person.name || crmName} />
   ) : smAuditSubTab === 'jobs' ? (
     <SiteAuditJobsView city={city} />
   ) : smAuditSubTab === 'perf' ? (
@@ -192,7 +201,15 @@ function SiteAuditViewInner() {
           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-amber-700">
             {wantShadowing ? 'Shadowing preview' : 'Preview'}
           </span>
-          {showCity ? <div className="ml-auto">{cityPicker}</div> : null}
+          {isCoe ? (
+            <button
+              onClick={() => setCoeShowServiceMgr((v) => !v)}
+              className="ml-auto shrink-0 rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700 cursor-pointer"
+            >
+              {coeShowServiceMgr ? '← Their dashboard' : 'Service Manager dashboard →'}
+            </button>
+          ) : null}
+          {showCity ? <div className={isCoe ? '' : 'ml-auto'}>{cityPicker}</div> : null}
         </div>
 
         {primaryTabs.length ? (
@@ -237,6 +254,8 @@ function SiteAuditViewInner() {
           <SiteAuditorApp actingAs={actingAs} />
         ) : viewRole === 'installer' ? (
           <SiteInstallerApp actingAs={actingAs} />
+        ) : isCoe && !coeShowServiceMgr ? (
+          <SiteAuditCoeView city={city} who={person.name} />
         ) : isCombined ? (
           combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
         ) : isCoe ? (

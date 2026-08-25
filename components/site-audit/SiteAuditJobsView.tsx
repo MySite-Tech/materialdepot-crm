@@ -8,7 +8,7 @@ import {
 } from './siteAuditShared';
 import { autoImportSiteAuditJobs } from './autoImportAuditOrders';
 import ShadowerSelect, { type ShadowerOption } from './install-ops/ShadowerSelect';
-import { categoryFor } from './auditRegistry';
+import { categoryFor, mdInstallTermsBlock } from './auditRegistry';
 import { AuditRoomCard, InstallRoomCard } from './AuditRoomViews';
 import RoomSkuEditor, { auditRoomSkuSaver, installRoomSkuSaver } from './RoomSkuEditor';
 
@@ -20,6 +20,7 @@ import {
   loadBrandLogo,
   mdBrandGrid,
   mdInfoTable,
+  mdPdfConsent,
   mdPdfHeader,
   mdPdfInstallRoom,
 } from './pdfBrand';
@@ -77,9 +78,6 @@ async function genInstallPDF(order: any, sj: any, jobcard: any, installerName: s
     y = await mdPdfInstallRoom(doc, r, y, { M, W, H, compress: compressForPdf, header: () => mdPdfHeader(doc, { title: 'Installation Job Card', right: order.pi, M }) });
   }
   doc.addPage(); y = M; header();
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...navy); doc.text('Client Acknowledgement', M, y + 4); y += 26;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
-  doc.text(doc.splitTextToSize('I confirm that the installation for the above order has been carried out by the Material Depot installer, the rooms and products listed in this Job Card have been installed, and that I am satisfied with the service provided.', W - 2 * M), M, y); y += 58;
   const RI = jobcard.sign && jobcard.sign.ratings;
   if (RI) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...navy); doc.text('Client Feedback', M, y); y += 12;
@@ -89,11 +87,16 @@ async function genInstallPDF(order: any, sj: any, jobcard: any, installerName: s
     });
     y = doc.lastAutoTable.finalY + 10;
   }
-  doc.setFontSize(10); doc.setTextColor(...muted); doc.text('Client name: ' + ((jobcard.sign && jobcard.sign.name) || order.customer_name || ''), M, y); y += 18; doc.text('Date: ' + fmtDateA(sj.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (jobcard.sign && jobcard.sign.img) { const si = await compressForPdf(jobcard.sign.img); if (si) try { doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH); } catch (e) { } }
-  doc.setDrawColor(...muted); doc.setLineWidth(.8); doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5); doc.setTextColor(...muted); doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y, M, W, H, compress: compressForPdf,
+    consentText: 'I confirm that the installation for the above order has been carried out by the Material Depot installer, the rooms and products listed in this Job Card have been installed, and that I am satisfied with the service provided, and that the installation was carried out in line with the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([sj.type]),
+    personName: (jobcard.sign && jobcard.sign.name) || order.customer_name || '',
+    personDate: fmtDateA(sj.date),
+    sign: jobcard.sign,
+    installerSign: jobcard.installerSign,
+    header: () => mdPdfHeader(doc, { title: 'Installation Job Card', right: order.pi, M }),
+  });
   doc.save(('Installation_' + (order.customer_name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }
 
@@ -408,7 +411,12 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
   }).filter((j) => {
     if (!jobsSearch) return true;
     const q = jobsSearch.toLowerCase();
-    return j.id.toLowerCase().includes(q) || j.customer.toLowerCase().includes(q);
+    // Enq ID/customer (original) plus address, assigned-to, status label, and date(s) —
+    // mirrors the same search extension shipped in material-depot-site's Admin.html.
+    const dates = [j.date, ...(j.installDates || [])].filter(Boolean).join(' ');
+    const hay = [j.id, j.customer, j.addr, j.assignee, JOB_STATUS[j.status]?.l || j.status, dates]
+      .filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
   }), [realJobs, jobsFilter, jobsDateFilter, jobsSearch]);
 
   if (loading) {
@@ -443,7 +451,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
           <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-b border-gray-100">
             <div className="relative" style={{ maxWidth: 280, minWidth: 180, flexShrink: 0 }}>
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
-              <input type="text" placeholder="Search Enquiry ID or customer…" value={jobsSearch} onChange={(e) => setJobsSearch(e.target.value)} className="w-full pl-8 pr-3 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400" />
+              <input type="text" placeholder="Search Enquiry ID, customer, address, assigned to, status, date…" value={jobsSearch} onChange={(e) => setJobsSearch(e.target.value)} className="w-full pl-8 pr-3 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400" />
             </div>
             <div className="flex gap-1.5 flex-wrap">
               {FILTER_KEYS.map((f) => (

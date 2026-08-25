@@ -216,9 +216,9 @@ export default function SiteAuditOwnDashboard({
           </div>
         )}
         {smTab === 'install' ? (
-          <SiteAuditInstallOpsView city={city} />
+          <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
         ) : smAuditSubTab === 'ops' ? (
-          <SiteAuditOpsView city={city} />
+          <SiteAuditOpsView city={city} attribution={person.name || crmName} />
         ) : smAuditSubTab === 'jobs' ? (
           <SiteAuditJobsView city={city} />
         ) : smAuditSubTab === 'perf' ? (

@@ -18,12 +18,23 @@ import {
 import {
   CATEGORY_LIST,
   MD_CATEGORIES,
+  ROOM_V,
+  adjMissingPhoto,
+  adjMissingReason,
+  adjRows,
+  adjSum,
   categoryFor,
   computeDerived,
+  fieldsFor,
+  mdInstallTermsBlock,
+  needsVariant,
   normalizeRoom,
   prereqFlagged,
   segmentPrereqRows,
   segmentRows,
+  unitFor,
+  unitNoteFor,
+  type AdjustRow,
   type CategoryDef,
   type FieldValues,
   type PrereqEntry,
@@ -35,6 +46,7 @@ import {
   mdCompress,
   mdInfoTable,
   mdPdfAuditRoom,
+  mdPdfConsent,
   mdPdfHeader,
   loadBrandLogo,
 } from '@/components/site-audit/pdfBrand';
@@ -68,10 +80,14 @@ type Segment = {
   photos: string[];
   fields: FieldValues;
   prereq: Record<string, PrereqEntry>;
+  adjust: AdjustRow[];
 };
 
 type Room = {
   id: number;
+  // Schema version — a resumed v2 draft keeps its OWN v (mm whatever the variant, see
+  // auditRegistry's per-variant-unit gate); only a brand-new room gets the current ROOM_V.
+  v: number;
   category: string;
   name: string;
   sku: string;
@@ -85,7 +101,10 @@ type Room = {
 type SignData = {
   img: string;
   name: string;
-  ratings: { q1: number; q2: number; q3: number; comments: string };
+  // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never on-site
+  // — this stays optional only so historical job cards with an old sign.ratings still render.
+  ratings?: { q1: number; q2: number; q3: number; comments: string };
+  tcCategories?: string[];
 };
 
 /* Rooms are stored in their serialized v2 shape (see serializeRoom) — the same shape written to
@@ -145,7 +164,7 @@ const DEFAULT_LOG_TEXT: Record<string, string> = {
 /* Serialized (DB / draft) shape of one captured room — v2 segments. */
 function serializeRoom(r: Room) {
   return {
-    v: 2,
+    v: r.v || ROOM_V,
     category: r.category,
     name: r.name,
     sku: r.sku,
@@ -158,21 +177,32 @@ function serializeRoom(r: Room) {
       fields: { ...s.fields },
       photos: (s.photos || []).slice(),
       prereq: { ...s.prereq },
+      adjust: (s.adjust || []).map((a) => ({ ...a, photos: (a.photos || []).slice() })),
       flagged: prereqFlagged(s),
     })),
   };
 }
 
-/* Draft written to the DB on autosave — photos are dropped per segment (they can be multi-MB
-   base64 until each upload swaps in its Storage URL). */
+/* Draft written to the DB on autosave — photos are dropped per segment AND per adjustment (they
+   can be multi-MB base64 until each upload swaps in its Storage URL). */
 function draftPayload(rooms: Room[]) {
   return rooms.map((r) => {
     const { segments, ...rest } = serializeRoom(r);
-    return { ...rest, segments: segments.map(({ photos, ...s }) => s) };
+    return {
+      ...rest,
+      segments: segments.map(({ photos, adjust, ...s }) => ({
+        ...s,
+        adjust: adjust.map(({ photos: _p, ...a }) => a),
+      })),
+    };
   });
 }
 
-const MD_TC = `Material Depot — Client Acknowledgement
+// `termsBlock` (from mdInstallTermsBlock) fills what used to be a literal, never-written-in
+// placeholder — the install-readiness clauses for whichever categories are in this job card, so
+// the client is confirming the site is ready for installation, not just that the audit happened.
+function buildAuditTC(termsBlock: string): string {
+  return `Material Depot — Client Acknowledgement
 
 By ticking the box and signing below, I confirm that:
 
@@ -180,8 +210,10 @@ By ticking the box and signing below, I confirm that:
 • The details, measurements and room information recorded are accurate and correct.
 • I am satisfied with the service provided by the Material Depot team.
 • I consent to being contacted for quality feedback purposes if required.
+• I have read, understood and agree to the installation terms & conditions below, which explain what needs to be in place before installation can proceed.
 
-[Full terms and conditions will be provided by Material Depot]`;
+${termsBlock || '[Full terms and conditions will be provided by Material Depot]'}`;
+}
 
 /* ---- date / slot helpers (verbatim logic from source) ---- */
 function todayMidnight(): Date {
@@ -450,18 +482,6 @@ async function genPDF(order: Order, auditorName: string): Promise<string> {
   doc.addPage();
   y = M;
   header();
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(...navy);
-  doc.text('Client Acknowledgement', M, y + 4);
-  y += 26;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  doc.setTextColor(40, 40, 40);
-  const consent =
-    'I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided.';
-  doc.text(doc.splitTextToSize(consent, W - 2 * M), M, y);
-  y += 58;
   const R = order.jobcard?.sign?.ratings;
   if (R) {
     doc.setFont('helvetica', 'bold');
@@ -484,26 +504,20 @@ async function genPDF(order: Order, auditorName: string): Promise<string> {
     });
     y = doc.lastAutoTable.finalY + 12;
   }
-  doc.setFontSize(10);
-  doc.setTextColor(...muted);
-  doc.text('Client name: ' + (order.jobcard?.sign?.name || order.name), M, y);
-  y += 18;
-  doc.text('Date: ' + fmtDateA(order.date), M, y);
-  const sigW = 200, sigH = 80, sx = W - M - sigW, sy = H - M - sigH - 24;
-  if (order.jobcard?.sign?.img) {
-    const sigImg = await compressImageDataUrl(order.jobcard.sign.img);
-    if (sigImg) {
-      try {
-        doc.addImage(sigImg, 'JPEG', sx, sy - 10, sigW, sigH);
-      } catch {}
-    }
-  }
-  doc.setDrawColor(...muted);
-  doc.setLineWidth(0.8);
-  doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
-  doc.setFontSize(9.5);
-  doc.setTextColor(...muted);
-  doc.text('Client signature', sx, sy + sigH + 10);
+  await mdPdfConsent(doc, {
+    y,
+    M,
+    W,
+    H,
+    compress: compressImageDataUrl,
+    consentText:
+      'I confirm that the site audit for the above order has been carried out by the Material Depot auditor, that the rooms, measurements and details recorded in this Job Card are correct, and that I am satisfied with the service provided, and that I have read, understood and agree to the installation terms & conditions below.',
+    termsBlock: mdInstallTermsBlock([...new Set(rooms.map((r) => r.category || r.type))]),
+    personName: order.jobcard?.sign?.name || order.name,
+    personDate: fmtDateA(order.date),
+    sign: order.jobcard?.sign,
+    header: () => mdPdfHeader(doc, { title: 'Site Audit Job Card', right: order.pi, M }),
+  });
   return URL.createObjectURL(doc.output('blob'));
 }
 
@@ -538,25 +552,6 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function StarRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={cn(
-            'h-8 w-8 rounded-md border text-xs font-bold',
-            value === n ? 'border-[#EAB308] bg-[#EAB308] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
-          )}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function CommentDialog({
   title,
@@ -792,10 +787,12 @@ function JobListView({
 /* ---- reschedule form ---- */
 function RescheduleForm({
   showToast,
+  busy,
   onCancel,
   onConfirm,
 }: {
   showToast: (m: string) => void;
+  busy: boolean;
   onCancel: () => void;
   onConfirm: (reason: string, followUp: string) => void;
 }) {
@@ -833,12 +830,14 @@ function RescheduleForm({
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          disabled={busy}
+          className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="button"
+          disabled={busy}
           onClick={() => {
             if (!reason.trim()) {
               showToast('Please enter a reason for rescheduling');
@@ -846,9 +845,9 @@ function RescheduleForm({
             }
             onConfirm(reason.trim(), followUp.trim());
           }}
-          className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white hover:opacity-90"
+          className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
         >
-          Confirm Reschedule
+          {busy ? 'Submitting…' : 'Confirm Reschedule'}
         </button>
       </div>
     </div>
@@ -1054,8 +1053,8 @@ function JobDetailView({
   // stale `order.log` closure twice, and whichever sbPatch lands last silently
   // drops the other tap's log entry.
   const adv = useCallback(
-    async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra) => {
-      if (advBusy) return;
+    async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra): Promise<boolean> => {
+      if (advBusy) return false;
       setAdvBusy(true);
       try {
         const logText = logOverride || DEFAULT_LOG_TEXT[st] || st;
@@ -1064,13 +1063,24 @@ function JobDetailView({
         let newLog = [...order.log, entry];
         if (order.id) {
           try {
-            const rows = await sbGet('audit_orders?id=eq.' + order.id + '&select=log');
-            const freshLog: LogEntry[] = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].log) ? rows[0].log : order.log;
+            const rows = await sbGet('audit_orders?id=eq.' + order.id + '&select=log,status');
+            const fresh = Array.isArray(rows) && rows[0] ? rows[0] : null;
+            // The screen's `order.status` can go stale — an SM action (e.g.
+            // rebooking after a reschedule) can land between this button being
+            // shown and tapped. Without this check a delayed/duplicate tap
+            // here would silently overwrite whatever the SM just set, which is
+            // exactly what made a rebooked slot "revert" to reschedule.
+            if (fresh && fresh.status !== order.status) {
+              showToast('This job was just updated — refresh to see the latest before trying again');
+              await refreshJobs();
+              return false;
+            }
+            const freshLog: LogEntry[] = fresh && Array.isArray(fresh.log) ? fresh.log : order.log;
             newLog = [...freshLog, entry];
             await sbPatch('audit_orders', order.id, { status: dbStatus, log: newLog });
           } catch {
             showToast('Network error — try again');
-            return;
+            return false;
           }
         }
         if (st === 'atsite') locationTracker.start(order.pi);
@@ -1078,6 +1088,7 @@ function JobDetailView({
         onUpdateOrder((o) => ({ ...o, status: st, log: newLog }));
         await refreshJobs();
         showToast(toastMsg);
+        return true;
       } finally {
         setAdvBusy(false);
       }
@@ -1138,11 +1149,18 @@ function JobDetailView({
       {reschedOpen ? (
         <RescheduleForm
           showToast={showToast}
+          busy={advBusy}
           onCancel={() => setReschedOpen(false)}
           onConfirm={async (reason, followUp) => {
             const logMsg = 'Reschedule requested: ' + reason + (followUp ? ` · Follow-up: ${followUp}` : '');
+            // Wait for adv() to actually succeed before closing the form —
+            // closing it up front (as this used to) left the Confirm button
+            // fully clickable for the whole round trip, so a slow/flaky
+            // connection invited repeat taps that each wrote their own
+            // duplicate "Reschedule requested" log entry.
+            const ok = await adv('reschedule', 'Sent to SM to reschedule', logMsg);
+            if (!ok) return;
             setReschedOpen(false);
-            await adv('reschedule', 'Sent to SM to reschedule', logMsg);
             if (followUp && order.id) {
               try {
                 await sbPatch('audit_orders', order.id, { service: { ...order.service, follow_up_date: followUp } });
@@ -1280,14 +1298,15 @@ function JobDetailsHeader({ order, actingAs }: { order: Order; actingAs: ActingA
 
 type RoomPatch = Partial<Room> | ((r: Room) => Partial<Room>);
 
-function blankSegment(catKey: string, sid: number): Segment {
+function blankSegment(catKey: string, sid: number, room?: { v?: number; variant?: string | null } | null): Segment {
   const cat = MD_CATEGORIES[catKey] || MD_CATEGORIES.flooring;
+  const roomCtx = room || { v: ROOM_V, variant: null };
   const fields: FieldValues = {};
-  (cat.fields || []).forEach((f) => {
+  fieldsFor(cat, roomCtx).forEach((f) => {
     if (f.default !== undefined) fields[f.k] = f.default;
   });
-  computeDerived(cat, fields);
-  return { sid, facing: null, photos: [], fields, prereq: {} };
+  computeDerived(cat, fields, roomCtx);
+  return { sid, facing: null, photos: [], fields, prereq: {}, adjust: [] };
 }
 
 /* Value a select-type field shows when nothing has been picked yet — the registry's first option,
@@ -1303,17 +1322,20 @@ function fieldValue(seg: Segment, f: { k: string; input?: string; opts?: string[
 const GROUP_LABEL_CLS = 'mt-2.5 text-[11px] font-extrabold uppercase tracking-wider text-gray-400';
 
 /* Grouped measurement inputs for one segment. Derived fields are read-only and recomputed on
-   every keystroke by the registry's own formulas. */
+   every keystroke by the registry's own formulas — except a field with `editableIf` true for the
+   current values (the manual "Custom" area mode), which renders as a plain input instead. */
 function SegmentFields({
   cat,
   seg,
+  room,
   onFields,
 }: {
   cat: CategoryDef;
   seg: Segment;
+  room: { v: number; variant: string | null };
   onFields: (next: FieldValues) => void;
 }) {
-  const visible = (cat.fields || []).filter((f) => !f.showIf || f.showIf(seg.fields));
+  const visible = fieldsFor(cat, room).filter((f) => !f.showIf || f.showIf(seg.fields));
   const groups: { group: string; fields: typeof visible }[] = [];
   visible.forEach((f) => {
     const last = groups[groups.length - 1];
@@ -1323,7 +1345,7 @@ function SegmentFields({
 
   const setField = (k: string, value: string) => {
     const next: FieldValues = { ...seg.fields, [k]: value };
-    computeDerived(cat, next);
+    computeDerived(cat, next, room);
     onFields(next);
   };
 
@@ -1333,41 +1355,206 @@ function SegmentFields({
         <div key={g.group}>
           <div className={GROUP_LABEL_CLS}>{g.group}</div>
           <div className="mt-1 grid grid-cols-2 gap-3">
-            {g.fields.map((f) => (
-              <div key={f.k}>
-                <label className="text-xs text-gray-500">{f.label}</label>
-                {f.input === 'select' ? (
-                  <select
-                    value={fieldValue(seg, f)}
-                    onChange={(e) => setField(f.k, e.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                  >
-                    {(f.opts ?? []).map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                ) : f.derived ? (
-                  <input
-                    value={fieldValue(seg, f)}
-                    readOnly
-                    className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
-                  />
-                ) : (
-                  <input
-                    inputMode={f.input === 'decimal' ? 'decimal' : undefined}
-                    value={fieldValue(seg, f)}
-                    onChange={(e) => setField(f.k, e.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                  />
-                )}
-              </div>
-            ))}
+            {g.fields.map((f) => {
+              const overrideEditable = f.derived && f.editableIf && f.editableIf(seg.fields);
+              return (
+                <div key={f.k}>
+                  <label className="text-xs text-gray-500">{f.label}</label>
+                  {f.input === 'select' ? (
+                    <select
+                      value={fieldValue(seg, f)}
+                      onChange={(e) => setField(f.k, e.target.value)}
+                      className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                    >
+                      {(f.opts ?? []).map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  ) : f.derived && !overrideEditable ? (
+                    <input
+                      value={fieldValue(seg, f)}
+                      readOnly
+                      className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
+                    />
+                  ) : (
+                    <input
+                      inputMode={f.input === 'decimal' || overrideEditable ? 'decimal' : undefined}
+                      value={fieldValue(seg, f)}
+                      onChange={(e) => setField(f.k, e.target.value)}
+                      className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
     </>
+  );
+}
+
+/* Per-segment area adjustments: add/subtract a small area that belongs to THIS wall/floor rather
+   than to a room of its own (a door to deduct, a niche to add), each with a shape (Rectangle/
+   Triangle compute from dimensions; Other skips dimensions and takes a typed area directly), a
+   reason and a photo. Dimensions are in the segment's own unit; the signed sq.ft total lands in
+   fields.adjArea (maintained by the caller's recompute) and flows through net area -> wastage ->
+   rolls, same mechanism as any other derived field. */
+function SegmentAdjustments({
+  cat,
+  room,
+  seg,
+  onAdjust,
+}: {
+  cat: CategoryDef;
+  room: { v: number; variant: string | null };
+  seg: Segment;
+  onAdjust: (next: AdjustRow[]) => void;
+}) {
+  const u = unitFor(cat, room);
+  const segLabel = (cat.segment && cat.segment.segLabel) || 'segment';
+
+  const patchRow = (i: number, patch: Partial<AdjustRow>) => {
+    const next = seg.adjust.map((a, idx) => (idx === i ? { ...a, ...patch } : a));
+    onAdjust(next);
+  };
+  const removeRow = (i: number) => onAdjust(seg.adjust.filter((_, idx) => idx !== i));
+  const addRow = () =>
+    onAdjust([...seg.adjust, { sign: '-', shape: 'Rectangle', h: '', w: '', area: '', reason: '', photos: [] }]);
+
+  return (
+    <div className="mt-2.5">
+      <div className={GROUP_LABEL_CLS}>Area adjustments (optional)</div>
+      <div className="mb-1 text-xs text-gray-400">
+        Add or subtract a small area for this {segLabel.toLowerCase()} — e.g. subtract a door or window opening. Give a
+        reason and a photo for each one.
+      </div>
+      {seg.adjust.map((a, i) => {
+        const shape = a.shape || 'Rectangle';
+        const isOther = shape === 'Other';
+        const computedArea = isOther ? '' : adjSum(cat, room, [a]);
+        const dim1 = shape === 'Triangle' ? 'Base' : 'Height';
+        const dim2 = shape === 'Triangle' ? 'Height' : 'Width';
+        const missingReason = !!(a.reason ? false : (isOther ? a.area : a.h && a.w));
+        return (
+          <div key={i} className="mt-2 rounded-lg border border-gray-200 bg-white p-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500">Add or subtract</label>
+                <select
+                  value={a.sign || '-'}
+                  onChange={(e) => patchRow(i, { sign: e.target.value as '+' | '-' })}
+                  className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                >
+                  <option value="-">Subtract</option>
+                  <option value="+">Add</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Shape</label>
+                <select
+                  value={shape}
+                  onChange={(e) => {
+                    const nextShape = e.target.value as AdjustRow['shape'];
+                    patchRow(
+                      i,
+                      nextShape === 'Other' ? { shape: nextShape, h: '', w: '' } : { shape: nextShape, area: '' },
+                    );
+                  }}
+                  className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                >
+                  <option value="Rectangle">Rectangle</option>
+                  <option value="Triangle">Triangle</option>
+                  <option value="Other">Other (type area directly)</option>
+                </select>
+              </div>
+              {isOther ? (
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">Area (sq.ft)</label>
+                  <input
+                    inputMode="decimal"
+                    value={a.area ?? ''}
+                    onChange={(e) => patchRow(i, { area: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      {dim1} ({u})
+                    </label>
+                    <input
+                      inputMode="decimal"
+                      value={a.h ?? ''}
+                      onChange={(e) => patchRow(i, { h: e.target.value })}
+                      className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      {dim2} ({u})
+                    </label>
+                    <input
+                      inputMode="decimal"
+                      value={a.w ?? ''}
+                      onChange={(e) => patchRow(i, { w: e.target.value })}
+                      className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-gray-500">Area (sq.ft)</label>
+                    <input
+                      value={computedArea === '' ? '' : (computedArea > 0 ? '+' : '') + computedArea}
+                      readOnly
+                      className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500">Reason</label>
+                <input
+                  value={a.reason || ''}
+                  onChange={(e) => patchRow(i, { reason: e.target.value })}
+                  placeholder="e.g. Door opening"
+                  className={cn(
+                    'mt-1 w-full rounded-md border px-2 py-1.5 text-sm',
+                    missingReason ? 'border-red-400' : 'border-gray-200',
+                  )}
+                />
+              </div>
+            </div>
+            <div className="mt-2">
+              <label className="text-xs text-gray-500">Photo</label>
+              <SegmentPhotos
+                photos={a.photos || []}
+                label=""
+                onAdd={(url) => patchRow(i, { photos: [...(a.photos || []), url] })}
+                onSwap={(from, to) => patchRow(i, { photos: (a.photos || []).map((p) => (p === from ? to : p)) })}
+                onRemoveAt={(idx) => patchRow(i, { photos: (a.photos || []).filter((_, pi2) => pi2 !== idx) })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => removeRow(i)}
+              className="mt-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+            >
+              Remove adjustment
+            </button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={addRow}
+        className="mt-2 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-bold text-gray-700 hover:bg-gray-100"
+      >
+        + Add adjustment
+      </button>
+    </div>
   );
 }
 
@@ -1590,7 +1777,13 @@ function RoomEditor({
           value={room.category}
           onChange={(e) => {
             const category = e.target.value;
-            onChange({ category, variant: null, segments: [blankSegment(category, 1)], nextSid: 1 });
+            onChange({
+              category,
+              v: ROOM_V,
+              variant: null,
+              segments: [blankSegment(category, 1, { v: ROOM_V, variant: null })],
+              nextSid: 1,
+            });
           }}
           className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
         >
@@ -1628,7 +1821,52 @@ function RoomEditor({
           <label className="text-xs text-gray-500">{cat.label} type</label>
           <select
             value={room.variant || ''}
-            onChange={(e) => onChange({ variant: e.target.value || null })}
+            onChange={(e) => {
+              const prev = room.variant;
+              const next = e.target.value || null;
+              // The variant can decide the measurement UNIT (Standard wallpaper = ft, Customized =
+              // mm), so switching it may need to clear already-typed measurements — silently
+              // re-labelling 2800mm as 2800ft would put a ~300x wrong area on the job card.
+              const unitFlips = unitFor(cat, { v: room.v, variant: prev }) !== unitFor(cat, { v: room.v, variant: next });
+              const hasData = room.segments.some(
+                (s) =>
+                  ['height', 'width', 'length'].some((k) => String(s.fields?.[k] ?? '') !== '') ||
+                  (s.fields?.areaMode === 'Custom' && String(s.fields.area ?? '') !== '') ||
+                  (s.adjust || []).some(
+                    (a) => String(a.h ?? '') !== '' || String(a.w ?? '') !== '' || String(a.area ?? '') !== '',
+                  ),
+              );
+              if (
+                prev &&
+                next &&
+                unitFlips &&
+                hasData &&
+                !window.confirm(
+                  `Switching to ${next} changes the measurement unit from ${unitFor(cat, { v: room.v, variant: prev })} to ${unitFor(cat, { v: room.v, variant: next })}.\n\nThe measurements already entered will be cleared so they can be re-taken in the new unit. Continue?`,
+                )
+              ) {
+                return;
+              }
+              if (prev && next && unitFlips) {
+                onChange({
+                  variant: next,
+                  segments: room.segments.map((s) => {
+                    // A Custom-mode area is a direct sq.ft entry with no unit of its own, so a unit
+                    // flip doesn't make it wrong the way a height/width typed in the old unit would
+                    // be — leave it in place.
+                    const dropKeys =
+                      s.fields?.areaMode === 'Custom'
+                        ? ['height', 'width', 'length', 'adjArea', 'netArea', 'areaW', 'rolls']
+                        : ['height', 'width', 'length', 'area', 'adjArea', 'netArea', 'areaW', 'rolls'];
+                    const fields = { ...s.fields };
+                    dropKeys.forEach((k) => delete fields[k]);
+                    return { ...s, fields, adjust: [] };
+                  }),
+                });
+              } else {
+                onChange({ variant: next });
+              }
+            }}
             className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
           >
             <option value="">Select…</option>
@@ -1641,10 +1879,9 @@ function RoomEditor({
         </div>
       )}
 
-      {room.category === 'wallpaper' && (
+      {unitNoteFor(cat, room) && (
         <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800">
-          📏 Wall height &amp; width are now entered in millimetres (mm), not inches — the calculated area still shows
-          in sq.ft.
+          📏 {unitNoteFor(cat, room)}
         </div>
       )}
 
@@ -1684,7 +1921,30 @@ function RoomEditor({
             </div>
           )}
 
-          <SegmentFields cat={cat} seg={seg} onFields={(fields) => patchSegment(seg.sid, { fields })} />
+          {needsVariant(cat, room) ? (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800">
+              {cat.variantPrompt || `Pick the ${cat.label} type above to enter measurements.`}
+            </div>
+          ) : (
+            <>
+              <SegmentFields
+                cat={cat}
+                seg={seg}
+                room={room}
+                onFields={(fields) => patchSegment(seg.sid, { fields })}
+              />
+              <SegmentAdjustments
+                cat={cat}
+                room={room}
+                seg={seg}
+                onAdjust={(nextAdjust) => {
+                  const fields = { ...seg.fields, adjArea: adjSum(cat, room, nextAdjust) };
+                  computeDerived(cat, fields, room);
+                  patchSegment(seg.sid, { adjust: nextAdjust, fields });
+                }}
+              />
+            </>
+          )}
 
           <SegmentPhotos
             photos={seg.photos}
@@ -1719,7 +1979,7 @@ function RoomEditor({
           type="button"
           onClick={() =>
             onChange((r) => ({
-              segments: [...r.segments, blankSegment(r.category, r.nextSid + 1)],
+              segments: [...r.segments, blankSegment(r.category, r.nextSid + 1, r)],
               nextSid: r.nextSid + 1,
             }))
           }
@@ -1782,11 +2042,12 @@ function RoomReviewCard({ room, index }: { room: Room; index: number }) {
     () =>
       room.segments.map((s) => ({
         seg: s,
-        rows: segmentRows(cat, { ...s, id: s.sid }, true),
+        rows: segmentRows(cat, { ...s, id: s.sid }, true, room),
+        adj: adjRows(cat, room, s.adjust),
         prq: segmentPrereqRows(cat, { ...s, id: s.sid }),
         flagged: prereqFlagged(s),
       })),
-    [room.segments, cat],
+    [room.segments, cat, room],
   );
 
   return (
@@ -1801,7 +2062,7 @@ function RoomReviewCard({ room, index }: { room: Room; index: number }) {
         {room.sku && <span className="text-[11.5px] text-gray-500">SKU: {room.sku}</span>}
       </div>
 
-      {segs.map(({ seg, rows, prq, flagged }, si) => (
+      {segs.map(({ seg, rows, adj, prq, flagged }, si) => (
         <div key={seg.sid} className="mt-2 rounded-lg border border-gray-200 p-2.5">
           {multi && (
             <div className="mb-1.5 text-[13px] font-extrabold text-[#1F3A5F]">
@@ -1821,6 +2082,29 @@ function RoomReviewCard({ room, index }: { room: Room; index: number }) {
             </div>
           ) : (
             <div className="text-xs text-gray-400">No measurements recorded.</div>
+          )}
+          {adj.length > 0 && (
+            <div className="mt-1.5 border-t border-dashed border-gray-200 pt-1.5">
+              <div className="mb-0.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-400">
+                Area adjustments
+              </div>
+              {adj.map((a, ai) => (
+                <div key={ai} className="flex flex-wrap gap-2 text-[12.5px]">
+                  <span className={cn('font-bold', a.neg ? 'text-red-600' : 'text-green-700')}>{a.area} sq.ft</span>
+                  <span className="text-gray-400">
+                    {a.label} {a.size}
+                  </span>
+                  <span>{a.reason || <i className="text-red-600">no reason given</i>}</span>
+                  <span>
+                    {a.photos.length ? (
+                      `${a.photos.length} photo${a.photos.length > 1 ? 's' : ''}`
+                    ) : (
+                      <i className="text-red-600">no photo attached</i>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
           {prq.length > 0 && (
             <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
@@ -1864,7 +2148,7 @@ function RoomReviewCard({ room, index }: { room: Room; index: number }) {
 
 
 /* ---- job card wizard (rooms -> review -> pass-to-client -> terms -> ratings -> sign -> done) ---- */
-type WizardPhase = 'rooms' | 'review' | 'pass' | 'terms' | 'ratings' | 'sign' | 'done';
+type WizardPhase = 'rooms' | 'review' | 'pass' | 'terms' | 'sign' | 'done';
 
 /* The order's first non-audit SKU picks the starting category, exactly like the field app; an SKU
    `type` the registry doesn't know falls back to flooring. */
@@ -1876,22 +2160,26 @@ function initialCategory(order: Order): string {
 function makeRoom(id: number, category: string): Room {
   return {
     id,
+    v: ROOM_V,
     category,
     name: '',
     sku: '',
     variant: null,
     notes: '',
-    segments: [blankSegment(category, 1)],
+    segments: [blankSegment(category, 1, { v: ROOM_V, variant: null })],
     nextSid: 1,
     sketchStrokes: [],
   };
 }
 
 /* Restores a saved room — either a v2 {segments} room or a legacy {type,calc,photos} one, which
-   normalizeRoom folds into a single segment so it stays editable. */
+   normalizeRoom folds into a single segment so it stays editable. A resumed v>=2 draft keeps its
+   OWN v (a v2 wallpaper room was captured in mm whatever its variant — see auditRegistry's
+   room.v>=3 gate); only a fresh/legacy room gets the current ROOM_V. */
 function normalizeRestoredRoom(r: any, id: number): Room {
   const nr = normalizeRoom(r);
   const category = MD_CATEGORIES[nr.category] ? nr.category : 'flooring';
+  const v = nr.v >= 2 ? nr.v : ROOM_V;
   let sid = 0;
   const segments: Segment[] = (nr.segments || []).map((s) => ({
     sid: ++sid,
@@ -1899,15 +2187,17 @@ function normalizeRestoredRoom(r: any, id: number): Room {
     photos: (s.photos || []).slice(),
     fields: { ...(s.fields || {}) },
     prereq: { ...(s.prereq || {}) },
+    adjust: ((s as any).adjust || []).map((a: AdjustRow) => ({ ...a, photos: (a.photos || []).slice() })),
   }));
   return {
     id,
+    v,
     category,
     name: nr.name || '',
     sku: nr.sku || '',
     variant: nr.variant || null,
     notes: nr.notes || '',
-    segments: segments.length ? segments : [blankSegment(category, 1)],
+    segments: segments.length ? segments : [blankSegment(category, 1, { v, variant: nr.variant || null })],
     nextSid: Math.max(sid, 1),
     sketchStrokes: (nr.sketchStrokes as SketchStroke[]) || [],
   };
@@ -1941,7 +2231,6 @@ function JobCardWizard({
   const [initialized, setInitialized] = useState(false);
   const [phase, setPhase] = useState<WizardPhase>('rooms');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'local'>('idle');
-  const [ratings, setRatings] = useState({ q1: 0, q2: 0, q3: 0, comments: '' });
   const [tcAgree, setTcAgree] = useState(false);
   const [signName, setSignName] = useState(order.name);
   const [completing, setCompleting] = useState(false);
@@ -2075,6 +2364,34 @@ function JobCardWizard({
       showToast("Please capture the client's signature");
       return;
     }
+    // Soft gate: a missing adjustment reason/photo, or a missing photo on a custom-measured
+    // wall/floor, is never a hard block on a field auditor mid-visit — acknowledge once and the
+    // job card records it as given (this repo's house style is soft-gate-and-surface, not
+    // hard-blocking; see CLAUDE.md).
+    const noReason = rooms.some((r) => {
+      const cat = categoryFor(r.category);
+      return r.segments.some((s) => adjMissingReason(cat, r, s.adjust));
+    });
+    const noAdjPhoto = rooms.some((r) => {
+      const cat = categoryFor(r.category);
+      return r.segments.some((s) => adjMissingPhoto(cat, r, s.adjust));
+    });
+    const noCustomPhoto = rooms.some((r) =>
+      r.segments.some((s) => s.fields?.areaMode === 'Custom' && !(s.photos && s.photos.length)),
+    );
+    if (noReason || noAdjPhoto || noCustomPhoto) {
+      const issues: string[] = [];
+      if (noReason) issues.push('a reason for an area adjustment');
+      if (noAdjPhoto) issues.push('a photo for an area adjustment');
+      if (noCustomPhoto) issues.push('a photo for a custom-measured wall/floor');
+      if (
+        !window.confirm(
+          `Missing: ${issues.join(', ')}.\n\nThese help the office understand what was measured/adjusted and why. Continue without them?`,
+        )
+      ) {
+        return;
+      }
+    }
     setCompleting(true);
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -2085,7 +2402,7 @@ function JobCardWizard({
     const rawSignImg = signPadRef.current.export();
     let signImg = rawSignImg;
     try { signImg = await uploadPhoto(rawSignImg); } catch { /* keep raw captured data URL */ }
-    const signData: SignData = { img: signImg, name: signName, ratings };
+    const signData: SignData = { img: signImg, name: signName, tcCategories: [...new Set(rooms.map((r) => r.category))] };
     const finishedRooms = rooms.map(serializeRoom);
     const newLogEntry: LogEntry = {
       t: 'Site audit completed · JobCard signed',
@@ -2138,38 +2455,6 @@ function JobCardWizard({
         } catch {}
       }
 
-      try {
-        await sbPost('ratings', {
-          order_type: 'audit',
-          pi: order.pi,
-          order_id: order.id,
-          staff_email: actingAs.email,
-          staff_name: actingAs.name,
-          q1_score: ratings.q1,
-          q2_score: ratings.q2,
-          q3_score: ratings.q3,
-          comments: ratings.comments || '',
-          customer_name: order.name,
-          customer_phone: order.phone,
-        });
-      } catch {
-        try {
-          await sbPost('ratings', {
-            order_type: 'audit',
-            pi: order.pi,
-            order_id: order.id,
-            staff_email: actingAs.email,
-            staff_name: actingAs.name,
-            q1_score: ratings.q1,
-            q2_score: ratings.q2,
-            comments: ratings.comments || '',
-            customer_name: order.name,
-            customer_phone: order.phone,
-          });
-        } catch (e2) {
-          console.error('ratings write failed', e2);
-        }
-      }
     }
 
     locationTracker.stop();
@@ -2184,7 +2469,7 @@ function JobCardWizard({
     setCompleting(false);
     setPhase('done');
     onCompleted(updatedOrder);
-  }, [order, actingAs, ratings, rooms, signName, locationTracker, onCompleted, showToast]);
+  }, [order, actingAs, rooms, signName, locationTracker, onCompleted, showToast]);
 
   return (
     <div>
@@ -2294,7 +2579,7 @@ function JobCardWizard({
               <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4">
                 <h2 className="mb-3 text-[15px] font-bold text-gray-900">Terms &amp; Conditions</h2>
                 <div className="max-h-[200px] overflow-y-auto whitespace-pre-line rounded-lg border border-gray-200 p-3.5 text-[13px] leading-relaxed text-gray-800">
-                  {MD_TC}
+                  {buildAuditTC(mdInstallTermsBlock(rooms.map((r) => r.category)))}
                 </div>
                 <label className="mt-4 flex cursor-pointer items-start gap-3">
                   <input
@@ -2317,74 +2602,10 @@ function JobCardWizard({
                 <button
                   type="button"
                   disabled={!tcAgree}
-                  onClick={() => setPhase('ratings')}
+                  onClick={() => setPhase('sign')}
                   className="flex-1 rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white disabled:opacity-40"
                 >
                   Agree &amp; proceed →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {phase === 'ratings' && (
-            <div>
-              <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4">
-                <h2 className="mb-3.5 text-[15px] font-bold text-gray-900">Client feedback</h2>
-                <p className="mb-4.5 text-[13.5px] text-gray-500">
-                  Please rate your experience. Tap a number from 1 (lowest) to 10 (highest).
-                </p>
-                <div className="mb-4.5">
-                  <label className="text-sm font-bold text-gray-800">1. How would you rate the overall Site Audit experience?</label>
-                  <StarRow value={ratings.q1} onChange={(n) => setRatings((r) => ({ ...r, q1: n }))} />
-                </div>
-                <div className="mb-4.5">
-                  <label className="text-sm font-bold text-gray-800">2. How would you rate your site auditor and their behaviour?</label>
-                  <StarRow value={ratings.q2} onChange={(n) => setRatings((r) => ({ ...r, q2: n }))} />
-                </div>
-                <div className="mb-4.5">
-                  <label className="text-sm font-bold text-gray-800">3. How clean did the site auditor leave the site after the audit?</label>
-                  <StarRow value={ratings.q3} onChange={(n) => setRatings((r) => ({ ...r, q3: n }))} />
-                </div>
-                <div>
-                  <label className="text-sm font-bold text-gray-800">
-                    Comments <span className="font-medium text-gray-400">(optional)</span>
-                  </label>
-                  <textarea
-                    value={ratings.comments}
-                    onChange={(e) => setRatings((r) => ({ ...r, comments: e.target.value }))}
-                    placeholder="Any feedback or comments…"
-                    className="mt-2 min-h-[80px] w-full resize-y rounded-lg border border-gray-200 p-2.5 text-[13.5px]"
-                  />
-                </div>
-              </div>
-              <div className="my-3.5 mb-6 flex gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setPhase('terms')}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                >
-                  ← Back to terms
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!ratings.q1) {
-                      showToast('Please rate the overall experience');
-                      return;
-                    }
-                    if (!ratings.q2) {
-                      showToast('Please rate the site auditor');
-                      return;
-                    }
-                    if (!ratings.q3) {
-                      showToast('Please rate the site cleanliness');
-                      return;
-                    }
-                    setPhase('sign');
-                  }}
-                  className="flex-1 rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90"
-                >
-                  Next: Signature →
                 </button>
               </div>
             </div>
@@ -2448,7 +2669,7 @@ function JobCardWizard({
               <div className="my-3.5 mb-6 flex gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setPhase('ratings')}
+                  onClick={() => setPhase('terms')}
                   className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
                 >
                   ← Back

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, fmtLog } from '../siteAuditShared';
 import {
   BUCKETS, CHECKPOINTS, OUTCOMES, addDays, bucketFor, categoriesFor, checkpointState,
-  coeCalls, daysBetween, followupRows, loadOrderLog, mapUrl, orderPlacedFor, patchCoe, todayStr,
+  coeCalls, daysBetween, followupRows, loadOrderLog, mapUrl, orderPlacedFor, patchCoe, postJobRating, todayStr,
   type BucketKey, type CheckpointState, type CoeInstall, type CoeOrder, type FollowupRow as Row,
 } from './shared';
 
@@ -263,6 +263,7 @@ function FollowupDrawer({ order: o, installByPhone, who, onClose }: { order: Coe
                 <div key={c.id} className="border-b border-gray-100 py-2 last:border-b-0">
                   <div className="text-[13px] font-bold">{cp ? cp.label : 'Ad-hoc call'} · {c.who === 'bm' ? 'BM' : 'Client'}</div>
                   {c.note ? <div className="mt-0.5 text-[12.5px]">{c.note}</div> : null}
+                  {c.ratings ? <div className="mt-0.5 text-[12.5px] font-semibold text-[#1F3A5F]">⭐ {c.ratings.q1}/10 · 👤 {c.ratings.q2}/10 · 🧹 {c.ratings.q3}/10</div> : null}
                   <div className="mt-0.5 text-[11.5px] text-gray-400">{oc ? oc.l : (c.outcome || '')} · {fmtLog(c.ts)}{c.by?.name ? ' · ' + c.by.name : ''}</div>
                 </div>
               );
@@ -349,24 +350,60 @@ function OrderStatusSection({ row, run }: { row: Row; run: (mutate: (t: any) => 
   );
 }
 
+// 1-10 score dropdown, shared shape between the two rating questions below and InstallReviews.tsx's
+// own copy — kept as a tiny local component rather than a cross-file export, matching this file's
+// existing preference for small local presentational helpers (see Sec/KV) over shared UI bits.
+function ScoreSelect({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <div className="mb-1.5">
+      <label className="mb-0.5 block text-[12px] font-semibold text-gray-700">{label}</label>
+      <select value={value || ''} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]">
+        <option value="">Select…</option>
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+    </div>
+  );
+}
+
 function LogCallForm({ o, nextDue, run }: { o: CoeOrder; nextDue: CheckpointState | null; run: (mutate: (t: any) => any, logText: string, onOk?: string) => Promise<void> }) {
   const [stage, setStage] = useState(nextDue?.k || 'adhoc');
   const [whoSpoke, setWhoSpoke] = useState<'client' | 'bm'>('client');
   const [outcome, setOutcome] = useState(OUTCOMES[0].k);
   const [note, setNote] = useState('');
+  const [q1, setQ1] = useState(0);
+  const [q2, setQ2] = useState(0);
+  const [q3, setQ3] = useState(0);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // The D+1 client review is the one checkpoint this app scores — right on this call, never
+  // on-site (note 117: the field worker being rated handing over the phone biased every score up).
+  const needsRatings = stage === 'd1' && whoSpoke === 'client' && outcome === 'reached';
 
   async function save() {
     setErr('');
     if (!note.trim()) { setErr("Add a short note on what they said — that's the point of the call log."); return; }
+    if (needsRatings && (!q1 || !q2 || !q3)) { setErr('All three ratings are required when the client was reached for the D+1 review.'); return; }
     setBusy(true);
     const cp = CHECKPOINTS.find((x) => x.k === stage);
+    const ratings = needsRatings ? { q1, q2, q3 } : undefined;
     await run((t) => {
-      (t.calls = t.calls || []).push({ id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), ts: new Date().toISOString(), stage, who: whoSpoke, outcome, note: note.trim() });
+      (t.calls = t.calls || []).push({ id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), ts: new Date().toISOString(), stage, who: whoSpoke, outcome, note: note.trim(), ...(ratings ? { ratings } : {}) });
       return t;
     }, (cp ? cp.label : 'Ad-hoc call') + ' — ' + (whoSpoke === 'bm' ? 'BM' : 'client') + ': ' + note.trim(), 'Call logged');
-    setNote('');
+    if (ratings) {
+      try {
+        await postJobRating({
+          orderType: 'audit', pi: o.pi, orderId: o.id,
+          staffEmail: o.auditorEmail, staffName: o.auditorName,
+          q1: ratings.q1, q2: ratings.q2, q3: ratings.q3, comments: note.trim(),
+          customerName: o.name, customerPhone: o.phone,
+        });
+      } catch (e) {
+        console.error('ratings write failed', e);
+      }
+    }
+    setNote(''); setQ1(0); setQ2(0); setQ3(0);
     setBusy(false);
   }
 
@@ -385,6 +422,13 @@ function LogCallForm({ o, nextDue, run }: { o: CoeOrder; nextDue: CheckpointStat
       <select value={outcome} onChange={(e) => setOutcome(e.target.value)} className="mb-1.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]">
         {OUTCOMES.map((x) => <option key={x.k} value={x.k}>{x.l}</option>)}
       </select>
+      {needsRatings ? (
+        <div className="mb-1.5 rounded-md bg-gray-50 p-2">
+          <ScoreSelect label="Overall Site Audit experience" value={q1} onChange={setQ1} />
+          <ScoreSelect label="Site auditor and their behaviour" value={q2} onChange={setQ2} />
+          <ScoreSelect label="How clean did the auditor leave the site after the audit?" value={q3} onChange={setQ3} />
+        </div>
+      ) : null}
       <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Their review / reason / next step…" className="mb-1.5 min-h-[56px] w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12.5px]" />
       {err ? <div className="mb-1 text-[11.5px] text-red-600">{err}</div> : null}
       <button disabled={busy} onClick={save} className="rounded-md bg-[#1F3A5F] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60">{busy ? 'Saving…' : 'Save call'}</button>

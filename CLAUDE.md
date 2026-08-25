@@ -243,11 +243,38 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
-- **A hand-written force-add set drifts from the mapping it mirrors.**
-  `SITE_AUDIT_ROLES` listed `delivery_manager`/`post_sales`/`procurement` but not
-  `delivery`, which `CRM_ROLE_TO_SITE_AUDIT_ROLE` maps to `service_mgr` — those
-  accounts got no tab at all. It is now *derived* from that map, so it can't
-  drift again. Add the permission to the map, not to two places.
+- **A derived force-add set can still be reverted back to a hand-written one —
+  this has now happened twice.** `SITE_AUDIT_ROLES` (`app/App.tsx`) drifted
+  from `CRM_ROLE_TO_SITE_AUDIT_ROLE` once before (`delivery` mapped to
+  `service_mgr` there but was missing here), was made genuinely derived in
+  commit `3bc84a6` (2026-08-19) — `...OVERSIGHT_CRM_ROLES,
+  ...Object.keys(CRM_ROLE_TO_SITE_AUDIT_ROLE).filter(k => map[k]),
+  'field_worker'`, plus a second independent path via the caller's own field
+  profile role — and then a teammate's large same-area rewrite the very next
+  day (`a4d5469`, "site audit fixes", introducing the `site_audit.*` slug
+  system) silently reverted BOTH: back to a hand-copied literal missing
+  `field_worker` entirely, and dropped the field-profile fallback path with
+  it. Nobody noticed until three real field workers (site auditors/
+  installers) reported no Site Audit tab at all (2026-08-24). Re-fixed the
+  same way, but **if `SITE_AUDIT_ROLES` is ever touched again — especially by
+  a large unrelated-looking "site audit fixes" commit — diff it against
+  `CRM_ROLE_TO_SITE_AUDIT_ROLE` by hand rather than trusting that "it's
+  derived" still holds**; a derivation is only as durable as the next person
+  editing the same lines knowing it's there. Add a role to the map, never to
+  a second hand-written list.
+- **`defaultPermissionsForRole` had the identical drift, one level up.** It
+  pre-checks the permission checklist in Admin > Users' Add/Edit forms and
+  used to compute defaults from `ROLE_TABS` alone, without the three
+  `resolveAllowedTabs` force-add sets. For any role missing from `ROLE_TABS`
+  (`field_worker`, `delivery_manager`, `post_sales`, `procurement`), opening
+  that person's row and hitting Save for an unrelated edit (e.g. a phone
+  number) silently saved a permission list missing `crm.site_audit` —
+  and once `individualPermissions` is non-empty, `resolveAllowedTabs`'s
+  role-based fallback never applies again, so the tab was gone for good. Both
+  functions now share one `defaultTabsForRole(role)` helper, so they can't
+  diverge. Admin > Users flags any already-saved account this already broke
+  (`⚠ Missing Site Audit` in the Permissions column) — that's a one-time
+  backfill gap code can't self-heal; re-open Edit and check the box.
 - **One phone can have several `profiles` rows** (a field-app account under a
   personal email alongside the company one — Ashish Bhat has exactly this, and
   the company-email row's `contact` is NULL so it can never be resolved by
