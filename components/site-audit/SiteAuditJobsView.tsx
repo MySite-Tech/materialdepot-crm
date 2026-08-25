@@ -406,7 +406,12 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
   }).filter((j) => {
     if (!jobsSearch) return true;
     const q = jobsSearch.toLowerCase();
-    return j.id.toLowerCase().includes(q) || j.customer.toLowerCase().includes(q);
+    // Enq ID/customer (original) plus address, assigned-to, status label, and date(s) —
+    // mirrors the same search extension shipped in material-depot-site's Admin.html.
+    const dates = [j.date, ...(j.installDates || [])].filter(Boolean).join(' ');
+    const hay = [j.id, j.customer, j.addr, j.assignee, JOB_STATUS[j.status]?.l || j.status, dates]
+      .filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
   }), [realJobs, jobsFilter, jobsDateFilter, jobsSearch]);
 
   if (loading) {
@@ -441,7 +446,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
           <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-b border-gray-100">
             <div className="relative" style={{ maxWidth: 280, minWidth: 180, flexShrink: 0 }}>
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
-              <input type="text" placeholder="Search Enquiry ID or customer…" value={jobsSearch} onChange={(e) => setJobsSearch(e.target.value)} className="w-full pl-8 pr-3 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400" />
+              <input type="text" placeholder="Search Enquiry ID, customer, address, assigned to, status, date…" value={jobsSearch} onChange={(e) => setJobsSearch(e.target.value)} className="w-full pl-8 pr-3 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400" />
             </div>
             <div className="flex gap-1.5 flex-wrap">
               {FILTER_KEYS.map((f) => (
