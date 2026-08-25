@@ -7,6 +7,7 @@ import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 import { MD_LOGO_H, MD_LOGO_W, brandLogoPng, loadBrandLogo } from './mdLogo';
 import {
+  adjRows,
   categoryFor,
   installRoomPhotos,
   installRoomRows,
@@ -184,7 +185,7 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
       if (nroom.variant) st += '   ·   ' + nroom.variant;
       y = mdSectionTitle(doc, st, y + 8, M) + 4;
     }
-    const rows = segmentRows(cat, seg, isV2);
+    const rows = segmentRows(cat, seg, isV2, nroom);
     if (rows.length) {
       ensure(34 + rows.length * 20);
       doc.autoTable(
@@ -194,6 +195,25 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
           head: [['Measurement', 'Value']],
           body: rows,
           columnStyles: { 0: { cellWidth: 250, fontStyle: 'bold', textColor: MD_INK, fillColor: MD_LABELFILL } },
+        }),
+      );
+      y = doc.lastAutoTable.finalY + 8;
+    }
+    const adj = isV2 ? adjRows(cat, nroom, seg.adjust) : [];
+    if (adj.length) {
+      ensure(34 + adj.length * 20);
+      doc.autoTable(
+        mdBrandGrid({
+          startY: y,
+          margin: { left: M, right: M },
+          head: [['Area adjustment', 'Shape', 'Size', 'sq.ft', 'Reason']],
+          body: adj.map((a) => [a.label, a.shape, a.size, a.area, a.reason || '—']),
+          columnStyles: {
+            0: { cellWidth: 78, fontStyle: 'bold', textColor: MD_INK, fillColor: MD_LABELFILL },
+            1: { cellWidth: 64 },
+            2: { cellWidth: 96 },
+            3: { cellWidth: 48 },
+          },
         }),
       );
       y = doc.lastAutoTable.finalY + 8;
@@ -312,4 +332,102 @@ export async function mdPdfInstallRoom(doc: any, room: any, yStart: number, opts
     y += cls.length * 12 + 6;
   }
   return y;
+}
+
+export type ConsentPdfOpts = {
+  y?: number;
+  M?: number;
+  W?: number;
+  H?: number;
+  consentText: string;
+  termsBlock?: string;
+  personName: string;
+  personDate: string;
+  sign?: { img?: string | null; name?: string } | null;
+  installerSign?: { img?: string | null; name?: string } | null;
+  compress?: (d?: string | null) => Promise<string | null>;
+  header?: () => number;
+};
+
+// Shared "Client Acknowledgement" page — consent paragraph, optional per-category installation
+// terms block (from mdInstallTermsBlock), and one signature per signature supplied. This app's 6
+// PDF generators (audit + install, across the auditor/installer apps and the ops views) used to
+// hand-roll this page; a new feature touching it once here reaches all 6 with no per-generator
+// changes, the same reason mdPdfAuditRoom/mdPdfInstallRoom exist. Always the last page of a job
+// card. `sign`/`installerSign` are {img,name} or falsy.
+export async function mdPdfConsent(doc: any, opts: ConsentPdfOpts): Promise<void> {
+  const M = opts.M ?? 40;
+  const W = opts.W ?? doc.internal.pageSize.getWidth();
+  const H = opts.H ?? doc.internal.pageSize.getHeight();
+  const compress = opts.compress || ((d?: string | null) => mdCompress(d));
+  let y = opts.y ?? M;
+  const ensure = (space: number) => {
+    if (y + space > H - M) {
+      doc.addPage();
+      y = opts.header ? opts.header() : M;
+    }
+  };
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(...MD_INK);
+  doc.text('Client Acknowledgement', M, y + 4);
+  y += 26;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(40, 40, 40);
+  const cl = doc.splitTextToSize(opts.consentText, W - 2 * M);
+  ensure(cl.length * 13);
+  doc.text(cl, M, y);
+  y += cl.length * 13 + 16;
+  if (opts.termsBlock) {
+    ensure(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...MD_INK);
+    doc.text('Installation Terms & Conditions', M, y);
+    y += 14;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(40, 40, 40);
+    for (const line of opts.termsBlock.split('\n')) {
+      if (!line) {
+        y += 6;
+        continue;
+      }
+      const wrapped = doc.splitTextToSize(line, W - 2 * M);
+      ensure(wrapped.length * 12);
+      doc.text(wrapped, M, y);
+      y += wrapped.length * 12;
+    }
+    y += 10;
+  }
+  ensure(40);
+  doc.setFontSize(10);
+  doc.setTextColor(...MD_MUTED);
+  doc.text('Client name: ' + (opts.personName || ''), M, y);
+  y += 18;
+  doc.text('Date: ' + (opts.personDate || ''), M, y);
+  // One signature block per signature supplied — installer on the left, client on the right — so
+  // a customer-only page (audit) looks exactly as it always has.
+  const sigs: { label: string; sign?: { img?: string | null; name?: string } | null }[] = [];
+  if (opts.installerSign) sigs.push({ label: 'Installer signature', sign: opts.installerSign });
+  if (opts.sign) sigs.push({ label: 'Client signature', sign: opts.sign });
+  const sigW = 200, sigH = 80, sy = H - M - sigH - 24;
+  for (let i = 0; i < sigs.length; i++) {
+    const sx = sigs.length === 1 ? W - M - sigW : i === 0 ? M : W - M - sigW;
+    if (sigs[i].sign?.img) {
+      const si = await compress(sigs[i].sign!.img);
+      if (si) {
+        try {
+          doc.addImage(si, 'JPEG', sx, sy - 10, sigW, sigH);
+        } catch {}
+      }
+    }
+    doc.setDrawColor(...MD_MUTED);
+    doc.setLineWidth(0.8);
+    doc.line(sx, sy + sigH - 6, sx + sigW, sy + sigH - 6);
+    doc.setFontSize(9.5);
+    doc.setTextColor(...MD_MUTED);
+    doc.text(sigs[i].label, sx, sy + sigH + 10);
+  }
 }

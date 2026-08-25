@@ -5,10 +5,30 @@
    parameters instead, so the same math works against React state without
    reintroducing module-level mutable globals. */
 
-import { SQFT_PER_ROLL, publishSlotConfig } from '../siteAuditShared';
+import { SQFT_PER_ROLL, publishSlotConfig, sbGet } from '../siteAuditShared';
 import type { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
 export { SQFT_PER_ROLL };
+
+/* Auto-detects site audit type by exact phone match against audit_orders —
+   same signal Admin's "Material Depot Audit %" metric already uses read-only
+   in material-depot-site (CLAUDE.md note 56 there). Exact string match, no
+   normalization — verified against live data that normalizing phone formats
+   doesn't change the match count. Returns null (leave unset, don't guess) if
+   the lookup itself fails, rather than treating a failed request as "no
+   match found". Ported here because this CRM's install-order creation never
+   had it — every new order landed on "Not set", needing a manual pick that
+   the legacy app resolved automatically at creation. */
+export async function detectAuditBy(phone: string): Promise<'material_depot' | 'customer' | null> {
+  if (!phone) return null;
+  try {
+    const rows = await sbGet('audit_orders?select=id&phone=eq.' + encodeURIComponent(phone) + '&status=neq.deleted&limit=1');
+    if (!Array.isArray(rows)) return null;
+    return rows.length ? 'material_depot' : 'customer';
+  } catch {
+    return null;
+  }
+}
 
 export const INSTALL_SKU = 'SVC-INSTALL-001';
 export const CUSTOM_WP_SKU = 'WP-CUST';

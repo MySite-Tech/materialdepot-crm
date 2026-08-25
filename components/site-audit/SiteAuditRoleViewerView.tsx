@@ -286,12 +286,98 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
+  /* Same read-only switcher SiteAuditOwnDashboard gives a COE — this preview
+     shouldn't be the one place a COE's Service Manager visibility doesn't
+     reach. */
+  const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
+  /* Attribution fallback if the previewed profile has no name on file — the
+     CRM viewer's own session name, same pattern as SiteAuditOwnDashboard's
+     crmName / site-audit-view's page-level fallback. */
+  const [crmName, setCrmName] = useState('');
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('materialdepot_user');
+      setCrmName(stored ? JSON.parse(stored)?.name || '' : '');
+    } catch { setCrmName(''); }
+  }, []);
 
   const actingAs = { id: person.id, name: person.name, email: person.email };
 
+  const renderServiceMgrDashboard = () => (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-0 border-b border-gray-200">
+        {([['audit', 'Audit Dashboard'], ['install', 'Install Dashboard']] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setSmTab(k)}
+            className={`px-4 py-2 text-[13px] font-semibold border-b-2 ${smTab === k ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          >
+            {label}
+          </button>
+        ))}
+        <div className="ml-auto flex shrink-0 items-center gap-2 pb-2">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="pv-city">City</label>
+          <select
+            id="pv-city"
+            value={city}
+            onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
+            className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
+          >
+            <option value="all">All Cities</option>
+            {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+      {smTab === 'install' ? (
+        <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
+      ) : (
+        <div>
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {([
+              ['ops', 'Audit Ops'], ['jobs', 'Job Overview'], ['perf', 'Performance'], ['analytics', 'Analytics'], ['live', 'Live'],
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setSmAuditSubTab(k)}
+                className={`rounded-full px-3 py-1.5 text-[11.5px] font-semibold ${smAuditSubTab === k ? 'bg-[#1A1A1A] text-white' : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-400'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {smAuditSubTab === 'ops' ? (
+            <SiteAuditOpsView city={city} attribution={person.name || crmName} />
+          ) : smAuditSubTab === 'jobs' ? (
+            <SiteAuditJobsView city={city} />
+          ) : smAuditSubTab === 'perf' ? (
+            <SiteAuditPerfView city={city} />
+          ) : smAuditSubTab === 'analytics' ? (
+            <SiteAuditAnalyticsView city={city} />
+          ) : (
+            <SiteAuditLiveView city={city} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   if (shadowing) return <SiteShadowerApp actingAs={actingAs} />;
   if (person.role === 'bm') return <SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact: person.contact || undefined }} />;
-  if (person.role === 'coe') return <SiteAuditCoeView city={city} who={person.name} />;
+  if (person.role === 'coe') {
+    return (
+      <div>
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => setCoeShowServiceMgr((v) => !v)}
+            className="rounded-md bg-purple-50 px-3 py-1.5 text-[12.5px] font-extrabold text-purple-700 cursor-pointer"
+          >
+            {coeShowServiceMgr ? '← Their dashboard' : 'Service Manager dashboard →'}
+          </button>
+        </div>
+        {coeShowServiceMgr ? renderServiceMgrDashboard() : <SiteAuditCoeView city={city} who={person.name} />}
+      </div>
+    );
+  }
   /* `branches={null}` + contact makes the preview resolve the store the same
      way the real person's session does — from their CRM Branch Access — so an
      admin sees what they'd actually see, not a guess off the blank
@@ -319,65 +405,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
     );
   }
 
-  if (person.role === 'service_mgr') {
-    return (
-      <div>
-        <div className="mb-4 flex flex-wrap items-center gap-0 border-b border-gray-200">
-          {([['audit', 'Audit Dashboard'], ['install', 'Install Dashboard']] as const).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setSmTab(k)}
-              className={`px-4 py-2 text-[13px] font-semibold border-b-2 ${smTab === k ? 'border-[#EAB308] text-gray-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              {label}
-            </button>
-          ))}
-          <div className="ml-auto flex shrink-0 items-center gap-2 pb-2">
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="pv-city">City</label>
-            <select
-              id="pv-city"
-              value={city}
-              onChange={(e) => { const c = e.target.value as CityFilter; setCity(c); saveCityFilter(c); }}
-              className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[140px] focus:border-[#0F766E]"
-            >
-              <option value="all">All Cities</option>
-              {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
-        {smTab === 'install' ? (
-          <SiteAuditInstallOpsView city={city} />
-        ) : (
-          <div>
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {([
-                ['ops', 'Audit Ops'], ['jobs', 'Job Overview'], ['perf', 'Performance'], ['analytics', 'Analytics'], ['live', 'Live'],
-              ] as const).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setSmAuditSubTab(k)}
-                  className={`rounded-full px-3 py-1.5 text-[11.5px] font-semibold ${smAuditSubTab === k ? 'bg-[#1A1A1A] text-white' : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-400'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {smAuditSubTab === 'ops' ? (
-              <SiteAuditOpsView city={city} />
-            ) : smAuditSubTab === 'jobs' ? (
-              <SiteAuditJobsView city={city} />
-            ) : smAuditSubTab === 'perf' ? (
-              <SiteAuditPerfView city={city} />
-            ) : smAuditSubTab === 'analytics' ? (
-              <SiteAuditAnalyticsView city={city} />
-            ) : (
-              <SiteAuditLiveView city={city} />
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+  if (person.role === 'service_mgr') return renderServiceMgrDashboard();
 
   return <div className="py-6 text-center text-[13px] text-gray-400">No dashboard for this role.</div>;
 }

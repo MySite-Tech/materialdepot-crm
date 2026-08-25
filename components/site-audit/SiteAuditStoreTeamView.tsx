@@ -635,6 +635,10 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
       setErr('BM name is required.');
       return;
     }
+    if (!fl && !wp && !cwp && !cnc && !wpnl) {
+      setErr('Select at least one audit category.');
+      return;
+    }
 
     const cats: string[] = [];
     if (fl) cats.push('Wooden Flooring');
@@ -739,7 +743,7 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
 
         <div className="mb-3">
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Audit categories <span className="normal-case font-medium text-gray-400">(select all that apply)</span>
+            Audit categories * <span className="normal-case font-medium text-gray-400">(select all that apply)</span>
           </label>
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px] text-gray-700">
