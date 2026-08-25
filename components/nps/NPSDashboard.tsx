@@ -710,8 +710,23 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
   return (
     <div className="px-3 py-4 sm:px-6 sm:py-6 max-w-[1400px] mx-auto">
       {/* heading */}
-      <h1 className="text-[22px] font-bold text-gray-900">NPS Dashboard</h1>
-      <p className="text-[13px] text-gray-400 mt-0.5">Net Promoter Score · {storeLabel} · {fmtDate(from)} – {fmtDate(to)}</p>
+      <h1 className="text-[22px] font-bold text-gray-900">Store Visit NPS</h1>
+      {/* Named explicitly, because this is not the only NPS in the portal.
+          Site Audit > Analytics and Category Ops > Review scores report
+          FIELD-SERVICE NPS: a different question (Q1, "overall experience" of
+          an audit or installation), asked of a different population, on
+          stricter bands (detractor ≤7, neutral 8 — see NPS_BAND_LABELS in
+          siteAuditShared.ts). Both are correct for what they measure; a
+          reader who assumes there is one company NPS will draw the wrong
+          conclusion from whichever tab they happen to be on, so each says
+          which it is. */}
+      <p className="text-[13px] text-gray-400 mt-0.5">
+        Net Promoter Score from store-visit footfall · {storeLabel} · {fmtDate(from)} – {fmtDate(to)}
+      </p>
+      <p className="text-[11.5px] text-gray-400 mt-0.5">
+        Promoter 9–10 · Passive 7–8 · Detractor 0–6. Separate from the field-service NPS on Site Audit &gt; Analytics, which scores completed site audits and
+        installations on stricter bands — the two are not comparable.
+      </p>
 
       {/* filters */}
       <div className="flex flex-wrap items-center gap-3 mt-4">

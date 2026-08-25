@@ -12,40 +12,52 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inCity, phoneKey, sbGet, type CityFilter } from './siteAuditShared';
-import { AUDIT_COLS, INSTALL_COLS, mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder } from './coe-ops/shared';
+import { AUDIT_COLS, INSTALL_COLS, RATING_COLS, mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder, type RatingRow } from './coe-ops/shared';
 import type { WpRow } from './coe-ops/wpTrack';
 import Followups from './coe-ops/Followups';
 import InstallReviews from './coe-ops/InstallReviews';
+import ReviewScores from './coe-ops/ReviewScores';
 import Wallpaper from './coe-ops/Wallpaper';
 import Insights from './coe-ops/Insights';
 
-type Tab = 'followups' | 'installreviews' | 'wallpaper' | 'insights';
+type Tab = 'followups' | 'installreviews' | 'scores' | 'wallpaper' | 'insights';
 const TABS: Array<{ k: Tab; l: string }> = [
   { k: 'followups', l: '📞 Audit Follow-ups' },
   { k: 'installreviews', l: '📞 Install Reviews' },
+  { k: 'scores', l: '⭐ Review scores' },
   { k: 'wallpaper', l: '🖼️ Custom wallpaper' },
   { k: 'insights', l: '📉 Where it stalls' },
 ];
 
-export default function SiteAuditCoeView({ city, who }: { city?: CityFilter; who?: string }) {
+export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityFilter; who?: string; whoEmail?: string | null }) {
   const [tab, setTab] = useState<Tab>('followups');
   const [orders, setOrders] = useState<CoeOrder[]>([]);
   const [installs, setInstalls] = useState<CoeInstall[]>([]);
   const [wpRows, setWpRows] = useState<WpRow[]>([]);
+  /* null = the ratings read failed or hasn't run. NOT an empty table — see the
+     `ratings` prop comment in ReviewScores: collapsing the two would offer to
+     re-push every score ever captured. sbGet resolves a PostgREST error object
+     instead of throwing (CLAUDE.md's Array.isArray landmine), so the array
+     check IS the error check here, and the last good value survives a blip. */
+  const [ratings, setRatings] = useState<RatingRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [aRows, iRows, wRows] = await Promise.all([
+    const [aRows, iRows, wRows, rRows] = await Promise.all([
       sbGet('audit_orders?select=' + AUDIT_COLS + '&status=eq.completed&order=date.desc'),
       // _slim (not the base table) — INSTALL_COLS now carries subjobs/log for the Install Reviews
       // tab, and this is the repo's established way to add those columns without reintroducing the
       // photo-bloat problem the base install_orders table has (see e.g. SiteAuditJobsView.tsx).
       sbGet('install_orders_slim?select=' + INSTALL_COLS + '&status=neq.deleted&order=created_at.desc'),
       sbGet('wp_production?select=*&order=created_at.desc'),
+      // Narrow projection of the ratings table — only what's needed to tell
+      // which captured scores already reached it.
+      sbGet('ratings?select=' + RATING_COLS),
     ]);
     if (Array.isArray(aRows)) setOrders(aRows.map(mapCoeAudit));
     if (Array.isArray(iRows)) setInstalls(iRows.map(mapCoeInstall));
     if (Array.isArray(wRows)) setWpRows(wRows);
+    setRatings(Array.isArray(rRows) ? (rRows as RatingRow[]) : (cur) => cur);
     setLoading(false);
   }, []);
 
@@ -98,9 +110,11 @@ export default function SiteAuditCoeView({ city, who }: { city?: CityFilter; who
       {loading ? (
         <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-[#1F3A5F]" /></div>
       ) : tab === 'followups' ? (
-        <Followups orders={scopedOrders} installByPhone={installByPhone} who={attribution} onChanged={load} />
+        <Followups orders={scopedOrders} installByPhone={installByPhone} who={attribution} whoEmail={whoEmail} onChanged={load} />
       ) : tab === 'installreviews' ? (
-        <InstallReviews installs={scopedInstalls} who={attribution} onChanged={load} />
+        <InstallReviews installs={scopedInstalls} who={attribution} whoEmail={whoEmail} onChanged={load} />
+      ) : tab === 'scores' ? (
+        <ReviewScores orders={scopedOrders} installs={scopedInstalls} installByPhone={installByPhone} ratings={ratings} onChanged={load} />
       ) : tab === 'wallpaper' ? (
         <Wallpaper rows={scopedWp} installs={scopedInstalls} who={attribution} city={cityScope} onChanged={load} />
       ) : (

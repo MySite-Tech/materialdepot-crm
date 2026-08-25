@@ -282,6 +282,65 @@ Note this puts a Django call inside the Site Audit tab, so
 session for these three steps — it already did via `fetchUsers()`, and a failure
 degrades to `unknown` rather than to a wrong answer.
 
+## Review scores → NPS: one pipeline, and where it leaks
+
+Q1/Q2/Q3 (overall experience / staff / site cleanliness, 1–10) used to be
+collected on-site, on the job card, handed to the client by the field worker
+being rated — which biased every score upward. Collection moved to a Category
+Ops phone call the day after the job: `coe-ops/Followups.tsx` for the audit's
+D+1 checkpoint, `coe-ops/InstallReviews.tsx` for one checkpoint per completed
+install sub-job. **This repo's own field apps kept writing on-site scores until
+`c4f1296` (2026-08-24)**, four days after `material-depot-site` stopped, so the
+live `ratings` table holds two populations with opposite bias — worth saying out
+loud before anyone reads a trend across that date.
+
+The chain, and what owns each link:
+
+| Link | Where | Note |
+|---|---|---|
+| Source of truth | `coe_track.calls[].ratings` (audit) · `subjobs[].coe_review.calls[].ratings` (install) | append-only, inside jsonb this app already writes |
+| Projection | `ratings` table (`postJobRating`) | a second copy, written for Analytics only |
+| Bands | `npsFrom`/`npsBand` in `siteAuditShared.ts` | ONE definition; see below |
+| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` | both read the same helpers |
+
+**The `ratings` table is a projection, not the record.** The PATCH that saves
+the call and the POST that projects it are two writes; the second can fail
+alone. `coe-ops/ReviewScores.tsx` is what closes that loop —
+`unprojectedScoredCalls` diffs the call logs against the table and offers to
+push what never landed. Two match rules, both needed: same order within 30
+minutes of the call (the normal case, and tight enough that a pre-2026-08-24
+on-site rating on the same order can't be mistaken for it), or same order plus
+identical Q1/Q2/Q3 at any time (so an already-pushed score isn't offered
+forever). Rows are consumed as they match, so two scored calls on one order
+need two rows.
+
+**Analytics joins ratings to the ORDER, never by `ratings.created_at`.**
+`_anAttachAuditRatings` / `_anAttachInstallRatings`, ported from Admin.html.
+While the field app wrote the score at signing time the two were the same set;
+once collection moved to a D+1 call they came apart, and a created_at filter
+lends a job's score to the period *after* the one it describes. The join also
+de-duplicates — 13 audit orders in live data carry more than one rating, which a
+date filter counts twice. Install is the awkward half: a rating's `order_id` is
+the *parent* order, shared by every sub-job, so it's disambiguated by rated
+installer email, then nearest completion date (only 3 rated orders live have 2+
+completed sub-jobs, so this rarely bites). Consequence to expect, not fix: the
+last few days of any range show fewer scores than jobs, because those D+1 calls
+haven't happened yet.
+
+**Two different NPS numbers live in this portal, and both are correct.** Site
+Audit → Analytics and Category Ops → Review scores report *field-service* NPS on
+Material Depot's stricter house bands (promoter 9–10, neutral 8, **detractor
+≤7**), matching Admin.html. The `crm.nps` tab (`components/nps`) reports
+*store-visit* NPS from the Django footfall tracker on textbook bands (detractor
+≤6) — a different question of a different population. Never average them, and
+never "fix" one to match the other; each names itself and prints its bands on
+screen so a reader can't mistake which is on the page.
+
+**Job Card & Signature % is measured from the signature**, not from "a rating
+exists". That proxy was only ever true while the field app wrote the rating at
+signing time. Audit reads `audit_ticked->sign->>name`, install reads
+`subjobs[].jobcard.sign`.
+
 ## A pre-booking and the audit it becomes are two rows, not one
 
 `Store_Team_App` books a slot before the Kylas enquiry exists, so the two halves
@@ -344,6 +403,35 @@ but degrade safely (optional shadower, free-text BM fallback, feature stays
 inert). Leave them; they are not gates.
 
 ## Known landmines
+
+- **A second write that only `console.error`s on failure is silent data
+  loss.** Both COE rating forms saved the call, then projected the score into
+  `ratings` inside `try { … } catch { console.error }`. The COE saw "Call
+  logged", the score sat in the call log, and Analytics' NPS never counted it —
+  with no error anywhere a human would look. Fixed 2026-08-25: the failure is
+  surfaced in the form, `run()` now returns whether the call itself saved (so a
+  score is never projected for a call that didn't), and Category Ops →
+  ⭐ Review scores finds and pushes anything that slipped through. The same
+  shape still exists elsewhere in this repo — `upsertSiteAuditProfile()` in
+  `app/App.tsx` is fire-and-forget with `.catch(console.error)`. Treat
+  `.catch(console.error)` on a write as a bug report waiting to happen.
+- **`audit_ticked->sign->>name` is cheap to transfer and expensive to READ.**
+  The json path keeps the job-card room photos off the wire, but Postgres still
+  detoasts the whole `audit_ticked` blob per row, so that select over all ~1.1k
+  audit rows dies with `57014 canceling statement due to statement timeout`
+  (500, not an empty result). `SiteAuditAnalyticsView` fetches it as its own
+  query scoped to `status=eq.completed` — the 306 rows the metric's denominator
+  actually needs — which returns in ~3s. If you add another jsonb-path column
+  to a full-table select here, time it first.
+- **As of 2026-08-25 not one COE call has ever been logged in production.**
+  `coe_track` is non-null on 527 `audit_orders` rows and `{}` on every one of
+  them; zero rows carry `calls`, zero `order_placed` marks, and zero install
+  sub-jobs carry a `coe_review`. So all 444 rows in `ratings` are on-site
+  scores, the newest dated 2026-08-24 — the day this repo removed on-site
+  collection. **Field-service NPS therefore has no live source right now**: the
+  old one is gone and the new one is unused. Any report of "NPS is empty /
+  stale" is this, not a code fault — check `coe_track` for calls before
+  debugging the pipeline.
 
 - **A derived force-add set can still be reverted back to a hand-written one —
   this has now happened twice.** `SITE_AUDIT_ROLES` (`app/App.tsx`) drifted

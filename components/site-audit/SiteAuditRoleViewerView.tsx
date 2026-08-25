@@ -374,7 +374,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
             {coeShowServiceMgr ? '← Their dashboard' : 'Service Manager dashboard →'}
           </button>
         </div>
-        {coeShowServiceMgr ? renderServiceMgrDashboard() : <SiteAuditCoeView city={city} who={person.name} />}
+        {coeShowServiceMgr ? renderServiceMgrDashboard() : <SiteAuditCoeView city={city} who={person.name} whoEmail={person.email} />}
       </div>
     );
   }

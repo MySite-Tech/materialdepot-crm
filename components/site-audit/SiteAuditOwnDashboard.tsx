@@ -257,7 +257,7 @@ export default function SiteAuditOwnDashboard({
         </div>
         {coeShowServiceMgr
           ? renderServiceMgrDashboard()
-          : <div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} /></div>}
+          : <div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} whoEmail={person.email} /></div>}
       </div>
     );
   }

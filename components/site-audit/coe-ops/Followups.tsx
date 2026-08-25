@@ -38,8 +38,8 @@ function firstNonEmpty(order: string[], counts: Record<string, number>, fallback
   return fallback;
 }
 
-export default function Followups({ orders, installByPhone, who, onChanged }: {
-  orders: CoeOrder[]; installByPhone: Map<string, CoeInstall[]>; who: string; onChanged: () => void;
+export default function Followups({ orders, installByPhone, who, whoEmail, onChanged }: {
+  orders: CoeOrder[]; installByPhone: Map<string, CoeInstall[]>; who: string; whoEmail?: string | null; onChanged: () => void;
 }) {
   const [bucket, setBucket] = useState<BucketKey>('overdue');
   const [bucketPicked, setBucketPicked] = useState(false);
@@ -118,7 +118,7 @@ export default function Followups({ orders, installByPhone, who, onChanged }: {
 
       {openRow ? (
         <FollowupDrawer
-          order={openRow.o} installByPhone={installByPhone} who={who}
+          order={openRow.o} installByPhone={installByPhone} who={who} whoEmail={whoEmail}
           onClose={() => { setOpenId(null); onChanged(); }}
         />
       ) : null}
@@ -165,7 +165,7 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex gap-3 py-0.5 text-[13px]"><span className="w-24 shrink-0 text-gray-400">{k}</span><span className="min-w-0 text-gray-900">{v}</span></div>;
 }
 
-function FollowupDrawer({ order: o, installByPhone, who, onClose }: { order: CoeOrder; installByPhone: Map<string, CoeInstall[]>; who: string; onClose: () => void }) {
+function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { order: CoeOrder; installByPhone: Map<string, CoeInstall[]>; who: string; whoEmail?: string | null; onClose: () => void }) {
   const [, force] = useState(0);
   const [msg, setMsg] = useState('');
   // Fetched per order rather than carried by the list — see AUDIT_COLS.
@@ -186,14 +186,20 @@ function FollowupDrawer({ order: o, installByPhone, who, onClose }: { order: Coe
   const nextDue = cps.filter((c) => c.applies && c.state !== 'done').sort((a, b) => String(a.dueOn || '').localeCompare(String(b.dueOn || '')))[0] || null;
   const row: Row = { o, placed, cps, bucket: bucketFor(o, placed, today), nextDue };
 
-  async function run(mutate: (t: any) => any, logText: string, onOk?: string) {
+  /* Returns whether the write actually landed. Callers that do a SECOND write
+     afterwards (the D+1 form's ratings projection) must not fire it when the
+     call itself failed to save — otherwise a score is projected for a call
+     that isn't in the log. */
+  async function run(mutate: (t: any) => any, logText: string, onOk?: string): Promise<boolean> {
     try {
       const next = await patchCoe(o.id, mutate, logText, who);
       o.coeTrack = next;
       if (onOk) setMsg(onOk);
       force((n) => n + 1);
+      return true;
     } catch (e: any) {
       setMsg('Failed — ' + (e?.message || 'try again'));
+      return false;
     }
   }
 
@@ -226,7 +232,7 @@ function FollowupDrawer({ order: o, installByPhone, who, onClose }: { order: Coe
           </Sec>
 
           <Sec title="Log a call">
-            <LogCallForm o={o} nextDue={nextDue} run={run} />
+            <LogCallForm o={o} nextDue={nextDue} who={who} whoEmail={whoEmail} run={run} />
           </Sec>
 
           <Sec title="Outcome">
@@ -311,7 +317,7 @@ function CpRow({ cp }: { cp: CheckpointState }) {
   );
 }
 
-function OrderStatusSection({ row, run }: { row: Row; run: (mutate: (t: any) => any, logText: string, onOk?: string) => Promise<void> }) {
+function OrderStatusSection({ row, run }: { row: Row; run: (mutate: (t: any) => any, logText: string, onOk?: string) => Promise<boolean> }) {
   const [kind, setKind] = useState('cart');
   const [ref, setRef] = useState('');
   const placed = row.placed;
@@ -365,7 +371,10 @@ function ScoreSelect({ label, value, onChange }: { label: string; value: number;
   );
 }
 
-function LogCallForm({ o, nextDue, run }: { o: CoeOrder; nextDue: CheckpointState | null; run: (mutate: (t: any) => any, logText: string, onOk?: string) => Promise<void> }) {
+function LogCallForm({ o, nextDue, who, whoEmail, run }: {
+  o: CoeOrder; nextDue: CheckpointState | null; who: string; whoEmail?: string | null;
+  run: (mutate: (t: any) => any, logText: string, onOk?: string) => Promise<boolean>;
+}) {
   const [stage, setStage] = useState(nextDue?.k || 'adhoc');
   const [whoSpoke, setWhoSpoke] = useState<'client' | 'bm'>('client');
   const [outcome, setOutcome] = useState(OUTCOMES[0].k);
@@ -387,10 +396,18 @@ function LogCallForm({ o, nextDue, run }: { o: CoeOrder; nextDue: CheckpointStat
     setBusy(true);
     const cp = CHECKPOINTS.find((x) => x.k === stage);
     const ratings = needsRatings ? { q1, q2, q3 } : undefined;
-    await run((t) => {
-      (t.calls = t.calls || []).push({ id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), ts: new Date().toISOString(), stage, who: whoSpoke, outcome, note: note.trim(), ...(ratings ? { ratings } : {}) });
+    // `by` is the COE who made the call — distinct from staff_email/staff_name
+    // on the rating, which is always the auditor being rated. Written here so a
+    // call logged from the CRM carries the same provenance as one logged from
+    // material-depot-site's COE_Dashboard, which has always stamped it: the two
+    // apps append to the same coe_track.calls[], and a call with no `by` is
+    // unattributable to whoever actually dialled.
+    const by = { email: whoEmail || undefined, name: who };
+    const saved = await run((t) => {
+      (t.calls = t.calls || []).push({ id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), ts: new Date().toISOString(), stage, who: whoSpoke, outcome, note: note.trim(), ...(ratings ? { ratings } : {}), by });
       return t;
     }, (cp ? cp.label : 'Ad-hoc call') + ' — ' + (whoSpoke === 'bm' ? 'BM' : 'client') + ': ' + note.trim(), 'Call logged');
+    if (!saved) { setBusy(false); return; }
     if (ratings) {
       try {
         await postJobRating({
@@ -399,8 +416,15 @@ function LogCallForm({ o, nextDue, run }: { o: CoeOrder; nextDue: CheckpointStat
           q1: ratings.q1, q2: ratings.q2, q3: ratings.q3, comments: note.trim(),
           customerName: o.name, customerPhone: o.phone,
         });
-      } catch (e) {
-        console.error('ratings write failed', e);
+      } catch (e: any) {
+        /* The score is NOT lost — it is saved on the call above, which is the
+           source of truth. Only the analytics projection failed. Say so, and
+           point at the tab that can push it: swallowing this into console.error
+           is what kept scores out of NPS invisibly until 2026-08-25. */
+        setErr('Call saved with the scores — but writing them to the analytics table failed (' + (e?.message || 'unknown error')
+          + '). Nothing is lost: push it from the ⭐ Review scores tab.');
+        setBusy(false);
+        return;
       }
     }
     setNote(''); setQ1(0); setQ2(0); setQ3(0);
