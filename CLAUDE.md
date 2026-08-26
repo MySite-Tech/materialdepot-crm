@@ -433,6 +433,58 @@ inert). Leave them; they are not gates.
   stale" is this, not a code fault — check `coe_track` for calls before
   debugging the pipeline.
 
+- **A field app's stale-write guard has to compare like with like — the guard
+  itself was the outage.** `advanceStatus` (`SiteInstallerApp.tsx`) and `adv`
+  (`SiteAuditorApp.tsx`) re-read the row before writing so an SM's concurrent
+  change can't be clobbered (added 2026-08-21, `41a60d1`). Both compared a RAW
+  DB status against the flattened on-screen one — different vocabularies — so
+  the guard fired on jobs nobody had touched, and its own toast ("refresh to see
+  the latest") could never clear it because nothing was stale. Three distinct
+  mismatches, all live on 2026-08-26: `assigned` (DB) vs `scheduled` (UI,
+  mapped in `loadJobs`); the display-only autoFlip to `callpending` 3h before
+  the slot, which is never persisted; and the installer's own
+  `assignments[].status` vs `sj.status`, which **only the PRIMARY writes** —
+  `markAdditionalComplete` writes the assignment and nothing else, so an
+  additional installer's "Your part marked complete" never moved their screen.
+  19 of 43 live installer×sub-job pairs (44%) could not be advanced at all, and
+  every freshly assigned audit was unstartable. Fixed with one derivation each:
+  `statusForInstaller(sj, email)` and `normalizeAuditStatus(s)` — `loadJobs`
+  **and** the guard must both call it, and the installer guard compares
+  `job.storedStatus` (un-flipped) rather than `job.status`. Add a status or a
+  display flip *there*, never at a call site. Note the PWA's
+  `Site_Installer_App.html` has no such guard at all, so this class of drift is
+  invisible in that app — don't take "it works in the field app" as evidence.
+- **An SM re-assignment resets `sj.status` to `assigned` but used to leave the
+  per-assignee statuses alone.** `AssignSection.saveAssign` seeds its editor by
+  spreading the existing `assignments` rows, so re-assigning after a reschedule
+  left `status:'reschedule'` on the assignment under a sub-job that said
+  `assigned` — and since the field app reads the installer's *own* status, that
+  showed them "To Reschedule — nothing to do" on a job just booked for them. It
+  now resets each saved assignment to `assigned`, treating `completed` as
+  terminal exactly as `OrderDrawer`'s `setStatus` does. Live proof this mattered:
+  `ENQ2026071279303`'s wallpaper sub-job was re-assigned to Nadeem Khan on
+  2026-08-12 *after* he had signed its job card, so `sj.status` read `assigned`
+  over an assignment that (correctly) read `completed`. `SM_Install_Dashboard.html`
+  in `material-depot-site` still has the un-fixed shape — keep them in step if
+  you touch either.
+- **These two apps are PORTS of PWA apps that are still being changed, so a
+  status this repo has never heard of can appear in shared data at any time.**
+  `partial` is a first-class SUB-JOB status written by
+  `material-depot-site`'s `Site_Installer_App.html` partial-completion flow;
+  `SiteInstallerApp.tsx` knew nothing about it, so those sub-jobs rendered a raw
+  `partial` pill above a detail panel with **no stage card and no buttons** —
+  the same dead end as a hard block, just quieter. Both field apps now carry a
+  stage registry (`INSTALL_STAGES` / `AUDITOR_STAGES`) and fall through to a
+  self-describing "nothing for you to do right now — the office moves it on"
+  block, so the next unknown status degrades instead of rendering blank. Keep
+  the registry and the rendered branches in step.
+- **`slot_reserved`/`slot_converted` pre-bookings were reaching auditors' own
+  job lists.** 18 live reservation rows carry an `auditor_email`, so six real
+  auditors saw held store slots as jobs — un-actionable by definition, since the
+  real audit is a separate row (the reservation's `po` is that row's `pi`; 13 of
+  the 18 were already `completed` there). `SiteAuditorApp`'s `loadJobs` now
+  filters both statuses out, matching what `audit-ops/Views.tsx` already does
+  for the ops list.
 - **A derived force-add set can still be reverted back to a hand-written one —
   this has now happened twice.** `SITE_AUDIT_ROLES` (`app/App.tsx`) drifted
   from `CRM_ROLE_TO_SITE_AUDIT_ROLE` once before (`delivery` mapped to

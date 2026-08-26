@@ -257,6 +257,14 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
 
     const joined = joinShadowers(shadowers);
     const prevSh = parseShadowers(sj.shadower_email, sj.shadower_name);
+    /* A (re)assignment resets the sub-job to `assigned`, so each installer's own
+       status has to reset with it — `assigns` is seeded by spreading the existing
+       rows, so without this a re-assign after a reschedule left `status:'reschedule'`
+       on the assignment while the sub-job said `assigned`. The field app reads the
+       installer's own status (statusForInstaller in SiteInstallerApp), so that drift
+       shows them "To Reschedule — nothing to do" on a job just booked for them.
+       `completed` is terminal here exactly as it is in OrderDrawer's setStatus. */
+    valid.forEach((a) => { if (a.status !== 'completed') a.status = 'assigned'; });
     const nextSj: Subjob = {
       ...sj,
       assignments: valid,

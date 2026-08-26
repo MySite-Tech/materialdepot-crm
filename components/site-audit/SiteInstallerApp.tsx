@@ -81,6 +81,9 @@ type Ratings = { q1: number; q2: number; q3: number; comments: string };
 
 type JobCard = {
   draft?: boolean;
+  /** Set by the PWA's partial-completion save ({partial, rooms, note, partialBy,
+      partialAt}) — rooms done so far, no customer signature yet. */
+  partial?: boolean;
   rooms: PersistedRoom[];
   // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never
   // on-site — optional only so historical job cards with an old sign.ratings still render.
@@ -100,7 +103,13 @@ type Job = {
   date: string | null;
   slot: string | null;
   slots: string[];
+  /** What the screen shows — `status` with the display-only autoFlip applied. */
   status: string;
+  /** What the DB actually holds for this installer, un-flipped. The stale-write
+      guard compares against THIS: `callpending` 3h before the slot is a screen
+      flip that is never persisted, so comparing `status` blocked every job on
+      its own slot day. */
+  storedStatus: string;
   sku: SkuLine[];
   auditBy: string | null;
   jobcard: JobCard | null;
@@ -173,6 +182,24 @@ function rollupStatus(subjobs: any[], fallback: string): string {
   return fallback;
 }
 
+/* The status THIS installer is working against, in the vocabulary the screen
+   uses. loadJobs and the stale-write guard in advanceStatus MUST both derive it
+   from here — they were two hand-rolled derivations before, and every way they
+   disagreed was a permanent hard block ("This job was just updated…" on a job
+   nothing had updated, which no amount of refreshing could clear):
+   - `assigned` is the DB spelling of what these field apps call `scheduled`;
+   - on a shared sub-job only the PRIMARY writes `sj.status`, so an additional
+     installer's own progress lives on their assignment row — and
+     markAdditionalComplete writes it NOWHERE else;
+   - an assignment created before per-assignee status existed has none, so fall
+     back to the sub-job rather than reading it as blank. */
+function statusForInstaller(sj: any, email: string): string {
+  const assignments = Array.isArray(sj && sj.assignments) ? sj.assignments : [];
+  const mine = assignments.find((a: any) => a && a.installer_email === email);
+  const raw = (mine && mine.status) || (sj && sj.status) || '';
+  return raw === 'assigned' ? 'scheduled' : raw;
+}
+
 function mapUrl(a: string) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
@@ -183,8 +210,20 @@ const INSTALL_STATUS: Record<string, { label: string; badge: string }> = {
   reschedule: { label: 'To Reschedule', badge: 'bg-red-100 text-red-700' },
   onway: { label: 'On The Way', badge: 'bg-blue-100 text-blue-700' },
   atsite: { label: 'At Site', badge: 'bg-blue-100 text-blue-700' },
+  // Written by Site_Installer_App.html's partial-completion flow in the
+  // material-depot-site PWA against the same table — a sub-job status, not just
+  // the order-level rollup. Missing here, it rendered as a raw 'partial' pill
+  // above a detail screen with no stage card and no buttons at all.
+  partial: { label: 'Partially Completed', badge: 'bg-teal-100 text-teal-700' },
   completed: { label: 'Completed', badge: 'bg-green-100 text-green-700' },
 };
+
+/* The statuses JobDetailScreen draws a stage card for. Anything else falls
+   through to a self-describing block instead of an empty panel — `created` on a
+   legacy sub-job the SM has since unscheduled lands there today, and these
+   tables are shared with the material-depot-site PWA, which can add a status
+   this port has never heard of (`partial` arrived exactly that way). */
+const INSTALL_STAGES = ['scheduled', 'callpending', 'reschedule', 'onway', 'atsite', 'partial', 'completed'];
 
 const DEFAULT_LOG_MESSAGES: Record<string, string> = {
   callpending: 'Pre-install call started',
@@ -340,7 +379,7 @@ async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
   let y = M;
   const navy = MD_INK, muted = MD_MUTED;
   const rooms = job.jobcard?.rooms || [];
-  const isPartial = !!job.jobcard?.draft;
+  const isPartial = !!(job.jobcard?.draft || job.jobcard?.partial);
   const cardTitle = 'Installation Job Card';
   function header() {
     y = mdPdfHeader(doc, { title: cardTitle, right: job.pi, M });
@@ -528,6 +567,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
               const isPrimary: boolean = myAssign
                 ? myAssign.primary === true || (!sj.assignments.some((a: any) => a.primary) && sj.assignments.indexOf(myAssign) === 0)
                 : true;
+              // Their OWN status, not the primary's — see statusForInstaller.
+              const myStatus = statusForInstaller(sj, actingAs.email);
               newJobs.push({
                 id: r.id,
                 sjId: sj.id,
@@ -540,7 +581,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
                 date: aDate,
                 slot: aSlots[0] || null,
                 slots: aSlots,
-                status: sj.status === 'assigned' ? 'scheduled' : sj.status,
+                status: myStatus,
+                storedStatus: myStatus,
                 sku: (sj.items || []).map((it: any) => ({ code: it.sku || '', skuName: it.name || it.num || '', link: it.link || '', qty: itemQtyDisplay(it, sj.type === 'wallpaper') })),
                 auditBy: (r.service && r.service.audit_by) || null,
                 jobcard: existing[r.pi + '|' + sj.id] || sj.jobcard || null,
@@ -571,6 +613,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         } else return o;
         const start = new Date(today);
         start.setHours(Math.floor(startH), Math.round((startH % 1) * 60), 0, 0);
+        // Only `status` flips; `storedStatus` is spread through untouched so the
+        // stale-write guard still sees what the DB holds.
         if (now >= new Date(start.getTime() - 3 * 3600 * 1000)) return { ...o, status: 'callpending' };
       }
       return o;
@@ -636,14 +680,17 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const subjobs = parent.subjobs || [];
         const sj = subjobs.find((s: any) => s.id === job.sjId);
         if (!sj) { toast('Job not found — please refresh'); return; }
-        const curStatus = sj.assignments && sj.assignments.length
-          ? (sj.assignments.find((a: any) => a.installer_email === actingAs.email)?.status ?? sj.status)
-          : sj.status;
-        // Someone else (an SM rebooking after a reschedule, another
-        // assignee) may have moved this sub-job since it was loaded — writing
-        // this transition on top of that would silently clobber it.
-        if (curStatus !== job.status) {
-          toast('This job was just updated — refresh to see the latest before trying again');
+        // Someone else (an SM rebooking after a reschedule, another assignee)
+        // may have moved this sub-job since it was loaded — writing this
+        // transition on top of that would silently clobber it. Both sides of
+        // the comparison have to come from statusForInstaller against the
+        // *stored* status; deriving the fresh half by hand and comparing it to
+        // the flattened+autoFlipped `job.status` is what made this fire on
+        // jobs nobody had touched.
+        const curStatus = statusForInstaller(sj, actingAs.email);
+        if (curStatus !== job.storedStatus) {
+          const label = (INSTALL_STATUS[curStatus] || { label: curStatus }).label;
+          toast('The office moved this job to "' + label + '" — showing the latest now');
           await loadJobs();
           return;
         }
@@ -1403,12 +1450,32 @@ function JobDetailScreen({
                 {rescheduleBtn("Can't proceed — Reschedule")}
               </>
             )}
+            {job.status === 'partial' && (
+              <>
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-400">In progress</div>
+                <div className="mt-1 text-lg font-bold text-teal-700">Partially completed</div>
+                <p className="mt-2 text-[13px] text-gray-500">Some of this job is done. Resume to add the remaining rooms and finish with the customer.</p>
+                <button onClick={onOpenJobCard} className="mt-3 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90">Resume installation card</button>
+                {/* Same gate as the SM drawer: a partial card is only worth downloading once it has rooms on it. */}
+                {(job.jobcard?.rooms || []).length > 0 && (
+                  <button disabled={pdfBusy} onClick={onDownloadPdf} className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">{pdfBusy ? 'Building PDF…' : 'Download partial job card'}</button>
+                )}
+                {rescheduleBtn("Can't proceed — Reschedule")}
+              </>
+            )}
             {job.status === 'completed' && (
               <>
                 <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Done</div>
                 <div className="mt-1 text-lg font-bold text-green-600">Completed</div>
                 <p className="mt-2 text-[13px] text-gray-500">Card saved and sent to the office.</p>
                 <button disabled={pdfBusy} onClick={onDownloadPdf} className="mt-3 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">{pdfBusy ? 'Building PDF…' : 'Download PDF'}</button>
+              </>
+            )}
+            {!INSTALL_STAGES.includes(job.status) && (
+              <>
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Now</div>
+                <div className="mt-1 text-lg font-bold text-gray-900">{(INSTALL_STATUS[job.status] || { label: job.status || 'Unknown' }).label}</div>
+                <p className="mt-2 text-[13px] text-gray-500">Nothing for you to do on this job right now — the office moves it on from here. Call them if you were expecting to start it.</p>
               </>
             )}
           </div>

@@ -151,6 +151,12 @@ const STATUS_LABELS: Record<string, { l: string; chip: string }> = {
   completed: { l: 'Site Audit Completed', chip: 'bg-green-100 text-green-700' },
 };
 
+/* The statuses CurrentStage draws a card for. Anything else falls through to a
+   self-describing block instead of an empty panel — `slot_converted` used to
+   land there, and the field apps share these tables with the material-depot-site
+   PWA, which can add a status this port has never heard of. */
+const AUDITOR_STAGES = ['scheduled', 'callpending', 'reschedule', 'onway', 'atsite', 'completed'];
+
 const DEFAULT_LOG_TEXT: Record<string, string> = {
   callpending: 'Pre-visit call started',
   onway: 'Auditor on the way · customer confirmed',
@@ -245,6 +251,16 @@ function mapUrl(a: string): string {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
 
+/* `assigned` is the DB spelling of what this app calls `scheduled`. loadJobs
+   maps it on the way in, so ANYTHING that compares a fresh DB read against an
+   on-screen Order has to map it too. adv()'s stale-write guard did not, so
+   `assigned !== scheduled` fired on every freshly assigned audit — the auditor
+   could never start the pre-visit call or reschedule, and the toast's advice to
+   refresh could not help because nothing was actually stale. */
+function normalizeAuditStatus(s: string | null | undefined): string {
+  return s === 'assigned' ? 'scheduled' : s || '';
+}
+
 function computeDisplayStatus(o: Order, now: Date, today: Date): string {
   if (o.status === 'scheduled' && o.date === dstr(today)) {
     let startH: number | undefined;
@@ -302,7 +318,11 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
         encodeURIComponent(email) +
         '&select=' +
         AUDITOR_COLS +
-        '&status=neq.deleted&order=created_at.desc',
+        // A pre-booking is a held store slot whose real audit is a SEPARATE row
+        // (the reservation's `po` is that row's `pi`) — 18 live ones carry an
+        // auditor_email and were rendering in six auditors' lists as jobs with
+        // no stage and no buttons. The ops views filter the same two statuses.
+        '&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc',
     );
     if (!Array.isArray(rows)) return prevOrders;
     const existing: Record<string, JobCard> = {};
@@ -318,7 +338,7 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
       bm: r.bm || '',
       date: r.date || null,
       slot: r.slot || null,
-      status: r.status === 'assigned' ? 'scheduled' : r.status,
+      status: normalizeAuditStatus(r.status),
       skus: r.skus || [],
       log: r.log || [],
       jobcard: existing[r.pi] || null,
@@ -1017,6 +1037,17 @@ function StageBar({
           )}
         </>
       )}
+      {!AUDITOR_STAGES.includes(order.status) && (
+        <>
+          <div className="mb-2 text-lg font-bold text-gray-900">
+            {(STATUS_LABELS[order.status] || { l: order.status || 'Unknown' }).l}
+          </div>
+          <div className="text-[13.5px] text-gray-500">
+            There is nothing for you to do on this job right now — your Service Manager moves it on from
+            here. Call them if you were expecting to start it.
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1070,8 +1101,9 @@ function JobDetailView({
             // shown and tapped. Without this check a delayed/duplicate tap
             // here would silently overwrite whatever the SM just set, which is
             // exactly what made a rebooked slot "revert" to reschedule.
-            if (fresh && fresh.status !== order.status) {
-              showToast('This job was just updated — refresh to see the latest before trying again');
+            if (fresh && normalizeAuditStatus(fresh.status) !== order.status) {
+              const label = (STATUS_LABELS[normalizeAuditStatus(fresh.status)] || { l: fresh.status }).l;
+              showToast('The office moved this job to "' + label + '" — showing the latest now');
               await refreshJobs();
               return false;
             }
