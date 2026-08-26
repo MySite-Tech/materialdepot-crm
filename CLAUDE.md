@@ -282,6 +282,63 @@ Note this puts a Django call inside the Site Audit tab, so
 session for these three steps — it already did via `fetchUsers()`, and a failure
 degrades to `unknown` rather than to a wrong answer.
 
+## Analytics: two halves, two sources, one page
+
+Site Audit → Analytics is five tabs over two databases that are never mixed in one number
+(ported from `material-depot-site`'s Admin console Analytics V3, 2026-08-26):
+
+| Tab | Source | Where |
+|---|---|---|
+| **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `SiteAuditAnalyticsView.tsx` |
+| **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `CatAnalyticsPanel.tsx` + `public/md-cat-analytics.js` |
+
+An order lives in the order book, a site visit lives in Supabase, and **the only bridge between
+them is the customer phone number** — which is why the two halves are separate tabs with separate
+footnotes, and why no tile adds a booking count to an order count. `SiteAuditAnalyticsView.tsx`
+holds both the Execution view and the shell that renders the tab bar and picks between them.
+
+**`public/md-cat-analytics.js` is a VERBATIM copy of the file with the same name in
+`material-depot-site`** — registry, dummy data layer, target model and all four tab renderers, as
+a self-contained IIFE that publishes on `window` and touches no DOM, no network and no framework.
+That is what makes it shareable byte-for-byte instead of hand-rewritten into JSX. **Fix it in one
+repo, copy it to the other; do not fork it** (same rule as the two copies of the job-card category
+registry). It is loaded on demand by `catAnalytics.ts` — only when a commercial tab is actually
+opened — so its 127 KB never reaches the main bundle. The Execution tab loads it too, in the
+background, purely for `mdAnGrouped`/`mdAnTatHtml` so the bookings and TAT charts match the
+commercial ones; a failed load costs those two blocks, never the ops numbers.
+
+Because the renderers return **HTML strings**, three things follow:
+
+- They need the Admin console's CSS, which lives at the bottom of `app/globals.css` **scoped under
+  `.md-an`**, with the palette variables on `.md-an` rather than `:root` so none of it reaches the
+  Tailwind side of the CRM. Any wrapper that injects this HTML must carry that class.
+  One deliberate un-reset: Tailwind preflight's `svg { max-width: 100% }` is switched off inside
+  the scope, because the charts already decide their own scaling.
+- The tab bodies carry the module's own inline `onclick`/`onchange` handlers (`anDrill`, `anCsv`,
+  `anTargetInput`, `anSaveTargets`, …), so `CatAnalyticsPanel` publishes exactly those names on
+  `window` while mounted and **restores the previous values on unmount** — two mounts (rail plus a
+  Role Viewer preview) must never leave a handler pointing at an unmounted panel. Anything those
+  handlers read comes from a ref, or a CSV export would keep exporting the range the tab opened on.
+- Targets are edited in a **mutable ref** with a `nonce` bump to redraw, not in state. That is
+  deliberate: an edit touches one cell of a 7-month × 13-store × 6-category object, nothing is
+  written until Save, and abandoning the tab abandons the edits. Save writes the whole object to
+  `app_settings.cat_analytics_targets`, shared with the Admin console.
+
+**The commercial numbers are DUMMY right now, and the UI says so** — an amber "◆ Dummy data" badge
+in the filter row plus a footer explaining every definition and limit. The generator is seeded from
+the Jun–Aug 2026 category workbook and reconciles back to it exactly, so the figures are arithmetic,
+not noise. It covers **1 Jun – 17 Aug 2026 only**, which is why the date pickers clamp to that
+window (`clampToData`): today is past the cut, so an unclamped "this month" would render an empty
+dashboard that reads as broken. **To go live: implement `MD_AN_SOURCE.metabase()` in
+`public/md-cat-analytics.js` to return the shape `MD_AN_SOURCE.dummy()` returns (documented at
+`MD_AN_ROW_CONTRACT` in that file) and flip `mode`.** Nothing in `CatAnalyticsPanel.tsx` or
+`catAnalytics.ts` changes — the badge, the footer and the clamp all read that flag themselves.
+
+Two intentional differences from the Admin console version: city comes from the CRM's own header
+selector (the `city` prop) instead of the filter row's own buttons, so there is one city control per
+page; and the filter row is real React rather than an HTML string, because it is this app's chrome
+rather than part of the shared dashboard. See also the `service_mgr` gate under Known landmines.
+
 ## Review scores → NPS: one pipeline, and where it leaks
 
 Q1/Q2/Q3 (overall experience / staff / site cleanliness, 1–10) used to be
@@ -583,11 +640,14 @@ inert). Leave them; they are not gates.
   `Admin.html`'s Analytics is five tabs (Category, Execution, Week on week, Penetration,
   Targets) and only Execution is field-ops; the rest carry revenue, AOV and store targets, and
   a `service_mgr` session is pinned to Execution in three places (forced in `renderAnalytics`,
-  filtered out of the tab bar, and re-checked in `anSetTab`). **This repo has no commercial
-  analytics at all** — `SiteAuditAnalyticsView.tsx` is the pre-V3 execution-only port — so
-  there is currently nothing to gate here. If those tabs (or a Metabase-backed equivalent) are
-  ever ported into the CRM, the role gate has to come with them, or every service manager gets
-  the order book. Related: this repo's Role Viewer renders each role's components inline rather
+  filtered out of the tab bar, and re-checked in `anSetTab`). **Those four commercial tabs now
+  exist here too** (ported 2026-08-26 — see the *Analytics: two halves* section below), so the
+  gate is live rather than hypothetical: `SiteAuditAnalyticsView` takes `execOnly`, and every
+  service-manager host passes it — the SM's own dashboard, the SM view inside the Role Viewer,
+  and `/site-audit-view`'s SM body. Gated twice, like the original: the tab bar renders only
+  Execution AND `pick()` refuses anything else, so a stale `md_an_tab` in localStorage can't get
+  past it. **Add a fifth mount of this view and you must decide `execOnly` for it** — the default
+  is all five tabs, i.e. the order book. Related: this repo's Role Viewer renders each role's components inline rather
   than copying the original's iframe + localStorage impersonation, which is also why the
   2026-08-18 preview-leak bug in that app (its note 112) has no counterpart here.
 - Site Audit `profiles` rows double as login identities on the still-live public

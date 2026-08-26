@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { avgScore, inCity, npsFrom, sbGetLong, NPS_BAND_LABELS, NPS_HOUSE_NOTE, SQFT_PER_ROLL, type CityFilter } from './siteAuditShared';
 import { typeLabel } from './auditRegistry';
+import CatAnalyticsPanel, { type CommercialTab } from './CatAnalyticsPanel';
+import { catAnalyticsIfLoaded, loadCatAnalytics, type CatAnalyticsApi } from './catAnalytics';
 
 /* ---- ANALYTICS HELPERS (ported verbatim from material-depot-site Admin.jsx lines 202-334) ---- */
 function _anDstr(d: Date) {
@@ -318,7 +320,9 @@ interface AnalyticsState {
   data: AnalyticsData | null;
 }
 
-export default function SiteAuditAnalyticsView({ city = 'all' }: { city?: CityFilter } = {}) {
+/* The EXECUTION half: site audits and installations straight off the ops DB (Supabase). Rendered
+   as the Execution tab of the shell at the bottom of this file. */
+function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
   const [analyticsFrom, setAnalyticsFrom] = useState(() => {
     const t = new Date();
     t.setDate(t.getDate() - 6);
@@ -327,6 +331,23 @@ export default function SiteAuditAnalyticsView({ city = 'all' }: { city?: CityFi
   const [analyticsTo, setAnalyticsTo] = useState(() => _anDstr(new Date()));
 
   const [state, setState] = useState<AnalyticsState>({ loading: true, error: false, data: null });
+  /* The bookings/TAT charts are drawn by the shared analytics module (see catAnalytics.ts) so both
+     halves of this page look like one dashboard. Loaded in the background and rendered only once
+     it arrives — the ops metrics below must never wait on it, and a failed load costs those two
+     sections rather than the tab. */
+  const [chartApi, setChartApi] = useState<CatAnalyticsApi | null>(() => catAnalyticsIfLoaded());
+  useEffect(() => {
+    if (chartApi) return;
+    let alive = true;
+    loadCatAnalytics()
+      .then((m) => alive && setChartApi(m))
+      .catch(() => {
+        /* charts stay hidden; every ops number on this tab is unaffected */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [chartApi]);
   const [tempFrom, setTempFrom] = useState(analyticsFrom);
   const [tempTo, setTempTo] = useState(analyticsTo);
   useEffect(() => {
@@ -443,19 +464,15 @@ export default function SiteAuditAnalyticsView({ city = 'all' }: { city?: CityFi
     return <div className="text-center py-8 text-[13px] text-gray-400">Loading…</div>;
   if (state.error)
     return (
-      <>
-        <div className="mb-5">
-          <h1 className="text-xl font-bold text-black">Analytics</h1>
-        </div>
-        <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-[13px] font-semibold text-red-600">
-          ⚠ Failed to load analytics data — network timeout. Please try again.
-        </div>
-      </>
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-[13px] font-semibold text-red-600">
+        ⚠ Failed to load operations data — network timeout. Please try again.
+      </div>
     );
 
   return (
     <AnalyticsBody
       data={state.data as AnalyticsData}
+      chartApi={chartApi}
       from={analyticsFrom}
       to={analyticsTo}
       tempFrom={tempFrom}
@@ -470,6 +487,7 @@ export default function SiteAuditAnalyticsView({ city = 'all' }: { city?: CityFi
 
 function AnalyticsBody({
   data,
+  chartApi,
   from,
   to,
   tempFrom,
@@ -480,6 +498,7 @@ function AnalyticsBody({
   setAnalyticsTo,
 }: {
   data: AnalyticsData;
+  chartApi: CatAnalyticsApi | null;
   from: string;
   to: string;
   tempFrom: string;
@@ -568,7 +587,74 @@ function AnalyticsBody({
       iByStatus[a.status] = (iByStatus[a.status] || 0) + 1;
     });
 
+    /* ── BOOKINGS vs EXECUTIONS, and the turnaround between them ──────────────────────────
+       A booking and its execution are two different days and belong on two different dates:
+       someone who buys a ₹999 site audit today for the day after tomorrow is a BOOKING today and
+       an EXECUTION the day after tomorrow. Same for an installation — the order is placed on one
+       day and the installers turn up on another. So, per bucket in the selected range:
+         • bookings   = orders CREATED in the bucket (install: once per parent ORDER, not per
+                        sub-job, since one order books once however many sub-jobs it carries)
+         • executions = work actually DONE in the bucket (audit: the "Site audit completed" log
+                        date, falling back to the scheduled date · install: one row per completed
+                        sub-job, so an order with a wallpaper and a flooring sub-job books once
+                        and executes twice)
+         • TAT        = execution date − booking date, in days, per executed row
+       These are never added together and never share an axis trick: same unit (jobs) on one axis,
+       which is exactly when a grouped column chart is honest. Booking counts here are NOT
+       comparable with the Category tab's order counts — this side counts ops rows in Supabase,
+       that side counts order lines in the order book. */
+    // Some live log rows carry a `d` that Date() cannot parse (258 such entries in audit_orders
+    // on 2026-08-18); _anDateIST would throw RangeError and blank the whole tab, so every date
+    // derived from log/DB text goes through this guard first.
+    const dateSafe = (iso: any): string | null => {
+      if (!iso) return null;
+      const t = new Date(iso);
+      return isNaN(t.getTime()) ? null : _anDateIST(iso);
+    };
+    const dayDiff = (a: string | null, b: string | null) => (!a || !b ? null : Math.round((new Date(a).getTime() - new Date(b).getTime()) / 86400000));
+    const aExecDate = (o: any): string | null => {
+      let cd: string | null = null;
+      for (const l of o.log || []) {
+        if (!l.t || !l.d || !/site audit completed/i.test(l.t)) continue;
+        const d = dateSafe(l.d);
+        if (d && (!cd || d > cd)) cd = d;
+      }
+      return cd || o.date || null;
+    };
+    const inRange = (d: string | null) => !!d && d >= from && d <= to;
+
+    const aBookings = audits.map((o) => ({ date: dateSafe(o.created_at) })).filter((x) => inRange(x.date));
+    const aExecs = audits
+      .filter((o) => o.status === 'completed')
+      .map((o) => ({ o, date: aExecDate(o) }))
+      .filter((x) => inRange(x.date));
+    const aTats = aExecs.map((x) => dayDiff(x.date, dateSafe(x.o.created_at)));
+
+    const iBookings = installs.map((o) => ({ date: dateSafe(o.created_at) })).filter((x) => inRange(x.date));
+    /* One execution per completed SUB-JOB, not per attempt row. _anInstallAttempts emits a row
+       per scheduled date, so a two-day sub-job would otherwise execute twice — collapse on
+       order+sub-job and keep the latest date, which is the completion date for anything with a
+       completion log. */
+    const iExecMap = new Map<string, string>();
+    for (const a of iAttempts) {
+      if (!['completed', 'partial'].includes(a.status)) continue;
+      const k = a.orderId + '|' + a.sjId;
+      const prev = iExecMap.get(k);
+      if (!prev || a.date > prev) iExecMap.set(k, a.date);
+    }
+    const iExecs = [...iExecMap.entries()].map(([k, date]) => ({ date, orderId: k.split('|')[0] }));
+    const iTats = iExecs.map((r) => {
+      const o = installs.find((x) => String(x.id) === r.orderId);
+      return dayDiff(r.date, o ? dateSafe(o.created_at) : null);
+    });
+
     return {
+      aBookings,
+      aExecs,
+      aTats,
+      iBookings,
+      iExecs,
+      iTats,
       iTotal,
       aTotal,
       IR,
@@ -721,12 +807,10 @@ function AnalyticsBody({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-black">Analytics</h1>
-        <p className="text-[13px] text-gray-400 mt-1">
-          Operational metrics. Each scheduling attempt counted separately — a rescheduled order appears twice if both dates fall in the range.
-        </p>
-      </div>
+      <p className="text-[12.5px] text-gray-500 leading-relaxed">
+        Operational metrics, straight off the ops database. Each scheduling attempt counted separately — a rescheduled order appears twice if both dates fall in
+        the range. Not comparable with the commercial tabs, which count order lines in the order book rather than site visits.
+      </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] text-gray-500 font-semibold">Date range</span>
@@ -852,6 +936,19 @@ function AnalyticsBody({
           </div>
         </div>
 
+        <BookExecSection
+          api={chartApi}
+          from={from}
+          to={to}
+          bookings={M.iBookings}
+          executions={M.iExecs}
+          tats={M.iTats}
+          bookLabel="order placed"
+          execLabel="sub-job done"
+          tatLabel="installations"
+          tatNote="Bookings are counted once per install ORDER on its created_at; executions are counted per SUB-JOB on its completion date, so an order with a wallpaper and a flooring sub-job books once and executes twice. TAT is measured from the parent order&rsquo;s created_at to each sub-job&rsquo;s completion date. Orders created before 1 Jul 2026 carry no log in this tab&rsquo;s payload, so their completion date falls back to the scheduled date — the same documented limitation as the metrics above."
+        />
+
         <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Per-Installer Breakdown</div>
         {M.installers.length ? (
           <div className="overflow-x-auto">
@@ -944,6 +1041,19 @@ function AnalyticsBody({
           counts audits currently in reschedule status within the selected range.
         </div>
 
+        <BookExecSection
+          api={chartApi}
+          from={from}
+          to={to}
+          bookings={M.aBookings}
+          executions={M.aExecs}
+          tats={M.aTats}
+          bookLabel="audit sold"
+          execLabel="audit done"
+          tatLabel="site audits"
+          tatNote="One row per completed site audit whose execution lands in this range. Booking date is the audit order&rsquo;s created_at (IST); execution date is its &ldquo;Site audit completed&rdquo; log entry, falling back to the scheduled date where no such entry exists. A pre-booking made by store staff only appears once it becomes a real audit order — reserved slots are excluded from this tab entirely."
+        />
+
         <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Per-Auditor Breakdown</div>
         {M.auditors.length ? (
           <div className="overflow-x-auto">
@@ -1004,6 +1114,182 @@ function AnalyticsBody({
         <b>NPS:</b> {NPS_HOUSE_NOTE} Range −100 to +100. Not comparable with the store-visit NPS on the <b>NPS</b> tab, which asks a different question of
         footfall customers on textbook bands.
       </div>
+    </div>
+  );
+}
+
+/* ── Bookings vs executions + turnaround, drawn with the shared chart primitives ──────────
+   Rendered as HTML from md-cat-analytics.js (mdAnGrouped / mdAnTatHtml) rather than rebuilt in
+   JSX, so this block is pixel-identical to the same block in the Admin console and to the
+   commercial tabs' own charts. The rows it counts are computed above, off the ops DB. */
+function BookExecSection({
+  api,
+  from,
+  to,
+  bookings,
+  executions,
+  tats,
+  bookLabel,
+  execLabel,
+  tatLabel,
+  tatNote,
+}: {
+  api: CatAnalyticsApi | null;
+  from: string;
+  to: string;
+  bookings: Array<{ date: string | null }>;
+  executions: Array<{ date: string | null }>;
+  tats: Array<number | null>;
+  bookLabel: string;
+  execLabel: string;
+  tatLabel: string;
+  tatNote: string;
+}) {
+  const html = useMemo(() => {
+    if (!api) return '';
+    const buckets = api.mdAnBuckets(from, to).map((b) => ({
+      ...b,
+      vals: [
+        bookings.filter((x) => x.date && x.date >= b.from && x.date <= b.to).length,
+        executions.filter((x) => x.date && x.date >= b.from && x.date <= b.to).length,
+      ],
+    }));
+    const nb = bookings.length;
+    const ne = executions.length;
+    const days = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
+    const series = [
+      { label: 'Booked (' + bookLabel + ')', color: '#5b3aa6' },
+      { label: 'Executed (' + execLabel + ')', color: '#0f6e74' },
+    ];
+    const gap = nb - ne;
+    return `
+    <div class="an-sub-head">Bookings vs executions</div>
+    <div class="an-deliv-row">
+      <div class="an-deliv-stat"><div class="an-deliv-val" style="color:var(--purple)">${nb}</div><div class="an-deliv-lbl">Booked in range<br><span style="font-weight:400">${api.mdAnNum1(nb / days)} / day</span></div></div>
+      <div class="an-deliv-stat"><div class="an-deliv-val" style="color:var(--teal)">${ne}</div><div class="an-deliv-lbl">Executed in range<br><span style="font-weight:400">${api.mdAnNum1(ne / days)} / day</span></div></div>
+      <div class="an-deliv-stat"><div class="an-deliv-val" style="color:${gap > 0 ? 'var(--amber)' : 'var(--green)'}">${gap > 0 ? '+' : ''}${gap}</div><div class="an-deliv-lbl">Booked minus executed<br><span style="font-weight:400">${gap > 0 ? 'work flowing into the queue' : 'queue drained in this window'}</span></div></div>
+      <div style="font-size:11.5px;color:var(--muted);align-self:center;max-width:340px;line-height:1.55">A booking counts on the day it was <b>sold</b>; an execution counts on the day the work was <b>done</b>. The two rarely land in the same bucket, which is the whole point of splitting them.</div>
+    </div>
+    <div style="padding:14px 20px 4px">${api.mdAnGrouped(buckets, series, 160)}</div>
+    <div style="overflow-x:auto;padding:0 0 6px"><table class="an-inst-table">
+      <thead><tr><th>${buckets.length && buckets[0].days === 1 ? 'Day' : 'Bucket'}</th><th style="text-align:right">Days</th>
+        <th style="text-align:right">Booked</th><th style="text-align:right">Booked / day</th>
+        <th style="text-align:right">Executed</th><th style="text-align:right">Executed / day</th></tr></thead>
+      <tbody>${buckets
+        .map(
+          (b) => `<tr><td style="font-weight:700;white-space:nowrap">${b.label}</td>
+        <td style="text-align:right;color:var(--muted)">${b.days}</td>
+        <td style="text-align:right">${b.vals[0]}</td><td style="text-align:right;color:var(--muted)">${api.mdAnNum1(b.vals[0] / b.days)}</td>
+        <td style="text-align:right">${b.vals[1]}</td><td style="text-align:right;color:var(--muted)">${api.mdAnNum1(b.vals[1] / b.days)}</td></tr>`
+        )
+        .join('')}</tbody>
+    </table></div>
+    <div class="an-sub-head">Turnaround — booking to execution</div>
+    ${api.mdAnTatHtml(api.mdAnTatStats(tats), tatLabel)}
+    <div style="font-size:11.5px;color:var(--muted);padding:0 20px 14px;line-height:1.6">${tatNote}</div>`;
+  }, [api, from, to, bookings, executions, tats, bookLabel, execLabel, tatLabel, tatNote]);
+
+  if (!api) return null;
+  return <div className="md-an" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   THE ANALYTICS SHELL — one tab per question.
+
+   Ported from material-depot-site's Admin console (its Analytics V3 revamp), which is where the
+   commercial tabs come from. Five tabs over two sources that are deliberately never mixed:
+
+     Category · Execution · Week on week · Penetration · Targets
+
+   Execution is this repo's own ops-DB view (above). The other four are COMMERCIAL — carts,
+   orders, order value, attach rate, audit → order conversion, store penetration, targets — and
+   read the order book through public/md-cat-analytics.js. An order lives in the order book, a
+   site visit lives in the ops DB, and the only bridge between them is the customer phone number,
+   so no tile ever adds one to the other.
+
+   ROLE GATE: a service manager gets Execution and nothing else. The commercial tabs carry
+   revenue, AOV and store targets, which that role does not get. `execOnly` is passed by every
+   service-manager host (the SM's own dashboard, the SM view inside the Role Viewer, and the
+   /site-audit-view SM body); the oversight rail passes nothing and gets all five. It is gated in
+   two places — the tab bar only renders Execution, AND `pick` refuses anything else, so a stale
+   localStorage tab or a stray call can't get past it. Role gating in this app is client-side
+   throughout, so this is a scoping rule rather than a security boundary, same as the rail items.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Mirrors MD_AN_TABS in md-cat-analytics.js. Hardcoded rather than read from that module because
+   the bar has to be on screen before the 127 KB module has loaded — the Execution tab must not
+   wait on a download it doesn't need. Keep the two lists in step. */
+const AN_TABS: Array<{ k: string; ico: string; label: string; sub: string }> = [
+  { k: 'category', ico: '📦', label: 'Category', sub: 'Carts, orders, value, attach rate, audit conversion' },
+  { k: 'execution', ico: '🔧', label: 'Execution', sub: 'Bookings, executions, TAT, arrival on time, NPS' },
+  { k: 'weekly', ico: '📈', label: 'Week on week', sub: 'Every category, week by week' },
+  { k: 'penetration', ico: '🏬', label: 'Penetration', sub: 'Store maturity and category penetration' },
+  { k: 'targets', ico: '🎯', label: 'Targets', sub: 'Set targets and see what is failing' },
+];
+
+const AN_TAB_KEY = 'md_an_tab';
+
+export default function SiteAuditAnalyticsView({ city = 'all', execOnly = false }: { city?: CityFilter; execOnly?: boolean } = {}) {
+  const [tab, setTab] = useState<string>(() => {
+    if (execOnly) return 'execution';
+    try {
+      const saved = localStorage.getItem(AN_TAB_KEY);
+      if (saved && AN_TABS.some((t) => t.k === saved)) return saved;
+    } catch {
+      /* private mode / storage disabled — the default tab is fine */
+    }
+    return 'category';
+  });
+
+  const pick = useCallback(
+    (k: string) => {
+      if (execOnly && k !== 'execution') return;
+      setTab(k);
+      try {
+        localStorage.setItem(AN_TAB_KEY, k);
+      } catch {
+        /* nothing to do — the choice just won't survive a reload */
+      }
+    },
+    [execOnly]
+  );
+
+  // A role that loses the commercial tabs must not be left on one it can no longer render.
+  useEffect(() => {
+    if (execOnly && tab !== 'execution') setTab('execution');
+  }, [execOnly, tab]);
+
+  const tabs = execOnly ? AN_TABS.filter((t) => t.k === 'execution') : AN_TABS;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-bold text-black">Analytics</h1>
+        <p className="text-[13px] text-gray-400 mt-1">
+          {execOnly
+            ? 'Field-operations execution. Each tab keeps its own definitions visible — no number on this page is left unexplained.'
+            : 'Category commercial performance and field-operations execution, in one place. Each tab keeps its own definitions visible — no number on this page is left unexplained.'}
+        </p>
+      </div>
+
+      <div className="md-an">
+        <div className="an-tabs">
+          {tabs.map((t) => (
+            <button key={t.k} className={`an-tab${t.k === tab ? ' active' : ''}`} onClick={() => pick(t.k)}>
+              <span>
+                {t.ico} {t.label}
+                <small>{t.sub}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'execution' ? (
+        <ExecutionAnalyticsView city={city} />
+      ) : (
+        <CatAnalyticsPanel tab={tab as CommercialTab} city={city} onTabChange={pick} />
+      )}
     </div>
   );
 }

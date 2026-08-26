@@ -224,7 +224,8 @@ export default function SiteAuditOwnDashboard({
         ) : smAuditSubTab === 'perf' ? (
           <SiteAuditPerfView city={city} />
         ) : smAuditSubTab === 'analytics' ? (
-          <SiteAuditAnalyticsView city={city} />
+          // Service manager: Execution only — the commercial tabs carry revenue and store targets.
+          <SiteAuditAnalyticsView city={city} execOnly />
         ) : (
           <SiteAuditLiveView city={city} />
         )}
