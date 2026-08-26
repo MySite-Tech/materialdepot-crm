@@ -116,6 +116,7 @@ const ROLE_TABS: Record<string, Array<MainTab>> = {
   b2b_sales:    ['b2bSales', 'siteAudit'],
   b2b_KAM:      ['b2bSales', 'siteAudit'],
   b2b_manager:  ['b2bSales', 'siteAudit'],
+  field_worker: ['siteAudit'],
 };
 const DEFAULT_ROLE_TABS: Array<MainTab> = ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales'];
 
@@ -165,6 +166,46 @@ const TAB_LABELS: Record<MainTab, string> = {
 // a role's default tabs. Delegates to defaultTabsForRole (defined below, but
 // only ever called at render time, well after module init) so this can never
 // drift from what resolveAllowedTabs actually grants an un-migrated account.
+/* Every `permission_name` the Django side actually issues, so the Role dropdowns
+   can't silently reassign someone. Only 5-6 were listed inline before, which
+   meant opening Edit on a Field Worker (or Procurement, Post Sales, Delivery,
+   B2B…) pre-selected a role they don't have and Save wrote it — the row's badge
+   renders the raw value, so the table showed roles the editor couldn't pick.
+   `superadmin` is deliberately absent: not creatable from this screen, but an
+   existing one is preserved by RoleSelect's unknown-value option. */
+const ROLE_OPTIONS: Array<string> = [
+  'sales', 'manager', 'store_manager', 'retail', 'admin', 'tech',
+  'b2b_sales', 'b2b_KAM', 'b2b_manager',
+  'field_worker', 'delivery', 'delivery_manager', 'post_sales', 'procurement',
+  'pre_sales', 'customer_success', 'accounts', 'data',
+];
+
+const ROLE_LABEL_OVERRIDES: Record<string, string> = {
+  b2b_sales: 'B2B Sales',
+  b2b_KAM: 'B2B KAM',
+  b2b_manager: 'B2B Manager',
+  coe: 'Category Ops Executive',
+};
+
+const roleLabel = (role?: string | null): string => {
+  if (!role) return '\u2014';
+  return ROLE_LABEL_OVERRIDES[role] ?? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+/* Role <select> shared by Add User and the inline row editor. Keeps an
+   off-list current value (a legacy or newly-added Django role) as its own
+   option so editing an unrelated field can never reassign the person. */
+function RoleSelect({ value, onChange, className }: { value: string; onChange: (role: string) => void; className: string }) {
+  const options = ROLE_OPTIONS.includes(value) || !value ? ROLE_OPTIONS : [value, ...ROLE_OPTIONS];
+  return (
+    <select className={className} value={value} onChange={(e) => onChange(e.target.value)}>
+      {options.map((r) => (
+        <option key={r} value={r}>{roleLabel(r)}</option>
+      ))}
+    </select>
+  );
+}
+
 const defaultPermissionsForRole = (role: string): string[] => {
   const tabs = new Set(defaultTabsForRole(role));
   return PERMISSION_TAB_ORDER.filter(([, tab]) => tabs.has(tab)).map(([slug]) => slug);
@@ -332,7 +373,18 @@ const defaultTabsForRole = (role: string): Array<MainTab> => {
   return tabs;
 };
 
+/* Roles clamped to Site Audit and nothing else. Unlike every other role entry
+   here this is a CEILING, not a grant: field workers are on site all day and
+   have no business in leads, dashboards, footfall or sales, and most of them
+   already carry a permission list (from the delivery/order slug backfills)
+   whose CRM slugs would otherwise open those tabs. A slug they hold that is
+   not `crm.site_audit` is therefore ignored rather than honoured — the only
+   place in this file where role overrides permission, and only ever to take
+   access away. */
+const SITE_AUDIT_ONLY_ROLES = new Set(['field_worker']);
+
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
+  if (SITE_AUDIT_ONLY_ROLES.has(user?.role ?? '')) return ['siteAudit'];
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
@@ -1435,14 +1487,11 @@ function AdminDashboard() {
                 </div>
                 <div className="w-[130px]">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Role</label>
-                  <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={newRole} onChange={(e) => { setNewRole(e.target.value); setNewPermissions(defaultPermissionsForRole(e.target.value)); }}>
-                    <option value="sales">Sales</option>
-                    <option value="manager">Manager</option>
-                    <option value="store_manager">Store Manager</option>
-                    <option value="retail">Retail</option>
-                    <option value="admin">Admin</option>
-                    <option value="tech">Tech</option>
-                  </select>
+                  <RoleSelect
+                    className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full"
+                    value={newRole}
+                    onChange={(role) => { setNewRole(role); setNewPermissions(defaultPermissionsForRole(role)); }}
+                  />
                 </div>
                 <div className="w-[220px]">
                   <PermissionChecklist value={newPermissions} onChange={setNewPermissions} />
@@ -1485,13 +1534,11 @@ function AdminDashboard() {
                             <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editName} onChange={(e) => setEditName(e.target.value)} /></td>
                             <td className="px-4 py-2"><input className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none font-mono w-full text-center" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} maxLength={10} /></td>
                             <td className="px-4 py-2">
-                              <select className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full" value={editRole} onChange={(e) => { setEditRole(e.target.value); setEditPermissions(defaultPermissionsForRole(e.target.value)); }}>
-                                <option value="sales">Sales</option>
-                                <option value="manager">Manager</option>
-                                <option value="store_manager">Store Manager</option>
-                                <option value="retail">Retail</option>
-                                <option value="admin">Admin</option>
-                              </select>
+                              <RoleSelect
+                                className="px-2 py-1 text-[13px] border border-gray-200 rounded outline-none w-full"
+                                value={editRole}
+                                onChange={(role) => { setEditRole(role); setEditPermissions(defaultPermissionsForRole(role)); }}
+                              />
                             </td>
                             <td className="px-4 py-2 min-w-[180px]">
                               <BranchAccessDropdown branchList={branchList} value={editBranches} onChange={setEditBranches} hideLabel />
@@ -1519,7 +1566,7 @@ function AdminDashboard() {
                             <td className="px-4 py-2.5 text-[13px] font-mono">{u.phone}</td>
                             <td className="px-4 py-2.5">
                               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : u.role === 'tech' ? 'bg-cyan-100 text-cyan-700' : u.role === 'manager' ? 'bg-blue-100 text-blue-700' : u.role === 'retail' ? 'bg-teal-100 text-teal-700' : u.role === 'sales' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {u.role ? u.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'}
+                                {roleLabel(u.role)}
                               </span>
                             </td>
                             <td className="px-4 py-2.5">
