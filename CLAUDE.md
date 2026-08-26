@@ -433,6 +433,29 @@ inert). Leave them; they are not gates.
   stale" is this, not a code fault — check `coe_track` for calls before
   debugging the pipeline.
 
+- **The read side aliases `customer_name` to `name`, and both order drawers
+  wrote the alias back.** `audit_orders` and `install_orders` have a
+  `customer_name` column and no `name` column at all (`profiles` does, which is
+  what makes the mistake easy). `install-ops/shared.ts` and `audit-ops/shared.ts`
+  both map `name: r.customer_name` on load, and both drawers' "Fix details" form
+  PATCHed `{ name, phone, addr }` — PostgREST rejects the *whole* body with
+  `PGRST204 Could not find the 'name' column`, so the phone and address were
+  lost along with the name. Fixed 2026-08-26. When you add a write, check it
+  against the column list, not against the UI type: the two disagree by design
+  for `customer_name`, `matched_audit`/`matchedAudit`, `delivery_date`/
+  `deliveryDate` and `original_delivery_date`.
+- **`install-ops/OrderDrawer`'s `persist()` had no error handling, so every
+  write in that drawer failed silently.** `sbPatch` *does* throw on a non-2xx
+  (unlike `sbGet` — see the `Array.isArray` section), but `persist` was a bare
+  `await sbPatch(...)` and none of its callers caught, so the rejection escaped
+  into the click handler as an unhandled promise: no toast, no console entry a
+  user would see, a Save button indistinguishable from a dead one. That is the
+  only reason the `name` bug above survived — the SM had no way to learn the
+  write was being refused. `persist` now catches, toasts, and returns whether
+  the write landed (callers gate their form-close on it, and the three that had
+  hand-rolled try/catch now pass a `failMsg` instead).
+  `audit-ops/AuditOrderDrawer`'s `patch()` already had this shape — copy it, and
+  treat a write wrapper with no catch the same way as `.catch(console.error)`.
 - **A field app's stale-write guard has to compare like with like — the guard
   itself was the outage.** `advanceStatus` (`SiteInstallerApp.tsx`) and `adv`
   (`SiteAuditorApp.tsx`) re-read the row before writing so an SM's concurrent

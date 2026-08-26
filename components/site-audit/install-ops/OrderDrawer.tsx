@@ -92,11 +92,24 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
     else setDraft((d) => ({ ...d, [grp]: [] }));
   }
 
-  async function persist(patch: Record<string, any>, toastMsg?: string, reopen = true) {
-    if (o.id) await sbPatch('install_orders', String(o.id), patch);
+  /* Every write in this drawer goes through here, so this is the one place that
+     has to know a failed PATCH must be surfaced. It used to just `await sbPatch`
+     and let the rejection escape into the click handler — an unhandled promise
+     rejection, no toast, a Save button indistinguishable from a dead one. That
+     is how the customer-details write below sat broken: it PATCHed a `name`
+     column that does not exist, PostgREST 400'd every time, and nothing said so.
+     Returns whether the write landed, so a caller can keep its form open. */
+  async function persist(patch: Record<string, any>, toastMsg?: string, reopen = true, failMsg?: string): Promise<boolean> {
+    try {
+      if (o.id) await sbPatch('install_orders', String(o.id), patch);
+    } catch (e: any) {
+      toast(failMsg || 'Could not save — ' + (e?.message || 'try again'));
+      return false;
+    }
     await reload();
     if (toastMsg) toast(toastMsg);
     if (reopen) onOpenOrder(o.pi);
+    return true;
   }
 
   /* Customer detail correction — the OMS auto-fetch sometimes writes a bad
@@ -111,8 +124,11 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
     if (ad !== (o.addr || '')) changed.push('address');
     if (!changed.length) { toast('No changes to save'); return; }
     const nextLog = [...o.log, { t: 'Customer details corrected — ' + changed.join(', ') + ' updated', d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
-    await persist({ name: nm, phone: ph, addr: ad, log: nextLog }, 'Customer details updated');
-    setCustOpen(false);
+    // `customer_name`, NOT `name` — the read side maps it to `o.name` (install-ops/
+    // shared.ts) and writing that alias back 400s the whole PATCH, so the phone and
+    // address were lost along with it.
+    const saved = await persist({ customer_name: nm, phone: ph, addr: ad, log: nextLog }, 'Customer details updated');
+    if (saved) setCustOpen(false);
   };
 
   const setAuditBy = async (val: 'material_depot' | 'customer') => {
@@ -233,11 +249,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
       t: typeLabel(sj.type) + ' split — ' + moved.length + ' SKU(s) moved to a new sub-job (' + moved.map((m) => m.sku).join(', ') + ') with its own delivery/installer',
       d: new Date().toISOString(), by: 'manual' as const, who: attribution,
     }];
-    try {
-      await persist({ status: nextStatus, subjobs: nextSubjobs, log: nextLog }, 'Split into separate visits');
-    } catch {
-      toast('Could not save split — try again');
-    }
+    await persist({ status: nextStatus, subjobs: nextSubjobs, log: nextLog }, 'Split into separate visits', true, 'Could not save split — try again');
   };
 
   const doMerge = async (sjId: string) => {
@@ -255,11 +267,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
       t: typeLabel(sj.type) + ' sub-job merged back (' + (sj.items || []).map((m) => m.sku).join(', ') + ')',
       d: new Date().toISOString(), by: 'manual' as const, who: attribution,
     }];
-    try {
-      await persist({ status: nextStatus, subjobs: nextSubjobs, log: nextLog }, 'Merged back');
-    } catch {
-      toast('Could not merge — try again');
-    }
+    await persist({ status: nextStatus, subjobs: nextSubjobs, log: nextLog }, 'Merged back', true, 'Could not merge — try again');
   };
 
   /* Per-sub-job delivery date. Split sub-jobs inherit the order's date at
@@ -287,11 +295,7 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
       ? sjShortLabel(o, sj).toUpperCase() + ' delivery date set to ' + fmtDate(date) + (prev ? ' (was ' + fmtDate(prev) + ')' : '')
       : sjShortLabel(o, sj).toUpperCase() + ' delivery date cleared — follows the order date (' + fmtDate(o.deliveryDate) + ')';
     const nextLog = [...o.log, { t: label, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
-    try {
-      await persist({ subjobs: nextSubjobs, log: nextLog }, date ? 'Sub-job delivery updated' : 'Sub-job delivery reset');
-    } catch {
-      toast('Could not save the delivery date — try again');
-    }
+    await persist({ subjobs: nextSubjobs, log: nextLog }, date ? 'Sub-job delivery updated' : 'Sub-job delivery reset', true, 'Could not save the delivery date — try again');
   };
 
   const setFollowUp = async () => {
