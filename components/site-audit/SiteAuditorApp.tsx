@@ -1467,7 +1467,9 @@ function SegmentAdjustments({
         const shape = a.shape || 'Rectangle';
         const isOther = shape === 'Other';
         const computedArea = isOther ? '' : adjSum(cat, room, [a]);
-        const dim1 = shape === 'Triangle' ? 'Base' : 'Height';
+        // Registry-driven, not hardcoded: a floor's two dimensions are length
+        // and width — it has no height. See `adjDim1` in auditRegistry.ts.
+        const dim1 = shape === 'Triangle' ? 'Base' : cat.adjDim1 || 'Height';
         const dim2 = shape === 'Triangle' ? 'Height' : 'Width';
         const missingReason = !!(a.reason ? false : (isOther ? a.area : a.h && a.w));
         return (

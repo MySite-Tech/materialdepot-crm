@@ -433,6 +433,21 @@ inert). Leave them; they are not gates.
   stale" is this, not a code fault — check `coe_track` for calls before
   debugging the pipeline.
 
+- **A floor has no height — per-category wording belongs in `auditRegistry.ts`,
+  not in the capture form.** `SegmentAdjustments` hardcoded the rectangle
+  dimension pair as Height x Width, which is right for a wall and wrong for
+  `flooring`, whose own fields are Room length / Room width. It is not a rare
+  path: in a 60-order live sample, flooring carried **17 of the 28** area
+  adjustments (more than wallpaper), every one of them a Rectangle, and the
+  reasons are furniture footprints — "Bed", "Cupboard" — which have a length,
+  never a height. Now `cat.adjDim1` (absent => 'Height'). The Triangle branch
+  deliberately keeps Base x Height: there `h` is the perpendicular altitude in
+  the ½·base·height formula, and zero triangle adjustments exist in live data.
+  The stored keys stay `h`/`w` — only the label is per-category, so no migration
+  and no change to `adjRows`, whose `size` string ("6.5 x 6 ft") is
+  orientation-neutral and is what every read-only view and the PDF render.
+  `md-audit-registry.js` + `Site_Auditor_App.html` in `material-depot-site`
+  carry the identical fix; keep the two registries in step.
 - **The read side aliases `customer_name` to `name`, and both order drawers
   wrote the alias back.** `audit_orders` and `install_orders` have a
   `customer_name` column and no `name` column at all (`profiles` does, which is

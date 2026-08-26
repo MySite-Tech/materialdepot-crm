@@ -51,6 +51,15 @@ export type CategoryDef = {
   };
   variants: string[] | null;
   rollCoverage: number | null;
+  /* Label for the FIRST dimension of a rectangular area adjustment, in this
+     category's own vocabulary. A wall has a height; a FLOOR does not — the
+     adjustments auditors actually raise on a floor are furniture footprints
+     ("Bed", "Cupboard"), which are length x width, the same pair the floor's own
+     measurement fields already use. Defaults to 'Height', which is right for
+     every wall category. (The Triangle branch keeps Base x Height: there `h` is
+     the perpendicular altitude in `½ · base · height`, a geometry term rather
+     than an architectural one, and it reads correctly on a floor plan.) */
+  adjDim1?: string;
   // Base (pre-per-variant-unit) unit + field list — also what a pre-v3 room keeps resolving to.
   unit?: string;
   variantUnits?: Record<string, string>;
@@ -206,6 +215,7 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     segment: { model: 'single', segLabel: 'Floor', facing: false, facingOpts: null, addLabel: null },
     variants: null,
     rollCoverage: null,
+    adjDim1: 'Length',
     unit: 'ft',
     unitNote: 'Room length & width are entered in FEET (ft). Area is shown in sq.ft.',
     fields: (
