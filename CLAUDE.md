@@ -491,6 +491,18 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
+- **The field apps write a log line more than once for one event, so any metric
+  counted off `log` entries must dedupe before it counts.** Arrival on time was
+  counting the same visit repeatedly — 17 install and 30 audit person-day pairs
+  in live data on 2026-08-26, one audit visit logged **20 times**, inflating the
+  install metric by 13% and the audit metric by 23%. `_anArrivalStats` now keys
+  on order + person + day (the PWA's Admin console always did; this port did
+  not). Nothing surfaced it for weeks because a percentage cannot show you its
+  own duplicate rows — it only became visible once the tiles started listing
+  them. Two rules follow: a new log-derived metric needs the same guard, and
+  mark a row "seen" only once it actually *counts*, or an entry skipped for a
+  missing slot suppresses a later write for the same visit that would have
+  resolved. See the Analytics section above.
 - **A second write that only `console.error`s on failure is silent data
   loss.** Both COE rating forms saved the call, then projected the score into
   `ratings` inside `try { … } catch { console.error }`. The COE saw "Call
