@@ -7,7 +7,7 @@ import {
   type LeadNote, type CallLogEntry, type LeadDeal, B2B_LOST_REASONS,
 } from './mockData';
 import { fetchLeadNotes, createLeadNote, fetchLeadCallLogs, createInboundCallLog, CALL_OUTCOME_OPTIONS, type CallOutcome, updateInboundLeadKylas, fetchInboundLeadDetail, fetchCallLogSummary, fetchLeadDeals, B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
-import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
+import { fetchInboundBoard, upsertInboundLead, B2B_FRESH_START } from '@/lib/b2bLeads';
 import { ExportButton, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll, LostReasonSelect, type ExportFormat, type ExportScope } from './exportUtils';
 
 const INBOUND_EXPORT_HEADERS = ['Company', 'Contact', 'Type', 'Stage', 'Timeline', 'Owner', 'Source', 'Value'];
@@ -778,6 +778,7 @@ export default function InboundLeads() {
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Created After</label>
           <input
             type="date"
+            min={B2B_FRESH_START}
             value={createdAfter}
             onChange={(e) => setCreatedAfter(e.target.value)}
             className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white"
@@ -787,6 +788,7 @@ export default function InboundLeads() {
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Created Before</label>
           <input
             type="date"
+            min={B2B_FRESH_START}
             value={createdBefore}
             onChange={(e) => setCreatedBefore(e.target.value)}
             className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white"
