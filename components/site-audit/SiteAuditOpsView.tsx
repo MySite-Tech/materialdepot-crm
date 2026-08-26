@@ -26,7 +26,8 @@ import {
 } from './audit-ops/Views';
 import { AddAuditorOverlay, AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from './audit-ops/Overlays';
 import {
-  AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, dstr, loadAuditSlots, loadCaps, mapAuditRow, today,
+  AUDIT_CATEGORY_QUERY, AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, applyAuditCategories,
+  dstr, loadAuditSlots, loadCaps, mapAuditRow, today,
   type AuditOrder, type AuditViewKey, type Auditor, type Caps, type SlotDef,
 } from './audit-ops/shared';
 import type { ShadowerOption } from './install-ops/ShadowerSelect';
@@ -157,6 +158,9 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     } catch { /* free-text BM entry still works */ }
   }, []);
 
+  /* Last good narrow category read — see loadOrders. */
+  const catRowsRef = useRef<any[]>([]);
+
   const loadOrders = useCallback(async () => {
     try {
       const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');
@@ -167,7 +171,24 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       }
       setConnErr(false);
       if (retryTid.current) { clearTimeout(retryTid.current); retryTid.current = null; }
-      setRawOrders(rows.map(mapAuditRow));
+      /* The ticked categories come from a second, deliberately narrow query: they
+         can't ride in AUDIT_COLS because `audit_ticked` also holds the job card's
+         room photos, but for the pre-card statuses it is a few bytes a row — and
+         it is the only place "what material is this audit for" is recorded.
+
+         The last good result is kept in a ref and applied to THIS render pass, so
+         a 30s poll never repaints the table with the pills missing while the
+         second query is in flight. The fetch itself is fire-and-forget and fails
+         quietly: no category pill is worth delaying or blanking the orders table
+         for, and the previous answer stays on screen if it drops. */
+      setRawOrders(applyAuditCategories(rows.map(mapAuditRow), catRowsRef.current));
+      sbGet(AUDIT_CATEGORY_QUERY)
+        .then((catRows) => {
+          if (!Array.isArray(catRows)) return;
+          catRowsRef.current = catRows;
+          setRawOrders((prev) => applyAuditCategories(prev, catRows));
+        })
+        .catch(() => { /* keep the previous categories */ });
     } catch {
       setConnErr(true);
       if (!retryTid.current) retryTid.current = setTimeout(() => { retryTid.current = null; loadOrders(); }, 8000);

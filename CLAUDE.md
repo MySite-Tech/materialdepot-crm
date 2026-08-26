@@ -750,6 +750,92 @@ inert). Leave them; they are not gates.
   real fix; the migration just stops the DB from rejecting the profile-side
   writes that go along with it.
 
+- **A boolean "cancelled" flag on a retryable capture is a one-way door.**
+  `ArrivalCameraModal`'s `retake` set `cancelledRef = true` — to disown a confirm
+  whose `uploadPhoto()` retry was still in flight — and never cleared it. Since
+  `handleConfirm` checks that flag *after* the upload, the first Retake swallowed
+  every subsequent Confirm for the life of the overlay: the modal stayed open,
+  the button cycled Uploading… → Confirm, and no arrival was ever recorded.
+  Retaking a photo is the most ordinary thing a field worker does here, so that
+  one stale boolean was a silent dead end between "on the way" and "at site"
+  (fixed 2026-08-26). It is now a per-attempt COUNTER, which is the shape this
+  needs: a flag can say "this attempt is abandoned" but has no way to say "the
+  next one is live". `camGenRef` next to it was already a counter for exactly
+  this reason — copy that, not the flag.
+- **Never disable a field app's only forward control on a permission or device
+  probe.** The same modal's shutter was `disabled={!cameraFailed && !camReady}`,
+  and `getUserMedia` can neither resolve nor reject — an Android webview with a
+  pending permission sheet, or a camera another app holds, just leaves the
+  promise open. `camReady` then stays false forever and the worker is left with
+  Cancel as the only live button, unable to mark themselves at site at all. The
+  shutter is now never disabled: it shoots the live preview when there is one and
+  otherwise opens the OS camera, with a 6s watchdog that relabels it. The
+  `material-depot-site` PWA always had this fallback (`snap.onclick` →
+  `nativeCapture()`); the port dropped it. Related: bind a MediaStream to the
+  `<video>` in an effect, not at the `getUserMedia` callsite — the element is
+  unmounted while `cameraFailed` is set, so a late grant assigned `srcObject` to
+  a null ref and left a black preview behind a live button.
+- **`if (busy) return` where `busy` is state is not a lock.** Two taps inside one
+  tick both read it as false and both write — one status change, two identical
+  log lines. `advanceStatus` (`SiteInstallerApp`), `adv` (`SiteAuditorApp`) and
+  the arrival modal's confirm all had this shape; each now holds a ref, with the
+  state kept only for the disabled styling. This is the *write-side* half of the
+  duplicate-log problem the Analytics dedupe guard compensates for on the read
+  side — see the log-duplicate landmine above. A failed upload must also never
+  fall back to embedding base64 in `log[]`: that column is fetched in full by
+  every poll and has no slim view (7 live entries, ~30-50 KB each).
+- **A re-assignment must only reset the assignees whose work actually changed.**
+  `AssignSection.saveAssign` resets each saved assignment to `assigned`, which was
+  added to stop a re-assign after a reschedule leaving `status:'reschedule'` on an
+  assignment under a sub-job that said `assigned` (the field app reads the
+  installer's own status, so that drift showed them "To Reschedule — nothing to
+  do"). Resetting **every** assignee is the opposite bug and the one the field
+  sees: the SM re-opens the form to add a second installer or fix a note, and a
+  colleague already On The Way is yanked back to "Call the customer". They confirm
+  again, the next edit resets them again. `ENQ2026071780139` collected 32 "on the
+  way" entries on 2026-08-26 in bursts that each begin seconds after an SM
+  re-assignment. Now scoped to assignees who are new to the sub-job, whose
+  date/slots moved, or who still carry `reschedule`; `completed` stays terminal.
+- **Only the PRIMARY installer writes `sj.status` — everyone else's progress
+  lives on their `assignments[]` row, and nothing in Install Ops used to read
+  it.** So the dashboard showed "At Site" on `ENQ2026082087114` while its own
+  timeline said "Flooring installation done (additional installer: Ankit
+  Sharma)" seven times over: both were true, and only one was on screen. There
+  is now ONE derivation — `assigneeStatus` / `subjobDisplayStatus` /
+  `assigneeProgress` in `install-ops/shared.ts`, mirrored by
+  `subjobEffectiveStatus` in `SiteInstallerApp.tsx` — and every sub-job status
+  the SM sees goes through it, so the badge, the calendar, the drawer and the
+  order row cannot disagree. Three rules it must keep: a sub-job rolls up to
+  `completed` only when **every** assignee is (one installer finishing must not
+  bill the OMS service leg, which is gated on the parent rollup, nor skip the
+  customer signature); `partial` and `completed` are never overridden (`partial`
+  states that rooms are still outstanding); and `mapInstallRow`'s
+  `reconciledOrderStatus` only ever moves an order that is stuck on a TRAVEL
+  status, because `pending`/`deliv_*`/`created`/`call_na` are pre-service states
+  no sub-job speaks to and an SM's deliberate `partial` is theirs to keep. On
+  live data that reconciliation moves exactly 1 order and 1 sub-job badge, while
+  surfacing 23 installer rows whose own status had been invisible. The
+  `material-depot-site` PWA had the same split *and* fed it into the field app's
+  own `loadJobs`, which is the worse half — see note 119 there.
+- **`audit_ticked` is excluded from `AUDIT_COLS` for good reason, but
+  `mapAuditRow` hardcoding `auditTicked: null` silently disabled every category
+  display in the audit ops views.** The Categories column and the pre-booking
+  drawer could only ever fall through to `o.service`, i.e. `—` on anything
+  pre-service. And the store's own ticks never reached the audit at all: the two
+  halves of one job are two rows (see the pre-booking section above), the store
+  records the material on the reservation, and the audit row is created later by
+  `autoImportAuditOrders` from an OMS order whose only SKU at that point is the
+  audit service line — so `tickedCategories` yields `[]`, as it has on every live
+  pending audit. Fixed 2026-08-26 with `AUDIT_CATEGORY_QUERY` — a second, narrow
+  select over `PRE_CARD_STATUSES` only (210 rows / 36 KB / ~0.9s live, versus the
+  full-table select that times out) whose last good result is held in a ref so a
+  30s poll never repaints the table with the pills missing — plus a carry-over
+  keyed on **the pre-booking's `po` === the audit's `pi`**, never the name or
+  phone. It lands in a separate `storeCategories` field rather than being merged
+  into `auditTicked`, because the two were ticked by different people and
+  `categoriesAreFromStore` labels which one is on screen. **Do not "simplify"
+  this by adding `audit_ticked` to `AUDIT_COLS`.**
+
 ## House style
 
 - Comments explain *why*, especially the non-obvious constraint a line encodes —

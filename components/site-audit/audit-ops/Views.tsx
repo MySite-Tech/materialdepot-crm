@@ -11,7 +11,7 @@ import { WDAYS, sbPatch } from '../siteAuditShared';
 import { Chip } from './AuditOrderDrawer';
 import {
   DEFAULT_CAP, STATUS, addDays, auditorNameOf, capFor, dailyTotalCap, dstr, fmtDate, mapUrl,
-  offReason, orderCategories, saveAuditSlots, saveCaps, slotLabel, today,
+  categoriesAreFromStore, offReason, orderCategories, saveAuditSlots, saveCaps, slotLabel, today,
   type AuditOrder, type Auditor, type Caps, type SlotDef,
 } from './shared';
 
@@ -35,6 +35,19 @@ function Head({ title, sub, right }: { title: string; sub: string; right?: React
 function Customer({ o }: { o: AuditOrder }) {
   return <div><b>{o.name || '—'}</b><div className="text-gray-500">{o.phone}</div></div>;
 }
+/* What material the visit is for. Worth a column of its own on every list the SM
+   plans from: on an OMS-raised audit the only record of it is the store's own
+   pre-booking, so this is often the one place it appears. */
+function Cats({ o }: { o: AuditOrder }) {
+  const cats = orderCategories(o);
+  if (!cats.length) return <span className="text-gray-400">—</span>;
+  return (
+    <span className="flex flex-wrap gap-1" title={categoriesAreFromStore(o) ? 'From the store pre-booking' : undefined}>
+      {cats.map((c) => <span key={c} className="rounded bg-yellow-50 px-1.5 py-0.5 text-[10px] font-bold text-yellow-800">{c}</span>)}
+    </span>
+  );
+}
+
 function Addr({ o }: { o: AuditOrder }) {
   return o.addr
     ? <a className="text-blue-600" href={mapUrl(o.addr)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{o.addr}</a>
@@ -163,7 +176,7 @@ export function OrdersView({
                 <tr key={o.id} onClick={() => onOpenOrder(o.pi)} className="cursor-pointer hover:bg-gray-50">
                   <td className={TD}><b className="font-mono text-xs">{o.pi}</b><div className="text-[11px] text-gray-400">{o.po.join(' · ')}</div></td>
                   <td className={TD}><div className="flex flex-wrap gap-1">{o.skus.map((s, i) => <span key={i} className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${s.audit ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{s.c}</span>)}</div></td>
-                  <td className={TD}><div className="flex flex-wrap gap-1">{orderCategories(o).map((cat) => <span key={cat} className="rounded bg-yellow-50 px-1.5 py-0.5 text-[10px] font-bold text-yellow-800">{cat}</span>)}{!orderCategories(o).length ? <span className="text-gray-400">—</span> : null}</div></td>
+                  <td className={TD}><Cats o={o} /></td>
                   <td className={TD}><Customer o={o} /></td>
                   <td className={`${TD} max-w-[180px] text-gray-500`}><Addr o={o} /></td>
                   <td className={TD}>{fmtDate(o.date)}</td>
@@ -192,18 +205,19 @@ export function TodayView({ orders, auditors, slots, onOpenOrder }: { orders: Au
       <Head title={'Today — ' + fmtDate(todayStr)} sub="Live view of today's audits and auditor progress." />
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table className="w-full">
-          <thead><tr>{['Slot', 'PI', 'Customer', 'Address', 'Auditor', 'Live status'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+          <thead><tr>{['Slot', 'PI', 'Audit is for', 'Customer', 'Address', 'Auditor', 'Live status'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {list.length ? list.map((o) => (
               <tr key={o.id} onClick={() => onOpenOrder(o.pi)} className="cursor-pointer hover:bg-gray-50">
                 <td className={TD}><b>{slotLabel(o.slot, slots)}</b></td>
                 <td className={TD}><b className="font-mono text-xs">{o.pi}</b></td>
+                <td className={TD}><Cats o={o} /></td>
                 <td className={TD}><Customer o={o} /></td>
                 <td className={`${TD} max-w-[170px] text-gray-500`}><Addr o={o} /></td>
                 <td className={TD}>{o.auditor ? auditorNameOf(o, auditors) : <span className="font-bold text-red-600">Unassigned</span>}</td>
                 <td className={TD}><Chip st={o.status} /></td>
               </tr>
-            )) : <Empty cols={6} msg="No audits scheduled today." />}
+            )) : <Empty cols={7} msg="No audits scheduled today." />}
           </tbody>
         </table>
       </div>
@@ -326,6 +340,7 @@ export function CalendarView({
                 <div className="text-[13.5px] font-bold text-gray-900">{o.name}</div>
                 <div className="text-[12px] text-gray-500">{o.pi} · BM {o.bm} · <a className="text-blue-600" href={'tel:' + o.phone.replace(/\s/g, '')} onClick={(e) => e.stopPropagation()}>{o.phone}</a></div>
                 <div className="text-[12px] text-gray-400">{o.addr}</div>
+                <div className="mt-1"><Cats o={o} /></div>
               </div>
               <div className="shrink-0 text-right">
                 <div className="text-[12.5px] font-bold text-[#1F3A5F]">{slotLabel(o.slot, slots)}</div>

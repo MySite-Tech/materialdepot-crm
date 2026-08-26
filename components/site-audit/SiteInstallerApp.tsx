@@ -52,6 +52,8 @@ type LogEntry = {
   lat?: number;
   lng?: number;
   arrivalPhoto?: string;
+  /* Arrival recorded with no GPS fix — see the ArrivalCameraModal note. */
+  locOverride?: boolean;
 };
 
 type SkuLine = { code: string; skuName: string; link: string; qty: string };
@@ -169,9 +171,25 @@ function buildSlots(): Record<string, { label: string; start: number }> {
   return m;
 }
 
+/* A sub-job whose ENTIRE crew has marked itself complete is complete, even though
+   only the primary ever writes `sj.status`. Without this the order stayed at
+   `atsite` while its own timeline read "installation done", and the SM dashboard
+   showed the contradiction (ENQ2026082087114, live on 2026-08-26). Deliberately
+   NOT triggered by one installer finishing: the customer signature is the
+   primary's job and `parentStatus === 'completed'` is what bills the OMS service
+   leg. `partial` and `completed` are left as written — `partial` is a statement
+   that rooms are still outstanding. Mirrors subjobDisplayStatus in
+   install-ops/shared.ts; keep the two in step. */
+function subjobEffectiveStatus(sj: any): string {
+  const asgns = Array.isArray(sj && sj.assignments) ? sj.assignments : [];
+  if (!asgns.length) return sj.status;
+  if (sj.status === 'partial' || sj.status === 'completed') return sj.status;
+  return asgns.every((a: any) => a.status === 'completed') ? 'completed' : sj.status;
+}
+
 function rollupStatus(subjobs: any[], fallback: string): string {
   if (!subjobs || !subjobs.length) return fallback;
-  const sts = subjobs.map((s) => s.status);
+  const sts = subjobs.map(subjobEffectiveStatus);
   if (sts.every((s) => s === 'completed')) return 'completed';
   if (sts.some((s) => s === 'completed') && sts.some((s) => s !== 'completed')) return 'partial';
   if (sts.some((s) => ['onway', 'atsite'].includes(s))) return sts.find((s) => ['onway', 'atsite'].includes(s))!;
@@ -516,6 +534,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const [rescheduleReason, setRescheduleReason] = useState('');
   const [rescheduleFollowUp, setRescheduleFollowUp] = useState('');
   const [advBusy, setAdvBusy] = useState(false);
+  const advBusyRef = useRef(false);
   const [arrivalOpen, setArrivalOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [commentSheet, setCommentSheet] = useState<{ title: string; onConfirm: (c: string) => void } | null>(null);
@@ -669,7 +688,12 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
 
   /* ── Status-advance read-merge-write (verbatim, source lines 403-437) ──── */
   const advanceStatus = useCallback(async (job: Job, st: string, msg: string, logOverride?: string | null, extraLog?: Record<string, any>) => {
-    if (advBusy) return;
+    /* `advBusy` is state, so two taps inside one tick both read it as false and
+        both write — one status change, two identical log lines. Live data has
+        person-days with 38 of them on a single order. The ref is the actual
+        lock; the state only drives the disabled styling. */
+    if (advBusyRef.current) return;
+    advBusyRef.current = true;
     setAdvBusy(true);
     const logMsg = logOverride || DEFAULT_LOG_MESSAGES[st] || st;
     try {
@@ -722,10 +746,11 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     } catch {
       toast('Network error — try again');
     } finally {
+      advBusyRef.current = false;
       setAdvBusy(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [advBusy, actingAs.email, actingAs.name, loadJobs, location, toast]);
+  }, [actingAs.email, actingAs.name, loadJobs, location, toast]);
 
   /* ── Job-card wizard state (lifted to root so the debounced autosave and
      race-guard survive navigating back to the detail screen — mirrors the
@@ -867,6 +892,12 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
             const myA = sj.assignments.find((a: any) => a.installer_email === actingAs.email);
             if (myA) myA.status = 'completed';
             sj.jobcard = newJobcard;
+            /* If that was the last outstanding assignee, write the conclusion to
+               the sub-job rather than leaving every reader to derive it. Reaching
+               here means the primary has already completed, which only happens
+               through finishInstallation (customer signature) or the SM's own
+               force-complete — so no unsigned job can slip through. */
+            sj.status = subjobEffectiveStatus(sj);
           } else {
             sj.status = 'completed';
             sj.jobcard = newJobcard;
@@ -1203,8 +1234,17 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           if (!activeJob) return;
           const extra: Record<string, any> = {};
           if (photo) extra.arrivalPhoto = photo;
-          if (lat != null && lng != null) { extra.lat = lat; extra.lng = lng; }
-          advanceStatus(activeJob, 'atsite', 'You are at the site', null, extra);
+          const haveFix = lat != null && lng != null;
+          if (haveFix) { extra.lat = lat; extra.lng = lng; }
+          /* House style is soft-gate-and-surface: a dead GPS must never stop a
+             worker who is standing at the site, but the office has to be able to
+             see that the arrival wasn't verified rather than assume it was. */
+          else extra.locOverride = true;
+          advanceStatus(
+            activeJob, 'atsite', 'You are at the site',
+            haveFix ? null : 'Installer arrived at site ⚠ (no location captured)',
+            extra,
+          );
         }}
       />
 

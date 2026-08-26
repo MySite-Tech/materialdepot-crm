@@ -16,7 +16,7 @@ import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch,
 import { useNoteModal } from '../NoteModal';
 import ShadowerSelect, { type ShadowerOption } from './ShadowerSelect';
 import {
-  dateRange, fmtDate, installerById, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
+  STATUS, dateRange, fmtDate, installerById, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
 } from './shared';
 import type { Assignment, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
@@ -257,14 +257,44 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
 
     const joined = joinShadowers(shadowers);
     const prevSh = parseShadowers(sj.shadower_email, sj.shadower_name);
-    /* A (re)assignment resets the sub-job to `assigned`, so each installer's own
-       status has to reset with it — `assigns` is seeded by spreading the existing
-       rows, so without this a re-assign after a reschedule left `status:'reschedule'`
-       on the assignment while the sub-job said `assigned`. The field app reads the
-       installer's own status (statusForInstaller in SiteInstallerApp), so that drift
-       shows them "To Reschedule — nothing to do" on a job just booked for them.
-       `completed` is terminal here exactly as it is in OrderDrawer's setStatus. */
-    valid.forEach((a) => { if (a.status !== 'completed') a.status = 'assigned'; });
+    /* A (re)assignment resets the sub-job to `assigned`, so an installer whose
+       booking actually MOVED has to reset with it — `assigns` is seeded by
+       spreading the existing rows, so without this a re-assign after a reschedule
+       left `status:'reschedule'` on the assignment while the sub-job said
+       `assigned`, and the field app (which reads the installer's own status via
+       statusForInstaller) showed them "To Reschedule — nothing to do" on a job
+       just booked for them.
+
+       But resetting EVERY assignee is the opposite bug, and it is the one the
+       field sees: the SM re-opens this form to add a second installer or to fix a
+       note, and a colleague who is already On The Way is yanked back to
+       "Call the customer". They confirm they're on the way again, the next edit
+       resets them again, and the order collects a run of identical log lines with
+       no way to reach At Site — the exact shape of ENQ2026071780139's 32 "on the
+       way" entries on 2026-08-26, each burst following an SM re-assignment.
+
+       So the reset is scoped to assignees whose work actually changed: someone
+       new to the sub-job, someone whose date or slots moved, or someone still
+       carrying `reschedule` (which is never a state to leave a fresh booking in).
+       `completed` stays terminal exactly as in OrderDrawer's setStatus. */
+    const prevByKey = new Map<string, Assignment>();
+    (sj.assignments || []).forEach((a) => {
+      const k = (a.installer_email || a.installer_id || '').toString();
+      if (k) prevByKey.set(k, a);
+    });
+    const sameDates = (x: Assignment, y: Assignment) => {
+      const dx = x.mode === 'custom' ? (x.dates || []) : x.date ? [x.date] : [];
+      const dy = y.mode === 'custom' ? (y.dates || []) : y.date ? [y.date] : [];
+      return dx.length === dy.length && dx.every((d, i) => d === dy[i]);
+    };
+    const sameSlots = (x: Assignment, y: Assignment) =>
+      (x.slots || []).length === (y.slots || []).length && (x.slots || []).every((sl, i) => sl === (y.slots || [])[i]);
+    valid.forEach((a) => {
+      if (a.status === 'completed') return;
+      const prev = prevByKey.get((a.installer_email || a.installer_id || '').toString());
+      const bookingMoved = !prev || a.mode !== prev.mode || !sameDates(a, prev) || !sameSlots(a, prev);
+      if (bookingMoved || a.status === 'reschedule' || !a.status) a.status = 'assigned';
+    });
     const nextSj: Subjob = {
       ...sj,
       assignments: valid,
@@ -304,7 +334,14 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
           <div className="w-6 h-6 rounded-full bg-[#1F3A5F] text-white text-[11px] font-bold grid place-items-center shrink-0">{idx + 1}</div>
           <div className="flex-1">
             <div className="font-bold text-[13px]">{inst ? inst.name : 'Select installer'}</div>
-            <div className="text-[11px] text-gray-500">{sj.type} installer</div>
+            {/* This installer's OWN progress. On a shared sub-job only the primary
+                writes `sj.status`, so for everyone else this is the only place
+                their visit is recorded — and the only way the SM can see that
+                someone has already finished. */}
+            <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
+              {sj.type} installer
+              {a.status ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${(STATUS[a.status] || { badge: 'bg-gray-100 text-gray-600' }).badge}`}>{(STATUS[a.status] || { l: a.status }).l}</span> : null}
+            </div>
           </div>
           {isPrimary
             ? <span className="text-[10px] font-extrabold bg-yellow-100 text-yellow-800 rounded-md px-2 py-1">★ Primary</span>
