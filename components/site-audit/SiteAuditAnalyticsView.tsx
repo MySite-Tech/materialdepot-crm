@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { avgScore, inCity, npsFrom, sbGetLong, NPS_BAND_LABELS, NPS_HOUSE_NOTE, SQFT_PER_ROLL, type CityFilter } from './siteAuditShared';
+import { avgScore, inCity, npsFrom, sbGetLong, JOB_STATUS, NPS_BAND_LABELS, NPS_HOUSE_NOTE, SQFT_PER_ROLL, type CityFilter } from './siteAuditShared';
 import { typeLabel } from './auditRegistry';
 import CatAnalyticsPanel, { type CommercialTab } from './CatAnalyticsPanel';
-import { catAnalyticsIfLoaded, loadCatAnalytics, type CatAnalyticsApi } from './catAnalytics';
+import { catAnalyticsIfLoaded, downloadCsv, loadCatAnalytics, type CatAnalyticsApi } from './catAnalytics';
 
 /* ---- ANALYTICS HELPERS (ported verbatim from material-depot-site Admin.jsx lines 202-334) ---- */
 function _anDstr(d: Date) {
@@ -20,6 +20,13 @@ function _anDateIST(iso: string) {
 function _anMinsIST(iso: string) {
   const d = _anToIST(iso);
   return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+// The clock time an arrival was logged, for the drill-down to print next to the booked slot —
+// "10:04 vs 10:00" is the evidence behind a late row, where "late" alone is just an assertion.
+function _anHhMmIST(iso: string) {
+  const m = _anMinsIST(iso);
+  const z = (n: number) => (n < 10 ? '0' + n : '' + n);
+  return z(Math.floor(m / 60)) + ':' + z(m % 60);
 }
 
 function _anInstallAttempts(installs: any[], from: string, to: string) {
@@ -86,14 +93,29 @@ function _anInstallAttempts(installs: any[], from: string, to: string) {
   return out;
 }
 
+/* Returns the per-person tally the tiles and the per-person tables use, PLUS `tagged` — one row
+   per arrival that was actually counted, so the metric drill-down can show WHICH visits were on
+   time and which were late instead of only how many. `tagged` is derived in the same loop as the
+   tally, deliberately: a drill that disagrees with the tile it opened from is worse than no drill,
+   so there is exactly one place that decides whether an arrival counts. */
 function _anArrivalStats(orders: any[], trackFrom: string, trackTo: string, isInstall: boolean) {
   const map: Record<string, { onTime: number; late: number }> = {};
+  const tagged: Array<{ pi: string; date: string; order: any; who: string; slot: string; arrivedAt: string; diff: number; bucket: 'onTime' | 'late' }> = [];
+  const seenVisits = new Set<string>();
   for (const o of orders) {
     for (const l of o.log || []) {
       if (!l.t || !l.d || !l.who) continue;
       if (!l.t.toLowerCase().includes('arrived at site')) continue;
       const dateIST = _anDateIST(l.d);
       if (dateIST < trackFrom || dateIST > trackTo) continue;
+      /* One person, one order, one day = ONE visit, however many times the field app wrote the log
+         line. Without this the same arrival is counted twice (or twenty times — ENQ2026080884597
+         carries 20 identical "arrived at site" rows for one auditor on 2026-08-10), which on live
+         data as of 2026-08-26 inflated the install metric by 13% and the audit metric by 23%. The
+         PWA's Admin console has always deduped this way; this port did not, and the mismatch only
+         became visible once the tiles started listing their own rows. */
+      const visitKey = o.pi + '|' + l.who + '|' + dateIST;
+      if (seenVisits.has(visitKey)) continue;
       let slot = '';
       if (isInstall) {
         for (const sj of o.subjobs || []) {
@@ -109,13 +131,27 @@ function _anArrivalStats(orders: any[], trackFrom: string, trackTo: string, isIn
       }
       if (!slot || !/^\d{1,2}:\d{2}$/.test(slot)) continue;
       const [sh, sm2] = slot.split(':').map(Number);
-      const diff = _anMinsIST(l.d) - (sh * 60 + sm2);
+      const mins = _anMinsIST(l.d);
+      const diff = mins - (sh * 60 + sm2);
+      const bucket: 'onTime' | 'late' = diff > 3 ? 'late' : 'onTime';
+      // Recorded here rather than at the top of the loop: an entry skipped above for an
+      // unresolvable slot must not suppress a later write for the same visit that does resolve.
+      seenVisits.add(visitKey);
       if (!map[l.who]) map[l.who] = { onTime: 0, late: 0 };
-      if (diff > 3) map[l.who].late++;
-      else map[l.who].onTime++;
+      map[l.who][bucket]++;
+      tagged.push({
+        pi: o.pi,
+        date: dateIST,
+        order: o,
+        who: l.who,
+        slot,
+        arrivedAt: _anHhMmIST(l.d),
+        diff,
+        bucket,
+      });
     }
   }
-  return map;
+  return { byName: map, tagged };
 }
 
 /* ── Ratings → the job they belong to ──────────────────────────────────────
@@ -306,6 +342,39 @@ function _anAuditorMap(auditFiltered: any[], aRatingMap: Map<any, any>, arrMap: 
 
 /* ---- ANALYTICS V2 (ported from Admin.jsx lines 1158-1486) ---- */
 
+/* The header line for a ratings drill: the bands and the NPS the tile shows, rather than a
+   pass/fail ratio the rows cannot support. */
+function npsSummary(rated: any[], nps: number | null): string {
+  const n = rated.length;
+  if (!n) return 'No ratings in this range';
+  const prom = rated.filter((r) => r.q1_score >= 9).length;
+  const det = rated.filter((r) => r.q1_score <= 7).length;
+  return `${n} rating${n === 1 ? '' : 's'} · ${prom} ${NPS_BAND_LABELS.promoter} · ${n - prom - det} ${NPS_BAND_LABELS.neutral} · ${det} ${NPS_BAND_LABELS.detractor}${nps === null ? '' : ` · NPS ${nps >= 0 ? '+' : ''}${nps}`}`;
+}
+
+/* ── Metric drill-down ────────────────────────────────────────────────────
+   `hit` is what makes a drill answer the question a percentage raises: 'yes' rows are the
+   numerator, 'no' rows are the rest of the denominator, and 'na' is for a row that is genuinely
+   neither (a Neutral rating, or a signature we could not read) — which must never be quietly
+   folded into "no". Every list is sorted numerator-first so the split is visible without reading
+   the whole table. */
+type DrillHit = 'yes' | 'no' | 'na';
+type DrillRow = {
+  pi: string;
+  customer: string;
+  phone: string;
+  bm: string;
+  person: string;
+  slot: string;
+  date: string;
+  result: string;
+  hit: DrillHit;
+};
+/* `summary` overrides the computed "X of Y — Z%" header. Needed for the ratings drills, where
+   yes/(yes+no) would be promoters over promoters-plus-detractors — which is not NPS and not any
+   other real number. A drill whose rows are a breakdown rather than a pass/fail says so. */
+type Drill = { title: string; note: string; rows: DrillRow[]; summary?: string };
+
 interface AnalyticsData {
   installs: any[];
   audits: any[];
@@ -361,7 +430,12 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
       let installRes: any, auditRes: any, ratingsRes: any;
       try {
         [installRes, auditRes, ratingsRes] = await Promise.all([
-          sbGetLong('install_orders_slim?select=id,pi,status,subjobs,service,delivery_date,created_at,city&status=neq.deleted'),
+          /* customer_name/bm/phone are for the metric drill-downs — a list of enquiry IDs does not
+             answer "which orders", which is the whole point of opening one. All three are columns on
+             the slim view, so this costs no extra query (and note the column is `customer_name`;
+             `name` does not exist on this table — see CLAUDE.md). `phone` is re-read with the log
+             below for orders from 1 Jul 2026, which is the copy the audit phone-match uses. */
+          sbGetLong('install_orders_slim?select=id,pi,status,subjobs,service,delivery_date,created_at,city,customer_name,bm,phone&status=neq.deleted'),
           sbGetLong(
             'audit_orders?select=id,pi,status,date,slot,auditor_name,auditor_email,phone,log,created_at,city&status=not.in.(deleted,slot_reserved,slot_converted)'
           ),
@@ -439,7 +513,9 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
         const lm: Record<string, any> = {};
         for (const r of installLogRes) lm[r.pi] = { phone: r.phone || null, log: r.log || [] };
         for (const o of installRes) {
-          o.phone = lm[o.pi]?.phone || null;
+          // Keep the phone from the main select when this order predates the log window, instead of
+          // blanking it — a blank phone can never match a site audit and would read as "no audit".
+          o.phone = lm[o.pi]?.phone ?? o.phone ?? null;
           o.log = lm[o.pi]?.log || [];
         }
       }
@@ -562,15 +638,15 @@ function AnalyticsBody({
 
     const iTrackFrom = from > TRACK_FROM ? from : TRACK_FROM;
     const aTrackFrom = from > TRACK_FROM ? from : TRACK_FROM;
-    const iArrMap = _anArrivalStats(installs, iTrackFrom, to, true);
-    const aArrMap = _anArrivalStats(audits, aTrackFrom, to, false);
+    const iArr = _anArrivalStats(installs, iTrackFrom, to, true);
+    const aArr = _anArrivalStats(audits, aTrackFrom, to, false);
     const sumArr = (map: Record<string, { onTime: number; late: number }>) =>
       Object.values(map).reduce((s, v) => ({ onTime: s.onTime + v.onTime, late: s.late + v.late }), { onTime: 0, late: 0 });
-    const iArrTot = sumArr(iArrMap),
-      aArrTot = sumArr(aArrMap);
+    const iArrTot = sumArr(iArr.byName),
+      aArrTot = sumArr(aArr.byName);
 
-    const installers = _anInstallerMap(iAttempts, iRatingMap, iArrMap);
-    const auditors = _anAuditorMap(aFiltered, aRatingMap, aArrMap);
+    const installers = _anInstallerMap(iAttempts, iRatingMap, iArr.byName);
+    const auditors = _anAuditorMap(aFiltered, aRatingMap, aArr.byName);
 
     const origTracked = iAttempts.filter((a) => a.originalDelivery).length;
     const confirmedDelayed = iAttempts.filter((a) => a.hasDelay).length;
@@ -648,7 +724,243 @@ function AnalyticsBody({
       return dayDiff(r.date, o ? dateSafe(o.created_at) : null);
     });
 
+    /* ══ METRIC DRILL-DOWNS ═══════════════════════════════════════════════════════════════
+       Every tile on this tab is clickable and opens the rows behind it, split into the ones that
+       met the criterion and the ones that did not — the question a percentage always raises next
+       ("which 5 of the 7 arrived on time, and who were the 2 that didn't?").
+
+       The rule that keeps this honest: a drill's row set IS the tile's denominator, built from the
+       same variable the tile renders. So `iStatus:*` and the delivery tiles iterate `iAttempts`
+       (attempts, matching "total attempts in range"), Job Card iterates only the completed/partial
+       attempts, MD Audit iterates distinct PIs, the ratings drills iterate the rating map, and the
+       arrival drills iterate the arrival rows tagged in _anArrivalStats. Adding a tile means
+       adding its drill off the same variable — never off a fresh filter that happens to look right.
+
+       No extra queries: customer/phone/BM/assignee all come off the order objects already loaded. */
+    const label = (st: string) => JOB_STATUS[st]?.l || st;
+    const oRow = (o: any) => ({ customer: o?.customer_name || '', phone: o?.phone || '', bm: o?.bm || '' });
+    const attemptPerson = (a: any) =>
+      (a.installers || [])
+        .map((x: any) => x.installer_name)
+        .filter(Boolean)
+        .join(', ');
+    const mk = (title: string, note: string, rows: DrillRow[], summary?: string): Drill => ({ title, note, rows, summary });
+
+    const iCompletedAttempts = iAttempts.filter((a) => ['completed', 'partial'].includes(a.status));
+
+    const ratingResult = (r: any) => {
+      const band = r.q1_score >= 9 ? '✓ Promoter' : r.q1_score <= 7 ? '✗ Detractor' : '● Neutral';
+      return band + ' — Q1 ' + r.q1_score + ' · Q2 ' + (r.q2_score ?? '—') + ' · Q3 ' + (r.q3_score ?? '—');
+    };
+    const arrRows = (tagged: typeof iArr.tagged): DrillRow[] =>
+      tagged.map((t) => ({
+        pi: t.pi,
+        ...oRow(t.order),
+        person: t.who,
+        slot: t.slot + ' → arrived ' + t.arrivedAt,
+        date: t.date,
+        hit: t.bucket === 'onTime' ? 'yes' : 'no',
+        result:
+          t.bucket === 'onTime'
+            ? '✓ On time' + (t.diff > 0 ? ' (' + t.diff + ' min after slot)' : t.diff < 0 ? ' (' + -t.diff + ' min early)' : ' (on the minute)')
+            : '✗ Late by ' + t.diff + ' min',
+      }));
+
+    const drills: Record<string, Drill> = {
+      /* ---- Site Installation ---- */
+      iArrival: mk(
+        'Site Installation — Installer Arrival On Time %',
+        'One row per logged "arrived at site" entry on/after 2 Jul 2026 (when arrival tracking began) whose booked slot could be resolved. A sub-job visited by two installers shows one row each, and a reassigned sub-job can appear once per installer who actually turned up. More than 3 minutes past the slot counts as late.',
+        arrRows(iArr.tagged)
+      ),
+      iMDaudit: mk(
+        'Site Installation — Material Depot Audit %',
+        'One row per distinct install order in range, phone-matched against every site audit order we hold (any date). A blank phone can never match — that is a data gap, not a "no".',
+        [...iUniquePIs].map((pi) => {
+          const o = installs.find((r) => r.pi === pi);
+          const matched = !!(o && o.phone && auditPhones.has(o.phone));
+          return {
+            pi: String(pi),
+            ...oRow(o),
+            person: '',
+            slot: '',
+            date: (iAttempts.find((a) => a.pi === pi) || {}).date || '',
+            hit: matched ? 'yes' : 'no',
+            result: matched ? '✓ Matched a Material Depot site audit' : o && !o.phone ? '✗ No match — this order has no phone number' : '✗ No matching site audit',
+          } as DrillRow;
+        })
+      ),
+      iJobCard: mk(
+        'Site Installation — Job Card & Signature %',
+        'Every completed or partially completed attempt in range. Measured from the client signature on the job card itself (subjobs[].jobcard.sign), not from "a rating exists" — that proxy stopped being true on 24 Aug 2026, when review scores moved to a Category Ops call the day after.',
+        iCompletedAttempts.map((a) => ({
+          pi: a.pi,
+          ...oRow(a.order),
+          person: attemptPerson(a),
+          slot: a.slot || '',
+          date: a.date,
+          hit: _anInstallSigned(a) ? 'yes' : 'no',
+          result: _anInstallSigned(a) ? '✓ Signed job card' : '✗ No signature on the job card',
+        }))
+      ),
+      iRatings: mk(
+        'Site Installation — Client Ratings, NPS and Q1–Q3',
+        'Every attempt in range that has a client rating attached — the set behind the NPS and Q1/Q2/Q3 tiles. ' +
+          NPS_HOUSE_NOTE +
+          ' A rating is joined to the job it describes rather than filtered by its own date, so the last few days of any range legitimately show fewer scores than jobs: those D+1 calls have not been made yet.',
+        [...iRatingMap.entries()].map(([a, r]: any) => ({
+          pi: a.pi,
+          ...oRow(a.order),
+          person: attemptPerson(a),
+          slot: a.slot || '',
+          date: a.date,
+          hit: r.q1_score >= 9 ? 'yes' : r.q1_score <= 7 ? 'no' : 'na',
+          result: ratingResult(r),
+        })),
+        npsSummary(IR, IR_nps)
+      ),
+      iDelayLog: mk(
+        'Site Installation — Delay mentioned in log',
+        'Every attempt in range. Counted when any log entry on the parent order mentions "delay" — free-text, so it catches an SM noting a delay even where no date changed.',
+        iAttempts.map((a) => ({
+          pi: a.pi,
+          ...oRow(a.order),
+          person: attemptPerson(a),
+          slot: a.slot || '',
+          date: a.date,
+          hit: a.logDelay ? 'yes' : 'no',
+          result: a.logDelay ? '✓ Delay mentioned in the log' : '✗ No delay mentioned',
+        }))
+      ),
+      iOrigTracked: mk(
+        'Site Installation — With original delivery date tracked',
+        'Every attempt in range. original_delivery_date is only set on orders created from 2 Jul 2026, so an older order reads as untracked rather than as on time.',
+        iAttempts.map((a) => ({
+          pi: a.pi,
+          ...oRow(a.order),
+          person: attemptPerson(a),
+          slot: a.slot || '',
+          date: a.date,
+          hit: a.originalDelivery ? 'yes' : 'no',
+          result: a.originalDelivery ? '✓ Original date tracked: ' + a.originalDelivery + (a.currentDelivery ? ' → now ' + a.currentDelivery : '') : '✗ No original delivery date on record',
+        }))
+      ),
+      iConfirmedDelayed: mk(
+        'Site Installation — Confirmed delayed (delivery date changed)',
+        'Every attempt in range. "Confirmed" compares original_delivery_date against the current delivery_date, so it is a measured change rather than a mention in free text.',
+        iAttempts.map((a) => ({
+          pi: a.pi,
+          ...oRow(a.order),
+          person: attemptPerson(a),
+          slot: a.slot || '',
+          date: a.date,
+          hit: a.hasDelay ? 'yes' : 'no',
+          result: a.hasDelay ? '✓ Delivery moved ' + a.originalDelivery + ' → ' + a.currentDelivery : a.originalDelivery ? '✗ Delivery date unchanged (' + a.originalDelivery + ')' : '✗ Not tracked — no original delivery date',
+        }))
+      ),
+      iNeedAction: mk(
+        'Site Installation — Orders needing SM attention right now',
+        'A LIVE count across every non-deleted install order, deliberately NOT filtered by the date range above — an overdue order does not stop being overdue because you narrowed the report. Flagged when delivery is due/overdue while still pending, or a sub-job sits in reschedule, or an ops follow-up date has passed.',
+        installs.map((o) => {
+          const dueDeliv = ['pending', 'deliv_delayed'].includes(o.status) && o.delivery_date && o.delivery_date <= todayStr;
+          const resched = (o.subjobs || []).some((sj: any) => sj.status === 'reschedule');
+          const followUp = o.service && o.service.follow_up_date && o.service.follow_up_date <= todayStr;
+          const why = [dueDeliv ? 'delivery due ' + o.delivery_date : '', resched ? 'sub-job in reschedule' : '', followUp ? 'follow-up due ' + o.service.follow_up_date : ''].filter(Boolean);
+          return {
+            pi: o.pi,
+            ...oRow(o),
+            person: '',
+            slot: '',
+            date: o.delivery_date || '',
+            hit: why.length ? 'yes' : 'no',
+            result: why.length ? '✓ ' + why.join(' · ') : '✗ Nothing outstanding',
+          } as DrillRow;
+        })
+      ),
+
+      /* ---- Site Audit ---- */
+      aArrival: mk(
+        'Site Audit — Auditor Arrival On Time %',
+        'One row per logged "arrived at site" entry on/after 2 Jul 2026 (when arrival tracking began) whose booked slot could be resolved. More than 3 minutes past the slot counts as late.',
+        arrRows(aArr.tagged)
+      ),
+      aJobCard: mk(
+        'Site Audit — Job Card & Signature %',
+        auditSignOk
+          ? 'Every completed audit in range, measured from the client signature on the job card (audit_ticked.sign).'
+          : 'The signature read failed for this range, so no row can be judged — this is "could not load", not "nobody signed".',
+        aFiltered
+          .filter((o) => o.status === 'completed')
+          .map((o) => ({
+            pi: o.pi,
+            ...oRow(o),
+            person: o.auditor_name || '',
+            slot: o.slot || '',
+            date: o.date,
+            hit: !auditSignOk ? 'na' : _anAuditSigned(o) ? 'yes' : 'no',
+            result: !auditSignOk ? '— Signature could not be read' : _anAuditSigned(o) ? '✓ Signed job card' : '✗ No signature on the job card',
+          }))
+      ),
+      aCompletion: mk('Site Audit — Completion Rate %', 'Every audit scheduled in this date range, whatever its current status.', aFiltered.map((o) => ({
+        pi: o.pi,
+        ...oRow(o),
+        person: o.auditor_name || '',
+        slot: o.slot || '',
+        date: o.date,
+        hit: o.status === 'completed' ? 'yes' : 'no',
+        result: o.status === 'completed' ? '✓ Completed' : '✗ Not completed (' + label(o.status) + ')',
+      }))),
+      aReschedule: mk('Site Audit — Reschedule Rate %', 'Every audit scheduled in this date range. Counts audits sitting in reschedule status right now, not every audit that was ever moved.', aFiltered.map((o) => ({
+        pi: o.pi,
+        ...oRow(o),
+        person: o.auditor_name || '',
+        slot: o.slot || '',
+        date: o.date,
+        hit: o.status === 'reschedule' ? 'yes' : 'no',
+        result: o.status === 'reschedule' ? '✓ In reschedule status' : '✗ Not in reschedule (' + label(o.status) + ')',
+      }))),
+      aRatings: mk(
+        'Site Audit — Client Ratings, NPS and Q1–Q3',
+        'Every audit in range that has a client rating attached — the set behind the NPS and Q1/Q2/Q3 tiles. ' + NPS_HOUSE_NOTE,
+        [...aRatingMap.entries()].map(([o, r]: any) => ({
+          pi: o.pi,
+          ...oRow(o),
+          person: o.auditor_name || '',
+          slot: o.slot || '',
+          date: o.date,
+          hit: r.q1_score >= 9 ? 'yes' : r.q1_score <= 7 ? 'no' : 'na',
+          result: ratingResult(r),
+        })),
+        npsSummary(AR, AR_nps)
+      ),
+    };
+
+    /* One drill per status tile, over the same attempt set the tile's percentage divides by. */
+    for (const st of Object.keys(iByStatus)) {
+      drills['iStatus:' + st] = mk(
+        'Site Installation — ' + label(st),
+        'Every attempt in range. An attempt is one sub-job on one scheduled date, so a rescheduled sub-job appears once per date that falls inside the range — the same counting rule as "total attempts" above.',
+        iAttempts.map((a) => ({
+          pi: a.pi,
+          ...oRow(a.order),
+          person: attemptPerson(a),
+          slot: a.slot || '',
+          date: a.date,
+          hit: a.status === st ? 'yes' : 'no',
+          result: (a.status === st ? '✓ ' : '✗ ') + label(a.status),
+        }))
+      );
+    }
+    /* "No delay mentioned" is the same row set as iDelayLog with the verdict inverted, so it is
+       derived from it rather than rebuilt — the two tiles can never then disagree. */
+    drills.iNoDelayLog = mk('Site Installation — No delay mentioned in log', drills.iDelayLog.note, drills.iDelayLog.rows.map((r) => ({
+      ...r,
+      hit: r.hit === 'yes' ? 'no' : 'yes',
+      result: r.hit === 'yes' ? '✗ Delay mentioned in the log' : '✓ No delay mentioned',
+    })));
+
     return {
+      drills,
       aBookings,
       aExecs,
       aTats,
@@ -695,10 +1007,37 @@ function AnalyticsBody({
   const pcColorClass = (p: number | null) => (p === null ? 'text-gray-400' : p >= 80 ? 'text-green-600' : p >= 50 ? 'text-amber-600' : 'text-red-600');
   const pcBarClass = (p: number | null) => (p === null ? 'bg-gray-300' : p >= 80 ? 'bg-green-600' : p >= 50 ? 'bg-amber-600' : 'bg-red-600');
 
-  function PctCard({ label, n, d, sub, note }: { label: string; n: number; d: number; sub?: string; note?: string }) {
+  /* Every tile opens the rows behind it. `tile()` returns the props that make one clickable, so a
+     tile with no drill registered stays inert rather than looking clickable and doing nothing. */
+  const [drillKey, setDrillKey] = useState<string | null>(null);
+  const openDrill = M.drills[drillKey || ''] || null;
+  const tile = (key?: string) => {
+    const d = key ? M.drills[key] : null;
+    if (!d) return {};
+    return {
+      onClick: () => setDrillKey(key as string),
+      role: 'button' as const,
+      tabIndex: 0,
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setDrillKey(key as string);
+        }
+      },
+      title: 'Show the ' + d.rows.length + ' row(s) behind this number',
+      className: 'cursor-pointer transition hover:border-gray-400 hover:shadow-sm',
+    };
+  };
+  // Merges the clickable props into a tile's own className rather than letting one clobber the other.
+  const tileProps = (key: string | undefined, base: string) => {
+    const t = tile(key) as any;
+    return { ...t, className: base + (t.className ? ' ' + t.className : '') };
+  };
+
+  function PctCard({ label, n, d, sub, note, drill }: { label: string; n: number; d: number; sub?: string; note?: string; drill?: string }) {
     const p = pc(n, d);
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div {...tileProps(drill, 'rounded-lg border border-gray-200 bg-white p-4')}>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
         <div className={`mt-1 font-mono text-[22px] font-bold ${pcColorClass(p)}`}>{p !== null ? p + '%' : '—'}</div>
         {p !== null ? (
@@ -712,7 +1051,7 @@ function AnalyticsBody({
       </div>
     );
   }
-  function RatingCard({ label, avg, cnt }: { label: string; avg: number | null; cnt: number }) {
+  function RatingCard({ label, avg, cnt, drill }: { label: string; avg: number | null; cnt: number; drill?: string }) {
     if (avg === null)
       return (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -724,7 +1063,7 @@ function AnalyticsBody({
     const c = avg >= 8 ? 'text-green-600' : avg >= 6 ? 'text-amber-600' : 'text-red-600';
     const s = Math.min(5, Math.round(avg / 2));
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div {...tileProps(drill, 'rounded-lg border border-gray-200 bg-white p-4')}>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
         <div className={`mt-1 font-mono text-[22px] font-bold ${c}`}>
           {avg}
@@ -737,7 +1076,7 @@ function AnalyticsBody({
       </div>
     );
   }
-  function NpsCard({ label, nps, prom, det, total }: { label: string; nps: number | null; prom: number; det: number; total: number }) {
+  function NpsCard({ label, nps, prom, det, total, drill }: { label: string; nps: number | null; prom: number; det: number; total: number; drill?: string }) {
     if (nps === null)
       return (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -749,7 +1088,7 @@ function AnalyticsBody({
     const c = nps >= 50 ? 'text-green-600' : nps >= 0 ? 'text-amber-600' : 'text-red-600';
     const pass = total - prom - det;
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div {...tileProps(drill, 'rounded-lg border border-gray-200 bg-white p-4')}>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
         <div className={`mt-1 font-mono text-[22px] font-bold ${c}`}>
           {nps >= 0 ? '+' : ''}
@@ -810,7 +1149,11 @@ function AnalyticsBody({
       <p className="text-[12.5px] text-gray-500 leading-relaxed">
         Operational metrics, straight off the ops database. Each scheduling attempt counted separately — a rescheduled order appears twice if both dates fall in
         the range. Not comparable with the commercial tabs, which count order lines in the order book rather than site visits.
+        <br />
+        <b>Click any tile</b> to see the orders behind the number — which ones met the criterion, which ones did not, and who they were assigned to.
       </p>
+
+      {openDrill ? <DrillModal drill={openDrill} onClose={() => setDrillKey(null)} /> : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] text-gray-500 font-semibold">Date range</span>
@@ -865,13 +1208,14 @@ function AnalyticsBody({
 
         <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Overview</div>
         <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 border-b border-gray-100">
-          <PctCard label="Installer Arrival On Time %" n={M.iArrTot.onTime} d={M.iArrTot.onTime + M.iArrTot.late} sub="> 3 min past slot = delayed" note={iArrNote} />
+          <PctCard label="Installer Arrival On Time %" n={M.iArrTot.onTime} d={M.iArrTot.onTime + M.iArrTot.late} sub="> 3 min past slot = delayed" note={iArrNote} drill="iArrival" />
           <PctCard
             label="Material Depot Audit %"
             n={M.iMDaudit}
             d={M.iUniquePIs.size}
             sub="Install customers who also had an MD site audit"
             note="(phone number match across audit + install orders)"
+            drill="iMDaudit"
           />
           <PctCard
             label="Job Card & Signature %"
@@ -879,11 +1223,12 @@ function AnalyticsBody({
             d={M.iCompleted}
             sub="Sub-jobs carrying a client signature on the job card"
             note="(measured from the signature, not from a rating)"
+            drill="iJobCard"
           />
-          <NpsCard label="NPS Score" nps={M.IR_nps} prom={M.IR_prom} det={M.IR_det} total={M.IR.length} />
-          <RatingCard label="Q1 — Overall Service" avg={M.IR_q1} cnt={M.IR.length} />
-          <RatingCard label="Q2 — Installer Rating" avg={M.IR_q2} cnt={M.IR.length} />
-          <RatingCard label="Q3 — Site Cleanliness" avg={M.IR_q3} cnt={M.IR.length} />
+          <NpsCard label="NPS Score" nps={M.IR_nps} prom={M.IR_prom} det={M.IR_det} total={M.IR.length} drill="iRatings" />
+          <RatingCard label="Q1 — Overall Service" avg={M.IR_q1} cnt={M.IR.length} drill="iRatings" />
+          <RatingCard label="Q2 — Installer Rating" avg={M.IR_q2} cnt={M.IR.length} drill="iRatings" />
+          <RatingCard label="Q3 — Site Cleanliness" avg={M.IR_q3} cnt={M.IR.length} drill="iRatings" />
         </div>
 
         <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Status Breakdown</div>
@@ -891,7 +1236,7 @@ function AnalyticsBody({
           {statusDefs
             .filter((sd) => M.iByStatus[sd.k])
             .map((sd) => (
-              <div key={sd.k} className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]">
+              <div key={sd.k} {...tileProps('iStatus:' + sd.k, 'rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]')}>
                 <div className={`text-xl font-bold ${sd.c}`}>{M.iByStatus[sd.k]}</div>
                 <div className="text-[11px] font-semibold text-gray-400 mt-0.5">{sd.l}</div>
                 <div className="text-[11px] text-gray-400">{M.iTotal ? Math.round((M.iByStatus[sd.k] / M.iTotal) * 100) + '%' : '—'}</div>
@@ -901,20 +1246,20 @@ function AnalyticsBody({
 
         <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Delivery Date Tracking</div>
         <div className="px-4 sm:px-6 py-4 flex flex-wrap items-center gap-4 border-b border-gray-100">
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]">
+          <div {...tileProps('iDelayLog', 'rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]')}>
             <div className="text-xl font-bold text-red-600">{M.iDelayed}</div>
             <div className="text-[11px] font-semibold text-gray-400 mt-0.5">Delay mentioned in log</div>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]">
+          <div {...tileProps('iNoDelayLog', 'rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]')}>
             <div className="text-xl font-bold text-green-600">{M.iTotal - M.iDelayed}</div>
             <div className="text-[11px] font-semibold text-gray-400 mt-0.5">No delay mentioned</div>
           </div>
           <div className="w-px self-stretch bg-gray-200"></div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]">
+          <div {...tileProps('iOrigTracked', 'rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]')}>
             <div className="text-xl font-bold text-blue-600">{M.origTracked}</div>
             <div className="text-[11px] font-semibold text-gray-400 mt-0.5">With original date tracked</div>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]">
+          <div {...tileProps('iConfirmedDelayed', 'rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 min-w-[120px]')}>
             <div className="text-xl font-bold text-amber-600">{M.confirmedDelayed}</div>
             <div className="text-[11px] font-semibold text-gray-400 mt-0.5">Confirmed delayed (date changed)</div>
           </div>
@@ -924,7 +1269,7 @@ function AnalyticsBody({
         </div>
 
         <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Live Operations</div>
-        <div className={`px-4 sm:px-6 py-4 flex items-center gap-4 border-b border-gray-100 ${M.naCount > 0 ? 'bg-amber-50' : 'bg-green-50'}`}>
+        <div {...tileProps('iNeedAction', `px-4 sm:px-6 py-4 flex items-center gap-4 border-b border-gray-100 ${M.naCount > 0 ? 'bg-amber-50' : 'bg-green-50'}`)}>
           <div className={`text-4xl font-black leading-none ${M.naCount > 0 ? 'text-amber-600' : 'text-green-600'}`}>{M.naCount}</div>
           <div>
             <div className={`text-[13.5px] font-bold ${M.naCount > 0 ? 'text-amber-600' : 'text-green-600'}`}>
@@ -1026,14 +1371,15 @@ function AnalyticsBody({
             d={M.aSignKnown ? M.aCompleted : 0}
             sub="Completed audits carrying a client signature"
             note={M.aSignKnown ? '(measured from the signature, not from a rating)' : "Couldn't read signatures — this is not 0%"}
+            drill="aJobCard"
           />
-          <PctCard label="Completion Rate %" n={M.aCompleted} d={M.aTotal} sub="Audits that reached completed status" note="" />
-          <PctCard label="Auditor Arrival On Time %" n={M.aArrTot.onTime} d={M.aArrTot.onTime + M.aArrTot.late} sub="> 3 min past slot = delayed" note={aArrNote} />
-          <PctCard label="Reschedule Rate %" n={M.aRescheduled} d={M.aTotal} sub="Audits currently in reschedule status" note="" />
-          <NpsCard label="NPS Score" nps={M.AR_nps} prom={M.AR_prom} det={M.AR_det} total={M.AR.length} />
-          <RatingCard label="Q1 — Overall Service" avg={M.AR_q1} cnt={M.AR.length} />
-          <RatingCard label="Q2 — Auditor Rating" avg={M.AR_q2} cnt={M.AR.length} />
-          <RatingCard label="Q3 — Site Cleanliness" avg={M.AR_q3} cnt={M.AR.length} />
+          <PctCard label="Completion Rate %" n={M.aCompleted} d={M.aTotal} sub="Audits that reached completed status" note="" drill="aCompletion" />
+          <PctCard label="Auditor Arrival On Time %" n={M.aArrTot.onTime} d={M.aArrTot.onTime + M.aArrTot.late} sub="> 3 min past slot = delayed" note={aArrNote} drill="aArrival" />
+          <PctCard label="Reschedule Rate %" n={M.aRescheduled} d={M.aTotal} sub="Audits currently in reschedule status" note="" drill="aReschedule" />
+          <NpsCard label="NPS Score" nps={M.AR_nps} prom={M.AR_prom} det={M.AR_det} total={M.AR.length} drill="aRatings" />
+          <RatingCard label="Q1 — Overall Service" avg={M.AR_q1} cnt={M.AR.length} drill="aRatings" />
+          <RatingCard label="Q2 — Auditor Rating" avg={M.AR_q2} cnt={M.AR.length} drill="aRatings" />
+          <RatingCard label="Q3 — Site Cleanliness" avg={M.AR_q3} cnt={M.AR.length} drill="aRatings" />
         </div>
 
         <div className="px-4 sm:px-6 py-2.5 text-[11.5px] text-gray-400 border-b border-gray-100">
@@ -1113,6 +1459,128 @@ function AnalyticsBody({
         <br />
         <b>NPS:</b> {NPS_HOUSE_NOTE} Range −100 to +100. Not comparable with the store-visit NPS on the <b>NPS</b> tab, which asks a different question of
         footfall customers on textbook bands.
+      </div>
+    </div>
+  );
+}
+
+/* ── The drill-down modal ──────────────────────────────────────────────────────────────────
+   Opens off any tile and shows the rows behind the number, numerator first, with a one-click CSV
+   so an SM can work the "didn't happen" list rather than just read a percentage. Deliberately not
+   built on the module's HTML-string modal — this half of the page is React, and these rows carry a
+   phone number worth making tappable. */
+function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => void }) {
+  const yes = drill.rows.filter((r) => r.hit === 'yes');
+  const no = drill.rows.filter((r) => r.hit === 'no');
+  const na = drill.rows.filter((r) => r.hit === 'na');
+  const den = yes.length + no.length;
+  const pct = den ? Math.round((yes.length / den) * 100) : null;
+  // Numerator first, then the misses, then anything unjudged — the order an SM reads it in.
+  const ordered = [...yes, ...no, ...na];
+
+  // Esc to close: this modal is opened by a click on a tile, so the keyboard has to have a way out.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const download = () => {
+    const header = ['Enquiry ID', 'Customer', 'Phone', 'BM', 'Assigned to', 'Slot', 'Date', 'Counts', 'Result'];
+    downloadCsv(
+      drill.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase(),
+      [header].concat(ordered.map((r) => [r.pi, r.customer, r.phone, r.bm, r.person, r.slot, r.date, r.hit === 'yes' ? 'yes' : r.hit === 'no' ? 'no' : 'n/a', r.result]))
+    );
+  };
+
+  const cell = 'px-3 py-2 text-[12.5px] border-t border-gray-100 align-middle';
+  return (
+    <div className="fixed inset-0 z-[200] grid place-items-center bg-black/45 p-3 sm:p-6" onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 border-b border-gray-200 px-5 py-4">
+          <div className="flex-1">
+            <h3 className="text-[15px] font-bold text-black">{drill.title}</h3>
+            <div className="mt-1 text-[12px] text-gray-500">
+              {drill.summary ? (
+                drill.summary
+              ) : !drill.rows.length ? (
+                'No rows in this range'
+              ) : den ? (
+                <>
+                  <b className="text-green-700">{yes.length}</b> of <b>{den}</b>
+                  {pct !== null ? <> — {pct}%</> : null}
+                  {no.length ? (
+                    <>
+                      {' · '}
+                      <b className="text-red-700">{no.length}</b> did not
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>{drill.rows.length} row(s), none of which can be judged</>
+              )}
+              {!drill.summary && na.length ? <> · {na.length} not judged</> : null}
+            </div>
+          </div>
+          <button onClick={onClose} className="-mt-1 cursor-pointer border-0 bg-transparent text-2xl leading-none text-gray-400 hover:text-gray-700" aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        {drill.note ? <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11.5px] leading-relaxed text-gray-500">{drill.note}</div> : null}
+
+        <div className="flex-1 overflow-auto">
+          {ordered.length ? (
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 bg-gray-50">
+                <tr>
+                  {['Enquiry ID', 'Customer', 'Phone', 'BM', 'Assigned to', 'Slot', 'Date', 'Result'].map((h) => (
+                    <th key={h} className="whitespace-nowrap px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ordered.map((r, i) => (
+                  <tr key={i} className={r.hit === 'yes' ? 'bg-green-50/40' : r.hit === 'no' ? 'bg-red-50/40' : ''}>
+                    <td className={cell + ' font-mono text-[11.5px] whitespace-nowrap'}>{r.pi || '—'}</td>
+                    <td className={cell}>{r.customer || '—'}</td>
+                    <td className={cell + ' whitespace-nowrap'}>
+                      {r.phone ? (
+                        <a href={'tel:' + r.phone} className="text-blue-600 hover:underline">
+                          {r.phone}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className={cell}>{r.bm || '—'}</td>
+                    <td className={cell}>{r.person || '—'}</td>
+                    <td className={cell + ' whitespace-nowrap text-gray-500'}>{r.slot || '—'}</td>
+                    <td className={cell + ' whitespace-nowrap text-gray-500'}>{r.date || '—'}</td>
+                    <td className={cell + ' ' + (r.hit === 'yes' ? 'font-semibold text-green-700' : r.hit === 'no' ? 'text-red-700' : 'text-gray-500')}>{r.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="px-5 py-8 text-center text-[13px] text-gray-400">Nothing in this date range.</div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-3">
+          <span className="text-[11px] text-gray-400">Green = counts toward the metric · red = does not</span>
+          <button
+            onClick={download}
+            disabled={!ordered.length}
+            className="cursor-pointer rounded-md bg-[#1F3A5F] px-4 py-2 text-[12.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            ⬇ Download CSV
+          </button>
+        </div>
       </div>
     </div>
   );

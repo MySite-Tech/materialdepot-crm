@@ -324,6 +324,36 @@ Because the renderers return **HTML strings**, three things follow:
   written until Save, and abandoning the tab abandons the edits. Save writes the whole object to
   `app_settings.cat_analytics_targets`, shared with the Admin console.
 
+**Every tile on the Execution tab is clickable and opens the rows behind it** (added 2026-08-26):
+which orders met the criterion, which did not, who they were assigned to, the booked slot vs the
+actual arrival time, and a CSV. `M.drills` in `SiteAuditAnalyticsView.tsx` is the registry; `DrillRow.hit`
+is `'yes'` (numerator) / `'no'` (rest of the denominator) / `'na'` (genuinely neither — a Neutral
+rating, or a signature that could not be read, which must never be folded into "no").
+
+**The invariant: a drill's row set IS its tile's denominator, built off the same variable the tile
+renders.** So the status and delivery drills iterate `iAttempts`, Job Card iterates only the
+completed/partial attempts, MD Audit iterates distinct PIs, the ratings drills iterate the rating
+map, and the arrival drills iterate the rows `_anArrivalStats` tags in the same loop that does the
+counting. A drill that disagrees with the tile it opened from is worse than no drill — so when you
+add a tile, derive its drill from the same variable, never from a fresh filter that looks right.
+(`iNoDelayLog` is literally `iDelayLog` with the verdict inverted, for that reason.) The ratings
+drills pass an explicit `summary`, because yes/(yes+no) there would be promoters over
+promoters-plus-detractors — not NPS, not anything.
+
+**Arrival counts one visit once, and did not used to.** `_anArrivalStats` now dedupes on
+order + person + day. The field apps write the "arrived at site" log line more than once for a
+single visit — 17 install and 30 audit person-day pairs on live data as of 2026-08-26, one audit
+logged **20 times** — which was inflating the install arrival metric by 13% and the audit one by
+23% (install went 53% → 56%, audit 60% → 63% when fixed). The PWA's Admin console has always
+deduped this way; this port never did, and nobody could see it until the tiles started listing
+their own rows. Any new metric read off `log` entries needs the same guard.
+
+The install select carries `customer_name`, `bm` and `phone` **for the drills** — a list of enquiry
+IDs does not answer "which orders". They are columns on `install_orders_slim`, so this costs no
+extra query. Note the log enrichment uses `?? o.phone` rather than `|| null`: it only covers orders
+created from 1 Jul 2026, and blanking the phone on older ones made them unmatchable against site
+audits, i.e. a false "no audit".
+
 **The commercial numbers are DUMMY right now, and the UI says so** — an amber "◆ Dummy data" badge
 in the filter row plus a footer explaining every definition and limit. The generator is seeded from
 the Jun–Aug 2026 category workbook and reconciles back to it exactly, so the figures are arithmetic,
