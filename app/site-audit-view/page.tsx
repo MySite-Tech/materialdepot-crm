@@ -171,7 +171,8 @@ function SiteAuditViewInner() {
   ) : smAuditSubTab === 'perf' ? (
     <SiteAuditPerfView city={city} />
   ) : smAuditSubTab === 'analytics' ? (
-    <SiteAuditAnalyticsView city={city} />
+    // Service manager: Execution only — the commercial tabs carry revenue and store targets.
+    <SiteAuditAnalyticsView city={city} execOnly />
   ) : (
     <SiteAuditLiveView city={city} />
   );
@@ -255,7 +256,7 @@ function SiteAuditViewInner() {
         ) : viewRole === 'installer' ? (
           <SiteInstallerApp actingAs={actingAs} />
         ) : isCoe && !coeShowServiceMgr ? (
-          <SiteAuditCoeView city={city} who={person.name} />
+          <SiteAuditCoeView city={city} who={person.name} whoEmail={person.email} />
         ) : isCombined ? (
           combinedView === 'auditor' ? <SiteAuditorApp actingAs={actingAs} /> : <SiteInstallerApp actingAs={actingAs} />
         ) : isCoe ? (
@@ -268,7 +269,7 @@ function SiteAuditViewInner() {
                 {coeShowServiceMgr ? '← COE dashboard' : 'Service Manager dashboard →'}
               </button>
             </div>
-            {coeShowServiceMgr ? smBody : <SiteAuditCoeView city={city} who={person.name} />}
+            {coeShowServiceMgr ? smBody : <SiteAuditCoeView city={city} who={person.name} whoEmail={person.email} />}
           </div>
         ) : isBranchMgr ? (
           <SiteAuditBranchManagerView branches={null} contact={person.contact || null} city={city} />

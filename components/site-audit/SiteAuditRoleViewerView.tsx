@@ -352,7 +352,8 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
           ) : smAuditSubTab === 'perf' ? (
             <SiteAuditPerfView city={city} />
           ) : smAuditSubTab === 'analytics' ? (
-            <SiteAuditAnalyticsView city={city} />
+            // Previewing the SM dashboard, so it must be gated exactly as the SM's own is.
+            <SiteAuditAnalyticsView city={city} execOnly />
           ) : (
             <SiteAuditLiveView city={city} />
           )}
@@ -374,7 +375,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
             {coeShowServiceMgr ? '← Their dashboard' : 'Service Manager dashboard →'}
           </button>
         </div>
-        {coeShowServiceMgr ? renderServiceMgrDashboard() : <SiteAuditCoeView city={city} who={person.name} />}
+        {coeShowServiceMgr ? renderServiceMgrDashboard() : <SiteAuditCoeView city={city} who={person.name} whoEmail={person.email} />}
       </div>
     );
   }

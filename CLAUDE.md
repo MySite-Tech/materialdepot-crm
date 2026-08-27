@@ -180,6 +180,254 @@ pre-bookings — see the next section; has `bm_email`),
 column** — always resolves by name/phone), `wp_production` (custom wallpaper
 runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 
+## The BM's order book: three tables, three drawers, one conversion funnel
+
+`SiteAuditBmView` is the BM dashboard; `ownedOrders.tsx` holds the Installations
+and Custom Wallpaper halves of it, and both are reused by
+`SiteAuditBranchManagerView`'s store rollup. Every list opens a drawer; the two
+new ones are read-only apart from declaring which site audit an installation
+came from, since scheduling stays with the SM and wallpaper production with the
+COE.
+
+**Drawer data is fetched per order on open, never added to the list select.**
+`log` is jsonb averaging ~7 KB a row and both lists poll every 30s, so the
+install/wallpaper drawers read `log`/`service`/`skus`/`notes` for the one row
+being looked at (`INSTALL_DRAWER_COLS` / `WP_DRAWER_COLS`). The one thing lifted
+into a list select is `auditBy:service->>audit_by` — PostgREST json path with an
+alias, so the row can badge audit ownership without carrying the SKU blob.
+
+**Who did the site audit** lives in `install_orders.service.audit_by`
+(`material_depot` | `customer` | unset — 192/179/57 of live rows), set by the SM
+and auto-detected at creation by `detectAuditBy`. On a Material-Depot-audited
+installation, `LinkAuditSection` finds the audit behind it:
+
+1. a declared `jobCardLinks` link wins (either direction — `LinkInstallSection`
+   writes the same pair from the audit side);
+2. else audits sharing the client's exact phone digits, **pre-bookings
+   excluded** — a `slot_reserved`/`slot_converted` row is a held slot, not the
+   audit, and its phone is often the store's own;
+3. exactly one candidate → shown as "matched by phone" with the visit date on
+   it (157 of 182 live rows land here); **two or more → nothing is picked**, the
+   BM chooses (16 rows), and that choice becomes the declared link; none → said
+   plainly (9 rows), which almost always means the audit was booked against a
+   different number.
+
+Matching on `pi` is near-useless here and measuring it is why the fallback is
+phone: only 4 of those 182 installations share a `pi` with their audit, because
+the audit is raised pre-sale and the installation post-sale against the order's
+PI. `LinkAuditSection` takes `attribution` — **omit it and the section goes
+read-only**, which is what the branch-manager rollup does: a link nobody can be
+named for is not worth writing.
+
+`WpLadder` (`coe-ops/WpLadder.tsx`) is the read-only custom-wallpaper stage
+ladder, shared by the COE's Wallpaper tab and both BM drawers so the BM can
+never be shown a stage list that has drifted from the one the COE is working. A
+custom-WP installation resolves its production run by `install_order_id` or
+exact `pi` (verified: every run with the id set agrees on `pi`), **never by
+phone** — one client's two projects share a number.
+
+## Conversion: did the audit become an order, and where did it stop
+
+`conversionFunnel.ts` answers the question the BM dashboard exists for. Six
+steps — audit → cart → quotation → order → installation ordered → installed —
+where the middle three come from the **CRM's own Django deal pipeline**
+(`/crm/leads/?q=<phone>`), which is where carts, quotations and orders actually
+live. This is the swap `coe-ops/shared.ts`'s `orderPlacedFor` comment
+anticipated ("when Material Depot's other system exposes carts and product-only
+orders, this is the ONLY function that has to change"), reached from inside the
+CRM; the two agree, in that an installation order on/after the audit day still
+counts as an order placed.
+
+Three rules that must not bend — the second and third were live bugs in the
+first draft of this module, caught by exercising `funnelFor` against synthetic
+cases before it shipped:
+
+- **Deals are scoped to the audit day**, never to the phone's whole history —
+  otherwise a fresh audit is marked converted off an unrelated order from last
+  year. Earlier deals are reported as context (`priorDeals`) and never as
+  conversion.
+- **`unknown` is a distinct state from `pending`.** A failed
+  `fetchCRMLeads` means we don't know whether a cart exists. Folding that into
+  "no cart yet" would turn one Django outage into a dashboard full of clients
+  who look like they walked away, and would send BMs to chase clients who have
+  already paid. Hence `Funnel.unknownFrom` alongside `stalledAt`, its own
+  "Pipeline unknown" tile, and `?` ticks in the ladder. (`fetchLeadDeals` in
+  `lib/mockApi` swallows its own errors into `[]` — the `Array.isArray`
+  landmine above, one level up — so this module calls `fetchCRMLeads` directly.)
+- **A lost deal is only the story when nothing else is still moving.** `lost`
+  requires no live ranked deal AND no order: a client whose first cart was
+  cancelled and whose second is in quote approval has not been lost.
+  Symmetrically, `cart_created` is proved by ANY scoped deal including a lost
+  one — a cancelled cart was still a cart.
+
+A step with no local evidence *below* one that has some is `implied`, not a gap:
+an order raised under a second phone number would otherwise render as "no cart,
+no quote, order placed". `DEAL_PIPELINE` mirrors `STATUSES` in `app/App.tsx`
+(not exported from that 3.3k-line component — `b2b/kamAutoStage.ts` re-declares
+it locally for the same reason); an unlisted status is unranked and cannot
+advance the funnel. There is deliberately **no "PI shared" step**: the deal
+vocabulary has no PI status, and the Footfall/Weekly Funnel dashboards' PI
+column is computed server-side from data this endpoint doesn't return.
+
+Cost: one request per client phone, because the batched
+`/crm/leads/client-order-history/` endpoint returns a *lifetime* furthest status
+with no dates, which cannot be scoped to an audit. Mitigated by a module-level
+cache, a concurrency pool of 4, and `FUNNEL_PHONE_CAP` — and the overflow is
+**reported in the UI**, not silently dropped. The cache outlives the component,
+so the drawer carries a "Re-check the CRM pipeline" button for a BM who has just
+raised the cart.
+
+Note this puts a Django call inside the Site Audit tab, so
+`/site-audit-view?person=` (which never authenticates) now depends on a real
+session for these three steps — it already did via `fetchUsers()`, and a failure
+degrades to `unknown` rather than to a wrong answer.
+
+## Analytics: two halves, two sources, one page
+
+Site Audit → Analytics is five tabs over two databases that are never mixed in one number
+(ported from `material-depot-site`'s Admin console Analytics V3, 2026-08-26):
+
+| Tab | Source | Where |
+|---|---|---|
+| **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `SiteAuditAnalyticsView.tsx` |
+| **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `CatAnalyticsPanel.tsx` + `public/md-cat-analytics.js` |
+
+An order lives in the order book, a site visit lives in Supabase, and **the only bridge between
+them is the customer phone number** — which is why the two halves are separate tabs with separate
+footnotes, and why no tile adds a booking count to an order count. `SiteAuditAnalyticsView.tsx`
+holds both the Execution view and the shell that renders the tab bar and picks between them.
+
+**`public/md-cat-analytics.js` is a VERBATIM copy of the file with the same name in
+`material-depot-site`** — registry, dummy data layer, target model and all four tab renderers, as
+a self-contained IIFE that publishes on `window` and touches no DOM, no network and no framework.
+That is what makes it shareable byte-for-byte instead of hand-rewritten into JSX. **Fix it in one
+repo, copy it to the other; do not fork it** (same rule as the two copies of the job-card category
+registry). It is loaded on demand by `catAnalytics.ts` — only when a commercial tab is actually
+opened — so its 127 KB never reaches the main bundle. The Execution tab loads it too, in the
+background, purely for `mdAnGrouped`/`mdAnTatHtml` so the bookings and TAT charts match the
+commercial ones; a failed load costs those two blocks, never the ops numbers.
+
+Because the renderers return **HTML strings**, three things follow:
+
+- They need the Admin console's CSS, which lives at the bottom of `app/globals.css` **scoped under
+  `.md-an`**, with the palette variables on `.md-an` rather than `:root` so none of it reaches the
+  Tailwind side of the CRM. Any wrapper that injects this HTML must carry that class.
+  One deliberate un-reset: Tailwind preflight's `svg { max-width: 100% }` is switched off inside
+  the scope, because the charts already decide their own scaling.
+- The tab bodies carry the module's own inline `onclick`/`onchange` handlers (`anDrill`, `anCsv`,
+  `anTargetInput`, `anSaveTargets`, …), so `CatAnalyticsPanel` publishes exactly those names on
+  `window` while mounted and **restores the previous values on unmount** — two mounts (rail plus a
+  Role Viewer preview) must never leave a handler pointing at an unmounted panel. Anything those
+  handlers read comes from a ref, or a CSV export would keep exporting the range the tab opened on.
+- Targets are edited in a **mutable ref** with a `nonce` bump to redraw, not in state. That is
+  deliberate: an edit touches one cell of a 7-month × 13-store × 6-category object, nothing is
+  written until Save, and abandoning the tab abandons the edits. Save writes the whole object to
+  `app_settings.cat_analytics_targets`, shared with the Admin console.
+
+**Every tile on the Execution tab is clickable and opens the rows behind it** (added 2026-08-26):
+which orders met the criterion, which did not, who they were assigned to, the booked slot vs the
+actual arrival time, and a CSV. `M.drills` in `SiteAuditAnalyticsView.tsx` is the registry; `DrillRow.hit`
+is `'yes'` (numerator) / `'no'` (rest of the denominator) / `'na'` (genuinely neither — a Neutral
+rating, or a signature that could not be read, which must never be folded into "no").
+
+**The invariant: a drill's row set IS its tile's denominator, built off the same variable the tile
+renders.** So the status and delivery drills iterate `iAttempts`, Job Card iterates only the
+completed/partial attempts, MD Audit iterates distinct PIs, the ratings drills iterate the rating
+map, and the arrival drills iterate the rows `_anArrivalStats` tags in the same loop that does the
+counting. A drill that disagrees with the tile it opened from is worse than no drill — so when you
+add a tile, derive its drill from the same variable, never from a fresh filter that looks right.
+(`iNoDelayLog` is literally `iDelayLog` with the verdict inverted, for that reason.) The ratings
+drills pass an explicit `summary`, because yes/(yes+no) there would be promoters over
+promoters-plus-detractors — not NPS, not anything.
+
+**Arrival counts one visit once, and did not used to.** `_anArrivalStats` now dedupes on
+order + person + day. The field apps write the "arrived at site" log line more than once for a
+single visit — 17 install and 30 audit person-day pairs on live data as of 2026-08-26, one audit
+logged **20 times** — which was inflating the install arrival metric by 13% and the audit one by
+23% (install went 53% → 56%, audit 60% → 63% when fixed). The PWA's Admin console has always
+deduped this way; this port never did, and nobody could see it until the tiles started listing
+their own rows. Any new metric read off `log` entries needs the same guard.
+
+The install select carries `customer_name`, `bm` and `phone` **for the drills** — a list of enquiry
+IDs does not answer "which orders". They are columns on `install_orders_slim`, so this costs no
+extra query. Note the log enrichment uses `?? o.phone` rather than `|| null`: it only covers orders
+created from 1 Jul 2026, and blanking the phone on older ones made them unmatchable against site
+audits, i.e. a false "no audit".
+
+**The commercial numbers are DUMMY right now, and the UI says so** — an amber "◆ Dummy data" badge
+in the filter row plus a footer explaining every definition and limit. The generator is seeded from
+the Jun–Aug 2026 category workbook and reconciles back to it exactly, so the figures are arithmetic,
+not noise. It covers **1 Jun – 17 Aug 2026 only**, which is why the date pickers clamp to that
+window (`clampToData`): today is past the cut, so an unclamped "this month" would render an empty
+dashboard that reads as broken. **To go live: implement `MD_AN_SOURCE.metabase()` in
+`public/md-cat-analytics.js` to return the shape `MD_AN_SOURCE.dummy()` returns (documented at
+`MD_AN_ROW_CONTRACT` in that file) and flip `mode`.** Nothing in `CatAnalyticsPanel.tsx` or
+`catAnalytics.ts` changes — the badge, the footer and the clamp all read that flag themselves.
+
+Two intentional differences from the Admin console version: city comes from the CRM's own header
+selector (the `city` prop) instead of the filter row's own buttons, so there is one city control per
+page; and the filter row is real React rather than an HTML string, because it is this app's chrome
+rather than part of the shared dashboard. See also the `service_mgr` gate under Known landmines.
+
+## Review scores → NPS: one pipeline, and where it leaks
+
+Q1/Q2/Q3 (overall experience / staff / site cleanliness, 1–10) used to be
+collected on-site, on the job card, handed to the client by the field worker
+being rated — which biased every score upward. Collection moved to a Category
+Ops phone call the day after the job: `coe-ops/Followups.tsx` for the audit's
+D+1 checkpoint, `coe-ops/InstallReviews.tsx` for one checkpoint per completed
+install sub-job. **This repo's own field apps kept writing on-site scores until
+`c4f1296` (2026-08-24)**, four days after `material-depot-site` stopped, so the
+live `ratings` table holds two populations with opposite bias — worth saying out
+loud before anyone reads a trend across that date.
+
+The chain, and what owns each link:
+
+| Link | Where | Note |
+|---|---|---|
+| Source of truth | `coe_track.calls[].ratings` (audit) · `subjobs[].coe_review.calls[].ratings` (install) | append-only, inside jsonb this app already writes |
+| Projection | `ratings` table (`postJobRating`) | a second copy, written for Analytics only |
+| Bands | `npsFrom`/`npsBand` in `siteAuditShared.ts` | ONE definition; see below |
+| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` | both read the same helpers |
+
+**The `ratings` table is a projection, not the record.** The PATCH that saves
+the call and the POST that projects it are two writes; the second can fail
+alone. `coe-ops/ReviewScores.tsx` is what closes that loop —
+`unprojectedScoredCalls` diffs the call logs against the table and offers to
+push what never landed. Two match rules, both needed: same order within 30
+minutes of the call (the normal case, and tight enough that a pre-2026-08-24
+on-site rating on the same order can't be mistaken for it), or same order plus
+identical Q1/Q2/Q3 at any time (so an already-pushed score isn't offered
+forever). Rows are consumed as they match, so two scored calls on one order
+need two rows.
+
+**Analytics joins ratings to the ORDER, never by `ratings.created_at`.**
+`_anAttachAuditRatings` / `_anAttachInstallRatings`, ported from Admin.html.
+While the field app wrote the score at signing time the two were the same set;
+once collection moved to a D+1 call they came apart, and a created_at filter
+lends a job's score to the period *after* the one it describes. The join also
+de-duplicates — 13 audit orders in live data carry more than one rating, which a
+date filter counts twice. Install is the awkward half: a rating's `order_id` is
+the *parent* order, shared by every sub-job, so it's disambiguated by rated
+installer email, then nearest completion date (only 3 rated orders live have 2+
+completed sub-jobs, so this rarely bites). Consequence to expect, not fix: the
+last few days of any range show fewer scores than jobs, because those D+1 calls
+haven't happened yet.
+
+**Two different NPS numbers live in this portal, and both are correct.** Site
+Audit → Analytics and Category Ops → Review scores report *field-service* NPS on
+Material Depot's stricter house bands (promoter 9–10, neutral 8, **detractor
+≤7**), matching Admin.html. The `crm.nps` tab (`components/nps`) reports
+*store-visit* NPS from the Django footfall tracker on textbook bands (detractor
+≤6) — a different question of a different population. Never average them, and
+never "fix" one to match the other; each names itself and prints its bands on
+screen so a reader can't mistake which is on the page.
+
+**Job Card & Signature % is measured from the signature**, not from "a rating
+exists". That proxy was only ever true while the field app wrote the rating at
+signing time. Audit reads `audit_ticked->sign->>name`, install reads
+`subjobs[].jobcard.sign`.
+
 ## A pre-booking and the audit it becomes are two rows, not one
 
 `Store_Team_App` books a slot before the Kylas enquiry exists, so the two halves
@@ -243,6 +491,137 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
+- **The field apps write a log line more than once for one event, so any metric
+  counted off `log` entries must dedupe before it counts.** Arrival on time was
+  counting the same visit repeatedly — 17 install and 30 audit person-day pairs
+  in live data on 2026-08-26, one audit visit logged **20 times**, inflating the
+  install metric by 13% and the audit metric by 23%. `_anArrivalStats` now keys
+  on order + person + day (the PWA's Admin console always did; this port did
+  not). Nothing surfaced it for weeks because a percentage cannot show you its
+  own duplicate rows — it only became visible once the tiles started listing
+  them. Two rules follow: a new log-derived metric needs the same guard, and
+  mark a row "seen" only once it actually *counts*, or an entry skipped for a
+  missing slot suppresses a later write for the same visit that would have
+  resolved. See the Analytics section above.
+- **A second write that only `console.error`s on failure is silent data
+  loss.** Both COE rating forms saved the call, then projected the score into
+  `ratings` inside `try { … } catch { console.error }`. The COE saw "Call
+  logged", the score sat in the call log, and Analytics' NPS never counted it —
+  with no error anywhere a human would look. Fixed 2026-08-25: the failure is
+  surfaced in the form, `run()` now returns whether the call itself saved (so a
+  score is never projected for a call that didn't), and Category Ops →
+  ⭐ Review scores finds and pushes anything that slipped through. The same
+  shape still exists elsewhere in this repo — `upsertSiteAuditProfile()` in
+  `app/App.tsx` is fire-and-forget with `.catch(console.error)`. Treat
+  `.catch(console.error)` on a write as a bug report waiting to happen.
+- **`audit_ticked->sign->>name` is cheap to transfer and expensive to READ.**
+  The json path keeps the job-card room photos off the wire, but Postgres still
+  detoasts the whole `audit_ticked` blob per row, so that select over all ~1.1k
+  audit rows dies with `57014 canceling statement due to statement timeout`
+  (500, not an empty result). `SiteAuditAnalyticsView` fetches it as its own
+  query scoped to `status=eq.completed` — the 306 rows the metric's denominator
+  actually needs — which returns in ~3s. If you add another jsonb-path column
+  to a full-table select here, time it first.
+- **As of 2026-08-25 not one COE call has ever been logged in production.**
+  `coe_track` is non-null on 527 `audit_orders` rows and `{}` on every one of
+  them; zero rows carry `calls`, zero `order_placed` marks, and zero install
+  sub-jobs carry a `coe_review`. So all 444 rows in `ratings` are on-site
+  scores, the newest dated 2026-08-24 — the day this repo removed on-site
+  collection. **Field-service NPS therefore has no live source right now**: the
+  old one is gone and the new one is unused. Any report of "NPS is empty /
+  stale" is this, not a code fault — check `coe_track` for calls before
+  debugging the pipeline.
+
+- **A floor has no height — per-category wording belongs in `auditRegistry.ts`,
+  not in the capture form.** `SegmentAdjustments` hardcoded the rectangle
+  dimension pair as Height x Width, which is right for a wall and wrong for
+  `flooring`, whose own fields are Room length / Room width. It is not a rare
+  path: in a 60-order live sample, flooring carried **17 of the 28** area
+  adjustments (more than wallpaper), every one of them a Rectangle, and the
+  reasons are furniture footprints — "Bed", "Cupboard" — which have a length,
+  never a height. Now `cat.adjDim1` (absent => 'Height'). The Triangle branch
+  deliberately keeps Base x Height: there `h` is the perpendicular altitude in
+  the ½·base·height formula, and zero triangle adjustments exist in live data.
+  The stored keys stay `h`/`w` — only the label is per-category, so no migration
+  and no change to `adjRows`, whose `size` string ("6.5 x 6 ft") is
+  orientation-neutral and is what every read-only view and the PDF render.
+  `md-audit-registry.js` + `Site_Auditor_App.html` in `material-depot-site`
+  carry the identical fix; keep the two registries in step.
+- **The read side aliases `customer_name` to `name`, and both order drawers
+  wrote the alias back.** `audit_orders` and `install_orders` have a
+  `customer_name` column and no `name` column at all (`profiles` does, which is
+  what makes the mistake easy). `install-ops/shared.ts` and `audit-ops/shared.ts`
+  both map `name: r.customer_name` on load, and both drawers' "Fix details" form
+  PATCHed `{ name, phone, addr }` — PostgREST rejects the *whole* body with
+  `PGRST204 Could not find the 'name' column`, so the phone and address were
+  lost along with the name. Fixed 2026-08-26. When you add a write, check it
+  against the column list, not against the UI type: the two disagree by design
+  for `customer_name`, `matched_audit`/`matchedAudit`, `delivery_date`/
+  `deliveryDate` and `original_delivery_date`.
+- **`install-ops/OrderDrawer`'s `persist()` had no error handling, so every
+  write in that drawer failed silently.** `sbPatch` *does* throw on a non-2xx
+  (unlike `sbGet` — see the `Array.isArray` section), but `persist` was a bare
+  `await sbPatch(...)` and none of its callers caught, so the rejection escaped
+  into the click handler as an unhandled promise: no toast, no console entry a
+  user would see, a Save button indistinguishable from a dead one. That is the
+  only reason the `name` bug above survived — the SM had no way to learn the
+  write was being refused. `persist` now catches, toasts, and returns whether
+  the write landed (callers gate their form-close on it, and the three that had
+  hand-rolled try/catch now pass a `failMsg` instead).
+  `audit-ops/AuditOrderDrawer`'s `patch()` already had this shape — copy it, and
+  treat a write wrapper with no catch the same way as `.catch(console.error)`.
+- **A field app's stale-write guard has to compare like with like — the guard
+  itself was the outage.** `advanceStatus` (`SiteInstallerApp.tsx`) and `adv`
+  (`SiteAuditorApp.tsx`) re-read the row before writing so an SM's concurrent
+  change can't be clobbered (added 2026-08-21, `41a60d1`). Both compared a RAW
+  DB status against the flattened on-screen one — different vocabularies — so
+  the guard fired on jobs nobody had touched, and its own toast ("refresh to see
+  the latest") could never clear it because nothing was stale. Three distinct
+  mismatches, all live on 2026-08-26: `assigned` (DB) vs `scheduled` (UI,
+  mapped in `loadJobs`); the display-only autoFlip to `callpending` 3h before
+  the slot, which is never persisted; and the installer's own
+  `assignments[].status` vs `sj.status`, which **only the PRIMARY writes** —
+  `markAdditionalComplete` writes the assignment and nothing else, so an
+  additional installer's "Your part marked complete" never moved their screen.
+  19 of 43 live installer×sub-job pairs (44%) could not be advanced at all, and
+  every freshly assigned audit was unstartable. Fixed with one derivation each:
+  `statusForInstaller(sj, email)` and `normalizeAuditStatus(s)` — `loadJobs`
+  **and** the guard must both call it, and the installer guard compares
+  `job.storedStatus` (un-flipped) rather than `job.status`. Add a status or a
+  display flip *there*, never at a call site. Note the PWA's
+  `Site_Installer_App.html` has no such guard at all, so this class of drift is
+  invisible in that app — don't take "it works in the field app" as evidence.
+- **An SM re-assignment resets `sj.status` to `assigned` but used to leave the
+  per-assignee statuses alone.** `AssignSection.saveAssign` seeds its editor by
+  spreading the existing `assignments` rows, so re-assigning after a reschedule
+  left `status:'reschedule'` on the assignment under a sub-job that said
+  `assigned` — and since the field app reads the installer's *own* status, that
+  showed them "To Reschedule — nothing to do" on a job just booked for them. It
+  now resets each saved assignment to `assigned`, treating `completed` as
+  terminal exactly as `OrderDrawer`'s `setStatus` does. Live proof this mattered:
+  `ENQ2026071279303`'s wallpaper sub-job was re-assigned to Nadeem Khan on
+  2026-08-12 *after* he had signed its job card, so `sj.status` read `assigned`
+  over an assignment that (correctly) read `completed`. `SM_Install_Dashboard.html`
+  in `material-depot-site` still has the un-fixed shape — keep them in step if
+  you touch either.
+- **These two apps are PORTS of PWA apps that are still being changed, so a
+  status this repo has never heard of can appear in shared data at any time.**
+  `partial` is a first-class SUB-JOB status written by
+  `material-depot-site`'s `Site_Installer_App.html` partial-completion flow;
+  `SiteInstallerApp.tsx` knew nothing about it, so those sub-jobs rendered a raw
+  `partial` pill above a detail panel with **no stage card and no buttons** —
+  the same dead end as a hard block, just quieter. Both field apps now carry a
+  stage registry (`INSTALL_STAGES` / `AUDITOR_STAGES`) and fall through to a
+  self-describing "nothing for you to do right now — the office moves it on"
+  block, so the next unknown status degrades instead of rendering blank. Keep
+  the registry and the rendered branches in step.
+- **`slot_reserved`/`slot_converted` pre-bookings were reaching auditors' own
+  job lists.** 18 live reservation rows carry an `auditor_email`, so six real
+  auditors saw held store slots as jobs — un-actionable by definition, since the
+  real audit is a separate row (the reservation's `po` is that row's `pi`; 13 of
+  the 18 were already `completed` there). `SiteAuditorApp`'s `loadJobs` now
+  filters both statuses out, matching what `audit-ops/Views.tsx` already does
+  for the ops list.
 - **A derived force-add set can still be reverted back to a hand-written one —
   this has now happened twice.** `SITE_AUDIT_ROLES` (`app/App.tsx`) drifted
   from `CRM_ROLE_TO_SITE_AUDIT_ROLE` once before (`delivery` mapped to
@@ -303,11 +682,14 @@ inert). Leave them; they are not gates.
   `Admin.html`'s Analytics is five tabs (Category, Execution, Week on week, Penetration,
   Targets) and only Execution is field-ops; the rest carry revenue, AOV and store targets, and
   a `service_mgr` session is pinned to Execution in three places (forced in `renderAnalytics`,
-  filtered out of the tab bar, and re-checked in `anSetTab`). **This repo has no commercial
-  analytics at all** — `SiteAuditAnalyticsView.tsx` is the pre-V3 execution-only port — so
-  there is currently nothing to gate here. If those tabs (or a Metabase-backed equivalent) are
-  ever ported into the CRM, the role gate has to come with them, or every service manager gets
-  the order book. Related: this repo's Role Viewer renders each role's components inline rather
+  filtered out of the tab bar, and re-checked in `anSetTab`). **Those four commercial tabs now
+  exist here too** (ported 2026-08-26 — see the *Analytics: two halves* section below), so the
+  gate is live rather than hypothetical: `SiteAuditAnalyticsView` takes `execOnly`, and every
+  service-manager host passes it — the SM's own dashboard, the SM view inside the Role Viewer,
+  and `/site-audit-view`'s SM body. Gated twice, like the original: the tab bar renders only
+  Execution AND `pick()` refuses anything else, so a stale `md_an_tab` in localStorage can't get
+  past it. **Add a fifth mount of this view and you must decide `execOnly` for it** — the default
+  is all five tabs, i.e. the order book. Related: this repo's Role Viewer renders each role's components inline rather
   than copying the original's iframe + localStorage impersonation, which is also why the
   2026-08-18 preview-leak bug in that app (its note 112) has no counterpart here.
 - Site Audit `profiles` rows double as login identities on the still-live public
@@ -317,6 +699,11 @@ inert). Leave them; they are not gates.
   permanently on one failed fetch.** That is what killed auditor assignment;
   `loadOrders`-style retry + a self-describing empty state is the fix, not a
   louder `console.error`. See the `Array.isArray` section above.
+- **`AUDIT_COLS` (`SiteAuditBmView.tsx`) now also carries `bm_journey` and
+  `coe_track`**, so the conversion funnel can honour a manual "order placed"
+  tick from either the BM or the COE for the whole list in one pass. They add
+  ~16 KB to a ~2 MB payload (`log` + `skus` are almost all of it) — but do NOT
+  copy them into `ROLLUP_AUDIT_COLS`, whose whole point is being narrow.
 - **`SiteAuditBranchManagerView`'s `ROLLUP_AUDIT_COLS` is deliberately narrower
   than `AUDIT_COLS`** (dropping `log`/`skus` cut this list from 1.9 MB per poll to
   107 KB) — but it must keep `po`, which is never rendered and exists only so
@@ -372,3 +759,6 @@ inert). Leave them; they are not gates.
   `SiteAuditBranchManagerView`) instead of rendering a bare empty list.
 - Reuse the existing status/stage registries (`install-ops/shared.ts` `STATUS`,
   `coe-ops/wpTrack.ts`) rather than re-declaring labels.
+- New Site Audit drawers are built from `drawerUi.tsx` (`DrawerShell`, `Sec`,
+  `KV`) rather than a fresh copy of the slide-over markup — `Sec`/`KV` had
+  already been duplicated into two drawers before it existed.

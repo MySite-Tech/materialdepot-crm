@@ -142,17 +142,20 @@ export default function AuditOrderDrawer({
 
   const flowIdx = flowIndexOf(o.status);
 
-  async function patch(body: Record<string, any>, msg: string, reopen = true) {
+  async function patch(body: Record<string, any>, msg: string, reopen = true): Promise<boolean> {
     setBusy(true);
     try {
       await sbPatch('audit_orders', o.id, body);
       await reload();
       toast(msg);
       if (reopen) onOpenOrder(o.pi); else onClose();
+      return true;
     } catch (e: any) {
       toast('Failed — ' + (e?.message || 'try again'));
+      return false;
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
   const logged = (t: string) => [...o.log, { t, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
 
@@ -381,11 +384,14 @@ export default function AuditOrderDrawer({
     if (ph !== (o.phone || '')) changed.push('phone');
     if (ad !== (o.addr || '')) changed.push('address');
     if (!changed.length) { toast('No changes to save'); return; }
-    await patch({
-      name: nm, phone: ph, addr: ad,
+    // `customer_name`, NOT `name` — the read side maps it to `o.name`
+    // (audit-ops/shared.ts) and writing that alias back 400s the whole PATCH,
+    // so the phone and address were lost along with it.
+    const saved = await patch({
+      customer_name: nm, phone: ph, addr: ad,
       log: logged('Customer details corrected — ' + changed.join(', ') + ' updated'),
     }, 'Customer details updated');
-    setCustOpen(false);
+    if (saved) setCustOpen(false);
   }
 
   /* ── BM link ─────────────────────────────────────────────────────────── */

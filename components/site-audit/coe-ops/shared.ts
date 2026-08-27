@@ -288,6 +288,185 @@ export async function postJobRating(input: JobRatingInput): Promise<void> {
   }
 }
 
+/* ── `ratings` is a PROJECTION of the call log, and it can go missing ───────
+   The durable record of a score is the call itself — coe_track.calls[].ratings
+   for an audit, subjobs[].coe_review.calls[].ratings for an install. The row in
+   `ratings` is a second copy, written straight after the call purely so
+   Analytics (here and Admin.html in the sibling repo) can read scores without
+   walking two jsonb blobs.
+
+   That second write can fail on its own: the PATCH that saved the call
+   succeeded, the POST that projected it didn't. Until 2026-08-25 both call
+   forms swallowed exactly that into `console.error`, so the COE saw "Call
+   logged", the score sat in the call log, and NPS silently never counted it.
+   These helpers close the loop — find the scores that never landed and offer
+   to push them — so a failed projection is a visible, fixable backlog instead
+   of a permanent hole in the number. */
+export const RATING_COLS = 'order_type,order_id,pi,q1_score,q2_score,q3_score,created_at,staff_email';
+export type RatingRow = {
+  order_type: string; order_id: string | null; pi: string | null;
+  q1_score: number | null; q2_score: number | null; q3_score: number | null;
+  created_at: string; staff_email: string | null;
+};
+
+/* A projection is written seconds after its call, so a generous half-hour is
+   already far tighter than the D+1-or-later gap to any on-site legacy rating
+   (those were written at signature time, before the COE ever dialled). */
+const PROJECTION_WINDOW_MS = 30 * 60 * 1000;
+
+export type ScoredCall = {
+  key: string; orderType: 'audit' | 'install'; at: string;
+  q1: number; q2: number; q3: number;
+  customer: string; staffName: string | null; label: string;
+  input: JobRatingInput;
+};
+
+/* Every score the COE has ever captured, read from the call logs themselves —
+   the source of truth, not the projection. Both tabs' numbers come from here,
+   so the COE's own NPS can never disagree with what they typed. */
+export function scoredCalls(orders: CoeOrder[], installs: CoeInstall[]): ScoredCall[] {
+  const out: ScoredCall[] = [];
+  for (const o of orders) {
+    for (const c of coeCalls(o)) {
+      const r = c.ratings;
+      if (!r || !r.q1) continue;
+      out.push({
+        key: o.id + '|' + c.id, orderType: 'audit', at: c.ts,
+        q1: +r.q1, q2: +r.q2, q3: +r.q3,
+        customer: o.name || o.pi || '—', staffName: o.auditorName,
+        label: 'Site audit · ' + (o.name || o.pi || '—') + (o.auditorName ? ' · audited by ' + o.auditorName : ''),
+        input: {
+          orderType: 'audit', pi: o.pi, orderId: o.id,
+          staffEmail: o.auditorEmail, staffName: o.auditorName,
+          q1: +r.q1, q2: +r.q2, q3: +r.q3, comments: c.note || '',
+          customerName: o.name, customerPhone: o.phone,
+        },
+      });
+    }
+  }
+  for (const io of installs) {
+    for (const sj of io.subjobs || []) {
+      const inst = installPrimaryInstaller(sj);
+      for (const c of sj.coe_review?.calls || []) {
+        const r = c.ratings;
+        if (!r || !r.q1) continue;
+        out.push({
+          key: io.id + '|' + sj.id + '|' + c.id, orderType: 'install', at: c.ts,
+          q1: +r.q1, q2: +r.q2, q3: +r.q3,
+          customer: io.name || io.pi || '—', staffName: inst.name,
+          label: typeLabel(sj.type) + ' installation · ' + (io.name || io.pi || '—') + (inst.name ? ' · installed by ' + inst.name : ''),
+          input: {
+            orderType: 'install', pi: io.pi, orderId: String(io.id),
+            staffEmail: inst.email, staffName: inst.name,
+            q1: +r.q1, q2: +r.q2, q3: +r.q3, comments: c.note || '',
+            customerName: io.name, customerPhone: io.phone,
+          },
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+/* Which of those scores never reached `ratings`.
+
+   Two ways a row counts as this call's projection, and both are needed:
+     1. same order, written within PROJECTION_WINDOW_MS of the call — the
+        normal case, and precise enough that a legacy on-site rating on the
+        same order can't be mistaken for it;
+     2. same order AND the identical Q1/Q2/Q3 (+ rated staff, when the row
+        names one) at any time — a duplicate-suppression guard. Without it, a
+        score whose projection landed under a clock skew, or which a previous
+        push already fixed, would be offered for pushing again forever.
+
+   Rows are consumed as they match, so two scored calls on one order need two
+   rows to both count as projected. */
+export function unprojectedScoredCalls(scored: ScoredCall[], ratingRows: RatingRow[]): ScoredCall[] {
+  const bucket = new Map<string, RatingRow[]>();
+  const keyOf = (type: string, orderId: string | null, pi: string | null) =>
+    type + '|' + (orderId ? 'id:' + orderId : 'pi:' + (pi || ''));
+  for (const r of ratingRows || []) {
+    if (r.order_type !== 'audit' && r.order_type !== 'install') continue;
+    // A legacy row with no order_id is only reachable by pi; index it under
+    // both so either lookup finds it.
+    for (const k of new Set([keyOf(r.order_type, r.order_id, r.pi), keyOf(r.order_type, null, r.pi)])) {
+      if (!bucket.has(k)) bucket.set(k, []);
+      bucket.get(k)!.push(r);
+    }
+  }
+  const used = new Set<RatingRow>();
+  const missing: ScoredCall[] = [];
+  // Oldest first, so the earliest call claims the earliest matching row.
+  for (const sc of scored.slice().sort((a, b) => String(a.at).localeCompare(String(b.at)))) {
+    const cands = [
+      ...(bucket.get(keyOf(sc.orderType, sc.input.orderId, sc.input.pi)) || []),
+      ...(bucket.get(keyOf(sc.orderType, null, sc.input.pi)) || []),
+    ].filter((r) => !used.has(r));
+    const ts = new Date(sc.at).getTime();
+    const inWindow = cands.filter((r) => Math.abs(new Date(r.created_at).getTime() - ts) <= PROJECTION_WINDOW_MS);
+    const staffMatch = (r: RatingRow) => !r.staff_email || !sc.input.staffEmail || r.staff_email === sc.input.staffEmail;
+    const hit =
+      inWindow.find(staffMatch) ||
+      inWindow[0] ||
+      cands.find((r) => Number(r.q1_score) === sc.q1 && Number(r.q2_score) === sc.q2 && Number(r.q3_score) === sc.q3 && staffMatch(r));
+    if (hit) used.add(hit);
+    else missing.push(sc);
+  }
+  return missing.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+/* Pushes the missing projections one at a time and reports what happened.
+   Sequential on purpose: this runs on a click, the backlog is small by
+   construction, and a partial success has to be reported honestly rather than
+   collapsed into one thrown error. */
+export async function pushScoredCalls(missing: ScoredCall[]): Promise<{ ok: number; failed: Array<{ sc: ScoredCall; message: string }> }> {
+  let ok = 0;
+  const failed: Array<{ sc: ScoredCall; message: string }> = [];
+  for (const sc of missing) {
+    try {
+      await postJobRating(sc.input);
+      ok++;
+    } catch (e: any) {
+      failed.push({ sc, message: e?.message || 'write failed' });
+    }
+  }
+  return { ok, failed };
+}
+
+/* ── Review coverage ───────────────────────────────────────────────────────
+   NPS without coverage is unreadable: 20 tens from 200 completed jobs is not
+   a +100. `due` counts only reviews whose D+1 has actually arrived (an
+   upcoming one is not a miss), `called` counts any logged attempt including
+   "didn't pick", and `scored` counts the ones that produced a score. */
+export type ReviewProgress = { due: number; called: number; scored: number };
+const emptyProgress = (): ReviewProgress => ({ due: 0, called: 0, scored: 0 });
+
+export function auditReviewProgress(rows: FollowupRow[]): ReviewProgress {
+  const p = emptyProgress();
+  for (const r of rows) {
+    const d1 = r.cps.find((c) => c.k === 'd1');
+    if (!d1 || !d1.applies) continue;
+    // 'pending' is "D+1 hasn't come round yet" — not yet owed, so not a miss.
+    if (!(d1.state === 'done' || d1.state === 'overdue' || d1.state === 'due')) continue;
+    p.due++;
+    if (d1.calls.length) p.called++;
+    if (d1.calls.some((c) => c.ratings && c.ratings.q1)) p.scored++;
+  }
+  return p;
+}
+
+export function installReviewProgress(rows: InstallReviewRow[]): ReviewProgress {
+  const p = emptyProgress();
+  for (const r of rows) {
+    if (r.bucket === 'upcoming') continue;
+    p.due++;
+    const calls = r.sj.coe_review?.calls || [];
+    if (calls.length) p.called++;
+    if (calls.some((c) => c.ratings && c.ratings.q1)) p.scored++;
+  }
+  return p;
+}
+
 /* ── Install reviews (note 117) — one D+1 checkpoint per COMPLETED SUB-JOB,
    not per order (a mixed order's flooring/wallpaper sub-jobs review
    independently). Calls live inside the sub-job itself

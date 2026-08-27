@@ -311,7 +311,7 @@ export default function SiteAuditBranchManagerView({
         {([
           ['audits', 'Site Audits', audits.length],
           ['installs', 'Installations', installs.length],
-          ['wallpaper', 'Wallpaper', wallpapers.length],
+          ['wallpaper', 'Custom Wallpaper', wallpapers.length],
           ['perf', 'Team Performance', null],
         ] as const).map(([k, label, n]) => (
           <button

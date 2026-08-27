@@ -19,7 +19,7 @@ function firstNonEmpty(order: string[], counts: Record<string, number>, fallback
   return fallback;
 }
 
-export default function InstallReviews({ installs, who, onChanged }: { installs: CoeInstall[]; who: string; onChanged: () => void }) {
+export default function InstallReviews({ installs, who, whoEmail, onChanged }: { installs: CoeInstall[]; who: string; whoEmail?: string | null; onChanged: () => void }) {
   const [bucket, setBucket] = useState<InstallReviewBucketKey>('overdue');
   const [bucketPicked, setBucketPicked] = useState(false);
   const [q, setQ] = useState('');
@@ -89,7 +89,7 @@ export default function InstallReviews({ installs, who, onChanged }: { installs:
       </div>
 
       {openRow ? (
-        <ReviewDrawer row={openRow} who={who} onClose={() => { setOpenKey(null); onChanged(); }} />
+        <ReviewDrawer row={openRow} who={who} whoEmail={whoEmail} onClose={() => { setOpenKey(null); onChanged(); }} />
       ) : null}
     </div>
   );
@@ -134,21 +134,25 @@ function ScoreSelect({ label, value, onChange }: { label: string; value: number;
   );
 }
 
-function ReviewDrawer({ row, who, onClose }: { row: Row; who: string; onClose: () => void }) {
+function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; whoEmail?: string | null; onClose: () => void }) {
   const [, force] = useState(0);
   const [msg, setMsg] = useState('');
   const [sj, setSj] = useState<CoeSubjob>(row.sj);
   const calls = (sj.coe_review?.calls || []).slice().sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   const cat = categoryFor(sj.type);
 
-  async function run(mutate: (s: CoeSubjob) => CoeSubjob, logText: string, onOk?: string) {
+  /* Returns whether the write landed — the ratings projection below must not
+     fire for a call that failed to save. Mirrors Followups.tsx's run(). */
+  async function run(mutate: (s: CoeSubjob) => CoeSubjob, logText: string, onOk?: string): Promise<boolean> {
     try {
       await patchInstallReview(String(row.order.id), sj.id, mutate, logText, who);
       setSj((cur) => mutate(JSON.parse(JSON.stringify(cur))));
       if (onOk) setMsg(onOk);
       force((n) => n + 1);
+      return true;
     } catch (e: any) {
       setMsg('Failed — ' + (e?.message || 'try again'));
+      return false;
     }
   }
 
@@ -181,7 +185,7 @@ function ReviewDrawer({ row, who, onClose }: { row: Row; who: string; onClose: (
           </Sec>
 
           <Sec title="Log a call">
-            <LogInstallCallForm order={row.order} sj={sj} run={run} />
+            <LogInstallCallForm order={row.order} sj={sj} who={who} whoEmail={whoEmail} run={run} />
           </Sec>
 
           <Sec title="Call history">
@@ -202,7 +206,7 @@ function ReviewDrawer({ row, who, onClose }: { row: Row; who: string; onClose: (
   );
 }
 
-function LogInstallCallForm({ order, sj, run }: { order: CoeInstall; sj: CoeSubjob; run: (mutate: (s: CoeSubjob) => CoeSubjob, logText: string, onOk?: string) => Promise<void> }) {
+function LogInstallCallForm({ order, sj, who, whoEmail, run }: { order: CoeInstall; sj: CoeSubjob; who: string; whoEmail?: string | null; run: (mutate: (s: CoeSubjob) => CoeSubjob, logText: string, onOk?: string) => Promise<boolean> }) {
   const [outcome, setOutcome] = useState(OUTCOMES[0].k);
   const [note, setNote] = useState('');
   const [q1, setQ1] = useState(0);
@@ -222,15 +226,21 @@ function LogInstallCallForm({ order, sj, run }: { order: CoeInstall; sj: CoeSubj
     setBusy(true);
     const ratings = needsRatings ? { q1, q2, q3 } : undefined;
     const catLabel = categoryFor(sj.type).pdfLabel;
-    await run((s) => {
+    // `by` is the COE who dialled — never the installer being rated (that goes
+    // on the rating's staff_email). Same stamp material-depot-site's
+    // COE_Dashboard writes into this jsonb; without it a call logged from the
+    // CRM can't be attributed to anyone.
+    const by = { email: whoEmail || undefined, name: who };
+    const saved = await run((s) => {
       s.coe_review = s.coe_review || {};
       (s.coe_review.calls = s.coe_review.calls || []).push({
         id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         ts: new Date().toISOString(), stage: 'd1', who: 'client', outcome, note: note.trim(),
-        ...(ratings ? { ratings } : {}),
+        ...(ratings ? { ratings } : {}), by,
       });
       return s;
     }, 'D+1 · Client installation review — ' + catLabel + ': ' + note.trim(), 'Call logged');
+    if (!saved) { setBusy(false); return; }
     if (ratings) {
       const installer = sj.assignments?.find((a) => a.primary) || sj.assignments?.[0];
       try {
@@ -241,8 +251,13 @@ function LogInstallCallForm({ order, sj, run }: { order: CoeInstall; sj: CoeSubj
           q1: ratings.q1, q2: ratings.q2, q3: ratings.q3, comments: note.trim(),
           customerName: order.name, customerPhone: order.phone,
         });
-      } catch (e) {
-        console.error('ratings write failed', e);
+      } catch (e: any) {
+        /* Saved on the call, missing from analytics only — see the identical
+           note in Followups.tsx. Never swallow this into console.error. */
+        setErr('Call saved with the scores — but writing them to the analytics table failed (' + (e?.message || 'unknown error')
+          + '). Nothing is lost: push it from the ⭐ Review scores tab.');
+        setBusy(false);
+        return;
       }
     }
     setNote(''); setQ1(0); setQ2(0); setQ3(0);

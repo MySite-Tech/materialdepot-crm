@@ -224,7 +224,8 @@ export default function SiteAuditOwnDashboard({
         ) : smAuditSubTab === 'perf' ? (
           <SiteAuditPerfView city={city} />
         ) : smAuditSubTab === 'analytics' ? (
-          <SiteAuditAnalyticsView city={city} />
+          // Service manager: Execution only — the commercial tabs carry revenue and store targets.
+          <SiteAuditAnalyticsView city={city} execOnly />
         ) : (
           <SiteAuditLiveView city={city} />
         )}
@@ -257,7 +258,7 @@ export default function SiteAuditOwnDashboard({
         </div>
         {coeShowServiceMgr
           ? renderServiceMgrDashboard()
-          : <div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} /></div>}
+          : <div className="p-4 sm:p-6"><SiteAuditCoeView city={city} who={person.name} whoEmail={person.email} /></div>}
       </div>
     );
   }
