@@ -684,7 +684,9 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
         customer_name: nm,
         phone: ph,
         addr: ad,
-        bm: bm || myStore,
+        // Never the store name: `bm` is a person, and "Whitefield" in it is a false attribution
+        // that no later name match can resolve. Unassigned stays visibly unassigned.
+        bm: bm || '—',
         ...(picked ? { bm_email: picked.email } : {}),
         date,
         slot: slot.id,

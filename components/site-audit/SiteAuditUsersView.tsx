@@ -216,7 +216,10 @@ export default function SiteAuditUsersView() {
   const [bmPanel, setBmPanel] = useState(false);
   useEffect(() => {
     let alive = true;
-    sbGet('audit_orders?select=bm&bm_email=is.null&status=neq.deleted')
+    /* Pre-booked slots are excluded, as they are from every other audit_orders read in the app: a
+       slot held or converted at a store counter exists before any enquiry does, so it has no owner to
+       resolve and counting it as unlinked creates a to-do that can never be completed. */
+    sbGet('audit_orders?select=bm&bm_email=is.null&status=not.in.(deleted,slot_reserved,slot_converted)')
       .then((r) => { if (alive) setBmOrders(Array.isArray(r) ? r : []); })
       .catch(() => { if (alive) setBmOrders([]); });
     return () => { alive = false; };
@@ -259,11 +262,46 @@ export default function SiteAuditUsersView() {
       if (email) plan.push({ raw, email, name: raw, count });
     }
     const autoBy = new Map(plan.map((p) => [p.raw, p.email]));
+
+    /* Who this name probably is, and on what number — so the row can be linked without
+       opening another tab to look the person up. Exact match first (that is the auto-link
+       case anyway), then first-name/word overlap, which is what the hard rows actually are:
+       "Dhruv" typed at a counter against the account "Dhruv Gangrade". Drawn only from the
+       BM profiles and CRM roster already in memory, so this costs no request. A name with no
+       candidate at all is the useful negative signal — "Whitefield" is a store, not a person,
+       and will never link. */
+    const candidatesFor = (raw: string) => {
+      const target = norm(raw);
+      const words = new Set(target.split(' ').filter(Boolean));
+      const seen = new Set<string>();
+      const out: Array<{ name: string; contact: string; role: string; exact: boolean }> = [];
+      const add = (name: string, contact: string | null, role: string, exact: boolean) => {
+        const key = phoneKey(contact || '');
+        if (!name || !key || seen.has(key) || out.length >= 3) return;
+        seen.add(key);
+        out.push({ name, contact: String(contact), role, exact });
+      };
+      /* Every profile, not just the BMs, plus the CRM roster: the question this column answers
+         is "who is this", and a name that turns out to belong to an admin is exactly the sort of
+         thing worth seeing before linking. The role travels with it so a match that cannot be
+         linked as a BM is obvious rather than misleading. */
+      const pool: Array<{ name: string; contact: string | null; role: string }> = [
+        ...rows.map((p) => ({ name: p.name, contact: p.contact, role: p.role })),
+        ...crmUsers.map((u) => ({ name: u.name, contact: u.phone, role: u.role || '' })),
+      ];
+      for (const c of pool) if (norm(c.name || '') === target) add(c.name, c.contact, c.role, true);
+      for (const c of pool) {
+        const cw = norm(c.name || '').split(' ').filter(Boolean);
+        if (cw.some((w) => words.has(w))) add(c.name, c.contact, c.role, false);
+      }
+      return out;
+    };
+
     const names = [...byName.entries()]
-      .map(([raw, count]) => ({ raw, count, auto: autoBy.get(raw) || null }))
+      .map(([raw, count]) => ({ raw, count, auto: autoBy.get(raw) || null, candidates: candidatesFor(raw) }))
       .sort((a, b) => b.count - a.count || a.raw.localeCompare(b.raw));
     return { unlinkedOrders, plan, names, linkable: plan.reduce((s, p) => s + p.count, 0) };
-  }, [bmOrders, bmProfiles, crmUsers, bmEmailByPhone]);
+  }, [bmOrders, bmProfiles, crmUsers, bmEmailByPhone, rows]);
 
   /* Names the store team/Kylas spell differently from the BM's own account
      ("Dhruv" vs "Dhruv Gangrade") can't be auto-linked without guessing, so
@@ -277,7 +315,7 @@ export default function SiteAuditUsersView() {
     try {
       const done = await sbPatchWhere(
         'audit_orders',
-        'bm=eq.' + encodeURIComponent(raw) + '&bm_email=is.null&status=neq.deleted',
+        'bm=eq.' + encodeURIComponent(raw) + '&bm_email=is.null&status=not.in.(deleted,slot_reserved,slot_converted)',
         { bm: prof.name, bm_email: prof.email }
       );
       flash('✓ Linked ' + done + ' order(s) to ' + prof.name);
@@ -305,7 +343,7 @@ export default function SiteAuditUsersView() {
         // in the meantime is skipped rather than overwritten.
         ok += await sbPatchWhere(
           'audit_orders',
-          'bm=eq.' + encodeURIComponent(p.raw) + '&bm_email=is.null&status=neq.deleted',
+          'bm=eq.' + encodeURIComponent(p.raw) + '&bm_email=is.null&status=not.in.(deleted,slot_reserved,slot_converted)',
           { bm: p.name, bm_email: p.email }
         );
       } catch { /* keep going; the total below reports what landed */ }
@@ -574,7 +612,7 @@ export default function SiteAuditUsersView() {
                 <div>
                   <b>{resolvePlan.needAccount.reduce((n, o) => n + o.rows, 0)}</b> order(s) belong to{' '}
                   <b>{resolvePlan.needAccount.length}</b> owner(s) with no Site Audit account:{' '}
-                  {resolvePlan.needAccount.slice(0, 8).map((o) => o.name + ' (' + o.rows + ')').join(', ')}
+                  {resolvePlan.needAccount.slice(0, 8).map((o) => o.name + (o.contact ? ' · ' + o.contact : '') + ' (' + o.rows + ')').join(', ')}
                   {resolvePlan.needAccount.length > 8 ? ' …' : ''}.
                   <button
                     onClick={createResolvedOwners}
@@ -593,7 +631,7 @@ export default function SiteAuditUsersView() {
             <div className="mt-2.5 max-h-[320px] overflow-y-auto rounded-md border border-sky-200 bg-white">
               <table className="w-full">
                 <thead>
-                  <tr>{['BM name on the order', 'Orders', 'Link to Business Manager'].map((h) => (
+                  <tr>{['BM name on the order', 'Orders', 'Likely person · contact', 'Link to Business Manager'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
                   ))}</tr>
                 </thead>
@@ -602,6 +640,21 @@ export default function SiteAuditUsersView() {
                     <tr key={n.raw} className="border-t border-gray-100">
                       <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{n.raw}</td>
                       <td className="px-3 py-2 text-[12.5px] text-gray-500">{n.count}</td>
+                      <td className="px-3 py-2 text-[12.5px] whitespace-nowrap">
+                        {n.candidates.length ? (
+                          n.candidates.map((c) => (
+                            <div key={c.contact} className={c.exact ? 'text-gray-800' : 'text-gray-500'}>
+                              <a href={'tel:' + c.contact} className="font-semibold underline decoration-gray-300">{c.contact}</a>
+                              {c.name && c.name.trim().toLowerCase() !== n.raw.trim().toLowerCase()
+                                ? <span className="ml-1.5 text-gray-400">{c.name}</span> : null}
+                              {c.role && c.role !== 'bm'
+                                ? <span className="ml-1 text-[11px] text-amber-700">{ROLES[c.role]?.label || c.role}</span> : null}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-gray-400">no matching person</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <BmSearchSelect

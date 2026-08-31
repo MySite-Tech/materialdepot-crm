@@ -138,7 +138,7 @@ export async function applyBmResolve(plan: BmResolvePlan): Promise<number> {
 
 /* The unlinked rows themselves, with the two columns an enquiry id can hide in. */
 export async function fetchUnlinkedAuditOrders(): Promise<Array<{ id: string; pi: string | null; po: string | null; bm: string | null }>> {
-  const rows = await sbGet('audit_orders?select=id,pi,po,bm&bm_email=is.null&status=neq.deleted');
+  const rows = await sbGet('audit_orders?select=id,pi,po,bm&bm_email=is.null&status=not.in.(deleted,slot_reserved,slot_converted)');
   return Array.isArray(rows) ? rows : [];
 }
 
