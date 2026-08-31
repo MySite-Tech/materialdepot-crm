@@ -16,8 +16,9 @@
      doesn't have to be entered twice in two different screens. */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CITIES, ROLES, fmtDate, initials, phoneKey, planSiteAuditRoleSync, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost } from './siteAuditShared';
+import { CITIES, CRM_ROLE_TO_SITE_AUDIT_ROLE, ROLES, fmtDate, initials, phoneKey, randomPasscode, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from './siteAuditShared';
 import { addUser, fetchUsers } from '@/lib/mockApi';
+import { applyBmResolve, fetchUnlinkedAuditOrders, planBmResolve, type BmResolvePlan } from './resolveBmFromBackend';
 
 type ProfileRow = {
   id: string;
@@ -74,9 +75,59 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+
+/* A searchable BM picker. 87 BM accounts in a bare <select> means scrolling a
+   list to find "Jhanvi" — with a filter box the by-hand pass over the unlinked
+   names is type-three-letters-and-click. Keeps the same contract as the select
+   it replaces: it reports the chosen profile's EMAIL, never a name. */
+function BmSearchSelect({ options, disabled, suggested, onPick }: {
+  options: Array<{ id: string; name: string; email: string; contact: string | null }>;
+  disabled: boolean;
+  suggested: string | null;
+  onPick: (email: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? options.filter((o) => o.name.toLowerCase().includes(needle)) : options;
+  return (
+    <div className="relative min-w-[220px]">
+      <input
+        value={q}
+        disabled={disabled}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        placeholder={suggested ? 'Suggested: ' + suggested : 'Search a BM…'}
+        className="w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white focus:border-[#0F766E] disabled:opacity-50"
+      />
+      {open && !disabled ? (
+        <div className="absolute z-20 mt-1 max-h-[220px] w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+          {shown.length ? shown.slice(0, 60).map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setOpen(false); setQ(''); onPick(o.email); }}
+              className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] text-gray-800 hover:bg-gray-50"
+            >
+              <span className="font-semibold">{o.name}</span>
+              {/* The phone disambiguates the near-namesakes a search invites you
+                  to misclick: "harsh" offers Harsh Chaubey and Sai Sri Harsha
+                  for an order that says Harsh Singh, and two real Priyas exist.
+                  Picking the wrong one moves another BM's orders. */}
+              <span className="ml-auto shrink-0 text-[11px] text-gray-400">{o.contact || 'no phone'}</span>
+            </button>
+          )) : <div className="px-2.5 py-2 text-[12px] text-gray-400">No BM matches “{q}”.</div>}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SiteAuditUsersView() {
   const [rows, setRows] = useState<ProfileRow[]>([]);
-  const [crmUsers, setCrmUsers] = useState<Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[] }>>([]);
+  const [crmUsers, setCrmUsers] = useState<Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[]; active?: boolean }>>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
@@ -95,7 +146,7 @@ export default function SiteAuditUsersView() {
     if (!Array.isArray(res)) { setErr('Could not load users.'); setLoading(false); return; }
     setErr('');
     setRows(res);
-    setCrmUsers((users as Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[] }>) || []);
+    setCrmUsers((users as Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[]; active?: boolean }>) || []);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -146,10 +197,19 @@ export default function SiteAuditUsersView() {
   /* ── Legacy BM links ────────────────────────────────────────────────────
      `audit_orders.bm` is free text (typed by the store team, or prefilled from
      the Kylas PO payload); `bm_email` is the real link that the BM dashboard
-     keys off. Everything created from this CRM writes both, so this only ever
-     has legacy rows to clean up. Linking is exact-name-only and never
-     ambiguous: one BM profile per name, or the name is left alone — a false
-     positive would show one BM another BM's customer. */
+     keys off. Every writer sets both now, so this is a backlog to clean up
+     rather than a growing one.
+
+     Matching a free-text name against `profiles.name` resolves almost nothing:
+     every live BM profile came from the CRM sync carrying a FIRST NAME
+     ("Anubhab", "Shaikh", "Kurugodu") while the orders carry the full one
+     ("Anubhab Sarkar", "Shaikh Mohd. Zaid"), so that route linked 0 of 196.
+     The CRM roster is the missing hop — it holds the full name AND the phone,
+     and the phone is `profiles.contact`. So: order name → exactly one roster
+     employee with that exact name → their phone → exactly one BM profile.
+     Both hops are exact; nothing here is ever a similarity guess, and a name
+     that is really a store ("Whitefield", "JP Nagar") or two people
+     ("Anubhab/Zaid") matches nothing and stays in the by-hand list. */
   const bmProfiles = useMemo(() => rows.filter((r) => r.role === 'bm' && r.email), [rows]);
   const [bmOrders, setBmOrders] = useState<Array<{ bm: string | null }> | null>(null);
   const [linkingBm, setLinkingBm] = useState(false);
@@ -162,7 +222,22 @@ export default function SiteAuditUsersView() {
     return () => { alive = false; };
   }, [rows]);
 
+  /* Phone → the single BM profile carrying it. A number on two BM profiles is
+     dropped, not chosen between. */
+  const bmEmailByPhone = useMemo(() => {
+    const seen = new Map<string, string | null>();
+    for (const p of bmProfiles) {
+      const key = phoneKey(p.contact);
+      if (!key) continue;
+      seen.set(key, seen.has(key) ? null : p.email);
+    }
+    const out = new Map<string, string>();
+    for (const [k, v] of seen) if (v) out.set(k, v);
+    return out;
+  }, [bmProfiles]);
+
   const bmLink = useMemo(() => {
+    const norm = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
     const unlinkedOrders = bmOrders ? bmOrders.length : 0;
     const byName = new Map<string, number>();
     for (const o of bmOrders || []) {
@@ -172,17 +247,23 @@ export default function SiteAuditUsersView() {
     }
     const plan: Array<{ raw: string; email: string; name: string; count: number }> = [];
     for (const [raw, count] of byName) {
-      const target = raw.toLowerCase().replace(/\s+/g, ' ');
-      const hits = bmProfiles.filter((p) => p.name.trim().toLowerCase().replace(/\s+/g, ' ') === target);
-      if (hits.length !== 1) continue;
-      plan.push({ raw, email: hits[0].email, name: hits[0].name, count });
+      const target = norm(raw);
+      const hits = bmProfiles.filter((p) => norm(p.name) === target);
+      if (hits.length === 1) { plan.push({ raw, email: hits[0].email, name: hits[0].name, count }); continue; }
+      if (hits.length > 1) continue;
+      // Via the CRM roster: exact full name → phone → BM profile. `bm` is left
+      // as it is, because the roster name it matched IS what the row says.
+      const crmHits = crmUsers.filter((u) => norm(u.name || '') === target);
+      if (crmHits.length !== 1) continue;
+      const email = bmEmailByPhone.get(phoneKey(crmHits[0].phone));
+      if (email) plan.push({ raw, email, name: raw, count });
     }
     const autoBy = new Map(plan.map((p) => [p.raw, p.email]));
     const names = [...byName.entries()]
       .map(([raw, count]) => ({ raw, count, auto: autoBy.get(raw) || null }))
       .sort((a, b) => b.count - a.count || a.raw.localeCompare(b.raw));
     return { unlinkedOrders, plan, names, linkable: plan.reduce((s, p) => s + p.count, 0) };
-  }, [bmOrders, bmProfiles]);
+  }, [bmOrders, bmProfiles, crmUsers, bmEmailByPhone]);
 
   /* Names the store team/Kylas spell differently from the BM's own account
      ("Dhruv" vs "Dhruv Gangrade") can't be auto-linked without guessing, so
@@ -212,7 +293,7 @@ export default function SiteAuditUsersView() {
     if (!bmLink.plan.length) return;
     const preview = bmLink.plan.slice(0, 12).map((p) => p.raw + ' → ' + p.email + ' (' + p.count + ')').join('\n');
     if (!window.confirm(
-      'Link ' + bmLink.linkable + ' audit order(s) to a BM account by exact name?\n\n' + preview
+      'Link ' + bmLink.linkable + ' audit order(s) to a BM account by exact match?\n\n' + preview
       + (bmLink.plan.length > 12 ? '\n…and ' + (bmLink.plan.length - 12) + ' more name(s)' : '')
       + '\n\nOnly orders with no BM account link are touched. Their BM dashboards start showing these orders immediately.'
     )) return;
@@ -235,62 +316,147 @@ export default function SiteAuditUsersView() {
     flash('✓ Linked ' + ok + ' order(s) to a BM account');
   }
 
-  /* ── CRM permission → Site Audit role sync ─────────────────────────────
-     The company's master employee/permission list lives in the CRM's own
-     Django backend (fetchUsers()); this derives each person's Site Audit
-     role from their CRM permission instead of assigning it twice by hand.
-     Pure computation lives in planSiteAuditRoleSync (siteAuditShared.ts) —
-     this is just the preview/confirm/apply UI around it, matching the
-     linkAllSuggested/linkBmOrders pattern above. */
-  const roleSync = useMemo(() => planSiteAuditRoleSync(crmUsers, rows), [crmUsers, rows]);
-  const [syncingRoles, setSyncingRoles] = useState(false);
-  const [roleSyncPanel, setRoleSyncPanel] = useState(false);
+  /* ── Resolve the owner from the backend ─────────────────────────────────
+     The authoritative path, and the one that needs no name at all: the enquiry
+     behind the order already has an owner, and the endpoint the auto-import
+     reads returns it (`bm: {name, contact}`). Phone → account, patch, done —
+     a typo at a store counter stops mattering. The by-name matcher below stays
+     for rows carrying no enquiry id. */
+  const [resolvePlan, setResolvePlan] = useState<BmResolvePlan | null>(null);
+  const [resolving, setResolving] = useState(false);
 
-  /* Only role CORRECTIONS on existing profiles are actionable. `noProfileYet`
-     used to be counted here, from when a field-app profile was required to see
-     any Site Audit dashboard — but a BM, branch manager or service manager now
-     renders from their CRM session and their `site_audit.*` slug, so a missing
-     profile is no longer a gap to close. Counting it put ~70 rows behind a
-     button that would provision that many logins on the public field-app
-     sign-in for desk staff who never do field work. It is dropped from the UI
-     entirely: with nothing actionable the banner now stays down, which is the
-     point — it was reporting 71 changes that nobody needed to make. The plan
-     still returns it for anyone who wants the list. */
-  const roleSyncTotal = roleSync.ready.length;
+  /* Accounts for the owners the BACKEND named, not for people a permission
+     label calls BMs. Whoever owns the enquiry owns the order — Harsh Singh
+     carries ~1500 clients under the label `manager`, and gating account
+     creation on that label is precisely why his orders sat unattributed. There
+     is nothing to decide here: the row exists because the backend already
+     attributed an order to them. */
+  const [makingOwners, setMakingOwners] = useState(false);
 
-  async function applyRoleSync() {
-    if (!roleSyncTotal) return;
-    const updateLines = roleSync.ready.map((r) => r.name + ': ' + r.currentRole + ' → ' + r.targetRole + (r.branch ? ' (branch: ' + r.branch + ')' : ''));
-    const preview = updateLines.slice(0, 12).join('\n');
+  async function createResolvedOwners() {
+    const need = resolvePlan?.needAccount || [];
+    if (!need.length) return;
     if (!window.confirm(
-      'Correct ' + roleSyncTotal + ' field-app role' + (roleSyncTotal === 1 ? '' : 's') + ' from CRM permissions?\n\n' + preview
-      + (updateLines.length > 12 ? '\n…and ' + (updateLines.length - 12) + ' more' : '')
-      + '\n\nThis only edits profiles that already exist; it never creates one.'
-      + '\n\nTheir Site Audit dashboard changes immediately.'
+      'Create ' + need.length + ' Site Audit BM account(s) for the owners the backend named?\n\n'
+      + need.slice(0, 12).map((o) => o.name + ' · ' + o.contact + ' (' + o.rows + ' order' + (o.rows === 1 ? '' : 's') + ')').join('\n')
+      + (need.length > 12 ? '\n…and ' + (need.length - 12) + ' more' : '')
+      + '\n\nTheir orders link straight after.'
     )) return;
-    setSyncingRoles(true);
+    setMakingOwners(true);
     let ok = 0;
-    const failed: string[] = [];
-    for (const r of roleSync.ready) {
+    for (const o of need) {
       try {
-        // Only ever ADD a branch. `branch: null` in the plan means "the CRM has
-        // no single branch to record", which must not wipe one an admin set by
-        // hand — so the column is omitted rather than nulled.
-        await sbPatch('profiles', r.profileId, r.branch ? { role: r.targetRole, branch: r.branch } : { role: r.targetRole });
+        await sbPost('profiles', {
+          name: o.name || o.contact,
+          email: syntheticSiteAuditEmail(o.contact),
+          role: 'bm',
+          contact: phoneKey(o.contact),
+          city: CITIES[0],
+          installer_type: 'flooring',
+          passcode: randomPasscode(),
+        });
         ok++;
       } catch (e: any) {
-        failed.push(r.name + ' (' + (e?.message || 'write failed') + ')');
+        console.error('[siteAudit] could not create owner account', o.name, e?.message);
       }
     }
-    setSyncingRoles(false);
+    setMakingOwners(false);
     await load();
-    // A bare count hid WHICH rows failed, leaving no way to retry the right
-    // ones — a half-applied sync is the state most in need of detail.
+    flash('✓ Created ' + ok + ' account(s) — resolving their orders…');
+    await resolveFromBackend();
+  }
+
+  async function resolveFromBackend() {
+    setResolving(true);
+    try {
+      const unlinked = await fetchUnlinkedAuditOrders();
+      const plan = await planBmResolve(unlinked);
+      setResolvePlan(plan);
+      if (!plan.ready.length) {
+        flash(plan.needAccount.length
+          ? '⚠ ' + plan.needAccount.length + ' owner(s) have no Site Audit account — create them below'
+          : '⚠ The backend could not name an owner for any unlinked order');
+        setResolving(false);
+        return;
+      }
+      if (!window.confirm(
+        'Link ' + plan.ready.length + ' order(s) to the BM the backend says owns the enquiry?\n\n'
+        + [...new Map(plan.ready.map((r) => [r.email, r.name])).entries()].slice(0, 12).map(([, n]) => n).join('\n')
+        + '\n\nThe name on the order is ignored — attribution comes from the estimate\'s own owner.'
+      )) { setResolving(false); return; }
+      const done = await applyBmResolve(plan);
+      setBmOrders(null);
+      await load();
+      const rest = plan.needAccount.reduce((n, o) => n + o.rows, 0);
+      flash('✓ Linked ' + done + ' order(s)'
+        + (rest ? ' · ' + rest + ' more need their owner to have an account' : '')
+        + (plan.unresolved ? ' · ' + plan.unresolved + ' had no enquiry the backend knows' : ''));
+    } catch (e: any) {
+      flash('⚠ ' + (e?.message || 'Could not resolve from the backend'));
+    }
+    setResolving(false);
+  }
+
+  /* ── BMs with no Site Audit account ─────────────────────────────────────
+     The root cause behind a slice of the unlinked orders: `bm_email` can only
+     point at a `profiles` row, so a BM the CRM knows about but Site Audit has
+     never heard of is unlinkable by construction — no picker lists them and no
+     backfill can resolve them.
+
+     This is deliberately narrower than the old role-sync's `noProfileYet`,
+     which was dropped for provisioning field-app logins for ~70 desk staff who
+     never do field work. A BM profile earns its row for one concrete reason:
+     it is the join target order attribution needs. Branch managers and service
+     managers still get nothing — they render from their CRM session and slug. */
+  const profilePhones = useMemo(() => new Set(rows.map((r) => phoneKey(r.contact)).filter(Boolean)), [rows]);
+  const missingBms = useMemo(() => crmUsers.filter((u) => (
+    u.active !== false
+    && CRM_ROLE_TO_SITE_AUDIT_ROLE[u.role] === 'bm'
+    && phoneKey(u.phone)
+    && !profilePhones.has(phoneKey(u.phone))
+  )), [crmUsers, profilePhones]);
+  const [bmMakePanel, setBmMakePanel] = useState(false);
+  const [bmMakeSkip, setBmMakeSkip] = useState<Set<string>>(new Set());
+  const [makingBms, setMakingBms] = useState(false);
+  const bmMakeList = missingBms.filter((u) => !bmMakeSkip.has(String(u.id)));
+
+  async function createMissingBms() {
+    if (!bmMakeList.length) return;
+    if (!window.confirm(
+      'Create ' + bmMakeList.length + ' Site Audit BM account(s)?\n\n'
+      + bmMakeList.slice(0, 12).map((u) => u.name + ' · ' + u.phone).join('\n')
+      + (bmMakeList.length > 12 ? '\n…and ' + (bmMakeList.length - 12) + ' more' : '')
+      + '\n\nThey get a Business Manager dashboard, and orders attributed to them can link from then on.'
+    )) return;
+    setMakingBms(true);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const u of bmMakeList) {
+      try {
+        await sbPost('profiles', {
+          name: u.name,
+          // Same synthetic identity the CRM sync uses — access is via the CRM
+          // session (resolved by phone), never this address or the passcode.
+          email: syntheticSiteAuditEmail(u.phone),
+          role: 'bm',
+          contact: phoneKey(u.phone),
+          city: (u.allowedBranches || []).some((b) => /hyder|gachi|kompally/i.test(b)) ? 'Hyderabad' : CITIES[0],
+          installer_type: 'flooring',
+          passcode: randomPasscode(),
+        });
+        ok++;
+      } catch (e: any) {
+        failed.push(u.name + ' (' + (e?.message || 'write failed') + ')');
+      }
+    }
+    setMakingBms(false);
+    setBmOrders(null);
+    await load();
     if (failed.length) {
-      console.error('[siteAudit] role sync failures', failed);
-      flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' — failed: ' + failed.slice(0, 3).join(', ') + (failed.length > 3 ? ' and ' + (failed.length - 3) + ' more (see console)' : ''));
+      console.error('[siteAudit] BM account creation failures', failed);
+      flash('✓ Created ' + ok + ' of ' + bmMakeList.length + ' — failed: ' + failed.slice(0, 3).join(', '));
     } else {
-      flash('✓ Synced ' + ok + ' of ' + roleSyncTotal + ' role(s)');
+      flash('✓ Created ' + ok + ' BM account(s) — press “Link by exact match” to attribute their orders');
     }
   }
 
@@ -340,15 +506,60 @@ export default function SiteAuditUsersView() {
         </div>
       ) : null}
 
+      {missingBms.length ? (
+        <div className="mb-3 rounded-md border-l-4 border-violet-500 bg-violet-50 px-3 py-2.5 text-[12.5px] text-violet-900">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>
+              <b>{missingBms.length}</b> Business Manager{missingBms.length === 1 ? '' : 's'} in the CRM {missingBms.length === 1 ? 'has' : 'have'} no Site Audit account, so orders attributed to {missingBms.length === 1 ? 'them' : 'them'} can never link to a dashboard.
+            </span>
+            <button onClick={createMissingBms} disabled={makingBms || !bmMakeList.length} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
+              {makingBms ? 'Creating…' : 'Create ' + bmMakeList.length + ' BM account' + (bmMakeList.length === 1 ? '' : 's')}
+            </button>
+            <button onClick={() => setBmMakePanel((v) => !v)} className="rounded-md border border-violet-300 bg-white px-2.5 py-1 text-[12px] font-bold text-violet-800">
+              {bmMakePanel ? 'Hide list' : 'Review the list'}
+            </button>
+          </div>
+          {/* Reviewable rather than blind: the CRM roster carries placeholder
+              accounts ("User", "Random", "none") that must not become BM
+              dashboards. Untick and they are left alone. */}
+          {bmMakePanel ? (
+            <div className="mt-2.5 max-h-[280px] overflow-y-auto rounded-md border border-violet-200 bg-white">
+              {missingBms.map((u) => {
+                const off = bmMakeSkip.has(String(u.id));
+                return (
+                  <label key={String(u.id)} className="flex items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-[12.5px] first:border-t-0">
+                    <input
+                      type="checkbox"
+                      checked={!off}
+                      onChange={() => setBmMakeSkip((prev) => {
+                        const next = new Set(prev);
+                        if (off) next.delete(String(u.id)); else next.add(String(u.id));
+                        return next;
+                      })}
+                    />
+                    <span className="font-semibold text-gray-800">{u.name}</span>
+                    <span className="text-gray-400">{u.phone}</span>
+                    <span className="ml-auto text-[11px] uppercase tracking-wider text-gray-400">{u.role}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {bmLink.unlinkedOrders ? (
         <div className="mb-3 rounded-md border-l-4 border-sky-500 bg-sky-50 px-3 py-2.5 text-[12.5px] text-sky-900">
           <div className="flex flex-wrap items-center gap-2">
             <span>
               <b>{bmLink.unlinkedOrders}</b> audit order{bmLink.unlinkedOrders === 1 ? '' : 's'} {bmLink.unlinkedOrders === 1 ? 'is' : 'are'} not linked to a BM account, so {bmLink.unlinkedOrders === 1 ? 'it' : 'they'} only reach a BM dashboard by name match.
             </span>
+            <button onClick={resolveFromBackend} disabled={resolving} className="rounded-md bg-[#0F766E] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
+              {resolving ? 'Resolving…' : 'Resolve owners from the backend'}
+            </button>
             {bmProfiles.length && bmLink.linkable ? (
               <button onClick={linkBmOrders} disabled={linkingBm} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
-                {linkingBm ? 'Linking…' : 'Link ' + bmLink.linkable + ' by exact name'}
+                {linkingBm ? 'Linking…' : 'Link ' + bmLink.linkable + ' by exact match'}
               </button>
             ) : null}
             {bmProfiles.length ? (
@@ -357,6 +568,27 @@ export default function SiteAuditUsersView() {
               </button>
             ) : <span>Add the Business Managers as users (role: Business Manager) to link them.</span>}
           </div>
+          {resolvePlan && (resolvePlan.needAccount.length || resolvePlan.unresolved) ? (
+            <div className="mt-2.5 rounded-md border border-sky-200 bg-white px-3 py-2 text-[12px] text-gray-600">
+              {resolvePlan.needAccount.length ? (
+                <div>
+                  <b>{resolvePlan.needAccount.reduce((n, o) => n + o.rows, 0)}</b> order(s) belong to{' '}
+                  <b>{resolvePlan.needAccount.length}</b> owner(s) with no Site Audit account:{' '}
+                  {resolvePlan.needAccount.slice(0, 8).map((o) => o.name + ' (' + o.rows + ')').join(', ')}
+                  {resolvePlan.needAccount.length > 8 ? ' …' : ''}.
+                  <button
+                    onClick={createResolvedOwners}
+                    disabled={makingOwners || resolving}
+                    className="ml-2 rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50"
+                  >
+                    {makingOwners ? 'Creating…' : 'Create ' + resolvePlan.needAccount.length + ' account' + (resolvePlan.needAccount.length === 1 ? '' : 's') + ' and link'}
+                  </button>
+                </div>
+              ) : null}
+              {resolvePlan.unresolved ? <div className="mt-1">{resolvePlan.unresolved} order(s) carry no enquiry id the backend knows — link those by hand below.</div> : null}
+              {resolvePlan.truncated ? <div className="mt-1 text-amber-700">The backend list was read up to its page cap, so older jobs may not be covered.</div> : null}
+            </div>
+          ) : null}
           {bmPanel ? (
             <div className="mt-2.5 max-h-[320px] overflow-y-auto rounded-md border border-sky-200 bg-white">
               <table className="w-full">
@@ -371,74 +603,15 @@ export default function SiteAuditUsersView() {
                       <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{n.raw}</td>
                       <td className="px-3 py-2 text-[12.5px] text-gray-500">{n.count}</td>
                       <td className="px-3 py-2">
-                        <select
-                          defaultValue={n.auto || ''}
-                          disabled={linkingBm}
-                          onChange={(e) => { if (e.target.value) linkOneBmName(n.raw, e.target.value); }}
-                          className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[200px] focus:border-[#0F766E]"
-                        >
-                          <option value="">— pick a BM —</option>
-                          {bmProfiles.map((p) => <option key={p.id} value={p.email}>{p.name} · {p.email}</option>)}
-                        </select>
-                        {n.auto ? <span className="ml-2 text-[11px] font-bold text-green-700">exact match</span> : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Skips alone don't raise the banner: `field_worker` and oversight roles
-          are permanent, by-design skips, so including them left a banner up
-          forever announcing "0 changes". It only shows when there is something
-          to act on — and the skip detail is still one click away from there. */}
-      {roleSyncTotal || roleSync.noLongerEntitled.length ? (
-        <div className="mb-3 rounded-md border-l-4 border-indigo-500 bg-indigo-50 px-3 py-2.5 text-[12.5px] text-indigo-900">
-          <div className="flex flex-wrap items-center gap-2">
-            <span>
-              <b>{roleSyncTotal}</b> CRM permission change{roleSyncTotal === 1 ? '' : 's'} not yet reflected here.
-            </span>
-            {roleSyncTotal ? (
-              <button onClick={applyRoleSync} disabled={syncingRoles} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
-                {syncingRoles ? 'Syncing…' : 'Sync ' + roleSyncTotal + ' role' + (roleSyncTotal === 1 ? '' : 's') + ' from CRM permissions'}
-              </button>
-            ) : null}
-            {roleSync.skipped.length || roleSync.noLongerEntitled.length ? (
-              <button onClick={() => setRoleSyncPanel((v) => !v)} className="rounded-md border border-indigo-300 bg-white px-2.5 py-1 text-[12px] font-bold text-indigo-800">
-                {roleSyncPanel ? 'Hide details' : 'See details (' + roleSync.skipped.length + ' skipped)'}
-              </button>
-            ) : null}
-          </div>
-          {roleSyncPanel ? (
-            <div className="mt-2.5 max-h-[320px] overflow-y-auto rounded-md border border-indigo-200 bg-white">
-              <table className="w-full">
-                <thead>
-                  <tr>{['Name', 'Status', 'Detail'].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
-                  ))}</tr>
-                </thead>
-                <tbody>
-                  {roleSync.noLongerEntitled.map((r) => (
-                    <tr key={'gone-' + r.profileId} className="border-t border-gray-100">
-                      <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{r.name}</td>
-                      <td className="px-3 py-2 text-[12.5px] text-gray-500">No longer entitled</td>
-                      <td className="px-3 py-2 text-[12.5px] text-gray-500">CRM permission &quot;{r.crmPermission}&quot; maps to no access, but still has role &quot;{ROLES[r.currentRole]?.label || r.currentRole}&quot; — remove by hand if intended</td>
-                    </tr>
-                  ))}
-                  {roleSync.skipped.map((r, i) => (
-                    <tr key={'skip-' + i} className="border-t border-gray-100">
-                      <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{r.name}</td>
-                      <td className="px-3 py-2 text-[12.5px] text-gray-500">Skipped</td>
-                      <td className="px-3 py-2 text-[12.5px] text-gray-500">
-                        {r.reason === 'field_worker' ? 'CRM permission is "field_worker" — can\'t tell auditor from installer, left as-is'
-                          : r.reason === 'protected_role' ? 'Current role is hand-assigned (Category Ops Executive, Store Team, or Content Team) — never auto-changed'
-                          : r.reason === 'field_work_role' ? 'Already a site auditor / installer — their jobs are keyed to that role, so a CRM permission never demotes them. Change it by hand if they really have moved off field work.'
-                          : r.reason === 'oversight_role' ? 'CRM admin/tech — their Site Audit access is the company-wide view from this CRM login; no field-app profile needed either way'
-                          : r.reason === 'ambiguous_phone' ? 'Phone number matches multiple people — needs a human to disambiguate'
-                          : 'CRM permission not recognised — never guessed at'}
+                        <div className="flex items-center gap-2">
+                          <BmSearchSelect
+                            options={bmProfiles.map((p) => ({ id: p.id, name: p.name, email: p.email, contact: p.contact }))}
+                            disabled={linkingBm}
+                            suggested={n.auto ? (bmProfiles.find((p) => p.email === n.auto)?.name || null) : null}
+                            onPick={(email) => linkOneBmName(n.raw, email)}
+                          />
+                          {n.auto ? <span className="shrink-0 text-[11px] font-bold text-green-700">exact match</span> : null}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -557,8 +730,12 @@ function AddUserModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: 
     if (!nm) { setErr('Please enter a full name.'); return; }
     if (!em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setErr('Please enter a valid email address.'); return; }
     if (!role) { setErr('Please select a role.'); return; }
-    if (ph && !/^\d{10}$/.test(ph)) { setErr('Phone must be 10 digits.'); return; }
-    if (!ph && makeCrm) { setErr('A phone number is required to create a CRM login.'); return; }
+    /* The phone is the identity, not a detail: it is what a CRM session is
+       resolved by, what order attribution keys off, and what payouts and
+       availability are looked up with. A profile without one is a row nothing
+       can find — 15 of them exist and every one had to be chased down by hand
+       afterwards. Required at creation rather than repaired later. */
+    if (!/^\d{10}$/.test(ph)) { setErr('A 10-digit phone number is required — it is what links this person to their CRM login, their orders and their payouts.'); return; }
     setBusy(true);
     try {
       await sbPost('profiles', { name: nm, email: em, contact: ph || null, role, installer_type: isInstallerRole(role) ? itype : 'flooring', city, passcode: null });
@@ -585,7 +762,7 @@ function AddUserModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: 
     <Modal title="Add New User" onClose={onClose}>
       <Field label="Full Name"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya Sharma" className={inputCls} /></Field>
       <Field label="Work Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className={inputCls} /></Field>
-      <Field label="Phone (10 digits — links their field app and CRM logins)"><input inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9876543210" className={inputCls} /></Field>
+      <Field label="Phone * (10 digits — links their field app and CRM logins)"><input inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9876543210" className={inputCls} /></Field>
       <Field label="Role">
         <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
           <option value="">— Select a role —</option>

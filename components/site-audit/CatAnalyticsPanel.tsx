@@ -329,9 +329,9 @@ export default function CatAnalyticsPanel({
           </select>
         </div>
         <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
-          <b style={{ color: dummy ? 'var(--amber)' : 'var(--green)' }}>{dummy ? '◆ Dummy data' : '● Live (Metabase)'}</b>
+          <b style={{ color: dummy ? 'var(--amber)' : 'var(--green)' }}>{dummy ? '◆ Dummy data' : '● Live (order book)'}</b>
           <br />
-          {dummy ? `Seeded from the Jun–Aug 2026 category workbook · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}` : 'Order book via Metabase'}
+          {dummy ? `Seeded from the Jun–Aug 2026 category workbook · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}` : `Order book, live · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}`}
         </div>
       </div>
 
@@ -451,7 +451,7 @@ function footerHtml(api: CatAnalyticsApi): string {
   const A = api.MD_AN_ASSUMPTIONS;
   const modelled = api.MD_AN_CAT_IDS.filter((c) => api.MD_AN_CATEGORIES[c].modelled).map((c) => api.MD_AN_CATEGORIES[c].label);
   return `<div class="an-footer">
-    <b>Where these numbers come from:</b> the order book (Metabase question on <code>materialdepot_azure</code>), using the same order definition as the Sales Rep Analytics dashboard — confirmed/placed/shipped/delivered estimates only, quotes and cancellations excluded, order date = <code>COALESCE(order_placed_time, created_at)</code>. Right now that source is a <b>dummy generator seeded from the Jun–Aug 2026 category workbook</b>: every store-month total, order value, quantity, customer count, attach count and cart figure adds back up to the workbook exactly.<br>
+    <b>Where these numbers come from:</b> the order book, live, via <code>GET /crm/cat-analytics/</code>, using the same order definition as the Sales Rep Analytics dashboard — confirmed/placed/shipped/delivered estimates only, quotes and cancellations excluded, order date = <code>COALESCE(order_placed_time, created_at)</code> in IST.${api.MD_AN_SOURCE.mode === 'dummy' ? ' Right now that source is a <b>dummy generator seeded from the Jun–Aug 2026 category workbook</b>: every store-month total, order value, quantity, customer count, attach count and cart figure adds back up to the workbook exactly.' : ' Cross-checked against the Jun–Aug 2026 category workbook: site-audit AOV, wallpaper, flooring and installation all reconcile to within a few percent.'}<br>
     <b>Order count</b> is distinct orders CONTAINING the category — an order with wallpaper and flooring counts in both. <b>Order value</b> is only that category's line value (net of discount, incl. tax), never the whole order.<br>
     <b>Not comparable with the Execution tab:</b> these figures count order lines in the order book; Execution counts site visits in the ops DB. The only bridge between the two is the customer phone number.<br>
     <b>Attach rate:</b> ${L.attachIdentical}<br>

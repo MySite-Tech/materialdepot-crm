@@ -26,7 +26,8 @@
    flow leaves `subjobs` null too, so an auto-imported order lands in exactly the
    state a hand-imported one does, at Pending, waiting to be scheduled. */
 
-import { CITIES, sbGet, sbPost } from './siteAuditShared';
+import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPost, syntheticSiteAuditEmail } from './siteAuditShared';
+import { autoLinkBmsFromRows } from './resolveBmFromBackend';
 import { AUDIT_SKU } from './audit-ops/shared';
 import { INSTALL_SKU } from './install-ops/shared';
 import { poFieldFor } from './omsService';
@@ -52,7 +53,7 @@ type BackendRow = {
   delivery_date?: string | null;
   customer?: { name?: string; contact?: number | string } | null;
   shipping_address?: { address?: string; city?: string } | null;
-  bm?: { name?: string } | null;
+  bm?: { name?: string; contact?: number | string } | null;
   skus?: Array<{ variant_handle?: string; product_name?: string; category_name?: string; is_service?: boolean | null }> | null;
 };
 
@@ -90,6 +91,19 @@ function handleText(r: BackendRow): string {
     .join(' ');
 }
 
+type BmIndex = Map<string, string>;
+
+/* The backend sends the BM's contact number (_site_audit_serialize_bm), which
+   fetchBmEmailsByPhone resolves to a BM account. No match ⇒ `bm_email` stays
+   unset and the row is linkable by hand in Users, exactly as before. */
+function bmEmailFor(r: BackendRow, bms: BmIndex): string | null {
+  const key = phoneKey(r.bm && r.bm.contact != null ? String(r.bm.contact) : '');
+  if (!key) return null;
+  // The account's own address when it exists, else the synthetic one that
+  // encodes this phone — the number is what attribution compares either way.
+  return bms.get(key) || syntheticSiteAuditEmail(key);
+}
+
 function common(r: BackendRow, now: string, note: string): Record<string, any> {
   return {
     pi: String(r.estimate_lead_id),
@@ -118,14 +132,18 @@ function tickedCategories(text: string): string[] {
   return ticked;
 }
 
-function auditPayload(r: BackendRow, now: string): Record<string, any> {
+function auditPayload(r: BackendRow, now: string, bms: BmIndex): Record<string, any> {
   const ordered = orderedSkus(r);
   const skus: Array<Record<string, any>> = ordered.map((s) => ({ c: s.handle, n: s.name, audit: false }));
   skus.push({ c: AUDIT_SKU, n: 'Site Audit', audit: true });
+  /* Only on the audit payload: `install_orders` has no `bm_email` column at
+     all, and PostgREST rejects the WHOLE insert on an unknown column. */
+  const bmEmail = bmEmailFor(r, bms);
   return {
     ...common(r, now, 'Audit order imported automatically from the backend'),
     skus,
     audit_ticked: tickedCategories(handleText(r)),
+    ...(bmEmail ? { bm_email: bmEmail } : {}),
   };
 }
 
@@ -157,7 +175,7 @@ function serviceTrade(r: BackendRow): string | null {
   return null;
 }
 
-function installPayload(r: BackendRow, now: string): Record<string, any> {
+function installPayload(r: BackendRow, now: string, _bms: BmIndex): Record<string, any> {
   const trade = serviceTrade(r);
   const ordered = orderedSkus(r)
     .map((s) => ({ ...s, trade: tradeOf(s) }))
@@ -186,7 +204,7 @@ type Kind = {
      reconciles besides the payload shape. */
   param: 'site_audit' | 'installation';
   table: 'audit_orders' | 'install_orders';
-  payload: (r: BackendRow, now: string) => Record<string, any>;
+  payload: (r: BackendRow, now: string, bms: BmIndex) => Record<string, any>;
 };
 
 const AUDIT: Kind = { param: 'site_audit', table: 'audit_orders', payload: auditPayload };
@@ -209,13 +227,26 @@ async function fetchBackendRows(kind: Kind): Promise<BackendRow[]> {
 }
 
 async function reconcile(kind: Kind): Promise<number> {
-  const [backend, known] = await Promise.all([
+  const [backend, known, bms] = await Promise.all([
     fetchBackendRows(kind),
     sbGet(kind.table + '?select=pi'),
+    kind.table === 'audit_orders' ? fetchBmEmailsByPhone() : Promise.resolve(new Map() as BmIndex),
   ]);
   // A PostgREST error resolves as a non-array here, and treating that as "no
   // orders exist yet" would re-import the entire history.
   if (!Array.isArray(known)) return 0;
+
+  /* Attribution repair, before the insert diff and regardless of it: rows the
+     store counter created carry a typed BM name and no account link, and the
+     page of jobs just fetched names the real owner of each enquiry. What this
+     fixes is EXISTING rows, so it must not be gated on there being something
+     new to import. */
+  if (kind.table === 'audit_orders') {
+    try {
+      const linked = await autoLinkBmsFromRows(backend);
+      if (linked) console.info('[site-audit] linked ' + linked + ' order(s) to their BM account');
+    } catch { /* attribution is a repair, never a reason to fail the reconcile */ }
+  }
 
   const seen = new Set(known.map((r: any) => String(r.pi)));
   const cutoff = Date.now() - MAX_AGE_DAYS * 86400000;
@@ -230,7 +261,7 @@ async function reconcile(kind: Kind): Promise<number> {
   let added = 0;
   for (const row of missing) {
     try {
-      await sbPost(kind.table, kind.payload(row, now));
+      await sbPost(kind.table, kind.payload(row, now, bms));
       added += 1;
     } catch {
       /* Another tab won the race, or this one row is malformed — neither is a

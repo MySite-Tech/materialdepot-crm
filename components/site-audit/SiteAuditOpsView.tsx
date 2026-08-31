@@ -16,7 +16,7 @@
    outer Site Audit rail. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CITIES, inCity, sbGet, sbPatch, type CityFilter } from './siteAuditShared';
+import { CITIES, fetchBmEmailsByPhone, inCity, phoneKey, sbGet, sbPatch, syntheticSiteAuditEmail, type CityFilter } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
 import { poFieldFor } from './omsService';
 import { autoImportAuditOrders } from './autoImportAuditOrders';
@@ -149,11 +149,26 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
   }, []);
 
   /* BM list comes from the CRM's own user table (backend UserOrganisation) —
-     the same source the BM dashboard resolves identity from. */
+     the same source the BM dashboard resolves identity from.
+
+     `email` is filled in from the BM's field-app profile, matched on phone: the
+     roster has no email at all, and every writer here guards its `bm_email` on
+     `match.email`, so without this step the Add Order overlay and the drawer's
+     BM assign wrote a NAME and nothing else — the row then reached the BM's
+     dashboard only by name match, which is what left 196 rows unlinked. */
   const loadBms = useCallback(async () => {
     try {
-      const users = await fetchUsers();
-      setBmOptions((users || []).filter((u: any) => u.name).map((u: any) => ({ name: u.name, contact: u.phone })));
+      const [users, bmEmails] = await Promise.all([fetchUsers(), fetchBmEmailsByPhone()]);
+      setBmOptions((users || []).filter((u: any) => u.name).map((u: any) => ({
+        name: u.name,
+        contact: u.phone,
+        /* The account's address when they have one, otherwise the synthetic
+           address that encodes their number — attribution compares the phone,
+           so picking someone with no field-app account still links the order. */
+        email: phoneKey(u.phone)
+          ? (bmEmails.get(phoneKey(u.phone)) || syntheticSiteAuditEmail(u.phone))
+          : undefined,
+      })));
     } catch { /* free-text BM entry still works */ }
   }, []);
 

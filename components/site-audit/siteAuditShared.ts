@@ -85,6 +85,31 @@ export async function sbGetLong(q: string): Promise<any> {
   return withCache(q, 45000);
 }
 
+/* Reads a query in pages, for tables where one statement over the whole result set trips
+   Supabase's statement timeout (~3s for the anon role).
+
+   audit_orders is the case that forced this. The table is only ~585 rows, but `audit_ticked`
+   carries base64 job-card images — single rows reach 8 MB, and 100 rows total 7-11 MB — so any
+   statement that has to detoast that column across every completed row dies, while the same read
+   in pages of 50 succeeds every time. The underlying fix is to stop storing images inline in
+   that column; until then, page it.
+
+   Pages run SEQUENTIALLY on purpose: firing them together puts the same total detoast work on
+   the server at once, which is the thing being avoided. A failed page returns null for the whole
+   read rather than a short array — callers treat "not an array" as "this read failed" and hide
+   the affected metric, and a silently truncated result would instead under-report as fact. */
+export async function sbGetPaged(q: string, pageSize = 50, maxPages = 200): Promise<any[] | null> {
+  const sep = q.includes('?') ? '&' : '?';
+  const out: any[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const rows = await sbGetLong(`${q}${sep}order=id&limit=${pageSize}&offset=${page * pageSize}`);
+    if (!Array.isArray(rows)) return null;
+    out.push(...rows);
+    if (rows.length < pageSize) return out;
+  }
+  return out;
+}
+
 /* ── Writes (Store Team / Site Auditor / Site Installer apps) ──────────────
    These mutate the same Site Audit Supabase project the read views above
    query. Verbatim ports of sbPost/sbPatch/sbDel/uploadPhoto from
@@ -94,7 +119,7 @@ export async function sbPost(t: string, b: any): Promise<any> {
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 12000);
   try {
-    const r = await fetch(SB_URL + '/rest/v1/' + t, { method: 'POST', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
+    const r = await fetch(SB_URL + '/rest/v1/' + t, { method: 'POST', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(await sanitizeWriteBody(b)), signal: ac.signal });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
@@ -111,7 +136,7 @@ export async function sbPatch(t: string, id: string, b: any): Promise<void> {
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 12000);
   try {
-    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
+    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(await sanitizeWriteBody(b)), signal: ac.signal });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
@@ -184,7 +209,7 @@ export async function sbPatchWhere(t: string, filter: string, b: any): Promise<n
     const r = await fetch(SB_URL + '/rest/v1/' + t + '?' + filter, {
       method: 'PATCH',
       headers: { ...H, Prefer: 'return=representation' },
-      body: JSON.stringify(b),
+      body: JSON.stringify(await sanitizeWriteBody(b)),
       signal: ac.signal,
     });
     if (!r.ok) {
@@ -205,7 +230,7 @@ export async function sbPatchLong(t: string, id: string, b: any): Promise<void> 
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 90000);
   try {
-    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b), signal: ac.signal });
+    const r = await fetch(SB_URL + '/rest/v1/' + t + '?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(await sanitizeWriteBody(b)), signal: ac.signal });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.message || j.error || 'DB error ' + r.status);
@@ -266,13 +291,109 @@ export async function uploadPhoto(dataURL: string): Promise<string> {
       return await uploadPhotoAttempt(blob, fname);
     } catch (e) {
       if (i === attempts) {
-        console.error(`[siteAudit] photo upload failed after ${attempts} attempts, falling back to inline base64`, e);
+        console.error(`[siteAudit] photo upload failed after ${attempts} attempts`, e);
         throw e;
       }
       await new Promise((res) => setTimeout(res, 1000 * i));
     }
   }
   throw new Error('upload failed');
+}
+
+/* ── Never persist a full-size image inline in a JSON column ───────────────
+   Every write below runs its body through this first.
+
+   Why a chokepoint rather than a fix at each call site: inline base64 reached the DB by two
+   different routes, and only one of them was an error path.
+     1. uploadPhoto() fails after its 3 retries and the caller keeps the raw data URL.
+     2. Room photos are put into state inline ON PURPOSE, so the auditor sees the thumbnail
+        instantly, with the upload swapping the URL in afterwards — save the job card before
+        that lands and the base64 is what gets written. That is a race, not a failure.
+   It cost 70 MB in audit_orders.audit_ticked (single rows over 8 MB, 97 rows affected) and
+   5.8 MB in the two log columns, which is what pushed the Execution tab's reads over Supabase's
+   ~3s statement timeout.
+
+   The rule is "always externalize": ANY data: image URL in a write body gets uploaded and
+   replaced by its URL, whatever its size. Sizing the guard by a byte cap instead was tempting and
+   wrong — the 50 stray photos found in the log columns were 20-55 kB each, so a 64 kB cap would
+   have externalized exactly one of them and left 1.7 MB inline to start accumulating again. What
+   made those columns unreadable was the total, not any one row.
+
+   The cap therefore governs only the DEGRADED path: if the upload cannot be made to work, a small
+   image still rides inline so an offline signature save is not lost, and a large one is downscaled
+   until it fits. Evidence is degraded rather than lost, and one row can never blow up a table. */
+const INLINE_IMAGE_CAP = 64 * 1024;
+const INLINE_DATA_URL_RE = /^data:image\/[a-zA-Z0-9.+-]+;base64,/;
+
+async function shrinkToCap(dataURL: string): Promise<string | null> {
+  if (typeof document === 'undefined') return null;
+  for (const [px, q] of [[800, 0.6], [640, 0.5], [400, 0.4]] as Array<[number, number]>) {
+    const out = await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = Math.min(img.naturalWidth || px, px);
+        const h = Math.round(((img.naturalHeight || px) * w) / (img.naturalWidth || px));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        if (!ctx) return resolve(null);
+        ctx.drawImage(img, 0, 0, w, h);
+        try { resolve(cv.toDataURL('image/jpeg', q)); } catch { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataURL;
+    });
+    if (out && out.length <= INLINE_IMAGE_CAP) return out;
+  }
+  return null;
+}
+
+async function externalizeImage(dataURL: string): Promise<string | null> {
+  try {
+    return await uploadPhoto(dataURL);
+  } catch {
+    if (dataURL.length <= INLINE_IMAGE_CAP) {
+      console.warn('[siteAudit] photo upload failed; keeping it inline (small enough to be harmless)');
+      return dataURL;
+    }
+    const small = await shrinkToCap(dataURL);
+    if (small) {
+      console.warn('[siteAudit] photo upload failed; stored a downscaled thumbnail inline instead');
+      return small;
+    }
+    console.warn('[siteAudit] photo upload failed and could not be downscaled; dropping it rather than writing a multi-MB row');
+    return null;
+  }
+}
+
+/* Depth-limited walk — these payloads are job cards, a handful of levels deep. */
+async function stripInlineImages(value: any, depth = 0): Promise<any> {
+  if (depth > 8 || value == null) return value;
+  if (typeof value === 'string') {
+    if (!INLINE_DATA_URL_RE.test(value)) return value;
+    return await externalizeImage(value);
+  }
+  if (Array.isArray(value)) {
+    const out = [];
+    for (const item of value) out.push(await stripInlineImages(item, depth + 1));
+    return out;
+  }
+  if (typeof value === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = await stripInlineImages(v, depth + 1);
+    return out;
+  }
+  return value;
+}
+
+export async function sanitizeWriteBody(body: any): Promise<any> {
+  try {
+    return await stripInlineImages(body);
+  } catch (e) {
+    // A guard that throws would block a field save outright, which is worse than a fat row.
+    console.error('[siteAudit] inline-image guard failed; writing the body unchanged', e);
+    return body;
+  }
 }
 
 export const ROLES: Record<string, { label: string; color: string }> = {
@@ -465,6 +586,47 @@ export async function fetchOwnSiteAuditRole(phone: string): Promise<string | nul
   if (!Array.isArray(rows)) throw new Error('Site Audit profile lookup failed');
   const role = pickOwnProfile(rows)?.role;
   return typeof role === 'string' && role ? role : null;
+}
+
+/* The digits an order's BM link carries, or ''.
+
+   The link is written as a `profiles`-style email, and for a BM the CRM sync
+   created (or who has no account at all) that email IS the phone —
+   `crm.<10 digits>@site-audit.internal`. Reading the number back out of it
+   makes the PHONE the thing attribution compares, which is the point: a BM's
+   CRM session knows their number long before anyone creates them a field-app
+   profile, so an order can find its owner with no account in existence. Falls
+   back to digits typed into the free-text `bm` field. */
+export function bmPhoneOfOrder(row: { bm?: string | null; bm_email?: string | null }): string {
+  const em = String(row.bm_email || '');
+  const synthetic = /^crm\.(\d{10})@site-audit\.internal$/i.exec(em.trim());
+  if (synthetic) return synthetic[1];
+  return phoneKey(row.bm);
+}
+
+/* Phone → BM profile email, the one exact join between an order's BM and a BM
+   account. `audit_orders.bm` is free text and `profiles.name` is whatever the
+   CRM sync had (a first name on all 87 live BM rows: "Anubhab" against an order
+   saying "Anubhab Sarkar"), so a name never resolves this reliably — but the
+   CRM roster and `profiles.contact` carry the SAME 10 digits, so the phone
+   does, with no guessing. Every writer of `bm_email` goes through this: the
+   auto-import (backend sends the BM's contact), the Add Order overlay and the
+   BM-assign drawer (their BM list is the CRM roster, phone included).
+   A number on two BM profiles is dropped rather than picked between — a wrong
+   link shows one BM another BM's customer. */
+export async function fetchBmEmailsByPhone(): Promise<Map<string, string>> {
+  const rows = await sbGet('profiles?select=email,contact&role=eq.bm').catch(() => []);
+  const seen = new Map<string, string | null>();
+  if (Array.isArray(rows)) {
+    for (const r of rows as Array<{ email?: string; contact?: string | null }>) {
+      const key = phoneKey(r.contact);
+      if (!key || !r.email) continue;
+      seen.set(key, seen.has(key) ? null : r.email);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const [k, v] of seen) if (v) out.set(k, v);
+  return out;
 }
 
 /* Provisions/updates the Site Audit `profiles` row for someone granted a

@@ -592,12 +592,38 @@ interface BookingSheetProps {
   onBooked: (name: string) => void;
 }
 
+/* The BM is PICKED, not typed. Free text here is where `Janvi`/`janvi` (vs the
+   account `Jhanvi`), `Soheb`, `Beema` and — when the field was still optional
+   and fell back to `myStore` — `Whitefield`/`JP Nagar`/`Yelahanka` came from:
+   66 of the 128 rows with no BM account link were booked at a store counter.
+   The list is `profiles` rather than the CRM roster because this route is a
+   PUBLIC kiosk (app/store-booking/page.tsx) with no CRM token to call
+   fetchUsers() with — and profiles is the better source anyway: picking one
+   yields the `bm_email` that actually links the order, instead of a name
+   somebody else has to reconcile later. Only names are rendered; the anon key
+   already reads this table from this page.
+
+   A typed fallback stays, because a brand-new BM missing from the list must
+   not block a walk-in customer's slot — it is just no longer the default path,
+   and a row created that way is the exception rather than every row. */
 function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [addr, setAddr] = useState('');
   const [enqId, setEnqId] = useState('');
   const [bmName, setBmName] = useState('');
+  const [bmList, setBmList] = useState<Array<{ name: string; email: string }>>([]);
+  const [bmPick, setBmPick] = useState('');
+  const [bmTyped, setBmTyped] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    sbGet('profiles?select=name,email&role=eq.bm&order=name.asc')
+      .then((r) => { if (alive && Array.isArray(r)) setBmList(r.filter((p: any) => p && p.name && p.email)); })
+      /* The list failing to load must not lock the counter out of booking —
+         fall through to the typed field, same as an unlisted BM. */
+      .catch(() => { if (alive) setBmTyped(true); });
+    return () => { alive = false; };
+  }, []);
   const [comments, setComments] = useState('');
   const [fl, setFl] = useState(false);
   const [wp, setWp] = useState(false);
@@ -612,7 +638,8 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
     const ph = phone.trim();
     const ad = addr.trim();
     const enq = enqId.trim();
-    const bm = bmName.trim();
+    const picked = bmList.find((b) => b.email === bmPick) || null;
+    const bm = picked ? picked.name : bmName.trim();
     const cm = comments.trim();
     setErr('');
     if (!nm) {
@@ -658,6 +685,7 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
         phone: ph,
         addr: ad,
         bm: bm || myStore,
+        ...(picked ? { bm_email: picked.email } : {}),
         date,
         slot: slot.id,
         status: 'slot_reserved',
@@ -731,14 +759,43 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
         </div>
 
         <div className="mb-3">
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">BM Name *</label>
-          <input
-            className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400"
-            value={bmName}
-            onChange={(e) => setBmName(e.target.value)}
-            placeholder="Business manager name"
-            autoComplete="off"
-          />
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">BM *</label>
+          {bmTyped || !bmList.length ? (
+            <>
+              <input
+                className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400"
+                value={bmName}
+                onChange={(e) => setBmName(e.target.value)}
+                placeholder="Business manager name"
+                autoComplete="off"
+              />
+              {bmList.length ? (
+                <button
+                  type="button"
+                  onClick={() => { setBmTyped(false); setBmName(''); }}
+                  className="mt-1 text-[11.5px] font-semibold text-gray-500 underline"
+                >
+                  Pick from the list instead
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <select
+                className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white focus:border-yellow-400"
+                value={bmPick}
+                onChange={(e) => {
+                  if (e.target.value === '__other') { setBmTyped(true); setBmPick(''); return; }
+                  setBmPick(e.target.value);
+                }}
+              >
+                <option value="">— select the BM —</option>
+                {bmList.map((b) => <option key={b.email} value={b.email}>{b.name}</option>)}
+                <option value="__other">BM not in this list…</option>
+              </select>
+              <div className="mt-1 text-[11.5px] text-gray-400">Picking from the list puts the booking straight on that BM&apos;s dashboard.</div>
+            </>
+          )}
         </div>
 
         <div className="mb-3">

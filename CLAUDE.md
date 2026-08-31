@@ -174,6 +174,64 @@ attribute, the question is "which profile or `bm_email` link is missing", not
 "should the match be looser". Same rule holds for the COE's imported
 `wp_production` rows with a blank `bm`.
 
+**Write `bm_email` at the point the BM is chosen — the phone is the join.**
+196 audit orders reached 2026-08-31 with `bm_email` NULL because none of the
+three writers set it: the auto-import dropped the `bm.contact` the backend
+sends (`_site_audit_serialize_bm`), and the Add Order overlay + the drawer's BM
+assign guard on `match.email` while their BM list (`fetchUsers()`, the CRM
+roster) has no email field at all — so the guard was always false and only a
+name was written. All three now resolve it through
+`fetchBmEmailsByPhone()` (`siteAuditShared.ts`): `phoneKey` → the single
+`profiles` row with `role='bm'` carrying that number, ambiguous numbers dropped.
+
+Do NOT reach for `profiles.name` to close that gap. Every live BM profile came
+from the CRM sync holding a FIRST NAME ("Anubhab", "Shaikh") while orders carry
+the full one ("Anubhab Sarkar") — name matching against profiles resolved 0 of
+the 196. The Users-view backfill goes order name → exactly one CRM roster
+employee with that exact name (the roster has `f_name + l_name`, the same
+string the order got) → their phone → the BM profile. Two exact hops, no
+similarity, and store names ("Whitefield") and "Anubhab/Zaid" match nothing and
+stay in the by-hand list, which is correct.
+
+`bm_email` is only on `audit_orders`; never add it to an `install_orders`
+payload — PostgREST rejects the whole insert on an unknown column.
+
+**A BM with no `profiles` row is unlinkable by construction** — `bm_email` has
+nothing to point at, no picker lists them, no backfill resolves them. The Users
+tab surfaces active CRM users whose permission maps to `bm` and who have no
+profile (19 on 2026-08-31) and creates the accounts on request. This is the ONE
+exception to "don't provision field-app logins for desk staff": a BM profile is
+the join target order attribution needs. Branch managers and service managers
+still get nothing — they render from their CRM session and slug.
+
+The store pre-booking sheet picks the BM from `profiles` instead of taking free
+text, because that public kiosk route was the single biggest source of
+unattributable names (66 of 128 rows: `Janvi` for the account `Jhanvi`, `Soheb`,
+`Beema`, and the store's own name when the field was optional).
+
+**The name on the order is not the attribution — the enquiry's owner is.**
+`resolveBmFromBackend.ts` reads `bm: {name, contact}` off the jobs feed
+(`/api/site-audit/install-pos`, the one the auto-import already pages) keyed by
+`estimate_lead_id`, and links on phone. This needs NO backend endpoint and no
+judgement about whether someone "is a BM" — being the estimate's owner is the
+whole answer, and `permission_name` disagrees with it constantly (Harsh Singh:
+~1500 clients, label `manager`). The enquiry id is in `pi` for CRM rows and in
+`po` for store pre-bookings, whose `pi` is the generated `SRES-…` slot id.
+`autoLinkBmsFromRows` runs this inside the auto-import reconcile from the page
+of jobs already in hand — no extra request, no button — so new rows self-repair;
+the Users-tab button is only for backlog older than a reconcile page.
+
+**The phone is the identity; `bm_email` is only how it is stored.** When the
+owner has no field-app account, writers record the synthetic address that
+ENCODES their number (`crm.<10 digits>@site-audit.internal`) rather than
+recording nothing, and `orderBelongsToBm` compares `bmPhoneOfOrder(row)` against
+the viewer's `phoneKey(contact)` FIRST. A BM's CRM session knows their number
+long before anyone creates them a profile, so attribution no longer waits on an
+account existing — and when the account is created it lands on that very same
+synthetic address, so no row needs rewriting. Creating the account is now about
+giving someone a dashboard, not about making their orders findable. Phone is
+required when adding a Site Audit user for the same reason.
+
 Tables (Site Audit Supabase): `audit_orders` (site audits **and** store
 pre-bookings — see the next section; has `bm_email`),
 `install_orders` / `install_orders_slim` view (installations, **no `bm_email`

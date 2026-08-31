@@ -27,7 +27,7 @@ import { AuditRoomCard } from './AuditRoomViews';
 import RoomSkuEditor, { auditRoomSkuSaver } from './RoomSkuEditor';
 import LinkInstallSection from './LinkInstallSection';
 import { MD_JOURNEY_STAGES, categoryFor, journeyStage, type JourneyEntry } from './auditRegistry';
-import { fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
+import { bmPhoneOfOrder, fmtDateA, fmtLog, phoneKey, sbGet, sbPatch } from './siteAuditShared';
 import { InstallOrdersList, WallpaperOrdersList, useOwnedExtras, type OwnedInstall } from './ownedOrders';
 import { DrawerShell, KV, Sec } from './drawerUi';
 import {
@@ -85,15 +85,24 @@ function norm(s?: string | null) {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-/* `bm_email` is the authoritative link, so when an order carries one it DECIDES
-   ownership on its own — a name match must not override it, or two BMs sharing
-   a first name would each see the other's customers. Only rows with no link
-   yet fall back to the free-text `bm` (its contact digits, then its name).
-   Deliberately exact-after-normalisation, never fuzzy, for the same reason. */
+/* THE PHONE DECIDES. Every writer records the owner's number — the auto-import
+   from the backend's `bm.contact`, the store sheet and the drawer from the
+   account they picked, the resolve pass from the enquiry's real owner — and a
+   BM's CRM session carries the same number. So attribution never waits on a
+   field-app account existing: a number matches a number.
+
+   `bm_email` is how that number is stored (a `profiles`-style address, whose
+   synthetic form encodes the digits — see bmPhoneOfOrder), so a row linked to
+   an account with a REAL email still decides on the email. Rows with neither
+   fall back to the free-text `bm` name, exact after normalisation.
+
+   Never fuzzy, at any level: two BMs sharing a first name would each see the
+   other's customers. */
 export function orderBelongsToBm(row: { bm?: string | null; bm_email?: string | null }, bm: BmProfile): boolean {
+  const mine = phoneKey(bm.contact);
+  const theirs = bmPhoneOfOrder(row);
+  if (mine && theirs) return mine === theirs;
   if (row.bm_email) return !!bm.email && norm(row.bm_email) === norm(bm.email);
-  const key = phoneKey(bm.contact);
-  if (key && phoneKey(row.bm) === key) return true;
   const bmText = norm(row.bm);
   if (!bmText) return false;
   return bmNames(bm).has(bmText);
