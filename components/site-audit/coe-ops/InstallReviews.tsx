@@ -6,13 +6,17 @@
    call-queue UI; every historical "Overdue" on day one is expected, not a bug — the same thing
    happened when the audit follow-up queue first shipped. */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { fmtDateA, fmtLog } from '../siteAuditShared';
-import { categoryFor } from '../auditRegistry';
 import {
-  INSTALL_REVIEW_BUCKETS, OUTCOMES, daysBetween, installReviewRows, mapUrl, patchInstallReview, postJobRating, todayStr,
-  type CoeInstall, type CoeSubjob, type InstallReviewBucketKey, type InstallReviewRow as Row,
+  CATEGORY_ORDER, CAT_UNSET, INSTALL_REVIEW_BUCKETS, OUTCOMES, daysBetween, inDateRange,
+  installReviewRows, mapUrl, matchesCategory, patchInstallReview, postJobRating, presetRange,
+  subjobCategory, todayStr,
+  type CoeInstall, type CoeSubjob, type DatePresetKey, type DateRange,
+  type InstallReviewBucketKey, type InstallReviewRow as Row,
 } from './shared';
+import { BucketTiles, CategoryFilter, CategoryPills, DateRangeFilter, FrozenBar, useFrozenBar } from './filters';
+import ClientCarts from './ClientCarts';
 
 function firstNonEmpty(order: string[], counts: Record<string, number>, fallback: string): string {
   for (const k of order) if (counts[k]) return k;
@@ -23,22 +27,50 @@ export default function InstallReviews({ installs, who, whoEmail, onChanged }: {
   const [bucket, setBucket] = useState<InstallReviewBucketKey>('overdue');
   const [bucketPicked, setBucketPicked] = useState(false);
   const [q, setQ] = useState('');
+  const [preset, setPreset] = useState<DatePresetKey>('all');
+  const [range, setRange] = useState<DateRange>(() => presetRange('all'));
+  const [cats, setCats] = useState<string[]>([]);
   // Keyed by "order id · sub-job id" — a sub-job id alone isn't guaranteed unique across orders.
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const frozen = useFrozenBar();
 
-  const all = installReviewRows(installs);
+  const everyRow = useMemo(() => installReviewRows(installs), [installs]);
+
+  /* Filtered on the sub-job's COMPLETION date, not the order's creation date:
+     the D+1 review is owed off the day the work finished, so that is the date
+     every count and every due-date on this tab is derived from, and filtering
+     on anything else would put a row outside the window its own "overdue"
+     badge was computed in. Same filter-order rule as the audit queue — date and
+     category before the buckets, search after. */
+  const all = useMemo(
+    () => everyRow.filter((r) => inDateRange(r.completedOn, range) && matchesCategory([subjobCategory(r.sj, r.order)], cats)),
+    [everyRow, range, cats],
+  );
+
   const counts: Record<string, number> = {};
   INSTALL_REVIEW_BUCKETS.forEach((b) => { counts[b.k] = 0; });
   all.forEach((r) => { counts[r.bucket] = (counts[r.bucket] || 0) + 1; });
+
+  const catCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    [...CATEGORY_ORDER, CAT_UNSET].forEach((k) => { c[k] = 0; });
+    everyRow.forEach((r) => {
+      if (!inDateRange(r.completedOn, range)) return;
+      const k = subjobCategory(r.sj, r.order);
+      if (k in c) c[k]++;
+    });
+    return c;
+  }, [everyRow, range]);
 
   let activeBucket = bucket;
   if (!bucketPicked && !counts[bucket]) activeBucket = firstNonEmpty(INSTALL_REVIEW_BUCKETS.map((b) => b.k), counts, bucket) as InstallReviewBucketKey;
 
   const list = all.filter((r) => r.bucket === activeBucket)
-    .filter((r) => !q || [r.order.pi, r.order.name, r.order.phone, r.order.bm, r.installer.name].join(' ').toLowerCase().includes(q.toLowerCase()))
+    .filter((r) => !q || [r.order.pi, r.order.name, r.order.phone, r.order.bm, r.installer.name, subjobCategory(r.sj, r.order)].join(' ').toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
 
   const openRow = openKey ? all.find((r) => r.order.id + '·' + r.sj.id === openKey) || null : null;
+  const filtered = all.length !== everyRow.length;
 
   return (
     <div>
@@ -47,33 +79,35 @@ export default function InstallReviews({ installs, who, whoEmail, onChanged }: {
         <p className="text-[13px] text-gray-400">Every completed installation sub-job and whether its D+1 review call has been made. One row per category, not per order.</p>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {INSTALL_REVIEW_BUCKETS.map((b) => (
-          <button
-            key={b.k}
-            onClick={() => { setBucket(b.k); setBucketPicked(true); }}
-            className={`rounded-lg border px-3 py-2.5 text-left ${activeBucket === b.k ? 'border-[#1F3A5F] bg-[#eef3f9]' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-          >
-            <div className={`text-[20px] font-extrabold leading-tight ${b.k === 'overdue' ? 'text-red-600' : b.k === 'today' ? 'text-amber-600' : b.k === 'done' ? 'text-green-700' : 'text-[#1F3A5F]'}`}>{counts[b.k] || 0}</div>
-            <div className="mt-0.5 text-[11px] font-semibold text-gray-500">{b.l}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] max-w-[320px] flex-1">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client, phone, ENQ, BM, installer…" className="w-full rounded-md border border-gray-200 py-2 pl-8 pr-3 text-[13.5px] outline-none focus:border-yellow-400" />
+      <FrozenBar top={frozen.top} setRef={frozen.ref}>
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          <DateRangeFilter label="Installation completed on" preset={preset} range={range} onChange={(p, r) => { setPreset(p); setRange(r); }} />
+          <CategoryFilter selected={cats} counts={catCounts} onChange={setCats} />
+          <div className="relative min-w-[180px] max-w-[300px] flex-1">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client, phone, ENQ, BM, installer…" className="w-full rounded-md border border-gray-200 py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-yellow-400" />
+          </div>
+          <div className="text-[11.5px] text-gray-400">
+            {all.length} sub-job{all.length === 1 ? '' : 's'}{filtered ? ' of ' + everyRow.length : ' tracked'}
+          </div>
+          {filtered ? (
+            <button
+              onClick={() => { setPreset('all'); setRange(presetRange('all')); setCats([]); }}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11.5px] font-semibold text-gray-500"
+            >
+              Clear filters
+            </button>
+          ) : null}
         </div>
-        <div className="text-[12px] text-gray-400">{all.length} completed sub-job{all.length === 1 ? '' : 's'} tracked</div>
-      </div>
+        <BucketTiles buckets={INSTALL_REVIEW_BUCKETS} counts={counts} active={activeBucket} onPick={(k) => { setBucket(k); setBucketPicked(true); }} />
+      </FrozenBar>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         {list.length ? (
           <table className="w-full">
             <thead>
               <tr>{['Client', 'Order', 'Category', 'BM', 'Installer', 'Next call'].map((h) => (
-                <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
+                <th key={h} className="whitespace-nowrap bg-gray-50 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">{h}</th>
               ))}</tr>
             </thead>
             <tbody>
@@ -82,8 +116,12 @@ export default function InstallReviews({ installs, who, whoEmail, onChanged }: {
           </table>
         ) : (
           <div className="py-12 text-center text-[13px] text-gray-400">
-            <div className="mb-2 text-2xl">{counts[activeBucket] ? '🔎' : '✅'}</div>
-            {counts[activeBucket] ? 'No rows match your search.' : 'Nothing in this bucket.'}
+            <div className="mb-2 text-2xl">{counts[activeBucket] ? '🔎' : filtered ? '🗂️' : '✅'}</div>
+            {counts[activeBucket]
+              ? 'No rows match your search.'
+              : filtered
+                ? 'Nothing in this bucket for the date range and categories you picked.'
+                : 'Nothing in this bucket.'}
           </div>
         )}
       </div>
@@ -103,7 +141,7 @@ function ReviewRow({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
     <tr onClick={onOpen} className="cursor-pointer border-t border-gray-100 hover:bg-gray-50">
       <td className="px-3 py-2.5 text-[13px]"><div className="font-bold text-gray-900">{r.order.name || '—'}</div><div className="text-[11.5px] text-gray-400">{r.order.phone || '—'}</div></td>
       <td className="px-3 py-2.5 text-[13px]"><div>{fmtDateA(r.completedOn)}</div><div className="text-[11.5px] text-gray-400">{r.order.pi}</div></td>
-      <td className="px-3 py-2.5 text-[13px] text-gray-700">{categoryFor(r.sj.type).pdfLabel}</td>
+      <td className="px-3 py-2.5 text-[13px]"><CategoryPills cats={[subjobCategory(r.sj, r.order)].filter((c) => c !== CAT_UNSET)} /></td>
       <td className="px-3 py-2.5 text-[13px] text-gray-700">{r.order.bm || '—'}</td>
       <td className="px-3 py-2.5 text-[13px] text-gray-700">{r.installer.name || '—'}</td>
       <td className="px-3 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${cls}`}>{when}</span></td>
@@ -139,7 +177,9 @@ function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; 
   const [msg, setMsg] = useState('');
   const [sj, setSj] = useState<CoeSubjob>(row.sj);
   const calls = (sj.coe_review?.calls || []).slice().sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
-  const cat = categoryFor(sj.type);
+  // The shared vocabulary, so the drawer heading, the row pill and the filter
+  // all name this sub-job's material identically.
+  const catLabel = subjobCategory(sj, row.order);
 
   /* Returns whether the write landed — the ratings projection below must not
      fire for a call that failed to save. Mirrors Followups.tsx's run(). */
@@ -162,7 +202,7 @@ function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; 
         <div className="flex items-start gap-2 border-b border-gray-200 px-5 py-4">
           <div>
             <h2 className="text-base font-bold text-gray-900">{row.order.name || '—'}</h2>
-            <div className="mt-0.5 text-[12.5px] text-gray-400">{row.order.pi} · {cat.pdfLabel} · completed {fmtDateA(row.completedOn)}</div>
+            <div className="mt-0.5 text-[12.5px] text-gray-400">{row.order.pi} · {catLabel} · completed {fmtDateA(row.completedOn)}</div>
           </div>
           <button className="ml-auto h-7 w-7 shrink-0 rounded-md bg-gray-100 text-gray-500" onClick={onClose}>✕</button>
         </div>
@@ -172,7 +212,7 @@ function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; 
             <KV k="Client" v={<a className="text-blue-600" href={'tel:' + row.order.phone}>{row.order.phone || '—'}</a>} />
             <KV k="BM" v={row.order.bm || '—'} />
             <KV k="Installer" v={row.installer.name || '—'} />
-            <KV k="Category" v={cat.pdfLabel} />
+            <KV k="Category" v={catLabel} />
             <KV k="Address" v={row.order.addr ? <a className="text-blue-600" href={mapUrl(row.order.addr)} target="_blank" rel="noopener noreferrer">📍 {row.order.addr}</a> : '—'} />
           </Sec>
 
@@ -186,6 +226,13 @@ function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; 
 
           <Sec title="Log a call">
             <LogInstallCallForm order={row.order} sj={sj} who={who} whoEmail={whoEmail} run={run} />
+          </Sec>
+
+          {/* Same panel as the audit queue's drawer, anchored on the day this
+              sub-job finished rather than on an audit date: a review call is
+              also the moment to see what else the client has in a cart. */}
+          <Sec title="All carts on this number">
+            <ClientCarts phone={row.order.phone} anchorDate={row.completedOn} anchorLabel="installation" />
           </Sec>
 
           <Sec title="Call history">
@@ -225,7 +272,7 @@ function LogInstallCallForm({ order, sj, who, whoEmail, run }: { order: CoeInsta
     if (needsRatings && (!q1 || !q2 || !q3)) { setErr('All three ratings are required when the client was reached for the D+1 review.'); return; }
     setBusy(true);
     const ratings = needsRatings ? { q1, q2, q3 } : undefined;
-    const catLabel = categoryFor(sj.type).pdfLabel;
+    const catLabel = subjobCategory(sj, order);
     // `by` is the COE who dialled — never the installer being rated (that goes
     // on the rating's staff_email). Same stamp material-depot-site's
     // COE_Dashboard writes into this jsonb; without it a call logged from the

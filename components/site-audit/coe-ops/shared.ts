@@ -24,6 +24,10 @@ export type CoeOrder = {
   name: string; phone: string; addr: string; status: string; service: any; slot: string | null;
   date: string | null; auditorName: string | null; auditorEmail: string | null; createdAt: string | null;
   city: string | null; coeTrack: CoeTrack;
+  /* Canonical category labels the AUDITOR ticked, merged in from the separate
+     AUDIT_TICKED_QUERY (see below) rather than carried by AUDIT_COLS — which is
+     why it starts empty and fills in a beat later. */
+  tickedCats: string[];
 };
 export type CoeInstall = {
   id: string; pi: string; po: string[]; phone: string; name: string; addr: string; bm: string;
@@ -60,6 +64,7 @@ export function mapCoeAudit(r: any): CoeOrder {
     status: r.status || 'pending', service: r.service || null, slot: r.slot || null, date: r.date || null,
     auditorName: r.auditor_name || null, auditorEmail: r.auditor_email || null, createdAt: r.created_at || null,
     city: r.city || null, coeTrack: (r.coe_track && typeof r.coe_track === 'object') ? r.coe_track : {},
+    tickedCats: [],
   };
 }
 export function mapCoeInstall(r: any): CoeInstall {
@@ -202,23 +207,233 @@ export function bucketFor(o: CoeOrder, placed: CoeOrderPlaced | null, today: str
   return 'open';
 }
 
-export type Category = { l: string; c: string };
+/* ── Categories: ONE vocabulary for both halves of this dashboard ──────────
+   The Followups and Install Reviews tables now carry a category column that is
+   also a filter, so audit categories and installation categories have to be
+   the SAME strings — an audit labelled "Flooring" and a sub-job labelled
+   "Wooden Flooring" would give the filter two entries for one material and
+   silently split every count. These labels are `auditRegistry`'s `pdfLabel`s
+   plus Custom Wallpaper, which is a wallpaper VARIANT rather than a registry
+   category and is what the COE's whole Wallpaper tab is about — so it has to
+   be separable here.
 
-/* Category labels, derived from service{} first (set when the SM creates the
-   service) and falling back to SKU codes. audit_ticked is deliberately never
-   fetched here — it carries job-card photos on completed orders. */
-export function categoriesFor(o: CoeOrder): Category[] {
-  const out: Category[] = [];
-  const svc = o.service || {};
-  if (Array.isArray(svc.flooring) && svc.flooring.length) out.push({ l: 'Flooring', c: '' });
-  if (Array.isArray(svc.wallpaper) && svc.wallpaper.length) out.push({ l: 'Wallpaper', c: 'wp' });
-  const codes = (o.skus || []).filter((s: any) => !s.audit).map((s: any) => String(s.c || '').toUpperCase()).join(' ');
-  if (/CWP-|CUSTOM/.test(codes) && !out.some((x) => x.c === 'cwp')) out.push({ l: 'Custom WP', c: 'cwp' });
-  if (!out.length) {
-    if (/WF-|FLOOR/.test(codes)) out.push({ l: 'Flooring', c: '' });
-    if (/WP-|WALL/.test(codes)) out.push({ l: 'Wallpaper', c: 'wp' });
+   `CAT_UNSET` is a filter option, not a category: 92% of completed audits can
+   be labelled from `audit_ticked` (see below) and the rest genuinely have
+   nothing recorded. Folding those into a real category would put orders under
+   a material nobody ticked; giving them their own bucket makes the gap
+   filterable, which is the honest version. */
+export const CAT_FLOORING = 'Wooden Flooring';
+export const CAT_WALLPAPER = 'Wallpaper';
+export const CAT_CUSTOM_WP = 'Custom Wallpaper';
+export const CAT_WALLPANEL = 'Wall Panels';
+export const CAT_CNC = 'CNC';
+export const CAT_UNSET = 'Not recorded';
+
+/* Display order, so an order with two categories renders its pills the same
+   way every time (the raw room order varies row to row). */
+export const CATEGORY_ORDER = [CAT_FLOORING, CAT_WALLPAPER, CAT_CUSTOM_WP, CAT_WALLPANEL, CAT_CNC];
+
+/* Pill palette key per category, matching the colours this table already used
+   for flooring/wallpaper/custom WP. */
+export const CATEGORY_TONE: Record<string, string> = {
+  [CAT_FLOORING]: '', [CAT_WALLPAPER]: 'wp', [CAT_CUSTOM_WP]: 'cwp',
+  [CAT_WALLPANEL]: 'wpl', [CAT_CNC]: 'cnc',
+};
+
+function sortCats(list: string[]): string[] {
+  return [...new Set(list)].sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b));
+}
+
+/* The auditor's ticked categories, in the two shapes live data actually holds
+   (330 completed audits as of 2026-09-01):
+
+     - 313 rows: the v3 job card, `{rooms:[{category|type, variant}]}`. A
+       wallpaper room whose `variant` is Customized is Custom Wallpaper, which
+       is the distinction the COE's wallpaper production queue turns on.
+     - 17 rows: a flat string list from the pre-job-card tick screen
+       ('Wooden Flooring' | 'Standard Wallpapers' | 'Custom Wallpapers').
+
+   A room with NEITHER `category` nor `type` (45 live rooms) is skipped rather
+   than defaulted: `categoryFor`/`typeLabel` both fall back to flooring, which
+   would invent a material for an order whose auditor never recorded one. */
+const TICKED_LIST_LABELS: Record<string, string> = {
+  'wooden flooring': CAT_FLOORING, flooring: CAT_FLOORING, 'spc flooring': CAT_FLOORING,
+  'standard wallpapers': CAT_WALLPAPER, 'standard wallpaper': CAT_WALLPAPER, wallpaper: CAT_WALLPAPER,
+  'custom wallpapers': CAT_CUSTOM_WP, 'custom wallpaper': CAT_CUSTOM_WP, 'customized wallpaper': CAT_CUSTOM_WP,
+  'wall panels': CAT_WALLPANEL, wallpanel: CAT_WALLPANEL, cnc: CAT_CNC,
+};
+const TICKED_ROOM_LABELS: Record<string, string> = {
+  flooring: CAT_FLOORING, wallpaper: CAT_WALLPAPER, wallpanel: CAT_WALLPANEL, cnc: CAT_CNC,
+};
+
+export function tickedCategories(auditTicked: any): string[] {
+  if (Array.isArray(auditTicked)) {
+    return sortCats(auditTicked
+      .map((x: any) => TICKED_LIST_LABELS[String(x || '').trim().toLowerCase()])
+      .filter(Boolean) as string[]);
   }
-  return out;
+  const rooms = auditTicked && Array.isArray(auditTicked.rooms) ? auditTicked.rooms : null;
+  if (!rooms) return [];
+  const out: string[] = [];
+  for (const r of rooms) {
+    const key = String((r && (r.category || r.type)) || '').toLowerCase();
+    let label = TICKED_ROOM_LABELS[key];
+    if (!label) continue;
+    if (label === CAT_WALLPAPER && String((r && r.variant) || '').toLowerCase().startsWith('custom')) label = CAT_CUSTOM_WP;
+    out.push(label);
+  }
+  return sortCats(out);
+}
+
+/* The supplementary query that fills `tickedCats`, kept out of AUDIT_COLS for
+   the same reason `audit-ops/shared.ts` keeps its own AUDIT_CATEGORY_QUERY
+   apart: `audit_ticked` on a COMPLETED audit is the whole job card. Scoped to
+   the statuses this dashboard lists it is 330 rows / ~1.2 MB / ~1.4s, which is
+   fine ONCE but is not something to put in a 30s poll — see the caller in
+   SiteAuditCoeView, which only re-asks when an audit it has no answer for
+   appears. (A completed audit's job card is terminal, so the answer doesn't
+   go stale.) */
+export const AUDIT_TICKED_QUERY = 'audit_orders?select=id,audit_ticked&status=eq.completed';
+
+/* id → ticked categories. Mapped straight out of the response so the job-card
+   photo URLs behind it are never retained. */
+export function auditCategoryMap(rows: any[]): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  for (const r of rows || []) {
+    if (!r || !r.id) continue;
+    m.set(String(r.id), tickedCategories(r.audit_ticked));
+  }
+  return m;
+}
+
+export function applyCoeCategories(orders: CoeOrder[], cats: Map<string, string[]>): CoeOrder[] {
+  if (!cats.size) return orders;
+  return orders.map((o) => {
+    const t = cats.get(String(o.id));
+    // Reference-stable when nothing changes, so the memoised row build downstream
+    // isn't invalidated by every poll.
+    if (!t || (t.length === o.tickedCats.length && t.every((x, i) => x === o.tickedCats[i]))) return o;
+    return { ...o, tickedCats: t };
+  });
+}
+
+/* Canonical categories for one audit: what the auditor ticked, else the created
+   service, else the SKU codes. The last two are what this function used to
+   have on its own and answered 12 of 330 completed audits; `tickedCats`
+   answers 302 of them. They stay as the fallback because a pre-service or
+   legacy row has no job card at all. */
+export function auditCategories(o: CoeOrder): string[] {
+  if (o.tickedCats.length) return o.tickedCats;
+  const out: string[] = [];
+  const svc = o.service || {};
+  if (Array.isArray(svc.flooring) && svc.flooring.length) out.push(CAT_FLOORING);
+  if (Array.isArray(svc.wallpaper) && svc.wallpaper.length) out.push(CAT_WALLPAPER);
+  const codes = (o.skus || []).filter((s: any) => !s.audit).map((s: any) => String(s.c || '').toUpperCase()).join(' ');
+  if (/CWP-|CUSTOM/.test(codes)) out.push(CAT_CUSTOM_WP);
+  if (!out.length) {
+    if (/WF-|FLOOR/.test(codes)) out.push(CAT_FLOORING);
+    if (/WP-|WALL/.test(codes)) out.push(CAT_WALLPAPER);
+  }
+  return sortCats(out);
+}
+
+/* One installation sub-job's category, in the same vocabulary. `typeLabel` is
+   the install surfaces' own short label ('Flooring'), so it is mapped rather
+   than used directly — otherwise the filter would carry both 'Flooring' and
+   'Wooden Flooring' for one material.
+
+   `custom_wp` is a flag on the ORDER, not a sub-job type: a custom-wallpaper
+   job's sub-job still reads `wallpaper`. Without that check this filter and the
+   COE's own custom-wallpaper production queue would disagree about which
+   installations are custom, which is the one distinction that tab exists for. */
+export function subjobCategory(sj: CoeSubjob, io?: CoeInstall): string {
+  const base = TICKED_ROOM_LABELS[String(sj.type || '').toLowerCase()];
+  if (!base) return CAT_UNSET;
+  if (base === CAT_WALLPAPER && io?.customWp) return CAT_CUSTOM_WP;
+  return base;
+}
+
+/* Does a row pass a category filter? An empty selection means "no filter" —
+   never "nothing matches", which is the reading that empties a table the
+   moment somebody clears the last chip. */
+export function matchesCategory(cats: string[], selected: string[]): boolean {
+  if (!selected.length) return true;
+  if (!cats.length) return selected.includes(CAT_UNSET);
+  return cats.some((c) => selected.includes(c));
+}
+
+/* ── Date range filtering ─────────────────────────────────────────────────
+   Both queues and the NPS analytics tab filter by date, and all three have to
+   agree on what "Last 30 days" means or a COE comparing two tabs is comparing
+   two windows. Ranges are INCLUSIVE on both ends and compared as YYYY-MM-DD
+   strings, which is what every date column in this schema already is. */
+export type DateRange = { from: string; to: string };
+export type DatePresetKey = 'all' | 'today' | 'last7' | 'last30' | 'last90' | 'thismonth' | 'lastmonth' | 'custom';
+export const DATE_PRESETS: Array<{ k: DatePresetKey; l: string }> = [
+  { k: 'all', l: 'All time' },
+  { k: 'today', l: 'Today' },
+  { k: 'last7', l: 'Last 7 days' },
+  { k: 'last30', l: 'Last 30 days' },
+  { k: 'last90', l: 'Last 90 days' },
+  { k: 'thismonth', l: 'This month' },
+  { k: 'lastmonth', l: 'Last month' },
+];
+
+/* `{from:'', to:''}` is the "all time" range — an empty bound is unbounded, so
+   `inDateRange` needs no separate no-filter flag. */
+export function presetRange(k: DatePresetKey): DateRange {
+  const today = todayStr();
+  const monthStart = (y: number, m: number) => y + '-' + String(m + 1).padStart(2, '0') + '-01';
+  const d = new Date(today + 'T00:00');
+  switch (k) {
+    case 'today': return { from: today, to: today };
+    case 'last7': return { from: addDays(today, -6), to: today };
+    case 'last30': return { from: addDays(today, -29), to: today };
+    case 'last90': return { from: addDays(today, -89), to: today };
+    case 'thismonth': return { from: monthStart(d.getFullYear(), d.getMonth()), to: today };
+    case 'lastmonth': {
+      const first = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      const last = new Date(d.getFullYear(), d.getMonth(), 0);
+      return { from: monthStart(first.getFullYear(), first.getMonth()), to: last.getFullYear() + '-' + String(last.getMonth() + 1).padStart(2, '0') + '-' + String(last.getDate()).padStart(2, '0') };
+    }
+    default: return { from: '', to: '' };
+  }
+}
+
+/* The immediately preceding window of the same length, for a "vs prev" delta.
+   `null` for an unbounded range, because "before all time" is not a period. */
+export function previousRange(r: DateRange): DateRange | null {
+  if (!r.from || !r.to) return null;
+  const span = daysBetween(r.from, r.to) + 1;
+  return { from: addDays(r.from, -span), to: addDays(r.from, -1) };
+}
+
+/* The picker's button label. A custom range prints both ends, because "custom"
+   on its own tells a COE reading a screenshot nothing about what they filtered. */
+export function fmtRangeLabel(preset: DatePresetKey, r: DateRange): string {
+  const named = DATE_PRESETS.find((p) => p.k === preset);
+  if (named) return named.l;
+  if (r.from && r.to) return r.from === r.to ? fmtDateShort(r.from) : fmtDateShort(r.from) + ' → ' + fmtDateShort(r.to);
+  return 'All time';
+}
+
+function fmtDateShort(ds: string): string {
+  const d = new Date(ds + 'T00:00');
+  if (Number.isNaN(d.getTime())) return ds;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+
+/* `d` may be a date (YYYY-MM-DD) or a timestamp; only the day part is compared,
+   so a call logged at 23:50 IST counts on the day the COE made it. A row with
+   no date is OUT of any bounded range and IN the unbounded one — it can't be
+   claimed for a window nobody can place it in. */
+export function inDateRange(d: string | null | undefined, r: DateRange): boolean {
+  if (!r.from && !r.to) return true;
+  if (!d) return false;
+  const day = String(d).slice(0, 10);
+  if (r.from && day < r.from) return false;
+  if (r.to && day > r.to) return false;
+  return true;
 }
 
 /* Always re-fetches coe_track AND log immediately before merging, then

@@ -23,7 +23,7 @@ import {
 } from '../siteAuditShared';
 import {
   AUTO_STATUSES, FLOW, FLOW_LABELS, STATUS, auditorById, auditorConflictOrder, auditorLoad, auditorNameOf,
-  capFor, dstr, flowIndexOf, fmtDate, mapUrl, offReason, slotLabel, today,
+  capFor, categoriesAreFromStore, dstr, flowIndexOf, fmtDate, mapUrl, offReason, orderCategories, slotLabel, today,
   type AuditOrder, type AuditSkuRow, type Auditor, type Caps, type SlotDef,
 } from './shared';
 import { genAuditPDF } from './pdf';
@@ -465,6 +465,13 @@ export default function AuditOrderDrawer({
   const rooms = ticked && !Array.isArray(ticked) && Array.isArray(ticked.rooms) ? ticked.rooms : [];
   const isPreBooking = o.status === 'slot_reserved' || o.status === 'slot_converted';
   const auditorName = auditorNameOf(o, auditors);
+  /* On a reservation `po` holds the enquiry id the store was given; on a real
+     order it holds the MD order ids. Same column, opposite meaning. */
+  const preBookingEnq = o.po;
+  const linkedOrder = (enq: string) => orders.some((x) => x.pi === enq);
+  const preCats = Array.isArray(o.auditTicked) ? o.auditTicked.filter(Boolean) : [];
+  const auditCats = orderCategories(o);
+  const catsFromStore = categoriesAreFromStore(o);
 
   return (
     <>
@@ -489,7 +496,28 @@ export default function AuditOrderDrawer({
             <KV k="Customer" v={o.name || '—'} />
             <KV k="Phone" v={o.phone || '—'} />
             <KV k="Address" v={o.addr ? <a className="text-blue-600" href={mapUrl(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
-            <KV k="Categories" v={(Array.isArray(o.auditTicked) ? o.auditTicked : []).join(', ') || '—'} />
+            {/* The enquiry ID the store typed IS the `pi` of the audit row this
+                reservation becomes, so it is both the thing the SM was missing
+                here and a working link to the other half of the job. */}
+            <KV k="Enquiry ID" v={
+              preBookingEnq.length ? (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {preBookingEnq.map((enq) => (
+                    linkedOrder(enq)
+                      ? <button key={enq} onClick={() => onOpenOrder(enq)} className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[12px] font-bold text-blue-700">{enq} ↗</button>
+                      : <span key={enq} className="font-mono text-[12.5px] font-bold text-gray-900">{enq}</span>
+                  ))}
+                  {preBookingEnq.every((enq) => !linkedOrder(enq))
+                    ? <span className="text-[11px] font-bold text-amber-700">⚠ no service order under this enquiry yet</span>
+                    : null}
+                </span>
+              ) : <span className="text-[11px] font-bold text-amber-700">⚠ none recorded — ask the store to re-book with the enquiry ID</span>
+            } />
+            <KV k="Audit is for" v={
+              preCats.length
+                ? <div className="flex flex-wrap gap-1">{preCats.map((c) => <span key={c} className="rounded bg-yellow-50 px-1.5 py-0.5 text-[10.5px] font-bold text-yellow-800">{c}</span>)}</div>
+                : <span className="text-[11px] font-bold text-amber-700">⚠ material not recorded — ask the store which category this audit is for</span>
+            } />
             <KV k="Auditor reserved" v={auditorName || '—'} />
           </Section>
         ) : (
@@ -516,7 +544,18 @@ export default function AuditOrderDrawer({
               <KV k="PI ID" v={o.pi} />
               <KV k="PO numbers" v={o.po.join(', ') || '—'} />
               <KV k="SKUs in cart" v={<div className="flex flex-wrap gap-1">{o.skus.map((s, i) => <span key={i} className={`rounded-md px-2 py-0.5 text-[10.5px] font-bold ${s.audit ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-[#1F3A5F]'}`}>{s.c}{s.n && s.n !== s.c ? ' · ' + s.n : ''}</span>)}</div>} />
-              <KV k="Audit ticked for" v={(Array.isArray(o.auditTicked) ? o.auditTicked.join(', ') : '') || '—'} />
+              {/* An audit raised from the OMS carries only the service line, so its
+                  own `audit_ticked` is empty and the store's pre-booking is the
+                  only record of what material the visit is for. Say which of the
+                  two is on screen — they were ticked by different people. */}
+              <KV k="Audit is for" v={
+                auditCats.length
+                  ? <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="flex flex-wrap gap-1">{auditCats.map((c) => <span key={c} className="rounded bg-yellow-50 px-1.5 py-0.5 text-[10.5px] font-bold text-yellow-800">{c}</span>)}</span>
+                      {catsFromStore ? <span className="text-[11px] font-semibold text-gray-500">from the store pre-booking</span> : null}
+                    </span>
+                  : <span className="text-[11px] font-bold text-amber-700">⚠ material not recorded on this order or its store booking</span>
+              } />
               <KV k="BM" v={
                 <span className="flex flex-wrap items-center gap-1.5">
                   {o.bm}

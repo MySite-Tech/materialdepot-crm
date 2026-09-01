@@ -107,6 +107,8 @@ export interface LogEntry {
   lat?: number;
   lng?: number;
   arrivalPhoto?: string;
+  /* Arrival recorded with no GPS fix, by either field app. */
+  locOverride?: boolean;
 }
 
 export interface InstallOrder {

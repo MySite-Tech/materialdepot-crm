@@ -6,7 +6,7 @@
    #EAB308 accent, status pill patterns already used in SiteAuditJobsView). */
 
 import type { ReactElement } from 'react';
-import { fmtDate, installerById, STATUS } from './shared';
+import { assigneeProgress, fmtDate, installerById, STATUS, subjobDisplayStatus } from './shared';
 import { typeTag } from '../auditRegistry';
 import type { InstallCategory, InstallOrder, Installer, Subjob } from './types';
 
@@ -73,12 +73,19 @@ export function SubjobSummary({ o, installers }: { o: InstallOrder; installers: 
             ? [{ installer_name: (installerById(installers, sj.installer) || { name: 'Unknown' }).name }]
             : [];
         const names = asgns.map((a: any) => a.installer_name || 'Unassigned').join(', ') || 'Unassigned';
+        const st = subjobDisplayStatus(sj);
+        /* Spell out per-installer progress in the tooltip whenever someone's own
+           row is ahead of the sub-job — otherwise "At Site" on a job where two of
+           three installers have finished reads as nothing having happened. */
+        const prog = assigneeProgress(sj);
+        const aheadTip = prog.filter((x) => x.ahead).map((x) => x.name + ': ' + (STATUS[x.status] || { l: x.status }).l);
         return (
-          <span key={i} className="block max-w-[220px] truncate text-[12px] text-gray-600" title={`${fmtDate(sj.date)} · ${names} · ${(STATUS[sj.status] || { l: sj.status }).l}`}>
+          <span key={i} className="block max-w-[220px] truncate text-[12px] text-gray-600" title={[`${fmtDate(sj.date)} · ${names} · ${(STATUS[st] || { l: st }).l}`, ...aheadTip].join('\n')}>
             <span className={`inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${sjTypeClass(sj.type)}`}>
               {typeTag(sj.type)}
             </span>
-            {fmtDate(sj.date)} · {names} · {(STATUS[sj.status] || { l: sj.status }).l}
+            {fmtDate(sj.date)} · {names} · {(STATUS[st] || { l: st }).l}
+            {aheadTip.length ? <span className="ml-1 font-bold text-teal-700">·{aheadTip.length} ahead</span> : null}
           </span>
         );
       })}

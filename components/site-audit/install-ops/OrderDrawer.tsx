@@ -12,8 +12,9 @@ import { useNoteModal } from '../NoteModal';
 import AssignSection from './AssignSection';
 import { Chip, MapLink, Note, sjTypeClass } from './ui';
 import {
-  AUTO_STATUSES, STATUS, dstr, fmtDate, isSplit, mintSubjobId, rollHintText, sjCustomWp, sjDeliveryDate, sjShortLabel,
-  skuQtyField, slotsForWp, syncParentStatus, today, totalRolls, emptySkuRow, fmtLogLocal, opsCallDue,
+  AUTO_STATUSES, STATUS, assigneeProgress, dstr, fmtDate, isSplit, mintSubjobId, rollHintText, sjCustomWp,
+  sjDeliveryDate, sjShortLabel, skuQtyField, slotsForWp, subjobDisplayStatus, syncParentStatus, today,
+  totalRolls, emptySkuRow, fmtLogLocal, opsCallDue,
 } from './shared';
 import { genInstallPDFSM } from './pdf';
 import type { ShadowerOption } from './ShadowerSelect';
@@ -62,6 +63,35 @@ interface Props {
   reload: () => Promise<void>;
   reloadWithDeleted: () => Promise<void>;
   toast: (m: string) => void;
+}
+
+/* Who on the crew is where. Rendered on every sub-job with a crew, not only when
+   they disagree: "everyone is at site" and "two of three have finished" must be
+   equally readable, or the SM learns to distrust the badge. */
+function SubjobCrewProgress({ sj }: { sj: Subjob }) {
+  const crew = assigneeProgress(sj);
+  if (crew.length < 1) return null;
+  const anyAhead = crew.some((c) => c.ahead);
+  if (crew.length === 1 && !anyAhead) return null;
+  return (
+    <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+      {crew.map((c, i) => {
+        const st = STATUS[c.status] || { l: c.status || '—', badge: 'bg-gray-100 text-gray-600' };
+        return (
+          <span key={i} className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold ${st.badge}`}>
+            {c.primary ? <span title="Primary — takes the customer signature">★</span> : null}
+            {c.name}
+            <span className="font-normal opacity-80">· {st.l}</span>
+          </span>
+        );
+      })}
+      {anyAhead ? (
+        <span className="text-[11px] font-semibold text-gray-500">
+          The badge above follows the primary installer — the order completes when they close the job card with the customer.
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export default function OrderDrawer({ order: o, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr, onRetryInstallers, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {
@@ -470,8 +500,14 @@ export default function OrderDrawer({ order: o, installers, shadowerPool, city, 
                   <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${sjTypeClass(sj.type)}`}>{sjShortLabel(o, sj) === typeTag(sj.type) ? typeLabel(sj.type).toUpperCase() : sjShortLabel(o, sj).toUpperCase()}</span>
                     <span className="text-[12.5px] text-gray-600">{skText}</span>
-                    <span className="ml-auto"><Chip st={sj.status} /></span>
+                    <span className="ml-auto"><Chip st={subjobDisplayStatus(sj)} /></span>
                   </div>
+                  {/* Only the PRIMARY installer writes `sj.status`; everyone else's
+                      progress lives on their own assignment row. Without this the
+                      drawer said "At Site" over a timeline full of "installation
+                      done (additional installer: …)" and the SM had no way to tell
+                      which was current. */}
+                  <SubjobCrewProgress sj={sj} />
                   {sj.type === 'wallpaper'
                     ? <div className="flex items-center justify-between rounded-md bg-purple-50 px-3 py-2 mb-2.5 text-[12.5px] text-purple-800"><span>{totalSqft ? totalSqft + ' sq.ft → ' : ''}{rolls} roll{rolls === 1 ? '' : 's'} → <strong>{slotsN} slot{slotsN > 1 ? 's' : ''} · {slotsN * 3} hours</strong></span><span className="text-lg">🕐</span></div>
                     : <div className="text-[12px] text-green-700 mb-2.5">{typeLabel(sj.type)} — 1 full day per installer visit</div>}

@@ -663,7 +663,7 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
       return;
     }
     if (!fl && !wp && !cwp && !cnc && !wpnl) {
-      setErr('Select at least one audit category.');
+      setErr('Select what the audit is for — at least one material.');
       return;
     }
 
@@ -802,8 +802,12 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
 
         <div className="mb-3">
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Audit categories * <span className="normal-case font-medium text-gray-400">(select all that apply)</span>
+            What is the audit for? * <span className="normal-case font-medium text-gray-400">(select every material)</span>
           </label>
+          {/* This is the ONLY record of what the visit is for: the audit row the
+              service manager works from is raised later from the OMS, which at
+              that point carries nothing but the audit service line. */}
+          <div className="text-[11.5px] text-gray-500 mb-1.5">Shown to the service manager and the auditor — pick every material the customer wants measured.</div>
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px] text-gray-700">
               <input type="checkbox" checked={fl} onChange={(e) => setFl(e.target.checked)} />

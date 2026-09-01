@@ -42,6 +42,11 @@ export interface AuditOrder {
   po: string[];
   skus: Array<{ c: string; n: string; audit?: boolean }>;
   auditTicked: any;
+  /* What the STORE said the audit is for, carried over from the pre-booking
+     row this audit was raised from (its `po` is this row's `pi`). Separate from
+     `auditTicked` so the two can never be mistaken for each other: one is what
+     the order itself declares, the other is what the store booked the slot for. */
+  storeCategories: string[];
   bm: string;
   bmEmail: string | null;
   name: string;
@@ -79,7 +84,11 @@ export function mapAuditRow(r: any): AuditOrder {
     pi: r.pi || '',
     po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
     skus: r.skus || [],
+    /* Filled in by `applyAuditCategories` after the list loads — `audit_ticked`
+       is deliberately NOT in AUDIT_COLS (it also carries the job card's room
+       photos, and Postgres detoasts the whole blob per row). */
     auditTicked: null,
+    storeCategories: [],
     bm: r.bm || '—',
     bmEmail: r.bm_email || null,
     name: r.customer_name || '',
@@ -278,8 +287,63 @@ export function auditorConflictOrder(
   }) || null;
 }
 
+/* The statuses whose `audit_ticked` is nothing but the ticked-category list.
+   Until the auditor starts the visit the job card does not exist, so the column
+   is a handful of bytes a row and safe to pull for a whole list; from `onway`
+   onwards it carries the room photos and is the query that times out over the
+   full table (see the detoast note in CLAUDE.md). Every one of these statuses
+   is also exactly where the SM needs to know what material the audit is for —
+   before it happens, not after. */
+export const PRE_CARD_STATUSES = [
+  'slot_reserved', 'slot_converted', 'pending', 'created', 'call_na',
+  'scheduled', 'assigned', 'callpending', 'reschedule',
+];
+
+/* The supplementary query that fills `auditTicked` for those rows. Kept apart
+   from AUDIT_COLS on purpose: widening AUDIT_COLS would put the job card in
+   every list select in this app. */
+export const AUDIT_CATEGORY_QUERY =
+  'audit_orders?select=id,pi,po,status,audit_ticked&status=in.(' + PRE_CARD_STATUSES.join(',') + ')';
+
+/* Merge the narrow category rows into an already-mapped order list, and carry a
+   store pre-booking's categories over to the audit it became.
+
+   The carry-over matters because the two halves of one job are two rows: the
+   store ticks the material when it books the slot, but the audit row is created
+   later from the OMS, whose only SKU at that point is the audit service line —
+   so `tickedCategories` in autoImportAuditOrders yields [] and the SM sees no
+   material at all (true of every live pending audit as of 2026-08-26). The link
+   is the pre-booking's `po` === the audit's `pi`, exactly as in
+   `dropSupersededPreBookings` — never the name or the phone, which are free
+   text on the reservation form. */
+export function applyAuditCategories(orders: AuditOrder[], catRows: any[]): AuditOrder[] {
+  const own = new Map<string, any>();
+  const fromStore = new Map<string, string[]>();
+  for (const r of catRows) {
+    if (!r || !r.id) continue;
+    own.set(String(r.id), r.audit_ticked);
+    const isPre = r.status === 'slot_reserved' || r.status === 'slot_converted';
+    const cats = Array.isArray(r.audit_ticked) ? r.audit_ticked.filter(Boolean) : [];
+    if (isPre && r.po && cats.length) {
+      /* `po` is a single enquiry id on a reservation, but the column is shared
+         with real orders that carry a comma-separated list. */
+      String(r.po).split(',').map((x) => x.trim()).filter(Boolean)
+        .forEach((pi) => { if (!fromStore.has(pi)) fromStore.set(pi, cats); });
+    }
+  }
+  if (!own.size) return orders;
+  return orders.map((o) => {
+    const mine = own.has(String(o.id)) ? own.get(String(o.id)) : o.auditTicked;
+    const store = fromStore.get(o.pi) || [];
+    if (mine === o.auditTicked && !store.length) return o;
+    return { ...o, auditTicked: mine, storeCategories: store };
+  });
+}
+
 /* Category pills for the orders table: the auditor's ticked categories if
-   present, else the v2 job card's rooms, else the created service. */
+   present, else the v2 job card's rooms, else the created service, and finally
+   what the store booked the slot for — which is the only signal that exists on
+   an audit the OMS raised with nothing but the service line on it. */
 export function orderCategories(o: AuditOrder): string[] {
   const at = o.auditTicked;
   if (Array.isArray(at) && at.length) return at.filter(Boolean);
@@ -289,7 +353,19 @@ export function orderCategories(o: AuditOrder): string[] {
   const out: string[] = [];
   if (o.service?.flooring?.length) out.push('Flooring');
   if (o.service?.wallpaper?.length) out.push('Wallpaper');
-  return out;
+  if (out.length) return out;
+  return o.storeCategories || [];
+}
+
+/* True when the pills above came from the store's pre-booking rather than from
+   the order itself — the SM should be able to see which of the two they are
+   reading, since only one of them was ticked by someone who saw the cart. */
+export function categoriesAreFromStore(o: AuditOrder): boolean {
+  const at = o.auditTicked;
+  if (Array.isArray(at) && at.length) return false;
+  if (at && Array.isArray(at.rooms) && at.rooms.length) return false;
+  if (o.service?.flooring?.length || o.service?.wallpaper?.length) return false;
+  return (o.storeCategories || []).length > 0;
 }
 
 export function auditorById(auditors: Auditor[], id: string | null | undefined) {

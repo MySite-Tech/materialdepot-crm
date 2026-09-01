@@ -153,6 +153,25 @@ export function mapUrl(a: string) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
 
+/* The stored `status` column is only as fresh as the last write to it, and a
+   crew's completion used to reach neither it nor the sub-job it belongs to — so
+   orders are sitting in the table right now saying At Site with every installer
+   finished. Healing that on the next write alone would leave the existing rows
+   wrong indefinitely, so the read reconciles too.
+
+   Deliberately narrow: it only ever moves an order that is stuck on a TRAVEL
+   status, which is the reported failure and the only case where the sub-jobs are
+   unambiguously further along than the column. `pending` / `deliv_*` / `created` /
+   `call_na` are pre-service states no sub-job speaks to, and an SM's deliberate
+   `partial` or `completed` is left exactly as they set it. */
+const TRAVEL_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite'];
+
+export function reconciledOrderStatus(stored: string, subjobs: Subjob[] | null): string {
+  if (!subjobs || !subjobs.length) return stored;
+  if (!TRAVEL_STATUSES.includes(stored)) return stored;
+  return syncParentStatus(subjobs, stored);
+}
+
 export function mapInstallRow(r: any): InstallOrder {
   return {
     city: r.city || 'Bengaluru',
@@ -168,7 +187,7 @@ export function mapInstallRow(r: any): InstallOrder {
     auditBy: (r.service && r.service.audit_by) || null,
     deliveryDate: r.delivery_date || null,
     customWp: r.custom_wp || false,
-    status: r.status || 'pending',
+    status: reconciledOrderStatus(r.status || 'pending', r.subjobs || null),
     subjobs: r.subjobs || null,
     service: r.service || null,
     log: r.log || [],
@@ -186,6 +205,61 @@ export function slotLabel(id: string | null | undefined, slotsFl: SlotDef[], slo
     return h12 + ':' + (m < 10 ? '0' : '') + m + ' ' + ap;
   }
   return '—';
+}
+
+/* ── One sub-job, several installers, two places a status lives ───────────
+   `sj.status` is written by the PRIMARY installer only. An additional installer's
+   own progress lives on their `assignments[]` row and NOWHERE else — the field
+   app's markAdditionalComplete writes just that. Nothing in the SM's views used
+   to read it, which is why the dashboard showed "At Site" on ENQ2026082087114
+   while its timeline said "Flooring installation done (additional installer:
+   Ankit Sharma)" seven times over: both were true, and only one was on screen.
+
+   These three helpers are the single derivation for that. Anything in Install Ops
+   that renders a sub-job status must go through `subjobDisplayStatus`, and
+   `rollupStatus` in SiteInstallerApp keys the parent order off the same rule, so
+   the badge, the calendar, the drawer and the order row can never disagree. */
+
+/* The status one assignee is working against. An assignment created before
+   per-assignee status existed has none, so it falls back to the sub-job rather
+   than reading as blank. Mirrors statusForInstaller in SiteInstallerApp. */
+export function assigneeStatus(sj: Subjob, a: Assignment): string {
+  return (a && a.status) || sj.status || '';
+}
+
+/* What the sub-job actually stands at, once every assignee is accounted for.
+   Deliberately conservative in two directions:
+   - it never invents `completed` from a SINGLE installer finishing, because the
+     customer signature is the primary's job and the OMS service leg (i.e. the
+     invoice) is gated on the rollup;
+   - `partial` and `completed` are left exactly as written. `partial` is a
+     deliberate statement that rooms are still outstanding, and an additional
+     installer marking their own part done must not erase it. */
+export function subjobDisplayStatus(sj: Subjob): string {
+  const asgns: Assignment[] = Array.isArray(sj.assignments) ? sj.assignments : [];
+  if (!asgns.length) return sj.status;
+  if (sj.status === 'partial' || sj.status === 'completed') return sj.status;
+  if (asgns.every((a) => a.status === 'completed')) return 'completed';
+  return sj.status;
+}
+
+/* Per-installer progress for the SM, ordered primary first. Returned even when
+   every assignee agrees with the sub-job — the SM asking "who is where" should
+   get the same answer shape every time. */
+export function assigneeProgress(sj: Subjob): Array<{ name: string; status: string; primary: boolean; ahead: boolean }> {
+  const asgns: Assignment[] = Array.isArray(sj.assignments) ? sj.assignments : [];
+  const anyPrimary = asgns.some((a) => a.primary);
+  return asgns.map((a, i) => {
+    const st = assigneeStatus(sj, a);
+    return {
+      name: a.installer_name || '—',
+      status: st,
+      primary: a.primary === true || (!anyPrimary && i === 0),
+      /* Their own row says something the sub-job does not — the case that used
+         to be invisible. */
+      ahead: !!a.status && a.status !== sj.status,
+    };
+  }).sort((x, y) => Number(y.primary) - Number(x.primary));
 }
 
 export function installerById(installers: Installer[], id: string | null | undefined) {
@@ -273,7 +347,10 @@ export function needActionCount(orders: InstallOrder[]): number {
    status instead of mutating `o.status` in place. */
 export function syncParentStatus(subjobs: Subjob[] | null, fallback: string): string {
   if (!subjobs || !subjobs.length) return fallback;
-  const sts = subjobs.map((s) => s.status);
+  /* Via subjobDisplayStatus, so a sub-job whose whole crew has finished counts as
+     completed here too. Reading raw `sj.status` left the order sitting at At Site
+     with a timeline that said the installation was done. */
+  const sts = subjobs.map(subjobDisplayStatus);
   if (sts.every((s) => s === 'completed')) return 'completed';
   if (sts.some((s) => s === 'completed') && sts.some((s) => s !== 'completed')) return 'partial';
   if (sts.some((s) => ['onway', 'atsite'].includes(s))) return sts.find((s) => ['onway', 'atsite'].includes(s))!;

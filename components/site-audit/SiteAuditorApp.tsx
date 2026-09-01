@@ -68,8 +68,11 @@ type LogEntry = {
   arrivalPhoto?: string | null;
   lat?: number | null;
   lng?: number | null;
+  /* The visit was recorded with no GPS fix. Written rather than blocked on, so
+     the office can tell an unverified arrival from a verified one. */
+  locOverride?: boolean;
 };
-type LogExtra = Partial<Pick<LogEntry, 'arrivalPhoto' | 'lat' | 'lng'>>;
+type LogExtra = Partial<Pick<LogEntry, 'arrivalPhoto' | 'lat' | 'lng' | 'locOverride'>>;
 
 /* One measured segment of a room — a wall for the multi-segment categories (wallpaper / CNC /
    wall panels), the single floor for flooring. `sid` is local-only; the serialized room writes it
@@ -1091,6 +1094,7 @@ function JobDetailView({
   const [downloading, setDownloading] = useState(false);
   const [pdfLink, setPdfLink] = useState<string | null>(null);
   const [advBusy, setAdvBusy] = useState(false);
+  const advBusyRef = useRef(false);
 
   // Read-merge-write + busy-guard, mirroring SiteInstallerApp's advanceStatus
   // — without the fresh read, a double-tap builds its `newLog` off the same
@@ -1098,7 +1102,12 @@ function JobDetailView({
   // drops the other tap's log entry.
   const adv = useCallback(
     async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra): Promise<boolean> => {
-      if (advBusy) return false;
+      /* `advBusy` is state: two taps in one tick both read it as false and both
+         write, which is where the repeated identical timeline lines come from
+         (294 of 770 auditor person-day events in live data carry a duplicate,
+         one arrival logged 20 times). The ref is the lock. */
+      if (advBusyRef.current) return false;
+      advBusyRef.current = true;
       setAdvBusy(true);
       try {
         const logText = logOverride || DEFAULT_LOG_TEXT[st] || st;
@@ -1135,10 +1144,11 @@ function JobDetailView({
         showToast(toastMsg);
         return true;
       } finally {
+        advBusyRef.current = false;
         setAdvBusy(false);
       }
     },
-    [advBusy, order, actingAs.name, locationTracker, onUpdateOrder, refreshJobs, showToast],
+    [order, actingAs.name, locationTracker, onUpdateOrder, refreshJobs, showToast],
   );
 
   const handleDownloadPdf = useCallback(async () => {
@@ -1292,11 +1302,16 @@ function JobDetailView({
             setArrivalOpen(false);
             const extra: LogExtra = {};
             if (photo) extra.arrivalPhoto = photo;
-            if (lat != null && lng != null) {
+            const haveFix = lat != null && lng != null;
+            if (haveFix) {
               extra.lat = lat;
               extra.lng = lng;
+            } else {
+              /* Never block the auditor on a dead GPS — but the office must see
+                 that this arrival wasn't verified rather than assume it was. */
+              extra.locOverride = true;
             }
-            adv('atsite', 'At site — open the Job Card', null, extra);
+            adv('atsite', 'At site — open the Job Card', haveFix ? null : 'Auditor arrived at site ⚠ (no location captured)', extra);
           }}
         />
       )}

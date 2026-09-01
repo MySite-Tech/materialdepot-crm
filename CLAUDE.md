@@ -350,6 +350,17 @@ Site Audit → Analytics is five tabs over two databases that are never mixed in
 | **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `SiteAuditAnalyticsView.tsx` |
 | **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `CatAnalyticsPanel.tsx` + `public/md-cat-analytics.js` |
 
+**Three surfaces now report field-service NPS, and they do not all read the same source** — worth
+settling before editing any of them, because "add NPS analytics" could plausibly mean any of the
+three. Execution (here) joins the **`ratings` projection** to the order; Category Ops →
+⭐ Review scores and Category Ops → 📊 NPS analytics both compute from the **call logs**, the
+record itself. So the COE tabs are the superset by construction: a score whose projection POST
+failed counts there and not here, which is exactly the gap `unprojectedScoredCalls` exists to find
+and repair. Verified 2026-09-01 — 41 scored calls in the logs, 41 `ratings` rows dated on or after
+2026-08-31, **zero unprojected** — so they agree today; they are not guaranteed to, and a report
+that "the two NPS numbers differ by a few scores" is this, in that direction only, and is fixed
+from the ⭐ Review scores tab rather than in code.
+
 An order lives in the order book, a site visit lives in Supabase, and **the only bridge between
 them is the customer phone number** — which is why the two halves are separate tabs with separate
 footnotes, and why no tile adds a booking count to an order count. `SiteAuditAnalyticsView.tsx`
@@ -446,7 +457,7 @@ The chain, and what owns each link:
 | Source of truth | `coe_track.calls[].ratings` (audit) · `subjobs[].coe_review.calls[].ratings` (install) | append-only, inside jsonb this app already writes |
 | Projection | `ratings` table (`postJobRating`) | a second copy, written for Analytics only |
 | Bands | `npsFrom`/`npsBand` in `siteAuditShared.ts` | ONE definition; see below |
-| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` | both read the same helpers |
+| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` · `coe-ops/NpsAnalytics.tsx` | all three read the same helpers |
 
 **The `ratings` table is a projection, not the record.** The PATCH that saves
 the call and the POST that projects it are two writes; the second can fail
@@ -473,18 +484,135 @@ last few days of any range show fewer scores than jobs, because those D+1 calls
 haven't happened yet.
 
 **Two different NPS numbers live in this portal, and both are correct.** Site
-Audit → Analytics and Category Ops → Review scores report *field-service* NPS on
-Material Depot's stricter house bands (promoter 9–10, neutral 8, **detractor
-≤7**), matching Admin.html. The `crm.nps` tab (`components/nps`) reports
-*store-visit* NPS from the Django footfall tracker on textbook bands (detractor
-≤6) — a different question of a different population. Never average them, and
-never "fix" one to match the other; each names itself and prints its bands on
-screen so a reader can't mistake which is on the page.
+Audit → Analytics, Category Ops → Review scores and Category Ops → NPS analytics
+report *field-service* NPS on Material Depot's stricter house bands (promoter
+9–10, neutral 8, **detractor ≤7**), matching Admin.html. The `crm.nps` tab
+(`components/nps`) reports *store-visit* NPS from the Django footfall tracker on
+textbook bands (detractor ≤6) — a different question of a different population.
+Never average them, and never "fix" one to match the other; each names itself and
+prints its bands on screen so a reader can't mistake which is on the page.
+
+The trap here is now specifically **layout**, not arithmetic: `NpsAnalytics.tsx`
+deliberately borrows `components/nps`'s tile-and-chart layout because that is the
+shape the business already reads — so the two pages LOOK alike while measuring
+different populations on different bands. That is exactly why the house-bands
+note sits in its filter row and the band names ride on the promoter/neutral/
+detractor tiles themselves. Don't tidy those labels away, and don't copy
+`components/nps`'s `bucketOf`/`catOf` (textbook) into the Site Audit side while
+borrowing its components.
 
 **Job Card & Signature % is measured from the signature**, not from "a rating
 exists". That proxy was only ever true while the field app wrote the rating at
 signing time. Audit reads `audit_ticked->sign->>name`, install reads
 `subjobs[].jobcard.sign`.
+
+## The COE dashboard's six tabs, and the three things they share
+
+`SiteAuditCoeView` does ONE data load (`audit_orders` completed + `install_orders_slim`
++ `wp_production` + `ratings`) and hands the same in-memory rows to every tab, so a
+number on one tab can never disagree with another. Six tabs as of 2026-09-01:
+Audit Follow-ups · Install Reviews · ⭐ Review scores · 📊 NPS analytics ·
+Custom wallpaper · Where it stalls.
+
+Three things are shared deliberately, and each of them is shared because the
+alternative was two copies that drifted:
+
+**One category vocabulary** (`coe-ops/shared.ts`). `CAT_FLOORING` / `CAT_WALLPAPER` /
+`CAT_CUSTOM_WP` / `CAT_WALLPANEL` / `CAT_CNC`, plus `CAT_UNSET` which is a FILTER
+bucket, not a category. Audits resolve through `auditCategories`, install sub-jobs
+through `subjobCategory`. Both tables' category column and both category filters read
+these, so "Flooring" on one tab and "Wooden Flooring" on the other can't split one
+material into two filter entries. Two traps live in here:
+
+- **A completed audit's categories are only in `audit_ticked`, and that column is the
+  whole job card.** `service.flooring`/`service.wallpaper` — what `categoriesFor` used
+  to read alone — is empty on 318 of 330 live completed audits, and 317 of them carry
+  no non-audit SKU either, so the old fallbacks answered 12 rows out of 330 and the
+  column was `—` for everyone else. `audit_ticked` answers 303. So there is a second,
+  separate query (`AUDIT_TICKED_QUERY`, ~1.2 MB / ~1.4s) which is **not in the 30s
+  poll**: a completed audit's job card is terminal, so `SiteAuditCoeView` asks once and
+  then only again when an order appears that it has no answer for. Last good answer in
+  a ref, fire-and-forget, fails quietly — same shape as `SiteAuditOpsView`'s own
+  `AUDIT_CATEGORY_QUERY`, and for the same detoast reason. **Do not "simplify" this by
+  adding `audit_ticked` to `AUDIT_COLS`.**
+- **A room with neither `category` nor `type` is skipped, not defaulted.**
+  `categoryFor`/`typeLabel` both fall back to flooring; 45 live rooms have neither, and
+  defaulting them invents a material the auditor never ticked. They land in
+  `CAT_UNSET` (27 audits), which is filterable and honest. Likewise `custom_wp` is a
+  flag on the install ORDER while its sub-job still reads `wallpaper` — miss that and
+  this filter disagrees with the Custom wallpaper tab about which installs are custom.
+
+**One date-range vocabulary** (`DATE_PRESETS`/`presetRange`/`inDateRange`/
+`previousRange`). Ranges are inclusive both ends, compared as `YYYY-MM-DD` strings,
+and `{from:'',to:''}` IS "all time" so there is no separate no-filter flag. A row with
+no date is in the unbounded range and out of every bounded one — it can't be claimed
+for a window nobody can place it in. `previousRange` abuts the range without
+overlapping it, which is what the NPS deltas rest on.
+
+**Filter order, which is not cosmetic: date + category → buckets → search.** The
+bucket tiles are the denominator the COE works the queue by, so they count what the
+date and category filters leave; "3 Overdue" above a table of 40 rows is worse than no
+tile at all. Search is the one filter the tiles deliberately ignore — typing a name
+should narrow the list, not renumber the queue. Both queues also keep the invariant the
+buckets always had: they partition the filtered set and sum to its total.
+
+**The frozen bar** (`coe-ops/filters.tsx`) pins the filters and bucket tiles while rows
+scroll under them. Its `top` is **measured, never hard-coded**: each host that mounts
+this dashboard has its own sticky header at a height this component can't know —
+`app/App.tsx`'s is a fixed 48px, `/site-audit-view`'s wraps and changes with the window
+— so `useFrozenBar` walks up the ancestors summing the heights of preceding siblings
+that are pinned to the top. **The table's `<thead>` is deliberately NOT sticky, and
+can't be:** the wrapper around it is `overflow-x-auto`, which makes that wrapper the
+sticky scrollport rather than the document, so `sticky top-N` on a header cell doesn't
+pin to the viewport — it shifts the header row N pixels DOWN over the first rows (this
+was live for one iteration and looks exactly like a rendering bug). CSS won't let the
+wrapper scroll on one axis only, either: `overflow-y: visible` next to
+`overflow-x: auto` computes back to `auto`. The frozen bar works because it sits
+outside that wrapper.
+
+### Every cart on the client's number (`coe-ops/ClientCarts.tsx`)
+
+Both call queues' drawers show all of a client's CRM deals for their phone —
+`/crm/leads/?q=<phone>`, the same rows the Leads tab renders. It exists because
+`orderPlacedFor` can only see an INSTALLATION order, so a client who took a site audit
+and then bought tiles, wallpaper and laminates as separate product carts read as "Not
+yet", and the COE had to leave the dashboard and search the number by hand.
+
+It inherits both of `conversionFunnel.ts`'s rules verbatim. `q` is a free-text search
+that also matches names and cart ids, so results are **re-filtered on `phoneKey`** — a
+client whose name contains the digits must not inherit somebody else's deals. And a
+failed request is reported as **unreadable, never as "no carts"**: telling a COE a
+client walked away when they have already paid is the most expensive wrong answer this
+panel could give. Deals are SPLIT by the anchor day rather than filtered to it (all of
+them is the ask), with the earlier ones labelled history and never counted as this
+job's conversion — the same scoping rule `funnelFor` enforces.
+
+Note this panel puts a Django call behind a drawer open, so on `/site-audit-view`
+(which never authenticates) a 401 from it will `forceReLogin()` and drop the preview
+session. Stub the Django host to exercise it — see *Auth, and why a fake session won't
+work*.
+
+### 📊 NPS analytics (`coe-ops/NpsAnalytics.tsx`)
+
+Field-service NPS over a picked date range, laid out like `components/nps`'s
+store-visit dashboard because that is the shape the business already reads. Three
+things it does NOT do, each for a reason recorded elsewhere in this file: it uses the
+house bands via `npsFrom`/`npsBand` (never textbook — and prints them on screen); it
+computes from `scoredCalls` over the CALL LOGS, never from the `ratings` projection, so
+it and ⭐ Review scores cannot disagree; and it therefore dates a score by the day the
+COE MADE the call, not by `ratings.created_at`.
+
+Coverage on that tab is deliberately **all-time, not range-scoped** — it is "every
+review currently owed", the same denominator the Overdue buckets show — and it says so
+on screen.
+
+Two rendering rules worth keeping: a day with no calls is a BREAK in the trend line
+(`connectNulls={false}`), not a zero, because interpolating it invents scores; and
+"NPS by rated staff" is a div-based diverging bar list rather than a Recharts
+`BarChart` because **a bar chart draws nothing at all for a value of exactly 0** — no
+bar, and it skips the label too — and worst-first sorting puts precisely that row at
+the top, so the one person a reader most needs to see was the one row with nothing on
+it.
 
 ## A pre-booking and the audit it becomes are two rows, not one
 
@@ -580,15 +708,22 @@ inert). Leave them; they are not gates.
   query scoped to `status=eq.completed` — the 306 rows the metric's denominator
   actually needs — which returns in ~3s. If you add another jsonb-path column
   to a full-table select here, time it first.
-- **As of 2026-08-25 not one COE call has ever been logged in production.**
-  `coe_track` is non-null on 527 `audit_orders` rows and `{}` on every one of
-  them; zero rows carry `calls`, zero `order_placed` marks, and zero install
-  sub-jobs carry a `coe_review`. So all 444 rows in `ratings` are on-site
-  scores, the newest dated 2026-08-24 — the day this repo removed on-site
-  collection. **Field-service NPS therefore has no live source right now**: the
-  old one is gone and the new one is unused. Any report of "NPS is empty /
-  stale" is this, not a code fault — check `coe_track` for calls before
-  debugging the pipeline.
+- **COE calling began on 2026-08-31, so nothing before that date has a
+  field-service NPS at all.** For the six days from 2026-08-25 this entry said
+  not one COE call had ever been logged, and it was true: `coe_track` was `{}` on
+  all 527 `audit_orders` rows, no sub-job carried a `coe_review`, and all 444
+  rows in `ratings` were legacy on-site scores whose newest was 2026-08-24 — the
+  day this repo removed on-site collection. Old source gone, new source unused.
+  **That gap is now closed**: as of 2026-09-01 there are ~40 scored calls,
+  roughly half audit and half install, every one dated 2026-08-31 or later (it
+  went 40 → 41 inside a single session, so treat any exact figure here as a
+  floor, not a fixture), with coverage around 20 of 324 audit reviews owed and 18
+  of 282 install ones. Two consequences to expect rather than debug: **no date
+  range ending before 2026-08-31 has an NPS**, so 📊 NPS analytics' "vs prev"
+  legitimately reads "no prior period" on almost every preset, and its trend is a
+  couple of points hugging the right-hand edge. A report of "NPS is empty" for an
+  older period is this, not a code fault — check `coe_track` for calls inside the
+  window before touching the pipeline.
 
 - **A floor has no height — per-category wording belongs in `auditRegistry.ts`,
   not in the capture form.** `SegmentAdjustments` hardcoded the rectangle
@@ -778,9 +913,17 @@ inert). Leave them; they are not gates.
   `useNoteModal()` (`components/site-audit/NoteModal.tsx`) instead — a
   controlled in-page modal with the same "returns the trimmed note, or `null`
   if cancelled/left blank; caller MUST abort on `null`" contract, just as real
-  DOM instead of a native dialog. `OrderDrawer.tsx`, `AssignSection.tsx` and
-  `AuditOrderDrawer.tsx` already use it — reuse it rather than reaching for
-  `window.prompt` again anywhere in Site Audit/Install.
+  DOM instead of a native dialog. `OrderDrawer.tsx`, `AssignSection.tsx`,
+  `AuditOrderDrawer.tsx` and — since 2026-09-01 — `coe-ops/Followups.tsx`
+  ("Mark lost") and `coe-ops/Wallpaper.tsx` ("Put on hold", "Cancel PO") use it.
+  Reuse it rather than reaching for `window.prompt` again anywhere in Site
+  Audit/Install. Those three survived four weeks past the first sweep because
+  nothing about a silently no-opping button looks broken in code review, so
+  **grep for `window.prompt` rather than assuming the sweep was complete** — one
+  is still live at `install-ops/OrderDrawer.tsx:179` (the required reason for
+  force-completing an order with no signed job card). That one at least aborts
+  with a toast rather than doing nothing, but an SM in a webview cannot force a
+  completion at all; it is the next one to convert.
 - **`branch_mgr` was added to the app on 2026-08-14 but the Site Audit
   Supabase's `profiles_role_check` CHECK constraint (plain `role in (...)`,
   not a Postgres enum type) was never widened to allow it — so every write
@@ -807,6 +950,92 @@ inert). Leave them; they are not gates.
   already has a CRM login, ticking that one checkbox in Admin > Users is the
   real fix; the migration just stops the DB from rejecting the profile-side
   writes that go along with it.
+
+- **A boolean "cancelled" flag on a retryable capture is a one-way door.**
+  `ArrivalCameraModal`'s `retake` set `cancelledRef = true` — to disown a confirm
+  whose `uploadPhoto()` retry was still in flight — and never cleared it. Since
+  `handleConfirm` checks that flag *after* the upload, the first Retake swallowed
+  every subsequent Confirm for the life of the overlay: the modal stayed open,
+  the button cycled Uploading… → Confirm, and no arrival was ever recorded.
+  Retaking a photo is the most ordinary thing a field worker does here, so that
+  one stale boolean was a silent dead end between "on the way" and "at site"
+  (fixed 2026-08-26). It is now a per-attempt COUNTER, which is the shape this
+  needs: a flag can say "this attempt is abandoned" but has no way to say "the
+  next one is live". `camGenRef` next to it was already a counter for exactly
+  this reason — copy that, not the flag.
+- **Never disable a field app's only forward control on a permission or device
+  probe.** The same modal's shutter was `disabled={!cameraFailed && !camReady}`,
+  and `getUserMedia` can neither resolve nor reject — an Android webview with a
+  pending permission sheet, or a camera another app holds, just leaves the
+  promise open. `camReady` then stays false forever and the worker is left with
+  Cancel as the only live button, unable to mark themselves at site at all. The
+  shutter is now never disabled: it shoots the live preview when there is one and
+  otherwise opens the OS camera, with a 6s watchdog that relabels it. The
+  `material-depot-site` PWA always had this fallback (`snap.onclick` →
+  `nativeCapture()`); the port dropped it. Related: bind a MediaStream to the
+  `<video>` in an effect, not at the `getUserMedia` callsite — the element is
+  unmounted while `cameraFailed` is set, so a late grant assigned `srcObject` to
+  a null ref and left a black preview behind a live button.
+- **`if (busy) return` where `busy` is state is not a lock.** Two taps inside one
+  tick both read it as false and both write — one status change, two identical
+  log lines. `advanceStatus` (`SiteInstallerApp`), `adv` (`SiteAuditorApp`) and
+  the arrival modal's confirm all had this shape; each now holds a ref, with the
+  state kept only for the disabled styling. This is the *write-side* half of the
+  duplicate-log problem the Analytics dedupe guard compensates for on the read
+  side — see the log-duplicate landmine above. A failed upload must also never
+  fall back to embedding base64 in `log[]`: that column is fetched in full by
+  every poll and has no slim view (7 live entries, ~30-50 KB each).
+- **A re-assignment must only reset the assignees whose work actually changed.**
+  `AssignSection.saveAssign` resets each saved assignment to `assigned`, which was
+  added to stop a re-assign after a reschedule leaving `status:'reschedule'` on an
+  assignment under a sub-job that said `assigned` (the field app reads the
+  installer's own status, so that drift showed them "To Reschedule — nothing to
+  do"). Resetting **every** assignee is the opposite bug and the one the field
+  sees: the SM re-opens the form to add a second installer or fix a note, and a
+  colleague already On The Way is yanked back to "Call the customer". They confirm
+  again, the next edit resets them again. `ENQ2026071780139` collected 32 "on the
+  way" entries on 2026-08-26 in bursts that each begin seconds after an SM
+  re-assignment. Now scoped to assignees who are new to the sub-job, whose
+  date/slots moved, or who still carry `reschedule`; `completed` stays terminal.
+- **Only the PRIMARY installer writes `sj.status` — everyone else's progress
+  lives on their `assignments[]` row, and nothing in Install Ops used to read
+  it.** So the dashboard showed "At Site" on `ENQ2026082087114` while its own
+  timeline said "Flooring installation done (additional installer: Ankit
+  Sharma)" seven times over: both were true, and only one was on screen. There
+  is now ONE derivation — `assigneeStatus` / `subjobDisplayStatus` /
+  `assigneeProgress` in `install-ops/shared.ts`, mirrored by
+  `subjobEffectiveStatus` in `SiteInstallerApp.tsx` — and every sub-job status
+  the SM sees goes through it, so the badge, the calendar, the drawer and the
+  order row cannot disagree. Three rules it must keep: a sub-job rolls up to
+  `completed` only when **every** assignee is (one installer finishing must not
+  bill the OMS service leg, which is gated on the parent rollup, nor skip the
+  customer signature); `partial` and `completed` are never overridden (`partial`
+  states that rooms are still outstanding); and `mapInstallRow`'s
+  `reconciledOrderStatus` only ever moves an order that is stuck on a TRAVEL
+  status, because `pending`/`deliv_*`/`created`/`call_na` are pre-service states
+  no sub-job speaks to and an SM's deliberate `partial` is theirs to keep. On
+  live data that reconciliation moves exactly 1 order and 1 sub-job badge, while
+  surfacing 23 installer rows whose own status had been invisible. The
+  `material-depot-site` PWA had the same split *and* fed it into the field app's
+  own `loadJobs`, which is the worse half — see note 119 there.
+- **`audit_ticked` is excluded from `AUDIT_COLS` for good reason, but
+  `mapAuditRow` hardcoding `auditTicked: null` silently disabled every category
+  display in the audit ops views.** The Categories column and the pre-booking
+  drawer could only ever fall through to `o.service`, i.e. `—` on anything
+  pre-service. And the store's own ticks never reached the audit at all: the two
+  halves of one job are two rows (see the pre-booking section above), the store
+  records the material on the reservation, and the audit row is created later by
+  `autoImportAuditOrders` from an OMS order whose only SKU at that point is the
+  audit service line — so `tickedCategories` yields `[]`, as it has on every live
+  pending audit. Fixed 2026-08-26 with `AUDIT_CATEGORY_QUERY` — a second, narrow
+  select over `PRE_CARD_STATUSES` only (210 rows / 36 KB / ~0.9s live, versus the
+  full-table select that times out) whose last good result is held in a ref so a
+  30s poll never repaints the table with the pills missing — plus a carry-over
+  keyed on **the pre-booking's `po` === the audit's `pi`**, never the name or
+  phone. It lands in a separate `storeCategories` field rather than being merged
+  into `auditTicked`, because the two were ticked by different people and
+  `categoriesAreFromStore` labels which one is on screen. **Do not "simplify"
+  this by adding `audit_ticked` to `AUDIT_COLS`.**
 
 ## House style
 
