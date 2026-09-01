@@ -292,6 +292,17 @@ Site Audit → Analytics is five tabs over two databases that are never mixed in
 | **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `SiteAuditAnalyticsView.tsx` |
 | **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `CatAnalyticsPanel.tsx` + `public/md-cat-analytics.js` |
 
+**Three surfaces now report field-service NPS, and they do not all read the same source** — worth
+settling before editing any of them, because "add NPS analytics" could plausibly mean any of the
+three. Execution (here) joins the **`ratings` projection** to the order; Category Ops →
+⭐ Review scores and Category Ops → 📊 NPS analytics both compute from the **call logs**, the
+record itself. So the COE tabs are the superset by construction: a score whose projection POST
+failed counts there and not here, which is exactly the gap `unprojectedScoredCalls` exists to find
+and repair. Verified 2026-09-01 — 41 scored calls in the logs, 41 `ratings` rows dated on or after
+2026-08-31, **zero unprojected** — so they agree today; they are not guaranteed to, and a report
+that "the two NPS numbers differ by a few scores" is this, in that direction only, and is fixed
+from the ⭐ Review scores tab rather than in code.
+
 An order lives in the order book, a site visit lives in Supabase, and **the only bridge between
 them is the customer phone number** — which is why the two halves are separate tabs with separate
 footnotes, and why no tile adds a booking count to an order count. `SiteAuditAnalyticsView.tsx`
@@ -388,7 +399,7 @@ The chain, and what owns each link:
 | Source of truth | `coe_track.calls[].ratings` (audit) · `subjobs[].coe_review.calls[].ratings` (install) | append-only, inside jsonb this app already writes |
 | Projection | `ratings` table (`postJobRating`) | a second copy, written for Analytics only |
 | Bands | `npsFrom`/`npsBand` in `siteAuditShared.ts` | ONE definition; see below |
-| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` | both read the same helpers |
+| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` · `coe-ops/NpsAnalytics.tsx` | all three read the same helpers |
 
 **The `ratings` table is a projection, not the record.** The PATCH that saves
 the call and the POST that projects it are two writes; the second can fail
@@ -415,13 +426,22 @@ last few days of any range show fewer scores than jobs, because those D+1 calls
 haven't happened yet.
 
 **Two different NPS numbers live in this portal, and both are correct.** Site
-Audit → Analytics and Category Ops → Review scores report *field-service* NPS on
-Material Depot's stricter house bands (promoter 9–10, neutral 8, **detractor
-≤7**), matching Admin.html. The `crm.nps` tab (`components/nps`) reports
-*store-visit* NPS from the Django footfall tracker on textbook bands (detractor
-≤6) — a different question of a different population. Never average them, and
-never "fix" one to match the other; each names itself and prints its bands on
-screen so a reader can't mistake which is on the page.
+Audit → Analytics, Category Ops → Review scores and Category Ops → NPS analytics
+report *field-service* NPS on Material Depot's stricter house bands (promoter
+9–10, neutral 8, **detractor ≤7**), matching Admin.html. The `crm.nps` tab
+(`components/nps`) reports *store-visit* NPS from the Django footfall tracker on
+textbook bands (detractor ≤6) — a different question of a different population.
+Never average them, and never "fix" one to match the other; each names itself and
+prints its bands on screen so a reader can't mistake which is on the page.
+
+The trap here is now specifically **layout**, not arithmetic: `NpsAnalytics.tsx`
+deliberately borrows `components/nps`'s tile-and-chart layout because that is the
+shape the business already reads — so the two pages LOOK alike while measuring
+different populations on different bands. That is exactly why the house-bands
+note sits in its filter row and the band names ride on the promoter/neutral/
+detractor tiles themselves. Don't tidy those labels away, and don't copy
+`components/nps`'s `bucketOf`/`catOf` (textbook) into the Site Audit side while
+borrowing its components.
 
 **Job Card & Signature % is measured from the signature**, not from "a rating
 exists". That proxy was only ever true while the field app wrote the rating at
@@ -630,15 +650,22 @@ inert). Leave them; they are not gates.
   query scoped to `status=eq.completed` — the 306 rows the metric's denominator
   actually needs — which returns in ~3s. If you add another jsonb-path column
   to a full-table select here, time it first.
-- **As of 2026-08-25 not one COE call has ever been logged in production.**
-  `coe_track` is non-null on 527 `audit_orders` rows and `{}` on every one of
-  them; zero rows carry `calls`, zero `order_placed` marks, and zero install
-  sub-jobs carry a `coe_review`. So all 444 rows in `ratings` are on-site
-  scores, the newest dated 2026-08-24 — the day this repo removed on-site
-  collection. **Field-service NPS therefore has no live source right now**: the
-  old one is gone and the new one is unused. Any report of "NPS is empty /
-  stale" is this, not a code fault — check `coe_track` for calls before
-  debugging the pipeline.
+- **COE calling began on 2026-08-31, so nothing before that date has a
+  field-service NPS at all.** For the six days from 2026-08-25 this entry said
+  not one COE call had ever been logged, and it was true: `coe_track` was `{}` on
+  all 527 `audit_orders` rows, no sub-job carried a `coe_review`, and all 444
+  rows in `ratings` were legacy on-site scores whose newest was 2026-08-24 — the
+  day this repo removed on-site collection. Old source gone, new source unused.
+  **That gap is now closed**: as of 2026-09-01 there are ~40 scored calls,
+  roughly half audit and half install, every one dated 2026-08-31 or later (it
+  went 40 → 41 inside a single session, so treat any exact figure here as a
+  floor, not a fixture), with coverage around 20 of 324 audit reviews owed and 18
+  of 282 install ones. Two consequences to expect rather than debug: **no date
+  range ending before 2026-08-31 has an NPS**, so 📊 NPS analytics' "vs prev"
+  legitimately reads "no prior period" on almost every preset, and its trend is a
+  couple of points hugging the right-hand edge. A report of "NPS is empty" for an
+  older period is this, not a code fault — check `coe_track` for calls inside the
+  window before touching the pipeline.
 
 - **A floor has no height — per-category wording belongs in `auditRegistry.ts`,
   not in the capture form.** `SegmentAdjustments` hardcoded the rectangle
