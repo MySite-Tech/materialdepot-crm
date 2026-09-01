@@ -30,7 +30,7 @@ import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPost, syntheticSiteAud
 import { autoLinkBmsFromRows } from './resolveBmFromBackend';
 import { AUDIT_SKU } from './audit-ops/shared';
 import { INSTALL_SKU } from './install-ops/shared';
-import { poFieldFor } from './omsService';
+import { confirmServiceStage, poFieldFor } from './omsService';
 import { getToken } from '@/lib/mockApi';
 
 export const AUTO_ATTRIBUTION = 'Auto-import (backend)';
@@ -50,6 +50,9 @@ type BackendRow = {
   po_number?: string;
   stage_id?: number;
   sales_order_id?: number;
+  /* Derived OMS stage status ('held' while the leg waits on someone confirming the work was
+     performed) — what `confirmCompletedJobs` diffs the CRM's own status against. */
+  stage_status?: string | null;
   delivery_date?: string | null;
   customer?: { name?: string; contact?: number | string } | null;
   shipping_address?: { address?: string; city?: string } | null;
@@ -226,10 +229,50 @@ async function fetchBackendRows(kind: Kind): Promise<BackendRow[]> {
   return data.results;
 }
 
+/* The other half of the reconcile: telling OMS about work the CRM already considers done.
+
+   A SERVICE leg is HELD until someone confirms the work happened, and that confirmation is what
+   raises the invoice — so a confirmation that never lands is an order that never bills. It rode
+   entirely on one best-effort call from the auditor's / installer's browser at the moment they hit
+   complete, with a localStorage queue that only drains on app load; between 2026-08-21 and 09-01
+   that dropped 51 completed jobs, every one of them an unraised invoice.
+
+   This is the backstop, and it needs nothing new: the backend list already reports `stage_id` and
+   `stage_status` per leg, the CRM table already holds the job's own status, and this reconcile
+   already has both in hand. Anything the field app missed gets picked up the next time an ops view
+   loads. Idempotent upstream — a second confirmation records nothing new and cannot double-bill. */
+/* A redo/re-visit is a SEPARATE CRM row whose `pi` is the lead with a suffix — 'ENQ…-R',
+   'ENQ… - R', 'ENQ…-1'. It is the same enquiry and the same service leg, and a redo only exists
+   because the work was done, so it counts as completion for the leg the backend reports under the
+   bare lead id. Lead ids carry no internal dash, so this only ever strips a suffix. */
+function leadKey(pi: unknown): string {
+  return String(pi).trim().replace(/\s*-\s*(R|\d+)$/i, '');
+}
+
+async function confirmCompletedJobs(backend: BackendRow[], known: any[]): Promise<number> {
+  const completed = new Set(
+    known.filter((r: any) => String(r.status) === 'completed').map((r: any) => leadKey(r.pi)),
+  );
+  if (!completed.size) return 0;
+  const stragglers = backend.filter(
+    (r) => r.stage_id && r.stage_status === 'held' && completed.has(leadKey(r.estimate_lead_id)),
+  );
+  let confirmed = 0;
+  for (const r of stragglers) {
+    /* Attributed to the reconcile, not to whoever happens to have the ops view open — they did not
+       perform the work, they just happened to be the authenticated session that noticed. */
+    if (await confirmServiceStage(Number(r.stage_id), 'Confirmed by CRM reconcile — job already marked completed in the Site Audit tab')) {
+      confirmed += 1;
+    }
+  }
+  if (confirmed) console.info('[site-audit] confirmed ' + confirmed + ' completed job(s) back to OMS');
+  return confirmed;
+}
+
 async function reconcile(kind: Kind): Promise<number> {
   const [backend, known, bms] = await Promise.all([
     fetchBackendRows(kind),
-    sbGet(kind.table + '?select=pi'),
+    sbGet(kind.table + '?select=pi,status'),
     kind.table === 'audit_orders' ? fetchBmEmailsByPhone() : Promise.resolve(new Map() as BmIndex),
   ]);
   // A PostgREST error resolves as a non-array here, and treating that as "no
@@ -247,6 +290,13 @@ async function reconcile(kind: Kind): Promise<number> {
       if (linked) console.info('[site-audit] linked ' + linked + ' order(s) to their BM account');
     } catch { /* attribution is a repair, never a reason to fail the reconcile */ }
   }
+
+  /* Before the insert diff and regardless of it, like the attribution repair above: this recovers
+     EXISTING rows whose completion never reached OMS, so it must not be gated on there being
+     something new to import. Never a reason to fail the reconcile. */
+  try {
+    await confirmCompletedJobs(backend, known);
+  } catch { /* the field app's own retry queue is the other path; try again next load */ }
 
   const seen = new Set(known.map((r: any) => String(r.pi)));
   const cutoff = Date.now() - MAX_AGE_DAYS * 86400000;
