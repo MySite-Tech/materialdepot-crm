@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  addDays, anchorDate, categoriesFor, followupRows, todayStr,
+  addDays, anchorDate, auditCategories, followupRows, todayStr,
   type CoeInstall, type CoeOrder, type FollowupRow,
 } from './shared';
 import { WP_STAGES, WP_VENDORS, wpBucket, wpDurations, wpEverReached, wpFmtDur, wpNext, wpSla, wpStageAt, wpStageLabel, type WpBucketKey, type WpNext, type WpRow, type WpSla } from './wpTrack';
@@ -87,7 +87,7 @@ export default function Insights({ orders, installByPhone, wpRows }: {
   const cuts = [
     cut((r) => r.o.bm, 'By BM'),
     cut((r) => r.o.auditorName, 'By auditor'),
-    cut((r) => categoriesFor(r.o).map((c) => c.l).join(' + ') || '—', 'By category'),
+    cut((r) => auditCategories(r.o).join(' + ') || '—', 'By category'),
   ];
 
   return (

@@ -2,11 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, fmtLog } from '../siteAuditShared';
+import { useNoteModal } from '../NoteModal';
 import {
-  BUCKETS, CHECKPOINTS, OUTCOMES, addDays, bucketFor, categoriesFor, checkpointState,
-  coeCalls, daysBetween, followupRows, loadOrderLog, mapUrl, orderPlacedFor, patchCoe, postJobRating, todayStr,
-  type BucketKey, type CheckpointState, type CoeInstall, type CoeOrder, type FollowupRow as Row,
+  BUCKETS, CATEGORY_ORDER, CAT_UNSET, CHECKPOINTS, OUTCOMES, addDays, anchorDate, auditCategories,
+  bucketFor, checkpointState, coeCalls, daysBetween, followupRows, inDateRange,
+  loadOrderLog, mapUrl, matchesCategory, orderPlacedFor, patchCoe, postJobRating, presetRange, todayStr,
+  type BucketKey, type CheckpointState, type CoeInstall, type CoeOrder, type DatePresetKey,
+  type DateRange, type FollowupRow as Row,
 } from './shared';
+import { BucketTiles, CategoryFilter, CategoryPills, DateRangeFilter, FrozenBar, useFrozenBar } from './filters';
+import ClientCarts from './ClientCarts';
 
 function exportCsv(rows: Row[]) {
   const head = ['ENQ ID', 'Client Name', 'Client Number', 'Categories', 'Auditor', 'BM', 'Audit Date', 'Order Placed', 'D+1 (Audit Review)', 'D+3 (BM review)', 'D+14 (BM + client)', 'Result'];
@@ -16,7 +21,7 @@ function exportCsv(rows: Row[]) {
     const byK: Record<string, CheckpointState> = {};
     r.cps.forEach((c) => { byK[c.k] = c; });
     return [
-      r.o.pi, r.o.name, r.o.phone, categoriesFor(r.o).map((c) => c.l).join(' + '), r.o.auditorName || '', r.o.bm || '', r.o.date || '',
+      r.o.pi, r.o.name, r.o.phone, auditCategories(r.o).join(' + '), r.o.auditorName || '', r.o.bm || '', r.o.date || '',
       r.placed ? 'Y' : 'not yet', noteOf(byK.d1), noteOf(byK.d3), noteOf(byK.d14),
       r.o.coeTrack.result || (r.placed ? 'converted' : ''),
     ].map(cell).join(',');
@@ -44,11 +49,27 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
   const [bucket, setBucket] = useState<BucketKey>('overdue');
   const [bucketPicked, setBucketPicked] = useState(false);
   const [q, setQ] = useState('');
+  const [preset, setPreset] = useState<DatePresetKey>('all');
+  const [range, setRange] = useState<DateRange>(() => presetRange('all'));
+  const [cats, setCats] = useState<string[]>([]);
   // Keyed by row id, not `pi` — pi is free text with no uniqueness guarantee,
   // so a blank or repeated one would collide React keys and open the wrong row.
   const [openId, setOpenId] = useState<string | null>(null);
+  const frozen = useFrozenBar();
 
-  const all = useMemo(() => followupRows(orders, installByPhone), [orders, installByPhone]);
+  const everyRow = useMemo(() => followupRows(orders, installByPhone), [orders, installByPhone]);
+
+  /* THE FILTER ORDER MATTERS, and it is: date+category first, THEN buckets, THEN
+     search. The bucket tiles are the denominator the COE works the queue by, so
+     they have to count what the date and category filters leave — "3 Overdue" on
+     a tile above a table showing 40 rows is worse than no tile. Search is the
+     one filter the tiles deliberately IGNORE (as before): typing a name should
+     narrow the list, not renumber the queue you are working. */
+  const all = useMemo(
+    () => everyRow.filter((r) => inDateRange(anchorDate(r.o), range) && matchesCategory(auditCategories(r.o), cats)),
+    [everyRow, range, cats],
+  );
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     BUCKETS.forEach((b) => { c[b.k] = 0; });
@@ -56,14 +77,30 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
     return c;
   }, [all]);
 
+  /* Category counts for the picker come from the DATE-filtered rows but ignore
+     the category selection itself — otherwise every unpicked option reads 0 the
+     moment one is picked, which looks like "this material has no audits". */
+  const catCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    [...CATEGORY_ORDER, CAT_UNSET].forEach((k) => { c[k] = 0; });
+    everyRow.forEach((r) => {
+      if (!inDateRange(anchorDate(r.o), range)) return;
+      const list = auditCategories(r.o);
+      if (!list.length) { c[CAT_UNSET]++; return; }
+      list.forEach((k) => { if (k in c) c[k]++; });
+    });
+    return c;
+  }, [everyRow, range]);
+
   let activeBucket = bucket;
   if (!bucketPicked && !counts[bucket]) activeBucket = firstNonEmpty(BUCKETS.map((b) => b.k), counts, bucket) as BucketKey;
 
   const list = all.filter((r) => r.bucket === activeBucket)
-    .filter((r) => !q || [r.o.pi, r.o.name, r.o.phone, r.o.bm, r.o.auditorName].join(' ').toLowerCase().includes(q.toLowerCase()))
+    .filter((r) => !q || [r.o.pi, r.o.name, r.o.phone, r.o.bm, r.o.auditorName, ...auditCategories(r.o)].join(' ').toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => String(a.nextDue?.dueOn || '9999').localeCompare(String(b.nextDue?.dueOn || '9999')));
 
   const openRow = openId ? all.find((r) => r.o.id === openId) || null : null;
+  const filtered = all.length !== everyRow.length;
 
   return (
     <div>
@@ -75,33 +112,45 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
         <button onClick={() => exportCsv(list)} className="ml-auto shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700">⬇ CSV</button>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-        {BUCKETS.map((b) => (
-          <button
-            key={b.k}
-            onClick={() => { setBucket(b.k); setBucketPicked(true); }}
-            className={`rounded-lg border px-3 py-2.5 text-left ${activeBucket === b.k ? 'border-[#1F3A5F] bg-[#eef3f9]' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-          >
-            <div className={`text-[20px] font-extrabold leading-tight ${b.k === 'overdue' ? 'text-red-600' : b.k === 'today' ? 'text-amber-600' : b.k === 'converted' ? 'text-green-700' : 'text-[#1F3A5F]'}`}>{counts[b.k] || 0}</div>
-            <div className="mt-0.5 text-[11px] font-semibold text-gray-500">{b.l}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] max-w-[320px] flex-1">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client, phone, ENQ, BM, auditor…" className="w-full rounded-md border border-gray-200 py-2 pl-8 pr-3 text-[13.5px] outline-none focus:border-yellow-400" />
+      {/* Pinned: the counts and the controls the COE reads against whichever row
+          is on screen. Everything below scrolls under it. */}
+      <FrozenBar top={frozen.top} setRef={frozen.ref}>
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          <DateRangeFilter label="Site audit date" preset={preset} range={range} onChange={(p, r) => { setPreset(p); setRange(r); }} />
+          <CategoryFilter selected={cats} counts={catCounts} onChange={setCats} />
+          <div className="relative min-w-[180px] max-w-[300px] flex-1">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔎</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client, phone, ENQ, BM, auditor…" className="w-full rounded-md border border-gray-200 py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-yellow-400" />
+          </div>
+          <div className="text-[11.5px] text-gray-400">
+            {all.length} audit{all.length === 1 ? '' : 's'}{filtered ? ' of ' + everyRow.length : ' tracked'}
+          </div>
+          {filtered ? (
+            <button
+              onClick={() => { setPreset('all'); setRange(presetRange('all')); setCats([]); }}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11.5px] font-semibold text-gray-500"
+            >
+              Clear filters
+            </button>
+          ) : null}
         </div>
-        <div className="text-[12px] text-gray-400">{all.length} completed audit{all.length === 1 ? '' : 's'} tracked</div>
-      </div>
+        <BucketTiles buckets={BUCKETS} counts={counts} active={activeBucket} onPick={(k) => { setBucket(k); setBucketPicked(true); }} />
+      </FrozenBar>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         {list.length ? (
           <table className="w-full">
             <thead>
+              {/* NOT sticky, and it can't be: the wrapper below is
+                  `overflow-x-auto`, which makes IT the sticky scrollport rather
+                  than the document. `sticky top-N` on a cell in here doesn't
+                  pin to the viewport, it just shifts the header row N pixels
+                  down over the first rows. (CSS won't let the wrapper scroll on
+                  one axis only — `overflow-y: visible` beside `overflow-x: auto`
+                  computes back to auto.) The frozen bar above is outside that
+                  wrapper, which is why it works. */}
               <tr>{['Client', 'Audit', 'Categories', 'BM', 'Auditor', 'Order', 'Next call'].map((h) => (
-                <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
+                <th key={h} className="whitespace-nowrap bg-gray-50 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">{h}</th>
               ))}</tr>
             </thead>
             <tbody>
@@ -110,8 +159,12 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
           </table>
         ) : (
           <div className="py-12 text-center text-[13px] text-gray-400">
-            <div className="mb-2 text-2xl">{counts[activeBucket] ? '🔎' : '✅'}</div>
-            {counts[activeBucket] ? 'No rows match your search.' : 'Nothing in this bucket.'}
+            <div className="mb-2 text-2xl">{counts[activeBucket] ? '🔎' : filtered ? '🗂️' : '✅'}</div>
+            {counts[activeBucket]
+              ? 'No rows match your search.'
+              : filtered
+                ? 'Nothing in this bucket for the date range and categories you picked.'
+                : 'Nothing in this bucket.'}
           </div>
         )}
       </div>
@@ -128,7 +181,6 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
 
 function FollowupRow({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
   const o = r.o;
-  const cats = categoriesFor(o);
   const placedTxt = r.placed
     ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-700">{r.placed.auto ? 'Order placed' : 'Marked placed'}</span>
     : (o.coeTrack.result === 'lost' ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-500">Lost</span> : <span className="text-[12px] text-gray-400">Not yet</span>);
@@ -144,7 +196,7 @@ function FollowupRow({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
     <tr onClick={onOpen} className="cursor-pointer border-t border-gray-100 hover:bg-gray-50">
       <td className="px-3 py-2.5 text-[13px]"><div className="font-bold text-gray-900">{o.name || '—'}</div><div className="text-[11.5px] text-gray-400">{o.phone || '—'}</div></td>
       <td className="px-3 py-2.5 text-[13px]"><div>{o.date ? fmtDateA(o.date) : '—'}</div><div className="text-[11.5px] text-gray-400">{o.pi}</div></td>
-      <td className="px-3 py-2.5">{cats.length ? cats.map((c) => <span key={c.l} className="mr-1 inline-block rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ background: c.c === 'wp' ? '#efeaf8' : c.c === 'cwp' ? '#e0f4f4' : '#fff4d6', color: c.c === 'wp' ? '#5b3aa6' : c.c === 'cwp' ? '#0f6e74' : '#7a5800' }}>{c.l}</span>) : <span className="text-gray-400">—</span>}</td>
+      <td className="px-3 py-2.5 text-[13px]"><CategoryPills cats={auditCategories(o)} /></td>
       <td className="px-3 py-2.5 text-[13px] text-gray-700">{o.bm || '—'}</td>
       <td className="px-3 py-2.5 text-[13px] text-gray-700">{o.auditorName || '—'}</td>
       <td className="px-3 py-2.5">{placedTxt}</td>
@@ -168,6 +220,13 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { order: CoeOrder; installByPhone: Map<string, CoeInstall[]>; who: string; whoEmail?: string | null; onClose: () => void }) {
   const [, force] = useState(0);
   const [msg, setMsg] = useState('');
+  /* Mark lost used window.prompt() for its required reason, which is the exact
+     shape CLAUDE.md's landmine covers: installed PWAs and mobile webviews
+     commonly return null with no dialog shown, and desktop Chrome silences it
+     per-origin for good once a user ticks "prevent additional dialogs" — so the
+     button just did nothing, indistinguishable from a dead one. Same contract
+     (a blank or cancelled note ABORTS), real DOM. */
+  const note = useNoteModal();
   // Fetched per order rather than carried by the list — see AUDIT_COLS.
   const [log, setLog] = useState<any[] | null>(null);
   useEffect(() => {
@@ -219,7 +278,7 @@ function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { 
             <KV k="Client" v={<a className="text-blue-600" href={'tel:' + o.phone}>{o.phone || '—'}</a>} />
             <KV k="BM" v={<>{o.bm || '—'}{o.bmEmail ? <> · <a className="text-blue-600" href={'mailto:' + o.bmEmail}>{o.bmEmail}</a></> : null}</>} />
             <KV k="Auditor" v={o.auditorName || '—'} />
-            <KV k="Categories" v={categoriesFor(o).map((c) => c.l).join(', ') || '—'} />
+            <KV k="Categories" v={auditCategories(o).join(', ') || '—'} />
             <KV k="Address" v={o.addr ? <a className="text-blue-600" href={mapUrl(o.addr)} target="_blank" rel="noopener noreferrer">📍 {o.addr}</a> : '—'} />
           </Sec>
 
@@ -229,6 +288,15 @@ function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { 
 
           <Sec title="Order status">
             <OrderStatusSection row={row} run={run} />
+          </Sec>
+
+          {/* Every cart on this number, not just the installation order the
+              `Order status` block above can see. The two answer different
+              questions and are deliberately both here: that block is "did this
+              audit convert", this one is "what has this client actually
+              bought". */}
+          <Sec title="All carts on this number">
+            <ClientCarts phone={o.phone} anchorDate={anchorDate(o)} anchorLabel="site audit" />
           </Sec>
 
           <Sec title="Log a call">
@@ -246,11 +314,10 @@ function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { 
             ) : (
               <div className="flex flex-wrap gap-2">
                 <button className="rounded-md bg-green-700 px-3 py-1.5 text-[12px] font-bold text-white" onClick={() => run((c) => { c.result = 'converted'; delete c.lost_reason; return c; }, 'Marked converted by category ops', 'Marked converted')}>Mark converted</button>
-                <button className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700" onClick={() => {
-                  const why = window.prompt('Why was this lost? (required)');
-                  if (why === null) return;
-                  if (!why.trim()) { setMsg('A reason is required'); return; }
-                  run((c) => { c.result = 'lost'; c.lost_reason = why.trim(); return c; }, 'Marked lost by category ops — ' + why.trim(), 'Marked lost');
+                <button className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700" onClick={async () => {
+                  const why = await note.ask('Why was this lost?', 'Marking a client lost retires the follow-up cadence, so the reason is what the next person reads instead of calling them again.');
+                  if (!why) return;
+                  run((c) => { c.result = 'lost'; c.lost_reason = why; return c; }, 'Marked lost by category ops — ' + why, 'Marked lost');
                 }}>Mark lost</button>
                 <button className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700" onClick={() => {
                   const until = addDays(todayStr(), 7);
@@ -289,6 +356,7 @@ function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { 
 
         {msg ? <div className="border-t border-gray-100 bg-blue-50 px-5 py-2 text-[12.5px] font-semibold text-blue-700">{msg}</div> : null}
       </div>
+      {note.modal}
     </div>
   );
 }

@@ -5,26 +5,34 @@
    order (D+1/D+3/D+14 call cadence) and tracks custom-wallpaper production
    PO-by-PO through render → approval → print → delivery → install.
 
-   Three tabs, one shared data load (audit_orders/install_orders/wp_production)
-   — every tab reads the same in-memory rows so a number on one tab can never
-   disagree with another (the CLAUDE.md "sum-to-total" lesson this feature's
-   source repo learned the hard way). */
+   Six tabs, ONE shared data load (audit_orders/install_orders/wp_production/
+   ratings) — every tab reads the same in-memory rows so a number on one tab can
+   never disagree with another (the CLAUDE.md "sum-to-total" lesson this
+   feature's source repo learned the hard way). That is also why 📊 NPS
+   analytics computes from `scoredCalls` over these same rows rather than
+   querying for its own: it and ⭐ Review scores must never be able to disagree
+   about what the COE typed. */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { inCity, phoneKey, sbGet, type CityFilter } from './siteAuditShared';
-import { AUDIT_COLS, INSTALL_COLS, RATING_COLS, mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder, type RatingRow } from './coe-ops/shared';
+import {
+  AUDIT_COLS, AUDIT_TICKED_QUERY, INSTALL_COLS, RATING_COLS, applyCoeCategories, auditCategoryMap,
+  mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder, type RatingRow,
+} from './coe-ops/shared';
 import type { WpRow } from './coe-ops/wpTrack';
 import Followups from './coe-ops/Followups';
 import InstallReviews from './coe-ops/InstallReviews';
 import ReviewScores from './coe-ops/ReviewScores';
+import NpsAnalytics from './coe-ops/NpsAnalytics';
 import Wallpaper from './coe-ops/Wallpaper';
 import Insights from './coe-ops/Insights';
 
-type Tab = 'followups' | 'installreviews' | 'scores' | 'wallpaper' | 'insights';
+type Tab = 'followups' | 'installreviews' | 'scores' | 'nps' | 'wallpaper' | 'insights';
 const TABS: Array<{ k: Tab; l: string }> = [
   { k: 'followups', l: '📞 Audit Follow-ups' },
   { k: 'installreviews', l: '📞 Install Reviews' },
   { k: 'scores', l: '⭐ Review scores' },
+  { k: 'nps', l: '📊 NPS analytics' },
   { k: 'wallpaper', l: '🖼️ Custom wallpaper' },
   { k: 'insights', l: '📉 Where it stalls' },
 ];
@@ -42,6 +50,14 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
   const [ratings, setRatings] = useState<RatingRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /* Ticked categories, held outside React state because they are only ever
+     merged INTO the order list (see the fetch below for why they aren't in
+     AUDIT_COLS). The ref is what lets a poll repaint the table with its
+     category pills still on it while the second query is in flight — the same
+     shape SiteAuditOpsView uses for its own AUDIT_CATEGORY_QUERY. */
+  const catsRef = useRef<Map<string, string[]>>(new Map());
+  const catsInFlight = useRef(false);
+
   const load = useCallback(async () => {
     const [aRows, iRows, wRows, rRows] = await Promise.all([
       sbGet('audit_orders?select=' + AUDIT_COLS + '&status=eq.completed&order=date.desc'),
@@ -54,7 +70,34 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
       // which captured scores already reached it.
       sbGet('ratings?select=' + RATING_COLS),
     ]);
-    if (Array.isArray(aRows)) setOrders(aRows.map(mapCoeAudit));
+    if (Array.isArray(aRows)) {
+      const mapped = aRows.map(mapCoeAudit).map((o) => {
+        const t = catsRef.current.get(String(o.id));
+        return t ? { ...o, tickedCats: t } : o;
+      });
+      setOrders(mapped);
+
+      /* The category query is `audit_ticked` over the same completed rows — the
+         only place the auditor's ticked material is recorded, and 1.2 MB / ~1.4s
+         because on a completed audit that column IS the job card (the detoast
+         trap in CLAUDE.md). So it is NOT part of the 30s poll: a completed
+         audit's job card is terminal, so it is asked once and then only again
+         when an audit turns up that we have no answer for — a fresh completion.
+         Fire-and-forget and fails quietly: no category pill is worth delaying
+         or blanking the queue for, and the previous answer stays on screen. */
+      const unknown = mapped.some((o) => !catsRef.current.has(String(o.id)));
+      if (unknown && !catsInFlight.current) {
+        catsInFlight.current = true;
+        sbGet(AUDIT_TICKED_QUERY)
+          .then((rows) => {
+            if (!Array.isArray(rows)) return;
+            catsRef.current = auditCategoryMap(rows);
+            setOrders((prev) => applyCoeCategories(prev, catsRef.current));
+          })
+          .catch(() => { /* keep whatever categories we already had */ })
+          .finally(() => { catsInFlight.current = false; });
+      }
+    }
     if (Array.isArray(iRows)) setInstalls(iRows.map(mapCoeInstall));
     if (Array.isArray(wRows)) setWpRows(wRows);
     setRatings(Array.isArray(rRows) ? (rRows as RatingRow[]) : (cur) => cur);
@@ -115,6 +158,8 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
         <InstallReviews installs={scopedInstalls} who={attribution} whoEmail={whoEmail} onChanged={load} />
       ) : tab === 'scores' ? (
         <ReviewScores orders={scopedOrders} installs={scopedInstalls} installByPhone={installByPhone} ratings={ratings} onChanged={load} />
+      ) : tab === 'nps' ? (
+        <NpsAnalytics orders={scopedOrders} installs={scopedInstalls} installByPhone={installByPhone} />
       ) : tab === 'wallpaper' ? (
         <Wallpaper rows={scopedWp} installs={scopedInstalls} who={attribution} city={cityScope} onChanged={load} />
       ) : (

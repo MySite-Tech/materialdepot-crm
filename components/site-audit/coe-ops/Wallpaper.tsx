@@ -5,6 +5,7 @@ import { fmtLog } from '../siteAuditShared';
 import { createWpRow, patchWp, stampWpStage, todayStr, type CoeInstall } from './shared';
 import WpLadder from './WpLadder';
 import { KV, Sec } from '../drawerUi';
+import { useNoteModal } from '../NoteModal';
 import {
   WP_BUCKETS, WP_DECISIONS, WP_VENDORS, wpBucket, wpFmtDur, wpNext, wpRounds,
   wpSla, wpVendor, type WpBucketKey, type WpNext, type WpRow, type WpSla,
@@ -287,6 +288,13 @@ function OrderDetailsForm({ row, who, onSaved }: { row: WpRow; who: string; onSa
   const [notes, setNotes] = useState(row.notes || '');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  /* Both required reasons below were window.prompt(), which is the landmine in
+     CLAUDE.md: it silently no-ops in installed PWAs and mobile webviews, and
+     desktop Chrome disables it per-origin for good once a user ticks "prevent
+     additional dialogs" — so Put on hold and Cancel PO just did nothing, with no
+     error anywhere. Same contract as before (a blank or cancelled reason
+     ABORTS), real DOM. */
+  const note = useNoteModal();
 
   async function saveDetails() {
     setErr('');
@@ -314,10 +322,9 @@ function OrderDetailsForm({ row, who, onSaved }: { row: WpRow; who: string; onSa
     const to = row.state === 'on_hold' ? 'active' : 'on_hold';
     let why = '';
     if (to === 'on_hold') {
-      const v = window.prompt('Why is this on hold? (required)');
-      if (v === null) return;
-      if (!v.trim()) { setErr('A reason is required'); return; }
-      why = v.trim();
+      const v = await note.ask('Why is this on hold?', 'A held PO stops appearing as due, so the reason is the only record of what the vendor or client is waiting on.');
+      if (!v) return;
+      why = v;
     }
     try {
       const updated = await patchWp(row, (cur) => { cur.state = to as any; return cur; }, to === 'on_hold' ? 'Put on hold — ' + why : 'Resumed', who);
@@ -327,11 +334,10 @@ function OrderDetailsForm({ row, who, onSaved }: { row: WpRow; who: string; onSa
     }
   }
   async function cancelPo() {
-    const v = window.prompt('Why is this PO being cancelled? (required)');
-    if (v === null) return;
-    if (!v.trim()) { setErr('A reason is required'); return; }
+    const v = await note.ask('Why is this PO being cancelled?', 'Cancelling retires this production run for good, so the reason is what the next person reads instead of re-raising it.');
+    if (!v) return;
     try {
-      const updated = await patchWp(row, (cur) => { cur.state = 'cancelled'; return cur; }, 'PO cancelled — ' + v.trim(), who);
+      const updated = await patchWp(row, (cur) => { cur.state = 'cancelled'; return cur; }, 'PO cancelled — ' + v, who);
       onSaved(updated, 'PO cancelled');
     } catch (e: any) {
       setErr('Failed — ' + (e?.message || 'try again'));
@@ -357,6 +363,7 @@ function OrderDetailsForm({ row, who, onSaved }: { row: WpRow; who: string; onSa
         {row.state !== 'cancelled' ? <button onClick={toggleHold} className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700">{row.state === 'on_hold' ? 'Resume' : 'Put on hold'}</button> : null}
         {row.state !== 'cancelled' ? <button onClick={cancelPo} className="rounded-md bg-red-600 px-3 py-1.5 text-[12px] font-bold text-white">Cancel PO</button> : null}
       </div>
+      {note.modal}
     </div>
   );
 }
