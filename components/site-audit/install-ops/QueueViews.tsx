@@ -1,7 +1,7 @@
 'use client';
 
 import { Chip, EmptyRow, TypeTag } from './ui';
-import { dstr, fmtDate, opsCallDue, slotLabel, today } from './shared';
+import { dstr, fmtDate, followUpDue, hasOpenFollowUp, opsCallDue, slotLabel, today } from './shared';
 import type { InstallOrder, SlotDef } from './types';
 
 interface BaseProps {
@@ -17,7 +17,7 @@ const td = 'px-3 py-2.5 text-[13px] border-t border-gray-100 align-top';
 export function NeedActionView({ orders, onOpenOrder }: BaseProps) {
   const todayStr = dstr(today);
   const opsList = orders.filter(opsCallDue);
-  const fuList = orders.filter((o) => o.service && o.service.follow_up_date && o.service.follow_up_date <= todayStr).filter((o) => !opsCallDue(o));
+  const fuList = orders.filter((o) => followUpDue(o, todayStr)).filter((o) => !opsCallDue(o));
   const reschedItems: Array<{ o: InstallOrder; sj: any }> = [];
   orders.forEach((o) => (o.subjobs || []).forEach((sj) => { if (sj.status === 'reschedule') reschedItems.push({ o, sj }); }));
 
@@ -176,7 +176,7 @@ export function RescheduleView({ orders, onOpenOrder, slotsFl, slotsWp }: BasePr
 /* ── Follow-ups ────────────────────────────────────────────────────────── */
 export function FollowupsView({ orders, onOpenOrder }: BaseProps) {
   const todayStr = dstr(today);
-  const list = orders.filter((o) => o.service && o.service.follow_up_date).sort((a, b) => a.service!.follow_up_date!.localeCompare(b.service!.follow_up_date!));
+  const list = orders.filter(hasOpenFollowUp).sort((a, b) => a.service!.follow_up_date!.localeCompare(b.service!.follow_up_date!));
   return (
     <>
       <div className="mb-4">

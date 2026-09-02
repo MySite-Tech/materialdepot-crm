@@ -335,10 +335,16 @@ export function sjsForDay(orders: InstallOrder[], installers: Installer[], ds: s
   }));
   return res;
 }
+export function hasOpenFollowUp(o: InstallOrder): boolean {
+  return !!(o.service && o.service.follow_up_date) && o.status !== 'completed';
+}
+export function followUpDue(o: InstallOrder, todayStr: string): boolean {
+  return hasOpenFollowUp(o) && o.service!.follow_up_date! <= todayStr;
+}
 export function needActionCount(orders: InstallOrder[]): number {
   const opsDue = orders.filter(opsCallDue).length;
   const todayStr = dstr(today);
-  const fuDue = orders.filter((o) => o.service && o.service.follow_up_date && o.service.follow_up_date <= todayStr).length;
+  const fuDue = orders.filter((o) => followUpDue(o, todayStr)).length;
   const resched = orders.filter((o) => o.status === 'reschedule' || (o.subjobs || []).some((sj) => sj.status === 'reschedule')).length;
   return opsDue + fuDue + resched;
 }

@@ -27,7 +27,7 @@ import {
 import { AddAuditorOverlay, AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from './audit-ops/Overlays';
 import {
   AUDIT_CATEGORY_QUERY, AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, applyAuditCategories,
-  dstr, loadAuditSlots, loadCaps, mapAuditRow, today,
+  dstr, hasOpenFollowUp, loadAuditSlots, loadCaps, mapAuditRow, today,
   type AuditOrder, type AuditViewKey, type Auditor, type Caps, type SlotDef,
 } from './audit-ops/shared';
 import type { ShadowerOption } from './install-ops/ShadowerSelect';
@@ -282,7 +282,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     orders: orders.filter((o) => !['slot_reserved', 'slot_converted'].includes(o.status)).length,
     schedule: orders.filter((o) => o.date === todayStr && !['slot_reserved', 'slot_converted'].includes(o.status)).length,
     reschedule: orders.filter((o) => o.status === 'reschedule').length,
-    followups: orders.filter((o) => o.service && o.service.follow_up_date && o.service.follow_up_date <= todayStr).length,
+    followups: orders.filter((o) => hasOpenFollowUp(o) && o.service!.follow_up_date! <= todayStr).length,
     deleted: deleted.length,
     rectifications: orders.filter((o) => o.service && o.service.rectification_of).length,
   };

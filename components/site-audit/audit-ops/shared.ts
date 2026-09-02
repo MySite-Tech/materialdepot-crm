@@ -133,6 +133,12 @@ export const FLOW_LABELS = ['Pending', 'Service created', 'Scheduled', 'Auditor 
 const BOOKED = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite', 'completed', 'slot_reserved'];
 const CONFLICT_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite', 'slot_reserved'];
 
+export const FOLLOWUP_ACTIVE_STATUSES = ['created', 'call_na', 'reschedule'];
+
+export function hasOpenFollowUp(o: AuditOrder): boolean {
+  return !!(o.service && o.service.follow_up_date) && FOLLOWUP_ACTIVE_STATUSES.includes(o.status);
+}
+
 /* Where the stepper considers an order to be, collapsing the auditor's live
    statuses onto "assigned" and the two sidetracks onto "created". */
 export function flowIndexOf(status: string): number {
