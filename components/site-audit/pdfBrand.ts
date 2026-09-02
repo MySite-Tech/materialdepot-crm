@@ -217,6 +217,34 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
         }),
       );
       y = doc.lastAutoTable.finalY + 8;
+      // The adjustment table states WHAT was added/subtracted; only the photo shows the office
+      // WHY, so it belongs in the PDF the same way a segment photo does. Drawn at half a segment
+      // photo's height — an adjustment is a door or a cupboard footprint, not a whole wall, and a
+      // job card with several of them stayed readable in testing at this size. Captioned with the
+      // reason so a reader can tell three "Cupboard" deductions apart.
+      for (let ai = 0; ai < adj.length; ai++) {
+        const aph = adj[ai].photos.filter(Boolean);
+        for (let ph = 0; ph < aph.length; ph++) {
+          const img = await compress(aph[ph]);
+          if (!img) continue;
+          const pw = (W - 2 * M) * 0.52, phh = pw * 0.62;
+          ensure(phh + 22);
+          doc.setFontSize(8.5);
+          doc.setTextColor(...MD_MUTED);
+          doc.text(
+            `${adj[ai].label} ${adj[ai].area} sq.ft${adj[ai].reason ? ' — ' + adj[ai].reason : ''}` +
+              (aph.length > 1 ? ` (${ph + 1}/${aph.length})` : ''),
+            M,
+            y,
+          );
+          try {
+            doc.addImage(img, 'JPEG', M, y + 6, pw, phh);
+          } catch {
+            /* unrenderable photo — skip */
+          }
+          y += phh + 16;
+        }
+      }
     }
     if (isV2) {
       const prows = segmentPrereqRows(cat, seg);

@@ -192,16 +192,43 @@ function serializeRoom(r: Room) {
   };
 }
 
-/* Draft written to the DB on autosave — photos are dropped per segment AND per adjustment (they
-   can be multi-MB base64 until each upload swaps in its Storage URL). */
+/* Permanent completion history: every signed job card is appended to `audit_ticked_history`
+   (jsonb array), so a later redo, status change or a stray draft write can never erase the record
+   that this audit was once completed — `audit_ticked` itself is a single mutable slot. Deduped by
+   `sign.img`. This is the recovery net the legacy PWA has had since note 66; without it a
+   clobbered CRM job card is simply gone, which is the state 59 of the 63 damaged live rows are in.
+   Best-effort by design: it must never throw into, or delay, the completion flow that calls it. */
+async function archiveAuditTicked(orderId: string | null | undefined, ticked: any, reason: string): Promise<void> {
+  if (!orderId || !ticked?.sign) return;
+  try {
+    const rows = await sbGet('audit_orders?id=eq.' + orderId + '&select=audit_ticked_history');
+    const hist: any[] = Array.isArray(rows) && Array.isArray(rows[0]?.audit_ticked_history)
+      ? rows[0].audit_ticked_history
+      : [];
+    if (hist.some((h) => h?.sign?.img && h.sign.img === ticked.sign.img)) return;
+    hist.push({ ...ticked, archivedAt: new Date().toISOString(), archivedReason: reason });
+    await sbPatch('audit_orders', orderId, { audit_ticked_history: hist });
+  } catch { /* history is best-effort — never block completion on it */ }
+}
+
+/* A photo that has ALREADY reached Storage is a ~120-byte URL and belongs in the draft; only one
+   still sitting as base64 (upload in flight, or a failed upload's fallback) can be multi-MB and
+   has to be left out, or the 12s draft PATCH times out on a site connection and the whole draft
+   is lost. Dropping the photos wholesale — which is what this did until 2026-09-02 — meant an
+   auditor resuming on a second device, or after clearing the browser, silently got their rooms
+   back with every photo missing, and the next completion write made that permanent. */
+const isUploaded = (p: string) => /^https?:/i.test(p);
+
+/* Draft written to the DB on autosave. */
 function draftPayload(rooms: Room[]) {
   return rooms.map((r) => {
     const { segments, ...rest } = serializeRoom(r);
     return {
       ...rest,
-      segments: segments.map(({ photos, adjust, ...s }) => ({
+      segments: segments.map((s) => ({
         ...s,
-        adjust: adjust.map(({ photos: _p, ...a }) => a),
+        photos: (s.photos || []).filter(isUploaded),
+        adjust: s.adjust.map((a) => ({ ...a, photos: (a.photos || []).filter(isUploaded) })),
       })),
     };
   });
@@ -1449,6 +1476,14 @@ function SegmentFields({
    reason and a photo. Dimensions are in the segment's own unit; the signed sq.ft total lands in
    fields.adjArea (maintained by the caller's recompute) and flows through net area -> wastage ->
    rolls, same mechanism as any other derived field. */
+/* `onAdjust` takes an UPDATER, not a finished array, and that is load-bearing rather than
+   stylistic. A photo is added to the row optimistically as base64 and swapped for its Storage URL
+   when the upload lands up to ~20s later; a handler built from a render-time snapshot of
+   `seg.adjust` runs that swap against the array as it looked BEFORE the base64 was inserted, so
+   the swap matches nothing and writes the pre-photo array back — deleting the photo the auditor
+   just attached. That is why adjustment photos went missing while segment photos (always wired
+   through the functional `onChange`) did not. Every mutation here goes through the updater so it
+   composes with whatever else landed in between. */
 function SegmentAdjustments({
   cat,
   room,
@@ -1458,18 +1493,31 @@ function SegmentAdjustments({
   cat: CategoryDef;
   room: { v: number; variant: string | null };
   seg: Segment;
-  onAdjust: (next: AdjustRow[]) => void;
+  onAdjust: (updater: (prev: AdjustRow[]) => AdjustRow[]) => void;
 }) {
   const u = unitFor(cat, room);
   const segLabel = (cat.segment && cat.segment.segLabel) || 'segment';
 
-  const patchRow = (i: number, patch: Partial<AdjustRow>) => {
-    const next = seg.adjust.map((a, idx) => (idx === i ? { ...a, ...patch } : a));
-    onAdjust(next);
-  };
-  const removeRow = (i: number) => onAdjust(seg.adjust.filter((_, idx) => idx !== i));
+  const patchRow = (i: number, patch: Partial<AdjustRow>) =>
+    onAdjust((prev) => prev.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
+  const removeRow = (i: number) => onAdjust((prev) => prev.filter((_, idx) => idx !== i));
   const addRow = () =>
-    onAdjust([...seg.adjust, { sign: '-', shape: 'Rectangle', h: '', w: '', area: '', reason: '', photos: [] }]);
+    onAdjust((prev) => [...prev, { sign: '-', shape: 'Rectangle', h: '', w: '', area: '', reason: '', photos: [] }]);
+  const addPhoto = (i: number, url: string) =>
+    onAdjust((prev) => prev.map((a, idx) => (idx === i ? { ...a, photos: [...(a.photos || []), url] } : a)));
+  /* Located by VALUE across every row, not by the row index the upload started on — a row removed
+     or added while the upload was in flight shifts that index, and swapping the wrong row's photo
+     is the same data loss by another route. */
+  const swapPhoto = (from: string, to: string) =>
+    onAdjust((prev) =>
+      prev.map((a) =>
+        (a.photos || []).includes(from) ? { ...a, photos: (a.photos || []).map((p) => (p === from ? to : p)) } : a,
+      ),
+    );
+  const removePhotoAt = (i: number, at: number) =>
+    onAdjust((prev) =>
+      prev.map((a, idx) => (idx === i ? { ...a, photos: (a.photos || []).filter((_, pi) => pi !== at) } : a)),
+    );
 
   return (
     <div className="mt-2.5">
@@ -1581,9 +1629,9 @@ function SegmentAdjustments({
               <SegmentPhotos
                 photos={a.photos || []}
                 label=""
-                onAdd={(url) => patchRow(i, { photos: [...(a.photos || []), url] })}
-                onSwap={(from, to) => patchRow(i, { photos: (a.photos || []).map((p) => (p === from ? to : p)) })}
-                onRemoveAt={(idx) => patchRow(i, { photos: (a.photos || []).filter((_, pi2) => pi2 !== idx) })}
+                onAdd={(url) => addPhoto(i, url)}
+                onSwap={swapPhoto}
+                onRemoveAt={(idx) => removePhotoAt(i, idx)}
               />
             </div>
             <button
@@ -1986,11 +2034,17 @@ function RoomEditor({
                 cat={cat}
                 room={room}
                 seg={seg}
-                onAdjust={(nextAdjust) => {
-                  const fields = { ...seg.fields, adjArea: adjSum(cat, room, nextAdjust) };
-                  computeDerived(cat, fields, room);
-                  patchSegment(seg.sid, { adjust: nextAdjust, fields });
-                }}
+                onAdjust={(updater) =>
+                  onChange((r) => ({
+                    segments: r.segments.map((s) => {
+                      if (s.sid !== seg.sid) return s;
+                      const nextAdjust = updater(s.adjust || []);
+                      const fields = { ...s.fields, adjArea: adjSum(cat, r, nextAdjust) };
+                      computeDerived(cat, fields, r);
+                      return { ...s, adjust: nextAdjust, fields };
+                    }),
+                  }))
+                }
               />
             </>
           )}
@@ -2290,30 +2344,51 @@ function JobCardWizard({
   const autosaveSeqRef = useRef(0);
   const completionWriteRef = useRef<{ audit_ticked: any } | null>(null);
   const skipNextAutosave = useRef(true);
+  /* True once we know the order already carries a SIGNED job card on the server. `audit_ticked` is
+     a single mutable slot shared by the draft autosave and the finished card, so a draft write on
+     a reopened card destroys the signature, the auditor, the date and every photo. The legacy PWA
+     learned this the hard way (root-caused live on ENQ2026072381434) and guards with `jcHadSign`;
+     this port shipped without the guard, which is how 63 of 331 completed audits ended up with a
+     photo-stripped `{draft:true}` blob as their permanent job card. While this is set the draft
+     stays on-device only. */
+  const hadSignRef = useRef(false);
+  const [hadSign, setHadSign] = useState(false);
   const signPadRef = useRef<SignaturePadHandle>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       let restoredRooms: any[] | null = null;
-      try {
-        const raw = localStorage.getItem('md_audit_' + order.pi);
-        if (raw) {
-          const d = JSON.parse(raw);
-          if (d?.rooms?.length) restoredRooms = d.rooms;
-        }
-      } catch {}
-      if (!restoredRooms && !order.jobcard && order.id) {
+      /* Server first, unconditionally: a signed card is authoritative and a local draft must never
+         be allowed to shadow it, because that is exactly the path on which the guard below never
+         learns the card was signed. */
+      let signedTicked: any = null;
+      if (order.id) {
         try {
           const r = await sbGet('audit_orders?id=eq.' + order.id + '&select=audit_ticked');
           if (Array.isArray(r) && r[0]?.audit_ticked && !Array.isArray(r[0].audit_ticked)) {
             const ticked = r[0].audit_ticked;
-            if (ticked.rooms?.length) restoredRooms = ticked.rooms;
+            if (ticked.sign && !ticked.draft && ticked.rooms?.length) signedTicked = ticked;
+            else if (ticked.rooms?.length && !order.jobcard) restoredRooms = ticked.rooms;
+          }
+        } catch {}
+      }
+      if (signedTicked) {
+        hadSignRef.current = true;
+        restoredRooms = signedTicked.rooms;
+        void archiveAuditTicked(order.id, signedTicked, 'backfill-on-reopen');
+      } else {
+        try {
+          const raw = localStorage.getItem('md_audit_' + order.pi);
+          if (raw) {
+            const d = JSON.parse(raw);
+            if (d?.rooms?.length) restoredRooms = d.rooms;
           }
         } catch {}
       }
       if (!restoredRooms && order.jobcard?.rooms?.length) restoredRooms = order.jobcard.rooms;
       if (!alive) return;
+      setHadSign(hadSignRef.current);
       if (restoredRooms && restoredRooms.length) {
         const withIds = restoredRooms.map((r) => normalizeRestoredRoom(r, ++seqRef.current));
         setRooms(withIds);
@@ -2348,6 +2423,12 @@ function JobCardWizard({
         return;
       }
       if (!order.id) {
+        setSaveStatus('local');
+        return;
+      }
+      // A signed card on file outranks any draft — edits stay on this device until the redo flow
+      // captures a fresh signature and writes a complete `ticked` again.
+      if (hadSignRef.current) {
         setSaveStatus('local');
         return;
       }
@@ -2387,7 +2468,7 @@ function JobCardWizard({
     if (!autosaveTimerRef.current) return;
     clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = null;
-    if (completionWriteRef.current || !order.id) return;
+    if (completionWriteRef.current || !order.id || hadSignRef.current) return;
     try {
       const draftRooms = draftPayload(rooms);
       await sbPatch('audit_orders', order.id, { audit_ticked: { draft: true, rooms: draftRooms } });
@@ -2491,6 +2572,10 @@ function JobCardWizard({
       completionWriteRef.current = { audit_ticked: ticked };
       try {
         await sbPatchLong('audit_orders', order.id, { audit_ticked: ticked });
+        // The card is signed and on file — snapshot it before anything can overwrite the slot.
+        void archiveAuditTicked(order.id, ticked, 'completed');
+        hadSignRef.current = true;
+        setHadSign(true);
         try {
           localStorage.removeItem('md_audit_' + order.pi);
         } catch {}
@@ -2538,6 +2623,13 @@ function JobCardWizard({
         </div>
         <div className={cn('ml-auto whitespace-nowrap text-[11px] font-bold', saveStatusInfo.className)}>{saveStatusInfo.text}</div>
       </div>
+
+      {hadSign && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[13px] font-semibold text-amber-800">
+          This job card was already signed &amp; completed. Your edits are saved on this device only — the signed record
+          on file, including its photos, is kept safe until you finish and capture a new signature below.
+        </div>
+      )}
 
       {!initialized ? (
         <Spinner />

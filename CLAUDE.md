@@ -619,6 +619,40 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
+- **`audit_ticked` / `subjobs[].jobcard` is ONE mutable slot holding both the 3s draft autosave
+  and the signed job card, and this port shipped without the guard that keeps them apart.** The
+  draft PATCHes `{draft:true, rooms}` with photos stripped. Reopen a completed card, touch
+  anything, and 3s later the signature, the auditor, the date and every photo are gone. The legacy
+  PWA hit this on `ENQ2026072381434` and guards with `jcHadSign` + an `audit_ticked_history`
+  archive; the port carried over neither, so the damage was silent AND unrecoverable. Live on
+  2026-09-01: **63 of 331 completed audits (19%) had a photo-stripped `{draft:true}` blob as their
+  permanent job card** — only 4 had a history snapshot (restored 2026-09-02), **59 are gone**.
+  Install side was 4 of 350, shielded only by `validateRooms` hard-requiring a room photo. Fixed
+  2026-09-02: `hadSignRef` in both field apps (a signed card on file makes the draft device-local
+  and shows an amber banner saying so), `archiveAuditTicked()` mirrors the legacy note-66 archive,
+  the restore path consults the server for a signed card FIRST (a localStorage draft used to shadow
+  it, which is the path on which the guard never learns the card was signed), and `draftPayload`
+  now keeps photos that already reached Storage — a ~120-byte URL — dropping only in-flight base64.
+  **Any new single-slot jsonb that a draft and a finished record share needs all four.**
+- **A photo that renders as `"1 photo"` is a photo nobody can see.** Area-adjustment photos were
+  captured, uploaded and stored correctly — 18 adjustments held 32 Storage URLs, all 32 HTTP 200,
+  zero base64 — and then `AuditRoomViews.tsx` printed the array's *length* while `pdfBrand.ts` drew
+  the adjustment table with no image column at all. The segment photo strip two lines below worked,
+  which is exactly why nobody caught it: a site auditor reported *"after uploading any image
+  related to adjustment area it's not showing in the job card after the final submission"* and
+  reasonably concluded the upload was broken. Fixed 2026-09-02 in both renderers (and both legacy
+  equivalents — see note 120 in `material-depot-site`); being a *render* fix it repairs every past
+  order retroactively. When you add a field that holds photos, render the photos.
+- **An optimistic-then-swap upload MUST go through a functional state updater.**
+  `SegmentAdjustments` took a finished `AdjustRow[]` and rebuilt it from a render-time snapshot of
+  `seg.adjust`. `SegmentPhotos` adds the photo as base64 immediately and swaps in the Storage URL
+  up to ~20s later, so that swap ran against the array as it looked BEFORE the base64 was inserted:
+  it matched nothing and wrote the pre-photo array back, **deleting the photo the auditor had just
+  attached**. Segment photos never had the bug because they were always wired through the
+  functional `onChange((r) => …)`. `onAdjust` now takes an updater, and the URL swap locates the
+  photo **by value across every row** rather than by the row index the upload started on — a row
+  added or removed mid-upload shifts that index and swaps the wrong row. Fixed 2026-09-02.
+
 - **The field apps write a log line more than once for one event, so any metric
   counted off `log` entries must dedupe before it counts.** Arrival on time was
   counting the same visit repeatedly — 17 install and 30 audit person-day pairs
