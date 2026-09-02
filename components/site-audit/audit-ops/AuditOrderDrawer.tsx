@@ -24,7 +24,7 @@ import {
 import {
   AUTO_STATUSES, FLOW, FLOW_LABELS, STATUS, auditorById, auditorConflictOrder, auditorLoad, auditorNameOf,
   capFor, categoriesAreFromStore, dstr, flowIndexOf, fmtDate, mapUrl, offReason, orderCategories, slotLabel, today,
-  type AuditOrder, type AuditSkuRow, type Auditor, type Caps, type SlotDef,
+  type AuditOrder, type AuditSkuRow, type Auditor, type SlotDef,
 } from './shared';
 import { genAuditPDF } from './pdf';
 
@@ -34,7 +34,6 @@ interface Props {
   order: AuditOrder;
   orders: AuditOrder[];
   auditors: Auditor[];
-  caps: Caps;
   slots: SlotDef[];
   shadowerPool: ShadowerOption[];
   bmOptions: BmOption[];
@@ -73,7 +72,7 @@ function EmptyAuditorPool({ err, anyLoaded, onRetry }: { err: boolean; anyLoaded
 }
 
 export default function AuditOrderDrawer({
-  order: o, orders, auditors, caps, slots, shadowerPool, bmOptions, attribution,
+  order: o, orders, auditors, slots, shadowerPool, bmOptions, attribution,
   auditorsErr = false, onRetryAuditors,
   onClose, reload, reloadWithDeleted, onOpenOrder, onRaiseRect, toast,
 }: Props) {
@@ -318,7 +317,7 @@ export default function AuditOrderDrawer({
   }, [orders, o.id, o.pi, o.name, o.slot, o.date]);
 
   const auditorRows = auditors.map((a) => {
-    const cap = capFor(caps, auditors, a.id, o.date);
+    const cap = capFor(auditors, a.id, o.date);
     const load = auditorLoad(orders, a.id, o.date, o.id);
     const cx = auditorConflictOrder(orders, a.id, o.date, o.slot, o.id, linkedPre?.id);
     const capBlocked = (cap < 1 && load === 0) || (cap > 0 && load >= cap);

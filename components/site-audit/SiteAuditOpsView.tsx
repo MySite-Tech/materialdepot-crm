@@ -16,7 +16,7 @@
    outer Site Audit rail. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CITIES, inCity, sbGet, sbPatch, type CityFilter } from './siteAuditShared';
+import { CITIES, inCity, mapCaps, rosterSelect, sbGet, sbPatch, type CityFilter } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
 import { poFieldFor } from './omsService';
 import { autoImportAuditOrders } from './autoImportAuditOrders';
@@ -27,8 +27,8 @@ import {
 import { AddAuditorOverlay, AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from './audit-ops/Overlays';
 import {
   AUDIT_CATEGORY_QUERY, AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, applyAuditCategories,
-  dstr, loadAuditSlots, loadCaps, mapAuditRow, today,
-  type AuditOrder, type AuditViewKey, type Auditor, type Caps, type SlotDef,
+  dstr, loadAuditSlots, mapAuditRow, today,
+  type AuditOrder, type AuditViewKey, type Auditor, type SlotDef,
 } from './audit-ops/shared';
 import type { ShadowerOption } from './install-ops/ShadowerSelect';
 
@@ -57,13 +57,12 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
   const [rawAuditors, setRawAuditors] = useState<Auditor[]>([]);
   const [shadowerPool, setShadowerPool] = useState<ShadowerOption[]>([]);
   const [bmOptions, setBmOptions] = useState<Array<{ name: string; email?: string; contact?: string }>>([]);
-  const [caps, setCaps] = useState<Caps>({});
   const [connErr, setConnErr] = useState(false);
   const retryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [slotsFl, setSlotsFl] = useState<SlotDef[]>(DEFAULT_AUDIT_SLOTS_FL);
   const [slotsWp, setSlotsWp] = useState<SlotDef[]>(DEFAULT_AUDIT_SLOTS_WP);
-  useEffect(() => { setSlotsFl(loadAuditSlots('fl')); setSlotsWp(loadAuditSlots('wp')); setCaps(loadCaps()); }, []);
+  useEffect(() => { setSlotsFl(loadAuditSlots('fl')); setSlotsWp(loadAuditSlots('wp')); }, []);
   const slots = useMemo(() => [...slotsFl, ...slotsWp], [slotsFl, slotsWp]);
 
   const [filterStatus, setFilterStatus] = useState('all');
@@ -120,7 +119,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
      8s retry `loadOrders` already uses applies here too. */
   const loadAuditors = useCallback(async () => {
     try {
-      const rows = await sbGet('profiles?role=in.(site_auditor,auditor_installer)&select=id,name,email,active_from,city,weekly_off,leave_dates');
+      const rows = await sbGet('profiles?role=in.(site_auditor,auditor_installer)&select=' + await rosterSelect('id,name,email,active_from,city,weekly_off,leave_dates'));
       if (!Array.isArray(rows)) throw new Error('auditor roster unavailable');
       setRawAuditors(rows.map((r: any) => ({
         id: r.id, name: r.name, email: r.email, phone: '', zone: '',
@@ -128,6 +127,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
         city: r.city || 'Bengaluru',
         weeklyOff: r.weekly_off == null ? null : r.weekly_off,
         leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
+        ...mapCaps(r),
       })));
       setAuditorsErr(false);
       if (audRetryTid.current) { clearTimeout(audRetryTid.current); audRetryTid.current = null; }
@@ -296,11 +296,11 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       case 'followups':
         return <FollowupsView orders={orders} onOpenOrder={openOrder} />;
       case 'calendar':
-        return <CalendarView orders={orders} auditors={auditors} caps={caps} slots={slots} calSelDay={calSelDay} setCalSelDay={setCalSelDay} onOpenOrder={openOrder} />;
+        return <CalendarView orders={orders} auditors={auditors} slots={slots} calSelDay={calSelDay} setCalSelDay={setCalSelDay} onOpenOrder={openOrder} />;
       case 'slots':
         return <SlotsView slotsFl={slotsFl} slotsWp={slotsWp} setSlotsFl={setSlotsFl} setSlotsWp={setSlotsWp} toast={toast} />;
       case 'auditors':
-        return <AuditorsView auditors={auditors} caps={caps} setCaps={setCaps} onAddStaff={() => setAddAuditorOpen(true)} reload={loadAuditors} toast={toast} />;
+        return <AuditorsView auditors={auditors} onAddStaff={() => setAddAuditorOpen(true)} reload={loadAuditors} toast={toast} />;
       case 'deleted':
         return <DeletedView deleted={deleted} auditors={auditors} onRestore={restoreOrder} />;
       case 'rectifications':
@@ -343,7 +343,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
         <div className="fixed inset-0 z-[900] flex justify-end bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) setCurrentPI(null); }}>
           <div className="flex h-full w-full max-w-[600px] flex-col bg-white shadow-2xl" key={currentPI + ':' + drawerNonce}>
             <AuditOrderDrawer
-              order={drawerOrder} orders={orders} auditors={auditors} caps={caps} slots={slots}
+              order={drawerOrder} orders={orders} auditors={auditors} slots={slots}
               shadowerPool={shadowerPool} bmOptions={bmOptions} attribution={ATTRIBUTION}
               auditorsErr={auditorsErr} onRetryAuditors={loadAuditors}
               onClose={() => setCurrentPI(null)} reload={loadOrders} reloadWithDeleted={reloadWithDeleted}
@@ -361,7 +361,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       />
       <KylasOverlay open={kylasOpen} orders={rawOrders} onClose={() => setKylasOpen(false)} onUse={usePORow} />
       <RectOverlay order={rectOrder} attribution={ATTRIBUTION} onClose={() => setRectOrder(null)} onSaved={loadOrders} toast={toast} />
-      <AddAuditorOverlay open={addAuditorOpen} onClose={() => setAddAuditorOpen(false)} reload={loadAuditors} toast={toast} />
+      <AddAuditorOverlay open={addAuditorOpen} onClose={() => setAddAuditorOpen(false)} reload={loadAuditors} toast={toast} scopeCity={city} />
 
       {toastShow ? (
         <div className="fixed bottom-6 left-1/2 z-[960] -translate-x-1/2 rounded-full bg-[#16294a] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-lg">{toastMsg}</div>

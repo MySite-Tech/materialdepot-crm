@@ -16,13 +16,14 @@ import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch,
 import { useNoteModal } from '../NoteModal';
 import ShadowerSelect, { type ShadowerOption } from './ShadowerSelect';
 import {
-  STATUS, dateRange, fmtDate, installerById, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
+  STATUS, dateRange, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
 } from './shared';
 import type { Assignment, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
 interface Props {
   order: InstallOrder;
   subjob: Subjob;
+  allOrders: InstallOrder[];
   installers: Installer[];
   shadowerPool: ShadowerOption[];
   city: CityFilter;
@@ -58,7 +59,7 @@ function EmptyInstallerPool({ err, anyLoaded, type, onRetry }: { err: boolean; a
   );
 }
 
-export default function AssignSection({ order: o, subjob: sj, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr = false, onRetryInstallers, reload, toast, onOpenOrder }: Props) {
+export default function AssignSection({ order: o, allOrders, subjob: sj, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr = false, onRetryInstallers, reload, toast, onOpenOrder }: Props) {
   const [, setTick] = useState(0);
   const redraw = () => setTick((x) => x + 1);
   const { ask: askNote, modal: noteModal } = useNoteModal();
@@ -354,10 +355,23 @@ export default function AssignSection({ order: o, subjob: sj, installers, shadow
             <select className="w-full px-2 py-1.5 border border-gray-200 rounded-md text-[13px] bg-white" value={a.installer_id || ''} onChange={(e) => pickInstaller(idx, e.target.value)}>
               <option value="">— pick installer —</option>
               {pool.map((p) => {
-                // Flag (but never block) an installer who's off on the date being assigned.
+                // Flag (but never block) an installer who's off, not yet
+                // started, or already at the daily cap their SM set for the
+                // date being assigned. Soft by design — this repo soft-gates
+                // and surfaces rather than hard-blocking a scheduling call the
+                // SM may have a good reason to make. Assigning past a cap is a
+                // judgement call; hiding the cap is not.
                 const dateForOff = showDates ? (a.dates && a.dates[0]) || a.date || '' : curDate;
                 const off = isOffDay(p, dateForOff);
-                return <option key={p.id} value={p.id}>{p.name}{off ? ' · ' + offDayReason(p, dateForOff) : ''}</option>;
+                const notStarted = !!(p.activeFrom && dateForOff && dateForOff < p.activeFrom);
+                const cap = installerDayCap(p, dateForOff);
+                const load = dateForOff ? installerDayLoad(allOrders, p, dateForOff, sj.id) : 0;
+                const note = off ? offDayReason(p, dateForOff)
+                  : notStarted ? 'starts ' + p.activeFrom
+                  : cap === 0 ? 'capped to 0 this day'
+                  : dateForOff && load >= cap ? `at cap (${load}/${cap})`
+                  : '';
+                return <option key={p.id} value={p.id}>{p.name}{note ? ' · ' + note : ''}</option>;
               })}
             </select>
           </div>

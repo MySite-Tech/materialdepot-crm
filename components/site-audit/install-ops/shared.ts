@@ -5,7 +5,7 @@
    parameters instead, so the same math works against React state without
    reintroducing module-level mutable globals. */
 
-import { SQFT_PER_ROLL, publishSlotConfig, sbGet } from '../siteAuditShared';
+import { SQFT_PER_ROLL, publishSlotConfig, sbGet, staffCapOn } from '../siteAuditShared';
 import type { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
 export { SQFT_PER_ROLL };
@@ -35,6 +35,27 @@ export const CUSTOM_WP_SKU = 'WP-CUST';
 export const FLOOR_DAY_CAP = 1;
 export const WP_DAY_SLOTS = 3;
 export const WALLPANEL_DAY_CAP = 1;   // wall-panel jobs/installer/day — mirrors flooring's full-day cadence
+
+/* The per-type default an installer's day capacity falls back to when their
+   service manager has not set one. Wallpaper is counted in 3h SLOTS, not jobs
+   (1-3 rolls = 1 slot, 4-6 = 2, 7+ = 3), so its number is not comparable with
+   the other two — a cap of 3 means three slots, which may be a single 7-roll
+   job. Keep that in mind before "normalising" these to one number. */
+export function typeDayCap(t: InstallCategory | null | undefined): number {
+  return t === 'wallpaper' ? WP_DAY_SLOTS : t === 'wallpanel' ? WALLPANEL_DAY_CAP : FLOOR_DAY_CAP;
+}
+
+/* Effective day capacity for ONE installer on ONE date: the SM's per-date
+   override, else their own default, else the per-type constant; 0 when they
+   are before their start date, on a weekly off, or on leave. */
+export function installerDayCap(a: Installer | null | undefined, ds: string | null | undefined): number {
+  return staffCapOn(a, ds, typeDayCap(a?.type));
+}
+/* Installers who can take at least one job on a date. Pass a CITY-SCOPED
+   list — an installer works only the city they were assigned on joining. */
+export function installersAvailable(installers: Installer[], ds: string): number {
+  return installers.filter((a) => installerDayCap(a, ds) >= 1).length;
+}
 
 export const DEFAULT_SLOTS_FL: SlotDef[] = [
   { id: 'sf1', label: '9 AM – 12 PM' },
@@ -316,6 +337,27 @@ export function wpSlotLoad(orders: InstallOrder[], id: string, date: string): nu
   }));
   return n;
 }
+/* One installer's committed load on one date, in the SAME unit as their cap:
+   3h SLOTS for wallpaper (a 7-roll job is 3 of them), whole JOBS otherwise.
+   `excludeSjId` drops the sub-job currently being assigned so re-picking an
+   installer doesn't count them against themselves. */
+export function installerDayLoad(
+  orders: InstallOrder[], inst: Installer, ds: string, excludeSjId?: string,
+): number {
+  let n = 0;
+  orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
+    if (excludeSjId && sj.id === excludeSjId) return;
+    if (sj.type !== inst.type) return;
+    subjobAssignList(sj).forEach((a) => {
+      if (a.installer_id !== inst.id) return;
+      const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : [];
+      if (!dates.includes(ds)) return;
+      n += sj.type === 'wallpaper' ? slotsForWp(totalRolls(sj)) : 1;
+    });
+  }));
+  return n;
+}
+
 export function installOrderHasDate(o: InstallOrder, ds: string): boolean {
   return (o.subjobs || []).some((sj) => subjobAssignList(sj).some((a) => (a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : []).includes(ds)));
 }

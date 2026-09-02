@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { sbGet, sbPost, sbPatch, fmtDate } from './siteAuditShared';
+import { CITIES, cityOf, mapCaps, rosterSelect, sbGet, sbPost, sbPatch, staffCapOn, fmtDate } from './siteAuditShared';
+import { DEFAULT_CAP } from './audit-ops/shared';
 
 /* Verbatim port of material-depot-site's app/src/pages/StoreTeam.jsx (slot-
    booking tool for in-store staff to pre-book Site Audit visit slots for
@@ -24,6 +25,25 @@ interface SlotDef {
 
 const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka', 'Gachibowli', 'Kompally', 'HSR Layout'];
 
+/* Which city each store books into. An auditor is assigned a city when they
+   join and works only that city, so a Bengaluru store's slots-left count must
+   be computed from Bengaluru auditors alone. Until 2026-09-02 this map did not
+   exist: the kiosk knew its STORE but had no notion of a city, so it counted
+   every auditor in the company — JP Nagar read "13 of 15 auditors available"
+   off a roster of 18 that included 7 idle Hyderabad auditors, when Bengaluru
+   actually had 9 available that day. A store missing from this map falls back
+   to CITIES[0] rather than to "everyone", so the failure mode of adding a new
+   store and forgetting this line is a wrong-but-bounded count, not a global one. */
+const STORE_CITY: Record<string, string> = {
+  'JP Nagar': 'Bengaluru',
+  Whitefield: 'Bengaluru',
+  Yelahanka: 'Bengaluru',
+  'HSR Layout': 'Bengaluru',
+  Gachibowli: 'Hyderabad',
+  Kompally: 'Hyderabad',
+};
+const cityOfStore = (store: string | null) => (store && STORE_CITY[store]) || CITIES[0];
+
 const SLOT_DEFS: SlotDef[] = [
   { id: '10:00', label: '10:00 AM', rangeEnd: '11:00 AM', startMin: 600, endMin: 660, group: 'Morning' },
   { id: '11:00', label: '11:00 AM', rangeEnd: '12:00 PM', startMin: 660, endMin: 720, group: 'Morning' },
@@ -32,6 +52,10 @@ const SLOT_DEFS: SlotDef[] = [
   { id: '16:00', label: '4:00 PM', rangeEnd: '5:00 PM', startMin: 960, endMin: 1020, group: 'Evening' },
   { id: '17:00', label: '5:00 PM', rangeEnd: '6:00 PM', startMin: 1020, endMin: 1080, group: 'Evening' },
 ];
+/* Statuses that consume an auditor's day against their cap — a real assigned
+   visit, not a store pre-booking that has no auditor yet. */
+const ASSIGNED_STATUSES = ['assigned', 'scheduled', 'callpending', 'onway', 'atsite', 'completed'];
+
 /* Strong evening cutoff: after this time (local) the store can no longer pre-book TOMORROW's
    morning slots — the service manager leaves early and can't absorb a last-minute morning booking
    made the evening before. Later slots tomorrow and all slots on later days stay open. SMs are
@@ -76,10 +100,14 @@ function slotsConflict(slotA: SlotDef, slotB: SlotDef) {
   return (gapAB >= 0 && gapAB < 120) || (gapBA >= 0 && gapBA < 120);
 }
 
-function getAvailability(slotId: string, dayOrders: any[], auditorCount: number) {
+/* `capBlocked` = auditors who have already hit the daily cap their service
+   manager set for this date, so they are unavailable in EVERY slot, not just
+   one that conflicts. Before caps moved into the DB the kiosk had no way to
+   know this — it counted raw headcount and ignored caps entirely. */
+function getAvailability(slotId: string, dayOrders: any[], auditorCount: number, capBlocked: Set<string>) {
   const slot = SLOT_DEFS.find((s) => s.id === slotId);
   if (!slot) return { available: 0, total: auditorCount, used: 0 };
-  const blockedAuditors = new Set<string>();
+  const blockedAuditors = new Set<string>(capBlocked);
   let reservationConflicts = 0;
   for (const o of dayOrders) {
     if (o.status === 'deleted' || o.status === 'slot_converted') continue;
@@ -135,6 +163,7 @@ export default function SiteAuditStoreTeamView() {
   const [selectedDate, setSelectedDate] = useState(dateChips[0].ds);
   const [dayOrders, setDayOrders] = useState<any[]>([]);
   const [auditorCount, setAuditorCount] = useState(3);
+  const [capBlocked, setCapBlocked] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [storeOverlay, setStoreOverlay] = useState<null | 'boot' | 'header'>(null);
@@ -152,6 +181,11 @@ export default function SiteAuditStoreTeamView() {
   }, []);
 
   const selectedDateRef = useRef(selectedDate);
+  /* loadDay is a stable useCallback that the 30s poll holds onto, so it must
+     read the store through a ref — closing over `myStore` would leave the poll
+     scoping availability to whichever store was selected when it was created. */
+  const myStoreRef = useRef(myStore);
+  myStoreRef.current = myStore;
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadDay = useCallback(async (date: string, silent = false) => {
@@ -164,24 +198,47 @@ export default function SiteAuditStoreTeamView() {
     try {
       const [orders, auditors] = await Promise.all([
         sbGet(
-          'audit_orders?select=id,pi,po,customer_name,phone,status,slot,date,auditor_id,bm,audit_ticked,log&date=eq.' +
+          'audit_orders?select=id,pi,po,customer_name,phone,status,slot,date,auditor_id,bm,city,audit_ticked,log&date=eq.' +
             date +
             '&status=neq.deleted'
         ),
-        sbGet('profiles?select=id,active_from,weekly_off,leave_dates&role=in.(site_auditor,auditor_installer)'),
+        rosterSelect('id,active_from,weekly_off,leave_dates,city').then((sel) => sbGet('profiles?select=' + sel + '&role=in.(site_auditor,auditor_installer)')),
       ]);
-      const orderList = Array.isArray(orders) ? orders : [];
-      // An auditor before their start date, on their weekly off, or on leave
-      // isn't available — so they must not inflate this store's slots-left
-      // count either (same rule the SM's Auditors & caps view applies).
-      const activeAuditors = (Array.isArray(auditors) ? auditors : []).filter((a: any) => {
-        if (a.active_from && a.active_from > date) return false;
-        if (a.weekly_off != null && new Date(date + 'T00:00:00').getDay() === a.weekly_off) return false;
-        if (Array.isArray(a.leave_dates) && a.leave_dates.includes(date)) return false;
-        return true;
-      });
+      /* sbGet resolves a PostgREST ERROR OBJECT for any 4xx/5xx rather than
+         rejecting, so a non-array here is a FAILED load, not an empty roster.
+         Treating it as empty would show the store "0 auditors available" and
+         block every booking off a transient server error — the exact shape of
+         the roster incident in CLAUDE.md. Fail loudly and keep the last good
+         count instead. */
+      if (!Array.isArray(orders) || !Array.isArray(auditors)) throw new Error('slot availability unavailable');
+      /* City scope. Filtered here rather than with `city=eq.` in the query
+         because 2 live audit_orders rows have a NULL city and `cityOf` reads
+         NULL as Bengaluru — a server-side filter would silently drop them. */
+      const storeCity = cityOfStore(myStoreRef.current);
+      const orderList = orders.filter((o: any) => cityOf(o) === storeCity);
+      // An auditor in another city, before their start date, on their weekly
+      // off, on leave, or capped to 0 for the date isn't available — so none of
+      // them may inflate this store's slots-left count (same rule, and now the
+      // same stored caps, that the SM's Auditors & caps view applies).
+      const roster = auditors
+        .filter((a: any) => cityOf(a) === storeCity)
+        .map((a: any) => ({
+          id: a.id as string,
+          activeFrom: a.active_from || null,
+          weeklyOff: a.weekly_off == null ? null : a.weekly_off,
+          leaveDates: Array.isArray(a.leave_dates) ? a.leave_dates : [],
+          ...mapCaps(a),
+        }));
+      const workingToday = roster.filter((a) => staffCapOn(a, date, DEFAULT_CAP) >= 1);
+      // Already at their cap for the day → unavailable in every slot.
+      const blocked = new Set<string>();
+      for (const a of workingToday) {
+        const load = orderList.filter((o: any) => o.auditor_id === a.id && ASSIGNED_STATUSES.includes(o.status)).length;
+        if (load >= staffCapOn(a, date, DEFAULT_CAP)) blocked.add(a.id);
+      }
       setDayOrders(orderList);
-      setAuditorCount(activeAuditors.length || 1);
+      setAuditorCount(workingToday.length);
+      setCapBlocked(blocked);
       setLoading(false);
     } catch (e) {
       if (!silent) {
@@ -302,6 +359,8 @@ export default function SiteAuditStoreTeamView() {
           myStore={myStore}
           dayOrders={dayOrders}
           auditorCount={auditorCount}
+          capBlocked={capBlocked}
+          storeCity={cityOfStore(myStore)}
           myRes={myRes}
           allBooked={allBooked}
           nowMin={nowMin}
@@ -379,6 +438,8 @@ interface SlotContentProps {
   myStore: string | null;
   dayOrders: any[];
   auditorCount: number;
+  capBlocked: Set<string>;
+  storeCity: string;
   myRes: any[];
   allBooked: any[];
   nowMin: number | null;
@@ -393,6 +454,8 @@ function SlotContent({
   myStore,
   dayOrders,
   auditorCount,
+  capBlocked,
+  storeCity,
   myRes,
   allBooked,
   nowMin,
@@ -421,17 +484,22 @@ function SlotContent({
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
                 {slots.map((sl) => {
-                  const av = getAvailability(sl.id, dayOrders, auditorCount);
+                  const av = getAvailability(sl.id, dayOrders, auditorCount, capBlocked);
                   const isFull = av.available <= 0;
                   const myBookingsForSlot = myRes.filter((r) => r.slot === sl.id);
                   const hasMyBooking = myBookingsForSlot.length > 0;
                   const dotClass = isFull ? 'bg-red-500' : av.available === 1 ? 'bg-amber-500' : 'bg-green-500';
 
                   let availText: string;
-                  if (isFull && !hasMyBooking) {
-                    availText = `Full — all ${av.total} auditor${av.total !== 1 ? 's' : ''} booked`;
+                  if (av.total === 0) {
+                    // A real zero for this city — everyone is on leave, capped
+                    // to 0, or hasn't started. Say so, rather than "all 0
+                    // auditors booked", which reads like a loading bug.
+                    availText = `No ${storeCity} auditors are working this day`;
+                  } else if (isFull && !hasMyBooking) {
+                    availText = `Full — all ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} booked`;
                   } else {
-                    availText = `${av.available} of ${av.total} auditor${av.total !== 1 ? 's' : ''} available`;
+                    availText = `${av.available} of ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} available`;
                   }
 
                   const otherResForSlot = dayOrders.filter(

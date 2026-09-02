@@ -9,7 +9,7 @@
    response shape. */
 
 import { useEffect, useRef, useState } from 'react';
-import { sbPatch, sbPost } from '../siteAuditShared';
+import { CITIES, sbPatch, sbPost, type CityFilter } from '../siteAuditShared';
 import { addUser, getToken } from '@/lib/mockApi';
 import type { InstallOrder, SkuType } from './types';
 
@@ -280,16 +280,26 @@ const CRM_PERMISSION_FOR: Record<string, string> = {
    permissions. Previously each had to be created separately in a different
    screen, with nothing joining them — an installer added here couldn't log
    into the CRM, and one added under Admin > Users had no field-app login. */
-export function AddStaffOverlay({ open, onClose, reload, toast }: { open: boolean; onClose: () => void; reload: () => Promise<void>; toast: (m: string) => void }) {
+/* `city` is REQUIRED here, and that is the point. This form never wrote a city
+   at all, so every auditor/installer added through the CRM landed with a NULL
+   one — and `cityOf` reads NULL as Bengaluru, which silently filed Hyderabad
+   hires under Bengaluru capacity. One live installer (Ayaz Khan) still has no
+   city for this reason. Since an auditor works only the city they are assigned
+   on joining, and the Store Team kiosk now counts per city, a blank here would
+   quietly reintroduce the cross-city bleed with the next hire. Defaults to the
+   city the SM is currently filtered to. */
+export function AddStaffOverlay({ open, onClose, reload, toast, city }: { open: boolean; onClose: () => void; reload: () => Promise<void>; toast: (m: string) => void; city?: CityFilter }) {
+  const defaultCity = city && city !== 'all' ? String(city) : CITIES[0];
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [roleVal, setRoleVal] = useState('installer_flooring');
+  const [cityVal, setCityVal] = useState(defaultCity);
   const [makeCrmUser, setMakeCrmUser] = useState(true);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setName(''); setEmail(''); setPhone(''); setRoleVal('installer_flooring'); setMakeCrmUser(true); setErr(''); } }, [open]);
+  useEffect(() => { if (open) { setName(''); setEmail(''); setPhone(''); setRoleVal('installer_flooring'); setCityVal(defaultCity); setMakeCrmUser(true); setErr(''); } }, [open, defaultCity]);
 
   if (!open) return null;
 
@@ -309,7 +319,7 @@ export function AddStaffOverlay({ open, onClose, reload, toast }: { open: boolea
           : null;
     setBusy(true);
     try {
-      await sbPost('profiles', { name: nm, email: em, contact: ph, role, installer_type, passcode: null });
+      await sbPost('profiles', { name: nm, email: em, contact: ph, role, installer_type, city: cityVal, passcode: null });
       // The CRM login is best-effort and reported separately: the field-app
       // profile is the part that must not be lost, and a duplicate-phone or
       // permission error on the backend shouldn't roll it back.
@@ -350,6 +360,11 @@ export function AddStaffOverlay({ open, onClose, reload, toast }: { open: boolea
               <option value="auditor_installer_flooring">Auditor + Flooring Installer</option>
               <option value="auditor_installer_wallpaper">Auditor + Wallpaper Installer</option>
               <option value="auditor_installer_wallpanel">Auditor + Wall Panel Installer</option>
+            </select>
+          </Field>
+          <Field label="City * (they will only be scheduled for this city)">
+            <select className="px-2.5 py-2 border border-gray-200 rounded-md text-[13px] w-full box-border outline-none focus:border-blue-400" value={cityVal} onChange={(e) => setCityVal(e.target.value)}>
+              {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
           <label className="flex items-start gap-2 rounded-md border border-gray-200 px-3 py-2.5 text-[12.5px] text-gray-700">

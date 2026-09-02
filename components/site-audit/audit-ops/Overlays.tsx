@@ -6,7 +6,7 @@
    with type=site_audit, same as the legacy app's /api/pos rewrite. */
 
 import { useEffect, useRef, useState } from 'react';
-import { CITIES, sbGet, sbPatch, sbPost } from '../siteAuditShared';
+import { CITIES, sbGet, sbPatch, sbPost, type CityFilter } from '../siteAuditShared';
 import { getToken, addUser } from '@/lib/mockApi';
 import { AUDIT_SKU, type AuditOrder } from './shared';
 
@@ -308,20 +308,25 @@ function RectForm({
 
 /* ── Add auditor (same dual write as the Users tab) ───────────────────── */
 export function AddAuditorOverlay({
-  open, onClose, reload, toast,
+  open, onClose, reload, toast, scopeCity,
 }: {
   open: boolean; onClose: () => void; reload: () => Promise<void>; toast: (m: string) => void;
+  /* The city the SM is currently filtered to — an auditor works only the city
+     they are assigned on joining, so defaulting to the one being looked at
+     beats always defaulting to Bengaluru. */
+  scopeCity?: CityFilter;
 }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('site_auditor');
-  const [city, setCity] = useState(CITIES[0]);
+  const defaultCity = scopeCity && scopeCity !== 'all' ? String(scopeCity) : CITIES[0];
+  const [city, setCity] = useState(defaultCity);
   const [makeCrm, setMakeCrm] = useState(true);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setName(''); setEmail(''); setPhone(''); setRole('site_auditor'); setCity(CITIES[0]); setMakeCrm(true); setErr(''); } }, [open]);
+  useEffect(() => { if (open) { setName(''); setEmail(''); setPhone(''); setRole('site_auditor'); setCity(defaultCity); setMakeCrm(true); setErr(''); } }, [open, defaultCity]);
   if (!open) return null;
 
   async function submit() {

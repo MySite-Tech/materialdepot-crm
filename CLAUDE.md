@@ -619,6 +619,53 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
+- **Availability is per CITY, and the Store Team kiosk was the one surface that
+  did not know it.** An auditor/installer is assigned a city when they join and
+  works only that city. Every SM view scopes correctly through `inCity()`, but
+  `SiteAuditStoreTeamView` knew only its STORE and had no store→city map at
+  all, so it counted the entire company: JP Nagar read **"13 of 15 auditors
+  available"** off an 18-person roster that included 7 idle Hyderabad auditors,
+  when Bengaluru actually had 9 available that day. It also counted *orders*
+  company-wide, so a Hyderabad booking consumed a Bengaluru store's slot. Fixed
+  2026-09-02 with `STORE_CITY` + `cityOfStore()`; an unmapped store falls back
+  to `CITIES[0]`, so forgetting a line when a store opens is a wrong-but-bounded
+  count rather than a global one. **Filter by city CLIENT-side, not with
+  `city=eq.` in the query** — 2 live `audit_orders` rows have a NULL city and
+  `cityOf()` reads NULL as Bengaluru, so a server-side filter silently drops
+  them.
+- **`AddStaffOverlay` never wrote a city, which is how the bleed would have
+  come back with the next hire.** The installer add form posted no `city` at
+  all, so profiles landed NULL → read as Bengaluru; one live installer (Ayaz
+  Khan) is still in that state. The *auditor* form always had the field. Both
+  now require a city and default to the SM's active city filter. If you add
+  another staff-creation path, it must write `city`.
+- **Daily caps live on `profiles`, not in localStorage — and the columns are
+  probe-gated.** Caps used to sit in `localStorage.md_audit_caps`, which made
+  them device-local: the other SM, the SM's own phone and the public kiosk all
+  disagreed, and the kiosk ignored caps entirely and counted headcount.
+  `profiles.daily_cap` (per-person default) + `profiles.cap_overrides` (jsonb,
+  per-date exceptions) replace it — see
+  `site-audit-migration-003-staff-caps.sql`, run against `jqrdfnjfxqxrazfkaofm`.
+  **PostgREST fails the WHOLE select with `42703` if those columns are absent**,
+  so asking for them unconditionally would take out the roster query and with it
+  the kiosk's ability to book at all. Every roster query therefore goes through
+  `rosterSelect()`, which probes once and — when the answer is *unknown* rather
+  than "missing" — returns the SAFE column list, degrading to default caps
+  instead of guessing "present" and turning a network blip into an outage.
+  Verified in all four states (columns present / absent-42703 / network blip /
+  live) before shipping. Installer caps default to the per-type constant via
+  `typeDayCap()`, so nothing changes until an SM sets a number, and wallpaper's
+  cap counts **3h SLOTS, not jobs** — do not "normalise" it against the other
+  two.
+- **Installer assignment flags caps, it does not block them; the auditor drawer
+  DOES block.** `AuditOrderDrawer.pickAuditor` hard-returns on a full cap
+  (long-standing). `AssignSection` deliberately only annotates the installer
+  option (`· at cap (2/1)`, `· capped to 0 this day`, `· starts <date>`),
+  matching both the off-day flag already there and this repo's soft-gate house
+  style — installers had NO cap enforcement before, so hard-blocking would have
+  been a new restriction on scheduling calls SMs make for good reasons. If you
+  make it a hard gate, that is a product decision, not a bug fix.
+
 - **`audit_ticked` / `subjobs[].jobcard` is ONE mutable slot holding both the 3s draft autosave
   and the signed job card, and this port shipped without the guard that keeps them apart.** The
   draft PATCHes `{draft:true, rooms}` with photos stripped. Reopen a completed card, touch

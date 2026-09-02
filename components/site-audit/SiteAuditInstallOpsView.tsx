@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from './omsService';
 import { autoImportInstallOrders } from './autoImportAuditOrders';
-import { inCity, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
+import { inCity, mapCaps, rosterSelect, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
 import OrdersView from './install-ops/OrdersView';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from './install-ops/QueueViews';
 import { CalendarView, ScheduleView } from './install-ops/ScheduleCalendarViews';
@@ -116,13 +116,15 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
      "zero installers" and wiped a roster that had been working. */
   const loadInstallers = useCallback(async () => {
     try {
-      const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=id,name,email,installer_type,city,weekly_off,leave_dates');
+      const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=' + await rosterSelect('id,name,email,installer_type,city,weekly_off,leave_dates,active_from'));
       if (!Array.isArray(rows)) throw new Error('installer roster unavailable');
       setInstallers(rows.map((r: any) => ({
         id: r.id, name: r.name, email: r.email, type: r.installer_type || 'flooring', zone: '', phone: '',
         city: r.city || 'Bengaluru',
         weeklyOff: r.weekly_off == null ? null : r.weekly_off,
         leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
+        activeFrom: r.active_from || null,
+        ...mapCaps(r),
       })));
       setInstallersErr(false);
       if (instRetryTid.current) { clearTimeout(instRetryTid.current); instRetryTid.current = null; }
@@ -400,7 +402,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
         <div className="fixed inset-0 bg-black/30 z-[900] flex justify-end" onClick={(e) => { if (e.target === e.currentTarget) closeDrawer(); }}>
           <div className="bg-white h-full w-full max-w-[600px] shadow-2xl flex flex-col" key={currentPI + ':' + drawerNonce}>
             <OrderDrawer
-              order={drawerOrder} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution}
+              order={drawerOrder} allOrders={orders} installers={installers} shadowerPool={shadowerPool} city={city} slotsFl={slotsFl} slotsWp={slotsWp} attribution={attribution}
               installersErr={installersErr} onRetryInstallers={loadInstallers}
               onClose={closeDrawer} onOpenOrder={openOrder} onOpenRect={(o) => setRectOrder(o)}
               reload={loadOrders} reloadWithDeleted={reloadWithDeleted} toast={toast}
@@ -417,7 +419,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
       />
       <KylasOverlay open={kylasOpen} orders={orders} onClose={() => setKylasOpen(false)} onUse={usePORow} />
       <RectOverlay order={rectOrder} onClose={() => setRectOrder(null)} reload={loadOrders} toast={toast} attribution={attribution} />
-      <AddStaffOverlay open={asOpen} onClose={() => setAsOpen(false)} reload={loadInstallers} toast={toast} />
+      <AddStaffOverlay open={asOpen} onClose={() => setAsOpen(false)} reload={loadInstallers} toast={toast} city={city} />
     </div>
   );
 }
