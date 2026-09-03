@@ -268,6 +268,9 @@ function RectForm({
       const rectSvc = { rectification_of: o.pi, issue: issue.trim(), flooring: o.service?.flooring || [], wallpaper: o.service?.wallpaper || [] };
       const base: Record<string, any> = {
         pi: newPi.trim(), po: (o.po || []).join(','), skus: o.skus || [], bm: o.bm,
+        // Carry the owner across: a rectification belongs to whoever owned the original. Without
+        // this the clone lands unattributed even though the parent was linked.
+        ...((o as any).bm_email ? { bm_email: (o as any).bm_email } : {}),
         customer_name: o.name, phone: o.phone, addr: o.addr, status: 'pending', service: rectSvc,
         log: [{ t: 'Rectification order for ' + o.pi, d: new Date().toISOString(), by: 'manual' }],
         created_by_email: attribution, city: o.city,

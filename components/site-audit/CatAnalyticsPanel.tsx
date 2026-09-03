@@ -29,7 +29,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CityFilter } from './siteAuditShared';
 import { loadSetting, saveSetting } from './siteAuditShared';
-import { clampToData, downloadCsv, dstr, loadCatAnalytics, type CatAnalyticsApi } from './catAnalytics';
+import {
+  ALL_DATA_DAYS,
+  clampToData,
+  daysAgo,
+  downloadCsv,
+  dstr,
+  fetchCatDataset,
+  INITIAL_RANGE_DAYS,
+  loadCatAnalytics,
+  type CatAnalyticsApi,
+} from './catAnalytics';
 
 export type CommercialTab = 'category' | 'weekly' | 'penetration' | 'targets';
 
@@ -52,6 +62,12 @@ export default function CatAnalyticsPanel({
   const [targetMonth, setTargetMonth] = useState('');
   const [drillKey, setDrillKey] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  /* The panel mounts with INITIAL_RANGE_DAYS of order book and re-filters that client-side. Picking
+     a range that reaches outside it triggers one on-demand fetch of the wider window — the loaded
+     window is tracked here so we can tell "re-filter what we have" from "go and get more". */
+  const [loadedFrom, setLoadedFrom] = useState('');
+  const [rangeErr, setRangeErr] = useState('');
+  const [fetching, setFetching] = useState(false);
 
   const dsRef = useRef<any>(null);
   /* Targets are held in a MUTABLE ref, not in state, and edits bump `nonce` to force the redraw.
@@ -104,9 +120,12 @@ export default function CatAnalyticsPanel({
         return;
       }
       if (!alive) return;
-      /* Default range: this month to date, clamped to the window the source actually holds. */
+      /* Default range: the last 30 days — the same window the mount fetch pulled, so the first
+         paint never asks for data that is not loaded. Clamped for the dummy source, which holds a
+         fixed 2026 window and would otherwise open on an empty range. */
       setFrom((cur) => cur || defaultFrom(mod));
       setTo((cur) => cur || clampToData(mod, dstr(new Date())));
+      setLoadedFrom(mod.MD_AN_DATA_FROM);
       setApi(mod);
     })();
     return () => {
@@ -212,6 +231,42 @@ export default function CatAnalyticsPanel({
     };
   }, [api, flash, redraw]);
 
+  /* ---- widen the loaded window on demand ----
+     Only ever reaches BACKWARDS: `to` is capped at today by the inputs, and the mount fetch already
+     ends there. Refetching the union (not just the missing slice) keeps one dataset in `dsRef`
+     rather than making the render layer stitch two, and the backend's 60s cache makes a repeated
+     window nearly free. Live source only — the dummy generator holds a fixed window with nothing
+     behind it to fetch. */
+  useEffect(() => {
+    if (!api || !from || !loadedFrom) return;
+    if (api.MD_AN_SOURCE.mode === 'dummy') return;
+    if (from >= loadedFrom) return;
+
+    let alive = true;
+    setFetching(true);
+    setRangeErr('');
+    fetchCatDataset(api, from, dstr(new Date()))
+      .then((ds) => {
+        if (!alive) return;
+        dsRef.current = ds;
+        setLoadedFrom(ds.meta?.from || from);
+        redraw();
+      })
+      .catch((e: any) => {
+        if (!alive) return;
+        /* Keep the narrower dataset and say so, rather than blanking a working panel: the range on
+           screen is now wider than the data behind it, which is exactly what has to be visible. */
+        setRangeErr(e?.message || 'could not load that range');
+      })
+      .finally(() => {
+        if (alive) setFetching(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, from, loadedFrom]);
+
   /* ---- build the slice, then render the tab ---- */
   const html = useMemo(() => {
     if (!api || !from || !to) return '';
@@ -267,8 +322,10 @@ export default function CatAnalyticsPanel({
       f = dstr(x);
       u = dstr(t);
     } else {
-      f = api.MD_AN_DATA_FROM;
-      u = api.MD_AN_DATA_TO;
+      /* Live: reach past the loaded window and let the widening effect fetch it. Dummy: its own
+         window IS all the data there is. */
+      f = api.MD_AN_SOURCE.mode === 'dummy' ? api.MD_AN_DATA_FROM : daysAgo(ALL_DATA_DAYS - 1);
+      u = api.MD_AN_SOURCE.mode === 'dummy' ? api.MD_AN_DATA_TO : dstr(t);
     }
     f = clampToData(api, f);
     u = clampToData(api, u);
@@ -329,9 +386,25 @@ export default function CatAnalyticsPanel({
           </select>
         </div>
         <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
-          <b style={{ color: dummy ? 'var(--amber)' : 'var(--green)' }}>{dummy ? '◆ Dummy data' : '● Live (Metabase)'}</b>
+          <b style={{ color: dummy ? 'var(--amber)' : 'var(--green)' }}>{dummy ? '◆ Dummy data' : '● Live (order book)'}</b>
           <br />
-          {dummy ? `Seeded from the Jun–Aug 2026 category workbook · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}` : 'Order book via Metabase'}
+          {dummy ? `Seeded from the Jun–Aug 2026 category workbook · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}` : `Order book, live · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}`}
+          {/* A wider range is one request, and it can take a while on a cold cache — say so rather
+              than leaving the old numbers on screen looking like the answer. */}
+          {fetching ? (
+            <>
+              <br />
+              <span style={{ color: 'var(--amber)' }}>loading a wider range…</span>
+            </>
+          ) : null}
+          {rangeErr ? (
+            <>
+              <br />
+              <span style={{ color: 'var(--red)' }}>
+                showing {api.MD_AN_DATA_FROM} onwards — {rangeErr}
+              </span>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -434,12 +507,11 @@ export default function CatAnalyticsPanel({
 }
 
 function defaultFrom(api: CatAnalyticsApi): string {
-  const t = new Date();
-  const monthStart = clampToData(api, dstr(new Date(t.getFullYear(), t.getMonth(), 1)));
-  const today = clampToData(api, dstr(t));
-  // Today is past the dummy window's end, so a raw "1st of this month" clamps ABOVE the clamped
-  // "today" and would invert the range — fall back to the window's own start in that case.
-  return monthStart > today ? clampToData(api, api.MD_AN_DATA_FROM) : monthStart;
+  const start = clampToData(api, daysAgo(INITIAL_RANGE_DAYS - 1));
+  const today = clampToData(api, dstr(new Date()));
+  // Today is past the dummy window's end, so a raw "30 days ago" clamps ABOVE the clamped "today"
+  // and would invert the range — fall back to the window's own start in that case.
+  return start > today ? clampToData(api, api.MD_AN_DATA_FROM) : start;
 }
 
 /* Where every number on these tabs comes from, and what it does not cover. Kept visible on the
@@ -451,7 +523,7 @@ function footerHtml(api: CatAnalyticsApi): string {
   const A = api.MD_AN_ASSUMPTIONS;
   const modelled = api.MD_AN_CAT_IDS.filter((c) => api.MD_AN_CATEGORIES[c].modelled).map((c) => api.MD_AN_CATEGORIES[c].label);
   return `<div class="an-footer">
-    <b>Where these numbers come from:</b> the order book (Metabase question on <code>materialdepot_azure</code>), using the same order definition as the Sales Rep Analytics dashboard — confirmed/placed/shipped/delivered estimates only, quotes and cancellations excluded, order date = <code>COALESCE(order_placed_time, created_at)</code>. Right now that source is a <b>dummy generator seeded from the Jun–Aug 2026 category workbook</b>: every store-month total, order value, quantity, customer count, attach count and cart figure adds back up to the workbook exactly.<br>
+    <b>Where these numbers come from:</b> the order book, live, via <code>GET /crm/cat-analytics/</code>, using the same order definition as the Sales Rep Analytics dashboard — confirmed/placed/shipped/delivered estimates only, quotes and cancellations excluded, order date = <code>COALESCE(order_placed_time, created_at)</code> in IST.${api.MD_AN_SOURCE.mode === 'dummy' ? ' Right now that source is a <b>dummy generator seeded from the Jun–Aug 2026 category workbook</b>: every store-month total, order value, quantity, customer count, attach count and cart figure adds back up to the workbook exactly.' : ' Cross-checked against the Jun–Aug 2026 category workbook: site-audit AOV, wallpaper, flooring and installation all reconcile to within a few percent.'}<br>
     <b>Order count</b> is distinct orders CONTAINING the category — an order with wallpaper and flooring counts in both. <b>Order value</b> is only that category's line value (net of discount, incl. tax), never the whole order.<br>
     <b>Not comparable with the Execution tab:</b> these figures count order lines in the order book; Execution counts site visits in the ops DB. The only bridge between the two is the customer phone number.<br>
     <b>Attach rate:</b> ${L.attachIdentical}<br>

@@ -596,13 +596,31 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     if (lat === null) captureLocation({ timeout: 5000, enableHighAccuracy: true });
   }, [lat, stopStream, captureLocation]);
 
+  /* Downscale to the same budget doSnap() uses (800px wide, q 0.6). Without this the picker
+     handed back the camera roll's full-resolution file — a ~3 MB JPEG — and when the upload then
+     failed, handleConfirm's fallback wrote all of it into the order's log as base64. One such
+     photo was 4.1 MB, 81% of an Execution-tab query's entire payload. */
   const onFileChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const rd = new FileReader();
       rd.onload = (ev) => {
-        setPhoto(ev.target?.result as string);
+        const raw = ev.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const W = Math.min(img.naturalWidth || 800, 800);
+          const H = Math.round(((img.naturalHeight || 600) * W) / (img.naturalWidth || 800));
+          const cv = document.createElement('canvas');
+          cv.width = W;
+          cv.height = H;
+          const ctx = cv.getContext('2d');
+          if (!ctx) { setPhoto(raw); return; }
+          ctx.drawImage(img, 0, 0, W, H);
+          try { setPhoto(cv.toDataURL('image/jpeg', 0.6)); } catch { setPhoto(raw); }
+        };
+        img.onerror = () => setPhoto(raw);
+        img.src = raw;
         if (lat === null) captureLocation({ timeout: 5000, enableHighAccuracy: true });
       };
       rd.readAsDataURL(file);

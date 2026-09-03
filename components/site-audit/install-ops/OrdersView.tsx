@@ -1,7 +1,7 @@
 'use client';
 
 import { Chip, MapLink, OrderCategoryPills, StatTile, SubjobSummary } from './ui';
-import { INSTALL_SKU, dstr, fmtDate, installOrderHasDate, opsCallDue, today } from './shared';
+import { INSTALL_SKU, dstr, fmtDate, hasOpenFollowUp, installOrderHasDate, opsCallDue, today } from './shared';
 import type { InstallOrder, Installer, ViewKey } from './types';
 
 const FILTERS = ['all', 'followup', 'pending', 'deliv_delayed', 'created', 'scheduled', 'assigned', 'partial', 'completed'];
@@ -50,7 +50,7 @@ export default function OrdersView({
       if (filterStatus !== 'all') {
         if (filterStatus === 'opsdue') return opsCallDue(o);
         if (filterStatus === 'unassigned') return isUnassignedScheduled(o);
-        if (filterStatus === 'followup') return !!(o.service && o.service.follow_up_date);
+        if (filterStatus === 'followup') return hasOpenFollowUp(o);
         if (filterStatus === 'live') return ['scheduled', 'assigned', 'partial', 'onway', 'atsite'].includes(o.status);
         if (o.status !== filterStatus) return false;
       }
@@ -147,7 +147,7 @@ export default function OrdersView({
               const auditBadge = o.auditBy === 'material_depot'
                 ? <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">MD Audit</span>
                 : o.auditBy === 'customer' ? <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">Cust Audit</span> : null;
-              const fu = o.service && o.service.follow_up_date;
+              const fu = hasOpenFollowUp(o) ? o.service!.follow_up_date : null;
               return (
                 <tr key={o.pi} className="hover:bg-gray-50 cursor-pointer" onClick={(e) => { if ((e.target as HTMLElement).closest('.maplink-stop')) return; onOpenOrder(o.pi); }}>
                   <td className="px-3 py-2.5 border-t border-gray-100 align-top">

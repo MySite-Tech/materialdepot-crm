@@ -11,14 +11,68 @@
    It is loaded on demand — only when someone actually opens a commercial analytics tab — so the
    127 KB never lands in the main bundle or on any other Site Audit screen.
 
-   GOING LIVE ON REAL DATA: nothing in this file or in CatAnalyticsPanel.tsx changes. Implement
-   MD_AN_SOURCE.metabase() inside public/md-cat-analytics.js to return the same shape
-   MD_AN_SOURCE.dummy() returns (documented at MD_AN_ROW_CONTRACT in that file) and flip
-   MD_AN_SOURCE.mode off 'dummy'. The filter row reads that flag and stops badging the numbers
-   as dummy data by itself.
+   LIVE SOURCE: the commercial tabs now read the order book through the Django API
+   (GET /crm/cat-analytics/, served by order/crm/cat_analytics/), which returns the
+   MD_AN_ROW_CONTRACT shape verbatim — so none of the module's compute or render layer changed.
+   The shared file stays framework-free: it exposes a window.MD_AN_FETCH hook and
+   installLiveSource() below is what plugs this app's authenticated fetch into it. The Admin
+   console can install its own and keep the same file byte-for-byte.
    ───────────────────────────────────────────────────────────────────────────────────────── */
 
+import { mdFetch } from '@/lib/mockApi';
+
 export const CAT_ANALYTICS_SRC = '/md-cat-analytics.js';
+
+/* The range the panel loads on mount. Deliberately SHORT: the cold build is ~20s for 400 days of
+   order book and the API pod runs on gunicorn's 30s default timeout, so a wide default put every
+   first paint next to that ceiling. Thirty days is what almost every visit actually looks at.
+
+   A wider range is not lost — it is fetched on demand. The user picks it in the From/To filter and
+   `fetchCatDataset` pulls exactly that window (see `CatAnalyticsPanel`), which is why the panel no
+   longer needs to over-fetch "just in case" a later month gets selected. */
+export const INITIAL_RANGE_DAYS = 30;
+
+/* Ceiling on a single on-demand fetch, mirroring the backend's MAX_RANGE_DAYS. Kept a hair under it
+   because the backend counts days INCLUSIVELY (`(end - start).days + 1`) while a day-count
+   subtraction here is exclusive — asking for exactly the cap is how this panel used to fail with
+   "range may not exceed 400 days". Every window built below is inclusive for that reason. */
+export const MAX_RANGE_DAYS = 1200;
+
+/* How far back "All data" reaches. Past ~730 days the order book stops yielding new carts, so a
+   bigger number costs time and returns nothing. */
+export const ALL_DATA_DAYS = 730;
+
+export function daysAgo(n: number): string {
+  return dstr(new Date(Date.now() - n * 86400000));
+}
+
+/* One authenticated fetch of an explicit window, and the only place that talks to the endpoint.
+   Also restates the module's data window, which is what the date inputs and the source line read.
+   The range is clamped rather than passed through: a hand-typed 2019 date would otherwise come
+   back as a 400 the panel can only report, when trimming to what the API allows still answers the
+   question. */
+export async function fetchCatDataset(api: CatAnalyticsApi, from: string, to: string) {
+  const floor = daysAgo(MAX_RANGE_DAYS - 1);
+  const start = from < floor ? floor : from;
+  const ds = await mdFetch(`/crm/cat-analytics/?from=${start}&to=${to}`);
+  if (!ds || !Array.isArray(ds.orders) || !Array.isArray(ds.carts)) {
+    throw new Error('the order-book API returned an unexpected shape');
+  }
+  if (ds.meta?.from) api.MD_AN_DATA_FROM = ds.meta.from;
+  if (ds.meta?.to) api.MD_AN_DATA_TO = ds.meta.to;
+  return ds;
+}
+
+/* Installs the live order-book source on the shared module and flips it off 'dummy'.
+   Idempotent, and deliberately without a dummy fallback: if the API is down the panel shows its
+   error state, because seeded workbook figures rendered as live numbers is the worse failure. */
+function installLiveSource(api: CatAnalyticsApi) {
+  const w = window as any;
+  if (w.MD_AN_FETCH) return;
+  w.MD_AN_FETCH = () =>
+    fetchCatDataset(api, daysAgo(INITIAL_RANGE_DAYS - 1), dstr(new Date()));
+  api.MD_AN_SOURCE.mode = 'metabase';
+}
 
 export type CatFilter = { from: string; to: string; store: string; city: string };
 
@@ -64,10 +118,17 @@ let pending: Promise<CatAnalyticsApi> | null = null;
 export function loadCatAnalytics(): Promise<CatAnalyticsApi> {
   if (typeof window === 'undefined') return Promise.reject(new Error('cat analytics is browser-only'));
   const w = window as any;
-  if (w.mdAnDataset) return Promise.resolve(w as CatAnalyticsApi);
+  if (w.mdAnDataset) {
+    installLiveSource(w as CatAnalyticsApi);
+    return Promise.resolve(w as CatAnalyticsApi);
+  }
   if (pending) return pending;
   pending = new Promise<CatAnalyticsApi>((resolve, reject) => {
-    const done = () => (w.mdAnDataset ? resolve(w as CatAnalyticsApi) : reject(new Error('md-cat-analytics.js loaded but published nothing')));
+    const done = () => {
+      if (!w.mdAnDataset) return reject(new Error('md-cat-analytics.js loaded but published nothing'));
+      installLiveSource(w as CatAnalyticsApi);
+      resolve(w as CatAnalyticsApi);
+    };
     const existing = document.querySelector<HTMLScriptElement>('script[data-md-cat-analytics]');
     if (existing) {
       existing.addEventListener('load', done);

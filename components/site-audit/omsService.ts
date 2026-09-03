@@ -47,16 +47,10 @@ async function post(stageId: number, notes: string): Promise<boolean> {
   return !!(res.ok && data && data.ok);
 }
 
-/* Confirm the leg behind this order's PO numbers. Never throws and never blocks the caller: the job
-   IS complete in the CRM whatever OMS says, so a failure queues for retry instead of failing the
-   completion the installer just signed off. Returns true when OMS has it (or there was nothing to
-   send). */
-export async function confirmServicePerformed(
-  po: string[] | string | null | undefined,
-  notes = '',
-): Promise<boolean> {
-  const stageId = stageIdFrom(po);
-  if (!stageId) return true;   // legacy PO or manually added order — no OMS leg
+/* Confirm one leg by stage id. Never throws: a failure queues for retry instead of failing the
+   completion the auditor/installer just signed off — the job IS complete in the CRM whatever OMS
+   says. Returns true when OMS has it. */
+export async function confirmServiceStage(stageId: number, notes = ''): Promise<boolean> {
   try {
     if (await post(stageId, notes)) return true;
   } catch { /* fall through to the queue */ }
@@ -64,6 +58,27 @@ export async function confirmServicePerformed(
     localStorage.setItem(QUEUE_PREFIX + stageId, JSON.stringify({ stageId, notes }));
   } catch {}
   return false;
+}
+
+/* Confirm the leg behind this order's PO numbers. Never throws and never blocks the caller.
+   Returns true when OMS has it (or there was nothing to send).
+
+   A `po` of null/undefined means the CALLER could not tell us what this order is — not that the
+   order has no leg. Those two used to collapse into the same silent `return true`, so a row whose
+   `po` failed to load reported a successful confirmation, queued nothing, and left the SERVICE leg
+   held with no trace anywhere. Say so and report failure instead; the reconcile in
+   `autoImportAuditOrders` is the backstop that actually recovers it. */
+export async function confirmServicePerformed(
+  po: string[] | string | null | undefined,
+  notes = '',
+): Promise<boolean> {
+  if (po == null) {
+    console.warn('[site-audit] no PO on the order — cannot confirm its OMS service leg');
+    return false;
+  }
+  const stageId = stageIdFrom(po);
+  if (!stageId) return true;   // legacy PO or manually added order — no OMS leg
+  return confirmServiceStage(stageId, notes);
 }
 
 /* Drain whatever failed earlier. Safe to call on every app load — the backend is idempotent, so a

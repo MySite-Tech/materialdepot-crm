@@ -576,7 +576,17 @@ window.MD_AN_SOURCE={
        carts:  SELECT cart_number, category, MIN(created_at)::date AS date, ...
      Then group order rows by id into {lines:[...]} and set hasInstall from the presence of an
      Installation line. Nothing else in the dashboard changes. */
-  metabase:function(){return Promise.reject(new Error('Metabase source not wired yet — MD_AN_SOURCE.mode is "dummy"'));},
+  /* The live source is INJECTED, not hard-coded: whoever hosts this module installs
+     window.MD_AN_FETCH (a zero-arg function resolving to the MD_AN_ROW_CONTRACT shape) and flips
+     `mode`. That keeps this file framework-free and byte-shareable between the static Admin
+     console and the CRM's Next app, which authenticate to the order book in different ways.
+     No fallback to dummy on failure — showing seeded figures as if they were live is worse than
+     showing an error. */
+  metabase:function(){
+    if(typeof window.MD_AN_FETCH!=='function')
+      return Promise.reject(new Error('no live source installed — set window.MD_AN_FETCH before flipping MD_AN_SOURCE.mode'));
+    return Promise.resolve(window.MD_AN_FETCH());
+  },
   fetch:function(){
     var self=this;
     if(this.mode==='metabase')return this.metabase();

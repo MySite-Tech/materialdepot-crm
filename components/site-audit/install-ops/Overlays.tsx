@@ -213,6 +213,9 @@ export function RectOverlay({ order, onClose, reload, toast, attribution }: { or
       const rectSvc = { rectification_of: o.pi, issue: issue.trim(), flooring: (o.service && o.service.flooring) || [], wallpaper: (o.service && o.service.wallpaper) || [], wallpanel: (o.service && o.service.wallpanel) || [] };
       const base = {
         pi: newPi.trim(), po: (o.po || []).join(','), skus: o.skus || [], bm: o.bm, customer_name: o.name, phone: o.phone, addr: o.addr,
+        // install_orders has no bm_email column, so an install -> audit rectification has nothing
+        // to copy; ensureAuditOrderOwner resolves it from the enquiry id on the way in.
+        ...((o as any).bm_email ? { bm_email: (o as any).bm_email } : {}),
         status: 'pending', service: rectSvc, log: [{ t: 'Rectification order for ' + o.pi, d: new Date().toISOString(), by: 'manual', who: attribution }], created_by_email: attribution,
       };
       if (svcType === 'install') await sbPost('install_orders', { ...base, status: 'deliv_ontime', matched_audit: false, delivery_date: null, custom_wp: false, subjobs: null });

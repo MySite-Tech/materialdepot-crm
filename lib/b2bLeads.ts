@@ -30,6 +30,18 @@ interface B2BLeadRow {
 
 const TABLE = 'b2b_lead';
 
+// Fresh-start floor. The B2B board was reset on this date: every b2b_lead row
+// created before it was deleted, and Kylas — which still holds years of older
+// inbound leads — must never surface them again. Every inbound read is clamped
+// to this day, so a cleared or widened date filter cannot reach behind it.
+export const B2B_FRESH_START = '2026-08-26';
+
+// The later of `day` and the fresh-start floor. Empty/invalid input yields the
+// floor itself, so "no filter" still means "from the reset onwards".
+function floorToFreshStart(day?: string): string {
+  return day && day > B2B_FRESH_START ? day : B2B_FRESH_START;
+}
+
 // ── Mappers: row ↔ UI type ───────────────────────────────────────────────────
 
 function rowToInbound(r: B2BLeadRow): InboundLead {
@@ -245,7 +257,8 @@ export async function fetchInboundBoard(
   const page = opts?.page ?? 0;
   const ownerIds = opts?.ownerId ? [opts.ownerId] : undefined;
   const search = (opts?.search || '').trim();
-  const createdAfter = opts?.createdFrom ? new Date(`${opts.createdFrom}T00:00:00+05:30`).toISOString() : '';
+  const createdFrom = floorToFreshStart(opts?.createdFrom);
+  const createdAfter = new Date(`${createdFrom}T00:00:00+05:30`).toISOString();
   const createdBefore = opts?.createdTo ? new Date(`${opts.createdTo}T23:59:59.999+05:30`).toISOString() : '';
   const kylas = await fetchB2BInboundLeads(
     page, ownerIds, search, createdAfter, createdBefore, opts?.kylasStage,
@@ -261,7 +274,7 @@ export async function fetchInboundBoard(
       // the created_at column rather than a mapped field, so it doesn't depend on
       // the row mapper carrying a date through.
       const rows = await fetchRows('inbound', {
-        createdFrom: opts?.createdFrom,
+        createdFrom,
         createdTo: opts?.createdTo,
       });
       dbLeads = rows.map(rowToInbound);
@@ -301,7 +314,9 @@ async function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
   const entries = await Promise.all(
     B2B_INBOUND_OWNER_LIST.map(async (o) => {
       try {
-        const res = await fetchB2BInboundLeads(0, [o.id]);
+        const res = await fetchB2BInboundLeads(
+          0, [o.id], '', new Date(`${B2B_FRESH_START}T00:00:00+05:30`).toISOString(),
+        );
         return [o.name, res.total] as const;
       } catch {
         return [o.name, 0] as const;

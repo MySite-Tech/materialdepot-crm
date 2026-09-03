@@ -117,6 +117,11 @@ type JobCard = { rooms: any[]; sign?: SignData | null };
 type Order = {
   id: string;
   pi: string;
+  /* Carried on the row, never re-fetched at completion time: `confirmServicePerformed`
+     reads the stage ref out of this, and a failed read there is indistinguishable from a
+     legacy order with no leg — it silently skipped the confirmation and left the OMS
+     SERVICE leg held (51 audits, Aug 21 – Sep 1). It is already in AUDITOR_COLS. */
+  po: string | null;
   name: string;
   phone: string;
   addr: string;
@@ -322,6 +327,13 @@ async function retryPendingCompletions() {
         if (d) {
           await sbPatch('audit_orders', d.id, { status: 'completed', log: d.log });
           localStorage.removeItem(k);
+          /* This path completes the job just as much as the live one does, so it owes OMS the
+             same confirmation — without it an audit that finished offline billed nothing.
+             `po` is carried in the queued payload; an entry queued before it was stored has
+             none, and the reconcile in autoImportAuditOrders picks that up instead. */
+          try {
+            await confirmServicePerformed(d.po, 'Site audit completed (offline, synced later)');
+          } catch {}
         }
       } catch {}
     }
@@ -362,6 +374,7 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
     return rows.map((r: any) => ({
       id: r.id,
       pi: r.pi || '',
+      po: r.po || null,
       name: r.customer_name || '',
       phone: r.phone || '',
       addr: r.addr || '',
@@ -2551,15 +2564,16 @@ function JobCardWizard({
         } catch {}
         // The audit happened → confirm the OMS SERVICE leg, which is what raises its invoice.
         // Queues itself for retry on failure; a legacy-PO order has no leg and is skipped.
+        // `order.po` is the row we already loaded — this used to re-read it from Supabase, and
+        // that read resolving null (sbGet answers null on any non-2xx/timeout) looked exactly
+        // like "no leg on this order", so the confirmation was dropped without a trace.
         try {
-          const poRows = await sbGet('audit_orders?id=eq.' + order.id + '&select=po');
-          const po = Array.isArray(poRows) && poRows[0] ? poRows[0].po : null;
-          await confirmServicePerformed(po, 'Site audit completed by ' + actingAs.name);
+          await confirmServicePerformed(order.po, 'Site audit completed by ' + actingAs.name);
         } catch {}
       } catch {
         showToast('Status not saved — will retry automatically');
         try {
-          localStorage.setItem('md_audit_ps_' + order.pi, JSON.stringify({ id: order.id, log: newLog }));
+          localStorage.setItem('md_audit_ps_' + order.pi, JSON.stringify({ id: order.id, log: newLog, po: order.po }));
         } catch {}
       }
 

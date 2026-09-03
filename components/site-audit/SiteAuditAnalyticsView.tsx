@@ -469,6 +469,9 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
           : sbGetLong('ratings?select=order_type,order_id,pi,q1_score,q2_score,created_at,staff_name,staff_email').catch(() => []),
         sbGetLong('install_orders?select=pi,original_delivery_date&status=neq.deleted').catch(() => []),
         sbGetLong('install_orders?select=pi,phone,log&status=neq.deleted&created_at=gte.2026-07-01').catch(() => []),
+        /* Unpaged again: this timed out while audit_ticked held base64 job-card images (70 MB
+           over the column, single rows past 8 MB). Those were moved to storage, the column is
+           now ~1.3 MB, and this reads in ~0.3s. sbGetPaged remains available if it ever regresses. */
         sbGetLong('audit_orders?select=id,signedName:audit_ticked->sign->>name&status=eq.completed').catch(() => null),
       ]);
       ratingsRes = ratingsFallback;

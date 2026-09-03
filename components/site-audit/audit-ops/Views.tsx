@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { WDAYS, sbPatch } from '../siteAuditShared';
 import { Chip } from './AuditOrderDrawer';
 import {
-  DEFAULT_CAP, STATUS, addDays, auditorNameOf, capFor, dailyTotalCap, dstr, fmtDate, mapUrl,
+  DEFAULT_CAP, STATUS, addDays, auditorNameOf, capFor, dailyTotalCap, dstr, fmtDate, hasOpenFollowUp, mapUrl,
   categoriesAreFromStore, offReason, orderCategories, saveAuditSlots, slotLabel, today,
   type AuditOrder, type Auditor, type SlotDef,
 } from './shared';
@@ -74,7 +74,7 @@ export function OrdersView({
   const missingBm = orders.filter((o) => !o.bmEmail).length;
   /* A date is already confirmed but no auditor is on the job — the SM's top
      priority to call and assign, easy to miss in a plain unsorted list. */
-  const isUnassignedScheduled = (o: AuditOrder) => !o.auditor && !!o.date && !['slot_reserved', 'slot_converted'].includes(o.status);
+  const isUnassignedScheduled = (o: AuditOrder) => !o.auditor && !!o.date && !['slot_reserved', 'slot_converted', 'completed'].includes(o.status);
   const unassignedScheduled = orders.filter(isUnassignedScheduled).length;
 
   const tiles: Array<[number, string, string, string]> = [
@@ -100,7 +100,7 @@ export function OrdersView({
     } else if (filterStatus === 'action') {
       if (!['pending', 'created', 'call_na'].includes(o.status)) return false;
     } else if (filterStatus === 'followup') {
-      if (!(o.service && o.service.follow_up_date)) return false;
+      if (!hasOpenFollowUp(o)) return false;
     } else if (filterStatus === 'live') {
       if (!['scheduled', 'assigned', 'onway', 'atsite'].includes(o.status)) return false;
     } else if (filterStatus === 'slot_reserved') {
@@ -171,7 +171,7 @@ export function OrdersView({
           <thead><tr>{['PI / PO', 'SKUs in cart', 'Categories', 'Customer', 'Address', 'Audit date', 'Auditor allocated', 'Status'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.length ? rows.map((o) => {
-              const fu = o.service && o.service.follow_up_date;
+              const fu = hasOpenFollowUp(o) ? o.service!.follow_up_date : null;
               return (
                 <tr key={o.id} onClick={() => onOpenOrder(o.pi)} className="cursor-pointer hover:bg-gray-50">
                   <td className={TD}><b className="font-mono text-xs">{o.pi}</b><div className="text-[11px] text-gray-400">{o.po.join(' · ')}</div></td>
@@ -228,7 +228,7 @@ export function TodayView({ orders, auditors, slots, onOpenOrder }: { orders: Au
 /* ── Follow-ups ───────────────────────────────────────────────────────── */
 export function FollowupsView({ orders, onOpenOrder }: { orders: AuditOrder[]; onOpenOrder: (pi: string) => void }) {
   const todayStr = dstr(today);
-  const list = orders.filter((o) => o.service && o.service.follow_up_date).sort((a, b) => (a.service!.follow_up_date || '').localeCompare(b.service!.follow_up_date || ''));
+  const list = orders.filter(hasOpenFollowUp).sort((a, b) => (a.service!.follow_up_date || '').localeCompare(b.service!.follow_up_date || ''));
   return (
     <>
       <Head title="Follow-ups" sub="Audit orders with a follow-up reminder set. Open each one to book a slot when the client confirms." />
