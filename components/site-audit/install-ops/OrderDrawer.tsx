@@ -177,9 +177,20 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
       const noCard = o.subjobs.filter((sj) => sj.status !== 'completed' && !(sj.jobcard && sj.jobcard.sign));
       if (noCard.length) {
         const names = noCard.map((sj) => typeLabel(sj.type)).join(', ');
-        const ok = window.confirm('The following sub-job(s) have NO signed job card yet — no photos, signature, or customer rating on file: ' + names + '.\n\nForcing Completed now will mark them done anyway with no proof of work. Only do this if you\'ve confirmed with the installer/customer directly.\n\nContinue?');
-        if (!ok) return;
-        overrideReason = (window.prompt('Reason for overriding without a job card (required):') || '').trim();
+        /* `window.confirm` + `window.prompt`, which is the landmine this repo
+           keeps re-treading: an installed PWA or mobile webview commonly
+           no-ops them and auto-returns null, and desktop Chrome silences them
+           permanently for an origin once "Prevent this page from creating
+           additional dialogs" is ticked. Either way the SM saw no dialog, the
+           reason came back blank, and the status silently refused to change
+           with only a toast to explain it. `askNote` is the same
+           "nothing happens until a non-blank reason is given" contract as real
+           DOM — its `preface` carries the warning the confirm used to. */
+        overrideReason = ((await askNote(
+          'Reason for overriding without a job card (required)',
+          'These sub-job(s) have NO signed job card — no photos, signature or customer rating on file: ' + names
+            + '. Forcing Completed marks them done with no proof of work. Only do this if you have confirmed directly with the installer or customer.',
+        )) || '').trim();
         if (!overrideReason) { toast('Reason required — status not changed'); return; }
       }
     }

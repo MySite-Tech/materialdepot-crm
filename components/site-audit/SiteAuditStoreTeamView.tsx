@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CITIES, cityOf, mapCaps, rosterSelect, sbGet, sbPost, sbPatch, staffCapOn, fmtDate } from './siteAuditShared';
+import { CITIES, activeStaffFilter, cityOf, mapCaps, rosterQuery, sbGet, sbPost, sbPatch, staffCapOn, fmtDate } from './siteAuditShared';
 import { DEFAULT_CAP } from './audit-ops/shared';
 
 /* Verbatim port of material-depot-site's app/src/pages/StoreTeam.jsx (slot-
@@ -202,7 +202,11 @@ export default function SiteAuditStoreTeamView() {
             date +
             '&status=neq.deleted'
         ),
-        rosterSelect('id,active_from,weekly_off,leave_dates,city').then((sel) => sbGet('profiles?select=' + sel + '&role=in.(site_auditor,auditor_installer)')),
+        /* The kiosk's availability and slots-left count. Retired auditors
+           must be gone from BOTH or a store books a slot against somebody who
+           has left — the same class of bug as the cross-city bleed this view
+           already carries a note about. */
+        rosterQuery('id,active_from,weekly_off,leave_dates,city').then(({ select, filter }) => sbGet('profiles?select=' + select + '&role=in.(site_auditor,auditor_installer)' + filter)),
       ]);
       /* sbGet resolves a PostgREST ERROR OBJECT for any 4xx/5xx rather than
          rejecting, so a non-array here is a FAILED load, not an empty roster.
@@ -685,7 +689,9 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
   const [bmTyped, setBmTyped] = useState(false);
   useEffect(() => {
     let alive = true;
-    sbGet('profiles?select=name,email&role=eq.bm&order=name.asc')
+    /* BM picker on the kiosk's booking form — a new booking must not be
+       attributed to a BM who has left. */
+    activeStaffFilter().then((f) => sbGet('profiles?select=name,email&role=eq.bm&order=name.asc' + f))
       .then((r) => { if (alive && Array.isArray(r)) setBmList(r.filter((p: any) => p && p.name && p.email)); })
       /* The list failing to load must not lock the counter out of booking —
          fall through to the typed field, same as an unlisted BM. */

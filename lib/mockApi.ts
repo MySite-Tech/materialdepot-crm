@@ -1365,13 +1365,19 @@ export async function addUser({ name, phone, role, individualPermissions }: { na
 }
 
 export async function updateUser(id: string | number, updates: Partial<import('../types/crm').AppUser>): Promise<void> {
-  const { individualPermissions, ...rest } = updates;
+  const { individualPermissions, active, ...rest } = updates;
   await mdFetch(`/user-organisation/${id}/`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...rest,
       ...(individualPermissions !== undefined ? { individual_permissions: individualPermissions } : {}),
+      /* `active` is this repo's name for it; the backend column is `status`.
+         `_mapUserOrg` reads it back the same way (`active: u.status !== false`).
+         Without this rename the key rode through untouched and Django ignored
+         it, so deactivating an account looked like it worked and changed
+         nothing. */
+      ...(active !== undefined ? { status: active } : {}),
     }),
   });
 }

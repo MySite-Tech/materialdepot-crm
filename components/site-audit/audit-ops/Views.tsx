@@ -7,7 +7,7 @@
    & timings (device-local, exactly as in the source). */
 
 import { useState } from 'react';
-import { WDAYS, sbPatch } from '../siteAuditShared';
+import { WDAYS, sbPatch, type StaffExit } from '../siteAuditShared';
 import { Chip } from './AuditOrderDrawer';
 import {
   DEFAULT_CAP, STATUS, addDays, auditorNameOf, capFor, dailyTotalCap, dstr, fmtDate, hasOpenFollowUp, mapUrl,
@@ -409,13 +409,22 @@ export function SlotsView({
 
 /* ── Auditors & caps ──────────────────────────────────────────────────── */
 export function AuditorsView({
-  auditors, onAddStaff, reload, toast,
+  auditors, formerAuditors = [], canRetire = false, onAddStaff, onRemove, onRestore, reload, toast,
 }: {
   auditors: Auditor[];
-  onAddStaff: () => void; reload: () => Promise<void>; toast: (m: string) => void;
+  /* Already city-scoped by the caller, same as `auditors`. */
+  formerAuditors?: Array<Auditor & StaffExit>;
+  /* False until migration 004 has been run — hides the whole former-staff
+     affordance rather than offering a Remove button that can only fail. */
+  canRetire?: boolean;
+  onAddStaff: () => void;
+  onRemove?: (a: Auditor) => void;
+  onRestore?: (a: Auditor & StaffExit) => void;
+  reload: () => Promise<void>; toast: (m: string) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(i));
   const todayStr = dstr(today);
+  const [showFormer, setShowFormer] = useState(false);
   /* Availability, active_from AND caps are all staged locally and written on
      Save, diffed against the loaded roster. Caps used to bypass this entirely
      and write straight to localStorage, which is why the kiosk and the second
@@ -474,6 +483,16 @@ export function AuditorsView({
         title="Auditors & daily caps"
         sub="Mark each auditor active (with an optional start date) and set their daily order cap."
         right={<>
+          {canRetire ? (
+            <button
+              onClick={() => setShowFormer((v) => !v)}
+              className={showFormer
+                ? 'rounded-md bg-gray-800 px-3 py-2 text-[13px] font-semibold text-white'
+                : 'rounded-md border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold text-gray-700'}
+            >
+              Former staff ({formerAuditors.length})
+            </button>
+          ) : null}
           <button onClick={onAddStaff} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold text-gray-700">+ Add Staff</button>
           <button disabled={saving || !dirty} onClick={save} className="rounded-md bg-[#1F3A5F] px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-60">{saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>
         </>}
@@ -501,6 +520,15 @@ export function AuditorsView({
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${activeNow ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{activeNow ? '● Active' : 'From ' + fmtDate(st.activeFrom)}</span>
                       <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-[#1F3A5F]">{a.city}</span>
+                      {canRetire && onRemove ? (
+                        <button
+                          onClick={() => onRemove(a)}
+                          title={'Mark ' + a.name + ' as no longer staff'}
+                          className="rounded-full border border-red-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
                     </div>
                     <div className="mt-1.5 text-[11px] text-gray-400">Daily cap (normal day):</div>
                     <input
@@ -552,6 +580,36 @@ export function AuditorsView({
           </tbody>
         </table>
       </div>
+
+      {canRetire && showFormer ? (
+        <div className="mt-4">
+          <h2 className="text-[15px] font-bold text-gray-900">Former auditors</h2>
+          <p className="mb-2 mt-0.5 text-[12.5px] text-gray-500">
+            Removed from the roster, kept on record. They take no jobs and count towards nobody&apos;s capacity — this is the attrition history, and where an accidental removal is undone.
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="w-full">
+              <thead><tr>{['Name', 'City', 'Left on', 'Reason', 'Removed by', ''].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+              <tbody>
+                {formerAuditors.length ? formerAuditors.map((a) => (
+                  <tr key={a.id} className="border-t border-gray-100">
+                    <td className="px-3 py-2.5 text-[13px]"><b>{a.name}</b><div className="text-[11.5px] text-gray-400">{a.email}</div></td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-500">{a.city}</td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-500">{fmtDate(a.deletedAt)}</td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-700">{a.exitReason || '—'}</td>
+                    <td className="px-3 py-2.5 text-[11.5px] text-gray-400">{a.deletedBy || '—'}</td>
+                    <td className="px-3 py-2.5">
+                      {onRestore ? (
+                        <button onClick={() => onRestore(a)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#1f7a3f]">Bring back</button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )) : <Empty cols={6} msg="Nobody has been removed from this city's roster." />}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

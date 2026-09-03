@@ -73,6 +73,10 @@ export interface Auditor extends Availability, StaffCaps {
   zone: string;
   activeFrom: string | null;
   city: string;
+  /* profiles.contact — the only bridge to their CRM login, so removal needs it
+     to know which account to deactivate. `phone` above is a legacy free-text
+     field the roster has never populated; don't conflate them. */
+  contact?: string | null;
 }
 
 export const AUDIT_COLS =

@@ -139,6 +139,10 @@ export interface Installer {
   zone: string;
   phone: string;
   city?: string;
+  /* profiles.contact — the bridge to their CRM login, needed to deactivate it
+     when they are removed. `phone` above is legacy free text the roster has
+     never filled in. */
+  contact?: string | null;
   /* profiles.weekly_off (0=Sun) / profiles.leave_dates — advisory at
      assignment time (the SM can override with a logged reason). */
   weeklyOff?: number | null;

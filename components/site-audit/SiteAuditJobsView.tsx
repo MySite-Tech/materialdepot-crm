@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import {
-  inCity, joinShadowers, parseShadowers, sbGet, sbPatch, JOB_STATUS, fmtDateA, fmtLog,
+  activeStaffFilter, inCity, joinShadowers, parseShadowers, sbGet, sbPatch, JOB_STATUS, fmtDateA, fmtLog,
   type CityFilter, type Shadower,
 } from './siteAuditShared';
 import { autoImportSiteAuditJobs } from './autoImportAuditOrders';
@@ -277,7 +277,10 @@ function AuditShadowers({ order: o }: { order: any }) {
 
   useEffect(() => {
     let alive = true;
-    sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name').then((rows) => {
+    /* Shadower pool — people who can be ASSIGNED to observe a job, so it
+       must exclude anyone who has left. The nameMap query further down is the
+       opposite case and deliberately keeps them. */
+    activeStaffFilter().then((f) => sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name' + f)).then((rows) => {
       if (alive && Array.isArray(rows)) setPool(rows.map((r: any) => ({ name: r.name, email: r.email, role: r.role })));
     });
     return () => { alive = false; };
@@ -343,6 +346,9 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
       const [auditRes, installRes, profileRes] = await Promise.all([
         sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date,city&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
         sbGet('install_orders_slim?select=pi,customer_name,addr,subjobs,status,delivery_date,city&status=neq.deleted&order=created_at.desc'),
+        /* email -> name for DISPLAYING who an existing job was assigned to.
+           Deliberately includes people who have left: filter this and a
+           leaver's past jobs render with a blank assignee. */
         sbGet('profiles?select=name,email&role=neq.admin'),
       ]);
       if (!alive) return;

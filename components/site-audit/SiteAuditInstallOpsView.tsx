@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from './omsService';
 import { autoImportInstallOrders } from './autoImportAuditOrders';
-import { inCity, mapCaps, rosterSelect, sbGet, sbPatch, sbPost, type CityFilter } from './siteAuditShared';
+import { EXIT_COLS, exitColumnsAvailable, inCity, mapCaps, mapExit, rosterQuery, sbGet, sbPatch, sbPost, type CityFilter, type StaffExit } from './siteAuditShared';
 import OrdersView from './install-ops/OrdersView';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from './install-ops/QueueViews';
 import { CalendarView, ScheduleView } from './install-ops/ScheduleCalendarViews';
@@ -29,7 +29,8 @@ import { DeletedView, RectificationsView } from './install-ops/DataViews';
 import { FoamView, PayoutsView } from './install-ops/FoamPayoutViews';
 import type { ShadowerOption } from './install-ops/ShadowerSelect';
 import OrderDrawer from './install-ops/OrderDrawer';
-import { AddOrderOverlay, AddStaffOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from './install-ops/Overlays';
+import { AddOrderOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from './install-ops/Overlays';
+import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from './StaffModals';
 import { Toast } from './install-ops/ui';
 import {
   DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, INSTALL_SKU, detectAuditBy, dstr, followUpDue, loadSlots, mapInstallRow, needActionCount, opsCallDue, today,
@@ -53,7 +54,9 @@ const TABS: Array<{ view: ViewKey; label: string }> = [
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM_ATTRIBUTION }: { city?: CityFilter; attribution?: string } = {}) {
+/* `actorEmail` is recorded as `profiles.deleted_by` when this SM removes
+   someone — see SiteAuditOpsView. */
+export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
   const [activeView, setActiveView] = useState<ViewKey>('orders');
   const [rawOrders, setOrders] = useState<InstallOrder[]>([]);
   const [rawDeleted, setDeleted] = useState<InstallOrder[]>([]);
@@ -101,6 +104,12 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
   const [kylasOpen, setKylasOpen] = useState(false);
   const [rectOrder, setRectOrder] = useState<InstallOrder | null>(null);
   const [asOpen, setAsOpen] = useState(false);
+  /* Retired installers, kept OUT of `installers` rather than flagged inside
+     it — see SiteAuditOpsView's formerAuditors for why absence beats a flag. */
+  const [formerInstallers, setFormerInstallers] = useState<Array<Installer & StaffExit>>([]);
+  const [canRetire, setCanRetire] = useState(false);
+  const [retiring, setRetiring] = useState<RetireTarget | null>(null);
+  const [restoring, setRestoring] = useState<(RetireTarget & StaffExit) | null>(null);
   /* "Roster failed to load" vs "nobody registered" — the picker's empty state
      has to say which, see loadInstallers. */
   const [installersErr, setInstallersErr] = useState(false);
@@ -116,10 +125,15 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
      "zero installers" and wiped a roster that had been working. */
   const loadInstallers = useCallback(async () => {
     try {
-      const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=' + await rosterSelect('id,name,email,installer_type,city,weekly_off,leave_dates,active_from'));
+      /* Both probe-gated column sets in one call — the caps columns (003) and
+         `deleted_at is null` (004). Naming either unconditionally 42703s the
+         whole select, which is the query the assignment picker depends on. */
+      const { select, filter } = await rosterQuery('id,name,email,contact,installer_type,city,weekly_off,leave_dates,active_from');
+      const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=' + select + filter);
       if (!Array.isArray(rows)) throw new Error('installer roster unavailable');
       setInstallers(rows.map((r: any) => ({
         id: r.id, name: r.name, email: r.email, type: r.installer_type || 'flooring', zone: '', phone: '',
+        contact: r.contact || null,
         city: r.city || 'Bengaluru',
         weeklyOff: r.weekly_off == null ? null : r.weekly_off,
         leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
@@ -135,6 +149,36 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Attrition list — see SiteAuditOpsView.loadFormerAuditors. Degrades to
+     empty and hides the affordance when migration 004 hasn't been run. */
+  const loadFormerInstallers = useCallback(async () => {
+    if (!(await exitColumnsAvailable())) { setCanRetire(false); setFormerInstallers([]); return; }
+    setCanRetire(true);
+    try {
+      const rows = await sbGet(
+        'profiles?role=in.(installer,auditor_installer)&deleted_at=not.is.null'
+        + '&select=id,name,email,contact,installer_type,city,weekly_off,leave_dates,active_from,' + EXIT_COLS
+        + '&order=deleted_at.desc',
+      );
+      if (!Array.isArray(rows)) return;
+      setFormerInstallers(rows.map((r: any) => ({
+        id: r.id, name: r.name, email: r.email, type: r.installer_type || 'flooring', zone: '', phone: '',
+        contact: r.contact || null,
+        city: r.city || 'Bengaluru',
+        weeklyOff: r.weekly_off == null ? null : r.weekly_off,
+        leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
+        activeFrom: r.active_from || null,
+        dailyCap: null, capOverrides: {},
+        ...mapExit(r),
+      })));
+    } catch { /* history panel is optional */ }
+  }, []);
+  useEffect(() => { loadFormerInstallers(); }, [loadFormerInstallers]);
+
+  const reloadRoster = useCallback(async () => {
+    await Promise.all([loadInstallers(), loadFormerInstallers()]);
+  }, [loadInstallers, loadFormerInstallers]);
 
   /* Shadower pool = everyone registered except store staff, whose kiosk app
      has no login and therefore no personal shadow schedule. Deliberately a
@@ -355,7 +399,16 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
       case 'slots':
         return <SlotsView slotsFl={slotsFl} slotsWp={slotsWp} setSlotsFl={setSlotsFl} setSlotsWp={setSlotsWp} toast={toast} />;
       case 'installers':
-        return <InstallersView installers={cityInstallers} orders={orders} onAddStaff={() => setAsOpen(true)} reload={loadInstallers} toast={toast} />;
+        return (
+          <InstallersView
+            installers={cityInstallers} orders={orders}
+            formerInstallers={inCity(formerInstallers, city)} canRetire={canRetire}
+            onAddStaff={() => setAsOpen(true)}
+            onRemove={(a) => setRetiring({ id: a.id, name: a.name, email: a.email, role: 'installer', contact: a.contact || null, city: a.city })}
+            onRestore={(a) => setRestoring({ id: a.id, name: a.name, email: a.email, role: 'installer', contact: a.contact || null, city: a.city, deletedAt: a.deletedAt, deletedBy: a.deletedBy, exitReason: a.exitReason })}
+            reload={loadInstallers} toast={toast}
+          />
+        );
       case 'foam':
         return <FoamView orders={orders} installers={cityInstallers} attribution={attribution} toast={toast} />;
       case 'payouts':
@@ -419,7 +472,25 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
       />
       <KylasOverlay open={kylasOpen} orders={orders} onClose={() => setKylasOpen(false)} onUse={usePORow} />
       <RectOverlay order={rectOrder} onClose={() => setRectOrder(null)} reload={loadOrders} toast={toast} attribution={attribution} />
-      <AddStaffOverlay open={asOpen} onClose={() => setAsOpen(false)} reload={loadInstallers} toast={toast} city={city} />
+      <AddFieldStaffModal
+        open={asOpen} onClose={() => setAsOpen(false)} defaultCity={city === 'all' ? null : String(city)}
+        defaultRole="installer"
+        onDone={async (m) => { await reloadRoster(); toast(m); }}
+      />
+      {retiring ? (
+        <RetireStaffModal
+          person={retiring} actorEmail={actorEmail}
+          onClose={() => setRetiring(null)}
+          onDone={async (m) => { await reloadRoster(); toast(m); }}
+        />
+      ) : null}
+      {restoring ? (
+        <RestoreStaffModal
+          person={restoring}
+          onClose={() => setRestoring(null)}
+          onDone={async (m) => { await reloadRoster(); toast(m); }}
+        />
+      ) : null}
     </div>
   );
 }

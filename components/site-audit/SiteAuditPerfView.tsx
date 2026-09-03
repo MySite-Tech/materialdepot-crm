@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { inCity, sbGet, ROLES, initials, type CityFilter } from './siteAuditShared';
+import { activeStaffFilter, inCity, sbGet, ROLES, initials, type CityFilter } from './siteAuditShared';
 
 interface PerfState {
   loading: boolean;
@@ -25,7 +25,10 @@ export default function SiteAuditPerfView({ city = 'all', roster = null }: { cit
     let alive = true;
     (async () => {
       const [usersRes, auditRes, installRes] = await Promise.all([
-        sbGet('profiles?select=*&role=neq.admin&order=name.asc'),
+        /* Current staff only. A leaver would otherwise render as a row of
+           zeros for any period after they left, and "these people did nothing"
+           is exactly the misreading this view's roster filter exists to avoid. */
+        activeStaffFilter().then((f) => sbGet('profiles?select=*&role=neq.admin&order=name.asc' + f)),
         sbGet('audit_orders?select=auditor_email,status,created_at,created_by_email,city&status=not.in.(deleted,slot_reserved,slot_converted)'),
         sbGet('install_orders_slim?select=subjobs,status,created_at,created_by_email,city'),
       ]);

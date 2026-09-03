@@ -163,9 +163,9 @@ function SiteAuditViewInner() {
   const pickPrimary = (k: string) => (showSm ? setSmTab(k as 'audit' | 'install') : setCombinedView(k as 'auditor' | 'installer'));
 
   const smBody = smTab === 'install' ? (
-    <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
+    <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} actorEmail={person.email} />
   ) : smAuditSubTab === 'ops' ? (
-    <SiteAuditOpsView city={city} attribution={person.name || crmName} />
+    <SiteAuditOpsView city={city} attribution={person.name || crmName} actorEmail={person.email} />
   ) : smAuditSubTab === 'jobs' ? (
     <SiteAuditJobsView city={city} />
   ) : smAuditSubTab === 'perf' ? (

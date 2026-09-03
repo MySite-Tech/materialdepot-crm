@@ -107,6 +107,10 @@ export default function SiteAuditBranchManagerView({
     (async () => {
       const [crmUsers, profileRows] = await Promise.all([
         fetchUsers().catch(() => null),
+        /* Identity map (phone -> profile) used to resolve who owns existing
+           rows. Keeps people who have left on purpose: the CRM side is already
+           filtered by `active !== false` just below, and dropping them here
+           would unattribute their historic orders. */
         sbGet('profiles?select=id,name,email,role,contact,branch&order=name.asc').catch(() => null),
       ]);
       if (!alive) return;

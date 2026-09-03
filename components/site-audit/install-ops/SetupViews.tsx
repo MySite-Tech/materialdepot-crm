@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { WDAYS, fmtDate as fmtDateShort, offDayReason, sbPatch } from '../siteAuditShared';
+import { WDAYS, fmtDate as fmtDateShort, offDayReason, sbPatch, type StaffExit } from '../siteAuditShared';
 import { FLOOR_DAY_CAP, WALLPANEL_DAY_CAP, WP_DAY_SLOTS, dstr, flLoad, installerDayCap, saveSlots, today, typeDayCap, wpSlotLoad, wpnlLoad } from './shared';
 import { typeLabel } from '../auditRegistry';
 import type { InstallOrder, Installer, SlotDef } from './types';
@@ -108,8 +108,22 @@ export function SlotsView({
    they tag the assignment picker and force an override reason there, they
    never hard-block an assignment. Edits are staged locally and written on
    "Save availability", diffed against the loaded roster. */
-export function InstallersView({ installers, orders, onAddStaff, reload, toast }: { installers: Installer[]; orders: InstallOrder[]; onAddStaff: () => void; reload: () => Promise<void>; toast: (m: string) => void }) {
+export function InstallersView({
+  installers, orders, formerInstallers = [], canRetire = false, onAddStaff, onRemove, onRestore, reload, toast,
+}: {
+  installers: Installer[]; orders: InstallOrder[];
+  /* City-scoped by the caller, same as `installers`. */
+  formerInstallers?: Array<Installer & StaffExit>;
+  /* False until migration 004 has been run, which hides the whole
+     former-staff affordance rather than offering a Remove that can only fail. */
+  canRetire?: boolean;
+  onAddStaff: () => void;
+  onRemove?: (a: Installer) => void;
+  onRestore?: (a: Installer & StaffExit) => void;
+  reload: () => Promise<void>; toast: (m: string) => void;
+}) {
   const todayStr = dstr(today);
+  const [showFormer, setShowFormer] = useState(false);
   type Draft = { weeklyOff: number | null; leaveDates: string[]; activeFrom: string | null; dailyCap: number | null; capOverrides: Record<string, number> };
   const [draft, setDraft] = useState<Record<string, Draft>>({});
   const [saving, setSaving] = useState(false);
@@ -168,6 +182,16 @@ export function InstallersView({ installers, orders, onAddStaff, reload, toast }
           <p className="text-[13px] text-gray-500 mt-0.5">Typed installers. Jobs go only to installers of the matching type (Flooring / Wallpaper / Wall Panels). Set each one&apos;s start date and daily capacity below.</p>
         </div>
         <div className="flex gap-2 shrink-0">
+          {canRetire ? (
+            <button
+              onClick={() => setShowFormer((v) => !v)}
+              className={showFormer
+                ? 'rounded-md bg-gray-800 px-3.5 py-2 text-[13px] font-semibold text-white'
+                : 'rounded-md border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700'}
+            >
+              Former staff ({formerInstallers.length})
+            </button>
+          ) : null}
           <button className="bg-white border border-gray-200 text-gray-700 px-3.5 py-2 rounded-md text-[13px] font-semibold" onClick={onAddStaff}>+ Add Staff</button>
           <button className="bg-[#1F3A5F] text-white px-3.5 py-2 rounded-md text-[13px] font-semibold disabled:opacity-60" disabled={saving || !Object.keys(draft).length} onClick={saveAvailability}>
             {saving ? 'Saving…' : 'Save'}
@@ -198,7 +222,19 @@ export function InstallersView({ installers, orders, onAddStaff, reload, toast }
                   : flLoad(orders, a.id, todayStr) + '/' + todayCap + ' job';
               return (
                 <tr key={i} className="border-t border-gray-100">
-                  <td className="px-3 py-2.5 text-[13px]"><b>{a.name}</b><div className="text-gray-500">{a.phone}</div></td>
+                  <td className="px-3 py-2.5 text-[13px]">
+                    <b>{a.name}</b>
+                    <div className="text-gray-500">{a.contact || a.phone}</div>
+                    {canRetire && onRemove ? (
+                      <button
+                        onClick={() => onRemove(a)}
+                        title={'Mark ' + a.name + ' as no longer staff'}
+                        className="mt-1 rounded-full border border-red-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2.5 text-[13px]"><span className={`inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold ${a.type === 'wallpaper' ? 'bg-orange-100 text-orange-800' : a.type === 'wallpanel' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-700'}`}>{typeLabel(a.type)}</span></td>
                   <td className="px-3 py-2.5 text-[13px]">
                     <input
@@ -275,6 +311,41 @@ export function InstallersView({ installers, orders, onAddStaff, reload, toast }
           </tbody>
         </table>
       </div>
+
+      {canRetire && showFormer ? (
+        <div className="mt-4">
+          <h2 className="text-[15px] font-bold text-gray-900">Former installers</h2>
+          <p className="mb-2 mt-0.5 text-[12.5px] text-gray-500">
+            Removed from the roster, kept on record. They take no jobs and count towards nobody&apos;s capacity — this is the attrition history, and where an accidental removal is undone.
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="w-full">
+              <thead><tr>{['Name', 'Type', 'City', 'Left on', 'Reason', 'Removed by', ''].map((h) => (
+                <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
+              ))}</tr></thead>
+              <tbody>
+                {formerInstallers.length ? formerInstallers.map((a) => (
+                  <tr key={a.id} className="border-t border-gray-100">
+                    <td className="px-3 py-2.5 text-[13px]"><b>{a.name}</b><div className="text-[11.5px] text-gray-400">{a.email}</div></td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-600">{typeLabel(a.type)}</td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-500">{a.city}</td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-500">{fmtDateShort(a.deletedAt)}</td>
+                    <td className="px-3 py-2.5 text-[12.5px] text-gray-700">{a.exitReason || '—'}</td>
+                    <td className="px-3 py-2.5 text-[11.5px] text-gray-400">{a.deletedBy || '—'}</td>
+                    <td className="px-3 py-2.5">
+                      {onRestore ? (
+                        <button onClick={() => onRestore(a)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#1f7a3f]">Bring back</button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={7} className="border-t border-gray-100 py-8 text-center text-[13px] text-gray-400">Nobody has been removed from this city&apos;s roster.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
