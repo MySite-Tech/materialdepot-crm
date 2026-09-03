@@ -209,6 +209,9 @@ export function PayoutsView({ orders, toast }: { orders: InstallOrder[]; toast: 
     (async () => {
       const [g, profs] = await Promise.all([
         loadSetting('payout_rates'),
+        /* Pay-rate lookup — deliberately NOT filtered to current staff. A
+           leaver's final payout is computed off the same override, and dropping
+           them would silently pay it at the global default instead. */
         sbGet('profiles?select=name,email,pay_rates&role=in.(installer,auditor_installer)').catch(() => []),
       ]);
       setRatesId(g.id);

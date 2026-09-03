@@ -18,7 +18,7 @@ import SiteAuditBranchManagerView from './SiteAuditBranchManagerView';
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
 
-type Person = { id: string; name: string; email: string; role: string; branch: string | null };
+type Person = { id: string; name: string; email: string; role: string; branch: string | null; deleted_at?: string | null };
 
 /* Renders the logged-in CRM user's own Site Audit dashboard, resolving their
    field-app identity by phone (profiles.contact) instead of email — the CRM
@@ -79,7 +79,7 @@ export default function SiteAuditOwnDashboard({
   useEffect(() => {
     if (!contact) { setLoading(false); return; }
     let alive = true;
-    sbGet(ownProfileQuery(contact)).then((rows) => {
+    ownProfileQuery(contact).then((q) => sbGet(q)).then((rows) => {
       if (!alive) return;
       if (!Array.isArray(rows)) { setLoadErr(true); setLoading(false); return; }
       setLoadErr(false);
@@ -216,9 +216,9 @@ export default function SiteAuditOwnDashboard({
           </div>
         )}
         {smTab === 'install' ? (
-          <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
+          <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} actorEmail={person.email} />
         ) : smAuditSubTab === 'ops' ? (
-          <SiteAuditOpsView city={city} attribution={person.name || crmName} />
+          <SiteAuditOpsView city={city} attribution={person.name || crmName} actorEmail={person.email} />
         ) : smAuditSubTab === 'jobs' ? (
           <SiteAuditJobsView city={city} />
         ) : smAuditSubTab === 'perf' ? (

@@ -21,11 +21,39 @@ for `app/` and `components/`, and `npm run lint` is dead too — it still runs
 directory: .../lint"). There is currently **no working lint command**; `npx tsc
 --noEmit` is the only automated check.
 
-## Git
+## Git, and what actually deploys
 
 `origin` = `MySite-Tech/materialdepot-crm` (a fork), `upstream` =
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
+
+**`main` is the deployed branch, and it can be AHEAD of `Installation-Changes`.**
+Pulling the feature branch is not enough: the teammate merges to `main` and
+keeps pushing there, so `git log HEAD..origin/main` is the check that matters
+before touching a shared file. On 2026-09-03 `origin/Installation-Changes` was
+up to date while `main` was 5 commits ahead carrying a 498-line rewrite of
+`SiteAuditUsersView.tsx` — building on the branch as-is would have re-reverted
+it, which is precisely the drift this file records happening twice already.
+Merge `origin/main` in first; the conflicts are usually just import lines.
+
+Deployment is **Azure Static Web Apps CI/CD**
+(`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which
+triggers on **push to `main`** — a PR to `main` builds a preview, and merging it
+is the deploy. Every commit on `main` so far is a PR merge from
+`Installation-Changes` (#3–#6), so that is the route; pushing straight to `main`
+deploys with no review and reverting means another push to `main`.
+
+Two things about that workflow are worth knowing before you touch config:
+
+- It injects only `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  as secrets. The **Site Audit** project's URL and anon key are not there and
+  do not need to be, because `siteAuditShared.ts` hardcodes them (see *Three
+  backends* below). "Move the Site Audit credentials into env vars" is
+  therefore a two-repo change that also needs a GitHub secret added, not a
+  tidy-up — do it and the field apps break on the next deploy.
+- `vercel.json` is tracked and `.vercel/` sits locally (gitignored), so the
+  repo looks Vercel-deployed. The workflow above is the deploy path visible in
+  the repo. Don't infer the hosting from those files.
 
 ## Three backends, and which is which
 
@@ -153,6 +181,121 @@ A missing `profiles` row is not a dead end for read-only roles: a BM or store
 manager renders from the CRM session alone. Roles that *do* field work
 (auditor/installer/SM) still require a real profile, because their jobs are keyed
 to it, as is shadowing (`SiteShadowerApp` acts *as* a profile).
+
+## Staff come and go, and the roster used to be the only record
+
+One field staff member exists twice and has to, because the two halves are
+keyed differently — `profiles` (Site Audit Supabase, EMAIL-keyed) is what the
+field PWAs log into, `UserOrganisation` (Django, PHONE-keyed) is what the CRM
+logs into and the only table `/login-otp/?contact=` will send an OTP for.
+`profiles.contact` is the sole bridge. `staffDirectory.ts` is the one place that
+writes both sides; `StaffModals.tsx` holds the three modals (add / retire /
+restore) every surface shares.
+
+**Adding.** There were two add-staff forms with separate role lists, separate
+validation and separate hand-copied permission maps: the Audit dashboard's
+offered Site Auditor and Auditor + Installer only, so an SM in the audit console
+could not create a plain installer at all and had to know to cross to the
+Install dashboard. Both are now `AddFieldStaffModal`, and it names the dashboard
+the new hire will appear on — the two SM rosters are `site_auditor +
+auditor_installer` and `installer + auditor_installer`, so adding an installer
+from the audit console works and is meant to, but the person shows up on the
+*other* screen and without that line the add read as a no-op.
+
+**The permission map is DERIVED now, in one direction each.**
+`SITE_AUDIT_ROLE_TO_PERMISSION` / `crmPermissionsForSiteAuditRole()` invert
+`SITE_AUDIT_PERMISSION_TO_ROLE` instead of restating it. Three hand-written
+copies of that table existed (`SiteAuditUsersView`, `audit-ops/Overlays`,
+`install-ops/Overlays`) and one had already drifted — which is exactly how
+`SITE_AUDIT_ROLES` and `defaultPermissionsForRole` broke twice (see Known
+landmines). Add a role to `SITE_AUDIT_PERMISSION_TO_ROLE` and both directions
+learn it at once.
+
+**Removing is a SOFT delete, and the SM can do it.** It used to be `sbDel`,
+admin-only, from one screen, and its own confirm text admitted the gap: it
+deleted the field-app profile and left the CRM login alive. Two things followed —
+nobody could answer "how many installers left this quarter" because the row was
+gone, and because deletion was irreversible it was avoided, so the roster kept
+people who had left months earlier and the assignment pickers went on offering
+them jobs. `profiles.deleted_at` / `deleted_by` / `exit_reason`
+(`site-audit-migration-004-staff-exit.sql`) replace it. `deleted_at is null` is
+the ONLY predicate any read uses; the reason comes from the fixed
+`EXIT_REASONS` list so the attrition breakdown can't fragment into fourteen
+spellings of "resigned"; `deleted_by` gives an accidental removal an owner to
+ask. Restore is one click and clears the reason.
+
+**Neither migration has been run yet as of 2026-09-03** (re-probed after the
+work was pushed: `daily_cap` and `deleted_at` both still answer 42703). So on
+the branch today the Remove control is disabled with a tooltip naming the file,
+the Former staff view is hidden, and caps still degrade to their defaults —
+everything else works unchanged. Running
+`site-audit-migration-004-staff-exit.sql` is what switches all of it on, and it
+is additive and idempotent, so it can be run before or after the deploy. Note
+the probe latches per page load, so anyone with the app already open needs a
+refresh before Remove becomes enabled.
+
+**Both column sets are probe-gated, and it is the same guard for the same
+reason.** `rosterQuery(cols)` bundles `rosterSelect` (caps, migration 003) and
+`activeStaffFilter` (exit, 004): PostgREST fails the WHOLE select with `42703`
+on a missing column, and this is the query the assignment pickers and the public
+kiosk's slots-left count depend on, so naming `deleted_at` unconditionally would
+take out every roster in both field apps. Verified against the live DB on
+2026-09-03, where the columns genuinely do not exist yet: the bare roster query
+returns 200, the naive `&deleted_at=is.null` returns 42703. An *unknown* probe
+answer (network blip) resolves to "absent" — pre-migration behaviour — never to
+"present", which would turn a dropped request into an empty roster. **Never
+write the filter inline; always append `activeStaffFilter()`.** `retireProfile`
+throws `ExitColumnsMissing` rather than falling back to a hard delete: a hard
+delete is not a degraded soft delete, it destroys the record being asked for.
+The UI probes up front and disables Remove with a tooltip naming the migration.
+
+**Which reads exclude people who have left, and which deliberately don't.**
+Getting this backwards silently breaks historic data, so each keep-them site
+carries a comment saying so:
+
+| Excludes retired | Keeps retired |
+|---|---|
+| both SM rosters + assignment pickers | `FoamPayoutViews` pay rates (a leaver's final payout uses the same override) |
+| the kiosk's availability + slots-left | `SiteAuditJobsView`'s email→name map (else a leaver's past jobs render with a blank assignee) |
+| `SiteAuditLiveView` (a leaver has a stale pin, not a location) | `SiteAuditBranchManagerView`'s phone→profile identity map (else their historic orders unattribute) |
+| `SiteAuditPerfView` (else a wall of zeros reads as "did nothing") | |
+| Role Viewer's person picker, the kiosk's BM picker, shadower pools | |
+
+`pickOwnProfile` also skips retired rows and returns null when they all are, so
+someone marked as no longer staff cannot be handed a field dashboard even if the
+Django deactivation (a separate write, which can fail alone) outlives the
+removal. `ownProfileQuery` is async purely because of the probe — both callers
+await the same function, so they still produce the same string and `sbGet`'s
+cache still collapses them into one request.
+
+**`AppUser.active` is not optional to check.** Retiring someone deactivates
+their CRM login (`status: false`, never a delete — Admin > Users still needs to
+manage the account and their past orders must keep resolving to a real name).
+`_mapUserOrg` reads it back as `active`. Anything deriving ACCESS or a live
+roster from `fetchUsers()` must filter `active !== false`:
+`SiteAuditBranchManagerView` always did; `SiteAuditUsersView`'s CRM-link check
+and `SiteAuditOpsView`'s BM picker did not, so a deactivated account still read
+as "✓ CRM linked" and was still offered for new order attribution. Both fixed
+2026-09-03. Note `lib/mockApi.ts`'s `updateUser` renames `active` → `status` on
+the way out — the repo's name and the backend column differ, and before that
+rename the key rode through untouched and Django ignored it, so deactivating an
+account looked like it worked and changed nothing.
+
+**Why people were "not reflected in our system".** A profile with a real phone
+and no CRM login cannot be sent an OTP, so the person cannot sign into the CRM
+at all however healthy their field-app profile looks (Mohd Musaddique,
+`8318839661`, was exactly this: `installer`/wallpaper/Hyderabad, `contact` set,
+passcode set, field app working, no `UserOrganisation` row). The systemic source
+is the legacy PWA — all three of its add-staff forms write a `profiles` row and
+nothing else, with no `contact` and no CRM user:
+`SM_Install_Dashboard.html:3109`, `SM_Audit_Dashboard.html:2553`,
+`Admin.html:707`. That is also why 14 live profiles have no phone number at all.
+The Users tab's amber notice used to state the count and stop, leaving the only
+fix buried inside one person's Edit form; it now lists exactly who and creates
+the missing logins in bulk (or one at a time, from a Fix button on the row) with
+the same two permissions a fresh add grants. **Anyone added through the legacy
+apps will keep arriving in that list until those three forms are fixed** — and
+per the field-ops split, that repo is read-only from here.
 
 ## Order attribution: exact matching only
 
@@ -677,6 +820,99 @@ inert). Leave them; they are not gates.
 
 ## Known landmines
 
+- **Availability is per CITY, and the Store Team kiosk was the one surface that
+  did not know it.** An auditor/installer is assigned a city when they join and
+  works only that city. Every SM view scopes correctly through `inCity()`, but
+  `SiteAuditStoreTeamView` knew only its STORE and had no store→city map at
+  all, so it counted the entire company: JP Nagar read **"13 of 15 auditors
+  available"** off an 18-person roster that included 7 idle Hyderabad auditors,
+  when Bengaluru actually had 9 available that day. It also counted *orders*
+  company-wide, so a Hyderabad booking consumed a Bengaluru store's slot. Fixed
+  2026-09-02 with `STORE_CITY` + `cityOfStore()`; an unmapped store falls back
+  to `CITIES[0]`, so forgetting a line when a store opens is a wrong-but-bounded
+  count rather than a global one. **Filter by city CLIENT-side, not with
+  `city=eq.` in the query** — 2 live `audit_orders` rows have a NULL city and
+  `cityOf()` reads NULL as Bengaluru, so a server-side filter silently drops
+  them.
+- **`AddStaffOverlay` never wrote a city, which is how the bleed would have
+  come back with the next hire.** The installer add form posted no `city` at
+  all, so profiles landed NULL → read as Bengaluru; one live installer (Ayaz
+  Khan) is still in that state. The *auditor* form always had the field. Both
+  forms have since been replaced by the single `AddFieldStaffModal`
+  (2026-09-03 — see *Staff come and go*), which requires city AND phone and
+  defaults the city to the SM's active filter. **If you add another
+  staff-creation path, it must write `city` and `contact`** — or better, call
+  `createFieldStaff` rather than adding one.
+- **Daily caps live on `profiles`, not in localStorage — and the columns are
+  probe-gated.** Caps used to sit in `localStorage.md_audit_caps`, which made
+  them device-local: the other SM, the SM's own phone and the public kiosk all
+  disagreed, and the kiosk ignored caps entirely and counted headcount.
+  `profiles.daily_cap` (per-person default) + `profiles.cap_overrides` (jsonb,
+  per-date exceptions) replace it — see
+  `site-audit-migration-003-staff-caps.sql`. **That migration was written but
+  never actually run**: probed live on 2026-09-03, both columns answered
+  `42703 column does not exist`, so the caps feature shipped in `4f431b0` has
+  been inert in production the whole time — `rosterSelect()` probes, gets
+  "missing", and degrades every cap to its default, which means an SM setting a
+  number saw it accepted and lost it on reload. Its two statements are repeated
+  inside `site-audit-migration-004-staff-exit.sql` (all `if not exists`), so
+  running that one file fixes both. **A committed migration in this repo is not
+  evidence it has been applied — probe the column before trusting a
+  DB-backed feature.**
+  **PostgREST fails the WHOLE select with `42703` if those columns are absent**,
+  so asking for them unconditionally would take out the roster query and with it
+  the kiosk's ability to book at all. Every roster query therefore goes through
+  `rosterSelect()`, which probes once and — when the answer is *unknown* rather
+  than "missing" — returns the SAFE column list, degrading to default caps
+  instead of guessing "present" and turning a network blip into an outage.
+  Verified in all four states (columns present / absent-42703 / network blip /
+  live) before shipping. Installer caps default to the per-type constant via
+  `typeDayCap()`, so nothing changes until an SM sets a number, and wallpaper's
+  cap counts **3h SLOTS, not jobs** — do not "normalise" it against the other
+  two.
+- **Installer assignment flags caps, it does not block them; the auditor drawer
+  DOES block.** `AuditOrderDrawer.pickAuditor` hard-returns on a full cap
+  (long-standing). `AssignSection` deliberately only annotates the installer
+  option (`· at cap (2/1)`, `· capped to 0 this day`, `· starts <date>`),
+  matching both the off-day flag already there and this repo's soft-gate house
+  style — installers had NO cap enforcement before, so hard-blocking would have
+  been a new restriction on scheduling calls SMs make for good reasons. If you
+  make it a hard gate, that is a product decision, not a bug fix.
+
+- **`audit_ticked` / `subjobs[].jobcard` is ONE mutable slot holding both the 3s draft autosave
+  and the signed job card, and this port shipped without the guard that keeps them apart.** The
+  draft PATCHes `{draft:true, rooms}` with photos stripped. Reopen a completed card, touch
+  anything, and 3s later the signature, the auditor, the date and every photo are gone. The legacy
+  PWA hit this on `ENQ2026072381434` and guards with `jcHadSign` + an `audit_ticked_history`
+  archive; the port carried over neither, so the damage was silent AND unrecoverable. Live on
+  2026-09-01: **63 of 331 completed audits (19%) had a photo-stripped `{draft:true}` blob as their
+  permanent job card** — only 4 had a history snapshot (restored 2026-09-02), **59 are gone**.
+  Install side was 4 of 350, shielded only by `validateRooms` hard-requiring a room photo. Fixed
+  2026-09-02: `hadSignRef` in both field apps (a signed card on file makes the draft device-local
+  and shows an amber banner saying so), `archiveAuditTicked()` mirrors the legacy note-66 archive,
+  the restore path consults the server for a signed card FIRST (a localStorage draft used to shadow
+  it, which is the path on which the guard never learns the card was signed), and `draftPayload`
+  now keeps photos that already reached Storage — a ~120-byte URL — dropping only in-flight base64.
+  **Any new single-slot jsonb that a draft and a finished record share needs all four.**
+- **A photo that renders as `"1 photo"` is a photo nobody can see.** Area-adjustment photos were
+  captured, uploaded and stored correctly — 18 adjustments held 32 Storage URLs, all 32 HTTP 200,
+  zero base64 — and then `AuditRoomViews.tsx` printed the array's *length* while `pdfBrand.ts` drew
+  the adjustment table with no image column at all. The segment photo strip two lines below worked,
+  which is exactly why nobody caught it: a site auditor reported *"after uploading any image
+  related to adjustment area it's not showing in the job card after the final submission"* and
+  reasonably concluded the upload was broken. Fixed 2026-09-02 in both renderers (and both legacy
+  equivalents — see note 120 in `material-depot-site`); being a *render* fix it repairs every past
+  order retroactively. When you add a field that holds photos, render the photos.
+- **An optimistic-then-swap upload MUST go through a functional state updater.**
+  `SegmentAdjustments` took a finished `AdjustRow[]` and rebuilt it from a render-time snapshot of
+  `seg.adjust`. `SegmentPhotos` adds the photo as base64 immediately and swaps in the Storage URL
+  up to ~20s later, so that swap ran against the array as it looked BEFORE the base64 was inserted:
+  it matched nothing and wrote the pre-photo array back, **deleting the photo the auditor had just
+  attached**. Segment photos never had the bug because they were always wired through the
+  functional `onChange((r) => …)`. `onAdjust` now takes an updater, and the URL swap locates the
+  photo **by value across every row** rather than by the row index the upload started on — a row
+  added or removed mid-upload shifts that index and swaps the wrong row. Fixed 2026-09-02.
+
 - **The field apps write a log line more than once for one event, so any metric
   counted off `log` entries must dedupe before it counts.** Arrival on time was
   counting the same visit repeatedly — 17 install and 30 audit person-day pairs
@@ -919,11 +1155,14 @@ inert). Leave them; they are not gates.
   Reuse it rather than reaching for `window.prompt` again anywhere in Site
   Audit/Install. Those three survived four weeks past the first sweep because
   nothing about a silently no-opping button looks broken in code review, so
-  **grep for `window.prompt` rather than assuming the sweep was complete** — one
-  is still live at `install-ops/OrderDrawer.tsx:179` (the required reason for
-  force-completing an order with no signed job card). That one at least aborts
-  with a toast rather than doing nothing, but an SM in a webview cannot force a
-  completion at all; it is the next one to convert.
+  **grep for `window.prompt` rather than assuming the sweep was complete.** The
+  last live one — `install-ops/OrderDrawer.tsx`'s required reason for
+  force-completing an order with no signed job card, which also had a
+  `window.confirm` in front of it — was converted 2026-09-03; the warning the
+  confirm carried is now that `askNote` call's `preface`. As of that date a grep
+  finds `window.prompt` only inside comments like this one. `RetireStaffModal`
+  (`StaffModals.tsx`) was built as a modal from the start for the same reason:
+  its exit reason is what the attrition breakdown groups by.
 - **`branch_mgr` was added to the app on 2026-08-14 but the Site Audit
   Supabase's `profiles_role_check` CHECK constraint (plain `role in (...)`,
   not a Postgres enum type) was never widened to allow it — so every write

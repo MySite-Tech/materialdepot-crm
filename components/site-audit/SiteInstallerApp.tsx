@@ -762,6 +762,10 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSeqRef = useRef(0);
   const completionWriteRef = useRef<{ subjobs: any[] } | null>(null);
+  /* Set when the sub-job opened already carries a SIGNED job card — see the guard in
+     triggerAutosave. Mirrors `hadSignRef` in SiteAuditorApp. */
+  const hadSignRef = useRef(false);
+  const [hadSign, setHadSign] = useState(false);
 
   const [jcRooms, setJcRooms] = useState<Room[]>([]);
   const [jcStage, setJcStage] = useState<'rooms' | 'review' | 'handoff' | 'tcs' | 'signature' | 'installerSignoff'>('rooms');
@@ -790,13 +794,24 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
       if (completionWriteRef.current) { setSaveStatus('saved'); return; }
       const curJob = jcJobRef.current;
       if (!curJob || !curJob.id || !curJob.sjId) { setSaveStatus('local'); return; }
+      // `sj.jobcard` is a single mutable slot shared by this draft and the finished card, so a
+      // draft write on a REOPENED card destroys its signatures and every photo. Same failure the
+      // auditor app shipped with; keep edits on-device until a fresh signature is captured.
+      if (hadSignRef.current) { setSaveStatus('local'); return; }
       try {
         const parentRows = await sbGet('install_orders?id=eq.' + curJob.id + '&select=subjobs');
         if (autosaveSeqRef.current !== mySeq || completionWriteRef.current) return;
         if (Array.isArray(parentRows) && parentRows[0]) {
           const subjobs = parentRows[0].subjobs || [];
           const sj = subjobs.find((s: any) => s.id === curJob.sjId);
-          const draftRooms = collectRooms(jcRoomsRef.current).map(({ photos: _photos, ...rest }) => rest);
+          // Keep photos that already reached Storage (a ~120-byte URL); leave out only one still
+          // sitting as base64, which can be multi-MB and would time the draft PATCH out. Dropping
+          // them all meant an installer resuming on another device got their rooms back with every
+          // photo gone, and the next completion write made that permanent.
+          const draftRooms = collectRooms(jcRoomsRef.current).map((r) => ({
+            ...r,
+            photos: (r.photos || []).filter((ph: string) => /^https?:/i.test(ph)),
+          }));
           if (sj) sj.jobcard = { draft: true, rooms: draftRooms };
           if (autosaveSeqRef.current !== mySeq || completionWriteRef.current) return;
           await sbPatch('install_orders', curJob.id, { subjobs });
@@ -827,12 +842,19 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     completionWriteRef.current = null;
     setSaveStatus('idle');
     setJcStage('rooms');
-    let restoreList: PersistedRoom[] | null = null;
-    try {
-      const raw = localStorage.getItem('md_install_' + job.pi + '_' + job.sjId);
-      const d = raw ? JSON.parse(raw) : null;
-      if (d && Array.isArray(d.rooms) && d.rooms.length) restoreList = d.rooms;
-    } catch { /* ignore malformed draft */ }
+    // A signed card on file is authoritative and outranks any local draft — restoring the draft
+    // instead is the path on which the autosave guard never learns the card was signed.
+    const signed = !!(job.jobcard && job.jobcard.sign && !(job.jobcard as any).draft && job.jobcard.rooms?.length);
+    hadSignRef.current = signed;
+    setHadSign(signed);
+    let restoreList: PersistedRoom[] | null = signed ? (job.jobcard!.rooms as PersistedRoom[]) : null;
+    if (!restoreList) {
+      try {
+        const raw = localStorage.getItem('md_install_' + job.pi + '_' + job.sjId);
+        const d = raw ? JSON.parse(raw) : null;
+        if (d && Array.isArray(d.rooms) && d.rooms.length) restoreList = d.rooms;
+      } catch { /* ignore malformed draft */ }
+    }
     if (!restoreList && job.jobcard && Array.isArray(job.jobcard.rooms) && job.jobcard.rooms.length) restoreList = job.jobcard.rooms;
     const seeded = restoreList && restoreList.length
       ? restoreList.reduce<Room[]>((acc, r) => appendRoomState(acc, jcSeqRef, job, r), [])
@@ -989,6 +1011,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const completionPatch = { subjobs };
         completionWriteRef.current = completionPatch;
         await sbPatchLong('install_orders', job.id, completionPatch);
+        hadSignRef.current = true;
+        setHadSign(true);
         job.parentLog = newParentLog;
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
       }
@@ -1195,6 +1219,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
           signName={signName}
           installerSignName={installerSignName}
           saveStatus={saveStatus}
+          hadSign={hadSign}
           finishBusy={finishBusy}
           signPadRef={signPadRef}
           onBack={handleJcBack}
@@ -1707,7 +1732,7 @@ ${termsBlock || '[Full terms and conditions will be provided by Material Depot]'
 }
 
 function JobCardWizardOverlay({
-  job, installerName, rooms, stage, signName, installerSignName, saveStatus, finishBusy, signPadRef,
+  job, installerName, rooms, stage, signName, installerSignName, saveStatus, hadSign, finishBusy, signPadRef,
   onBack, onAddRoom, onRemoveRoom, onRoomField, onRoomCategory, onRoomInstallField, onRoomFiles, onRoomRemovePhoto, onOpenScanner, onOpenLightbox,
   onFinishCard, onBackToRooms, onProceed, onBackFromHandoff, onClientReady, onTcsBack, onTcsProceed,
   onSignBack, onSignNameChange, onSignNext,
@@ -1720,6 +1745,7 @@ function JobCardWizardOverlay({
   signName: string;
   installerSignName: string;
   saveStatus: 'idle' | 'saving' | 'saved' | 'local';
+  hadSign: boolean;
   finishBusy: boolean;
   signPadRef: React.RefObject<SignaturePadHandle | null>;
   onBack: () => void;
@@ -1767,6 +1793,12 @@ function JobCardWizardOverlay({
         <div className="mx-auto max-w-2xl">
           {stage === 'rooms' && (
             <>
+              {hadSign && (
+                <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12.5px] font-semibold text-amber-800">
+                  This card was already signed &amp; completed. Your edits are saved on this device only — the signed
+                  record on file, including its photos, is kept safe until you finish and capture new signatures.
+                </div>
+              )}
               <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-[12px] text-blue-700">Fill one block per room. Each room needs a photo after installation. <span className="text-red-600">★</span> = required.</div>
               {rooms.map((r, i) => (
                 <RoomBlock

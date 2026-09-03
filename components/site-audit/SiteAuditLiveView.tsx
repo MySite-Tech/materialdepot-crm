@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { inCity, sbGet, type CityFilter } from './siteAuditShared';
+import { activeStaffFilter, inCity, sbGet, type CityFilter } from './siteAuditShared';
 
 function todayStr(d: Date) {
   const z = (n: number) => (n < 10 ? '0' + n : n);
@@ -36,6 +36,7 @@ export default function SiteAuditLiveView({ city = 'all' }: { city?: CityFilter 
     let alive = true;
     async function load() {
       const ts = todayStr(new Date());
+      const activeFilter = await activeStaffFilter();
       const [aOrds, iOrds, allProfs] = await Promise.all([
         sbGet(
           'audit_orders?select=pi,addr,slot,auditor_email,status&date=eq.' +
@@ -46,7 +47,9 @@ export default function SiteAuditLiveView({ city = 'all' }: { city?: CityFilter 
           'install_orders_slim?select=pi,addr,subjobs,status&status=not.in.(deleted,pending,deliv_ontime,deliv_delayed)'
         ),
         sbGet(
-          'profiles?select=name,email,role,last_lat,last_lng,last_loc_at,last_order_pi,city&role=in.(site_auditor,installer,auditor_installer)'
+          /* Live locations of people currently on the road — a retired
+             person has no current location, only a stale last-seen pin. */
+          'profiles?select=name,email,role,last_lat,last_lng,last_loc_at,last_order_pi,city&role=in.(site_auditor,installer,auditor_installer)' + activeFilter
         ),
       ]);
       if (!alive) return;

@@ -139,10 +139,24 @@ export interface Installer {
   zone: string;
   phone: string;
   city?: string;
+  /* profiles.contact — the bridge to their CRM login, needed to deactivate it
+     when they are removed. `phone` above is legacy free text the roster has
+     never filled in. */
+  contact?: string | null;
   /* profiles.weekly_off (0=Sun) / profiles.leave_dates — advisory at
      assignment time (the SM can override with a logged reason). */
   weeklyOff?: number | null;
   leaveDates?: string[];
+  /* profiles.active_from — a future date means they start taking jobs then.
+     Auditors have always had this; installers did not, so a new hire counted
+     towards capacity from the day their profile was created. */
+  activeFrom?: string | null;
+  /* profiles.daily_cap / profiles.cap_overrides — the SM's per-installer,
+     per-day override of the per-type constant (FLOOR_DAY_CAP / WP_DAY_SLOTS /
+     WALLPANEL_DAY_CAP). NULL/absent = keep using the constant, so nothing
+     changes until an SM sets a number. */
+  dailyCap?: number | null;
+  capOverrides?: Record<string, number>;
 }
 
 export interface SlotDef {

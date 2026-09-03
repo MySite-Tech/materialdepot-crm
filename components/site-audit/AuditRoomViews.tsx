@@ -16,19 +16,28 @@ import {
   segmentRows,
 } from './auditRegistry';
 
+/* An adjustment's photo is the ONLY evidence of what was added or subtracted, so it is rendered
+   as the image itself — not as a "1 photo" count, which is what this showed until 2026-09-01.
+   Auditors were attaching the photo correctly and it was reaching the DB as a Storage URL; every
+   renderer (this one, the PDF, and both legacy equivalents) then dropped it on the floor, so the
+   office saw a bare number and the auditor concluded the upload had failed. Keep the strip here
+   in step with `mdPdfAuditRoom` in pdfBrand.ts. */
 function AdjustmentRows({ rows }: { rows: ReturnType<typeof adjRows> }) {
   if (!rows.length) return null;
   return (
     <div className="mt-1.5 border-t border-dashed border-gray-200 pt-1.5">
       <div className="mb-0.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-400">Area adjustments</div>
       {rows.map((a, i) => (
-        <div key={i} className="flex flex-wrap gap-2 text-[12.5px]">
-          <span className={`font-bold ${a.neg ? 'text-red-600' : 'text-green-700'}`}>{a.area} sq.ft</span>
-          <span className="text-gray-400">
-            {a.label} {a.size}
-          </span>
-          <span>{a.reason || <i className="text-red-600">no reason given</i>}</span>
-          <span>{a.photos.length ? `${a.photos.length} photo${a.photos.length > 1 ? 's' : ''}` : <i className="text-red-600">no photo attached</i>}</span>
+        <div key={i} className="mt-1 first:mt-0">
+          <div className="flex flex-wrap gap-2 text-[12.5px]">
+            <span className={`font-bold ${a.neg ? 'text-red-600' : 'text-green-700'}`}>{a.area} sq.ft</span>
+            <span className="text-gray-400">
+              {a.label} {a.size}
+            </span>
+            <span>{a.reason || <i className="text-red-600">no reason given</i>}</span>
+            {!a.photos.length && <span><i className="text-red-600">no photo attached</i></span>}
+          </div>
+          <PhotoStrip photos={a.photos.filter(Boolean)} size={52} />
         </div>
       ))}
     </div>

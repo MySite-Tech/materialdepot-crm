@@ -16,7 +16,7 @@
    outer Site Audit rail. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CITIES, fetchBmEmailsByPhone, inCity, phoneKey, sbGet, sbPatch, syntheticSiteAuditEmail, type CityFilter } from './siteAuditShared';
+import { CITIES, EXIT_COLS, exitColumnsAvailable, fetchBmEmailsByPhone, inCity, mapCaps, mapExit, phoneKey, rosterQuery, sbGet, sbPatch, syntheticSiteAuditEmail, type CityFilter, type StaffExit } from './siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
 import { poFieldFor } from './omsService';
 import { autoImportAuditOrders } from './autoImportAuditOrders';
@@ -24,11 +24,12 @@ import AuditOrderDrawer from './audit-ops/AuditOrderDrawer';
 import {
   AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, SlotsView, TodayView,
 } from './audit-ops/Views';
-import { AddAuditorOverlay, AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from './audit-ops/Overlays';
+import { AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from './audit-ops/Overlays';
+import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from './StaffModals';
 import {
   AUDIT_CATEGORY_QUERY, AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, applyAuditCategories,
-  dstr, hasOpenFollowUp, loadAuditSlots, loadCaps, mapAuditRow, today,
-  type AuditOrder, type AuditViewKey, type Auditor, type Caps, type SlotDef,
+  dstr, hasOpenFollowUp, loadAuditSlots, mapAuditRow, today,
+  type AuditOrder, type AuditViewKey, type Auditor, type SlotDef,
 } from './audit-ops/shared';
 import type { ShadowerOption } from './install-ops/ShadowerSelect';
 
@@ -48,7 +49,10 @@ const TABS: Array<{ view: AuditViewKey; label: string }> = [
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_ATTRIBUTION }: { city?: CityFilter; attribution?: string } = {}) {
+/* `actorEmail` is recorded as `profiles.deleted_by` when this SM removes
+   someone, so an accidental removal has an owner to ask. Optional because the
+   oversight rail can render this view without a resolved person. */
+export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
   const ATTRIBUTION = attribution;
   const [view, setView] = useState<AuditViewKey>('orders');
   const [rawOrders, setRawOrders] = useState<AuditOrder[]>([]);
@@ -57,13 +61,12 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
   const [rawAuditors, setRawAuditors] = useState<Auditor[]>([]);
   const [shadowerPool, setShadowerPool] = useState<ShadowerOption[]>([]);
   const [bmOptions, setBmOptions] = useState<Array<{ name: string; email?: string; contact?: string }>>([]);
-  const [caps, setCaps] = useState<Caps>({});
   const [connErr, setConnErr] = useState(false);
   const retryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [slotsFl, setSlotsFl] = useState<SlotDef[]>(DEFAULT_AUDIT_SLOTS_FL);
   const [slotsWp, setSlotsWp] = useState<SlotDef[]>(DEFAULT_AUDIT_SLOTS_WP);
-  useEffect(() => { setSlotsFl(loadAuditSlots('fl')); setSlotsWp(loadAuditSlots('wp')); setCaps(loadCaps()); }, []);
+  useEffect(() => { setSlotsFl(loadAuditSlots('fl')); setSlotsWp(loadAuditSlots('wp')); }, []);
   const slots = useMemo(() => [...slotsFl, ...slotsWp], [slotsFl, slotsWp]);
 
   const [filterStatus, setFilterStatus] = useState('all');
@@ -90,6 +93,15 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
   const [kylasOpen, setKylasOpen] = useState(false);
   const [rectOrder, setRectOrder] = useState<AuditOrder | null>(null);
   const [addAuditorOpen, setAddAuditorOpen] = useState(false);
+  /* Retired auditors, loaded separately and only when migration 004 has been
+     run. Kept out of `rawAuditors` entirely rather than filtered downstream:
+     everything from the assignment picker to the kiosk's slots-left count
+     reads that array, and a "former" flag would have to be honoured in every
+     one of them. Absent means absent. */
+  const [formerAuditors, setFormerAuditors] = useState<Array<Auditor & StaffExit>>([]);
+  const [canRetire, setCanRetire] = useState(false);
+  const [retiring, setRetiring] = useState<RetireTarget | null>(null);
+  const [restoring, setRestoring] = useState<(RetireTarget & StaffExit) | null>(null);
   /* Distinguishes "the roster failed to load" from "nobody is registered" — the
      picker's empty state has to say which, see loadAuditors. */
   const [auditorsErr, setAuditorsErr] = useState(false);
@@ -120,14 +132,22 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
      8s retry `loadOrders` already uses applies here too. */
   const loadAuditors = useCallback(async () => {
     try {
-      const rows = await sbGet('profiles?role=in.(site_auditor,auditor_installer)&select=id,name,email,active_from,city,weekly_off,leave_dates');
+      /* `rosterQuery` bundles both probe-gated concerns: the caps columns
+         (migration 003) and `deleted_at is null` (migration 004). Neither may
+         be named unconditionally — PostgREST fails the WHOLE select with 42703
+         on a missing column, and this is the query the assignment picker and
+         the kiosk's slots-left count both depend on. */
+      const { select, filter } = await rosterQuery('id,name,email,contact,active_from,city,weekly_off,leave_dates');
+      const rows = await sbGet('profiles?role=in.(site_auditor,auditor_installer)&select=' + select + filter);
       if (!Array.isArray(rows)) throw new Error('auditor roster unavailable');
       setRawAuditors(rows.map((r: any) => ({
         id: r.id, name: r.name, email: r.email, phone: '', zone: '',
+        contact: r.contact || null,
         activeFrom: r.active_from || null,
         city: r.city || 'Bengaluru',
         weeklyOff: r.weekly_off == null ? null : r.weekly_off,
         leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
+        ...mapCaps(r),
       })));
       setAuditorsErr(false);
       if (audRetryTid.current) { clearTimeout(audRetryTid.current); audRetryTid.current = null; }
@@ -138,6 +158,38 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* The attrition list. Degrades to empty (and hides the tab) when the exit
+     columns aren't there, which is also what makes this safe to ship ahead of
+     the migration. Not gated on the 8s roster retry — a missing former-staff
+     list is a missing history panel, never a blocked workflow. */
+  const loadFormerAuditors = useCallback(async () => {
+    if (!(await exitColumnsAvailable())) { setCanRetire(false); setFormerAuditors([]); return; }
+    setCanRetire(true);
+    try {
+      const rows = await sbGet(
+        'profiles?role=in.(site_auditor,auditor_installer)&deleted_at=not.is.null'
+        + '&select=id,name,email,contact,city,active_from,weekly_off,leave_dates,' + EXIT_COLS
+        + '&order=deleted_at.desc',
+      );
+      if (!Array.isArray(rows)) return;
+      setFormerAuditors(rows.map((r: any) => ({
+        id: r.id, name: r.name, email: r.email, phone: '', zone: '',
+        contact: r.contact || null,
+        activeFrom: r.active_from || null,
+        city: r.city || 'Bengaluru',
+        weeklyOff: r.weekly_off == null ? null : r.weekly_off,
+        leaveDates: Array.isArray(r.leave_dates) ? r.leave_dates.slice() : [],
+        dailyCap: null, capOverrides: {},
+        ...mapExit(r),
+      })));
+    } catch { /* history panel is optional */ }
+  }, []);
+  useEffect(() => { loadFormerAuditors(); }, [loadFormerAuditors]);
+
+  const reloadRoster = useCallback(async () => {
+    await Promise.all([loadAuditors(), loadFormerAuditors()]);
+  }, [loadAuditors, loadFormerAuditors]);
 
   /* Shadower pool = everyone registered except store staff (their kiosk has no
      login, so no personal shadow schedule). Kept separate from `auditors` so
@@ -160,7 +212,13 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
   const loadBms = useCallback(async () => {
     try {
       const [users, bmEmails] = await Promise.all([fetchUsers(), fetchBmEmailsByPhone()]);
-      setBmOptions((users || []).filter((u: any) => u.name).map((u: any) => ({
+      /* Deactivated employees stay in the CRM roster so Admin > Users can
+         still manage them (see AppUser.active) — but offering one in the BM
+         picker attributes a new order to somebody who has left. This is the
+         same filter SiteAuditBranchManagerView already applies; it was missing
+         here, which is half of why staff who left kept "reflecting on our
+         system". */
+      setBmOptions((users || []).filter((u: any) => u.name && u.active !== false).map((u: any) => ({
         name: u.name,
         contact: u.phone,
         /* The account's address when they have one, otherwise the synthetic
@@ -311,11 +369,19 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       case 'followups':
         return <FollowupsView orders={orders} onOpenOrder={openOrder} />;
       case 'calendar':
-        return <CalendarView orders={orders} auditors={auditors} caps={caps} slots={slots} calSelDay={calSelDay} setCalSelDay={setCalSelDay} onOpenOrder={openOrder} />;
+        return <CalendarView orders={orders} auditors={auditors} slots={slots} calSelDay={calSelDay} setCalSelDay={setCalSelDay} onOpenOrder={openOrder} />;
       case 'slots':
         return <SlotsView slotsFl={slotsFl} slotsWp={slotsWp} setSlotsFl={setSlotsFl} setSlotsWp={setSlotsWp} toast={toast} />;
       case 'auditors':
-        return <AuditorsView auditors={auditors} caps={caps} setCaps={setCaps} onAddStaff={() => setAddAuditorOpen(true)} reload={loadAuditors} toast={toast} />;
+        return (
+          <AuditorsView
+            auditors={auditors} formerAuditors={inCity(formerAuditors, city)} canRetire={canRetire}
+            onAddStaff={() => setAddAuditorOpen(true)}
+            onRemove={(a) => setRetiring({ id: a.id, name: a.name, email: a.email, role: 'site_auditor', contact: a.contact || null, city: a.city })}
+            onRestore={(a) => setRestoring({ id: a.id, name: a.name, email: a.email, role: 'site_auditor', contact: a.contact || null, city: a.city, deletedAt: a.deletedAt, deletedBy: a.deletedBy, exitReason: a.exitReason })}
+            reload={loadAuditors} toast={toast}
+          />
+        );
       case 'deleted':
         return <DeletedView deleted={deleted} auditors={auditors} onRestore={restoreOrder} />;
       case 'rectifications':
@@ -358,7 +424,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
         <div className="fixed inset-0 z-[900] flex justify-end bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) setCurrentPI(null); }}>
           <div className="flex h-full w-full max-w-[600px] flex-col bg-white shadow-2xl" key={currentPI + ':' + drawerNonce}>
             <AuditOrderDrawer
-              order={drawerOrder} orders={orders} auditors={auditors} caps={caps} slots={slots}
+              order={drawerOrder} orders={orders} auditors={auditors} slots={slots}
               shadowerPool={shadowerPool} bmOptions={bmOptions} attribution={ATTRIBUTION}
               auditorsErr={auditorsErr} onRetryAuditors={loadAuditors}
               onClose={() => setCurrentPI(null)} reload={loadOrders} reloadWithDeleted={reloadWithDeleted}
@@ -376,7 +442,25 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       />
       <KylasOverlay open={kylasOpen} orders={rawOrders} onClose={() => setKylasOpen(false)} onUse={usePORow} />
       <RectOverlay order={rectOrder} attribution={ATTRIBUTION} onClose={() => setRectOrder(null)} onSaved={loadOrders} toast={toast} />
-      <AddAuditorOverlay open={addAuditorOpen} onClose={() => setAddAuditorOpen(false)} reload={loadAuditors} toast={toast} />
+      <AddFieldStaffModal
+        open={addAuditorOpen} onClose={() => setAddAuditorOpen(false)} defaultCity={city === 'all' ? null : String(city)}
+        defaultRole="site_auditor"
+        onDone={async (m) => { await reloadRoster(); toast(m); }}
+      />
+      {retiring ? (
+        <RetireStaffModal
+          person={retiring} actorEmail={actorEmail}
+          onClose={() => setRetiring(null)}
+          onDone={async (m) => { await reloadRoster(); toast(m); }}
+        />
+      ) : null}
+      {restoring ? (
+        <RestoreStaffModal
+          person={restoring}
+          onClose={() => setRestoring(null)}
+          onDone={async (m) => { await reloadRoster(); toast(m); }}
+        />
+      ) : null}
 
       {toastShow ? (
         <div className="fixed bottom-6 left-1/2 z-[960] -translate-x-1/2 rounded-full bg-[#16294a] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-lg">{toastMsg}</div>

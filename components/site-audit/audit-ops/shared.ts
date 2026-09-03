@@ -7,8 +7,8 @@
    runs against React state. The one genuine module-level thing kept as-is is
    CAPS, because in the source it is a device-local localStorage setting too. */
 
-import { publishSlotConfig } from '../siteAuditShared';
-import type { Availability } from '../siteAuditShared';
+import { offDayReason, publishSlotConfig, staffCapOn } from '../siteAuditShared';
+import type { Availability, StaffCaps } from '../siteAuditShared';
 
 export const AUDIT_SKU = 'SVC-AUDIT-001';
 
@@ -65,7 +65,7 @@ export interface AuditOrder {
   log: AuditLogEntry[];
 }
 
-export interface Auditor extends Availability {
+export interface Auditor extends Availability, StaffCaps {
   id: string;
   name: string;
   email: string;
@@ -73,6 +73,10 @@ export interface Auditor extends Availability {
   zone: string;
   activeFrom: string | null;
   city: string;
+  /* profiles.contact — the only bridge to their CRM login, so removal needs it
+     to know which account to deactivate. `phone` above is a legacy free-text
+     field the roster has never populated; don't conflate them. */
+  contact?: string | null;
 }
 
 export const AUDIT_COLS =
@@ -221,45 +225,32 @@ export function fmtDate(ds: string | null | undefined): string {
 }
 
 /* ── Per-auditor, per-date caps ────────────────────────────────────────
-   CAPS[auditorId][yyyy-mm-dd] = number, device-local like the source
-   (localStorage `md_audit_caps`). DEFAULT_CAP applies when unset. */
+   Caps live on the roster row itself (`profiles.daily_cap` /
+   `profiles.cap_overrides`, see siteAuditShared's StaffCaps), so the SM, the
+   other SM and the public Store Team kiosk all read one number. They used to
+   sit in localStorage under `md_audit_caps` — device-local, which meant the
+   kiosk could not see them at all and counted raw headcount instead. */
 export const DEFAULT_CAP = 3;
-export type Caps = Record<string, Record<string, number>>;
-
-export function loadCaps(): Caps {
-  if (typeof window === 'undefined') return {};
-  try { return JSON.parse(localStorage.getItem('md_audit_caps') || '{}') || {}; } catch { return {}; }
-}
-export function saveCaps(caps: Caps) {
-  try { localStorage.setItem('md_audit_caps', JSON.stringify(caps)); } catch { /* best-effort */ }
-}
 
 /* Effective cap for an auditor on a date: zero before their start date and on
-   a weekly off / leave day, otherwise their per-date override or the default. */
-export function capFor(caps: Caps, auditors: Auditor[], aid: string, ds: string | null): number {
+   a weekly off / leave day, otherwise their per-date override, then their own
+   default, then DEFAULT_CAP. */
+export function capFor(auditors: Auditor[], aid: string, ds: string | null): number {
   if (!ds) return DEFAULT_CAP;
-  const a = auditors.find((x) => x.id === aid);
-  if (a && a.activeFrom && ds < a.activeFrom) return 0;
-  if (a && isOff(a, ds)) return 0;
-  const c = caps[aid];
-  if (c && c[ds] !== undefined) return c[ds];
-  return DEFAULT_CAP;
-}
-function isOff(a: Auditor, ds: string): boolean {
-  if (a.weeklyOff != null && new Date(ds + 'T00:00:00').getDay() === a.weeklyOff) return true;
-  return Array.isArray(a.leaveDates) && a.leaveDates.includes(ds);
+  return staffCapOn(auditors.find((x) => x.id === aid), ds, DEFAULT_CAP);
 }
 export function offReason(a: Auditor, ds: string | null): string {
-  if (!ds || !isOff(a, ds)) return '';
-  return (a.leaveDates || []).includes(ds) ? 'on leave' : 'weekly off';
+  return offDayReason(a, ds);
 }
 /* Auditors available on a date = those with cap >= 1; total daily throughput
-   = the sum of their caps. Both are what the Store Team kiosk counts against. */
-export function auditorsAvailable(caps: Caps, auditors: Auditor[], ds: string): number {
-  return auditors.filter((a) => capFor(caps, auditors, a.id, ds) >= 1).length;
+   = the sum of their caps. Both are what the Store Team kiosk counts against —
+   pass it a CITY-SCOPED list, or a Bengaluru store ends up counting idle
+   Hyderabad auditors (which is exactly what the kiosk did until 2026-09-02). */
+export function auditorsAvailable(auditors: Auditor[], ds: string): number {
+  return auditors.filter((a) => capFor(auditors, a.id, ds) >= 1).length;
 }
-export function dailyTotalCap(caps: Caps, auditors: Auditor[], ds: string): number {
-  return auditors.reduce((s, a) => s + capFor(caps, auditors, a.id, ds), 0);
+export function dailyTotalCap(auditors: Auditor[], ds: string): number {
+  return auditors.reduce((s, a) => s + capFor(auditors, a.id, ds), 0);
 }
 
 /* ── Load / conflict ──────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { CITIES, encodePerson, loadCityFilter, saveCityFilter, sbGet, type CityFilter } from './siteAuditShared';
+import { CITIES, activeStaffFilter, encodePerson, loadCityFilter, saveCityFilter, sbGet, type CityFilter } from './siteAuditShared';
 import SiteAuditorApp from './SiteAuditorApp';
 import SiteInstallerApp from './SiteInstallerApp';
 import SiteAuditJobsView from './SiteAuditJobsView';
@@ -80,7 +80,10 @@ export default function SiteAuditRoleViewerView() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const rows = await sbGet('profiles?role=neq.admin&select=id,name,email,role,branch,contact&order=name.asc');
+      /* Whose dashboard an admin can preview. Someone marked as no longer
+         staff has no live dashboard to preview — `pickOwnProfile` refuses
+         them, so listing them here would only offer a dead end. */
+      const rows = await sbGet('profiles?role=neq.admin&select=id,name,email,role,branch,contact&order=name.asc' + await activeStaffFilter());
       if (!alive) return;
       const map: Record<string, Person[]> = {};
       if (Array.isArray(rows)) rows.forEach((p: Person) => { if (!map[p.role]) map[p.role] = []; map[p.role].push(p); });
@@ -329,7 +332,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
         </div>
       </div>
       {smTab === 'install' ? (
-        <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} />
+        <SiteAuditInstallOpsView city={city} attribution={person.name || crmName} actorEmail={person.email} />
       ) : (
         <div>
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -346,7 +349,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
             ))}
           </div>
           {smAuditSubTab === 'ops' ? (
-            <SiteAuditOpsView city={city} attribution={person.name || crmName} />
+            <SiteAuditOpsView city={city} attribution={person.name || crmName} actorEmail={person.email} />
           ) : smAuditSubTab === 'jobs' ? (
             <SiteAuditJobsView city={city} />
           ) : smAuditSubTab === 'perf' ? (

@@ -16,8 +16,10 @@
      doesn't have to be entered twice in two different screens. */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CITIES, CRM_ROLE_TO_SITE_AUDIT_ROLE, ROLES, fmtDate, initials, phoneKey, randomPasscode, sbDel, sbGet, sbPatch, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from './siteAuditShared';
+import { CITIES, CRM_ROLE_TO_SITE_AUDIT_ROLE, ROLES, crmPermissionsForSiteAuditRole, exitColumnsAvailable, fmtDate, initials, phoneKey, randomPasscode, sbGet, sbPatch, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from './siteAuditShared';
 import { addUser, fetchUsers } from '@/lib/mockApi';
+import { createCrmLoginFor } from './staffDirectory';
+import { RestoreStaffModal, RetireStaffModal, type RetireTarget } from './StaffModals';
 import { applyBmResolve, fetchUnlinkedAuditOrders, planBmResolve, type BmResolvePlan } from './resolveBmFromBackend';
 
 type ProfileRow = {
@@ -31,6 +33,12 @@ type ProfileRow = {
   passcode: string | null;
   pay_rates: Record<string, number | null> | null;
   created_at?: string;
+  /* migration 004. Absent (undefined) on every row until it has been run, and
+     `select=*` never 42703s, so these need no probe to READ — only writing and
+     filtering do. `deleted_at` set = former staff. */
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  exit_reason?: string | null;
 };
 
 const ROLE_OPTIONS: Array<[string, string]> = [
@@ -54,15 +62,11 @@ const PAY_FIELDS: Array<[string, string]> = [
   ['wp_custom_sqft', 'Custom WP ₹/sqft'],
   ['wpnl_sqft', 'Wall Panels ₹/sqft'],
 ];
-/* Site-audit role → the CRM sub-permission that routes them to the right
-   view once they sign in. Roles absent here (bm/admin) get the oversight
-   dashboard instead of a field app. */
-const CRM_PERMISSION_FOR: Record<string, string> = {
-  site_auditor: 'site_audit.site_auditor',
-  installer: 'site_audit.installer',
-  auditor_installer: 'site_audit.auditor_installer',
-  service_mgr: 'site_audit.service_manager',
-};
+/* The role → CRM sub-permission map used to be hand-written here, and again in
+   audit-ops/Overlays (with two of the four field roles missing) and again in
+   install-ops/Overlays. It is now derived from SITE_AUDIT_PERMISSION_TO_ROLE,
+   which is the same table read the other way — see
+   `crmPermissionsForSiteAuditRole` in siteAuditShared. */
 
 const isInstallerRole = (r: string) => r === 'installer' || r === 'auditor_installer';
 
@@ -125,7 +129,12 @@ function BmSearchSelect({ options, disabled, suggested, onPick }: {
   );
 }
 
-export default function SiteAuditUsersView() {
+/* `actor` is the signed-in admin, for `profiles.deleted_by`. The CRM session
+   carries a name and phone but never an email, so the identifier recorded is
+   the synthetic address that encodes their number — the same convention the
+   rest of this repo uses for a CRM-only person. */
+export default function SiteAuditUsersView({ actor }: { actor?: { name?: string; phone?: string; role?: string } | null } = {}) {
+  const actorEmail = actor?.phone ? syntheticSiteAuditEmail(actor.phone) : null;
   const [rows, setRows] = useState<ProfileRow[]>([]);
   const [crmUsers, setCrmUsers] = useState<Array<{ id: string | number; name: string; phone: string; role: string; allowedBranches?: string[]; active?: boolean }>>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +144,13 @@ export default function SiteAuditUsersView() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [toast, setToast] = useState('');
+  const [retiring, setRetiring] = useState<RetireTarget | null>(null);
+  const [restoring, setRestoring] = useState<(RetireTarget & { exitReason?: string | null }) | null>(null);
+  /* False until migration 004 has been run. Gates the Remove control and the
+     Former staff chip — a Remove that can only ever fail is worse than none. */
+  const [canRetire, setCanRetire] = useState(false);
+  const [crmBackfillPanel, setCrmBackfillPanel] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const flash = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(''), 3000); }, []);
 
@@ -150,8 +166,18 @@ export default function SiteAuditUsersView() {
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { exitColumnsAvailable().then(setCanRetire); }, []);
 
-  const crmPhones = useMemo(() => new Set(crmUsers.map((u) => phoneKey(u.phone)).filter(Boolean)), [crmUsers]);
+  /* A DEACTIVATED CRM login is not a usable login, so it must not read as
+     "linked". `_mapUserOrg` sets `active: u.status !== false` and the type
+     spells out that anything deriving access from this list has to check it —
+     `SiteAuditBranchManagerView` did, this didn't. Without the filter, someone
+     retired here still showed ✓ CRM linked and the amber "no CRM login"
+     notice under-counted by exactly the people who had left. */
+  const crmPhones = useMemo(
+    () => new Set(crmUsers.filter((u) => u.active !== false).map((u) => phoneKey(u.phone)).filter(Boolean)),
+    [crmUsers],
+  );
 
   /* Suggest a missing phone number from the CRM roster, but ONLY when it's
      unambiguous — exactly one CRM user with that exact name, whose number
@@ -166,21 +192,66 @@ export default function SiteAuditUsersView() {
     return ph;
   }, [crmUsers, rows]);
 
+  /* One fetch, split here. `rows` is every profile ever created; `current` is
+     the roster and is what every count, notice and default view is computed
+     from — a former staff member must not inflate "14 people have no phone
+     number" or the Site Auditor (14) chip, and the whole point of retiring
+     someone is that they stop appearing in the numbers. */
+  const former = useMemo(() => rows.filter((r) => !!r.deleted_at), [rows]);
+  const current = useMemo(() => rows.filter((r) => !r.deleted_at), [rows]);
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    rows.forEach((r) => { c[r.role] = (c[r.role] || 0) + 1; });
+    current.forEach((r) => { c[r.role] = (c[r.role] || 0) + 1; });
     return c;
-  }, [rows]);
+  }, [current]);
 
-  const filtered = rows.filter((u) => {
-    if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+  const matchesQ = useCallback((u: ProfileRow) => {
     if (!q) return true;
-    return (u.name + u.email + u.role + (u.contact || '')).toLowerCase().includes(q.toLowerCase());
+    return (u.name + u.email + u.role + (u.contact || '') + (u.exit_reason || '')).toLowerCase().includes(q.toLowerCase());
+  }, [q]);
+
+  const showingFormer = roleFilter === 'former';
+  const filtered = (showingFormer ? former : current).filter((u) => {
+    if (!showingFormer && roleFilter !== 'all' && u.role !== roleFilter) return false;
+    return matchesQ(u);
   });
 
-  const missingPhone = rows.filter((u) => !phoneKey(u.contact));
+  /* Attrition, over the rolling 90 days and all-time, broken down by the
+     reason recorded at removal. This is the number the whole soft delete
+     exists to make answerable. */
+  const attrition = useMemo(() => {
+    const cut = new Date(Date.now() - 90 * 86400_000).toISOString();
+    const recent = former.filter((r) => (r.deleted_at || '') >= cut);
+    const byReason: Record<string, number> = {};
+    former.forEach((r) => {
+      const key = (r.exit_reason || 'Not recorded').split(' — ')[0];
+      byReason[key] = (byReason[key] || 0) + 1;
+    });
+    /* Denominator is people who were on the roster during the window, i.e.
+       today's roster plus those who left inside it — not today's headcount
+       alone, which would overstate the rate for a shrinking team. */
+    const exposed = current.length + recent.length;
+    return {
+      total: former.length,
+      recent: recent.length,
+      rate: exposed ? Math.round((recent.length / exposed) * 1000) / 10 : 0,
+      byReason: Object.entries(byReason).sort((a, b) => b[1] - a[1]),
+    };
+  }, [former, current]);
+
+  const missingPhone = current.filter((u) => !phoneKey(u.contact));
   const unlinked = missingPhone.length;
-  const noCrm = rows.filter((u) => phoneKey(u.contact) && !crmPhones.has(phoneKey(u.contact))).length;
+  /* The people this fixes: a profile with a real phone and no usable CRM login
+     — so `/login-otp/?contact=` has nothing to send an OTP to and they cannot
+     sign into the CRM at all, however healthy their field-app profile looks.
+     Every staff member added through the legacy PWA lands here, because all
+     three of its add-staff forms write a `profiles` row and nothing else. */
+  const noCrmList = useMemo(
+    () => current.filter((u) => phoneKey(u.contact) && !crmPhones.has(phoneKey(u.contact))),
+    [current, crmPhones],
+  );
+  const noCrm = noCrmList.length;
   const suggestable = missingPhone.map((p) => ({ p, ph: suggestFor(p) })).filter((x) => x.ph) as Array<{ p: ProfileRow; ph: string }>;
 
   async function linkAllSuggested() {
@@ -510,14 +581,50 @@ export default function SiteAuditUsersView() {
     }
   }
 
-  async function removeUser(u: ProfileRow) {
-    if (!window.confirm(`Remove ${u.name} from the Site Audit field apps? They lose access immediately.\n\nThis deletes ONLY their field-app profile. Their CRM login in the backend user table is left untouched — remove that under Admin > Users if you also want to revoke CRM access.`)) return;
+  /* Removal used to be `sbDel` behind a `window.confirm` whose own text
+     admitted the gap: it deleted the field-app profile and left the CRM login
+     alive, so a person who had left could still sign in — and the row was
+     gone, so nobody could say how many had left. Both halves are now handled
+     by RetireStaffModal, which records a reason (what the attrition breakdown
+     groups by) and deactivates the CRM login by default. */
+  const startRemove = useCallback((u: ProfileRow) => {
+    setRetiring({ id: u.id, name: u.name, email: u.email, role: u.role, contact: u.contact, city: u.city });
+  }, []);
+
+  /* Backfill the CRM logins for everyone who has a phone but no usable one.
+     Sequential on purpose: `addUser` is a Django write per person and the
+     backend rejects a duplicate contact, so a failure here is per-person
+     information worth keeping rather than one aborted batch. */
+  async function backfillCrmLogins() {
+    if (!noCrmList.length) return;
+    setBackfilling(true);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const p of noCrmList) {
+      try {
+        await createCrmLoginFor(p);
+        ok++;
+      } catch (e: any) {
+        failed.push(p.name + ' (' + (e?.message || 'backend error') + ')');
+      }
+    }
+    await load();
+    setBackfilling(false);
+    if (failed.length) {
+      console.error('[siteAudit] CRM login backfill failures', failed);
+      flash('✓ Created ' + ok + ' of ' + noCrmList.length + ' — failed: ' + failed.slice(0, 2).join(', ') + (failed.length > 2 ? ' and ' + (failed.length - 2) + ' more (see console)' : ''));
+    } else {
+      flash('✓ Created ' + ok + ' CRM login' + (ok === 1 ? '' : 's') + ' — they can sign in with their phone number now');
+    }
+  }
+
+  async function createOneCrmLogin(u: ProfileRow) {
     try {
-      await sbDel('profiles', u.id);
+      await createCrmLoginFor(u);
       await load();
-      flash(`${u.name} removed from the field apps (CRM login untouched)`);
+      flash('✓ ' + u.name + ' can sign into the CRM with ' + u.contact + ' now');
     } catch (e: any) {
-      flash('⚠ ' + (e?.message || 'Could not remove'));
+      flash('⚠ ' + (e?.message || 'Could not create their CRM login'));
     }
   }
 
@@ -534,12 +641,51 @@ export default function SiteAuditUsersView() {
       {unlinked || noCrm ? (
         <div className="mb-3 rounded-md border-l-4 border-amber-500 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-800">
           {unlinked ? <><b>{unlinked}</b> {unlinked === 1 ? 'person has' : 'people have'} no phone number — they can&apos;t be matched with a CRM login (availability, payouts, their own dashboard and BM attribution all key off it). </> : null}
-          {noCrm ? <><b>{noCrm}</b> {noCrm === 1 ? 'has' : 'have'} a phone but no CRM login. </> : null}
-          Set the number on a person with Edit below.
-          {suggestable.length ? (
-            <button onClick={linkAllSuggested} className="ml-2 rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white">
-              Link {suggestable.length} exact name match{suggestable.length === 1 ? '' : 'es'}
-            </button>
+          {noCrm ? <><b>{noCrm}</b> {noCrm === 1 ? 'has' : 'have'} a phone but <b>no CRM login</b>, so <code>/login-otp/</code> has no account to send an OTP to and they cannot sign in here at all. </> : null}
+          Set a number on a person with Edit below.
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {suggestable.length ? (
+              <button onClick={linkAllSuggested} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white">
+                Link {suggestable.length} exact name match{suggestable.length === 1 ? '' : 'es'}
+              </button>
+            ) : null}
+            {/* The banner used to state the count and stop, leaving the only
+                fix buried inside one person's Edit form. This creates the
+                missing logins in bulk, with the same two permissions a fresh
+                add would grant. */}
+            {noCrm ? (
+              <>
+                <button onClick={backfillCrmLogins} disabled={backfilling} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
+                  {backfilling ? 'Creating…' : 'Create ' + noCrm + ' missing CRM login' + (noCrm === 1 ? '' : 's')}
+                </button>
+                <button onClick={() => setCrmBackfillPanel((v) => !v)} className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[12px] font-bold text-amber-800">
+                  {crmBackfillPanel ? 'Hide who' : 'See who (' + noCrm + ')'}
+                </button>
+              </>
+            ) : null}
+          </div>
+          {crmBackfillPanel && noCrm ? (
+            <div className="mt-2.5 max-h-[280px] overflow-y-auto rounded-md border border-amber-200 bg-white">
+              <table className="w-full">
+                <thead><tr>{['Name', 'Phone', 'Role', 'City', 'Added', ''].map((h) => (
+                  <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
+                ))}</tr></thead>
+                <tbody>
+                  {noCrmList.map((u) => (
+                    <tr key={u.id} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-[13px] font-semibold text-gray-800">{u.name}</td>
+                      <td className="px-3 py-2 font-mono text-[12px] text-gray-600">{u.contact}</td>
+                      <td className="px-3 py-2 text-[12.5px]"><RoleBadge role={u.role} /></td>
+                      <td className="px-3 py-2 text-[12.5px] text-gray-500">{u.city || 'Bengaluru'}</td>
+                      <td className="px-3 py-2 text-[12px] text-gray-400">{fmtDate(u.created_at)}</td>
+                      <td className="px-3 py-2">
+                        <button onClick={() => createOneCrmLogin(u)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[12px] font-bold text-[#1F3A5F]">Create login</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -687,11 +833,42 @@ export default function SiteAuditUsersView() {
               onClick={() => setRoleFilter(k)}
               className={roleFilter === k ? 'rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600'}
             >
-              {k === 'all' ? 'All' : ROLES[k]?.label || k} ({k === 'all' ? rows.length : counts[k]})
+              {k === 'all' ? 'All' : ROLES[k]?.label || k} ({k === 'all' ? current.length : counts[k]})
             </button>
           ))}
+          {/* Only once there is something to show. A "Former staff (0)" chip
+              before the migration has run reads as "nobody has ever left",
+              which is a claim this screen can't make yet. */}
+          {canRetire && former.length ? (
+            <button
+              onClick={() => setRoleFilter('former')}
+              className={showingFormer ? 'rounded-full bg-red-700 px-3 py-1.5 text-xs font-semibold text-white' : 'rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700'}
+            >
+              Former staff ({former.length})
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {showingFormer ? (
+        <div className="mb-3 rounded-md border-l-4 border-gray-400 bg-gray-50 px-3 py-2.5 text-[12.5px] text-gray-700">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            <span><b className="text-[15px]">{attrition.total}</b> people have left in total</span>
+            <span><b className="text-[15px]">{attrition.recent}</b> in the last 90 days</span>
+            {/* Denominator is the roster plus those who left inside the
+                window, not today's headcount — otherwise a shrinking team
+                reports a rate above its own losses. */}
+            <span><b className="text-[15px]">{attrition.rate}%</b> 90-day attrition, against {current.length + attrition.recent} people on the roster in that window</span>
+          </div>
+          {attrition.byReason.length ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {attrition.byReason.map(([reason, n]) => (
+                <span key={reason} className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-gray-700">{reason} · {n}</span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         {loading ? (
@@ -701,8 +878,11 @@ export default function SiteAuditUsersView() {
         ) : (
           <table className="w-full">
             <thead>
-              <tr>{['Name', 'Email', 'Phone', 'Role', 'City', 'Added', ''].map((h) => (
-                <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
+              <tr>{(showingFormer
+                ? ['Name', 'Email', 'Phone', 'Role', 'City', 'Left on', 'Reason', 'Removed by', '']
+                : ['Name', 'Email', 'Phone', 'Role', 'City', 'Added', '']
+              ).map((h, i) => (
+                <th key={h + i} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap">{h}</th>
               ))}</tr>
             </thead>
             <tbody>
@@ -719,7 +899,14 @@ export default function SiteAuditUsersView() {
                     <td className="px-3 py-2.5 font-mono text-[12px] text-gray-500">{u.email}</td>
                     <td className="px-3 py-2.5 font-mono text-[12px]">
                       {key
-                        ? <span className={crmPhones.has(key) ? 'text-gray-600' : 'text-amber-700'} title={crmPhones.has(key) ? 'Linked to a CRM login' : 'No CRM login for this number'}>{u.contact}{crmPhones.has(key) ? '' : ' ⚠'}</span>
+                        ? (crmPhones.has(key) || showingFormer
+                          ? <span className="text-gray-600" title={showingFormer ? 'Former staff' : 'Linked to a CRM login'}>{u.contact}</span>
+                          : (
+                            <span className="text-amber-700" title="No usable CRM login for this number — they cannot be sent an OTP, so they cannot sign in here">
+                              {u.contact} ⚠
+                              <button onClick={() => createOneCrmLogin(u)} className="ml-1.5 rounded border border-amber-300 bg-white px-1.5 py-0.5 text-[10.5px] font-bold text-amber-800">Fix</button>
+                            </span>
+                          ))
                         : (() => {
                           const sg = suggestFor(u);
                           return sg
@@ -732,17 +919,48 @@ export default function SiteAuditUsersView() {
                       {isInstallerRole(u.role) ? <span className="ml-1.5 text-[11px] text-gray-400">{INSTALLER_TYPES.find(([k]) => k === (u.installer_type || 'flooring'))?.[1]}</span> : null}
                     </td>
                     <td className="px-3 py-2.5 text-[12.5px] text-gray-500">{u.city || 'Bengaluru'}</td>
-                    <td className="px-3 py-2.5 text-[12px] text-gray-400">{fmtDate(u.created_at)}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex gap-1.5">
-                        <button onClick={() => setEditing(u)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-gray-700">✏️ Edit</button>
-                        <button onClick={() => removeUser(u)} className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-red-600">🗑</button>
-                      </div>
-                    </td>
+                    {showingFormer ? (
+                      <>
+                        <td className="px-3 py-2.5 text-[12px] text-gray-500">{fmtDate(u.deleted_at)}</td>
+                        <td className="px-3 py-2.5 text-[12.5px] text-gray-700">{u.exit_reason || '—'}</td>
+                        <td className="px-3 py-2.5 text-[11.5px] text-gray-400">{u.deleted_by || '—'}</td>
+                        <td className="px-3 py-2.5">
+                          <button
+                            onClick={() => setRestoring({ id: u.id, name: u.name, email: u.email, role: u.role, contact: u.contact, city: u.city, exitReason: u.exit_reason })}
+                            className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#1f7a3f]"
+                          >
+                            Bring back
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2.5 text-[12px] text-gray-400">{fmtDate(u.created_at)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex gap-1.5">
+                            <button onClick={() => setEditing(u)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-gray-700">✏️ Edit</button>
+                            {/* Disabled rather than hidden before migration 004:
+                                a control that vanishes reads as "you may not do
+                                this", and the truth is "the DB can't record it
+                                yet" — which the tooltip says. */}
+                            <button
+                              onClick={() => startRemove(u)}
+                              disabled={!canRetire}
+                              title={canRetire ? 'Mark as no longer staff' : 'Needs site-audit-migration-004-staff-exit.sql to be run first'}
+                              className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               }) : (
-                <tr><td colSpan={7} className="border-t border-gray-100 py-10 text-center text-[13px] text-gray-400">No users match your search</td></tr>
+                <tr><td colSpan={showingFormer ? 9 : 7} className="border-t border-gray-100 py-10 text-center text-[13px] text-gray-400">
+                  {showingFormer ? 'Nobody has been removed yet.' : 'No users match your search'}
+                </td></tr>
               )}
             </tbody>
           </table>
@@ -757,6 +975,21 @@ export default function SiteAuditUsersView() {
           onClose={() => setEditing(null)}
           onResetPasscode={() => resetPasscode(editing)}
           onDone={async (m) => { setEditing(null); await load(); flash(m); }}
+        />
+      ) : null}
+
+      {retiring ? (
+        <RetireStaffModal
+          person={retiring} actorEmail={actorEmail}
+          onClose={() => setRetiring(null)}
+          onDone={async (m) => { await load(); flash(m); }}
+        />
+      ) : null}
+      {restoring ? (
+        <RestoreStaffModal
+          person={restoring}
+          onClose={() => setRestoring(null)}
+          onDone={async (m) => { await load(); flash(m); }}
         />
       ) : null}
 
@@ -796,9 +1029,8 @@ function AddUserModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: 
       // phone, permissions) must not lose the field-app profile we just made.
       let note = '';
       if (makeCrm) {
-        const perm = CRM_PERMISSION_FOR[role];
         try {
-          await addUser({ name: nm, phone: ph, role: 'post_sales', individualPermissions: perm ? ['crm.site_audit', perm] : ['crm.site_audit'] });
+          await addUser({ name: nm, phone: ph, role: 'post_sales', individualPermissions: crmPermissionsForSiteAuditRole(role) });
         } catch (e: any) {
           note = ' · ⚠ CRM login NOT created (' + (e?.message || 'backend error') + ')';
         }
@@ -893,12 +1125,18 @@ function EditUserModal({ user: u, crmLinked, onClose, onDone, onResetPasscode }:
 
   async function createCrmLogin() {
     const ph = contact.replace(/\D/g, '');
-    if (!/^\d{10}$/.test(ph)) { setErr('Set a 10-digit phone number first, then save.'); return; }
+    if (!/^\d{10}$/.test(ph)) { setErr('Enter a 10-digit phone number first.'); return; }
     setMakingCrm(true);
     try {
-      const perm = CRM_PERMISSION_FOR[role];
-      await addUser({ name: u.name, phone: ph, role: 'post_sales', individualPermissions: perm ? ['crm.site_audit', perm] : ['crm.site_audit'] });
-      onDone(`✓ CRM login created for ${u.name}`);
+      /* The profile has to learn the number BEFORE a login is created against
+         it. This button reads the live input, so typing a new number and
+         clicking here without pressing Save made a CRM login for a phone
+         `profiles.contact` had never heard of: the two halves keyed to
+         different numbers, and the ⚠ was still on the row after the reload —
+         which reads as "the button didn't work". */
+      if (phoneKey(ph) !== phoneKey(u.contact)) await sbPatch('profiles', u.id, { contact: ph });
+      await addUser({ name: u.name, phone: ph, role: 'post_sales', individualPermissions: crmPermissionsForSiteAuditRole(role) });
+      onDone(`✓ ${u.name} can sign into the CRM with ${ph} now`);
     } catch (e: any) {
       setErr('CRM login failed — ' + (e?.message || 'try again'));
       setMakingCrm(false);

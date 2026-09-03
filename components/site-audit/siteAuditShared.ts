@@ -479,6 +479,143 @@ export async function ensureAuditOrderOwner(body: any): Promise<any> {
   };
 }
 
+/* ── Staff exit / attrition (profiles.deleted_at) ──────────────────────────
+   Removing a field-app profile used to be a hard DELETE. Two things followed
+   from that, and both are why this exists:
+
+   - Nobody could answer "how many installers left this quarter", because the
+     row was gone. Attrition was unmeasurable, so the only number anyone had
+     was the headcount currently on screen.
+   - Because deletion was irreversible, it was avoided. The roster kept people
+     who had left months earlier, they stayed in the assignment pickers and in
+     every availability count, and the SMs' own complaint — "a lot of
+     auditors/installers reflecting on our system who are no longer a part" —
+     is that accumulation, not a display bug.
+
+   A retired person is invisible to every roster, picker and capacity count
+   from the moment they are marked as having left, and the row survives as the
+   attrition record. `deleted_at is null` is the ONLY predicate any read uses;
+   see site-audit-migration-004-staff-exit.sql. */
+export type StaffExit = { deletedAt: string | null; deletedBy: string | null; exitReason: string | null };
+export const EXIT_COLS = 'deleted_at,deleted_by,exit_reason';
+
+/* The reasons the attrition breakdown is grouped by. Free text in the DB so a
+   future addition needs no migration; a fixed list in the UI so the grouping
+   doesn't fragment into fourteen spellings of "resigned". */
+export const EXIT_REASONS = [
+  'Resigned',
+  'Terminated',
+  'Contract ended',
+  'Absconded',
+  'Moved to another role',
+  'Other',
+] as const;
+
+/* Probe-gated for exactly the reason `rosterSelect` is (below): PostgREST
+   fails the WHOLE select with 42703 if the column isn't there, so naming
+   `deleted_at` before migration 004 has been run would take out every roster
+   query in both field apps and the public kiosk — a far worse outage than not
+   being able to retire anyone.
+
+   The unknown answer (a network blip) resolves to "absent", which means every
+   profile reads as current: the pre-migration behaviour. Guessing "present"
+   would turn a dropped request into an empty roster, which is the failure
+   mode this repo has already shipped twice.
+
+   Migration 003 is the standing proof this guard earns its keep — it sat
+   committed and unrun for a day while the caps feature quietly did nothing. */
+let exitReady: boolean | null = null;
+/* The probe is now read from ~8 places, several of which mount together, so
+   the in-flight promise is shared: without it a single page load fired eight
+   identical probes before any of them latched the answer. */
+let exitProbe: Promise<boolean> | null = null;
+async function probeExitColumns(): Promise<boolean> {
+  if (exitReady !== null) return exitReady;
+  if (!exitProbe) exitProbe = runExitProbe().finally(() => { exitProbe = null; });
+  return exitProbe;
+}
+async function runExitProbe(): Promise<boolean> {
+  if (exitReady === null) {
+    try {
+      const r = await fetch(SB_URL + '/rest/v1/profiles?select=' + EXIT_COLS + '&limit=1', { headers: H });
+      if (r.ok) exitReady = true;
+      else {
+        const body = await r.text().catch(() => '');
+        // Only a missing column is a durable "no" — anything else is transient
+        // and must not be latched.
+        if (body.includes('42703')) exitReady = false;
+        else console.error('[siteAudit] exit-column probe failed', r.status, body.slice(0, 200));
+      }
+    } catch (e) {
+      console.error('[siteAudit] exit-column probe failed', e);
+    }
+  }
+  return exitReady === true;
+}
+
+/* `exitSelect('id,name,city')` -> 'id,name,city,deleted_at,deleted_by,exit_reason'
+   once the migration has been run, and the bare list before that. */
+export async function exitSelect(cols: string): Promise<string> {
+  return (await probeExitColumns()) ? cols + ',' + EXIT_COLS : cols;
+}
+
+/* The `&deleted_at=is.null` fragment for a roster query, or '' when the column
+   doesn't exist yet. ALWAYS append this rather than writing the filter inline:
+   inline, a pre-migration read 42703s and renders as an empty roster. */
+export async function activeStaffFilter(): Promise<string> {
+  return (await probeExitColumns()) ? '&deleted_at=is.null' : '';
+}
+
+/* Reads both sides at once so a caller needs one await, not two. */
+export async function rosterQuery(cols: string): Promise<{ select: string; filter: string }> {
+  const [caps, filter] = await Promise.all([rosterSelect(cols), activeStaffFilter()]);
+  return { select: await exitSelect(caps), filter };
+}
+
+export function mapExit(r: any): StaffExit {
+  return {
+    deletedAt: r?.deleted_at || null,
+    deletedBy: r?.deleted_by || null,
+    exitReason: r?.exit_reason || null,
+  };
+}
+export const hasLeft = (r: { deletedAt?: string | null } | null | undefined) => !!r?.deletedAt;
+
+/* Thrown rather than falling back to `sbDel`. A hard delete is not a
+   degraded soft delete — it destroys the attrition record the operator is
+   asking us to keep — so when the columns are missing the honest answer is to
+   refuse and name the migration. */
+export class ExitColumnsMissing extends Error {
+  constructor() {
+    super('Staff exit needs site-audit-migration-004-staff-exit.sql to be run against the Site Audit Supabase project first. Nobody has been removed.');
+    this.name = 'ExitColumnsMissing';
+  }
+}
+
+/* Mark someone as no longer staff. `by` is the remover's email, for an
+   accidental removal to have an owner to ask. */
+export async function retireProfile(id: string, opts: { by?: string | null; reason?: string | null } = {}): Promise<void> {
+  if (!(await probeExitColumns())) throw new ExitColumnsMissing();
+  await sbPatch('profiles', id, {
+    deleted_at: new Date().toISOString(),
+    deleted_by: opts.by || null,
+    exit_reason: opts.reason || null,
+  });
+}
+
+/* Put a mistakenly-retired person back on the roster. Clears the reason too —
+   a current staff member with an exit reason on file reads as a data fault the
+   next time someone looks at the attrition breakdown. */
+export async function restoreProfile(id: string): Promise<void> {
+  if (!(await probeExitColumns())) throw new ExitColumnsMissing();
+  await sbPatch('profiles', id, { deleted_at: null, deleted_by: null, exit_reason: null });
+}
+
+/* Test seam + a way for the UI to tell "no former staff" from "can't record
+   one yet". Returns null while the probe hasn't run. */
+export function exitColumnsKnown(): boolean | null { return exitReady; }
+export async function exitColumnsAvailable(): Promise<boolean> { return probeExitColumns(); }
+
 export const ROLES: Record<string, { label: string; color: string }> = {
   admin: { label: 'Admin', color: '#5b3aa6' },
   service_mgr: { label: 'Service Manager', color: '#1F3A5F' },
@@ -516,6 +653,70 @@ export function joinShadowers(list: Shadower[]): { email: string | null; name: s
 export const WDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export type Availability = { weeklyOff: number | null; leaveDates: string[] };
+
+/* ── Daily capacity (profiles.daily_cap / profiles.cap_overrides) ──────────
+   How many jobs one auditor/installer can take on one day. Lives in the DB,
+   not localStorage: caps used to sit in the SM's browser under
+   `md_audit_caps`, which meant the other SM, the SM's own phone and — the
+   reason it mattered — the public Store Team kiosk all disagreed about
+   capacity. The kiosk didn't read caps at all and counted raw headcount.
+   `dailyCap` null = fall back to the caller's default, so a roster row that
+   no SM has touched behaves exactly as it did before. See
+   site-audit-migration-003-staff-caps.sql. */
+export type StaffCaps = { dailyCap: number | null; capOverrides: Record<string, number> };
+export const CAPS_COLS = 'daily_cap,cap_overrides';
+
+/* Probe-gated, because PostgREST fails the WHOLE select with 42703
+   (undefined_column) if these columns aren't there yet — so asking for them
+   before site-audit-migration-003 has been run would take out the roster query
+   and with it the store kiosk's ability to book at all. Probed once and
+   remembered; when the answer is unknown (network blip) we deliberately return
+   the SAFE column list, which just means caps read as their defaults for that
+   attempt — exactly the behaviour before this feature. Never the reverse:
+   guessing "present" would turn a blip into an outage.
+   `rosterSelect('id,name,city')` -> 'id,name,city,daily_cap,cap_overrides'. */
+let capsReady: boolean | null = null;
+export async function rosterSelect(cols: string): Promise<string> {
+  if (capsReady === null) {
+    try {
+      const r = await fetch(SB_URL + '/rest/v1/profiles?select=' + CAPS_COLS + '&limit=1', { headers: H });
+      if (r.ok) capsReady = true;
+      else {
+        const body = await r.text().catch(() => '');
+        // Only a missing column is a durable "no" — anything else is transient
+        // and must not be latched.
+        if (body.includes('42703')) capsReady = false;
+        else console.error('[siteAudit] caps-column probe failed', r.status, body.slice(0, 200));
+      }
+    } catch (e) {
+      console.error('[siteAudit] caps-column probe failed', e);
+    }
+  }
+  return capsReady ? cols + ',' + CAPS_COLS : cols;
+}
+export function mapCaps(r: any): StaffCaps {
+  return {
+    dailyCap: r?.daily_cap == null ? null : Number(r.daily_cap),
+    capOverrides: r?.cap_overrides && typeof r.cap_overrides === 'object' && !Array.isArray(r.cap_overrides)
+      ? (r.cap_overrides as Record<string, number>)
+      : {},
+  };
+}
+/* Effective cap for one person on one date, or 0 when they are not working it.
+   A per-date override wins over their default, which wins over `fallback`. */
+export function staffCapOn(
+  p: (Partial<Availability> & Partial<StaffCaps> & { activeFrom?: string | null }) | null | undefined,
+  ds: string | null | undefined,
+  fallback: number,
+): number {
+  if (!p || !ds) return fallback;
+  if (p.activeFrom && ds < p.activeFrom) return 0;
+  if (isOffDay(p, ds)) return 0;
+  const o = p.capOverrides;
+  if (o && o[ds] !== undefined && o[ds] !== null) return Math.max(0, Number(o[ds]) || 0);
+  if (p.dailyCap != null) return Math.max(0, p.dailyCap);
+  return fallback;
+}
 
 export function isOffDay(a: Partial<Availability> | null | undefined, ds?: string | null): boolean {
   if (!a || !ds) return false;
@@ -609,6 +810,31 @@ export const SITE_AUDIT_PERMISSION_TO_ROLE: Record<string, string> = {
 };
 
 
+/* The same table read the other way: profiles.role -> the CRM sub-permission
+   that routes this person to their own dashboard once they sign in.
+
+   DERIVED, never hand-written. Three separate copies of this map existed —
+   `CRM_PERMISSION_FOR` in SiteAuditUsersView, in audit-ops/Overlays and in
+   install-ops/Overlays — and the audit-ops one was already a partial copy
+   holding two of the four field roles, which is why the SM's Audit dashboard
+   could not create an installer at all. `SITE_AUDIT_ROLES` and
+   `defaultPermissionsForRole` have both drifted from their source the same
+   way (see CLAUDE.md, Known landmines); the fix that holds is one table, read
+   in both directions. Add a role to SITE_AUDIT_PERMISSION_TO_ROLE and both
+   directions learn about it at once. */
+export const SITE_AUDIT_ROLE_TO_PERMISSION: Record<string, string> = Object.fromEntries(
+  Object.entries(SITE_AUDIT_PERMISSION_TO_ROLE).map(([slug, role]) => [role, slug]),
+);
+
+/* What a new field-app person needs on their CRM login to be able to sign in
+   AND land somewhere: `crm.site_audit` grants the tab, the sub-permission
+   picks the view inside it. Without both they reach a CRM with no tabs. */
+export const CRM_SITE_AUDIT_TAB_PERMISSION = 'crm.site_audit';
+export function crmPermissionsForSiteAuditRole(role: string): string[] {
+  const sub = SITE_AUDIT_ROLE_TO_PERMISSION[role];
+  return sub ? [CRM_SITE_AUDIT_TAB_PERMISSION, sub] : [CRM_SITE_AUDIT_TAB_PERMISSION];
+}
+
 export function siteAuditRoleFromPermissions(perms: string[] | undefined | null): string | null {
   if (!Array.isArray(perms)) return null;
   for (const slug of perms) {
@@ -648,15 +874,31 @@ export const SITE_AUDIT_OWN_DASHBOARD_ROLES = new Set([
    Matched on phoneKey() — profiles.contact is a clean 10-digit number on every
    row that has one, so normalising the CRM's side is all that's needed. Still
    exact matching; never a name, per orderBelongsToBm's rule. */
-export const ownProfileQuery = (phone: string): string =>
-  'profiles?contact=eq.' + encodeURIComponent(phoneKey(phone)) + '&select=id,name,email,role,branch';
+/* Async only because `deleted_at` is probe-gated (migration 004) — both
+   callers await the same function and so still produce the SAME string, which
+   is what keeps cachedFetch collapsing them into one request. The filter is
+   deliberately NOT pushed into the query: `deleted_at` is selected and judged
+   in `pickOwnProfile`, so a person with two profile rows (which exists in
+   production) still resolves to their live one instead of to nothing. */
+export async function ownProfileQuery(phone: string): Promise<string> {
+  return 'profiles?contact=eq.' + encodeURIComponent(phoneKey(phone))
+    + '&select=' + await exitSelect('id,name,email,role,branch');
+}
 
 /* One phone can carry more than one profile row — a field-app account created
    under a personal email alongside the company one (this exists in
    production). Prefer the row naming a dashboard we can actually render over
-   whichever row PostgREST happened to return first. */
-export function pickOwnProfile<T extends { role?: string | null }>(rows: T[]): T | null {
-  return rows.find((r) => SITE_AUDIT_OWN_DASHBOARD_ROLES.has(String(r?.role || ''))) ?? rows[0] ?? null;
+   whichever row PostgREST happened to return first.
+
+   Retired rows are skipped entirely, and if EVERY row is retired the answer is
+   null: someone marked as no longer staff must not be handed a field dashboard
+   even if their CRM login outlives the removal (the Django deactivation is a
+   separate write that can fail on its own). Pre-migration, `deletedAt` is
+   simply absent on every row and this is a no-op. */
+export function pickOwnProfile<T extends { role?: string | null; deleted_at?: string | null }>(rows: T[]): T | null {
+  const live = rows.filter((r) => !r?.deleted_at);
+  if (!live.length) return null;
+  return live.find((r) => SITE_AUDIT_OWN_DASHBOARD_ROLES.has(String(r?.role || ''))) ?? live[0] ?? null;
 }
 
 /* THROWS on a failed load rather than reporting "no profile": sbGet resolves a
@@ -665,7 +907,7 @@ export function pickOwnProfile<T extends { role?: string | null }>(rows: T[]): T
    request must never read as a revoked role. */
 export async function fetchOwnSiteAuditRole(phone: string): Promise<string | null> {
   if (!phoneKey(phone)) return null;
-  const rows = await sbGet(ownProfileQuery(phone));
+  const rows = await sbGet(await ownProfileQuery(phone));
   if (!Array.isArray(rows)) throw new Error('Site Audit profile lookup failed');
   const role = pickOwnProfile(rows)?.role;
   return typeof role === 'string' && role ? role : null;

@@ -79,7 +79,7 @@ export default function SiteAuditRail({ user }: { user?: { name?: string; phone?
         </div>
       </div>
       <div className="p-4 sm:p-6">
-        {view === 'users' && <SiteAuditUsersView />}
+        {view === 'users' && <SiteAuditUsersView actor={user || null} />}
         {view === 'roleviewer' && <SiteAuditRoleViewerView />}
         {view === 'jobs' && <SiteAuditJobsView city={city} />}
         {view === 'perf' && <SiteAuditPerfView city={city} />}

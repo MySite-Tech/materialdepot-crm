@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CITIES, sbGet, sbPatch, sbPost } from '../siteAuditShared';
-import { getToken, addUser } from '@/lib/mockApi';
+import { getToken } from '@/lib/mockApi';
 import { AUDIT_SKU, type AuditOrder } from './shared';
 
 type BmOption = { name: string; email?: string; contact?: string };
@@ -309,75 +309,8 @@ function RectForm({
   );
 }
 
-/* ── Add auditor (same dual write as the Users tab) ───────────────────── */
-export function AddAuditorOverlay({
-  open, onClose, reload, toast,
-}: {
-  open: boolean; onClose: () => void; reload: () => Promise<void>; toast: (m: string) => void;
-}) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('site_auditor');
-  const [city, setCity] = useState(CITIES[0]);
-  const [makeCrm, setMakeCrm] = useState(true);
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => { if (open) { setName(''); setEmail(''); setPhone(''); setRole('site_auditor'); setCity(CITIES[0]); setMakeCrm(true); setErr(''); } }, [open]);
-  if (!open) return null;
-
-  async function submit() {
-    const nm = name.trim(), em = email.trim().toLowerCase(), ph = phone.replace(/\D/g, '');
-    setErr('');
-    if (!nm) { setErr('Name is required.'); return; }
-    if (!em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setErr('Enter a valid email address.'); return; }
-    if (ph && !/^\d{10}$/.test(ph)) { setErr('Phone must be 10 digits.'); return; }
-    if (!ph && makeCrm) { setErr('A phone number is required to create a CRM login.'); return; }
-    setBusy(true);
-    try {
-      await sbPost('profiles', { name: nm, email: em, contact: ph || null, role, installer_type: 'flooring', city, passcode: null });
-      let note = '';
-      if (makeCrm) {
-        try {
-          await addUser({
-            name: nm, phone: ph, role: 'post_sales',
-            individualPermissions: ['crm.site_audit', role === 'auditor_installer' ? 'site_audit.auditor_installer' : 'site_audit.site_auditor'],
-          });
-        } catch (e: any) {
-          note = ' · ⚠ CRM login NOT created (' + (e?.message || 'backend error') + ')';
-        }
-      }
-      await reload();
-      toast('Auditor added — they will set their PIN on first login' + note);
-      onClose();
-    } catch (e: any) {
-      setErr('Failed: ' + (e?.message || 'unknown error'));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal title="Add Auditor" onClose={onClose}>
-      <Field label="Full Name *"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Field>
-      <Field label="Email *"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className={inputCls} /></Field>
-      <Field label="Phone (10 digits — links their field app and CRM logins)"><input inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} /></Field>
-      <Field label="Role *">
-        <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
-          <option value="site_auditor">Site Auditor</option>
-          <option value="auditor_installer">Site Auditor + Installer</option>
-        </select>
-      </Field>
-      <Field label="City"><select value={city} onChange={(e) => setCity(e.target.value)} className={inputCls}>{CITIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
-      <label className="flex items-start gap-2 rounded-md border border-gray-200 px-3 py-2.5 text-[12.5px] text-gray-700">
-        <input type="checkbox" checked={makeCrm} onChange={(e) => setMakeCrm(e.target.checked)} className="mt-0.5 accent-[#1F3A5F]" />
-        <span>Also create their <b>CRM login</b> so they can sign in and see their own job list.</span>
-      </label>
-      {err ? <div className="rounded-md bg-red-50 px-3 py-2 text-[12.5px] font-semibold text-red-600">{err}</div> : null}
-      <div className="-mx-5 -mb-4 mt-1 flex justify-end gap-2 border-t border-gray-100 px-5 py-3.5">
-        <button onClick={onClose} className="rounded-md border border-gray-200 bg-white px-4 py-2 text-[13px] font-semibold text-gray-700">Cancel</button>
-        <button disabled={busy} onClick={submit} className="rounded-md bg-[#1F3A5F] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-60">{busy ? 'Adding…' : 'Add Auditor'}</button>
-      </div>
-    </Modal>
-  );
-}
+/* `AddAuditorOverlay` used to live here: its own form, its own validation and
+   its own two-of-four copy of the CRM permission map, which is why an SM in
+   the audit console could add an auditor but not an installer. It is now
+   `AddFieldStaffModal` in ../StaffModals, shared with the install dashboard
+   and with Site Audit > Users. */
