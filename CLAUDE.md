@@ -21,11 +21,39 @@ for `app/` and `components/`, and `npm run lint` is dead too — it still runs
 directory: .../lint"). There is currently **no working lint command**; `npx tsc
 --noEmit` is the only automated check.
 
-## Git
+## Git, and what actually deploys
 
 `origin` = `MySite-Tech/materialdepot-crm` (a fork), `upstream` =
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
+
+**`main` is the deployed branch, and it can be AHEAD of `Installation-Changes`.**
+Pulling the feature branch is not enough: the teammate merges to `main` and
+keeps pushing there, so `git log HEAD..origin/main` is the check that matters
+before touching a shared file. On 2026-09-03 `origin/Installation-Changes` was
+up to date while `main` was 5 commits ahead carrying a 498-line rewrite of
+`SiteAuditUsersView.tsx` — building on the branch as-is would have re-reverted
+it, which is precisely the drift this file records happening twice already.
+Merge `origin/main` in first; the conflicts are usually just import lines.
+
+Deployment is **Azure Static Web Apps CI/CD**
+(`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which
+triggers on **push to `main`** — a PR to `main` builds a preview, and merging it
+is the deploy. Every commit on `main` so far is a PR merge from
+`Installation-Changes` (#3–#6), so that is the route; pushing straight to `main`
+deploys with no review and reverting means another push to `main`.
+
+Two things about that workflow are worth knowing before you touch config:
+
+- It injects only `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  as secrets. The **Site Audit** project's URL and anon key are not there and
+  do not need to be, because `siteAuditShared.ts` hardcodes them (see *Three
+  backends* below). "Move the Site Audit credentials into env vars" is
+  therefore a two-repo change that also needs a GitHub secret added, not a
+  tidy-up — do it and the field apps break on the next deploy.
+- `vercel.json` is tracked and `.vercel/` sits locally (gitignored), so the
+  repo looks Vercel-deployed. The workflow above is the deploy path visible in
+  the repo. Don't infer the hosting from those files.
 
 ## Three backends, and which is which
 
@@ -196,7 +224,17 @@ the ONLY predicate any read uses; the reason comes from the fixed
 spellings of "resigned"; `deleted_by` gives an accidental removal an owner to
 ask. Restore is one click and clears the reason.
 
-**Both columns sets are probe-gated, and it is the same guard for the same
+**Neither migration has been run yet as of 2026-09-03** (re-probed after the
+work was pushed: `daily_cap` and `deleted_at` both still answer 42703). So on
+the branch today the Remove control is disabled with a tooltip naming the file,
+the Former staff view is hidden, and caps still degrade to their defaults —
+everything else works unchanged. Running
+`site-audit-migration-004-staff-exit.sql` is what switches all of it on, and it
+is additive and idempotent, so it can be run before or after the deploy. Note
+the probe latches per page load, so anyone with the app already open needs a
+refresh before Remove becomes enabled.
+
+**Both column sets are probe-gated, and it is the same guard for the same
 reason.** `rosterQuery(cols)` bundles `rosterSelect` (caps, migration 003) and
 `activeStaffFilter` (exit, 004): PostgREST fails the WHOLE select with `42703`
 on a missing column, and this is the query the assignment pickers and the public
