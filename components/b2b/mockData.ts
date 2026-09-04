@@ -6,10 +6,10 @@ export type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modul
 
 // ── Inbound ──────────────────────────────────────────────────────────────────
 export type InboundStage =
-  | 'New' | 'RNR' | 'Followup Required' | 'Quote' | 'PI Shared' | 'Closed' | 'Lost' | 'Enquiry Invalid';
+  | 'New' | 'Hyderabad' | 'RNR' | 'Followup Required' | 'Quote' | 'PI Shared' | 'Closed' | 'Lost' | 'Enquiry Invalid';
 
 export const INBOUND_STAGES: InboundStage[] = [
-  'New', 'RNR', 'Followup Required', 'Quote', 'PI Shared', 'Closed', 'Lost', 'Enquiry Invalid',
+  'New', 'Hyderabad', 'RNR', 'Followup Required', 'Quote', 'PI Shared', 'Closed', 'Lost', 'Enquiry Invalid',
 ];
 
 // Two Kylas pipeline stages both feed the local "New" column — this lets the
@@ -181,6 +181,7 @@ export const B2B_ADMINS = ['Krishna Bhagavatula'];
 // ── Stage → accent colour (aligned with app STATUS_COLORS vocabulary) ─────────
 export const INBOUND_STAGE_COLORS: Record<InboundStage, string> = {
   'New':               '#3B82F6',
+  'Hyderabad':         '#14B8A6',
   'RNR':               '#EF4444',
   'Followup Required': '#F59E0B',
   'Quote':             '#6366F1',
