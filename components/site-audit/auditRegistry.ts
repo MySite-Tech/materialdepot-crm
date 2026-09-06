@@ -1,6 +1,8 @@
 /* Product-category registry for the site-audit / installation job-card system.
    TypeScript port of material-depot-site's /md-audit-registry.js — SINGLE SOURCE OF TRUTH for
-   measurement fields, derived formulas, the segment model, prerequisites and legacy label maps.
+   measurement fields, the segment model, prerequisites and legacy label maps. Every measured
+   value on a job card is typed by the site auditor or BM — this file declares NO formulas (see
+   MANUAL ENTRY below).
 
    TO ADD A NEW PRODUCT CATEGORY: add one entry to MD_CATEGORIES below. Every form, PDF generator
    and on-screen renderer iterates this object, so a new category needs no other code change (the
@@ -13,10 +15,11 @@ const n = (x: unknown): number => {
 const r2 = (x: number): number => Math.round(x * 100) / 100;
 // 304.8mm (1ft) squared — converts a height(mm)*width(mm) area straight to sq.ft
 const MM2_PER_SQFT = 92903.04;
-// Every category captures its linear dimensions in ONE unit, declared as `unit` below, and always
-// derives area in sq.ft. A category whose unit depends on the room-level variant (Standard vs
-// Customized wallpaper) declares `variantUnits`/`variantFields` instead, resolved per room by
-// unitFor/fieldsFor. (height * width) / UNIT_DIV[unit] => sq.ft.
+// Every category captures its linear dimensions in ONE unit, declared as `unit` below, and states
+// its areas in sq.ft (which the auditor types). A category whose unit depends on the room-level
+// variant (Standard vs Customized wallpaper) declares `variantUnits`/`variantFields` instead,
+// resolved per room by unitFor/fieldsFor. UNIT_DIV survives only to read areas off pre-2026-09-06
+// adjustment rows that stored dimensions alone — see adjArea().
 const UNIT_DIV: Record<string, number> = { ft: 1, in: 144, mm: MM2_PER_SQFT };
 
 export type FieldValues = Record<string, string | number>;
@@ -27,14 +30,7 @@ export type CategoryField = {
   label: string;
   input?: 'decimal' | 'text' | 'select';
   opts?: string[];
-  derived?: boolean;
-  compute?: (v: FieldValues, cat?: CategoryDef) => number | string;
   showIf?: (v: FieldValues) => boolean;
-  // Tells computeDerived to leave a manually-typed value alone (manual "Custom" area mode).
-  skipIf?: (v: FieldValues) => boolean;
-  // Tells the capture form to render this normally-read-only derived field as a plain editable
-  // input instead (manual "Custom" area mode).
-  editableIf?: (v: FieldValues) => boolean;
   default?: string;
 };
 
@@ -50,6 +46,8 @@ export type CategoryDef = {
     addLabel: string | null;
   };
   variants: string[] | null;
+  /* sq.ft one roll of this category covers. Reference data only — it used to divide the area
+     into a roll count, and nothing reads it now that the auditor types Rolls required. */
   rollCoverage: number | null;
   /* Label for the FIRST dimension of a rectangular area adjustment, in this
      category's own vocabulary. A wall has a height; a FLOOR does not — the
@@ -92,16 +90,19 @@ const roomV = (room: RoomLike): number => {
   return v === undefined || v === null ? ROOM_V : v;
 };
 
-/* ---- MANUAL AREA MODE (irregular walls/floors) -------------------------------------------
-   Some walls/floors can't be generalised as one length x height. `fields.areaMode` (absent =
-   'Normal', today's behaviour) lets the auditor switch a segment to 'Custom' and type the total
-   area directly instead. `showIf`/`skipIf`/`editableIf` are the three hooks that make this work
-   with no changes to any read-only renderer — they already render fields generically from "does
-   this field have a non-blank value", so a hidden height/width just stays blank. */
+/* ---- AREA MODE (irregular walls/floors) --------------------------------------------------
+   EVERY area on a job card is typed by the auditor/BM — nothing on this form is ever computed
+   (see MANUAL ENTRY below). `fields.areaMode` therefore no longer picks "computed vs typed"; it
+   only says whether this wall/floor HAS a sensible length x height to record alongside the area.
+   'Normal' asks for the two dimensions, 'Custom' (an irregular wall/floor that can't be
+   generalised as one length x height) hides them. Stored values stay 'Normal'/'Custom' so rooms
+   captured before this change keep reading correctly. `showIf` is the only hook needed: every
+   read-only renderer already renders fields generically from "does this field have a non-blank
+   value", so a hidden height/width just stays blank. */
 const AREA_MODE_FIELD = (): CategoryField => ({
   k: 'areaMode',
   group: 'Measurements',
-  label: 'How to measure this wall/floor',
+  label: 'Record length x height for this wall/floor?',
   input: 'select',
   opts: ['Normal', 'Custom'],
 });
@@ -110,10 +111,12 @@ const skipDim = (v: FieldValues): boolean => v.areaMode === 'Custom';
 /* ---- AREA ADJUSTMENTS -------------------------------------------------------------------
    A segment may carry `adjust: AdjustRow[]` — small add/subtract areas that belong to THIS
    wall/floor rather than to a room of their own (a door to deduct, a niche to add), each with a
-   shape (Rectangle/Triangle compute from dimensions; Other skips dimensions and takes a typed
-   area directly), a reason and a photo. h/w are in the segment's own unit; the signed sq.ft total
-   is written into `fields.adjArea` by the capture form, so every read-only consumer just reads a
-   field. Order of the derived chain: gross area -> ± adjustments -> net area -> + wastage -> rolls. */
+   shape (Rectangle/Triangle also record the two dimensions; Other records no dimensions), a
+   typed area in sq.ft, a reason and a photo. h/w are in the segment's own unit and are a record
+   of what was measured — the row's area is typed, not derived from them, and the segment's
+   `fields.adjArea` total is typed too (see MANUAL ENTRY below). The measurement fields still read
+   in the order gross area -> ± adjustments -> net area -> + wastage -> rolls; the auditor fills
+   each one in. */
 export type AdjustRow = {
   sign?: '+' | '-';
   shape?: 'Rectangle' | 'Triangle' | 'Other';
@@ -134,38 +137,37 @@ export type AdjustDisplayRow = {
   neg: boolean;
 };
 
-// Effective (post-adjustment) area a wastage/roll calculation should work from.
-const effArea = (v: FieldValues): number => {
-  const a = n(v.adjArea);
-  return a ? r2(n(v.area) + a) : n(v.area);
-};
-// `adjArea` is `derived` (read-only in the form, shown by every renderer) but has NO compute —
-// computeDerived skips it and the capture form maintains it from the adjustment rows.
-const ADJ_FIELD = (): CategoryField => ({ k: 'adjArea', group: 'Measurements', label: 'Adjustments (± sq.ft)', derived: true });
-// Net area is blank (and so hidden by every renderer) unless an adjustment actually exists.
+/* ---- MANUAL ENTRY -------------------------------------------------------------------------
+   NOTHING in the Measurements group is calculated by the app. Area, adjustments, net area, area
+   including wastage and rolls are all typed by the site auditor or BM and are never written,
+   pre-filled or overwritten by a formula — the numbers on a job card are the numbers the person
+   on site put there. Dimensions (height/width/length) and wastage % are still captured next to
+   them as the record of HOW the area was arrived at; they no longer feed anything.
+
+   This is deliberate and load-bearing: do not reintroduce a `compute` here. Job cards captured
+   before 2026-09-06 hold formula-produced values in exactly these keys, so they keep rendering
+   unchanged — only new entry is manual. */
+const ADJ_FIELD = (): CategoryField => ({
+  k: 'adjArea',
+  group: 'Measurements',
+  label: 'Adjustments (± sq.ft)',
+  input: 'decimal',
+});
 const NET_FIELD = (): CategoryField => ({
   k: 'netArea',
   group: 'Measurements',
   label: 'Net area (sq.ft)',
-  derived: true,
-  compute: (v) => (n(v.adjArea) ? r2(n(v.area) + n(v.adjArea)) : ''),
+  input: 'decimal',
 });
 const WASTAGE_FIELDS = (): CategoryField[] => [
   { k: 'wastagePct', group: 'Measurements', label: 'Wastage to add (%)', input: 'decimal' },
-  {
-    k: 'areaW',
-    group: 'Measurements',
-    label: 'Area incl. wastage (sq.ft)',
-    derived: true,
-    compute: (v) => r2(effArea(v) * (1 + n(v.wastagePct) / 100)),
-  },
+  { k: 'areaW', group: 'Measurements', label: 'Area incl. wastage (sq.ft)', input: 'decimal' },
 ];
 const ROLLS_FIELD = (): CategoryField => ({
   k: 'rolls',
   group: 'Measurements',
   label: 'Rolls required',
-  derived: true,
-  compute: (v, cat) => Math.ceil(n(v.areaW) / ((cat && cat.rollCoverage) || 57)) || 0,
+  input: 'decimal',
 });
 // Wall-style measurement block (wallpaper / CNC / panels) in unit `u`.
 const WALL_FIELDS = (u: string, opts: { wastage?: boolean; rolls?: boolean; extra?: CategoryField[] } = {}): CategoryField[] => {
@@ -173,16 +175,8 @@ const WALL_FIELDS = (u: string, opts: { wastage?: boolean; rolls?: boolean; extr
     AREA_MODE_FIELD(),
     { k: 'height', group: 'Measurements', label: `Wall height (${u})`, input: 'decimal', showIf: (v) => !skipDim(v) },
     { k: 'width', group: 'Measurements', label: `Wall width (${u})`, input: 'decimal', showIf: (v) => !skipDim(v) },
-    {
-      k: 'area',
-      group: 'Measurements',
-      label: 'Area (sq.ft)',
-      derived: true,
-      input: 'decimal',
-      skipIf: skipDim,
-      editableIf: skipDim,
-      compute: (v) => r2((n(v.height) * n(v.width)) / (UNIT_DIV[u] || 1)),
-    },
+    // Typed by the auditor/BM, never derived from height x width — see MANUAL ENTRY above.
+    { k: 'area', group: 'Measurements', label: 'Area (sq.ft)', input: 'decimal' },
     ADJ_FIELD(),
     NET_FIELD(),
   ];
@@ -217,22 +211,14 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     rollCoverage: null,
     adjDim1: 'Length',
     unit: 'ft',
-    unitNote: 'Room length & width are entered in FEET (ft). Area is shown in sq.ft.',
+    unitNote: 'Room length & width are entered in FEET (ft). Area is entered in sq.ft.',
     fields: (
       [
         AREA_MODE_FIELD(),
         { k: 'length', group: 'Measurements', label: 'Room length (ft)', input: 'decimal', showIf: (v) => !skipDim(v) },
         { k: 'width', group: 'Measurements', label: 'Room width (ft)', input: 'decimal', showIf: (v) => !skipDim(v) },
-        {
-          k: 'area',
-          group: 'Measurements',
-          label: 'Total area (sq.ft)',
-          derived: true,
-          input: 'decimal',
-          skipIf: skipDim,
-          editableIf: skipDim,
-          compute: (v) => r2(n(v.length) * n(v.width)),
-        },
+        // Typed by the auditor/BM, never derived from length x width — see MANUAL ENTRY above.
+        { k: 'area', group: 'Measurements', label: 'Total area (sq.ft)', input: 'decimal' },
         ADJ_FIELD(),
         NET_FIELD(),
       ] as CategoryField[]
@@ -296,12 +282,12 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
       Customized: WALL_FIELDS('mm', { wastage: true, rolls: true }),
     },
     variantNote: {
-      Standard: 'Standard wallpaper — wall height & width are entered in FEET (ft). Area is shown in sq.ft.',
-      Customized: 'Customized wallpaper — wall height & width are entered in MILLIMETRES (mm). Area is shown in sq.ft.',
+      Standard: 'Standard wallpaper — wall height & width are entered in FEET (ft). Area is entered in sq.ft.',
+      Customized: 'Customized wallpaper — wall height & width are entered in MILLIMETRES (mm). Area is entered in sq.ft.',
     },
     variantPrompt: 'Pick Standard or Customized above — measurements are in feet for Standard and millimetres for Customized.',
     // Baseline note for a pre-v3 room, which was captured in mm whatever its variant.
-    unitNote: 'Wall height & width are entered in MILLIMETRES (mm). Area is shown in sq.ft.',
+    unitNote: 'Wall height & width are entered in MILLIMETRES (mm). Area is entered in sq.ft.',
     fields: WALL_FIELDS('mm', { wastage: true, rolls: true }),
     prerequisites: [
       { k: 'moisture', label: 'Wall moisture within threshold' },
@@ -340,7 +326,7 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     variants: null,
     rollCoverage: null,
     unit: 'mm',
-    unitNote: 'CNC — wall height & width are entered in MILLIMETRES (mm). Area is shown in sq.ft.',
+    unitNote: 'CNC — wall height & width are entered in MILLIMETRES (mm). Area is entered in sq.ft.',
     fields: WALL_FIELDS('mm'),
     prerequisites: [
       { k: 'moisture', label: 'Wall moisture within threshold' },
@@ -363,7 +349,7 @@ export const MD_CATEGORIES: Record<string, CategoryDef> = {
     variants: null,
     rollCoverage: null,
     unit: 'in',
-    unitNote: 'Wall Panels — wall height & width are entered in INCHES (in). Area is shown in sq.ft.',
+    unitNote: 'Wall Panels — wall height & width are entered in INCHES (in). Area is entered in sq.ft.',
     fields: WALL_FIELDS('in', { wastage: true, extra: PROFILE_FIELDS() }),
     prerequisites: [
       { k: 'moisture', label: 'Wall moisture within threshold' },
@@ -468,23 +454,6 @@ export function unitNoteFor(cat: CategoryDef, room?: RoomLike): string {
   return cat.unitNote || '';
 }
 
-/* Compute every derived field top-down (later derived read earlier). Mutates + returns `values`.
-   `room` selects the right field list for a per-variant-unit category — WITHOUT it a Standard
-   (feet) wallpaper wall would be computed with the Customized (mm) area formula. */
-export function computeDerived(cat: CategoryDef | undefined, values: FieldValues, room?: RoomLike): FieldValues {
-  if (!cat || !values) return values;
-  fieldsFor(cat, room).forEach((f) => {
-    if (f.derived && typeof f.compute === 'function' && !(f.skipIf && f.skipIf(values))) {
-      try {
-        values[f.k] = f.compute(values, cat);
-      } catch {
-        /* a bad partial value must never break typing */
-      }
-    }
-  });
-  return values;
-}
-
 /* Any 'Not OK' prerequisite in a segment flags it (soft flag, informational only). */
 export function prereqFlagged(seg: { prereq?: Record<string, PrereqEntry> } | null | undefined): boolean {
   const p = seg && seg.prereq;
@@ -545,30 +514,27 @@ export function segmentPrereqRows(cat: CategoryDef, seg: AuditSegment): [string,
     .map((p) => [p.label, seg.prereq[p.k].status, seg.prereq[p.k].note || ''] as [string, string, string]);
 }
 
-/* Unsigned sq.ft magnitude of one adjustment row. `shape` absent is treated as 'Rectangle',
-   reproducing the pre-shape h*w formula exactly (every live production row has no `shape`).
-   'Other' skips the unit conversion entirely — the auditor types the area straight in sq.ft. */
+/* Unsigned sq.ft magnitude of one adjustment row.
+
+   The auditor now types every adjustment's area in sq.ft, whatever its shape — nothing here is
+   calculated during capture (see MANUAL ENTRY above), and `a.area` is the value the capture form
+   writes for Rectangle, Triangle and Other alike.
+
+   The h*w fallback below is READ-ONLY BACKWARD COMPATIBILITY, not a calculation the form still
+   performs: rows captured before 2026-09-06 stored only `h`/`w` (+ an implicit 'Rectangle', which
+   is why absent `shape` is treated as one) and would otherwise render as 0 — i.e. drop off their
+   own job card and out of the missing-reason/photo gates. Keep it for those rows; a row with a
+   typed `area` always wins. */
 function adjArea(a: AdjustRow | null | undefined, div: number): number {
   if (!a) return 0;
-  if (a.shape === 'Other') return n(a.area);
+  if (String(a.area ?? '') !== '') return n(a.area);
+  if (a.shape === 'Other') return 0;
   const mult = a.shape === 'Triangle' ? 0.5 : 1;
   const raw = n(a.h) * n(a.w) * mult;
   return raw ? r2(raw / div) : 0;
 }
-/* Signed sq.ft total of a segment's area adjustments. The capture form writes this into
-   `fields.adjArea` so every read-only consumer only ever reads a plain field. */
-export function adjSum(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] | null): number {
-  const div = UNIT_DIV[unitFor(cat, room)] || 1;
-  let t = 0;
-  (adjust || []).forEach((a) => {
-    const ar = adjArea(a, div);
-    if (!ar) return;
-    t += a && a.sign === '-' ? -ar : ar;
-  });
-  return r2(t);
-}
-/* Display rows for a segment's adjustments. Empty rows (no computed/typed area) are dropped so a
-   half-typed adjustment never reaches a job card. */
+/* Display rows for a segment's adjustments. Empty rows (no area) are dropped so a half-typed
+   adjustment never reaches a job card. */
 export function adjRows(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] | null): AdjustDisplayRow[] {
   const u = unitFor(cat, room);
   const div = UNIT_DIV[u] || 1;
@@ -578,7 +544,11 @@ export function adjRows(cat: CategoryDef, room: RoomLike, adjust?: AdjustRow[] |
     .map(({ a, ar }) => {
       const shape = a.shape || 'Rectangle';
       const neg = a.sign === '-';
-      const size = shape === 'Other' ? 'manual entry' : `${n(a.h)} × ${n(a.w)} ${u}${shape === 'Triangle' ? ' (triangle)' : ''}`;
+      const hasDims = String(a.h ?? '') !== '' && String(a.w ?? '') !== '';
+      const size =
+        shape === 'Other' || !hasDims
+          ? 'manual entry'
+          : `${n(a.h)} × ${n(a.w)} ${u}${shape === 'Triangle' ? ' (triangle)' : ''}`;
       return {
         label: neg ? 'Subtract' : 'Add',
         shape,
