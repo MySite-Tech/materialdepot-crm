@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
-import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, readCapturedPhoto, fmtDateA, SQFT_PER_ROLL } from '@/components/site-audit/siteAuditShared';
 import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/omsService';
 import {
   SignaturePad,
@@ -320,25 +320,9 @@ function collectRooms(rooms: Room[]): PersistedRoom[] {
 /* Downscale only — the upload happens separately so the thumbnail can appear immediately (see
    handleFilesForRoom). On a weak site connection the old upload-then-show order left workers
    waiting up to ~20s and re-taking photos they had already captured. */
-function resizeDataUrl(dataURL: string): Promise<string> {
-  return new Promise((resolve) => {
-    const im = new Image();
-    im.onload = () => {
-      try {
-        const s = Math.min(1, 1600 / im.width, 1600 / im.height);
-        const cv = document.createElement('canvas');
-        cv.width = Math.round(im.width * s);
-        cv.height = Math.round(im.height * s);
-        cv.getContext('2d')!.drawImage(im, 0, 0, cv.width, cv.height);
-        resolve(cv.toDataURL('image/jpeg', 0.88));
-      } catch {
-        resolve(dataURL);
-      }
-    };
-    im.onerror = () => resolve(dataURL);
-    im.src = dataURL;
-  });
-}
+/* Room-photo capture moved to readCapturedPhoto in siteAuditShared. The local resizeDataUrl that
+   used to live here resolved the ORIGINAL dataURL on a decode failure, which is how HEIC files
+   from an iPhone on "High Efficiency" reached Storage named .jpg and unviewable in the office. */
 
 function compressForPdf(dataUrl: string | null | undefined): Promise<string | null> {
   if (!dataUrl) return Promise.resolve(null);
@@ -1057,20 +1041,21 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, fields: { ...(r.fields || {}), [k]: value } } : r)));
   }, [updateRooms]);
 
-  const handleFilesForRoom = useCallback(async (roomId: number, files: FileList | null) => {
-    if (!files || !files.length) return;
+  /* Returns the reason a file was refused, so RoomBlock can show it next to the photo strip.
+     An undecodable file is never uploaded — see readCapturedPhoto. */
+  const handleFilesForRoom = useCallback(async (roomId: number, files: FileList | null): Promise<string | null> => {
+    if (!files || !files.length) return null;
+    let err: string | null = null;
     for (const file of Array.from(files)) {
-      const dataURL: string = await new Promise((resolve) => {
-        const rd = new FileReader();
-        rd.onload = () => resolve(rd.result as string);
-        rd.readAsDataURL(file);
-      });
-      const resized = await resizeDataUrl(dataURL);
+      const got = await readCapturedPhoto(file, 1600, 0.88);
+      if (!got.ok) { err = got.error; continue; }
+      const resized = got.dataUrl;
       addPhotoToRoom(roomId, resized);
       uploadPhoto(resized)
         .then((url) => swapRoomPhoto(roomId, resized, url))
         .catch(() => { /* keep the inline base64 — the draft/job card still carries the photo */ });
     }
+    return err;
   }, [addPhotoToRoom, swapRoomPhoto]);
 
   /* ── Audit report (read-only), source lines 483-514 ───────────────────── */
@@ -1643,7 +1628,7 @@ function RoomBlock({
   onField: (field: keyof PersistedRoom, value: string) => void;
   onCategory: (category: string) => void;
   onInstallField: (k: string, value: string) => void;
-  onFiles: (files: FileList | null) => void;
+  onFiles: (files: FileList | null) => Promise<string | null>;
   onOpenScanner: () => void;
   onRemovePhoto: (idx: number) => void;
   onRemove: () => void;
@@ -1652,6 +1637,13 @@ function RoomBlock({
   const camRef = useRef<HTMLInputElement | null>(null);
   const galRef = useRef<HTMLInputElement | null>(null);
   const cat = categoryFor(room.category);
+  // A refused photo (format this browser can't decode) is reported here rather than as a toast:
+  // the fix is a camera setting the installer has to go and change before re-shooting.
+  const [readErr, setReadErr] = useState<string | null>(null);
+  const pick = useCallback(async (files: FileList | null) => {
+    setReadErr(null);
+    setReadErr(await onFiles(files));
+  }, [onFiles]);
   return (
     <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -1700,13 +1692,19 @@ function RoomBlock({
           </div>
         ))}
       </div>
-      <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e: ChangeEvent<HTMLInputElement>) => { onFiles(e.target.files); e.target.value = ''; }} />
-      <input ref={galRef} type="file" accept="image/*" multiple className="hidden" onChange={(e: ChangeEvent<HTMLInputElement>) => { onFiles(e.target.files); e.target.value = ''; }} />
+      <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e: ChangeEvent<HTMLInputElement>) => { pick(e.target.files); e.target.value = ''; }} />
+      <input ref={galRef} type="file" accept="image/*" multiple className="hidden" onChange={(e: ChangeEvent<HTMLInputElement>) => { pick(e.target.files); e.target.value = ''; }} />
       <div className="mb-3 flex gap-2">
         <button onClick={() => camRef.current?.click()} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">📷 Camera</button>
         <button onClick={() => galRef.current?.click()} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">🖼 Gallery</button>
         <button onClick={onOpenScanner} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">📄 Scan</button>
       </div>
+      {readErr && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11.5px] font-semibold text-amber-800">
+          <span className="flex-1">{readErr}</span>
+          <button type="button" onClick={() => setReadErr(null)} className="shrink-0 font-bold">×</button>
+        </div>
+      )}
 
       <label className="mb-1 block text-[12px] font-semibold">Comments (if any)</label>
       <textarea value={room.comments} onChange={(e) => onField('comments', e.target.value)} placeholder="Anything to note..." className="min-h-[70px] w-full resize-y rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
@@ -1754,7 +1752,7 @@ function JobCardWizardOverlay({
   onRoomField: (id: number, field: keyof PersistedRoom, value: string) => void;
   onRoomCategory: (id: number, category: string) => void;
   onRoomInstallField: (id: number, k: string, value: string) => void;
-  onRoomFiles: (id: number, files: FileList | null) => void;
+  onRoomFiles: (id: number, files: FileList | null) => Promise<string | null>;
   onRoomRemovePhoto: (id: number, idx: number) => void;
   onOpenScanner: (id: number) => void;
   onOpenLightbox: (src: string) => void;
