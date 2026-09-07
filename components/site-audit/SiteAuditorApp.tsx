@@ -22,9 +22,7 @@ import {
   adjMissingPhoto,
   adjMissingReason,
   adjRows,
-  adjSum,
   categoryFor,
-  computeDerived,
   fieldsFor,
   mdInstallTermsBlock,
   needsVariant,
@@ -1392,7 +1390,7 @@ function blankSegment(catKey: string, sid: number, room?: { v?: number; variant?
   fieldsFor(cat, roomCtx).forEach((f) => {
     if (f.default !== undefined) fields[f.k] = f.default;
   });
-  computeDerived(cat, fields, roomCtx);
+  // No measurement is pre-filled: every number on a job card is typed by the auditor/BM.
   return { sid, facing: null, photos: [], fields, prereq: {}, adjust: [] };
 }
 
@@ -1408,9 +1406,10 @@ function fieldValue(seg: Segment, f: { k: string; input?: string; opts?: string[
 
 const GROUP_LABEL_CLS = 'mt-2.5 text-[11px] font-extrabold uppercase tracking-wider text-gray-400';
 
-/* Grouped measurement inputs for one segment. Derived fields are read-only and recomputed on
-   every keystroke by the registry's own formulas — except a field with `editableIf` true for the
-   current values (the manual "Custom" area mode), which renders as a plain input instead. */
+/* Grouped measurement inputs for one segment. EVERY field here is a plain editable input the
+   auditor/BM fills in — areas, adjustments, net area, area incl. wastage and rolls included.
+   Nothing on this form is calculated, pre-filled or recomputed from anything else; see MANUAL
+   ENTRY in auditRegistry.ts before adding a formula back. */
 function SegmentFields({
   cat,
   seg,
@@ -1431,9 +1430,7 @@ function SegmentFields({
   });
 
   const setField = (k: string, value: string) => {
-    const next: FieldValues = { ...seg.fields, [k]: value };
-    computeDerived(cat, next, room);
-    onFields(next);
+    onFields({ ...seg.fields, [k]: value });
   };
 
   return (
@@ -1442,40 +1439,31 @@ function SegmentFields({
         <div key={g.group}>
           <div className={GROUP_LABEL_CLS}>{g.group}</div>
           <div className="mt-1 grid grid-cols-2 gap-3">
-            {g.fields.map((f) => {
-              const overrideEditable = f.derived && f.editableIf && f.editableIf(seg.fields);
-              return (
-                <div key={f.k}>
-                  <label className="text-xs text-gray-500">{f.label}</label>
-                  {f.input === 'select' ? (
-                    <select
-                      value={fieldValue(seg, f)}
-                      onChange={(e) => setField(f.k, e.target.value)}
-                      className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                    >
-                      {(f.opts ?? []).map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  ) : f.derived && !overrideEditable ? (
-                    <input
-                      value={fieldValue(seg, f)}
-                      readOnly
-                      className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
-                    />
-                  ) : (
-                    <input
-                      inputMode={f.input === 'decimal' || overrideEditable ? 'decimal' : undefined}
-                      value={fieldValue(seg, f)}
-                      onChange={(e) => setField(f.k, e.target.value)}
-                      className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {g.fields.map((f) => (
+              <div key={f.k}>
+                <label className="text-xs text-gray-500">{f.label}</label>
+                {f.input === 'select' ? (
+                  <select
+                    value={fieldValue(seg, f)}
+                    onChange={(e) => setField(f.k, e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                  >
+                    {(f.opts ?? []).map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    inputMode={f.input === 'decimal' ? 'decimal' : undefined}
+                    value={fieldValue(seg, f)}
+                    onChange={(e) => setField(f.k, e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                )}
+              </div>
+            ))}
           </div>
         </div>
       ))}
@@ -1485,10 +1473,10 @@ function SegmentFields({
 
 /* Per-segment area adjustments: add/subtract a small area that belongs to THIS wall/floor rather
    than to a room of its own (a door to deduct, a niche to add), each with a shape (Rectangle/
-   Triangle compute from dimensions; Other skips dimensions and takes a typed area directly), a
-   reason and a photo. Dimensions are in the segment's own unit; the signed sq.ft total lands in
-   fields.adjArea (maintained by the caller's recompute) and flows through net area -> wastage ->
-   rolls, same mechanism as any other derived field. */
+   Triangle also record two dimensions; Other records none), a typed area in sq.ft, a reason and a
+   photo. Dimensions are in the segment's own unit and are the record of what was measured — the
+   auditor types the row's area, and types the segment's Adjustments (± sq.ft) total into the
+   Measurements group as well. Nothing here sums or converts anything. */
 /* `onAdjust` takes an UPDATER, not a finished array, and that is load-bearing rather than
    stylistic. A photo is added to the row optimistically as base64 and swapped for its Storage URL
    when the upload lands up to ~20s later; a handler built from a render-time snapshot of
@@ -1536,18 +1524,18 @@ function SegmentAdjustments({
     <div className="mt-2.5">
       <div className={GROUP_LABEL_CLS}>Area adjustments (optional)</div>
       <div className="mb-1 text-xs text-gray-400">
-        Add or subtract a small area for this {segLabel.toLowerCase()} — e.g. subtract a door or window opening. Give a
-        reason and a photo for each one.
+        Add or subtract a small area for this {segLabel.toLowerCase()} — e.g. subtract a door or window opening. Enter
+        the area in sq.ft yourself, and give a reason and a photo for each one.
       </div>
       {seg.adjust.map((a, i) => {
         const shape = a.shape || 'Rectangle';
         const isOther = shape === 'Other';
-        const computedArea = isOther ? '' : adjSum(cat, room, [a]);
         // Registry-driven, not hardcoded: a floor's two dimensions are length
         // and width — it has no height. See `adjDim1` in auditRegistry.ts.
         const dim1 = shape === 'Triangle' ? 'Base' : cat.adjDim1 || 'Height';
         const dim2 = shape === 'Triangle' ? 'Height' : 'Width';
-        const missingReason = !!(a.reason ? false : (isOther ? a.area : a.h && a.w));
+        // The area is typed for every shape now, so it alone says whether this row is real.
+        const missingReason = !a.reason && String(a.area ?? '') !== '';
         return (
           <div key={i} className="mt-2 rounded-lg border border-gray-200 bg-white p-2.5">
             <div className="grid grid-cols-2 gap-2">
@@ -1568,29 +1556,18 @@ function SegmentAdjustments({
                   value={shape}
                   onChange={(e) => {
                     const nextShape = e.target.value as AdjustRow['shape'];
-                    patchRow(
-                      i,
-                      nextShape === 'Other' ? { shape: nextShape, h: '', w: '' } : { shape: nextShape, area: '' },
-                    );
+                    // The typed area survives a shape change — only the dimensions are
+                    // shape-specific, and 'Other' records none.
+                    patchRow(i, nextShape === 'Other' ? { shape: nextShape, h: '', w: '' } : { shape: nextShape });
                   }}
                   className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
                 >
                   <option value="Rectangle">Rectangle</option>
                   <option value="Triangle">Triangle</option>
-                  <option value="Other">Other (type area directly)</option>
+                  <option value="Other">Other (no length x height)</option>
                 </select>
               </div>
-              {isOther ? (
-                <div className="col-span-2">
-                  <label className="text-xs text-gray-500">Area (sq.ft)</label>
-                  <input
-                    inputMode="decimal"
-                    value={a.area ?? ''}
-                    onChange={(e) => patchRow(i, { area: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
-                  />
-                </div>
-              ) : (
+              {!isOther && (
                 <>
                   <div>
                     <label className="text-xs text-gray-500">
@@ -1614,16 +1591,18 @@ function SegmentAdjustments({
                       className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-gray-500">Area (sq.ft)</label>
-                    <input
-                      value={computedArea === '' ? '' : (computedArea > 0 ? '+' : '') + computedArea}
-                      readOnly
-                      className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
-                    />
-                  </div>
                 </>
               )}
+              {/* Typed for every shape — the dimensions above are recorded, not multiplied. */}
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500">Area (sq.ft)</label>
+                <input
+                  inputMode="decimal"
+                  value={a.area ?? ''}
+                  onChange={(e) => patchRow(i, { area: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                />
+              </div>
               <div className="col-span-2">
                 <label className="text-xs text-gray-500">Reason</label>
                 <input
@@ -1938,21 +1917,22 @@ function RoomEditor({
               // mm), so switching it may need to clear already-typed measurements — silently
               // re-labelling 2800mm as 2800ft would put a ~300x wrong area on the job card.
               const unitFlips = unitFor(cat, { v: room.v, variant: prev }) !== unitFor(cat, { v: room.v, variant: next });
-              const hasData = room.segments.some(
+              /* Only the LINEAR dimensions carry the unit. Every area on this card is typed
+                 straight in sq.ft, so a unit flip can't make one wrong and must not wipe it —
+                 that would delete work the auditor did by hand. */
+              const DIM_KEYS = ['height', 'width', 'length'];
+              const hasDims = room.segments.some(
                 (s) =>
-                  ['height', 'width', 'length'].some((k) => String(s.fields?.[k] ?? '') !== '') ||
-                  (s.fields?.areaMode === 'Custom' && String(s.fields.area ?? '') !== '') ||
-                  (s.adjust || []).some(
-                    (a) => String(a.h ?? '') !== '' || String(a.w ?? '') !== '' || String(a.area ?? '') !== '',
-                  ),
+                  DIM_KEYS.some((k) => String(s.fields?.[k] ?? '') !== '') ||
+                  (s.adjust || []).some((a) => String(a.h ?? '') !== '' || String(a.w ?? '') !== ''),
               );
               if (
                 prev &&
                 next &&
                 unitFlips &&
-                hasData &&
+                hasDims &&
                 !window.confirm(
-                  `Switching to ${next} changes the measurement unit from ${unitFor(cat, { v: room.v, variant: prev })} to ${unitFor(cat, { v: room.v, variant: next })}.\n\nThe measurements already entered will be cleared so they can be re-taken in the new unit. Continue?`,
+                  `Switching to ${next} changes the measurement unit from ${unitFor(cat, { v: room.v, variant: prev })} to ${unitFor(cat, { v: room.v, variant: next })}.\n\nThe length/height/width figures already entered will be cleared so they can be re-taken in the new unit. The areas you typed in sq.ft are kept. Continue?`,
                 )
               ) {
                 return;
@@ -1961,16 +1941,13 @@ function RoomEditor({
                 onChange({
                   variant: next,
                   segments: room.segments.map((s) => {
-                    // A Custom-mode area is a direct sq.ft entry with no unit of its own, so a unit
-                    // flip doesn't make it wrong the way a height/width typed in the old unit would
-                    // be — leave it in place.
-                    const dropKeys =
-                      s.fields?.areaMode === 'Custom'
-                        ? ['height', 'width', 'length', 'adjArea', 'netArea', 'areaW', 'rolls']
-                        : ['height', 'width', 'length', 'area', 'adjArea', 'netArea', 'areaW', 'rolls'];
                     const fields = { ...s.fields };
-                    dropKeys.forEach((k) => delete fields[k]);
-                    return { ...s, fields, adjust: [] };
+                    DIM_KEYS.forEach((k) => delete fields[k]);
+                    return {
+                      ...s,
+                      fields,
+                      adjust: (s.adjust || []).map((a) => ({ ...a, h: '', w: '' })),
+                    };
                   }),
                 });
               } else {
@@ -2047,15 +2024,13 @@ function RoomEditor({
                 cat={cat}
                 room={room}
                 seg={seg}
+                /* Editing an adjustment row does NOT touch fields.adjArea — the auditor types
+                   that total themselves, like every other number on the card. */
                 onAdjust={(updater) =>
                   onChange((r) => ({
-                    segments: r.segments.map((s) => {
-                      if (s.sid !== seg.sid) return s;
-                      const nextAdjust = updater(s.adjust || []);
-                      const fields = { ...s.fields, adjArea: adjSum(cat, r, nextAdjust) };
-                      computeDerived(cat, fields, r);
-                      return { ...s, adjust: nextAdjust, fields };
-                    }),
+                    segments: r.segments.map((s) =>
+                      s.sid === seg.sid ? { ...s, adjust: updater(s.adjust || []) } : s,
+                    ),
                   }))
                 }
               />
