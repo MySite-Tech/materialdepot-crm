@@ -11,13 +11,15 @@ const ALL_SUB_TABS = [
   // { key: 'liveMapping', label: 'Live Mapping', restricted: true },
   { key: 'discontinued', label: 'Discontinued List', restricted: false },
   { key: 'removed', label: 'Removed', restricted: false },
-  { key: 'movements', label: 'Movement Status', restricted: true },
+  { key: 'movements', label: 'Movement Status', restricted: false },
   { key: 'admin', label: 'Admin', restricted: true },
 ] as const;
 
 type SubTab = (typeof ALL_SUB_TABS)[number]['key'];
 
-/* `isAdmin` is resolved from the caller's permission slug, not their
+/* Admin is the only section withheld: every other sub-tab, Movement Status
+   included, is open to anyone who has the Store Display tab at all.
+   `isAdmin` is resolved from the caller's permission slug, not their
    permission_name — see canAdminStoreDisplay in app/App.tsx. */
 export default function StoreDisplayTab({ isAdmin }: { isAdmin: boolean }) {
   const [subTab, setSubTab] = useState<SubTab>('products');
