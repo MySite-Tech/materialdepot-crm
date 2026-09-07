@@ -435,7 +435,16 @@ async function shrinkToCap(dataURL: string): Promise<string | null> {
 async function externalizeImage(dataURL: string): Promise<string | null> {
   try {
     return await uploadPhoto(dataURL);
-  } catch {
+  } catch (e) {
+    /* A refused FORMAT is not a failed upload, and the degraded paths below are all wrong for it:
+       retrying won't help, keeping it inline stores an image nobody can open (and the <64 kB
+       branch would happily do exactly that), and shrinkToCap can't downscale what the canvas
+       cannot decode. Reachable now only from a job-card draft saved on a device BEFORE
+       readCapturedPhoto started refusing these at capture time. */
+    if (e instanceof PhotoFormatUnsupported) {
+      console.warn('[siteAudit] dropping a photo no browser can display (' + e.mime + '); it was captured before the format check existed');
+      return null;
+    }
     if (dataURL.length <= INLINE_IMAGE_CAP) {
       console.warn('[siteAudit] photo upload failed; keeping it inline (small enough to be harmless)');
       return dataURL;
