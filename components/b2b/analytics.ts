@@ -4,7 +4,7 @@
 import type { B2BData } from '@/lib/b2bLeads';
 import {
   INBOUND_STAGES, REP_TARGETS, B2B_ADMINS,
-  type InboundLead, type OutboundLead, type KamClient,
+  type InboundLead, type OutreachLead, type KamClient,
   type InboundStage, type KamStage, type RepRole, type TargetStore,
 } from './mockData';
 
@@ -19,7 +19,7 @@ const KAM_ACTIVE_STAGES: KamStage[] = [
 const isKamActive = (c: KamClient) => KAM_ACTIVE_STAGES.includes(c.stage);
 
 const inboundOpen = (l: InboundLead) => l.stage !== 'Closed' && !isInboundDead(l);
-const outboundOpen = (l: OutboundLead) => l.stage !== 'Closed' && l.stage !== 'Lost';
+const outreachOpen = (l: OutreachLead) => l.status !== 'Closed' && l.status !== 'Lost';
 const kamOpen = (c: KamClient) => c.stage !== 'Closed' && c.stage !== 'Lost';
 
 const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
@@ -28,7 +28,7 @@ const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
 export function repUniverse(data: B2BData): string[] {
   const seen = new Set<string>(REP_TARGETS.map((r) => r.rep));
   data.inbound.forEach((l) => l.owner && seen.add(l.owner));
-  data.outbound.forEach((l) => l.bda && seen.add(l.bda));
+  data.outreach.forEach((l) => l.bm && seen.add(l.bm));
   data.kam.forEach((c) => c.kam && seen.add(c.kam));
   return [...seen].filter((r) => !B2B_ADMINS.includes(r));
 }
@@ -37,40 +37,42 @@ export function repUniverse(data: B2BData): string[] {
 export interface DashboardMetrics {
   revenueGenerated: number;
   pipelineByStage: { label: string; count: number }[];
-  pipelineByVertical: { inbound: number; outbound: number; kam: number };
+  pipelineByVertical: { inbound: number; outreach: number; kam: number };
   clients: { active: number; inactive: number };
   revenueBySource: { source: string; value: number }[];
 }
 
 export function computeDashboard(data: B2BData): DashboardMetrics {
-  const { inbound, outbound, kam } = data;
+  const { inbound, outreach, kam } = data;
 
   const wonInbound = inbound.filter((l) => l.stage === 'Closed');
-  const wonOutbound = outbound.filter((l) => l.stage === 'Closed');
+  const wonOutreach = outreach.filter((l) => l.status === 'Closed');
   const wonKam = kam.filter((c) => c.stage === 'Closed');
   // Counted in the funnel's Won column but NOT in revenue: revenue stays keyed on
   // 'Closed' so auto-advance can't silently inflate the reported figure.
   const orderPlacedKam = kam.filter((c) => c.stage === 'Order Placed');
 
   const revInbound = sum(wonInbound.map((l) => l.value));
-  const revOutbound = sum(wonOutbound.map((l) => l.value));
+  // `value` on an outreach lead is the deal ticket's order value or nothing —
+  // never the BM's `expectedOrderValue`. See the field's doc comment.
+  const revOutreach = sum(wonOutreach.map((l) => l.value));
   const revKam = sum(wonKam.map((c) => c.value));
 
   const newCount =
     data.inboundTotal +
-    outbound.filter((l) => l.stage === 'Yet to Meet').length;
+    outreach.filter((l) => l.status === 'Yet to Meet').length;
   const inProgressCount =
     inbound.filter((l) => l.stage === 'Follow up').length +
-    outbound.filter((l) => ['In Progress', 'Samples/Catalogues Shared'].includes(l.stage)).length +
+    outreach.filter((l) => l.status === 'Follow up' || l.status === 'Quote Share').length +
     kam.filter((c) => ['No Active Enquiry', 'Quote Approval Pending', 'Awaiting Payment'].includes(c.stage)).length;
   const piCount =
     inbound.filter((l) => l.stage === 'PI Shared').length +
-    outbound.filter((l) => l.stage === 'PI Shared').length +
+    outreach.filter((l) => l.status === 'PI Shared').length +
     kam.filter((c) => c.stage === 'PI Shared').length;
-  const wonCount = wonInbound.length + wonOutbound.length + wonKam.length + orderPlacedKam.length;
+  const wonCount = wonInbound.length + wonOutreach.length + wonKam.length + orderPlacedKam.length;
 
   return {
-    revenueGenerated: revInbound + revOutbound + revKam,
+    revenueGenerated: revInbound + revOutreach + revKam,
     pipelineByStage: [
       { label: 'New', count: newCount },
       { label: 'In Progress', count: inProgressCount },
@@ -79,7 +81,10 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
     ],
     pipelineByVertical: {
       inbound: sum(inbound.filter(inboundOpen).map((l) => l.value)),
-      outbound: sum(outbound.filter(outboundOpen).map((l) => l.value)),
+      // Open outreach pipeline is the BM's own estimate — no deal ticket exists
+      // before PI Shared, so `value` is 0 on most of these rows. Labelled as an
+      // estimate wherever it is rendered.
+      outreach: sum(outreach.filter(outreachOpen).map((l) => l.orderValue || l.expectedOrderValue || 0)),
       kam: sum(kam.filter(kamOpen).map((c) => c.value)),
     },
     clients: {
@@ -88,7 +93,7 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
     },
     revenueBySource: [
       { source: 'Inbound', value: revInbound },
-      { source: 'Outbound', value: revOutbound },
+      { source: 'Outreach', value: revOutreach },
       { source: 'KAM Direct', value: revKam },
     ],
   };
@@ -98,7 +103,7 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
 export interface RepLeaderboardRow {
   rep: string;
   inbound: number;
-  outbound: number;
+  outreach: number;
   clients: number;
   revenue: number;
 }
@@ -123,21 +128,21 @@ function withinDays(dateStr: string | undefined, from: Date, days: number): bool
 }
 
 export function computeLeadership(data: B2BData, now: Date): LeadershipData {
-  const { inbound, outbound, kam } = data;
+  const { inbound, outreach, kam } = data;
 
   const leaderboard: RepLeaderboardRow[] = repUniverse(data)
     .map((rep) => ({
       rep,
       // New-stage leads from the Kylas per-owner total + promoted (non-New) loaded rows.
       inbound: (data.inboundOwnerTotals[rep] || 0) + inbound.filter((l) => l.owner === rep && l.stage !== 'New').length,
-      outbound: outbound.filter((l) => l.bda === rep).length,
+      outreach: outreach.filter((l) => l.bm === rep).length,
       clients: kam.filter((c) => c.kam === rep && c.stage !== 'Lost').length,
       revenue:
         sum(inbound.filter((l) => l.owner === rep && l.stage === 'Closed').map((l) => l.value)) +
-        sum(outbound.filter((l) => l.bda === rep && l.stage === 'Closed').map((l) => l.value)) +
+        sum(outreach.filter((l) => l.bm === rep && l.status === 'Closed').map((l) => l.value)) +
         sum(kam.filter((c) => c.kam === rep && c.stage === 'Closed').map((c) => c.value)),
     }))
-    .sort((a, b) => b.revenue - a.revenue || b.clients - a.clients || b.inbound + b.outbound - (a.inbound + a.outbound));
+    .sort((a, b) => b.revenue - a.revenue || b.clients - a.clients || b.inbound + b.outreach - (a.inbound + a.outreach));
 
   // Found by Expected date of closure within this week.
   //
@@ -148,7 +153,7 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
   // `followUpDate` is the only forward date the team actually sets.
   const closing = [
     ...inbound.filter((l) => inboundOpen(l) && withinDays(l.followUpDate, now, 7)).map((l) => ({ company: l.company, expected: l.followUpDate!, value: l.value })),
-    ...outbound.filter((l) => outboundOpen(l) && withinDays(l.expectedClosure, now, 7)).map((l) => ({ company: l.company, expected: l.expectedClosure!, value: l.value })),
+    ...outreach.filter((l) => outreachOpen(l) && withinDays(l.expectedClosure, now, 7)).map((l) => ({ company: l.company, expected: l.expectedClosure!, value: l.orderValue || l.expectedOrderValue || 0 })),
     ...kam.filter((c) => kamOpen(c) && withinDays(c.expectedClosure, now, 7)).map((c) => ({ company: c.company, expected: c.expectedClosure!, value: c.value })),
   ].sort((a, b) => a.expected.localeCompare(b.expected));
 
@@ -177,7 +182,7 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
     byCompany.set(company, a);
   };
   inbound.filter((l) => !isInboundDead(l)).forEach((l) => bump(l.company, l.value, l.stage === 'Closed', l.owner));
-  outbound.filter((l) => l.stage !== 'Lost').forEach((l) => bump(l.company, l.value, l.stage === 'Closed', l.bda));
+  outreach.filter((l) => l.status !== 'Lost').forEach((l) => bump(l.company, l.value, l.status === 'Closed', l.bm));
   kam.filter((c) => c.stage !== 'Lost').forEach((c) => bump(c.company, c.value, c.stage === 'Closed', c.kam));
 
   const topClientsByRevenue = [...byCompany.entries()]
@@ -201,24 +206,24 @@ export interface RepTargetRow {
   role: RepRole;
   revenue: number;          // achieved (₹)
   activeClients: number;    // KAM actual
-  newOnboardings: number;   // Inbound / Outbound actual (converted)
+  newOnboardings: number;   // Inbound / Outreach actual (converted)
   revenueTargetL: number;
   clientsTarget: number;
   onboardingsTarget: number;
 }
 
 export function computeTargets(data: B2BData, store: TargetStore): RepTargetRow[] {
-  const { inbound, outbound, kam } = data;
+  const { inbound, outreach, kam } = data;
   return REP_TARGETS.map((cfg) => {
     const goal = store.reps[cfg.rep] || cfg;
     const revenue =
       sum(inbound.filter((l) => l.owner === cfg.rep && l.stage === 'Closed').map((l) => l.value)) +
-      sum(outbound.filter((l) => l.bda === cfg.rep && l.stage === 'Closed').map((l) => l.value)) +
+      sum(outreach.filter((l) => l.bm === cfg.rep && l.status === 'Closed').map((l) => l.value)) +
       sum(kam.filter((c) => c.kam === cfg.rep && c.stage === 'Closed').map((c) => c.value));
     const activeClients = kam.filter((c) => c.kam === cfg.rep && c.stage !== 'Lost').length;
     const newOnboardings =
       inbound.filter((l) => l.owner === cfg.rep && l.stage === 'Closed').length +
-      outbound.filter((l) => l.bda === cfg.rep && l.stage === 'Closed').length;
+      outreach.filter((l) => l.bm === cfg.rep && l.status === 'Closed').length;
     return {
       rep: cfg.rep,
       role: cfg.role,

@@ -58,14 +58,14 @@ export default function LeadershipBoard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* ── Rep Leaderboard ── */}
-        <Panel title="Rep Leaderboard — Inbound / Outbound / Revenue">
+        <Panel title="Rep Leaderboard — Inbound / Outreach / Revenue">
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] min-w-[420px]">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
                   <th className="text-left font-semibold py-2">Rep</th>
                   <th className="text-left font-semibold py-2">Inbound</th>
-                  <th className="text-left font-semibold py-2">Outbound</th>
+                  <th className="text-left font-semibold py-2">Outreach</th>
                   <th className="text-left font-semibold py-2">Clients</th>
                   <th className="text-left font-semibold py-2">Revenue</th>
                 </tr>
@@ -77,7 +77,7 @@ export default function LeadershipBoard() {
                       {i === 0 && r.revenue > 0 ? '🏆 ' : ''}{r.rep}
                     </td>
                     <td className="py-2.5 text-gray-600">{r.inbound}</td>
-                    <td className="py-2.5 text-gray-600">{r.outbound}</td>
+                    <td className="py-2.5 text-gray-600">{r.outreach}</td>
                     <td className="py-2.5 text-gray-600">{r.clients}</td>
                     <td className="py-2.5 font-mono font-semibold text-gray-800">{fmtL(r.revenue)}</td>
                   </tr>

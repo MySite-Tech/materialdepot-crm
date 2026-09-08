@@ -1,14 +1,19 @@
 // ── B2B Sales CRM — shared types ─────────────────────────────────────────────
 // Types and vocabularies for the B2B Sales CRM module (Dashboard, Inbound,
-// Outbound, KAM). The Inbound half now follows the Inbound CRM Module PRD v1.0
-// and its field registry, status machine and provenance rules live in
-// `inboundModel.ts` — this file re-exports what the shared boards import.
+// Outreach, KAM, Leads). Both lead modules now follow their PRDs, and their
+// field registries, status machines and provenance rules live in
+// `inboundModel.ts` and `outreachModel.ts` — this file re-exports what the
+// shared boards import.
 
 import {
   INBOUND_STATUSES, INBOUND_STATUS_COLORS,
   type InboundStatus, type InboundLocation, type Segment, type ClientType,
   type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder,
 } from './inboundModel';
+import {
+  OUTREACH_STATUSES, OUTREACH_STATUS_COLORS,
+  type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
+} from './outreachModel';
 
 export type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
 
@@ -159,37 +164,81 @@ export interface InboundLead {
 // (id ↔ Kylas label) and the PRD Selection ↔ Kylas label mapping lives in
 // `inboundModel.ts`. Nothing needs a third copy here.
 
-// ── Outbound ─────────────────────────────────────────────────────────────────
-export type OutboundStage =
-  | 'Yet to Meet' | 'In Progress' | 'Samples/Catalogues Shared' | 'PI Shared' | 'Closed' | 'Lost';
+// ── Outreach (was "Outbound") ────────────────────────────────────────────────
+// The status vocabulary, the meeting loop, the gates and the field registry
+// live in `outreachModel.ts`, which implements the B2B Outreach Module PRD.
+// Re-exported here because the shared boards (Dashboard / LeadershipBoard /
+// analytics) import their types from this file.
+//
+// The DB `pipeline` column still reads `'outbound'`. That is deliberate: it is
+// a stored enum on `b2b_lead` whose allowed values are not tracked in this
+// repo, and renaming a column value to match a document's wording is not worth
+// a write that starts failing in production. Only the vocabulary a human reads
+// changed.
+export type OutreachStage = OutreachStatus;
+export const OUTREACH_STAGES: OutreachStatus[] = OUTREACH_STATUSES;
+export type { OutreachStatus, OutreachMeeting, MeetingStatus, CompanyType };
 
-export const OUTBOUND_STAGES: OutboundStage[] = [
-  'Yet to Meet', 'In Progress', 'Samples/Catalogues Shared', 'PI Shared', 'Closed', 'Lost',
-];
-
-export interface OutboundLead {
+export interface OutreachLead {
   id: string;
+
+  // ── §3.1 Create Lead ──
   company: string;
-  contactName: string;
+  contactPerson: string;
+  designation?: string;
   phone?: string;
-  accountType: AccountType;
-  city?: string;
-  stage: OutboundStage;
-  bda: string;              // assigned BDA
-  segment: string;         // "Seg 1" | "Seg 2" | "Seg 3"
-  visitCount: number;      // -> "2nd Visit"
-  value: number;           // proposal / cart value in ₹
-  expectedClosure?: string;
-  nextMeetingDate?: string;
-  nextMeetingTime?: string;
-  requirement?: string;           // detailed requirement, edited by BDA
-  categories?: ProductCategory[];
+  gstNumber?: string;             // PRD: "Optional — not mandatory"
+  segment?: Segment;              // '1' | '2' | '3'
+  leadType?: LeadType;            // Hot | Warm | Cold
+  companyType?: CompanyType;      // Architect / Interior Designer / Contractor / Builder / Other
+  companyTypeOther?: string;      // the "(specify)" half of Other
+  bm: string;                     // the BM who created and owns the lead
+  createdAt?: string;             // ISO instant — when the lead was logged in the field
+
+  // ── §3.2 Meetings (up to 4) ──
+  meetings?: OutreachMeeting[];
+
+  // ── §3.3 Requirement details ──
+  selections?: Selection[];       // Tiles / Plywood / Laminates / …
+  requirement?: string;
+  /**
+   * The BM's estimate at qualification. NEVER summed as revenue — the PRD's
+   * §6 "Quote Shared" tile reports it, labelled as an estimate, and nothing
+   * else reads it. Same rule as the Inbound board's `expectedOrderValue`.
+   */
+  expectedOrderValue?: number;
+
+  // ── §3.4 Status ──
+  status: OutreachStatus;
+  /** When the status last changed, ISO. Drives the "today" halves of §6. */
+  statusChangedAt?: string;
+  followUpDate?: string;          // 'YYYY-MM-DD'
+  followUpTime?: string;          // 'HH:MM'
+  quoteSharedAt?: string;         // ISO — when the quote was logged as shared
+  enqId?: string;
+  /** Resolved from the matching deal ticket. Never typed while a ticket owns it. */
+  orderValue?: number;
+  orderValueSource?: 'deal' | 'manual';
+  dealStatus?: string;            // status on the matched deal ticket
+  expectedClosure?: string;       // 'YYYY-MM-DD' — a Leads-tab column
+  lostReason?: string;
+
+  // ── §7 KAM handoff ──
+  kam?: string;
+  spok?: string;                  // whoever is speaking to the lead (Leads tab)
+  ecName?: string;                // Experience Centre that assisted, if any
+  ecBmName?: string;              // that EC's BM
+
   notes?: LeadNote[];
-  // ── stage-specific working fields ──
-  enqId?: string;                 // PI Shared / Closed
-  piValue?: number;               // PI Shared / Closed
-  piStatus?: string;              // PI Shared / Closed
-  lostReason?: string;            // Lost
+
+  /**
+   * Realised rupees only — `orderValue` or nothing. `analytics.ts` sums this as
+   * revenue, so folding the BM's estimate into it would inflate every target on
+   * the Leadership Board. This is the exact bug the Inbound rollout fixed; the
+   * old outreach board had it too, because its single `value` field was typed
+   * by the BM on the create form and then counted as revenue on Closed.
+   */
+  value: number;
 }
 
 // ── KAM (existing clients & converted leads) ─────────────────────────────────
@@ -239,14 +288,7 @@ export const B2B_ADMINS = ['Krishna Bhagavatula'];
 // ── Stage → accent colour (aligned with app STATUS_COLORS vocabulary) ─────────
 export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATUS_COLORS;
 
-export const OUTBOUND_STAGE_COLORS: Record<OutboundStage, string> = {
-  'Yet to Meet':               '#3B82F6',
-  'In Progress':               '#F59E0B',
-  'Samples/Catalogues Shared': '#6366F1',
-  'PI Shared':                 '#8B5CF6',
-  'Closed':                    '#22C55E',
-  'Lost':                      '#EF4444',
-};
+export const OUTREACH_STAGE_COLORS: Record<OutreachStatus, string> = OUTREACH_STATUS_COLORS;
 
 export const KAM_STAGE_COLORS: Record<KamStage, string> = {
   'No Active Enquiry':      '#9CA3AF',

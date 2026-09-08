@@ -936,6 +936,128 @@ their correct Enq ID is invalid.
 discarded it, so a rejected PATCH rendered as a successful save and Kylas and the
 CRM diverged with nothing on screen to say so.
 
+## B2B Outreach: the field half, and why it is not "Outbound" any more
+
+`components/b2b/outreachModel.ts` implements `B2B_Outreach_Module_PRD.docx`
+v1.0 (KK) and is the counterpart of `inboundModel.ts` — the ONE place that
+answers "where does this field live?" for an outreach lead. Only two systems
+hold one, not three: `b2b_lead.meta_data` for everything the BM types, and the
+Django deal tickets for the money. There is no Kylas leg, because nobody
+qualified the lead before the BM walked into the room.
+
+**The module is called Outreach everywhere a human reads it** (nav, headings,
+the Leads tab's Source column, `B2B_VERTICALS`, the Leaderboard column) and
+`'outbound'` everywhere a machine does. `b2b_lead.pipeline` is still
+`'outbound'`: it is a stored enum whose allowed values are not tracked in this
+repo, and this file already records that DB CHECK constraints here have to be
+verified live. Renaming a column value to match a document's wording is not
+worth a write that starts failing in production.
+
+`b2b_lead` held **zero outreach rows** when this shipped (verified 2026-09-08:
+181 rows, all `inbound` or `kam`), so the six-status vocabulary changed with no
+data to migrate — `In Progress` → `Follow up`, `Samples/Catalogues Shared` →
+`Quote Share`. `normalizeOutreachStatus` still decomposes the old two on READ,
+for the same reason `normalizeStatus` does on the inbound side.
+
+### The old board counted a typed guess as revenue
+
+`OutboundLead` had a single `value` the BM typed on the create form
+("Monthly order value"), and `analytics.ts` summed exactly that field as
+realised revenue for every `Closed` lead. That is the bug the Inbound rollout
+fixed, present again on the other board. Now: `expectedOrderValue` is the BM's
+estimate and is read by nothing but the §6 Quote Shared tile (labelled as an
+estimate on screen); `orderValue` comes from the deal ticket via `lookupEnqId`;
+and `value` — the column analytics reads — is `orderValue || 0` in both the
+mapper and every writer. **Do not put a typed figure into `value`.**
+
+`outboundToRow` also dropped `expected_closure` on every write while
+`rowToOutbound` read it, so an Expected date of closure typed into the drawer
+vanished on save — and it is a column the Leads tab PRD asks for.
+`OUTREACH_META` is now one declaration driving both directions, so a field
+cannot exist on one side only.
+
+### Gates: two hard, everything else asked for
+
+`outreachGateErrors` blocks a next follow-up date on `Follow up` / `PI Shared`
+and a lost reason on `Lost`. Two deliberate softenings, both because the PRD
+does not name them:
+
+- **Time.** The PRD says "date & time". Only the DATE blocks, so this board and
+  the Inbound board gate identically — the same reps work both.
+- **Enq ID on PI Shared.** The Inbound PRD names it required and hard-gates it;
+  this one only says the value is auto-fetched. Soft here, prompted loudly:
+  without it the fetch cannot run and the value stays blank, which is
+  recoverable. `outreachStatusPrompts` carries these.
+
+`MoveModal` opens for `Quote Share`, `PI Shared` and `Closed` too, even though
+none of them has a hard gate — those are the three moves with something worth
+collecting, and a silent move is how a status ends up with none of its fields.
+
+### Meetings are a four-slot loop, not a visit counter
+
+The old board had `visitCount: number`. The PRD wants meetings 1–4, each
+`Completed` or `Postponed`, with location (area + office) and notes captured
+**once a meeting is Completed** — the notes box only appears then. `Scheduled`
+is a third state the PRD does not name and cannot be avoided: a booked meeting
+is neither outcome, and storing it as either reports a meeting that never
+happened (the same reasoning as Inbound's `New`). `meetingsExhausted` is the
+diagram's "Meeting 4: Postponed" branch and only *offers* Lost or a long-term
+park — it never decides.
+
+### One KAM rotation, not two
+
+`fetchKamLoad` counts closed leads across **both** lead pipelines.
+`fetchInboundKamLoad` is now an alias of it. The Outreach PRD says its handoff
+is "consistent with the Inbound module's handoff logic" and its open question #2
+asks whether the pools are shared; two separate counts would each pick "the
+least loaded KAM" by their own reckoning and both land on the same person, so a
+shared count is the only reading under which "consistent" is true.
+
+## The Leads tab: one row per lead, and three states in one column
+
+`components/b2b/LeadsTab.tsx` + `fetchUnifiedLeads` implement
+`Leads_Tab_PRD.docx` v1.0. The tab **captures nothing** — every row originates
+in Inbound or Outreach — with one exception: "Assisted at EC", which the PRD
+puts on this screen and which belongs to neither source form. It is written back
+to whichever source row the lead came from (`outreach.ecName` /
+`inbound.placedUnder.ecName`); this tab has no store of its own.
+
+**EC is an Experience Centre, not an End Consumer.** The PRD asks for two
+dropdowns; `EcPicker` binds them to `fetchBranchList()` (through
+`apptBranchesFromCrm`, which drops HQ/warehouse and normalises the CRM's
+"Yelankha") and `fetchAvailableBMs([ec])`. It follows this file's roster rules:
+a non-array response throws, the last good roster survives a later failure, a
+stored value not in the roster is kept as an extra option, and a failed load is
+reported as *unreadable* rather than rendered as an empty dropdown.
+
+Nothing auto-fills those two from the matched deal ticket. A cart's `branch` is
+where it was raised and `assignedTo` is who owns it; "assisted at" is a claim
+about who helped close it, and inferring one from the other puts a name in a
+field nobody attested to.
+
+Three PRD open questions are resolved in `fetchUnifiedLeads`, in code rather
+than in JSX:
+
+- **Lost leads stay listed** (open question #1). Status is the PRD's binary
+  Closed / Yet to Close exactly as written, with a separate `lost` flag rendered
+  beside it and filterable. Dropping them hides the outcome the business most
+  wants to count; folding them into "Yet to Close" claims a dead lead is still
+  being worked.
+- **Expected date of closure has THREE states, not two.** Outreach has the
+  field; Inbound does not and must not — Kylas `expectedClosureOn` is
+  auto-stamped junk and is deliberately unmapped (see above). So the column
+  renders a date, "not set", or `n/a`, carried by `hasExpectedClosureField`.
+  Collapsing the third into the second reads as the Inbound team failing to fill
+  a field that does not exist.
+- **A half-loaded list says so.** Each side is caught separately into
+  `failed: LeadSource[]` and the tab prints which one did not load. A Leads tab
+  quietly showing only the Outreach half looks exactly like a CRM with no
+  inbound leads.
+
+Inbound contributes `fetchInboundBoard()` page 0 plus the whole DB overlay — the
+same set the Inbound tab shows — so the footer states how many unactioned Kylas
+leads are NOT in the list rather than implying the count is everything.
+
 ## Known landmines
 
 - **Availability is per CITY, and the Store Team kiosk was the one surface that

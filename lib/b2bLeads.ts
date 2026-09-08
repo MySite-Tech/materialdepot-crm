@@ -7,16 +7,20 @@ import {
 import {
   defaultTargetStore,
   type InboundLead, type InboundStage,
-  type OutboundLead, type OutboundStage,
+  type OutreachLead,
   type KamClient, type KamStage, type KamSource,
-  type AccountType, type ProductCategory, type LeadNote,
+  type AccountType, type ProductCategory, type LeadNote, type LeadDeal,
   type TargetStore,
 } from '@/components/b2b/mockData';
 import type { Escalation } from '@/components/b2b/accountHealth';
 import {
   normalizeStatus, decomposeLegacyStage, locationFromPincode, clientTypeFromKylas,
-  type InboundStatus, type CallAttempt,
+  type InboundStatus, type CallAttempt, type Segment, type LeadType, type Selection,
 } from '@/components/b2b/inboundModel';
+import {
+  normalizeOutreachStatus,
+  type OutreachStatus, type OutreachMeeting, type CompanyType,
+} from '@/components/b2b/outreachModel';
 
 type Pipeline = 'inbound' | 'outbound' | 'kam';
 
@@ -268,59 +272,98 @@ function mergeKylasIntoRow(dbLead: InboundLead, kylas: InboundLead): InboundLead
   return merged;
 }
 
-function rowToOutbound(r: B2BLeadRow): OutboundLead {
-  const m = r.meta_data || {};
-  return {
-    id: r.id,
-    company: m.company || '',
-    contactName: m.contact_name || '',
-    phone: m.phone || undefined,
-    accountType: (m.account_type as AccountType) || 'Interior Designer',
-    city: m.city || undefined,
-    stage: r.stage as OutboundStage,
-    bda: r.owner,
-    segment: m.segment || 'Seg 1',
-    visitCount: Number(m.visit_count) || 1,
-    value: Number(r.value) || 0,
-    expectedClosure: m.expected_closure || undefined,
-    nextMeetingDate: m.next_meeting_date || undefined,
-    nextMeetingTime: m.next_meeting_time || undefined,
-    requirement: m.requirement || undefined,
-    categories: (m.categories as ProductCategory[]) || [],
-    notes: (m.notes as LeadNote[]) || [],
-    enqId: m.enq_id || undefined,
-    piValue: typeof m.pi_value === 'number' ? m.pi_value : undefined,
-    piStatus: m.pi_status || undefined,
-    lostReason: m.lost_reason || undefined,
+// ── Outreach: one field table, both directions ───────────────────────────────
+//
+// `OUTREACH_META` is the single declaration the reader and the writer share, so
+// a field cannot exist on one side only. That asymmetry is not hypothetical
+// here: the previous `rowToOutbound` read `m.expected_closure` while
+// `outboundToRow` never wrote it, so an Expected date of closure typed into the
+// drawer was silently dropped on every save — and it is a column the Leads tab
+// PRD asks for.
+
+type MetaSpec<T> = {
+  [K in keyof T]?: {
+    /** meta_data key. */
+    col: string;
+    read: (v: any) => T[K];
   };
+};
+
+const str = (v: any): string | undefined => {
+  const s = String(v ?? '').trim();
+  return s || undefined;
+};
+const num = (v: any): number | undefined => {
+  const n = Number(v);
+  return Number.isFinite(n) && n !== 0 ? n : undefined;
+};
+const arr = <T,>(v: any): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+const OUTREACH_META: MetaSpec<OutreachLead> = {
+  company:            { col: 'company',          read: (v) => String(v ?? '') },
+  contactPerson:      { col: 'contact_person',   read: (v) => String(v ?? '') },
+  designation:        { col: 'designation',      read: str },
+  phone:              { col: 'phone',            read: str },
+  gstNumber:          { col: 'gst_number',       read: str },
+  segment:            { col: 'segment',          read: (v) => str(v) as Segment | undefined },
+  leadType:           { col: 'lead_type',        read: (v) => str(v) as LeadType | undefined },
+  companyType:        { col: 'company_type',     read: (v) => str(v) as CompanyType | undefined },
+  companyTypeOther:   { col: 'company_type_other', read: str },
+  createdAt:          { col: 'created_at',       read: str },
+  meetings:           { col: 'meetings',         read: (v) => arr<OutreachMeeting>(v) },
+  selections:         { col: 'selections',       read: (v) => arr<Selection>(v) },
+  requirement:        { col: 'requirement',      read: str },
+  expectedOrderValue: { col: 'expected_order_value', read: num },
+  statusChangedAt:    { col: 'status_changed_at', read: str },
+  followUpDate:       { col: 'follow_up_date',   read: str },
+  followUpTime:       { col: 'follow_up_time',   read: str },
+  quoteSharedAt:      { col: 'quote_shared_at',  read: str },
+  enqId:              { col: 'enq_id',           read: str },
+  orderValue:         { col: 'order_value',      read: num },
+  orderValueSource:   { col: 'order_value_source', read: (v) => (v === 'deal' || v === 'manual' ? v : undefined) },
+  dealStatus:         { col: 'deal_status',      read: str },
+  expectedClosure:    { col: 'expected_closure', read: str },
+  lostReason:         { col: 'lost_reason',      read: str },
+  kam:                { col: 'kam',              read: str },
+  spok:               { col: 'spok',             read: str },
+  ecName:             { col: 'ec_name',          read: str },
+  ecBmName:           { col: 'ec_bm_name',       read: str },
+  notes:              { col: 'notes',            read: (v) => arr<LeadNote>(v) },
+};
+
+function rowToOutreach(r: B2BLeadRow): OutreachLead {
+  const m = r.meta_data || {};
+  const lead = { id: r.id, bm: r.owner } as OutreachLead;
+  for (const [key, spec] of Object.entries(OUTREACH_META) as [keyof OutreachLead, { col: string; read: (v: any) => any }][]) {
+    (lead as unknown as Record<string, unknown>)[key] = spec.read(m[spec.col]);
+  }
+  // Legacy stage strings are decomposed on READ, so a row written by an older
+  // bundle still lands in a real column. See `normalizeOutreachStatus`.
+  lead.status = normalizeOutreachStatus(r.stage);
+  // Realised rupees only. `r.value` is the stored column analytics sums; an
+  // order value fetched from a deal ticket is the only thing allowed into it.
+  lead.value = Number(lead.orderValue) || 0;
+  return lead;
 }
 
-function outboundToRow(l: OutboundLead): B2BLeadRow {
+function outreachToRow(l: OutreachLead): B2BLeadRow {
+  const meta: Record<string, any> = {};
+  for (const [key, spec] of Object.entries(OUTREACH_META) as [keyof OutreachLead, { col: string }][]) {
+    const v = l[key];
+    meta[spec.col] = v === undefined ? null : v;
+  }
   return {
     id: l.id,
+    // The stored pipeline value stays 'outbound' — see the note in mockData.ts.
     pipeline: 'outbound',
-    stage: l.stage,
+    stage: l.status,
     kylas_lead_id: null,
-    owner: l.bda,
-    value: l.value || 0,
-    meta_data: {
-      company: l.company,
-      contact_name: l.contactName,
-      phone: l.phone || '',
-      account_type: l.accountType,
-      city: l.city || '',
-      segment: l.segment,
-      visit_count: l.visitCount,
-      next_meeting_date: l.nextMeetingDate || '',
-      next_meeting_time: l.nextMeetingTime || '',
-      requirement: l.requirement || '',
-      categories: l.categories || [],
-      notes: l.notes || [],
-      enq_id: l.enqId || '',
-      pi_value: l.piValue ?? 0,
-      pi_status: l.piStatus || '',
-      lost_reason: l.lostReason || '',
-    },
+    owner: l.bm,
+    // Realised rupees only, mirroring `value` on the UI type. A BM's estimate
+    // lives in meta_data.expected_order_value and is never promoted into this
+    // column, which is the one `analytics.ts` sums as revenue.
+    value: Number(l.orderValue) || 0,
+    meta_data: meta,
   };
 }
 
@@ -472,7 +515,7 @@ export async function fetchInboundBoard(
 
 export interface B2BData {
   inbound: InboundLead[];
-  outbound: OutboundLead[];
+  outreach: OutreachLead[];
   kam: KamClient[];
   inboundTotal: number;                        // true Kylas total of "New" inbound leads (board only loads page 0)
   inboundOwnerTotals: Record<string, number>;  // New-stage count per owner name (for the leaderboard)
@@ -504,10 +547,12 @@ export async function fetchB2BData(): Promise<B2BData> {
     .then((p) => ({ leads: p.leads, total: p.total }))
     .catch((e) => { console.error('[b2b] inbound aggregate fetch failed', e); return { leads: [] as InboundLead[], total: 0 }; });
   const ownerTotalsP = fetchInboundOwnerTotals().catch(() => ({} as Record<string, number>));
-  const [inbound, outbound, kam, inboundOwnerTotals] = await Promise.all([
-    inboundP, fetchOutboundLeads(), fetchKamClients(), ownerTotalsP,
+  const outreachP = fetchOutreachLeads()
+    .catch((e) => { console.error('[b2b] outreach aggregate fetch failed', e); return [] as OutreachLead[]; });
+  const [inbound, outreach, kam, inboundOwnerTotals] = await Promise.all([
+    inboundP, outreachP, fetchKamClients(), ownerTotalsP,
   ]);
-  return { inbound: inbound.leads, outbound, kam, inboundTotal: inbound.total, inboundOwnerTotals };
+  return { inbound: inbound.leads, outreach, kam, inboundTotal: inbound.total, inboundOwnerTotals };
 }
 
 // ── Pipeline value (Django /crm/leads/stats/, branch = B2B) ───────────────────
@@ -651,6 +696,8 @@ export interface EnqLookup {
   branch?: string;
   /** Enq IDs that DO exist on this phone, to help a rep spot a typo. */
   available?: string[];
+  /** The whole matched ticket — the Leads tab renders its line items. */
+  deal?: LeadDeal;
 }
 
 const normalizeEnq = (v: string | undefined): string =>
@@ -679,19 +726,29 @@ export async function lookupEnqId(phone: string | undefined, enqId: string | und
     dealStatus: hit.status || undefined,
     bmName: hit.assignedTo || undefined,
     branch: hit.branch || undefined,
+    deal: hit,
   };
 }
 
-// ── KAM round-robin load (PRD §3.5) ──────────────────────────────────────────
-// How many closed inbound leads each KAM already holds, so the rotation stays
-// balanced across sessions instead of restarting at the top of the roster on
-// every page load.
-export async function fetchInboundKamLoad(): Promise<Record<string, number>> {
+// ── KAM round-robin load (Inbound PRD §3.5 / Outreach PRD §7) ────────────────
+//
+// How many closed leads each KAM already holds, so the rotation stays balanced
+// across sessions instead of restarting at the top of the roster on every page
+// load.
+//
+// Counted across BOTH lead pipelines, not one. The Outreach PRD says its
+// handoff is "on a round-robin basis — consistent with the Inbound module's
+// handoff logic", and its open question #2 asks whether the two share a pool or
+// rotate separately. Two separate rotations would each pick the KAM who looks
+// least loaded to it alone, so the busiest KAM in the CRM keeps winning one of
+// them; one shared count is the only reading under which "consistent with
+// Inbound" is true. Revisit if KK answers the other way.
+export async function fetchKamLoad(): Promise<Record<string, number>> {
   try {
     const { data, error } = await supabase
       .from(TABLE)
       .select('meta_data')
-      .eq('pipeline', 'inbound')
+      .in('pipeline', ['inbound', 'outbound'])
       .eq('stage', 'Closed');
     if (error) throw error;
     const load: Record<string, number> = {};
@@ -706,6 +763,9 @@ export async function fetchInboundKamLoad(): Promise<Record<string, number>> {
   }
 }
 
+/** @deprecated Use `fetchKamLoad` — the rotation is one shared pool. */
+export const fetchInboundKamLoad = fetchKamLoad;
+
 export interface VerticalRep { name: string; contact: string }
 
 export const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
@@ -717,7 +777,7 @@ export const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
     { name: 'Mandeep Ghai', contact: '7223048042' },
     { name: 'Hardi Patel', contact: '9187191018' },
   ] },
-  { label: 'Outbound', reps: [
+  { label: 'Outreach', reps: [
     { name: 'Vilok Reddy', contact: '9980123308' },
     { name: 'Prafful Bhati', contact: '8233435000' },
   ] },
@@ -758,15 +818,16 @@ export async function fetchVerticalStats(
   );
 }
 
-export async function fetchOutboundLeads(
+/**
+ * Outreach leads. A failed load THROWS rather than resolving to `[]`: this feeds
+ * a board a BM works from, and "no leads today" is a very different message from
+ * "the database did not answer". `fetchB2BData` catches it for the aggregate
+ * dashboards, where an empty vertical is survivable.
+ */
+export async function fetchOutreachLeads(
   opts?: { createdFrom?: string; createdTo?: string },
-): Promise<OutboundLead[]> {
-  try {
-    return (await fetchRows('outbound', opts)).map(rowToOutbound);
-  } catch (e) {
-    console.error('[b2b] outbound DB fetch failed', e);
-    return [];
-  }
+): Promise<OutreachLead[]> {
+  return (await fetchRows('outbound', opts)).map(rowToOutreach);
 }
 
 export async function fetchKamClients(): Promise<KamClient[]> {
@@ -797,8 +858,8 @@ export function upsertInboundLead(l: InboundLead): Promise<string | null> {
   return upsert(inboundToRow(l), 'kylas_lead_id');
 }
 
-export function upsertOutboundLead(l: OutboundLead): Promise<string | null> {
-  return upsert(outboundToRow(l), 'id');
+export function upsertOutreachLead(l: OutreachLead): Promise<string | null> {
+  return upsert(outreachToRow(l), 'id');
 }
 
 export function upsertKamClient(l: KamClient): Promise<string | null> {
@@ -840,4 +901,154 @@ export async function saveTargets(store: TargetStore): Promise<void> {
   } catch (e) {
     console.error('[b2b] save targets failed', e);
   }
+}
+
+// ── Leads tab: one row per lead, across both source modules ──────────────────
+//
+// Implements `Leads_Tab_PRD.docx` v1.0 (KK, Business Head – B2B). The tab
+// captures nothing itself: every row originates in Inbound or Outreach, and the
+// Enquiry ID / order value / line items come from the deal tickets, exactly as
+// both source modules already fetch them.
+//
+// Three shape decisions the PRD leaves open, resolved here rather than in JSX:
+//
+//   Status is binary — Closed / Yet to Close, as written. Lost leads are NOT
+//   dropped (open question #1): dropping them hides the outcome the business
+//   most wants to count, and folding them into "Yet to Close" would claim a
+//   dead lead is still being worked. They render as Yet to Close carrying an
+//   explicit Lost mark, and the tab can filter on it.
+//
+//   Expected date of closure exists for Outreach and does NOT exist for
+//   Inbound — the Kylas `expectedClosureOn` field is auto-stamped junk and is
+//   deliberately unmapped (see the Inbound notes). So the column reports three
+//   states, not two: a date, "not set", or "n/a for this source". Collapsing
+//   the third into the second would read as the Inbound team failing to fill a
+//   field that does not exist.
+//
+//   Company name is `undefined`, not a placeholder, when the source has none —
+//   Kylas ships the phone number in the name field on most inbound leads, and
+//   `LeadName` is what decides how that renders.
+
+export type LeadSource = 'Inbound' | 'Outreach';
+export type UnifiedStatus = 'Closed' | 'Yet to Close';
+
+export interface UnifiedLead {
+  /** Unique across pipelines — a Kylas id and a b2b_lead uuid can't collide, but this makes it impossible. */
+  key: string;
+  id: string;
+  source: LeadSource;
+  companyName?: string;
+  contactPerson?: string;
+  phone?: string;
+  gstNumber?: string;
+  enqId?: string;
+  orderValue?: number;
+  /** Undefined means the SOURCE MODULE HAS NO SUCH FIELD — see the note above. */
+  expectedClosure?: string;
+  hasExpectedClosureField: boolean;
+  kam?: string;
+  spok?: string;
+  status: UnifiedStatus;
+  /** True when the source module marked it Lost. Renders beside the binary status. */
+  lost: boolean;
+  /** The source module's own status, shown in the detail view. */
+  sourceStatus: string;
+  /** The originating record, for "Source Lead Details". Exactly one is set. */
+  inbound?: InboundLead;
+  outreach?: OutreachLead;
+}
+
+function inboundToUnified(l: InboundLead): UnifiedLead {
+  return {
+    key: `inbound:${l.id}`,
+    id: l.id,
+    source: 'Inbound',
+    // A Kylas "name" that is only the phone number is not a company name.
+    companyName: String(l.companyName || '').trim() || undefined,
+    contactPerson: l.contactName || undefined,
+    phone: l.phone || undefined,
+    gstNumber: l.gstNumber || undefined,
+    enqId: l.enqId || undefined,
+    orderValue: l.orderValue || undefined,
+    expectedClosure: undefined,
+    hasExpectedClosureField: false,
+    kam: l.kam || undefined,
+    // PRD "Spok — whoever is/was speaking to the lead". §3.5 records it
+    // explicitly on close; before that the assigned BM is the person on it.
+    spok: l.placedUnder?.spok || l.owner || undefined,
+    status: l.stage === 'Closed' ? 'Closed' : 'Yet to Close',
+    lost: l.stage === 'Lost',
+    sourceStatus: l.stage,
+    inbound: l,
+  };
+}
+
+function outreachToUnified(l: OutreachLead): UnifiedLead {
+  return {
+    key: `outreach:${l.id}`,
+    id: l.id,
+    source: 'Outreach',
+    companyName: String(l.company || '').trim() || undefined,
+    contactPerson: l.contactPerson || undefined,
+    phone: l.phone || undefined,
+    gstNumber: l.gstNumber || undefined,
+    enqId: l.enqId || undefined,
+    orderValue: l.orderValue || undefined,
+    expectedClosure: l.expectedClosure || undefined,
+    hasExpectedClosureField: true,
+    kam: l.kam || undefined,
+    spok: l.spok || l.bm || undefined,
+    status: l.status === 'Closed' ? 'Closed' : 'Yet to Close',
+    lost: l.status === 'Lost',
+    sourceStatus: l.status,
+    outreach: l,
+  };
+}
+
+export interface UnifiedLeadsResult {
+  leads: UnifiedLead[];
+  /** True Kylas total of unactioned inbound leads; the board only loads page 0. */
+  inboundTotal: number;
+  inboundHasMore: boolean;
+  /** Which sides failed, so the tab can say "partial" instead of showing a short list as complete. */
+  failed: LeadSource[];
+}
+
+/**
+ * Every lead in the B2B CRM, from both source modules.
+ *
+ * Each side is reported separately on failure rather than folded into an empty
+ * list: a Leads tab that quietly shows only the Outreach half looks exactly
+ * like a CRM in which nobody has any inbound leads.
+ */
+export async function fetchUnifiedLeads(opts?: {
+  createdFrom?: string;
+  createdTo?: string;
+}): Promise<UnifiedLeadsResult> {
+  const failed: LeadSource[] = [];
+
+  const inboundP = fetchInboundBoard({ page: 0, createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
+    .catch((e) => {
+      console.error('[b2b] leads tab: inbound fetch failed', e);
+      failed.push('Inbound');
+      return { leads: [] as InboundLead[], page: 0, hasMore: false, total: 0 };
+    });
+  const outreachP = fetchOutreachLeads({ createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
+    .catch((e) => {
+      console.error('[b2b] leads tab: outreach fetch failed', e);
+      failed.push('Outreach');
+      return [] as OutreachLead[];
+    });
+
+  const [inbound, outreach] = await Promise.all([inboundP, outreachP]);
+
+  return {
+    leads: [
+      ...inbound.leads.map(inboundToUnified),
+      ...outreach.map(outreachToUnified),
+    ],
+    inboundTotal: inbound.total,
+    inboundHasMore: inbound.hasMore,
+    failed,
+  };
 }
