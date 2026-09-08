@@ -10,7 +10,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import { cn } from '@/lib/utils';
-import { sbGet, sbPatch, uploadPhoto } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPatch, uploadPhoto, readCapturedPhoto } from '@/components/site-audit/siteAuditShared';
 
 export type SketchPoint = { x: number; y: number };
 export type SketchStroke = SketchPoint[];
@@ -474,6 +474,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   const attemptRef = useRef(0);
 
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [locStatus, setLocStatus] = useState({ text: 'Getting location…', color: '#9ca3af' });
@@ -556,6 +557,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   useEffect(() => {
     if (!open) return;
     setPhoto(null);
+    setPhotoErr(null);
     setLat(null);
     setLng(null);
     setCameraFailed(false);
@@ -604,26 +606,16 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const rd = new FileReader();
-      rd.onload = (ev) => {
-        const raw = ev.target?.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const W = Math.min(img.naturalWidth || 800, 800);
-          const H = Math.round(((img.naturalHeight || 600) * W) / (img.naturalWidth || 800));
-          const cv = document.createElement('canvas');
-          cv.width = W;
-          cv.height = H;
-          const ctx = cv.getContext('2d');
-          if (!ctx) { setPhoto(raw); return; }
-          ctx.drawImage(img, 0, 0, W, H);
-          try { setPhoto(cv.toDataURL('image/jpeg', 0.6)); } catch { setPhoto(raw); }
-        };
-        img.onerror = () => setPhoto(raw);
-        img.src = raw;
-        if (lat === null) captureLocation({ timeout: 5000, enableHighAccuracy: true });
-      };
-      rd.readAsDataURL(file);
+      /* Keeping the original bytes when the canvas could not decode them (what this did until
+         2026-09-07) put HEIC files into log[] as .jpg — an arrival photo nobody can open. The
+         arrival must stay recordable either way, so a refused photo is reported and the confirm
+         proceeds without one; the location and timestamp are the parts that matter most here. */
+      readCapturedPhoto(file, 800, 0.6).then((got) => {
+        if (!got.ok) { setPhoto(null); setPhotoErr(got.error); return; }
+        setPhotoErr(null);
+        setPhoto(got.dataUrl);
+      });
+      if (lat === null) captureLocation({ timeout: 5000, enableHighAccuracy: true });
       e.target.value = '';
     },
     [lat, captureLocation],
@@ -650,6 +642,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     attemptRef.current++;
     confirmingRef.current = false;
     setPhoto(null);
+    setPhotoErr(null);
     setCameraFailed(false);
     startCam();
   }, [startCam]);
@@ -729,6 +722,11 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
       <div className="p-3 text-center text-sm" style={{ color: locStatus.color }}>
         {locStatus.text}
       </div>
+      {photoErr && (
+        <div className="mx-4 mb-1 rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-900">
+          {photoErr}
+        </div>
+      )}
       <div className="flex items-center justify-center gap-3 p-4 pb-6">
         <button
           type="button"
@@ -747,6 +745,20 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
             className="rounded-xl bg-blue-600 px-6 py-3 text-base font-extrabold text-white"
           >
             {cameraFailed || !camReady ? 'Open Camera' : 'Take Photo'}
+          </button>
+        )}
+        {!photo && photoErr && (
+          /* The photo was refused, not merely missing. Confirm has to stay reachable or a phone
+             that only shoots HEIC could never mark an arrival at all — the same "never disable
+             the only forward control" rule the shutter above follows. handleConfirm already
+             treats the photo as optional; location and timestamp still get recorded. */
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={confirming}
+            className="rounded-xl bg-green-600 px-5 py-3 text-sm font-extrabold text-white disabled:opacity-40"
+          >
+            {confirming ? 'Saving…' : 'Confirm without photo'}
           </button>
         )}
         {photo && (

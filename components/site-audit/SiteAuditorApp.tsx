@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
 import { cn } from '@/lib/utils';
-import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, readCapturedPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
 import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/omsService';
 import {
   SketchCanvas,
@@ -391,27 +391,11 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
   }
 }
 
-/* ---- image helpers (verbatim resize/sketch/PDF logic) ---- */
-function resizeImageDataUrl(dataUrl: string, maxDim: number, quality: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    const im = new Image();
-    im.onload = () => {
-      try {
-        const s = Math.min(1, maxDim / im.width, maxDim / im.height);
-        const cw = Math.round(im.width * s), ch = Math.round(im.height * s);
-        const cv = document.createElement('canvas');
-        cv.width = cw;
-        cv.height = ch;
-        cv.getContext('2d')!.drawImage(im, 0, 0, cw, ch);
-        resolve(cv.toDataURL('image/jpeg', quality));
-      } catch {
-        resolve(null);
-      }
-    };
-    im.onerror = () => resolve(null);
-    im.src = dataUrl;
-  });
-}
+/* ---- image helpers (verbatim resize/sketch/PDF logic) ----
+   Room-photo capture is NOT here any more: it goes through readCapturedPhoto in
+   siteAuditShared, which refuses a file this browser cannot decode instead of passing the
+   original bytes through (the local resizeImageDataUrl used to answer `null` and its one caller
+   wrote `|| dataUrl`, which is how HEIC reached Storage as a .jpg). */
 
 function compressImageDataUrl(dataUrl: string | null | undefined): Promise<string | null> {
   if (!dataUrl) return Promise.resolve(null);
@@ -1721,6 +1705,7 @@ function SegmentPhotos({
   const galInputRef = useRef<HTMLInputElement | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [readErr, setReadErr] = useState<string | null>(null);
 
   // Show the photo instantly (local base64), THEN upload to Storage in the background and swap the
   // URL in when it lands. Waiting on the upload first meant the thumbnail only appeared after up to
@@ -1729,13 +1714,14 @@ function SegmentPhotos({
     async (files: FileList | null) => {
       if (!files || !files.length) return;
       setUploading(true);
+      setReadErr(null);
       for (const file of Array.from(files)) {
-        const dataUrl: string = await new Promise((resolve) => {
-          const rd = new FileReader();
-          rd.onload = () => resolve(rd.result as string);
-          rd.readAsDataURL(file);
-        });
-        const resized = (await resizeImageDataUrl(dataUrl, 1600, 0.88)) || dataUrl;
+        // An undecodable file is refused rather than attached — see readCapturedPhoto. The notice
+        // stays on screen (not a toast) because the fix is a camera setting the auditor has to go
+        // and change before re-shooting.
+        const got = await readCapturedPhoto(file, 1600, 0.88);
+        if (!got.ok) { setReadErr(got.error); continue; }
+        const resized = got.dataUrl;
         onAdd(resized);
         uploadPhoto(resized)
           .then((url) => onSwap(resized, url))
@@ -1818,6 +1804,14 @@ function SegmentPhotos({
         </button>
       </div>
       {uploading && <div className="mt-1.5 text-[11px] text-gray-400">Adding photo…</div>}
+      {readErr && (
+        <div className="mt-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11.5px] font-semibold text-amber-800">
+          <span className="flex-1">{readErr}</span>
+          <button type="button" onClick={() => setReadErr(null)} className="shrink-0 font-bold">
+            ×
+          </button>
+        </div>
+      )}
       {scannerOpen && (
         <DocScannerModal open={scannerOpen} onClose={() => setScannerOpen(false)} onScanned={(url) => onAdd(url)} />
       )}
