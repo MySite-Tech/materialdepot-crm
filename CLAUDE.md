@@ -797,6 +797,14 @@ any 4xx/5xx resolves a PostgREST *error object*, not a throw. Callers that write
 `Array.isArray(rows) ? rows : []` therefore render a server error as legitimately
 empty — indistinguishable from "nothing matched".
 
+The same shape bites one level up, and that case is easier to miss: a wrapper
+that catches into `[]` makes its CALLER's error branch dead code.
+`fetchLeadDeals` catches, so `lookupEnqId`'s `unavailable` state — written
+specifically so a Django outage could not be reported as an invalid Enquiry ID —
+could never fire (fixed 2026-09-08). **When you write a distinct failure state,
+check that the thing you call can actually fail into it.** `fetchClientTickets`
+and `fetchClientOrderRows` call `fetchCRMLeads` directly for this reason.
+
 Harmless for a count or a badge. **Dangerous for anything a workflow is gated
 on.** It hard-blocked assignment in both ops views (fixed 2026-08-19, commit
 `c589ec8`): the auditor/installer rosters load once when the view mounts but the
@@ -922,6 +930,16 @@ rep types the figure, flagged `manual`, because resolving `ENQ-2488` to
 `ENQ-24881` would attach one client's money to another's lead. A Django outage
 returns `unavailable`, kept distinct from `no-match` so the UI never tells a rep
 their correct Enq ID is invalid.
+
+**That last sentence was false for the first three weeks it was written here**,
+and it is worth knowing why. `lookupEnqId` fetched through `fetchLeadDeals`,
+which catches its own errors into `[]` — so an outage produced an empty deal
+list, which reads as "no ticket has that Enq ID", and `unavailable` was
+unreachable code. Every rep would have been told their perfectly good Enquiry ID
+was invalid for as long as Django was down. Fixed 2026-09-08 by calling
+`fetchCRMLeads` directly with an `Array.isArray` guard, which is what the Site
+Audit funnel module already did for exactly this reason. See the `Array.isArray`
+section — a wrapper that swallows makes the error branch above it dead.
 
 ### Two vocabularies that deliberately do not fully map
 
@@ -1347,6 +1365,17 @@ this, block non-client writes in the shim and re-query the table at the end —
 `tx=rollback` will not save you here.
 
 ## Known landmines
+
+- **A Supabase write error is not an `Error`, so `String(e)` said
+  "[object Object]".** `upsert`/`deleteB2BRow` in `b2bLeads.ts` reported failures
+  as `e instanceof Error ? e.message : String(e)`, and a PostgrestError is a
+  plain object — so every failed write showed a rep the literal text
+  `[object Object]`. It only surfaced when the KAM board started reporting write
+  failures out loud instead of dropping them. `writeErrorMessage` pulls out
+  `message`/`details`/`hint` and appends `code`, which is the field that
+  matters: **42703 is the missing-column signature** this repo hits every time a
+  migration has not been run, and it was being hidden. Any new catch that shows
+  a backend error to a user goes through that helper.
 
 - **Availability is per CITY, and the Store Team kiosk was the one surface that
   did not know it.** An auditor/installer is assigned a city when they join and
@@ -1816,3 +1845,27 @@ this, block non-client writes in the shim and re-query the table at the end —
 - New Site Audit drawers are built from `drawerUi.tsx` (`DrawerShell`, `Sec`,
   `KV`) rather than a fresh copy of the slide-over markup — `Sec`/`KV` had
   already been duplicated into two drawers before it existed.
+
+- **`{expr} word` at the end of a wrapping JSX line silently loses the space.**
+  Turbopack's JSX transform stripped the leading space off a text node that
+  begins right after an expression and then wraps, so
+
+  ```jsx
+  so {n === 1 ? 'it counts' : 'they count'} as
+  ₹0 here.
+  ```
+
+  rendered as "they count**as** ₹0 here" — confirmed by reading the DOM text
+  nodes, not guessed. It does **not** fire on every such line (a neighbouring
+  one three lines up kept its space), so do not try to predict it: whenever a
+  space sits between `}` and text that wraps, write it as `{' '}`. Two of these
+  reached the rendered page in the Client Database / Dashboard copy before
+  anyone looked at it; the rest of that shape was converted defensively rather
+  than after being seen to break, because the trigger is not predictable. The
+  quick check is to render the panel and grep its `innerText` for a digit jammed
+  against a word.
+
+- **`ExportButton`'s `disabled` prop means "an export is running", not "there is
+  nothing to export".** It renders a spinner and the word "Exporting…" when
+  true, so passing `!rows.length` makes an empty tab claim it is mid-export.
+  Every caller passes only its own `exporting` flag.
