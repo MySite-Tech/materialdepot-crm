@@ -4,9 +4,17 @@ import MobileEscalationClient from "@/components/sales-dashboard/MobileEscalatio
 import MobileRaiseClient from "@/components/sales-dashboard/MobileRaiseClient";
 import { useState } from "react";
 
-export default function MobileDashboard({ userName }: { userName: string }) {
-  const [tab, setTab] = useState<"raise" | "status">("raise");
-  const [jumpToSearch, setJumpToSearch] = useState<string | null>(null);
+export default function MobileDashboard(
+  { userName, jumpTo }: { userName: string; jumpTo?: string | null },
+) {
+  /* `jumpTo` is the `?ticket=` param — the deep link the escalation WhatsApp
+     alert sends to the sales owner (see ESCALATION_ALERT_LINK_BASE in the
+     backend's kylas constants). It lands on Status rather than Raise, because
+     the recipient is being shown an escalation that already exists, and
+     MobileEscalationClient turns on exactMode for a jump so the full deal name
+     matches one ticket instead of every ticket sharing its ENQ. */
+  const [tab, setTab] = useState<"raise" | "status">(jumpTo ? "status" : "raise");
+  const [jumpToSearch, setJumpToSearch] = useState<string | null>(jumpTo ?? null);
 
   return (
     <div>

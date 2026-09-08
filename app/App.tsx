@@ -2828,7 +2828,7 @@ export default function App() {
         <AdminDashboard />
       )}
 
-      {effectiveTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} />}
+      {effectiveTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} jumpTo={searchParams.get('ticket')} />}
 
       {effectiveTab === 'b2bSales' && <B2BSalesCRM />}
 
