@@ -9,7 +9,9 @@ import {
 } from './mockData';
 
 // ── Stage semantics ───────────────────────────────────────────────────────────
-const isInboundDead = (l: InboundLead) => l.stage === 'Lost' || l.stage === 'Enquiry Invalid';
+// 'Enquiry Invalid' was retired as a stage by the Inbound PRD rollout — it is
+// now a lost reason, so 'Lost' alone covers both.
+const isInboundDead = (l: InboundLead) => l.stage === 'Lost';
 // An account with a live cart counts as active, same as one with a PI out.
 const KAM_ACTIVE_STAGES: KamStage[] = [
   'Quote Approval Pending', 'PI Shared', 'Awaiting Payment', 'Order Placed', 'Closed',
@@ -58,7 +60,7 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
     data.inboundTotal +
     outbound.filter((l) => l.stage === 'Yet to Meet').length;
   const inProgressCount =
-    inbound.filter((l) => ['RNR', 'Followup Required', 'Quote'].includes(l.stage)).length +
+    inbound.filter((l) => l.stage === 'Follow up').length +
     outbound.filter((l) => ['In Progress', 'Samples/Catalogues Shared'].includes(l.stage)).length +
     kam.filter((c) => ['No Active Enquiry', 'Quote Approval Pending', 'Awaiting Payment'].includes(c.stage)).length;
   const piCount =
@@ -137,10 +139,15 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
     }))
     .sort((a, b) => b.revenue - a.revenue || b.clients - a.clients || b.inbound + b.outbound - (a.inbound + a.outbound));
 
-  // Found by Expected date of closure within this week. Skip raw New inbound leads
-  // (Kylas auto-populates their closure date) — outbound/KAM are rep-managed.
+  // Found by Expected date of closure within this week.
+  //
+  // Inbound contributes its **next follow-up date**, not an expected-closure
+  // date. Kylas's `expectedClosureOn` is auto-stamped ~14 minutes after the
+  // lead is created, so every inbound lead used to land in this list with a
+  // meaningless date; the PRD defines no expected-closure field for inbound and
+  // `followUpDate` is the only forward date the team actually sets.
   const closing = [
-    ...inbound.filter((l) => l.stage !== 'New' && inboundOpen(l) && withinDays(l.expectedClosure, now, 7)).map((l) => ({ company: l.company, expected: l.expectedClosure!, value: l.value })),
+    ...inbound.filter((l) => inboundOpen(l) && withinDays(l.followUpDate, now, 7)).map((l) => ({ company: l.company, expected: l.followUpDate!, value: l.value })),
     ...outbound.filter((l) => outboundOpen(l) && withinDays(l.expectedClosure, now, 7)).map((l) => ({ company: l.company, expected: l.expectedClosure!, value: l.value })),
     ...kam.filter((c) => kamOpen(c) && withinDays(c.expectedClosure, now, 7)).map((c) => ({ company: c.company, expected: c.expectedClosure!, value: c.value })),
   ].sort((a, b) => a.expected.localeCompare(b.expected));
@@ -153,7 +160,7 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
   const nonNewLoaded = inbound.filter((l) => l.stage !== 'New').length;
   const orderWonFunnel = [
     { label: 'Total Leads', count: data.inboundTotal + nonNewLoaded },
-    { label: 'Follow-up', count: inbound.filter((l) => ['RNR', 'Followup Required'].includes(l.stage)).length },
+    { label: 'Follow-up', count: inbound.filter((l) => l.stage === 'Follow up').length },
     { label: 'PI Shared', count: inbound.filter((l) => l.stage === 'PI Shared').length },
     { label: 'Order Won', count: inbound.filter((l) => l.stage === 'Closed').length },
   ];

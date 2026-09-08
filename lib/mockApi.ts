@@ -1,3 +1,4 @@
+import { selectionsFromKylasLabels, selectionsToKylasLabels, type Selection } from '@/components/b2b/inboundModel';
 const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 const KYLAS_API_URL = "https://api.kylas.io/v1";
 const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
@@ -342,11 +343,25 @@ const B2B_INBOUND_OWNERS: Record<number, string> = {
 export const B2B_INBOUND_OWNER_LIST: { id: number; name: string }[] =
   Object.entries(B2B_INBOUND_OWNERS).map(([id, name]) => ({ id: Number(id), name }));
 
+// Field names in this Kylas instance do not mean what they say — verified
+// against live leads on 2026-09-08 and relied on by `mapInboundLead`:
+//
+//   city           → urgency ("Immediate" / "Not sure"), NOT a city
+//   companyZipcode → the qualification tag ("B2B Qualified"), NOT a zipcode
+//   zipcode        → the real pincode (this is the one that decides Bangalore
+//                    vs Hyderabad: 50xxxx Telangana, 56xxxx Karnataka)
+//   department     → a formatted mirror of the creation time; redundant with
+//                    `createdAt`, so deliberately not requested
+//
+// `expectedClosureOn` is also requested but NOT mapped: it is auto-stamped a
+// few minutes after lead creation, so it is not an expected closure date. See
+// the note on `InboundLead.expectedClosure`.
 const B2B_INBOUND_FIELDS = [
   'firstName', 'lastName', 'ownerId', 'pipelineStage', 'phoneNumbers', 'zipcode',
   'actualClosureDate', 'source', 'createdAt', 'updatedAt', 'cfBranch',
   'cfSpaceRequirement', 'requirementName', 'city', 'expectedClosureOn',
   'cfCategoriesOfInterest', 'id', 'recordActions', 'customFieldValues',
+  'companyZipcode', 'cfClientType', 'cfPsOwner', 'cfMissedCallCount', 'metaData',
 ];
 
 const KYLAS_CATEGORIES: { id: number; label: string }[] = [
@@ -370,13 +385,6 @@ function categoryIdsFromLabels(labels: string[] | undefined): number[] {
   return (labels || [])
     .map((l) => KYLAS_CATEGORIES.find((c) => c.label === l)?.id)
     .filter((id): id is number => typeof id === 'number');
-}
-
-function toDateInput(v: unknown): string {
-  if (!v) return '';
-  if (typeof v === 'number') return new Date(v).toISOString().slice(0, 10);
-  const s = String(v);
-  return s.includes('T') ? s.slice(0, 10) : s;
 }
 
 function b2bInboundRule(
@@ -435,30 +443,109 @@ function mapInboundSource(raw: unknown): import('../components/b2b/mockData').In
   return 'Other';
 }
 
+// A custom field can arrive either flattened onto the record or nested under
+// `customFieldValues`, depending on which Kylas endpoint answered.
+function cf(raw: Record<string, any>, key: string): unknown {
+  const nested = raw.customFieldValues?.[key];
+  return nested !== undefined && nested !== null ? nested : raw[key];
+}
+
+function cfString(raw: Record<string, any>, key: string): string | undefined {
+  const v = cf(raw, key);
+  if (v === undefined || v === null || v === '') return undefined;
+  return String(typeof v === 'object' ? (v as { name?: string }).name ?? '' : v).trim() || undefined;
+}
+
+// `cfMissedCallCount` comes back as 1, "2.0" or 2 depending on the endpoint.
+function cfCount(raw: Record<string, any>, key: string): number | undefined {
+  const n = Number(cfString(raw, key));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+// Kylas resolves ids to display names in `metaData.idNameStore`, which is how
+// `source: 2645445` becomes "Inbound Call".
+function kylasIdName(raw: Record<string, any>, bucket: string, id: unknown): string | undefined {
+  const store = raw?.metaData?.idNameStore?.[bucket];
+  if (!store || id === undefined || id === null) return undefined;
+  const name = store[String(id)];
+  return typeof name === 'string' && name ? name : undefined;
+}
+
+// ── Kylas lead identity ──────────────────────────────────────────────────────
+//
+// This instance is inconsistent about where a lead's name and number live:
+//
+//   lead 53329327: firstName "9182249232", lastName null   → name IS the phone
+//   lead 53197556: firstName null,         lastName "Ashu" → name is in lastName
+//
+// So neither field can be trusted by position. Both are read, the phone number
+// comes from `phoneNumbers` (the only reliable source), and a "name" that is
+// just that number again is reported as no name at all — which is precisely the
+// gap PRD §3.2's Client Company Name exists to close.
+//
+// The previous mapper read `firstName` only and used `lastName` as a *phone*
+// fallback, so a lead named in `lastName` showed no name and risked showing a
+// name where a phone was expected.
+interface KylasIdentity {
+  /** Digits as Kylas holds them, from `phoneNumbers`. */
+  phone: string;
+  /** Blank when Kylas's name is only the phone number repeated. */
+  contactName: string;
+  /** Kylas's own display name, phone-shaped or not. */
+  displayName: string;
+}
+
+function kylasLeadIdentity(raw: Record<string, any>): KylasIdentity {
+  const first = String(raw.firstName ?? '').trim();
+  const last = String(raw.lastName ?? '').trim();
+  const pn = Array.isArray(raw.phoneNumbers) && raw.phoneNumbers.length ? raw.phoneNumbers[0] : null;
+  const phone = pn ? String(pn.value || pn.dialCode || '').trim() : '';
+  const displayName = [first, last].filter(Boolean).join(' ');
+  const digits = (v: string) => v.replace(/\D/g, '').slice(-10);
+  const nameIsPhone = !!displayName && !!phone && digits(displayName) === digits(phone);
+  return { phone, contactName: nameIsPhone ? '' : displayName, displayName };
+}
+
 function mapInboundLead(raw: Record<string, any>): import('../components/b2b/mockData').InboundLead {
-  const firstName = String(raw.firstName || '').trim();
-  const lastName = String(raw.lastName || '').trim();
-  const phone = Array.isArray(raw.phoneNumbers) && raw.phoneNumbers.length
-    ? String(raw.phoneNumbers[0]?.value || raw.phoneNumbers[0]?.dialCode || '')
-    : lastName;
-  const timeline = raw.city ?? raw.customFieldValues?.city ?? undefined;
+  const { phone, contactName, displayName } = kylasLeadIdentity(raw);
   const kylasStage = typeof raw.pipelineStage === 'object' ? raw.pipelineStage?.id : raw.pipelineStage;
+  // `city` holds the urgency in this instance; PRD's Timeline reads the same value.
+  const urgency = cfString(raw, 'city');
+  const sourceName = kylasIdName(raw, 'source', raw.source);
   return {
     id: String(raw.id),
-    company: firstName || lastName || `Lead ${raw.id}`,
-    contactName: firstName || '—',
     phone,
-    ownerId: typeof raw.ownerId === 'number' ? raw.ownerId : undefined,
-    stage: 'New',
-    kylasStage: typeof kylasStage === 'number' ? kylasStage : undefined,
+    // Never '—': the old mapper's placeholder got persisted to 150 rows.
+    contactName,
     owner: B2B_INBOUND_OWNERS[raw.ownerId] || 'Unassigned',
-    source: mapInboundSource(raw.source),
-    urgency: 'Planning',
+    ownerId: typeof raw.ownerId === 'number' ? raw.ownerId : undefined,
+    leadCreatedAt: raw.createdAt ? String(raw.createdAt) : undefined,
+    qualificationTag: cfString(raw, 'companyZipcode'),
+    presalesOwner: cfString(raw, 'cfPsOwner'),
+    leadSummary: cfString(raw, 'cfSpaceRequirement'),
+    urgency,
+    pincode: cfString(raw, 'zipcode'),
+    presalesClientType: cfString(raw, 'cfClientType'),
+    presalesMissedCalls: cfCount(raw, 'cfMissedCallCount'),
+    kylasStage: typeof kylasStage === 'number' ? kylasStage : undefined,
+    source: mapInboundSource(sourceName ?? raw.source),
+
+    stage: 'New',
+    // Fallback headline only — the real one is `companyName`, which the Inbound
+    // team fills (PRD §3.2).
+    company: displayName || `Lead ${raw.id}`,
     value: 0,
-    requirement: raw.requirementName ?? raw.customFieldValues?.requirementName ?? undefined,
-    timeline,
-    categories: categoryLabelsFromIds(raw.cfCategoriesOfInterest ?? raw.customFieldValues?.cfCategoriesOfInterest),
-    expectedClosure: toDateInput(raw.expectedClosureOn) || undefined,
+
+    requirement: cfString(raw, 'requirementName'),
+    selections: selectionsFromKylasLabels(
+      categoryLabelsFromIds(cf(raw, 'cfCategoriesOfInterest')),
+    ),
+
+    // Retained aliases the shared boards still read.
+    timeline: urgency,
+    requirementBrief: cfString(raw, 'cfSpaceRequirement'),
+    categories: categoryLabelsFromIds(cf(raw, 'cfCategoriesOfInterest')),
+    // `expectedClosure` is deliberately NOT set from `expectedClosureOn`.
     calls: [],
     notes: [],
   };
@@ -666,45 +753,93 @@ export async function createInboundCallLog(params: {
 
 export interface InboundLeadEdit {
   requirement?: string;
-  expectedClosure?: string;   // 'YYYY-MM-DD'
-  categories?: string[];      // Kylas category labels
+  /** PRD selections (`Tiles`, `Plywood`, …) — mapped to Kylas's own labels. */
+  selections?: string[];
 }
 
+export interface KylasWriteResult {
+  ok: boolean;
+  error?: string;
+  /** Selections Kylas has no picklist option for, so they stayed CRM-only. */
+  dropped?: string[];
+}
+
+/**
+ * Pushes the two shared fields back to Kylas.
+ *
+ * Returns a result rather than a boolean because the caller used to discard it:
+ * a failed PATCH rendered as a successful save and the rep never knew Kylas and
+ * the CRM had diverged. `Plywood` has no Kylas picklist option, so it is
+ * reported in `dropped` instead of vanishing.
+ */
 export async function updateInboundLeadKylas(
   leadId: string | number,
   edit: InboundLeadEdit,
-): Promise<boolean> {
+): Promise<KylasWriteResult> {
+  const kylasLabels = selectionsToKylasLabels(edit.selections);
+  const dropped = (edit.selections || []).filter(
+    (s) => !selectionsToKylasLabels([s]).length,
+  );
   const body: Record<string, unknown> = {
     requirementName: edit.requirement || '',
-    cfCategoriesOfInterest: categoryIdsFromLabels(edit.categories),
+    cfCategoriesOfInterest: categoryIdsFromLabels(kylasLabels),
   };
-  if (edit.expectedClosure) body.expectedClosureOn = edit.expectedClosure;
   try {
     await kylasFetch(`/leads/${leadId}`, { method: 'PATCH', body: JSON.stringify(body) });
-    return true;
-  } catch {
-    return false;
+    return { ok: true, dropped: dropped.length ? dropped : undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 // Live editable fields for a lead, straight from Kylas (used on drawer open).
-export async function fetchInboundLeadDetail(leadId: string | number): Promise<InboundLeadEdit & {
-  requirementBrief?: string; timeline?: string; phoneId?: number; phone?: string;
-}> {
+export interface InboundLeadDetail extends InboundLeadEdit {
+  /** Narrowed from the write type: a read always yields known PRD selections. */
+  selections?: Selection[];
+  /** Kylas's own name for the lead — often the phone number repeated. */
+  kylasName?: string;
+  /** Blank when Kylas's name is just the phone number again. */
+  contactName?: string;
+  leadSummary?: string;
+  urgency?: string;
+  pincode?: string;
+  presalesOwner?: string;
+  presalesClientType?: string;
+  presalesMissedCalls?: number;
+  qualificationTag?: string;
+  leadCreatedAt?: string;
+  phoneId?: number;
+  phone?: string;
+  /** False when the lookup failed — the caller must not treat blanks as real. */
+  loaded: boolean;
+}
+
+export async function fetchInboundLeadDetail(leadId: string | number): Promise<InboundLeadDetail> {
   try {
     const d = await kylasFetch(`/leads/${leadId}`);
     const pn = Array.isArray(d.phoneNumbers) && d.phoneNumbers.length ? d.phoneNumbers[0] : null;
+    const { phone, contactName, displayName } = kylasLeadIdentity(d);
     return {
-      requirement: d.requirementName ?? d.customFieldValues?.requirementName ?? '',
-      requirementBrief: d.cfSpaceRequirement ?? d.customFieldValues?.cfSpaceRequirement ?? '',
-      timeline: d.city ?? '',
-      categories: categoryLabelsFromIds(d.cfCategoriesOfInterest ?? d.customFieldValues?.cfCategoriesOfInterest),
-      expectedClosure: toDateInput(d.expectedClosureOn),
+      loaded: true,
+      kylasName: displayName,
+      contactName,
+      requirement: cfString(d, 'requirementName') ?? '',
+      selections: selectionsFromKylasLabels(
+        categoryLabelsFromIds(cf(d, 'cfCategoriesOfInterest')),
+      ),
+      leadSummary: cfString(d, 'cfSpaceRequirement'),
+      urgency: cfString(d, 'city'),
+      pincode: cfString(d, 'zipcode'),
+      presalesOwner: cfString(d, 'cfPsOwner'),
+      presalesClientType: cfString(d, 'cfClientType'),
+      presalesMissedCalls: cfCount(d, 'cfMissedCallCount'),
+      qualificationTag: cfString(d, 'companyZipcode'),
+      leadCreatedAt: d.createdAt ? String(d.createdAt) : undefined,
       phoneId: pn && typeof pn.id === 'number' ? pn.id : undefined,
-      phone: pn ? String(pn.value || '') : undefined,
+      phone: phone || undefined,
     };
   } catch {
-    return {};
+    return { loaded: false };
   }
 }
 

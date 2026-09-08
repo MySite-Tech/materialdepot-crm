@@ -1,16 +1,24 @@
-// ── B2B Sales CRM — mock data + types ────────────────────────────────────────
-// Standalone in-memory data for the B2B Sales CRM module (Dashboard, Inbound
-// Leads, Outbound Leads). No backend yet — mirrors the PRD v1.0 field model.
+// ── B2B Sales CRM — shared types ─────────────────────────────────────────────
+// Types and vocabularies for the B2B Sales CRM module (Dashboard, Inbound,
+// Outbound, KAM). The Inbound half now follows the Inbound CRM Module PRD v1.0
+// and its field registry, status machine and provenance rules live in
+// `inboundModel.ts` — this file re-exports what the shared boards import.
+
+import {
+  INBOUND_STATUSES, INBOUND_STATUS_COLORS,
+  type InboundStatus, type InboundLocation, type Segment, type ClientType,
+  type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder,
+} from './inboundModel';
 
 export type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
 
 // ── Inbound ──────────────────────────────────────────────────────────────────
-export type InboundStage =
-  | 'New' | 'Hyderabad' | 'RNR' | 'Followup Required' | 'Quote' | 'PI Shared' | 'Closed' | 'Lost' | 'Enquiry Invalid';
-
-export const INBOUND_STAGES: InboundStage[] = [
-  'New', 'Hyderabad', 'RNR', 'Followup Required', 'Quote', 'PI Shared', 'Closed', 'Lost', 'Enquiry Invalid',
-];
+// The status vocabulary, gates and field registry live in `inboundModel.ts`,
+// which implements the Inbound CRM Module PRD. Re-exported under the old
+// `*Stage*` names because Dashboard / LeadershipBoard / analytics import them.
+export type InboundStage = InboundStatus;
+export const INBOUND_STAGES: InboundStatus[] = INBOUND_STATUSES;
+export type { InboundStatus };
 
 // Two Kylas pipeline stages both feed the local "New" column — this lets the
 // New column be filtered down to just one of them.
@@ -61,45 +69,95 @@ export interface LeadDeal {
 
 export interface InboundLead {
   id: string;
-  company: string;
-  contactName: string;
+
+  // ── §3.1 Auto-synced from Kylas, read-only here ──
+  // Presales owns every field in this block. Editing one in the CRM would be
+  // silently reverted by the next sync, so the drawer renders them read-only.
   phone: string;
-  ownerId?: number;          // Kylas owner id (for notes lookup)
-  accountType?: AccountType;
-  city?: string;
-  stage: InboundStage;
-  kylasStage?: number;      // raw Kylas pipelineStage id — only meaningful while stage === 'New'
-  owner: string;
+  contactName: string;
+  owner: string;                  // "Assigned To" — the Inbound BM
+  ownerId?: number;               // Kylas owner id (notes/call-log lookups)
+  leadCreatedAt?: string;         // ISO instant — PRD "Lead Date & Time"
+  qualificationTag?: string;      // "B2B Qualified" / "Inbound Qualified"
+  presalesOwner?: string;         // who qualified it (Kylas cfPsOwner)
+  leadSummary?: string;           // enquiry type as Presales recorded it
+  urgency?: string;               // "Immediate" / "Not sure" (Kylas `city`)
+  pincode?: string;               // real pincode (Kylas `zipcode`)
+  presalesClientType?: string;    // Kylas cfClientType — its own vocabulary
+  presalesMissedCalls?: number;   // Kylas cfMissedCallCount
+  kylasStage?: number;            // raw pipelineStage id — only meaningful while stage === 'New'
   source: 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Google' | 'Other';
-  urgency: 'Immediate need' | 'Planning' | 'Just browsing';
-  value: number;             // cart/PI value in ₹
-  followUpNote?: string;     // e.g. "Call 1"
-  overdueHours?: number;     // hours overdue on follow-up, if any
-  expectedClosure?: string;  // ISO date
-  // ── pre-sales brief (via Kylas) + working detail ──
-  timeline?: string;              // "1 month"
-  requirementBrief?: string;      // "Plywood for 3 residential projects"
-  requirement?: string;           // detailed requirement, edited by rep
-  categories?: string[];          // Kylas cfCategoriesOfInterest labels
+
+  // ── §3.2 Updated by the Inbound Sales team (b2b_lead) ──
+  companyName?: string;           // the real company; Kylas ships a phone number
+  gstNumber?: string;
+  segment?: Segment;
+  clientType?: ClientType;
+  leadType?: LeadType;
+  priority?: Priority;
+  location?: InboundLocation;     // defaults from pincode, overridable
+  callAttempts?: CallAttempt[];   // attempts 1-4, Connected | RNR
+
+  // ── §3.3 Requirement details ──
+  selections?: Selection[];       // Tiles / Plywood / … (Plywood has no Kylas option)
+  requirement?: string;           // requirement summary — pushed back to Kylas
+  expectedOrderValue?: number;    // the BM's estimate at qualification
+
+  // ── §3.4 Status ──
+  stage: InboundStatus;
+  /**
+   * When the status last changed, ISO. Nothing recorded this before, so the
+   * PRD §5.2 "Closed today / PI Shared today" tiles could only ever be answered
+   * for the whole loaded window. Rows that pre-date this field have none, and
+   * are reported as untimed rather than counted into today.
+   */
+  statusChangedAt?: string;
+  followUpDate?: string;          // 'YYYY-MM-DD'
+  followUpTime?: string;          // 'HH:MM'
+  enqId?: string;
+  orderValue?: number;            // resolved from the matching deal ticket
+  orderValueSource?: 'deal' | 'manual';
+  lostReason?: string;
+
+  // ── §3.5 Placed under (on Closed) ──
+  placedUnder?: PlacedUnder;
+  kam?: string;                   // round-robin assignee on order won
+
+  // ── Display / analytics ──
+  /** Card headline: `companyName` when the team has filled it, else the Kylas name. */
+  company: string;
+  /**
+   * Realised rupees only — `orderValue` or nothing. Never the estimate:
+   * `analytics.ts` sums this as revenue, and folding a BM's guess into it would
+   * inflate every target on the Leadership Board.
+   */
+  value: number;
   calls?: CallStep[];
   notes?: LeadNote[];
-  // ── stage-specific working fields (CRM-owned) ──
-  followUpDate?: string;          // Followup Required
-  followUpTime?: string;          // Followup Required
-  enqId?: string;                 // PI Shared
-  piStatus?: string;              // PI Shared
-  lostReason?: string;            // Lost
+
+  // ── Retained for the shared boards ──
+  accountType?: AccountType;      // legacy vocabulary; superseded by clientType
+  city?: string;
+  timeline?: string;              // = urgency; kept because the list view reads it
+  requirementBrief?: string;      // = leadSummary
+  categories?: string[];          // = selections, in Kylas labels
+  piStatus?: string;
+  followUpNote?: string;
+  overdueHours?: number;
+  /**
+   * NOT populated for inbound leads any more. Kylas `expectedClosureOn` is
+   * auto-stamped ~14 minutes after lead creation (median of 100 sampled; 45 of
+   * them within 10 minutes), so it was never an expected closure date. The PRD
+   * defines no such field for inbound — `followUpDate` is the real forward
+   * date — and mapping the junk value in put every lead into the Dashboard's
+   * "closing in 7 days" list and auto-flipped its status to Followup Required.
+   */
+  expectedClosure?: string;
 }
 
-// Kylas custom field `cfCategoriesOfInterest` picklist (id ↔ display label)
-export const KYLAS_LEAD_CATEGORIES: { id: number; label: string }[] = [
-  { id: 2689623, label: 'Tiles' },
-  { id: 2689624, label: 'Panels' },
-  { id: 2689625, label: 'Laminates' },
-  { id: 2689626, label: 'Wallpapers' },
-  { id: 2689627, label: 'Wooden Flooring' },
-  { id: 2689628, label: 'Others' },
-];
+// The Kylas `cfCategoriesOfInterest` picklist itself lives in `mockApi.ts`
+// (id ↔ Kylas label) and the PRD Selection ↔ Kylas label mapping lives in
+// `inboundModel.ts`. Nothing needs a third copy here.
 
 // ── Outbound ─────────────────────────────────────────────────────────────────
 export type OutboundStage =
@@ -179,17 +237,7 @@ export const KAMS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hard
 export const B2B_ADMINS = ['Krishna Bhagavatula'];
 
 // ── Stage → accent colour (aligned with app STATUS_COLORS vocabulary) ─────────
-export const INBOUND_STAGE_COLORS: Record<InboundStage, string> = {
-  'New':               '#3B82F6',
-  'Hyderabad':         '#14B8A6',
-  'RNR':               '#EF4444',
-  'Followup Required': '#F59E0B',
-  'Quote':             '#6366F1',
-  'PI Shared':         '#8B5CF6',
-  'Closed':            '#22C55E',
-  'Lost':              '#9CA3AF',
-  'Enquiry Invalid':   '#6B7280',
-};
+export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATUS_COLORS;
 
 export const OUTBOUND_STAGE_COLORS: Record<OutboundStage, string> = {
   'Yet to Meet':               '#3B82F6',
