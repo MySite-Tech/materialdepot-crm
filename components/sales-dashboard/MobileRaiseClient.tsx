@@ -27,20 +27,48 @@ const SEARCH_FIELDS = [
 // Request Type written to cfRequestType on submit (system-set, per the brief).
 //
 // These values come from the redefined "Raise request" field in Kylas.
-const RAISE_OPTIONS: { id: number; name: string; requestType: "Support" | "Escalation" }[] = [
-  { id: 202380, name: "Return Request", requestType: "Support" },
-  { id: 184695, name: "Modify Order", requestType: "Support" },
-  { id: 202382, name: "Order status update", requestType: "Support" },
-  { id: 184512, name: "Others", requestType: "Support" },
-  { id: 184504, name: "Delivery Delay", requestType: "Escalation" },
+//
+// `name` is the option's exact name in Kylas (Customizations > Deal form fields
+// > Raise Request, field 544462). Seven of these used to be paraphrases ("Return
+// Request" for `Return`, "Modify Order" for `Order Modification`, plus casing
+// drift like "Delivery Delay"/"Delivery delay"). Kylas resolves the option by ID
+// and overwrites whatever name you send — verified 2026-09-08 by patching
+// `{id:202380, name:"Return Request"}` and reading back `{id:202380,
+// name:"Return"}` — so this is NOT what broke the tab, and matching the names is
+// only so that what we send equals what comes back. `label` is what the chip
+// shows, so the sales-facing wording stays free to differ from Kylas' own.
+const RAISE_OPTIONS: { id: number; name: string; label?: string; requestType: "Support" | "Escalation" }[] = [
+  { id: 202380, name: "Return", label: "Return Request", requestType: "Support" },
+  { id: 184695, name: "Order Modification", label: "Modify Order", requestType: "Support" },
+  { id: 202382, name: "Order Status Update", label: "Order status update", requestType: "Support" },
+  { id: 184512, name: "Other disputes", label: "Others", requestType: "Support" },
+  { id: 184504, name: "Delivery delay", label: "Delivery Delay", requestType: "Escalation" },
   { id: 184508, name: "Item missing", requestType: "Escalation" },
   { id: 202384, name: "Incorrect quantity received", requestType: "Escalation" },
   { id: 184507, name: "Wrong material", requestType: "Escalation" },
-  { id: 184505, name: "Damaged Material", requestType: "Escalation" },
+  { id: 184505, name: "Damaged material", label: "Damaged Material", requestType: "Escalation" },
   { id: 202385, name: "Unloading not done", requestType: "Escalation" },
-  { id: 184506, name: "Quality issue", requestType: "Escalation" },
+  { id: 184506, name: "Quality Issue", label: "Quality issue", requestType: "Escalation" },
   { id: 202386, name: "Installation/Site Audit Issue", requestType: "Escalation" },
 ];
+
+// `/api/deals/[id]` passes Kylas' error body through verbatim, so a rejected
+// patch used to render in the drawer as a raw `{"timestamp":null,"code":...}`
+// blob — which tells a sales user nothing and cost a day of debugging to read.
+// Translate the codes we've actually seen and keep the raw text behind them.
+function friendlyPatchError(raw: unknown, status: number): string {
+  const text = typeof raw === "string" ? raw : raw == null ? "" : JSON.stringify(raw);
+  if (text.includes("invalid.patch.request")) {
+    return `Kylas rejected the update (invalid patch). Nothing was saved. ${text}`;
+  }
+  if (status === 401 || status === 403) {
+    return `Kylas refused the update — the API key may be expired. ${text}`;
+  }
+  if (status === 429) {
+    return "Kylas is rate-limiting us. Wait a moment and submit again.";
+  }
+  return text || `Failed: ${status}`;
+}
 
 function isSalesDeal(deal: Deal) {
   return (deal.pipeline?.name ?? "").toLowerCase().includes("sales");
@@ -133,6 +161,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   const [defaultRange, setDefaultRange] = useState<{ from: string; to: string } | null>(null);
 
   const [submitting, setSubmitting] = useState<number | null>(null);
+  // `submitting` drives the disabled styling, but state is not a lock: two taps
+  // inside one tick both read it as null and both submit, which on the re-raise
+  // path interleaves two clear/set pairs and can leave the tag cleared. The ref
+  // is the actual guard.
+  const submitLockRef = useRef(false);
   const [submitSuccess, setSubmitSuccess] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -398,6 +431,8 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     dealId: number,
     selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" }[]
   ) {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     setSubmitting(dealId);
     setSubmitError(null);
     setSubmitSuccess(null);
@@ -416,41 +451,94 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
-          throw new Error(j.error ?? `Failed: ${res.status}`);
+          throw new Error(friendlyPatchError(j.error, res.status));
         }
       }
 
-      const currentDeal = deals.find((d) => d.id === dealId) ?? selectedDeal;
-      const existing = currentDeal?.customFieldValues?.[field];
-      const existingArr = Array.isArray(existing)
-        ? (existing as { id: number; name: string }[])
-        : [];
-
-      const activeIds = new Set(RAISE_OPTIONS.map((o) => o.id));
-      const removeIndices = existingArr
-        .map((e, i) => ({ e, i }))
-        .filter(({ e }) => !activeIds.has(e.id) || selectedOptions.some((o) => o.id === e.id))
-        .map(({ i }) => i)
-        .sort((a, b) => b - a);
-
-      const mergedValue = [
-        ...existingArr.filter((e) => activeIds.has(e.id) && !selectedOptions.some((o) => o.id === e.id)),
-        ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
-      ];
-
-      // Two saves on purpose: PATCH 1 removes (so re-raising the same tag registers
-      // as a genuine change), PATCH 2 adds it back. Removing the last element makes
-      // Kylas drop the field to null, so PATCH 2 sets the WHOLE array — a `/-` append
-      // to a null field is rejected with `invalid.patch.request`.
-      if (removeIndices.length > 0) {
-        await patchDeal(
-          removeIndices.map((i) => ({ op: "remove", path: `/customFieldValues/${field}/${i}` }))
+      // The deal in local state came from Kylas' SEARCH index, which lags the
+      // record itself — deal 4733183 rendered an "Escalation: Return" badge off
+      // the index while the field on the deal was already null, and computing a
+      // patch from that phantom value is what broke this tab. So the current
+      // value is re-read from the DEAL before anything is computed from it.
+      //
+      // A failed read must NOT fall back to the indexed copy: writing the whole
+      // array back means a stale entry would be re-attached to the deal, i.e. a
+      // tag someone deliberately removed silently returns. Two attempts, then
+      // stop and say so — not raising is recoverable, a wrong array is not.
+      let existing: unknown;
+      let read = false;
+      for (let attempt = 0; attempt < 2 && !read; attempt++) {
+        try {
+          const res = await fetch(`/api/deals/${dealId}?fresh=1`, { cache: "no-store" });
+          if (!res.ok) throw new Error(String(res.status));
+          existing = ((await res.json())?.customFieldValues ?? {})[field];
+          read = true;
+        } catch {
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+      if (!read) {
+        throw new Error(
+          "Couldn't read this deal's current request from Kylas, so nothing was changed. Check your connection and try again."
         );
       }
-      await patchDeal([
-        { op: "add", path: `/customFieldValues/${field}`, value: mergedValue },
-        { op: "add", path: `/customFieldValues/cfRequestType`, value: requestType },
-      ]);
+      // Kylas hands a single-select back as a bare object and a multi-select as
+      // an array; normalise so neither shape reaches the payload builder.
+      const existingArr: { id: number; name: string }[] = Array.isArray(existing)
+        ? (existing as { id: number; name: string }[])
+        : existing && typeof existing === "object"
+          ? [existing as { id: number; name: string }]
+          : [];
+
+      const activeIds = new Set(RAISE_OPTIONS.map((o) => o.id));
+      const keptValue = existingArr.filter(
+        (e) => activeIds.has(e.id) && !selectedOptions.some((o) => o.id === e.id)
+      );
+      const mergedValue = [
+        ...keptValue,
+        ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
+      ];
+      // True only when the sales user is re-raising a tag the deal already
+      // carries — the one case that needs the clear-then-set pair below.
+      const isReRaise = existingArr.some((e) => selectedOptions.some((o) => o.id === e.id));
+
+      // Two saves when re-raising, so the repeat registers as a genuine change
+      // rather than a no-op write Kylas' automation ignores. Both saves address
+      // the WHOLE field: Kylas rejects any sub-path into a custom field value —
+      // a `/-` append against a null field, and (this is what broke the tab on
+      // 2026-09-08) an indexed `remove` such as
+      // `/customFieldValues/cfRaiseEscalation/0` when the field is null, both
+      // come back 400 `01001072 invalid.patch.request`. That killed PATCH 1, so
+      // PATCH 2 never ran and no request could be raised at all. Never name an
+      // index here; set the array.
+      let cleared = false;
+      if (isReRaise) {
+        await patchDeal([{ op: "add", path: `/customFieldValues/${field}`, value: keptValue }]);
+        cleared = true;
+      }
+      try {
+        await patchDeal([
+          { op: "add", path: `/customFieldValues/${field}`, value: mergedValue },
+          { op: "add", path: `/customFieldValues/cfRequestType`, value: requestType },
+        ]);
+      } catch (err) {
+        // The clear landed and the set did not, so the deal is now missing a tag
+        // it had before this submit — the raise failed AND took data with it.
+        // Put the original value back before reporting, so a failed re-raise is
+        // a no-op rather than a deletion.
+        if (cleared) {
+          try {
+            await patchDeal([
+              { op: "add", path: `/customFieldValues/${field}`, value: existingArr },
+            ]);
+          } catch {
+            throw new Error(
+              `${err instanceof Error ? err.message : "Update failed"} — and the previous value could not be restored. Check this deal's Raise Request field in Kylas.`
+            );
+          }
+        }
+        throw err;
+      }
       setSubmitSuccess(dealId);
       setTimeout(() => setSubmitSuccess(null), 3000);
       // Patch local state — avoid re-running the full fetch flow
@@ -465,6 +553,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to update");
     } finally {
+      submitLockRef.current = false;
       setSubmitting(null);
     }
   }
@@ -1063,7 +1152,7 @@ function RaiseField({
   submitting,
 }: {
   label: string;
-  options: { id: number; name: string; requestType?: "Support" | "Escalation" }[];
+  options: { id: number; name: string; label?: string; requestType?: "Support" | "Escalation" }[];
   onSubmit: (opts: { id: number; name: string; requestType?: "Support" | "Escalation" }[]) => void;
   submitting: boolean;
 }) {
@@ -1090,7 +1179,7 @@ function RaiseField({
                 : "bg-white text-gray-700 border-gray-300 active:bg-gray-100"
             }`}
           >
-            {o.name}
+            {o.label ?? o.name}
           </button>
         ))}
       </div>
