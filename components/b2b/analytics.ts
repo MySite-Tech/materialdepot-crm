@@ -4,33 +4,56 @@
 import type { B2BData } from '@/lib/b2bLeads';
 import {
   INBOUND_STAGES, REP_TARGETS, B2B_ADMINS,
-  type InboundLead, type OutreachLead, type KamClient,
-  type InboundStage, type KamStage, type RepRole, type TargetStore,
+  type InboundLead, type OutreachLead,
+  type InboundStage, type RepRole, type TargetStore,
 } from './mockData';
+import {
+  clientStatus, istToday,
+  type ClientEntity, type ClientOrderMetrics, type ClientStatus,
+} from './clientModel';
+import {
+  KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES,
+  kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit,
+  assignedClientRows, callCompliance, lostReasonBreakdown, segmentRevenue,
+  newVsRepeat, isAtRisk, temperatureMismatch, DAILY_CALL_TARGET,
+  type KamOrder, type CallCompliance, type CohortMonth, type KamAccountSplit,
+  type KamFunnel, type KamPipelineSplit, type NewVsRepeat,
+} from './kamModel';
 
 // ── Stage semantics ───────────────────────────────────────────────────────────
 // 'Enquiry Invalid' was retired as a stage by the Inbound PRD rollout — it is
 // now a lost reason, so 'Lost' alone covers both.
 const isInboundDead = (l: InboundLead) => l.stage === 'Lost';
-// An account with a live cart counts as active, same as one with a PI out.
-const KAM_ACTIVE_STAGES: KamStage[] = [
-  'Quote Approval Pending', 'PI Shared', 'Awaiting Payment', 'Order Placed', 'Closed',
-];
-const isKamActive = (c: KamClient) => KAM_ACTIVE_STAGES.includes(c.stage);
 
 const inboundOpen = (l: InboundLead) => l.stage !== 'Closed' && !isInboundDead(l);
 const outreachOpen = (l: OutreachLead) => l.status !== 'Closed' && l.status !== 'Lost';
-const kamOpen = (c: KamClient) => c.stage !== 'Closed' && c.stage !== 'Lost';
+const kamOpen = (o: KamOrder) => KAM_OPEN_STATUSES.includes(o.status);
 
-const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
+const sum = (ns: (number | undefined)[]) => ns.reduce((a: number, b) => a + (Number(b) || 0), 0);
+
+/**
+ * Client metrics keyed by client id, as the Dashboard resolves them. Passed in
+ * rather than fetched here so these stay pure — and so a partial load reaches
+ * the tiles as `Unknown` instead of as a wrong answer.
+ */
+export type ClientMetricsMap = Record<string, ClientOrderMetrics>;
 
 // ── Rep universe (configured reps ∪ reps seen in data, minus admins) ──────────
 export function repUniverse(data: B2BData): string[] {
   const seen = new Set<string>(REP_TARGETS.map((r) => r.rep));
   data.inbound.forEach((l) => l.owner && seen.add(l.owner));
   data.outreach.forEach((l) => l.bm && seen.add(l.bm));
-  data.kam.forEach((c) => c.kam && seen.add(c.kam));
+  data.kam.forEach((o) => o.kam && seen.add(o.kam));
+  data.clients.forEach((c) => c.kam && seen.add(c.kam));
   return [...seen].filter((r) => !B2B_ADMINS.includes(r));
+}
+
+/** Every KAM who holds an account or an order. */
+export function kamUniverse(data: B2BData): string[] {
+  const seen = new Set<string>();
+  data.kam.forEach((o) => o.kam && seen.add(o.kam));
+  data.clients.forEach((c) => c.kam && seen.add(c.kam));
+  return [...seen].sort();
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -38,25 +61,38 @@ export interface DashboardMetrics {
   revenueGenerated: number;
   pipelineByStage: { label: string; count: number }[];
   pipelineByVertical: { inbound: number; outreach: number; kam: number };
-  clients: { active: number; inactive: number };
+  /**
+   * Three states, not two. A client whose order dates could not be read is
+   * `unknown` — rendering it as Inactive would tell a manager an account has
+   * gone quiet when all that happened was a failed request.
+   */
+  clients: Record<ClientStatus, number>;
+  /** True when there are no client entities yet, so the split is not "0 active". */
+  clientMasterEmpty: boolean;
   revenueBySource: { source: string; value: number }[];
 }
 
-export function computeDashboard(data: B2BData): DashboardMetrics {
-  const { inbound, outreach, kam } = data;
+export function computeDashboard(
+  data: B2BData,
+  clientMetrics: ClientMetricsMap = {},
+  today: string = istToday(),
+): DashboardMetrics {
+  const { inbound, outreach, kam, clients } = data;
 
   const wonInbound = inbound.filter((l) => l.stage === 'Closed');
   const wonOutreach = outreach.filter((l) => l.status === 'Closed');
-  const wonKam = kam.filter((c) => c.stage === 'Closed');
-  // Counted in the funnel's Won column but NOT in revenue: revenue stays keyed on
-  // 'Closed' so auto-advance can't silently inflate the reported figure.
-  const orderPlacedKam = kam.filter((c) => c.stage === 'Order Placed');
+  const wonKam = kam.filter((o) => o.status === 'Closed');
 
   const revInbound = sum(wonInbound.map((l) => l.value));
   // `value` on an outreach lead is the deal ticket's order value or nothing —
   // never the BM's `expectedOrderValue`. See the field's doc comment.
   const revOutreach = sum(wonOutreach.map((l) => l.value));
-  const revKam = sum(wonKam.map((c) => c.value));
+  // Same rule now holds on the KAM board. This figure USED to exclude the
+  // auto-advanced 'Order Placed' rows on purpose, because their `value` was a
+  // KAM's typed estimate and counting it inflated revenue off a guess. The
+  // estimate now lives in `estimatedValue` and `value` is the deal ticket's
+  // figure, so every closed order can be counted and none of it is invented.
+  const revKam = sum(wonKam.map((o) => o.value));
 
   const newCount =
     data.inboundTotal +
@@ -64,12 +100,17 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
   const inProgressCount =
     inbound.filter((l) => l.stage === 'Follow up').length +
     outreach.filter((l) => l.status === 'Follow up' || l.status === 'Quote Share').length +
-    kam.filter((c) => ['No Active Enquiry', 'Quote Approval Pending', 'Awaiting Payment'].includes(c.stage)).length;
+    kam.filter((o) => o.status === 'Requirement Logged' || o.status === 'Quote Shared').length;
   const piCount =
     inbound.filter((l) => l.stage === 'PI Shared').length +
     outreach.filter((l) => l.status === 'PI Shared').length +
-    kam.filter((c) => c.stage === 'PI Shared').length;
-  const wonCount = wonInbound.length + wonOutreach.length + wonKam.length + orderPlacedKam.length;
+    kam.filter((o) => o.status === 'PI Shared').length;
+  const wonCount = wonInbound.length + wonOutreach.length + wonKam.length;
+
+  const clientCounts: Record<ClientStatus, number> = { Active: 0, Inactive: 0, Unknown: 0 };
+  for (const c of clients) {
+    clientCounts[clientStatus(clientMetrics[c.id] || { dateState: 'pending' }, today)]++;
+  }
 
   return {
     revenueGenerated: revInbound + revOutreach + revKam,
@@ -85,17 +126,224 @@ export function computeDashboard(data: B2BData): DashboardMetrics {
       // before PI Shared, so `value` is 0 on most of these rows. Labelled as an
       // estimate wherever it is rendered.
       outreach: sum(outreach.filter(outreachOpen).map((l) => l.orderValue || l.expectedOrderValue || 0)),
-      kam: sum(kam.filter(kamOpen).map((c) => c.value)),
+      // Same shape on the KAM board: deal-ticket rupees where a ticket exists,
+      // the KAM's estimate where none does yet.
+      kam: sum(kam.filter(kamOpen).map((o) => o.orderValue || o.estimatedValue || 0)),
     },
-    clients: {
-      active: kam.filter(isKamActive).length,
-      inactive: kam.filter((c) => !isKamActive(c)).length,
-    },
+    clients: clientCounts,
+    clientMasterEmpty: clients.length === 0,
     revenueBySource: [
       { source: 'Inbound', value: revInbound },
       { source: 'Outreach', value: revOutreach },
       { source: 'KAM Direct', value: revKam },
     ],
+  };
+}
+
+// ── KAM PRD §6 dashboard ──────────────────────────────────────────────────────
+//
+// The PRD's own list, in its own order:
+//
+//   Today's Pipeline / Total Pipeline for the month
+//   Inbound Pipeline / Outreach Pipeline / KAM Pipeline
+//   Target vs. Revenue
+//   Inbound Funnel / Outreach Funnel (custom date range)
+//   Inbound + Outreach + KAM Cohort — new clients month-wise, KAM accounts SPOC-wise
+//   BM Performance — Target vs. Achieved
+//   Total Revenue split — Inbound / Outreach / KAM
+//
+// §6.1's Pipeline definition is applied to all three verticals, not just the
+// KAM one: "orders currently at Quote Shared or PI Shared (i.e. not yet Closed
+// or Lost), split by source". On the two lead boards the equivalent statuses
+// are Quote Share/PI Shared (Outreach) and Follow up/PI Shared (Inbound — it
+// has no quote status), which is stated on screen rather than left implied.
+//
+// §6.2's suggested additions are flagged in the PRD "for review rather than
+// assuming they're wanted", so only the three that this module's own sections
+// already promise are computed: Call Compliance (§4.1's target, measured),
+// Account Temperature distribution and At-Risk Accounts (§3.2 exists so a
+// manager "can see at a glance which accounts are cooling off"), plus the KAM
+// Funnel, which is the same shape §6 already asks for on the other two boards.
+// The remaining six are left for KK to decide on.
+
+export interface VerticalPipeline {
+  label: string;
+  /** Deal-ticket rupees on open, quoted work. */
+  pipeline: number;
+  /** The rep's own estimate on the same rows. Never added to `pipeline`. */
+  estimatedPipeline: number;
+  count: number;
+  /** Which statuses this vertical counted, for the footnote. */
+  statuses: string[];
+}
+
+export interface TemperatureDistribution {
+  bands: { label: string; key: string; count: number; color: string }[];
+  unscored: number;
+  /** Accounts whose latest reading is below the one before it. */
+  dropped: number;
+  mismatches: { company: string; kam?: string; message: string }[];
+}
+
+export interface KamDashboard {
+  todayPipeline: KamPipelineSplit;
+  monthPipeline: KamPipelineSplit;
+  verticals: VerticalPipeline[];
+  revenue: { inbound: number; outreach: number; kam: number; total: number };
+  funnels: { inbound: { label: string; count: number }[]; outreach: { label: string; count: number }[]; kam: KamFunnel };
+  cohort: CohortMonth[];
+  spocSplit: KamAccountSplit[];
+  compliance: CallCompliance[];
+  complianceTotals: { logged: number; target: number; overdue: number; dueToday: number };
+  temperature: TemperatureDistribution;
+  atRisk: { company: string; kam?: string; daysLeft: number; lastContact?: string }[];
+  lostReasons: { reason: string; count: number; estimatedValue: number }[];
+  segments: { segment: string; revenue: number; clients: number }[];
+  newVsRepeat: NewVsRepeat;
+  /** Clients with no readable order dates — the denominator every rate excludes. */
+  unreadableClients: number;
+}
+
+export interface KamDashboardOptions {
+  clientMetrics?: ClientMetricsMap;
+  /** A client's first ordered ticket value, for §6.2's new-vs-repeat split. */
+  firstOrderValueFor?: (c: ClientEntity) => number | undefined;
+  today?: string;
+  /** Custom date range for the funnels and the cohort (§6). */
+  range?: { from?: string; to?: string };
+  /** Month range for "Total Pipeline for the month". */
+  month?: { from: string; to: string };
+}
+
+export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {}): KamDashboard {
+  const today = opts.today || istToday();
+  const clientMetrics = opts.clientMetrics || {};
+  const { inbound, outreach, kam, clients } = data;
+  const kams = kamUniverse(data);
+
+  const rows = assignedClientRows(clients, (c) => clientMetrics[c.id] || { dateState: 'pending' }, today);
+
+  const inboundLive = inbound.filter((l) => l.stage === 'Follow up' || l.stage === 'PI Shared');
+  const outreachLive = outreach.filter((l) => l.status === 'Quote Share' || l.status === 'PI Shared');
+  const kamLive = kamPipeline(kam);
+
+  const verticals: VerticalPipeline[] = [
+    {
+      label: 'Inbound',
+      pipeline: sum(inboundLive.map((l) => l.orderValue)),
+      estimatedPipeline: sum(inboundLive.map((l) => l.expectedOrderValue)),
+      count: inboundLive.length,
+      statuses: ['Follow up', 'PI Shared'],
+    },
+    {
+      label: 'Outreach',
+      pipeline: sum(outreachLive.map((l) => l.orderValue)),
+      estimatedPipeline: sum(outreachLive.map((l) => l.expectedOrderValue)),
+      count: outreachLive.length,
+      statuses: ['Quote Share', 'PI Shared'],
+    },
+    {
+      label: 'KAM',
+      pipeline: kamLive.pipeline,
+      estimatedPipeline: kamLive.estimatedPipeline,
+      count: kamLive.count,
+      statuses: [...KAM_PIPELINE_STATUSES],
+    },
+  ];
+
+  const revInbound = sum(inbound.filter((l) => l.stage === 'Closed').map((l) => l.value));
+  const revOutreach = sum(outreach.filter((l) => l.status === 'Closed').map((l) => l.value));
+  const revKam = sum(kam.filter((o) => o.status === 'Closed').map((o) => o.value));
+
+  const inRange = (day: string | undefined): boolean => {
+    const d = String(day || '').slice(0, 10);
+    if (!d) return !opts.range?.from && !opts.range?.to;
+    if (opts.range?.from && d < opts.range.from) return false;
+    if (opts.range?.to && d > opts.range.to) return false;
+    return true;
+  };
+
+  const inboundRanged = inbound.filter((l) => inRange(l.statusChangedAt || l.leadCreatedAt));
+  const outreachRanged = outreach.filter((l) => inRange(l.statusChangedAt || l.createdAt));
+
+  const compliance = callCompliance(clients, kams, today);
+  const complianceTotals = {
+    logged: sum(compliance.map((c) => c.logged)),
+    target: kams.length * DAILY_CALL_TARGET,
+    overdue: sum(compliance.map((c) => c.overdueFollowUps)),
+    dueToday: sum(compliance.map((c) => c.dueToday)),
+  };
+
+  const bandDefs = [
+    { key: 'cold', label: '0–3 · at risk', color: '#EF4444', test: (t: number) => t <= 3 },
+    { key: 'warm', label: '4–6 · watch',   color: '#F59E0B', test: (t: number) => t >= 4 && t <= 6 },
+    { key: 'hot',  label: '7–10 · healthy',color: '#22C55E', test: (t: number) => t >= 7 },
+  ];
+  const scored = rows.filter((r) => typeof r.temperature === 'number');
+  const temperature: TemperatureDistribution = {
+    bands: bandDefs.map((b) => ({
+      key: b.key, label: b.label, color: b.color,
+      count: scored.filter((r) => b.test(r.temperature as number)).length,
+    })),
+    unscored: rows.length - scored.length,
+    dropped: scored.filter((r) =>
+      typeof r.previousTemperature === 'number' && (r.temperature as number) < r.previousTemperature).length,
+    mismatches: rows
+      .map((r) => ({ r, m: temperatureMismatch(r) }))
+      .filter((x) => x.m)
+      .map((x) => ({ company: x.r.company, kam: x.r.client.kam, message: x.m!.message })),
+  };
+
+  type AtRiskRow = { company: string; kam?: string; daysLeft: number; lastContact?: string };
+  const atRisk: AtRiskRow[] = rows
+    .map((r): AtRiskRow | null => {
+      const metrics = r.metrics;
+      const last = String(metrics.lastOrderPlaced || '').slice(0, 10);
+      if (!last) return null;
+      const [ly, lm, ld] = last.split('-').map(Number);
+      const expiry = new Date(Date.UTC(ly, lm - 1 + 3, ld)).getTime();
+      const now = Date.parse(`${today}T00:00:00Z`);
+      const daysLeft = Number.isNaN(expiry) || Number.isNaN(now)
+        ? undefined
+        : Math.max(0, Math.round((expiry - now) / 86_400_000));
+      return isAtRisk(r, daysLeft)
+        ? { company: r.company, kam: r.client.kam, daysLeft: daysLeft as number, lastContact: r.lastInteraction?.date }
+        : null;
+    })
+    .filter((x): x is AtRiskRow => x !== null)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  return {
+    todayPipeline: kamPipelineToday(kam, today),
+    monthPipeline: kamPipeline(
+      opts.month
+        ? kam.filter((o) => {
+          const d = String(o.statusChangedAt || o.createdAt || '').slice(0, 10);
+          return !!d && d >= opts.month!.from && d <= opts.month!.to;
+        })
+        : kam,
+    ),
+    verticals,
+    revenue: { inbound: revInbound, outreach: revOutreach, kam: revKam, total: revInbound + revOutreach + revKam },
+    funnels: {
+      inbound: INBOUND_STAGES.map((label) => ({
+        label,
+        count: label === 'New' ? data.inboundTotal : inboundRanged.filter((l) => l.stage === label).length,
+      })),
+      outreach: (['Yet to Meet', 'Follow up', 'Quote Share', 'PI Shared', 'Closed', 'Lost'] as const)
+        .map((label) => ({ label, count: outreachRanged.filter((l) => l.status === label).length })),
+      kam: kamFunnel(kam, opts.range),
+    },
+    cohort: clientCohort(clients, opts.range),
+    spocSplit: kamAccountSplit(rows, kam, kams),
+    compliance,
+    complianceTotals,
+    temperature,
+    atRisk,
+    lostReasons: lostReasonBreakdown(kam),
+    segments: segmentRevenue(rows),
+    newVsRepeat: newVsRepeat(rows, opts.firstOrderValueFor || (() => undefined)),
+    unreadableClients: rows.filter((r) => r.status === 'Unknown').length,
   };
 }
 
@@ -128,7 +376,7 @@ function withinDays(dateStr: string | undefined, from: Date, days: number): bool
 }
 
 export function computeLeadership(data: B2BData, now: Date): LeadershipData {
-  const { inbound, outreach, kam } = data;
+  const { inbound, outreach, kam, clients } = data;
 
   const leaderboard: RepLeaderboardRow[] = repUniverse(data)
     .map((rep) => ({
@@ -136,11 +384,13 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
       // New-stage leads from the Kylas per-owner total + promoted (non-New) loaded rows.
       inbound: (data.inboundOwnerTotals[rep] || 0) + inbound.filter((l) => l.owner === rep && l.stage !== 'New').length,
       outreach: outreach.filter((l) => l.bm === rep).length,
-      clients: kam.filter((c) => c.kam === rep && c.stage !== 'Lost').length,
+      // Accounts held, from the client master — not open orders. A KAM with one
+      // client and four orders against it holds one account.
+      clients: clients.filter((c) => c.kam === rep).length,
       revenue:
         sum(inbound.filter((l) => l.owner === rep && l.stage === 'Closed').map((l) => l.value)) +
         sum(outreach.filter((l) => l.bm === rep && l.status === 'Closed').map((l) => l.value)) +
-        sum(kam.filter((c) => c.kam === rep && c.stage === 'Closed').map((c) => c.value)),
+        sum(kam.filter((o) => o.kam === rep && o.status === 'Closed').map((o) => o.value)),
     }))
     .sort((a, b) => b.revenue - a.revenue || b.clients - a.clients || b.inbound + b.outreach - (a.inbound + a.outreach));
 
@@ -154,7 +404,7 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
   const closing = [
     ...inbound.filter((l) => inboundOpen(l) && withinDays(l.followUpDate, now, 7)).map((l) => ({ company: l.company, expected: l.followUpDate!, value: l.value })),
     ...outreach.filter((l) => outreachOpen(l) && withinDays(l.expectedClosure, now, 7)).map((l) => ({ company: l.company, expected: l.expectedClosure!, value: l.orderValue || l.expectedOrderValue || 0 })),
-    ...kam.filter((c) => kamOpen(c) && withinDays(c.expectedClosure, now, 7)).map((c) => ({ company: c.company, expected: c.expectedClosure!, value: c.value })),
+    ...kam.filter((o) => kamOpen(o) && withinDays(o.expectedClosure, now, 7)).map((o) => ({ company: o.company, expected: o.expectedClosure!, value: o.orderValue || o.estimatedValue || 0 })),
   ].sort((a, b) => a.expected.localeCompare(b.expected));
 
   const inboundFunnel = INBOUND_STAGES.map((label) => ({
@@ -183,7 +433,7 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
   };
   inbound.filter((l) => !isInboundDead(l)).forEach((l) => bump(l.company, l.value, l.stage === 'Closed', l.owner));
   outreach.filter((l) => l.status !== 'Lost').forEach((l) => bump(l.company, l.value, l.status === 'Closed', l.bm));
-  kam.filter((c) => c.stage !== 'Lost').forEach((c) => bump(c.company, c.value, c.stage === 'Closed', c.kam));
+  kam.filter((o) => o.status !== 'Lost').forEach((o) => bump(o.company, o.value, o.status === 'Closed', o.kam));
 
   const topClientsByRevenue = [...byCompany.entries()]
     .filter(([, a]) => a.value > 0)
@@ -213,14 +463,17 @@ export interface RepTargetRow {
 }
 
 export function computeTargets(data: B2BData, store: TargetStore): RepTargetRow[] {
-  const { inbound, outreach, kam } = data;
+  const { inbound, outreach, kam, clients } = data;
   return REP_TARGETS.map((cfg) => {
     const goal = store.reps[cfg.rep] || cfg;
     const revenue =
       sum(inbound.filter((l) => l.owner === cfg.rep && l.stage === 'Closed').map((l) => l.value)) +
       sum(outreach.filter((l) => l.bm === cfg.rep && l.status === 'Closed').map((l) => l.value)) +
-      sum(kam.filter((c) => c.kam === cfg.rep && c.stage === 'Closed').map((c) => c.value));
-    const activeClients = kam.filter((c) => c.kam === cfg.rep && c.stage !== 'Lost').length;
+      sum(kam.filter((o) => o.kam === cfg.rep && o.status === 'Closed').map((o) => o.value));
+    // Accounts held, from the client master. This was previously "KAM board
+    // rows not Lost", which counted ORDERS — a KAM with four orders against one
+    // client scored four against a clients target.
+    const activeClients = clients.filter((c) => c.kam === cfg.rep).length;
     const newOnboardings =
       inbound.filter((l) => l.owner === cfg.rep && l.stage === 'Closed').length +
       outreach.filter((l) => l.bm === cfg.rep && l.status === 'Closed').length;

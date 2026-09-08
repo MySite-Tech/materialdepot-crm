@@ -43,11 +43,16 @@ import { phoneKey } from './siteAuditShared';
 
 /* The deal pipeline, in the order a deal moves through it. Mirrors the
    `STATUSES` literal in app/App.tsx — the CRM's own vocabulary, which is not
-   exported from that 3.3k-line client component. `components/b2b/kamAutoStage.ts`
-   already re-declares the same map locally for the same reason; if a status is
-   ever added there, add it here too. Anything unlisted is unranked and cannot
-   advance the funnel (guessing where a new status sits would silently mark
-   clients converted). */
+   exported from that 3.3k-line client component. Anything unlisted is unranked
+   and cannot advance the funnel (guessing where a new status sits would
+   silently mark clients converted).
+
+   The B2B side now names the same statuses in ONE place —
+   `DEAL_ORDER_STATUSES` / `DEAL_LOST_STATUSES` in `components/b2b/clientModel.ts`,
+   which `kamAutoStage.ts` and the Client Database both read. This list is not
+   folded into those because it is a RANKED pipeline (order matters, and it
+   includes the pre-order statuses) whereas those are set membership. If a
+   status is added to the CRM, add it in both places. */
 const DEAL_PIPELINE = [
   'In Cart',
   'Quote Approval Pending',

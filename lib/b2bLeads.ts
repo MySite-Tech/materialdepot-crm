@@ -1,28 +1,44 @@
 import { supabase } from '@/lib/supabase';
 import {
   fetchB2BInboundLeads, B2B_INBOUND_OWNER_LIST, fetchCRMLeadsStats,
-  fetchClientOrderHistoriesApi, fetchLeadDeals,
+  fetchClientOrderHistoriesApi, fetchClientTickets, fetchCRMLeads,
   type CRMLeadsStats, type CRMLeadsStatsBucket, type ClientOrderHistoryRow,
+  type CRMLeadRow, type ClientTicketResult,
 } from '@/lib/mockApi';
 import {
   defaultTargetStore,
-  type InboundLead, type InboundStage,
+  type InboundLead,
   type OutreachLead,
-  type KamClient, type KamStage, type KamSource,
-  type AccountType, type ProductCategory, type LeadNote, type LeadDeal,
+  type LeadNote, type LeadDeal,
   type TargetStore,
 } from '@/components/b2b/mockData';
 import type { Escalation } from '@/components/b2b/accountHealth';
+import {
+  normalizeContactNumber, normalizeGst, contactNumbers,
+  clientTypeFromLead, dealIsOrder, dealIsOpen, averageOrderValue,
+  type ClientEntity, type ClientContact, type ClientGst, type ClientSource,
+  type ClientEntityType, type ClientInteraction, type ClientOrderMetrics,
+  type KamAssignment, type ClientMergeRecord,
+} from '@/components/b2b/clientModel';
+import {
+  normalizeKamOrderStatus, isLegacyKamStage,
+  type KamOrder,
+} from '@/components/b2b/kamModel';
 import {
   normalizeStatus, decomposeLegacyStage, locationFromPincode, clientTypeFromKylas,
   type InboundStatus, type CallAttempt, type Segment, type LeadType, type Selection,
 } from '@/components/b2b/inboundModel';
 import {
   normalizeOutreachStatus,
-  type OutreachStatus, type OutreachMeeting, type CompanyType,
+  type OutreachMeeting, type CompanyType,
 } from '@/components/b2b/outreachModel';
 
-type Pipeline = 'inbound' | 'outbound' | 'kam';
+// 'client' is the Client Database's pipeline value. `pipeline` is plain text
+// with NO CHECK constraint — verified 2026-09-08 by inserting and deleting a
+// probe row with pipeline='client' against the live CRM project. (Note for
+// anyone repeating that: this Supabase does NOT honour `Prefer: tx=rollback`,
+// so the probe row persisted and had to be deleted by id.)
+type Pipeline = 'inbound' | 'outbound' | 'kam' | 'client';
 
 interface B2BLeadRow {
   id: string;
@@ -367,42 +383,157 @@ function outreachToRow(l: OutreachLead): B2BLeadRow {
   };
 }
 
-function rowToKam(r: B2BLeadRow): KamClient {
+// ── Client Database: one row per client entity ───────────────────────────────
+//
+// `pipeline='client'`, and three of the four columns are deliberately inert:
+//
+//   stage  — the constant 'Client'. The PRD's Client Status is system-computed
+//            from the deal tickets and "re-evaluates on every new closed order
+//            and on daily rollover", so storing it would create a second,
+//            stale answer that could disagree with the orders it is derived
+//            from. Every read computes it (see `clientStatus`).
+//   value  — 0. Total Revenue Generated is likewise derived, and a stored total
+//            has two independent ways to go wrong: a new ticket, and a merge.
+//   owner  — the assigned KAM. This one IS meaningful, and matches the
+//            convention the 'kam' pipeline already uses.
+
+const CLIENT_STAGE = 'Client';
+
+const CLIENT_META: MetaSpec<ClientEntity> = {
+  company:       { col: 'company',         read: (v) => String(v ?? '') },
+  contacts:      { col: 'contacts',        read: (v) => arr<ClientContact>(v) },
+  gsts:          { col: 'gsts',            read: (v) => arr<ClientGst>(v) },
+  segment:       { col: 'segment',         read: (v) => str(v) as Segment | undefined },
+  clientType:    { col: 'client_type',     read: (v) => str(v) as ClientEntityType | undefined },
+  clientTypeRaw: { col: 'client_type_raw', read: str },
+  source:        { col: 'source',          read: (v) => (str(v) as ClientSource | undefined) || 'Existing' },
+  assignments:   { col: 'assignments',     read: (v) => arr<KamAssignment>(v) },
+  remarks:       { col: 'remarks',         read: str },
+  interactions:  { col: 'interactions',    read: (v) => arr<ClientInteraction>(v) },
+  escalations:   { col: 'escalations',     read: (v) => arr<Escalation>(v) },
+  mergedFrom:    { col: 'merged_from',     read: (v) => arr<ClientMergeRecord>(v) },
+  createdAt:     { col: 'created_at',      read: str },
+  updatedAt:     { col: 'updated_at',      read: str },
+};
+
+function rowToClient(r: B2BLeadRow): ClientEntity {
   const m = r.meta_data || {};
+  const c = { id: r.id } as ClientEntity;
+  for (const [key, spec] of Object.entries(CLIENT_META) as [keyof ClientEntity, { col: string; read: (v: any) => any }][]) {
+    (c as unknown as Record<string, unknown>)[key] = spec.read(m[spec.col]);
+  }
+  // Numbers are normalised on READ as well as on write. Rows seeded from the
+  // lead boards carry whatever a rep typed ('63668 40078' is live today), and
+  // every order link keys on the 10-digit form.
+  c.contacts = (c.contacts || [])
+    .map((x) => ({ ...x, number: normalizeContactNumber(x.number) }))
+    .filter((x) => x.number);
+  c.gsts = (c.gsts || [])
+    .map((x) => ({ ...x, number: normalizeGst(x.number) }))
+    .filter((x) => x.number);
+  c.kam = str(r.owner);
+  // `created_at` is the row's own column; the meta copy only exists for rows
+  // seeded from a lead, where the client is as old as the lead that made it.
+  if (!c.createdAt) c.createdAt = str(r.created_at);
+  return c;
+}
+
+function clientToRow(c: ClientEntity): B2BLeadRow {
+  const meta: Record<string, any> = {};
+  for (const [key, spec] of Object.entries(CLIENT_META) as [keyof ClientEntity, { col: string }][]) {
+    const v = c[key];
+    meta[spec.col] = v === undefined ? null : v;
+  }
+  meta.contacts = (c.contacts || [])
+    .map((x) => ({ ...x, number: normalizeContactNumber(x.number) }))
+    .filter((x) => x.number);
+  meta.gsts = (c.gsts || [])
+    .map((x) => ({ ...x, number: normalizeGst(x.number) }))
+    .filter((x) => x.number);
   return {
-    id: r.id,
-    company: m.company || '',
-    contactName: m.contact_name || '',
-    phone: m.phone || '',
-    enqId: m.enq_id || undefined,
-    value: Number(r.value) || 0,
-    expectedClosure: m.expected_closure || undefined,
-    stage: r.stage as KamStage,
-    kam: r.owner,
-    source: (m.source as KamSource) || 'Existing',
-    notes: (m.notes as LeadNote[]) || [],
-    escalations: (m.escalations as Escalation[]) || [],
+    id: c.id,
+    pipeline: 'client',
+    stage: CLIENT_STAGE,
+    kylas_lead_id: null,
+    owner: c.kam || '',
+    value: 0,
+    meta_data: meta,
   };
 }
 
-function kamToRow(l: KamClient): B2BLeadRow {
+// ── KAM Active Orders (KAM PRD §5) ───────────────────────────────────────────
+//
+// The SAME `pipeline='kam'` rows the old board used — 30 of them, live. Nothing
+// is rewritten in place; the vocabulary change is applied on read by
+// `normalizeKamOrderStatus`, and `estimated_value` falls back to the legacy
+// `value` column because that column was a figure a KAM typed on the old form.
+//
+// The one behavioural change is which column analytics reads. `value` is now
+// the deal ticket's order value or 0 — never the estimate. That is the third
+// time this exact bug has been fixed on this board family (see
+// `OutreachLead.value`), and it means an auto-advanced row contributes real
+// rupees or nothing rather than a guess.
+
+const KAM_ORDER_META: MetaSpec<KamOrder> = {
+  clientId:         { col: 'client_id',          read: str },
+  company:          { col: 'company',            read: (v) => String(v ?? '') },
+  contactName:      { col: 'contact_name',       read: str },
+  phone:            { col: 'phone',              read: str },
+  requirement:      { col: 'requirement',        read: str },
+  enqId:            { col: 'enq_id',             read: str },
+  orderValue:       { col: 'order_value',        read: num },
+  orderValueSource: { col: 'order_value_source', read: (v) => (v === 'deal' || v === 'manual' ? v : undefined) },
+  dealStatus:       { col: 'deal_status',        read: str },
+  expectedClosure:  { col: 'expected_closure',   read: str },
+  lostReason:       { col: 'lost_reason',        read: str },
+  statusChangedAt:  { col: 'status_changed_at',  read: str },
+  source:           { col: 'source',             read: (v) => (str(v) as ClientSource | undefined) || 'Existing' },
+  legacyEscalations:{ col: 'escalations',        read: (v) => arr<Escalation>(v) },
+  notes:            { col: 'notes',              read: (v) => arr<LeadNote>(v) },
+  createdAt:        { col: 'created_at',         read: str },
+};
+
+function rowToKamOrder(r: B2BLeadRow): KamOrder {
+  const m = r.meta_data || {};
+  const o = { id: r.id, kam: r.owner } as KamOrder;
+  for (const [key, spec] of Object.entries(KAM_ORDER_META) as [keyof KamOrder, { col: string; read: (v: any) => any }][]) {
+    (o as unknown as Record<string, unknown>)[key] = spec.read(m[spec.col]);
+  }
+  o.status = normalizeKamOrderStatus(r.stage);
+  if (isLegacyKamStage(r.stage)) o.legacyStage = r.stage;
+  // The KAM's estimate. Legacy rows kept it in the `value` column, which is why
+  // the fallback is there and why it must never be removed: dropping it would
+  // blank the only figure 30 live rows carry.
+  o.estimatedValue = num(m.estimated_value) ?? num(r.value);
+  // Realised rupees only — the column analytics sums.
+  o.value = Number(o.orderValue) || 0;
+  if (!o.createdAt) o.createdAt = str(r.created_at);
+  if (!o.phone && m.phone) o.phone = str(m.phone);
+  return o;
+}
+
+function kamOrderToRow(o: KamOrder): B2BLeadRow {
+  const meta: Record<string, any> = {};
+  for (const [key, spec] of Object.entries(KAM_ORDER_META) as [keyof KamOrder, { col: string }][]) {
+    const v = o[key];
+    meta[spec.col] = v === undefined ? null : v;
+  }
+  meta.estimated_value = o.estimatedValue ?? null;
+  // `escalations` used to live on these rows. They belong to the CLIENT now (an
+  // escalation is about an account, not one order), and `KamOrder` has no field
+  // for them — so they are read into `legacyEscalations` and written straight
+  // back. Leaving them out of the writer would silently delete them on the
+  // first save of a row that has any, which is precisely the read/write
+  // asymmetry `OUTREACH_META` exists to prevent.
+  meta.escalations = o.legacyEscalations || [];
   return {
-    id: l.id,
+    id: o.id,
     pipeline: 'kam',
-    stage: l.stage,
+    stage: o.status,
     kylas_lead_id: null,
-    owner: l.kam,
-    value: l.value || 0,
-    meta_data: {
-      company: l.company,
-      contact_name: l.contactName,
-      phone: l.phone,
-      enq_id: l.enqId || '',
-      source: l.source,
-      expected_closure: l.expectedClosure || '',
-      notes: l.notes || [],
-      escalations: l.escalations || [],
-    },
+    owner: o.kam,
+    value: Number(o.orderValue) || 0,
+    meta_data: meta,
   };
 }
 
@@ -516,9 +647,22 @@ export async function fetchInboundBoard(
 export interface B2BData {
   inbound: InboundLead[];
   outreach: OutreachLead[];
-  kam: KamClient[];
+  /**
+   * KAM Active Orders (KAM PRD §5). Was `KamClient[]`, the old board's
+   * client-and-order-in-one row; the KAM module split those apart, so the
+   * orders are here and the client entities are in `clients`.
+   */
+  kam: KamOrder[];
+  /** Client Database entities (Client DB PRD §2). Empty until the master is seeded. */
+  clients: ClientEntity[];
   inboundTotal: number;                        // true Kylas total of "New" inbound leads (board only loads page 0)
   inboundOwnerTotals: Record<string, number>;  // New-stage count per owner name (for the leaderboard)
+  /**
+   * Which halves failed to load. A dashboard quietly showing only the inbound
+   * half looks exactly like a CRM with no KAM orders — the same rule the Leads
+   * tab follows.
+   */
+  failed: ('inbound' | 'outreach' | 'kam' | 'clients')[];
 }
 
 // Per-owner New-stage totals from Kylas (one light count query per inbound owner).
@@ -549,10 +693,19 @@ export async function fetchB2BData(): Promise<B2BData> {
   const ownerTotalsP = fetchInboundOwnerTotals().catch(() => ({} as Record<string, number>));
   const outreachP = fetchOutreachLeads()
     .catch((e) => { console.error('[b2b] outreach aggregate fetch failed', e); return [] as OutreachLead[]; });
-  const [inbound, outreach, kam, inboundOwnerTotals] = await Promise.all([
-    inboundP, outreachP, fetchKamClients(), ownerTotalsP,
+  const failed: B2BData['failed'] = [];
+  const kamP = fetchKamOrders()
+    .catch((e) => { console.error('[b2b] kam orders fetch failed', e); failed.push('kam'); return [] as KamOrder[]; });
+  const clientsP = fetchClients()
+    .catch((e) => { console.error('[b2b] client database fetch failed', e); failed.push('clients'); return [] as ClientEntity[]; });
+  const [inbound, outreach, kam, clients, inboundOwnerTotals] = await Promise.all([
+    inboundP, outreachP, kamP, clientsP, ownerTotalsP,
   ]);
-  return { inbound: inbound.leads, outreach, kam, inboundTotal: inbound.total, inboundOwnerTotals };
+  if (!inbound.leads.length && !inbound.total) failed.push('inbound');
+  return {
+    inbound: inbound.leads, outreach, kam, clients,
+    inboundTotal: inbound.total, inboundOwnerTotals, failed,
+  };
 }
 
 // ── Pipeline value (Django /crm/leads/stats/, branch = B2B) ───────────────────
@@ -707,9 +860,31 @@ export async function lookupEnqId(phone: string | undefined, enqId: string | und
   const want = normalizeEnq(enqId);
   const ph = String(phone || '').trim();
   if (!want || !ph) return { status: 'no-match' };
-  let deals;
+
+  // `fetchCRMLeads` directly, NOT `fetchLeadDeals` — which catches its own
+  // errors into `[]`. Through that wrapper the `unavailable` branch below was
+  // unreachable: a Django outage returned an empty deal list, which reads as
+  // "no ticket has that Enq ID", and every rep would have been told their
+  // perfectly good Enquiry ID was invalid while the backend was down. This is
+  // the same one-level-up swallow the Site Audit funnel module works around,
+  // and the reason `unavailable` exists as a third state at all.
+  let deals: LeadDeal[];
   try {
-    deals = await fetchLeadDeals(ph);
+    const { results } = await fetchCRMLeads({ q: ph, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' });
+    if (!Array.isArray(results)) throw new Error('deal ticket search returned a non-array');
+    deals = results.map((r) => ({
+      id: r.id,
+      ticketId: r.ticketId,
+      status: r.status || '',
+      cartValue: Number(r.cartValue) || 0,
+      cartItems: r.cartItems || undefined,
+      branch: r.branch || undefined,
+      assignedTo: r.assignedTo || undefined,
+      createdAt: r.createdAt || undefined,
+      followUpDate: r.followUpDate || undefined,
+      closureDate: r.closureDate || undefined,
+      lostReason: r.lostReason || undefined,
+    }));
   } catch (e) {
     // A Django outage is not evidence the Enq ID is wrong. Kept distinct from
     // 'no-match' so the UI never tells a rep their correct ID is invalid.
@@ -830,18 +1005,467 @@ export async function fetchOutreachLeads(
   return (await fetchRows('outbound', opts)).map(rowToOutreach);
 }
 
-export async function fetchKamClients(): Promise<KamClient[]> {
-  try {
-    return (await fetchRows('kam')).map(rowToKam);
-  } catch (e) {
-    console.error('[b2b] kam DB fetch failed', e);
-    return [];
+// ── Client Database reads ────────────────────────────────────────────────────
+
+export async function fetchClients(): Promise<ClientEntity[]> {
+  const rows = await fetchRows('client');
+  return rows.map(rowToClient);
+}
+
+/** Every KAM Active Order (KAM PRD §5.3). */
+export async function fetchKamOrders(): Promise<KamOrder[]> {
+  const rows = await fetchRows('kam');
+  return rows.map(rowToKamOrder);
+}
+
+// ── Order details per client (Client DB §3.2, KAM §2) ────────────────────────
+//
+// The metrics in §2 come from the BATCHED `/crm/leads/client-order-history/`
+// endpoint, which is the same derivation the Leads tab uses — so a client row
+// can never disagree with the Leads tab about how much a client has spent.
+//
+// That endpoint returns no DATES, though, and §2's Last Order Placed (and
+// therefore §2.1's Active/Inactive) needs one. So the ticket list is fetched
+// per phone number, which is one request each. Exactly the cost the Site Audit
+// funnel work hit, and mitigated the same way: a module-level cache, a
+// concurrency pool, a hard cap, and the overflow REPORTED in the UI rather than
+// silently dropped.
+
+/** Phones fetched for order details in one pass. Above this, the rest is reported. */
+export const ORDER_DETAIL_PHONE_CAP = 120;
+const ORDER_DETAIL_CONCURRENCY = 4;
+
+/** One row of a client's §3.2 Order Details table. */
+export interface ClientOrderRow {
+  enqId: string;
+  /** The specific number the order was placed under. */
+  contactNumber: string;
+  contactName: string;
+  /**
+   * §3.2 asks for "Company Name captured on that specific order" and "GST
+   * Number used on that specific order". **Neither is in the deal-ticket
+   * response** — `CRMLeadRow` carries a client NAME and no GST at all — so both
+   * are reported as unavailable rather than rendered blank, which would read as
+   * "this order had no company name on it".
+   */
+  companyOnOrder?: string;
+  gstOnOrder?: string;
+  orderValue: number;
+  status: string;
+  ordered: boolean;
+  lost: boolean;
+  open: boolean;
+  /** §3.2 "Order Placed Date" — the closure date on a placed order. */
+  orderPlacedDate?: string;
+  /** When the cart was raised. Shown when there is no closure date yet. */
+  createdAt?: string;
+  /** §3.2 SPOC — "whoever closed / is handling this order". */
+  spoc?: string;
+  branch?: string;
+  cartItems?: string;
+  lostReason?: string;
+}
+
+export interface ClientOrderDetails {
+  rows: ClientOrderRow[];
+  /** Phones that could not be read at all. Never folded into "no orders". */
+  failedPhones: string[];
+  /** Rows the backend returned under a different client's number. */
+  rejected: number;
+}
+
+const ticketCache = new Map<string, ClientTicketResult>();
+
+async function pooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+// ── Resolving a KAM order against Procurement (KAM PRD §5.1) ─────────────────
+//
+// "Enquiry ID — fetched from Procurement, once available. Order Value
+// (Procurement) — auto-fetched from Procurement, in line with the Enquiry ID."
+//
+// One `lookupEnqId` per order that carries an Enquiry ID but no resolved value.
+// Pooled and capped for the same reason the order-detail pass is: it is one
+// Django request each. The three outcomes stay three — `matched`, `no-match`
+// and `unavailable` — so a Django outage never renders as "your Enquiry ID is
+// wrong", and an order whose value could not be read is reported rather than
+// counted as ₹0 revenue by omission.
+
+export const ENQ_RESOLVE_CAP = 60;
+
+export interface KamOrderResolution {
+  order: KamOrder;
+  outcome: 'matched' | 'no-match' | 'unavailable' | 'skipped';
+  /** The order with orderValue/dealStatus filled in. Only on `matched`. */
+  resolved?: KamOrder;
+}
+
+export interface KamOrderResolveResult {
+  resolutions: KamOrderResolution[];
+  /** Orders past the cap, not attempted. Reported in the UI. */
+  overflow: number;
+}
+
+export async function resolveKamOrders(orders: KamOrder[]): Promise<KamOrderResolveResult> {
+  // Only orders that need it: an Enquiry ID present, and no deal-sourced value
+  // already stored. An order a KAM cleared by hand is left alone.
+  const needing = orders.filter((o) =>
+    !!String(o.enqId || '').trim()
+    && !!String(o.phone || '').trim()
+    && !(o.orderValueSource === 'deal' && o.orderValue !== undefined && o.dealStatus));
+  const head = needing.slice(0, ENQ_RESOLVE_CAP);
+
+  const resolutions = await pooled(head, ORDER_DETAIL_CONCURRENCY, async (o): Promise<KamOrderResolution> => {
+    const r = await lookupEnqId(o.phone, o.enqId);
+    if (r.status === 'matched') {
+      return {
+        order: o,
+        outcome: 'matched',
+        resolved: {
+          ...o,
+          orderValue: r.orderValue,
+          orderValueSource: 'deal',
+          dealStatus: r.dealStatus,
+          value: Number(r.orderValue) || 0,
+        },
+      };
+    }
+    return { order: o, outcome: r.status };
+  });
+
+  return { resolutions, overflow: Math.max(0, needing.length - head.length) };
+}
+
+function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
+  const ordered = dealIsOrder(t.status);
+  return {
+    enqId: String(t.id || ''),
+    contactNumber: phone,
+    contactName: String(t.clientName || '').trim(),
+    companyOnOrder: undefined,
+    gstOnOrder: undefined,
+    orderValue: Number(t.cartValue) || 0,
+    status: String(t.status || ''),
+    ordered,
+    lost: !ordered && !dealIsOpen(t.status),
+    open: dealIsOpen(t.status),
+    orderPlacedDate: ordered ? (String(t.closureDate || '').slice(0, 10) || undefined) : undefined,
+    createdAt: String(t.createdAt || '').slice(0, 10) || undefined,
+    spoc: String(t.assignedTo || '').trim() || undefined,
+    branch: String(t.branch || '').trim() || undefined,
+    cartItems: String(t.cartItems || '').trim() || undefined,
+    lostReason: String(t.lostReason || '').trim() || undefined,
+  };
+}
+
+/**
+ * Every deal ticket on the given contact numbers, as §3.2 rows. Cached per
+ * phone for the life of the page, so re-expanding a client is free.
+ */
+export async function fetchClientOrderRows(phones: string[]): Promise<ClientOrderDetails> {
+  const wanted = [...new Set(phones.map(normalizeContactNumber).filter((p) => p.length === 10))];
+  const missing = wanted.filter((p) => !ticketCache.has(p));
+  const fetched = await pooled(missing, ORDER_DETAIL_CONCURRENCY, fetchClientTickets);
+  for (const r of fetched) ticketCache.set(r.phone, r);
+
+  const rows: ClientOrderRow[] = [];
+  const failedPhones: string[] = [];
+  let rejected = 0;
+  for (const phone of wanted) {
+    const t = ticketCache.get(phone);
+    if (!t) continue;
+    if (t.state === 'failed') { failedPhones.push(phone); continue; }
+    rejected += t.rejected;
+    for (const row of t.rows) rows.push(ticketToOrderRow(row, phone));
   }
+  // Newest first, on whichever date the ticket actually has.
+  rows.sort((a, b) =>
+    String(b.orderPlacedDate || b.createdAt || '').localeCompare(String(a.orderPlacedDate || a.createdAt || '')));
+  return { rows, failedPhones, rejected };
+}
+
+/** Drop the cached tickets for one client, so a "re-check" button can refetch. */
+export function invalidateClientTickets(phones: string[]): void {
+  for (const p of phones.map(normalizeContactNumber)) ticketCache.delete(p);
+}
+
+/**
+ * §2's per-client metrics, assembled from both sources.
+ *
+ * `aggregates` is the batched endpoint's answer (counts and values), `dates` is
+ * the per-phone ticket pass (Last Order Placed). Either half can be absent and
+ * `dateState` says which, because a client with real orders whose dates did not
+ * load must NOT read as Inactive — that would have a KAM stand down an account
+ * that is ordering every week.
+ */
+export function clientMetricsFrom(
+  contacts: ClientContact[] | undefined,
+  aggregates: Record<string, ClientOrderHistory>,
+  dates: { byPhone: Record<string, { last?: string; loaded: boolean }> } | undefined,
+): ClientOrderMetrics {
+  const phones = contactNumbers(contacts);
+  if (!phones.length) return { dateState: 'no-phone' };
+
+  let orders = 0, totalRevenue = 0, enquiries = 0, openValue = 0;
+  let sawAggregate = false;
+  for (const p of phones) {
+    const a = aggregates[p];
+    if (!a) continue;
+    sawAggregate = true;
+    orders += a.orders;
+    totalRevenue += a.lifetimeValue;
+    enquiries += a.enquiries;
+    openValue += a.openValue;
+  }
+
+  let last: string | undefined;
+  let anyLoaded = false;
+  let allLoaded = true;
+  for (const p of phones) {
+    const d = dates?.byPhone[p];
+    if (d?.loaded) {
+      anyLoaded = true;
+      if (d.last && (!last || d.last > last)) last = d.last;
+    } else allLoaded = false;
+  }
+
+  const dateState: ClientOrderMetrics['dateState'] =
+    !dates ? 'pending'
+    : !anyLoaded ? 'unavailable'
+    : !allLoaded ? 'unavailable'
+    : last ? 'ok'
+    : 'no-orders';
+
+  return {
+    orders: sawAggregate ? orders : undefined,
+    totalRevenue: sawAggregate ? totalRevenue : undefined,
+    averageOrderValue: sawAggregate ? averageOrderValue(totalRevenue, orders) : undefined,
+    enquiries: sawAggregate ? enquiries : undefined,
+    openValue: sawAggregate ? openValue : undefined,
+    lastOrderPlaced: last,
+    dateState,
+  };
+}
+
+/** Last ordered date per phone, from the cached ticket pass. */
+export function orderDatesFromRows(
+  details: ClientOrderDetails,
+  phones: string[],
+): { byPhone: Record<string, { last?: string; loaded: boolean }> } {
+  const byPhone: Record<string, { last?: string; loaded: boolean }> = {};
+  const failed = new Set(details.failedPhones);
+  for (const p of phones.map(normalizeContactNumber)) {
+    if (!p) continue;
+    byPhone[p] = { loaded: !failed.has(p) };
+  }
+  for (const r of details.rows) {
+    if (!r.ordered) continue;
+    const day = r.orderPlacedDate || r.createdAt;
+    if (!day) continue;
+    const slot = byPhone[r.contactNumber];
+    if (slot && (!slot.last || day > slot.last)) slot.last = day;
+  }
+  return { byPhone };
+}
+
+/** A client's FIRST ordered ticket value — §6.2's new-vs-repeat split. */
+export function firstOrderValue(details: ClientOrderDetails, phones: string[]): number | undefined {
+  const wanted = new Set(phones.map(normalizeContactNumber));
+  const ordered = details.rows
+    .filter((r) => r.ordered && wanted.has(r.contactNumber))
+    .map((r) => ({ day: r.orderPlacedDate || r.createdAt || '', value: r.orderValue }))
+    .filter((r) => r.day)
+    .sort((a, b) => a.day.localeCompare(b.day));
+  return ordered.length ? ordered[0].value : undefined;
+}
+
+// ── Seeding the client universe (Client DB open question #4) ──────────────────
+//
+// "Is there a Procurement export needed to seed Order Details for clients who
+// ordered before this module existed?"
+//
+// No — Order Details is derived from the deal tickets, which already hold every
+// historical order. What DOES need seeding is the entity list itself, and the
+// CRM already knows about every client it has closed: a won Inbound lead, a won
+// Outreach lead, and the 30 legacy KAM rows each name a company and a phone.
+//
+// `planClientSeed` proposes entities from those and is never run automatically.
+// Matching is EXACT on the normalized phone — a company-name similarity is
+// reported as a possible duplicate for the merge screen instead, because two
+// firms with similar names are not one client and a seed that guessed would
+// silently fuse two books of business.
+
+export interface ClientSeedCandidate {
+  company: string;
+  phone: string;
+  contactName?: string;
+  gstNumber?: string;
+  segment?: Segment;
+  clientTypeRaw?: string;
+  clientType?: ClientEntityType;
+  source: ClientSource;
+  kam?: string;
+  /** Where the candidate came from, for the preview. */
+  origin: 'Inbound lead' | 'Outreach lead' | 'KAM board';
+  /** Set when an existing client already holds this phone. */
+  existingClientId?: string;
+  existingCompany?: string;
+}
+
+export interface ClientSeedPlan {
+  create: ClientSeedCandidate[];
+  /** Already covered by a client entity — nothing to do. */
+  alreadyLinked: ClientSeedCandidate[];
+  /** Named a company but no usable phone, so nothing could link its orders. */
+  unusable: ClientSeedCandidate[];
+}
+
+export async function planClientSeed(existing: ClientEntity[]): Promise<ClientSeedPlan> {
+  const [inbound, outreach, kamOrders] = await Promise.all([
+    fetchRows('inbound').then((rows) => rows.map(rowToInbound)).catch(() => [] as InboundLead[]),
+    fetchRows('outbound').then((rows) => rows.map(rowToOutreach)).catch(() => [] as OutreachLead[]),
+    fetchKamOrders().catch(() => [] as KamOrder[]),
+  ]);
+
+  const byPhone = new Map<string, ClientEntity>();
+  for (const c of existing) {
+    for (const p of contactNumbers(c.contacts)) if (!byPhone.has(p)) byPhone.set(p, c);
+  }
+
+  const raw: ClientSeedCandidate[] = [];
+
+  for (const l of inbound) {
+    if (l.stage !== 'Closed') continue;
+    raw.push({
+      company: String(l.companyName || l.company || '').trim(),
+      phone: normalizeContactNumber(l.phone),
+      contactName: l.contactName || undefined,
+      gstNumber: l.gstNumber || undefined,
+      segment: l.segment,
+      clientTypeRaw: l.clientType || l.presalesClientType || undefined,
+      clientType: clientTypeFromLead(l.clientType),
+      source: 'Inbound',
+      kam: l.kam || undefined,
+      origin: 'Inbound lead',
+    });
+  }
+
+  for (const l of outreach) {
+    if (l.status !== 'Closed') continue;
+    raw.push({
+      company: String(l.company || '').trim(),
+      phone: normalizeContactNumber(l.phone),
+      contactName: l.contactPerson || undefined,
+      gstNumber: l.gstNumber || undefined,
+      segment: l.segment,
+      clientTypeRaw: l.companyType || undefined,
+      clientType: clientTypeFromLead(l.companyType),
+      source: 'Outreach',
+      kam: l.kam || undefined,
+      origin: 'Outreach lead',
+    });
+  }
+
+  for (const o of kamOrders) {
+    raw.push({
+      company: String(o.company || '').trim(),
+      phone: normalizeContactNumber(o.phone),
+      contactName: o.contactName || undefined,
+      source: o.source,
+      kam: o.kam || undefined,
+      origin: 'KAM board',
+    });
+  }
+
+  // One candidate per phone. The first origin wins for the source (leads are
+  // listed before the KAM board precisely so a client's real source survives),
+  // and every later candidate only fills fields the first one left blank.
+  const merged = new Map<string, ClientSeedCandidate>();
+  const unusable: ClientSeedCandidate[] = [];
+  for (const cand of raw) {
+    if (!cand.company) continue;
+    if (cand.phone.length !== 10) { unusable.push(cand); continue; }
+    const prev = merged.get(cand.phone);
+    if (!prev) { merged.set(cand.phone, { ...cand }); continue; }
+    prev.contactName ||= cand.contactName;
+    prev.gstNumber ||= cand.gstNumber;
+    prev.segment ||= cand.segment;
+    prev.clientType ||= cand.clientType;
+    prev.clientTypeRaw ||= cand.clientTypeRaw;
+    prev.kam ||= cand.kam;
+  }
+
+  const create: ClientSeedCandidate[] = [];
+  const alreadyLinked: ClientSeedCandidate[] = [];
+  for (const cand of merged.values()) {
+    const hit = byPhone.get(cand.phone);
+    if (hit) {
+      alreadyLinked.push({ ...cand, existingClientId: hit.id, existingCompany: hit.company });
+    } else {
+      create.push(cand);
+    }
+  }
+
+  create.sort((a, b) => a.company.localeCompare(b.company));
+  return { create, alreadyLinked, unusable };
+}
+
+export function clientFromSeed(c: ClientSeedCandidate, now = new Date().toISOString()): ClientEntity {
+  return {
+    id: `CLI-${Date.now()}-${c.phone}`,
+    company: c.company,
+    contacts: [{ number: c.phone, name: c.contactName, primary: true }],
+    gsts: c.gstNumber ? [{ number: normalizeGst(c.gstNumber) }] : [],
+    segment: c.segment,
+    clientType: c.clientType,
+    clientTypeRaw: c.clientType ? undefined : c.clientTypeRaw,
+    source: c.source,
+    kam: c.kam,
+    assignments: c.kam ? [{ kam: c.kam, at: now, reason: `Seeded from ${c.origin}` }] : [],
+    interactions: [],
+    escalations: [],
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 // ── Writes (never throw to the UI; resolve to an error message or null) ───────
 // Fire-and-forget callers can keep ignoring the result. Bulk import awaits it,
 // because "imported 40 clients" is a lie if the upserts silently failed.
+
+/**
+ * A PostgrestError is a plain object, not an `Error`, so `String(e)` on one
+ * yields the literal text "[object Object]" — which is what a rep saw when a
+ * write failed. Pull out the fields Postgres actually sends. `code` matters
+ * most: 42703 is the missing-column signature this repo hits every time a
+ * migration has not been run.
+ */
+function writeErrorMessage(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (e && typeof e === 'object') {
+    const err = e as { message?: string; details?: string; hint?: string; code?: string };
+    const parts = [err.message, err.details, err.hint].filter(Boolean);
+    const text = parts.join(' — ');
+    if (text) return err.code ? `${text} (${err.code})` : text;
+    if (err.code) return `Postgres error ${err.code}`;
+    try {
+      const json = JSON.stringify(e);
+      if (json && json !== '{}') return json;
+    } catch { /* circular — fall through */ }
+  }
+  return String(e);
+}
 
 async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | null> {
   try {
@@ -850,7 +1474,7 @@ async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | nul
     return null;
   } catch (e) {
     console.error('[b2b] upsert failed', e);
-    return e instanceof Error ? e.message : String(e);
+    return writeErrorMessage(e);
   }
 }
 
@@ -862,8 +1486,34 @@ export function upsertOutreachLead(l: OutreachLead): Promise<string | null> {
   return upsert(outreachToRow(l), 'id');
 }
 
-export function upsertKamClient(l: KamClient): Promise<string | null> {
-  return upsert(kamToRow(l), 'id');
+export function upsertClient(c: ClientEntity): Promise<string | null> {
+  return upsert(clientToRow({ ...c, updatedAt: new Date().toISOString() }), 'id');
+}
+
+export function upsertKamOrder(o: KamOrder): Promise<string | null> {
+  return upsert(kamOrderToRow(o), 'id');
+}
+
+/**
+ * Delete one b2b_lead row. Used ONLY to remove the records absorbed by a merge,
+ * once the surviving entity has been written — never for a client a user
+ * "removed", because the orders behind it do not go away and an entity that
+ * vanishes takes its interaction log with it.
+ *
+ * Returns an error message rather than throwing, and the merge flow reports it:
+ * a merge whose survivor was written but whose sources were not deleted leaves
+ * duplicates on screen, which the user has to be told about rather than
+ * discovering on the next load.
+ */
+export async function deleteB2BRow(id: string): Promise<string | null> {
+  try {
+    const { error } = await supabase.from(TABLE).delete().eq('id', id);
+    if (error) throw error;
+    return null;
+  } catch (e) {
+    console.error('[b2b] delete failed', e);
+    return writeErrorMessage(e);
+  }
 }
 
 // ── Targets (shared team goals; single config row) ────────────────────────────

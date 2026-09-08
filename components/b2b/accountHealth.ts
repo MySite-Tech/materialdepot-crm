@@ -8,7 +8,18 @@
 // keyed by Kylas deal id), but carries no category, tier or resolution date, so
 // the classification the health meter needs is CRM-owned.
 
-import type { KamClient } from './mockData';
+/**
+ * What the aggregation needs from whatever it is scoring. Structural, not
+ * `KamClient`: escalations moved to the CLIENT entity when the KAM module split
+ * clients from orders (an escalation is about an account, not one order), and
+ * `ClientEntity` satisfies this without either file importing the other.
+ */
+export interface HealthSubject {
+  id: string;
+  company: string;
+  kam?: string;
+  escalations?: Escalation[];
+}
 
 export const ESCALATION_CATEGORIES = [
   'Delivery Delay',
@@ -167,15 +178,15 @@ export function scoreAccount(escalations: Escalation[] | undefined, today: strin
 
 // ── Board / dashboard aggregation ─────────────────────────────────────────────
 
-export interface AccountHealthRow {
-  client: KamClient;
+export interface AccountHealthRow<T extends HealthSubject = HealthSubject> {
+  client: T;
   health: AccountHealth;
   activePipeline: number;    // open cart value for this account, from the deal tickets
 }
 
-export interface HealthOverview {
-  rows: AccountHealthRow[];               // every account, worst first
-  attention: AccountHealthRow[];          // amber + red only, worst first
+export interface HealthOverview<T extends HealthSubject = HealthSubject> {
+  rows: AccountHealthRow<T>[];            // every account, worst first
+  attention: AccountHealthRow<T>[];       // amber + red only, worst first
   counts: Record<HealthStatus, number>;
   pipelineAtRisk: Record<HealthStatus, number>;
   escalationCount: number;                // Escalation_Count across all accounts
@@ -185,12 +196,12 @@ export interface HealthOverview {
 
 const STATUS_RANK: Record<HealthStatus, number> = { red: 0, amber: 1, green: 2 };
 
-export function buildHealthOverview(
-  clients: KamClient[],
+export function buildHealthOverview<T extends HealthSubject>(
+  clients: T[],
   today: string,
-  activePipelineFor: (client: KamClient) => number = () => 0,
-): HealthOverview {
-  const rows: AccountHealthRow[] = clients.map((client) => ({
+  activePipelineFor: (client: T) => number = () => 0,
+): HealthOverview<T> {
+  const rows: AccountHealthRow<T>[] = clients.map((client) => ({
     client,
     health: scoreAccount(client.escalations, today),
     activePipeline: activePipelineFor(client),

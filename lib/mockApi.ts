@@ -632,6 +632,57 @@ export async function fetchLeadDeals(phone: string | number): Promise<import('..
   }
 }
 
+// Every deal ticket on a set of client phone numbers, as the raw rows, keyed by
+// the number they were matched to. The Client Database's §3.2 Order Details
+// table needs the per-ticket columns the aggregate endpoint does not carry
+// (contact name, SPOC, dates), and `fetchLeadDeals` narrows those away.
+//
+// Two rules that are not in `fetchLeadDeals`:
+//
+//   The phone match is EXACT. `?q=` is an icontains over a cast of
+//   client__contact, so querying 9900099013 also returns a ticket raised under
+//   919900099013 or 99000990135 — a different client. `fetchLeadDeals` gets
+//   away with it because `lookupEnqId` then matches the Enq ID exactly, but
+//   here the rows themselves become a client's order history, and attributing
+//   one client's order to another is the exact failure the Enq ID rule exists
+//   to prevent. A row whose contact does not normalise to the number we asked
+//   for is dropped and counted.
+//
+//   A failure is reported, not swallowed. `fetchLeadDeals` catches into `[]`,
+//   which is indistinguishable from "this client has never enquired" — the
+//   landmine this file already documents. Each phone resolves to its own
+//   'ok' | 'failed' state so the UI can say which half it could not read.
+export interface ClientTicketResult {
+  phone: string;
+  state: 'ok' | 'failed';
+  rows: CRMLeadRow[];
+  /** Rows the backend returned whose contact number is not this client's. */
+  rejected: number;
+  error?: string;
+}
+
+const normalizeTicketPhone = (v: string | null | undefined): string =>
+  String(v || '').replace(/\D/g, '').slice(-10);
+
+export async function fetchClientTickets(phone: string): Promise<ClientTicketResult> {
+  const want = normalizeTicketPhone(phone);
+  if (want.length !== 10) return { phone: want, state: 'ok', rows: [], rejected: 0 };
+  try {
+    const { results } = await fetchCRMLeads({ q: want, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' });
+    const rows = Array.isArray(results) ? results : [];
+    const kept = rows.filter((r) => normalizeTicketPhone(r.clientPhone) === want);
+    return { phone: want, state: 'ok', rows: kept, rejected: rows.length - kept.length };
+  } catch (e) {
+    return {
+      phone: want,
+      state: 'failed',
+      rows: [],
+      rejected: 0,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
 export async function fetchLeadNotes(
   leadId: string | number,
   ownerId?: number,

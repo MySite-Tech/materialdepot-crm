@@ -241,36 +241,24 @@ export interface OutreachLead {
   value: number;
 }
 
-// ── KAM (existing clients & converted leads) ─────────────────────────────────
-// Quote Approval Pending / Awaiting Payment / Order Placed are driven by the
-// client's Django deal status (see kamAutoStage.ts). PI Shared is retained
-// rather than replaced: existing rows already carry that stage string, and
-// analytics.ts reads it.
-export type KamStage =
-  | 'No Active Enquiry' | 'Quote Approval Pending'
-  | 'PI Shared' | 'Awaiting Payment' | 'Order Placed' | 'Closed' | 'Lost';
-export const KAM_STAGES: KamStage[] = [
-  'No Active Enquiry', 'Quote Approval Pending',
-  'PI Shared', 'Awaiting Payment', 'Order Placed', 'Closed', 'Lost',
-];
-
+// ── KAM ──────────────────────────────────────────────────────────────────────
+//
+// `KamClient` used to live here: one row that was a client and an order at the
+// same time, with the seven stages the old board ran on. The KAM PRD splits
+// those apart, so both halves moved and neither is restated here:
+//
+//   The client entity  → `ClientEntity` in `clientModel.ts` (the Client
+//                        Database's own type, shared with the KAM module by
+//                        KAM PRD §7).
+//   The order          → `KamOrder` in `kamModel.ts`, with the PRD's five
+//                        statuses and `normalizeKamOrderStatus` mapping the old
+//                        seven on every read.
+//
+// `KamSource` stays, because both new types use it and the stored values on 30
+// live rows are its members. Note the DB values are 'Existing' | 'Inbound' |
+// 'Outbound' — the reading vocabulary is Outreach, the stored one is not (same
+// rule as `b2b_lead.pipeline`).
 export type KamSource = 'Existing' | 'Inbound' | 'Outbound';
-
-export interface KamClient {
-  id: string;
-  company: string;
-  contactName: string;
-  phone: string;
-  enqId?: string;
-  value: number;            // PI value in ₹
-  expectedClosure?: string; // ISO date
-  stage: KamStage;
-  kam: string;              // assigned KAM
-  source: KamSource;
-  notes?: LeadNote[];
-  // Logged client issues driving the account health meter. See accountHealth.ts.
-  escalations?: import('./accountHealth').Escalation[];
-}
 
 // Lost reasons for the B2B boards. Deliberately separate from ORDER_LOST_REASONS
 // in app/App.tsx — that list is the Django deal vocabulary for the Leads tab and
@@ -290,15 +278,8 @@ export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATU
 
 export const OUTREACH_STAGE_COLORS: Record<OutreachStatus, string> = OUTREACH_STATUS_COLORS;
 
-export const KAM_STAGE_COLORS: Record<KamStage, string> = {
-  'No Active Enquiry':      '#9CA3AF',
-  'Quote Approval Pending': '#F59E0B',
-  'PI Shared':         '#EAB308',
-  'Awaiting Payment':  '#3B82F6',
-  'Order Placed':      '#FB923C',
-  'Closed':            '#22C55E',
-  'Lost':              '#EF4444',
-};
+// KAM order colours live with the statuses, in `kamModel.ts`
+// (`KAM_ORDER_STATUS_COLORS`) — one declaration, not a copy here.
 
 export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
