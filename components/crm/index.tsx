@@ -123,6 +123,7 @@ export default function App() {
   const [cartValueGt, setCartValueGt] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
 
@@ -167,7 +168,7 @@ export default function App() {
   useEffect(() => {
     setPage(0);
   }, [
-    debouncedSearch, branchFilter, personFilter, statusFilter,
+    debouncedSearch, branchFilter, personFilter, statusFilter, priorityFilter,
     createdDateFrom, createdDateTo,
     followUpDateFrom, followUpDateTo,
     closureDateFrom, closureDateTo,
@@ -207,6 +208,7 @@ export default function App() {
     { key: 'propertyType', label: 'Property Type' },
     { key: 'architectInvolved', label: 'Architect/Designer' },
     { key: 'projectPhase', label: 'Project Phase' },
+    { key: 'leadPriority', label: 'Priority' },
     { key: 'status', label: 'Status' },
     { key: 'cartItems', label: 'Cart Items' },
     { key: 'followUpDate', label: 'Follow-up' },
@@ -239,9 +241,9 @@ export default function App() {
 
   const { addRemark, filteredTotal, handleDateEditSave, handleKylasModalSync, handleKylasSync, saveLead } = makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDeleteLeadState, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast });
 
-  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase'];
+  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase','Priority'];
 
-  const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   const isOverdue = (l: Lead): boolean => !!(l.followUpDate && l.followUpDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
   const isClosureOverdue = (l: Lead): boolean => !!(l.closureDate && l.closureDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
@@ -249,7 +251,7 @@ export default function App() {
 
   const COL_COUNT = visibleCols.length + 1;
 
-  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   if (!userLoaded) return null;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
@@ -292,6 +294,8 @@ export default function App() {
         branches={branches}
         cartValueGt={cartValueGt}
         categoryFilter={categoryFilter}
+        priorityFilter={priorityFilter}
+        setPriorityFilter={setPriorityFilter}
         categoryOptions={categoryOptions}
         closureDateFrom={closureDateFrom}
         closureDateTo={closureDateTo}

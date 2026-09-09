@@ -3,7 +3,7 @@
 import { CartItem, Lead, Remark, Visit } from '../../../types/crm';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
 
-import { CLIENT_TYPES, MARK_LOST_ELIGIBLE, MIN_LOST_AGE_DAYS, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../constants';
+import { CLIENT_TYPES, MARK_LOST_ELIGIBLE, MIN_LOST_AGE_DAYS, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS, LEAD_PRIORITIES } from '../constants';
 import { DateEditPopup } from '../ui/prompts';
 import { LeadDrawerProps } from '../types';
 import { Avatar, Field } from '../ui';
@@ -23,11 +23,12 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
     propertyType: lead.propertyType || '',
     architectInvolved: lead.architectInvolved || false,
     projectPhase: lead.projectPhase || '',
+    leadPriority: lead.leadPriority,
   } : {
     id: '', createdAt: todayStr(), assignedTo: currentUserName, branch: (branches[0] || ''), status: STATUSES[0],
     cartValue: 0, cartItems: '', followUpDate: '', closureDate: '', lostReason: '', remarks: [],
     clientName: '', clientPhone: '', visits: [],
-    clientType: '', propertyType: '', architectInvolved: false, projectPhase: '',
+    clientType: '', propertyType: '', architectInvolved: false, projectPhase: '', leadPriority: undefined,
   });
   const origFollowUpDate = useRef(lead ? lead.followUpDate : '');
   const [remarkAuthor, setRemarkAuthor] = useState(currentUserName);
@@ -190,6 +191,12 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.projectPhase || ''} onChange={(e) => set('projectPhase', e.target.value)}>
                   <option value="">Select...</option>
                   {PROJECT_PHASES.map((ph) => <option key={ph} value={ph}>{ph}</option>)}
+                </select>
+              </Field>
+              <Field label="PRIORITY">
+                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.leadPriority || ''} onChange={(e) => set('leadPriority', (e.target.value || undefined) as 'hot' | 'warm' | 'cold' | undefined)}>
+                  <option value="">Select...</option>
+                  {LEAD_PRIORITIES.map((lp) => <option key={lp} value={lp}>{lp.charAt(0).toUpperCase() + lp.slice(1)}</option>)}
                 </select>
               </Field>
               <Field label="STATUS">

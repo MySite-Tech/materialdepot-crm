@@ -54,6 +54,7 @@ export interface CRMLeadsQuery {
   sortDir?: 'asc' | 'desc';
   taskFilter?: string;
   category?: string;
+  priority?: string;
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number }
@@ -112,6 +113,7 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   }
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
   if (query.category) params.set('category', query.category);
+  if (query.priority) params.set('priority', query.priority);
   const qs = params.toString();
   const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`);
   return {
@@ -208,6 +210,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   }
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
   if (query.category) params.set('category', query.category);
+  if (query.priority) params.set('priority', query.priority);
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();

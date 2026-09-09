@@ -5,6 +5,8 @@ import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/s
 
 export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
+export const LEAD_PRIORITIES = ['hot', 'warm', 'cold'] as const;
+
 export const STATUSES = [
   'In Cart',
   'Quote Approval Pending',

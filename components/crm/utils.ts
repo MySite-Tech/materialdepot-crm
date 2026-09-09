@@ -164,10 +164,11 @@ export const triggerDownload = (blob: Blob, filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
+export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
   bmNameToPhone: Record<string, string>;
   branchFilter: string[];
   categoryFilter: string[];
+  priorityFilter: string[];
   closureDateFrom: string;
   closureDateTo: string;
   createdDateFrom: string;
@@ -205,5 +206,6 @@ export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, c
     ownerUserOrgId: currentUser.role === 'sales' ? currentUser.id : undefined,
     taskFilter: taskFilter || undefined,
     category: categoryFilter.length ? categoryFilter.join(',') : undefined,
+    priority: priorityFilter.length ? priorityFilter.join(',') : undefined,
   };
 }

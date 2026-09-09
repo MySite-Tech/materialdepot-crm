@@ -38,6 +38,7 @@ export interface Lead {
   propertyType?: string;
   architectInvolved?: boolean;
   projectPhase?: string;
+  leadPriority?: 'hot' | 'warm' | 'cold';
 }
 
 export interface AppUser {

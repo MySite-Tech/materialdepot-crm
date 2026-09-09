@@ -19,6 +19,7 @@ export async function fetchClientProperties(contacts: string[]): Promise<Record<
 
 export interface LeadPropertyUpdate {
   name?: string;
+  lead_priority?: string;
   client_type?: string;
   property_type?: string;
   architect_involved?: string;

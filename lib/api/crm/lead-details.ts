@@ -44,6 +44,7 @@ export async function upsertLead(lead: import('../../../types/crm').Lead): Promi
     followup_date: lead.followUpDate || undefined,
     project_phase: lead.projectPhase || undefined,
     estimated_closure_date: lead.closureDate || undefined,
+    lead_priority: lead.leadPriority || undefined,
   }, lead.ticketId);
 }
 

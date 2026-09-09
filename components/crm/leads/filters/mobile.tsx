@@ -1,16 +1,18 @@
 'use client';
 
 import { CategoryOption } from '../../../../lib/api/dashboards/weekly-funnel';
-import { STATUSES } from '../../constants';
+import { LEAD_PRIORITIES, STATUSES } from '../../constants';
 import { DateRangePicker, MultiSelect } from '../../ui/inputs';
 import { Dispatch, SetStateAction } from 'react';
 
-export function LeadsFiltersMobile({ availableBMs, branchFilter, branches, cartValueGt, categoryFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, personFilter, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setFollowUpDateFrom, setFollowUpDateTo, setPersonFilter, setSearch, setShowMobileFilters, setStatusFilter, setTaskFilter, showMobileFilters, statusFilter, taskFilter, userAllowedBranches }: {
+export function LeadsFiltersMobile({ availableBMs, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, personFilter, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setFollowUpDateFrom, setFollowUpDateTo, setPersonFilter, setSearch, setShowMobileFilters, setStatusFilter, setTaskFilter, showMobileFilters, statusFilter, taskFilter, userAllowedBranches }: {
   availableBMs: string[];
   branchFilter: string[];
   branches: string[];
   cartValueGt: string;
   categoryFilter: string[];
+  priorityFilter: string[];
+  setPriorityFilter: Dispatch<SetStateAction<string[]>>;
   categoryOptions: CategoryOption[];
   closureDateFrom: string;
   closureDateTo: string;
@@ -55,9 +57,9 @@ export function LeadsFiltersMobile({ availableBMs, branchFilter, branches, cartV
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
           </svg>
-          {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== '', categoryFilter.length > 0].filter(Boolean).length > 0 && !showMobileFilters && (
+          {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== '', categoryFilter.length > 0, priorityFilter.length > 0].filter(Boolean).length > 0 && !showMobileFilters && (
             <span className="absolute -top-1 -right-1 bg-[#EAB308] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-              {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== '', categoryFilter.length > 0].filter(Boolean).length}
+              {[statusFilter.length > 0, personFilter.filter(p => availableBMs.includes(p)).length > 0, branchFilter.length > 0, !!(createdDateFrom || createdDateTo), !!(followUpDateFrom || followUpDateTo), !!(closureDateFrom || closureDateTo), cartValueGt !== '', taskFilter !== '', categoryFilter.length > 0, priorityFilter.length > 0].filter(Boolean).length}
             </span>
           )}
         </button>
@@ -78,6 +80,7 @@ export function LeadsFiltersMobile({ availableBMs, branchFilter, branches, cartV
           <DateRangePicker className="w-full" label="Follow-up" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
           <DateRangePicker className="w-full" label="Closure" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
           <MultiSelect className="w-full" options={categoryOptions.map((c) => c.name)} selected={categoryFilter} onChange={setCategoryFilter} label="Category" searchable />
+          <MultiSelect className="w-full" options={LEAD_PRIORITIES.map((lp) => lp.charAt(0).toUpperCase() + lp.slice(1))} selected={priorityFilter.map((lp) => lp.charAt(0).toUpperCase() + lp.slice(1))} onChange={(labels) => setPriorityFilter(labels.map((l) => l.toLowerCase()))} label="Priority" />
           <input
             className="px-2 py-2 text-[12px] border border-gray-200 rounded-md outline-none font-mono w-full"
             type="text"

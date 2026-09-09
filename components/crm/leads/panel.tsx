@@ -12,7 +12,7 @@ import { DateEditState } from '../types';
 import { fmtINR } from '../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
-export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, branchFilter, branches, cartValueGt, categoryFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalPages, userAllowedBranches, wonCount }: {
+export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalPages, userAllowedBranches, wonCount }: {
   ALL_COLUMNS: { key: string; label: string; }[];
   COL_COUNT: number;
   activeCount: number;
@@ -21,6 +21,8 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
   branches: string[];
   cartValueGt: string;
   categoryFilter: string[];
+  priorityFilter: string[];
+  setPriorityFilter: Dispatch<SetStateAction<string[]>>;
   categoryOptions: CategoryOption[];
   closureDateFrom: string;
   closureDateTo: string;
@@ -137,6 +139,8 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
       branches={branches}
       cartValueGt={cartValueGt}
       categoryFilter={categoryFilter}
+      priorityFilter={priorityFilter}
+      setPriorityFilter={setPriorityFilter}
       categoryOptions={categoryOptions}
       closureDateFrom={closureDateFrom}
       closureDateTo={closureDateTo}
@@ -173,6 +177,8 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
       branches={branches}
       cartValueGt={cartValueGt}
       categoryFilter={categoryFilter}
+      priorityFilter={priorityFilter}
+      setPriorityFilter={setPriorityFilter}
       categoryOptions={categoryOptions}
       closureDateFrom={closureDateFrom}
       closureDateTo={closureDateTo}

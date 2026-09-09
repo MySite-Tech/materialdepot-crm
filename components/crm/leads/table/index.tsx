@@ -40,6 +40,7 @@ export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync
               {isColVisible('propertyType') && <Th label="Property Type" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('architectInvolved') && <Th label="Architect/Designer" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('projectPhase') && <Th label="Project Phase" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+              {isColVisible('leadPriority') && <Th label="Priority" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('status') && <Th label="Status" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('cartItems') && <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('followUpDate') && <Th label="Follow-up" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
@@ -73,6 +74,17 @@ export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync
                   {l.architectInvolved == null ? '—' : l.architectInvolved ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}
                 </td>}
                 {isColVisible('projectPhase') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">{l.projectPhase || '—'}</td>}
+                {isColVisible('leadPriority') && <td className="px-3 py-2.5 text-[13px] align-middle text-xs">
+                  {l.leadPriority ? (
+                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                      l.leadPriority === 'hot' ? 'bg-red-100 text-red-700' :
+                      l.leadPriority === 'warm' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {l.leadPriority.charAt(0).toUpperCase() + l.leadPriority.slice(1)}
+                    </span>
+                  ) : '—'}
+                </td>}
                 {isColVisible('status') && <td className="px-3 py-2.5 text-[13px] align-middle">
                   <EditableStatus status={l.status} lostReason={l.lostReason} />
                 </td>}

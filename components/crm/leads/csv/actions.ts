@@ -3,17 +3,18 @@
 import { fetchCRMLeads } from '../../../../lib/api/crm/leads';
 import { upsertLeads } from '../../../../lib/api/crm/lead-details';
 import { AppUser, CartItem, Lead, Remark, Visit } from '../../../../types/crm';
-import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../../constants';
+import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, LEAD_PRIORITIES, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../../constants';
 import { CsvRow } from '../../types';
 import { csvEscape, leadToExportRow, mergeLead, todayStr, triggerDownload } from '../../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
-export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
+export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
   CSV_HEADERS: string[];
   bmNameToPhone: Record<string, string>;
   branchFilter: string[];
   branches: string[];
   categoryFilter: string[];
+  priorityFilter: string[];
   closureDateFrom: string;
   closureDateTo: string;
   createdDateFrom: string;
@@ -64,6 +65,7 @@ const buildLeadsExportQuery = () => {
     sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
     taskFilter: taskFilter || undefined,
     category: categoryFilter.length ? categoryFilter.join(',') : undefined,
+    priority: priorityFilter.length ? priorityFilter.join(',') : undefined,
   };
 };
 
@@ -190,7 +192,7 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
       const fields = parseCsvLine(lines[r]);
       if (fields.length < 14) { errors.push('Row ' + rowNum + ': Expected at least 14 columns, got ' + fields.length); continue; }
 
-      const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr, projectPhaseStr] = fields;
+      const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr, projectPhaseStr, leadPriorityStr] = fields;
 
       if (!leadId) errors.push('Row ' + rowNum + ': Lead ID is required');
       if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
@@ -217,10 +219,12 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
       const clientType = (clientTypeStr || '').trim();
       const propertyType = (propertyTypeStr || '').trim();
       const projectPhase = (projectPhaseStr || '').trim();
+      const leadPriority = (leadPriorityStr || '').trim().toLowerCase();
       const architectInvolvedRaw = (architectInvolvedStr || '').trim().toLowerCase();
       if (clientType && !CLIENT_TYPES.includes(clientType)) errors.push('Row ' + rowNum + ': Client Type "' + clientType + '" is not valid. Must be one of: ' + CLIENT_TYPES.join(', '));
       if (propertyType && !PROPERTY_TYPES.includes(propertyType)) errors.push('Row ' + rowNum + ': Property Type "' + propertyType + '" is not valid. Must be one of: ' + PROPERTY_TYPES.join(', '));
       if (projectPhase && !PROJECT_PHASES.includes(projectPhase)) errors.push('Row ' + rowNum + ': Project Phase "' + projectPhase + '" is not valid. Must be one of: ' + PROJECT_PHASES.join(', '));
+      if (leadPriority && !LEAD_PRIORITIES.includes(leadPriority as typeof LEAD_PRIORITIES[number])) errors.push('Row ' + rowNum + ': Priority "' + leadPriorityStr + '" is not valid. Must be one of: ' + LEAD_PRIORITIES.join(', '));
       if (architectInvolvedRaw && !['true', 'false', 'yes', 'no'].includes(architectInvolvedRaw)) errors.push('Row ' + rowNum + ': Architect/Designer Involved "' + architectInvolvedStr + '" must be true/false/yes/no or empty');
       const architectInvolved = ['true', 'yes'].includes(architectInvolvedRaw);
 
@@ -261,7 +265,7 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
         }
       }
 
-      parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved, projectPhase });
+      parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved, projectPhase, leadPriority: (leadPriority as 'hot' | 'warm' | 'cold' | undefined) || undefined });
     }
 
     if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
@@ -304,6 +308,7 @@ const importCsvLeads = () => {
     propertyType: row.propertyType || '',
     architectInvolved: row.architectInvolved || false,
     projectPhase: row.projectPhase || '',
+    leadPriority: (row.leadPriority as 'hot' | 'warm' | 'cold' | undefined) || undefined,
   }));
   setLeads((prev) => {
     const updated = [...prev];
