@@ -16,7 +16,7 @@ import { AddOrderOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../../staff/staff-modals';
 import { Toast } from '../../install-ops/ui';
 import { DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, INSTALL_SKU, today } from '../../install-ops/constants';
-import { detectAuditBy, dstr, followUpDue, loadSlots, mapInstallRow, needActionCount, opsCallDue } from '../../install-ops/utils';
+import { detectAuditBy, dstr, loadSlots, mapInstallRow, needActionCount, openFollowUps, opsCallDue, reschedSubjobs, sjsForDay } from '../../install-ops/utils';
 import { SM_ATTRIBUTION } from '../../install-ops/types';
 import type { InstallOrder, Installer, SlotDef, ViewKey } from '../../install-ops/types';
 
@@ -317,10 +317,10 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
   const na = needActionCount(orders);
   const cCalls = orders.filter(opsCallDue).length;
   const todayStr = dstr(today);
-  const cToday = orders.filter((o) => (o.subjobs || []).some((sj) => sj.date === todayStr)).length;
-  const cResched = orders.filter((o) => o.status === 'reschedule' || (o.subjobs || []).some((sj) => sj.status === 'reschedule')).length;
+  const cToday = sjsForDay(orders, installers, todayStr).length;
+  const cResched = reschedSubjobs(orders).length;
   const cRect = orders.filter((o) => o.service && o.service.rectification_of).length;
-  const cFollowUp = orders.filter((o) => followUpDue(o, todayStr)).length;
+  const cFollowUp = openFollowUps(orders).length;
   const COUNTS: Partial<Record<ViewKey, number>> = {
     orders: orders.length, needaction: na, calls: cCalls, schedule: cToday, reschedule: cResched, followups: cFollowUp, deleted: deleted.length, rectifications: cRect,
   };

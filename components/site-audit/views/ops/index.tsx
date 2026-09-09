@@ -259,7 +259,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     orders: orders.filter((o) => !['slot_reserved', 'slot_converted'].includes(o.status)).length,
     schedule: orders.filter((o) => o.date === todayStr && !['slot_reserved', 'slot_converted'].includes(o.status)).length,
     reschedule: orders.filter((o) => o.status === 'reschedule').length,
-    followups: orders.filter((o) => hasOpenFollowUp(o) && o.service!.follow_up_date! <= todayStr).length,
+    followups: orders.filter(hasOpenFollowUp).length,
     deleted: deleted.length,
     rectifications: orders.filter((o) => o.service && o.service.rectification_of).length,
   };

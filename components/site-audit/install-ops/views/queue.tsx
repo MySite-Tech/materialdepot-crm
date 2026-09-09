@@ -2,7 +2,7 @@
 
 import { Chip, EmptyRow, TypeTag } from '../ui';
 import { today } from '../constants';
-import { dstr, fmtDate, followUpDue, hasOpenFollowUp, opsCallDue, slotLabel } from '../utils';
+import { dstr, fmtDate, needActionGroups, openFollowUps, opsCallDue, reschedSubjobs, slotLabel } from '../utils';
 import type { InstallOrder, SlotDef } from '../types';
 
 interface BaseProps {
@@ -15,10 +15,7 @@ const td = 'px-3 py-2.5 text-[13px] border-t border-gray-100 align-top';
 
 export function NeedActionView({ orders, onOpenOrder }: BaseProps) {
   const todayStr = dstr(today);
-  const opsList = orders.filter(opsCallDue);
-  const fuList = orders.filter((o) => followUpDue(o, todayStr)).filter((o) => !opsCallDue(o));
-  const reschedItems: Array<{ o: InstallOrder; sj: any }> = [];
-  orders.forEach((o) => (o.subjobs || []).forEach((sj) => { if (sj.status === 'reschedule') reschedItems.push({ o, sj }); }));
+  const { ops: opsList, followUps: fuList, resched: reschedItems } = needActionGroups(orders, todayStr);
 
   return (
     <>
@@ -142,8 +139,7 @@ export function CallsView({ orders, onOpenOrder }: BaseProps) {
 }
 
 export function RescheduleView({ orders, onOpenOrder, slotsFl, slotsWp }: BaseProps & { slotsFl: SlotDef[]; slotsWp: SlotDef[] }) {
-  const items: Array<{ o: InstallOrder; sj: any }> = [];
-  orders.forEach((o) => (o.subjobs || []).forEach((sj) => { if (sj.status === 'reschedule') items.push({ o, sj }); }));
+  const items = reschedSubjobs(orders);
   return (
     <>
       <div className="mb-4">
@@ -172,7 +168,7 @@ export function RescheduleView({ orders, onOpenOrder, slotsFl, slotsWp }: BasePr
 
 export function FollowupsView({ orders, onOpenOrder }: BaseProps) {
   const todayStr = dstr(today);
-  const list = orders.filter(hasOpenFollowUp).sort((a, b) => a.service!.follow_up_date!.localeCompare(b.service!.follow_up_date!));
+  const list = openFollowUps(orders);
   return (
     <>
       <div className="mb-4">

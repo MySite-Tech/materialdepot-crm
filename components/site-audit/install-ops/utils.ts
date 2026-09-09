@@ -242,12 +242,31 @@ export function followUpDue(o: InstallOrder, todayStr: string): boolean {
   return hasOpenFollowUp(o) && o.service!.follow_up_date! <= todayStr;
 }
 
+export function reschedSubjobs(orders: InstallOrder[]): Array<{ o: InstallOrder; sj: Subjob }> {
+  const items: Array<{ o: InstallOrder; sj: Subjob }> = [];
+  orders.forEach((o) => (o.subjobs || []).forEach((sj) => { if (sj.status === 'reschedule') items.push({ o, sj }); }));
+  return items;
+}
+
+export function openFollowUps(orders: InstallOrder[]): InstallOrder[] {
+  return orders
+    .filter(hasOpenFollowUp)
+    .sort((a, b) => a.service!.follow_up_date!.localeCompare(b.service!.follow_up_date!));
+}
+
+export function needActionGroups(orders: InstallOrder[], todayStr: string): {
+  ops: InstallOrder[]; followUps: InstallOrder[]; resched: Array<{ o: InstallOrder; sj: Subjob }>;
+} {
+  return {
+    ops: orders.filter(opsCallDue),
+    followUps: orders.filter((o) => followUpDue(o, todayStr)).filter((o) => !opsCallDue(o)),
+    resched: reschedSubjobs(orders),
+  };
+}
+
 export function needActionCount(orders: InstallOrder[]): number {
-  const opsDue = orders.filter(opsCallDue).length;
-  const todayStr = dstr(today);
-  const fuDue = orders.filter((o) => followUpDue(o, todayStr)).length;
-  const resched = orders.filter((o) => o.status === 'reschedule' || (o.subjobs || []).some((sj) => sj.status === 'reschedule')).length;
-  return opsDue + fuDue + resched;
+  const g = needActionGroups(orders, dstr(today));
+  return g.ops.length + g.followUps.length + g.resched.length;
 }
 
 export function syncParentStatus(subjobs: Subjob[] | null, fallback: string): string {

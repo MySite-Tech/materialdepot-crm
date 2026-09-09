@@ -7,11 +7,12 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-42 entries. They live in one file because they cross-reference each other —
+43 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
 - A booking's date must come from the sub-job, not from its assignment
+- A tab's badge must count the rows that tab lists — derive both from one function
 - Availability is per CITY, and the Store Team kiosk was the one surface that did not know it
 - `AddStaffOverlay` never wrote a city
 - Daily caps live on `profiles`, not in localStorage — and the columns are probe-gated
@@ -80,6 +81,23 @@ grep for a term, then read around the line you hit rather than opening all of it
   Fixed 2026-09-10; the same logic was on `main` (`install-ops/shared.ts:376`)
   since before the refactor. **An assignment is a staffing decision; the date is
   the booking. Never read one to learn the other.**
+
+- **A tab's badge must count the rows that tab lists — derive both from one
+  function.** Four badges in `install-ops` and one in `audit-ops` were computed
+  inline next to the nav definition while the view re-derived its own list, and
+  the two rules had drifted apart: **Follow-ups** counted only follow-ups *due*
+  (`follow_up_date <= today`) while the tab listed every *open* one, so the badge
+  read 7 beside 11 rows (both modules had this); **Need Action** summed
+  `ops + followUps + resched` without the view's de-dup of follow-ups against
+  ops-calls, and counted reschedule *orders* where the view lists reschedule
+  *sub-jobs*, so it could exceed its own list; **To reschedule** likewise counted
+  orders, including ones whose order-level status was `reschedule` with no flagged
+  sub-job — rows that render nowhere; **Today's installs** counted orders while
+  the calendar counted sub-jobs. `needActionGroups`, `reschedSubjobs`,
+  `openFollowUps` and `sjsForDay` are now the single source for each queue, used
+  by the badge and the view alike. Fixed 2026-09-10; all of it predates the
+  refactor. Same family as the booking-date landmine above: **two places
+  computing one number will drift, and the badge is the half nobody checks.**
 
 - **Availability is per CITY, and the Store Team kiosk was the one surface that
   did not know it.** An auditor/installer is assigned a city when they join and
