@@ -11,7 +11,6 @@ type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Fact
 
 export type InboundStage = InboundStatus;
 export const INBOUND_STAGES: InboundStatus[] = INBOUND_STATUSES;
-export type { InboundStatus };
 
 export const NEW_KYLAS_STAGES: { id: number; label: string }[] = [
   { id: 220515, label: 'B2B Qualified' },

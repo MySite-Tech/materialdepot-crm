@@ -4,7 +4,7 @@ import {
   type Segment, type LeadType, type Selection, type FieldOwner, type FollowUpBucket,
 } from './inbound';
 
-export type { Segment, LeadType, Selection, FieldOwner, FollowUpBucket };
+export type { Segment, LeadType, Selection, FollowUpBucket };
 export {
   SEGMENTS, LEAD_TYPES, LEAD_TYPE_COLORS, SELECTIONS, istToday, followUpBucket, daysUntil,
 

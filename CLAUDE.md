@@ -41,7 +41,7 @@ Rules, all of which the repo currently satisfies:
 - **Filenames are kebab-case,** `app/` included. Next.js only owns the *reserved*
   names there (`page.tsx`, `layout.tsx`, `route.ts`, `manifest.ts`); anything
   colocated alongside them is a normal file and follows the rule —
-  `app/pwa-register.tsx`, not `app/PwaRegister.tsx`.
+  `app/pwa-register.tsx`, not `app/pwa-register.tsx`.
 - **No `shared.ts` grab-bags.** A file mixing constants + types + helpers is the
   thing this layout exists to prevent; `install-ops/shared.ts` (388 lines) and
   `audit-ops/shared.ts` (301) were split into `constants.ts`/`types.ts`/`utils.ts`
@@ -71,6 +71,103 @@ Rules, all of which the repo currently satisfies:
 every Django call goes through** — it used to be `lib/mock-api.ts`, which was a
 misnomer (nothing in it is mocked).
 
+## Requests: a page gets ten, and no loops
+
+**A page may issue at most ten requests on mount.** That is a budget, not an
+aspiration — the B2B Dashboard was at ~181 and the Kylas proxy was answering
+429s. Where the tabs stand now, counted by hand: B2B Dashboard 7 (8 on Last
+Month / All Time), KAM 3, Client Database 2, Leads 2, Inbound 2, Outreach 1.
+If a change pushes a page over ten, the change is wrong, not the budget.
+
+**There are four ways out of this app and there must never be a fifth.**
+`mdFetch` (Django), `kylasFetch` (Kylas), `sbGet`/`sbGetPaged`/`supabase.from`
+(both Supabase projects), and a direct `fetch()` to this app's own
+`app/api/*` route handlers. No axios, no XHR, no sockets. Route every new call
+through the wrapper for its backend so the caching and auth-refresh below apply.
+
+**`mdFetch` de-duplicates identical GETs for 8s** and any non-GET clears that
+cache (`lib/api/core/client.ts`). Kylas and the `app/api/*` routes have no such
+cache, so a repeated Kylas call is a repeated network request — which is why
+`fetchLeadsByPhone` keeps its own per-phone promise map.
+
+**Never put a request inside a loop over rows.** If you are reaching for
+`for (const row of rows) await fetch…` or `Promise.all(rows.map(fetch…))`, the
+answer is a bulk endpoint, and four already exist as precedent:
+`/crm/leads/client-order-history/` (many phones), `/crm/leads/?enquiry_ids=`
+(many enquiry ids), `/crm/leads/stats/?bm_groups=` (many BM groups, plus
+`total_branch` for an unfiltered slice alongside them), and
+`/crm/leads/b2b-bulk/` (histories and deals in one). Adding a backend endpoint
+is cheaper than 200 round trips. Before you write the loop, check whether the
+field is *already in the response you have* — the Raise screen fetched
+`/api/deals/{id}` once per deal for an `associatedContacts` value that
+`SEARCH_FIELDS` had already asked Kylas for, up to 200 times per contact tap.
+
+The loops that are legitimate: paging a source that has no bulk form
+(`fetchAllRows`, `for (let page = 0; ; page++)`), batching a bulk call to its
+server-side cap (`HISTORY_BATCH = 300`), a bounded retry, and a user-triggered
+CSV import/export. Those all need a **cap or a page cursor** — never an
+unbounded fan-out over whatever the server returned.
+
+**Fetch for the tab that is open, nothing else.** Every nav level renders one
+panel at a time (`{effectiveTab === x && <View/>}` in `crm/shell/tab-panels.tsx`,
+the B2B sidebar in `views/b2-b-sales-crm.tsx`, the Site Audit rail in
+`views/rail/index.tsx`) so a view's effects cannot run for a tab nobody opened.
+Keep it that way: do not hoist a fetch into a shared parent to "warm" it.
+
+**Split load effects by what they actually depend on.** The B2B Dashboard has
+`loadBase` (no deps) and `loadRange` (`[range]`) because only the two stats
+calls take a date range; before the split, every click on Last Month re-fetched
+the Kylas board, the owner totals, the row read and the client histories — nine
+requests to change two numbers.
+
+**Polling is 30s or slower and gated on visibility.** The shape, used by all
+twelve pollers: `setInterval(() => { if (!document.hidden) load(); }, 30000)`
+plus a `visibilitychange` listener that refreshes on focus, and a cleanup that
+clears both. A background tab must be silent.
+
+**Never present a failed request as data.** This is the one that bites hardest,
+because the wrong version looks fine. A dropped client-history call must leave
+those clients reading **Unknown**, not **Inactive** — so `fetchB2BBulk` returns
+an `ok` flag, `orderDatesFromAggregates(…, ok)` puts it in `loaded`, and
+`clientStatus` turns `loaded: false` into Unknown. Two related traps:
+
+- **A failure must not be cached as a zero.** `orderHistoryCache` has no TTL, so
+  zero-filling a phone we never got an answer for would pin it at zero until a
+  full page reload — the Refresh button would not clear it. `zeroFill` takes a
+  `cache` flag for exactly this.
+- **`kylasFetch` wrappers swallow errors.** `fetchB2BInboundLeads` returns
+  `total: 0` on a 429, indistinguishable from "no leads". Never derive one
+  number from another across that boundary: deriving the second owner's total as
+  `boardTotal − firstOwner` silently moved one rep's leads onto another's card,
+  so both owners are fetched even though it costs a request.
+
+**A backend aggregate needs a deterministic `ORDER BY`.** `firstOrderValue`
+flipped between page loads for clients with two orders on one day because the
+history queryset had no ordering at all. Any "first"/"last" derived server-side
+gets `.order_by(...)` with a tiebreak (`('created_at', 'id')`).
+
+**Ship the backend first.** A frontend that reads a new field or endpoint must
+not deploy before the Django change — `b2b-bulk` 404s against an old API, and
+the zero-caching above then makes the damage outlast the deploy. `total_branch`
+is the pattern to copy for a *graceful* addition: the frontend falls back to the
+old call when `branchTotal` is absent.
+
+### Before you call a request change done
+
+`npx tsc --noEmit` and `npm run build` are the only automated gates in this repo
+(no lint, no tests), and neither one sees any of the above. So also:
+
+- **Count the requests in DevTools**, filtered to `apiV1|kylas|supabase`. Static
+  analysis cannot do this — four separate attempts at a per-page counter all
+  produced contaminated numbers, because generic names (`load`, `post`,
+  `confirm`) are defined in many modules and collide in any global name map.
+- **Check the failure path**, not just the happy one. Break the call (offline, or
+  a bad URL) and confirm the UI says "unknown" rather than showing a confident
+  zero.
+- **Diff against `origin/main`, not your branch**, before claiming parity —
+  `main` has run ahead twice, and a restructured file that `main` also edited
+  merges as a delete/modify conflict that silently drops `main`'s fix.
+
 ## Git, and what actually deploys
 
 `origin` = `MySite-Tech/materialdepot-crm` (a fork), `upstream` =
@@ -82,7 +179,7 @@ Pulling the feature branch is not enough: the teammate merges to `main` and
 keeps pushing there, so `git log HEAD..origin/main` is the check that matters
 before touching a shared file. On 2026-09-03 `origin/Installation-Changes` was
 up to date while `main` was 5 commits ahead carrying a 498-line rewrite of
-`SiteAuditUsersView.tsx` — building on the branch as-is would have re-reverted
+`components/site-audit/staff/users/index.tsx` — building on the branch as-is would have re-reverted
 it, which is precisely the drift this file records happening twice already.
 Merge `origin/main` in first; the conflicts are usually just import lines.
 
@@ -97,13 +194,24 @@ Two things about that workflow are worth knowing before you touch config:
 
 - It injects only `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   as secrets. The **Site Audit** project's URL and anon key are not there and
-  do not need to be, because `siteAuditShared.ts` hardcodes them (see *Three
+  do not need to be, because `shared/sb-client.ts` hardcodes them (see *Three
   backends* below). "Move the Site Audit credentials into env vars" is
   therefore a two-repo change that also needs a GitHub secret added, not a
   tidy-up — do it and the field apps break on the next deploy.
 - `vercel.json` is tracked and `.vercel/` sits locally (gitignored), so the
   repo looks Vercel-deployed. The workflow above is the deploy path visible in
   the repo. Don't infer the hosting from those files.
+- **`tsconfig.tsbuildinfo` is tracked**, so every `tsc`/`build` dirties the
+  working tree and it shows up in every diff. It is a build artifact and does
+  not belong in git; until someone gitignores it, leave it out of commits
+  rather than staging a diff you did not author.
+
+`main` has run **ahead of `Installation-Changes` twice**. Always
+`git fetch && git log HEAD..origin/main` before you merge or claim parity. If
+`main` edited a file this branch restructured away, git reports a
+`modify/delete` conflict — resolve it by **porting `main`'s change into the new
+location first**, then keeping the deletion. Taking "our" side blindly reverts
+whatever `main` fixed (it nearly lost `e2d0eaf`, the revenue-donut colour fix).
 
 ## Three backends, and which is which
 
@@ -111,15 +219,15 @@ This is the single most common source of confusion here.
 
 | What | Where | How it's reached |
 |---|---|---|
-| **Employees, permissions, auth, leads** | Django, `https://api-dev2.materialdepot.in/apiV1` | `lib/mockApi.ts` (`mdFetch`) |
-| **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, via `lib/supabase.ts` (only `lib/b2bLeads.ts` uses it) |
-| **Site Audit / field-app Supabase** | project `jqrdfnjfxqxrazfkaofm` | `components/site-audit/siteAuditShared.ts` — `sbGet`/`sbPost`/`sbPatch` |
+| **Employees, permissions, auth, leads** | Django, `https://api-dev2.materialdepot.in/apiV1` | `lib/api/core/client.ts` (`mdFetch`), re-exported from the `lib/api/index.ts` barrel |
+| **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, via `lib/supabase.ts` (only `lib/b2b/**` uses it) |
+| **Site Audit / field-app Supabase** | project `jqrdfnjfxqxrazfkaofm` | `components/site-audit/shared/sb-client.ts` — `sbGet`/`sbPost`/`sbPatch` |
 
 Gotchas:
 
-- `API_BASE_URL` in `lib/mockApi.ts:1` is **hardcoded**. The `API_BASE_URL` line
+- `API_BASE_URL` in `lib/api/core/client.ts:1` is **hardcoded**. The `API_BASE_URL` line
   in `.env.local` is dead — editing it changes nothing.
-- `siteAuditShared.ts` hardcodes the Site Audit URL **and** anon key too. The
+- `components/site-audit/shared/sb-client.ts` hardcodes the Site Audit URL **and** anon key too. The
   `NEXT_PUBLIC_SITE_AUDIT_*` env vars exist but that module doesn't read them.
 - The Site Audit project is shared with the separate `material-depot-site`
   vanilla-JS PWA and **runs with RLS off** — its anon key is public by design.
@@ -136,7 +244,7 @@ Login is phone + OTP (`sendOtp` → `verifyOtp`), which stores `jwt_token` /
 
 **Any 401/403 from `mdFetch` calls `forceReLogin()`, which deletes
 `materialdepot_user` and reloads.** So hand-writing a session into localStorage
-to preview the app does not survive: `App.tsx` calls `loginWithPhone()` on
+to preview the app does not survive: `components/crm/index.tsx` calls `loginWithPhone()` on
 mount, that 401s without a real JWT, and you're bounced to the login screen.
 
 Two ways to see a real dashboard without an OTP:
@@ -155,7 +263,7 @@ React inputs here ignore synthetic `type` events; set values via the native
 `HTMLInputElement.prototype.value` setter + `dispatchEvent(new Event('input',
 {bubbles:true}))`.
 
-## Tab permissions (`app/App.tsx`)
+## Tab permissions (`components/crm/index.tsx`)
 
 `resolveAllowedTabs(user)` decides which tabs render:
 
@@ -198,7 +306,7 @@ Don't conflate these:
 - **CRM `permission_name`** (Django) — `sales`, `manager`, `store_manager`,
   `delivery`, `b2b_sales`, `field_worker`, … Mapped to the above by
   `CRM_ROLE_TO_SITE_AUDIT_ROLE` / `siteAuditRoleForCrmRole` in
-  `siteAuditShared.ts`. Business-confirmed mapping; `field_worker` is
+  `components/site-audit/shared/`. Business-confirmed mapping; `field_worker` is
   deliberately unmapped (nothing distinguishes auditor from installer) — meaning
   the role *sync* won't touch them, but it still force-adds the Site Audit tab,
   and their own `profiles.role` picks which app they land in.
@@ -212,7 +320,7 @@ Don't conflate these:
   that were never granted `crm.site_audit` reached the company-wide rail, and
   `branch_mgr` had no slug at all.
 
-Routing lives at the `effectiveTab === 'siteAudit'` block in `App.tsx`:
+Routing lives at the `effectiveTab === 'siteAudit'` block in `components/crm/index.tsx`:
 
 - `site_audit.admin` → `SiteAuditRail`, the company-wide console (Users, Role
   Viewer, every job in every city).
@@ -238,8 +346,8 @@ One field staff member exists twice and has to, because the two halves are
 keyed differently — `profiles` (Site Audit Supabase, EMAIL-keyed) is what the
 field PWAs log into, `UserOrganisation` (Django, PHONE-keyed) is what the CRM
 logs into and the only table `/login-otp/?contact=` will send an OTP for.
-`profiles.contact` is the sole bridge. `staffDirectory.ts` is the one place that
-writes both sides; `StaffModals.tsx` holds the three modals (add / retire /
+`profiles.contact` is the sole bridge. `components/site-audit/staff/staff-directory.ts` is the one place that
+writes both sides; `components/site-audit/staff/staff-modals.tsx` holds the three modals (add / retire /
 restore) every surface shares.
 
 **Adding.** There were two add-staff forms with separate role lists, separate
@@ -326,7 +434,7 @@ roster from `fetchUsers()` must filter `active !== false`:
 `SiteAuditBranchManagerView` always did; `SiteAuditUsersView`'s CRM-link check
 and `SiteAuditOpsView`'s BM picker did not, so a deactivated account still read
 as "✓ CRM linked" and was still offered for new order attribution. Both fixed
-2026-09-03. Note `lib/mockApi.ts`'s `updateUser` renames `active` → `status` on
+2026-09-03. Note `lib/api/crm/users.ts`'s `updateUser` renames `active` → `status` on
 the way out — the repo's name and the backend column differ, and before that
 rename the key rode through untouched and Django ignored it, so deactivating an
 account looked like it worked and changed nothing.
@@ -349,7 +457,7 @@ per the field-ops split, that repo is read-only from here.
 
 ## Order attribution: exact matching only
 
-`orderBelongsToBm` (`SiteAuditBmView.tsx`) decides who owns an order, and is
+`orderBelongsToBm` (`components/site-audit/views/bm/index.tsx`) decides who owns an order, and is
 reused by every view that lists orders so they can never disagree. Precedence:
 
 1. `bm_email` present → it **decides alone** (a name match must not override it).
@@ -374,7 +482,7 @@ sends (`_site_audit_serialize_bm`), and the Add Order overlay + the drawer's BM
 assign guard on `match.email` while their BM list (`fetchUsers()`, the CRM
 roster) has no email field at all — so the guard was always false and only a
 name was written. All three now resolve it through
-`fetchBmEmailsByPhone()` (`siteAuditShared.ts`): `phoneKey` → the single
+`fetchBmEmailsByPhone()` (`shared/staff/bm-link.ts`): `phoneKey` → the single
 `profiles` row with `role='bm'` carrying that number, ambiguous numbers dropped.
 
 Do NOT reach for `profiles.name` to close that gap. Every live BM profile came
@@ -403,7 +511,7 @@ unattributable names (66 of 128 rows: `Janvi` for the account `Jhanvi`, `Soheb`,
 `Beema`, and the store's own name when the field was optional).
 
 **The name on the order is not the attribution — the enquiry's owner is.**
-`resolveBmFromBackend.ts` reads `bm: {name, contact}` off the jobs feed
+`components/site-audit/data/resolve-bm-from-backend.ts` reads `bm: {name, contact}` off the jobs feed
 (`/api/site-audit/install-pos`, the one the auto-import already pages) keyed by
 `estimate_lead_id`, and links on phone. This needs NO backend endpoint and no
 judgement about whether someone "is a BM" — being the estimate's owner is the
@@ -433,7 +541,7 @@ runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 
 ## The BM's order book: three tables, three drawers, one conversion funnel
 
-`SiteAuditBmView` is the BM dashboard; `ownedOrders.tsx` holds the Installations
+`SiteAuditBmView` is the BM dashboard; `components/site-audit/views/owned-orders/` holds the Installations
 and Custom Wallpaper halves of it, and both are reused by
 `SiteAuditBranchManagerView`'s store rollup. Every list opens a drawer; the two
 new ones are read-only apart from declaring which site audit an installation
@@ -470,7 +578,7 @@ PI. `LinkAuditSection` takes `attribution` — **omit it and the section goes
 read-only**, which is what the branch-manager rollup does: a link nobody can be
 named for is not worth writing.
 
-`WpLadder` (`coe-ops/WpLadder.tsx`) is the read-only custom-wallpaper stage
+`WpLadder` (`components/site-audit/coe-ops/wallpaper/ladder.tsx`) is the read-only custom-wallpaper stage
 ladder, shared by the COE's Wallpaper tab and both BM drawers so the BM can
 never be shown a stage list that has drifted from the one the COE is working. A
 custom-WP installation resolves its production run by `install_order_id` or
@@ -479,7 +587,7 @@ phone** — one client's two projects share a number.
 
 ## Conversion: did the audit become an order, and where did it stop
 
-`conversionFunnel.ts` answers the question the BM dashboard exists for. Six
+`components/site-audit/data/conversion-funnel.ts` answers the question the BM dashboard exists for. Six
 steps — audit → cart → quotation → order → installation ordered → installed —
 where the middle three come from the **CRM's own Django deal pipeline**
 (`/crm/leads/?q=<phone>`), which is where carts, quotations and orders actually
@@ -503,7 +611,7 @@ cases before it shipped:
   who look like they walked away, and would send BMs to chase clients who have
   already paid. Hence `Funnel.unknownFrom` alongside `stalledAt`, its own
   "Pipeline unknown" tile, and `?` ticks in the ladder. (`fetchLeadDeals` in
-  `lib/mockApi` swallows its own errors into `[]` — the `Array.isArray`
+  `mdFetch` (`lib/api/core/client.ts`) swallows its own errors into `[]` — the `Array.isArray`
   landmine above, one level up — so this module calls `fetchCRMLeads` directly.)
 - **A lost deal is only the story when nothing else is still moving.** `lost`
   requires no live ranked deal AND no order: a client whose first cart was
@@ -513,11 +621,11 @@ cases before it shipped:
 
 A step with no local evidence *below* one that has some is `implied`, not a gap:
 an order raised under a second phone number would otherwise render as "no cart,
-no quote, order placed". `DEAL_PIPELINE` mirrors `STATUSES` in `app/App.tsx`
+no quote, order placed". `DEAL_PIPELINE` mirrors `STATUSES` in `components/crm/constants.ts`
 (not exported from that 3.3k-line component); an unlisted status is unranked and
 cannot advance the funnel. The B2B side names the same statuses once, in
-`clientModel.ts` (`DEAL_ORDER_STATUSES` / `DEAL_LOST_STATUSES`), which
-`kamAutoStage.ts` and the Client Database both read — this one stays separate
+`components/b2b/models/client/` (`DEAL_ORDER_STATUSES` / `DEAL_LOST_STATUSES`), which
+`components/b2b/models/kam/auto-stage.ts` and the Client Database both read — this one stays separate
 because it is a RANKED pipeline, not set membership, but a status added to the
 CRM has to be added in both. There is deliberately **no "PI shared" step**: the deal
 vocabulary has no PI status, and the Footfall/Weekly Funnel dashboards' PI
@@ -543,8 +651,8 @@ Site Audit → Analytics is five tabs over two databases that are never mixed in
 
 | Tab | Source | Where |
 |---|---|---|
-| **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `SiteAuditAnalyticsView.tsx` |
-| **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `CatAnalyticsPanel.tsx` + `public/md-cat-analytics.js` |
+| **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `components/site-audit/views/analytics/index.tsx` |
+| **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `components/site-audit/ui/cat-analytics-panel.tsx` + `public/md-cat-analytics.js` |
 
 **Three surfaces now report field-service NPS, and they do not all read the same source** — worth
 settling before editing any of them, because "add NPS analytics" could plausibly mean any of the
@@ -559,7 +667,7 @@ from the ⭐ Review scores tab rather than in code.
 
 An order lives in the order book, a site visit lives in Supabase, and **the only bridge between
 them is the customer phone number** — which is why the two halves are separate tabs with separate
-footnotes, and why no tile adds a booking count to an order count. `SiteAuditAnalyticsView.tsx`
+footnotes, and why no tile adds a booking count to an order count. `components/site-audit/views/analytics/index.tsx`
 holds both the Execution view and the shell that renders the tab bar and picks between them.
 
 **`public/md-cat-analytics.js` is a VERBATIM copy of the file with the same name in
@@ -567,7 +675,7 @@ holds both the Execution view and the shell that renders the tab bar and picks b
 a self-contained IIFE that publishes on `window` and touches no DOM, no network and no framework.
 That is what makes it shareable byte-for-byte instead of hand-rewritten into JSX. **Fix it in one
 repo, copy it to the other; do not fork it** (same rule as the two copies of the job-card category
-registry). It is loaded on demand by `catAnalytics.ts` — only when a commercial tab is actually
+registry). It is loaded on demand by `components/site-audit/data/cat-analytics.ts` — only when a commercial tab is actually
 opened — so its 127 KB never reaches the main bundle. The Execution tab loads it too, in the
 background, purely for `mdAnGrouped`/`mdAnTatHtml` so the bookings and TAT charts match the
 commercial ones; a failed load costs those two blocks, never the ops numbers.
@@ -591,7 +699,7 @@ Because the renderers return **HTML strings**, three things follow:
 
 **Every tile on the Execution tab is clickable and opens the rows behind it** (added 2026-08-26):
 which orders met the criterion, which did not, who they were assigned to, the booked slot vs the
-actual arrival time, and a CSV. `M.drills` in `SiteAuditAnalyticsView.tsx` is the registry; `DrillRow.hit`
+actual arrival time, and a CSV. `M.drills` in `components/site-audit/views/analytics/index.tsx` is the registry; `DrillRow.hit`
 is `'yes'` (numerator) / `'no'` (rest of the denominator) / `'na'` (genuinely neither — a Neutral
 rating, or a signature that could not be read, which must never be folded into "no").
 
@@ -626,8 +734,8 @@ not noise. It covers **1 Jun – 17 Aug 2026 only**, which is why the date picke
 window (`clampToData`): today is past the cut, so an unclamped "this month" would render an empty
 dashboard that reads as broken. **To go live: implement `MD_AN_SOURCE.metabase()` in
 `public/md-cat-analytics.js` to return the shape `MD_AN_SOURCE.dummy()` returns (documented at
-`MD_AN_ROW_CONTRACT` in that file) and flip `mode`.** Nothing in `CatAnalyticsPanel.tsx` or
-`catAnalytics.ts` changes — the badge, the footer and the clamp all read that flag themselves.
+`MD_AN_ROW_CONTRACT` in that file) and flip `mode`.** Nothing in `components/site-audit/ui/cat-analytics-panel.tsx` or
+`components/site-audit/data/cat-analytics.ts` changes — the badge, the footer and the clamp all read that flag themselves.
 
 Two intentional differences from the Admin console version: city comes from the CRM's own header
 selector (the `city` prop) instead of the filter row's own buttons, so there is one city control per
@@ -639,8 +747,8 @@ rather than part of the shared dashboard. See also the `service_mgr` gate under 
 Q1/Q2/Q3 (overall experience / staff / site cleanliness, 1–10) used to be
 collected on-site, on the job card, handed to the client by the field worker
 being rated — which biased every score upward. Collection moved to a Category
-Ops phone call the day after the job: `coe-ops/Followups.tsx` for the audit's
-D+1 checkpoint, `coe-ops/InstallReviews.tsx` for one checkpoint per completed
+Ops phone call the day after the job: `components/site-audit/coe-ops/views/followups.tsx` for the audit's
+D+1 checkpoint, `components/site-audit/coe-ops/views/install-reviews.tsx` for one checkpoint per completed
 install sub-job. **This repo's own field apps kept writing on-site scores until
 `c4f1296` (2026-08-24)**, four days after `material-depot-site` stopped, so the
 live `ratings` table holds two populations with opposite bias — worth saying out
@@ -652,12 +760,12 @@ The chain, and what owns each link:
 |---|---|---|
 | Source of truth | `coe_track.calls[].ratings` (audit) · `subjobs[].coe_review.calls[].ratings` (install) | append-only, inside jsonb this app already writes |
 | Projection | `ratings` table (`postJobRating`) | a second copy, written for Analytics only |
-| Bands | `npsFrom`/`npsBand` in `siteAuditShared.ts` | ONE definition; see below |
-| Read | `SiteAuditAnalyticsView` · `coe-ops/ReviewScores.tsx` · `coe-ops/NpsAnalytics.tsx` | all three read the same helpers |
+| Bands | `npsFrom`/`npsBand` in `shared/format.ts` | ONE definition; see below |
+| Read | `SiteAuditAnalyticsView` · `components/site-audit/coe-ops/views/review-scores.tsx` · `components/site-audit/coe-ops/views/nps-analytics.tsx` | all three read the same helpers |
 
 **The `ratings` table is a projection, not the record.** The PATCH that saves
 the call and the POST that projects it are two writes; the second can fail
-alone. `coe-ops/ReviewScores.tsx` is what closes that loop —
+alone. `components/site-audit/coe-ops/views/review-scores.tsx` is what closes that loop —
 `unprojectedScoredCalls` diffs the call logs against the table and offers to
 push what never landed. Two match rules, both needed: same order within 30
 minutes of the call (the normal case, and tight enough that a pre-2026-08-24
@@ -688,7 +796,7 @@ textbook bands (detractor ≤6) — a different question of a different populati
 Never average them, and never "fix" one to match the other; each names itself and
 prints its bands on screen so a reader can't mistake which is on the page.
 
-The trap here is now specifically **layout**, not arithmetic: `NpsAnalytics.tsx`
+The trap here is now specifically **layout**, not arithmetic: `components/site-audit/coe-ops/views/nps-analytics.tsx`
 deliberately borrows `components/nps`'s tile-and-chart layout because that is the
 shape the business already reads — so the two pages LOOK alike while measuring
 different populations on different bands. That is exactly why the house-bands
@@ -755,7 +863,7 @@ buckets always had: they partition the filtered set and sum to its total.
 **The frozen bar** (`coe-ops/filters.tsx`) pins the filters and bucket tiles while rows
 scroll under them. Its `top` is **measured, never hard-coded**: each host that mounts
 this dashboard has its own sticky header at a height this component can't know —
-`app/App.tsx`'s is a fixed 48px, `/site-audit-view`'s wraps and changes with the window
+the CRM shell's is a fixed 48px, `/site-audit-view`'s wraps and changes with the window
 — so `useFrozenBar` walks up the ancestors summing the heights of preceding siblings
 that are pinned to the top. **The table's `<thead>` is deliberately NOT sticky, and
 can't be:** the wrapper around it is `overflow-x-auto`, which makes that wrapper the
@@ -766,7 +874,7 @@ wrapper scroll on one axis only, either: `overflow-y: visible` next to
 `overflow-x: auto` computes back to `auto`. The frozen bar works because it sits
 outside that wrapper.
 
-### Every cart on the client's number (`coe-ops/ClientCarts.tsx`)
+### Every cart on the client's number (`components/site-audit/coe-ops/views/client-carts.tsx`)
 
 Both call queues' drawers show all of a client's CRM deals for their phone —
 `/crm/leads/?q=<phone>`, the same rows the Leads tab renders. It exists because
@@ -774,7 +882,7 @@ Both call queues' drawers show all of a client's CRM deals for their phone —
 and then bought tiles, wallpaper and laminates as separate product carts read as "Not
 yet", and the COE had to leave the dashboard and search the number by hand.
 
-It inherits both of `conversionFunnel.ts`'s rules verbatim. `q` is a free-text search
+It inherits both of `components/site-audit/data/conversion-funnel.ts`'s rules verbatim. `q` is a free-text search
 that also matches names and cart ids, so results are **re-filtered on `phoneKey`** — a
 client whose name contains the digits must not inherit somebody else's deals. And a
 failed request is reported as **unreadable, never as "no carts"**: telling a COE a
@@ -788,7 +896,7 @@ Note this panel puts a Django call behind a drawer open, so on `/site-audit-view
 session. Stub the Django host to exercise it — see *Auth, and why a fake session won't
 work*.
 
-### 📊 NPS analytics (`coe-ops/NpsAnalytics.tsx`)
+### 📊 NPS analytics (`components/site-audit/coe-ops/views/nps-analytics.tsx`)
 
 Field-service NPS over a picked date range, laid out like `components/nps`'s
 store-visit dashboard because that is the shape the business already reads. Three
@@ -823,7 +931,7 @@ of one job live in separate `audit_orders` rows:
 **The pre-booking's `po` IS the other row's `pi`.** That exact link — not the
 customer name, not the phone — is how the two are tied together; it is what
 `Store_Team_App`'s slot-availability check already absorbs bookings by, and what
-`dropSupersededPreBookings` (`SiteAuditBmView.tsx`) uses. Name and phone are free
+`dropSupersededPreBookings` (`components/site-audit/views/bm/index.tsx`) uses. Name and phone are free
 text on the reservation form (the phone is often the *store's* own number, shared
 across unrelated bookings), so matching on them merges different customers — the
 same rule as **Order attribution** above.
@@ -837,12 +945,12 @@ pre-booking. A pre-booking still waiting on its service order stays visible: it
 is the only record that the slot was ever held.
 
 The ops/SM views take the opposite approach and filter both statuses out of the
-main list with a dedicated pre-booking filter (`audit-ops/Views.tsx`) — that is
+main list with a dedicated pre-booking filter (`components/site-audit/audit-ops/views/`) — that is
 deliberate, not an inconsistency. Don't unify them.
 
 ## `Array.isArray(rows) ? rows : []` turns a server error into empty data
 
-`sbGet` (`siteAuditShared.ts`) returns `r.json()` **without checking `r.ok`**, so
+`sbGet` (`shared/sb-client.ts`) returns `r.json()` **without checking `r.ok`**, so
 any 4xx/5xx resolves a PostgREST *error object*, not a throw. Callers that write
 `Array.isArray(rows) ? rows : []` therefore render a server error as legitimately
 empty — indistinguishable from "nothing matched".
@@ -863,7 +971,7 @@ the picker for as long as the view stayed mounted, and the empty state blamed th
 city filter for what was a connection problem.
 
 The shape to copy when a load feeds a picker or a gate — see `loadAuditors` in
-`SiteAuditOpsView.tsx`:
+`components/site-audit/views/ops/index.tsx`:
 
 - a non-array response **throws** (it is a failed load, not an empty roster);
 - the last good data survives the failure, so a blip can't blank a working picker;
@@ -881,14 +989,14 @@ inert). Leave them; they are not gates.
 
 ## B2B Inbound: the PRD, and the three systems that hold one lead
 
-`components/b2b/inboundModel.ts` implements `Inbound_CRM_Module_PRD.docx` v1.0
+`components/b2b/models/inbound/` implements `Inbound_CRM_Module_PRD.docx` v1.0
 (KK, Business Head – B2B) and is the ONE place that answers "where does this
 field live?" for an inbound lead. Three systems hold pieces of the same lead:
 
 | Holds | System | Reached via |
 |---|---|---|
-| Presales' capture (§3.1) | Kylas pipeline 31627 | `mockApi.ts` `kylasFetch` |
-| Everything the Inbound team types (§3.2–3.5) | `b2b_lead.meta_data` (CRM Supabase) | `lib/b2bLeads.ts` |
+| Presales' capture (§3.1) | Kylas pipeline 31627 | `lib/api/` `kylasFetch` |
+| Everything the Inbound team types (§3.2–3.5) | `b2b_lead.meta_data` (CRM Supabase) | `lib/b2b/data/` |
 | Cart / PI / order **value** | Django deal tickets, `/crm/leads/` | `fetchCRMLeads` |
 
 Every field declares its `FieldOwner`, which is what the drawer's provenance
@@ -939,7 +1047,7 @@ row was 56xxxx Karnataka), and `RNR` (13 rows) was a **call outcome**.
 
 ### `meta_data` is one field table, in both directions
 
-`INBOUND_META` + `INBOUND_KYLAS_SNAPSHOT` in `b2bLeads.ts` drive read and write
+`INBOUND_META` + `INBOUND_KYLAS_SNAPSHOT` in `lib/b2b/` drive read and write
 from one declaration. Before this there were two hand-written object literals
 and anything in only one of them was dropped on every save — which is what
 happened to `calls` and `notes`, hardcoded to `[]` on read while the writer never
@@ -1009,8 +1117,8 @@ CRM diverged with nothing on screen to say so.
 
 ## B2B Outreach: the field half, and why it is not "Outbound" any more
 
-`components/b2b/outreachModel.ts` implements `B2B_Outreach_Module_PRD.docx`
-v1.0 (KK) and is the counterpart of `inboundModel.ts` — the ONE place that
+`components/b2b/models/outreach.ts` implements `B2B_Outreach_Module_PRD.docx`
+v1.0 (KK) and is the counterpart of `components/b2b/models/inbound/` — the ONE place that
 answers "where does this field live?" for an outreach lead. Only two systems
 hold one, not three: `b2b_lead.meta_data` for everything the BM types, and the
 Django deal tickets for the money. There is no Kylas leg, because nobody
@@ -1086,7 +1194,7 @@ shared count is the only reading under which "consistent" is true.
 
 ## The Leads tab: one row per lead, and three states in one column
 
-`components/b2b/LeadsTab.tsx` + `fetchUnifiedLeads` implement
+`components/b2b/views/leads/index.tsx` + `fetchUnifiedLeads` implement
 `Leads_Tab_PRD.docx` v1.0. The tab **captures nothing** — every row originates
 in Inbound or Outreach — with one exception: "Assisted at EC", which the PRD
 puts on this screen and which belongs to neither source form. It is written back
@@ -1131,9 +1239,9 @@ leads are NOT in the list rather than implying the count is everything.
 
 ## The Client Database: one row per business, and nothing about an order stored
 
-`components/b2b/clientModel.ts` implements `Client_Database_Module_PRD.docx`
+`components/b2b/models/client/` implements `Client_Database_Module_PRD.docx`
 v1.0 (KK) and is the ONE place that answers "where does this field live?" for a
-client ENTITY. `ClientDatabase.tsx` is the tab; `clientImport.ts` is §7's bulk
+client ENTITY. `components/b2b/views/client-db/index.tsx` is the tab; `components/b2b/io/client-import/index.ts` is §7's bulk
 upload.
 
 Stored as `b2b_lead` rows with **`pipeline = 'client'`** — a new value for that
@@ -1270,8 +1378,8 @@ unusable rather than created — nothing could ever link an order to it.
 
 ## The KAM module: clients and orders are two things now
 
-`components/b2b/kamModel.ts` implements `KAM_Module_PRD.docx` v1.0 (KK).
-`KAMs.tsx` is the tab, rebuilt around it.
+`components/b2b/models/kam/` implements `KAM_Module_PRD.docx` v1.0 (KK).
+`components/b2b/views/kams/index.tsx` is the tab, rebuilt around it.
 
 §7 says the module "shares its client universe with the Client Database", so an
 assigned client IS a `ClientEntity` and §3's interactions live on that record.
@@ -1320,7 +1428,7 @@ same rows on load is how the duplicate auto-advance note below got written.
 
 ### Auto-advance now keys on the order's own ticket
 
-`kamAutoStage.ts` still moves an order forward off its deal status, forward-only,
+`components/b2b/models/kam/auto-stage.ts` still moves an order forward off its deal status, forward-only,
 never out of Closed/Lost. What changed is rule 3: it matches the order's **own**
 Enquiry ID exactly, where it used to key on `furthestStatus` for the client's
 PHONE — a lifetime figure across every deal that client ever raised. On the old
@@ -1386,7 +1494,7 @@ Compliance** (§4.1's target, measured), **Account Temperature distribution** an
 accounts are cooling off"), plus the **KAM Funnel**, which is the shape §6
 already asks for on the other two boards. The remaining six — Win Rate and
 Average Sales Cycle beyond the funnel's own, Lost Reason Breakdown, Segment-wise
-Revenue and New vs Repeat — are computed in `kamModel.ts`/`analytics.ts` but not
+Revenue and New vs Repeat — are computed in `components/b2b/models/kam/`/`analytics.ts` but not
 rendered, awaiting KK's decision.
 
 The KAM funnel counts each order's CURRENT status ("standing here or beyond").
@@ -1417,7 +1525,7 @@ this, block non-client writes in the shim and re-query the table at the end —
 ## Known landmines
 
 - **A Supabase write error is not an `Error`, so `String(e)` said
-  "[object Object]".** `upsert`/`deleteB2BRow` in `b2bLeads.ts` reported failures
+  "[object Object]".** `upsert`/`deleteB2BRow` in `lib/b2b/` reported failures
   as `e instanceof Error ? e.message : String(e)`, and a PostgrestError is a
   plain object — so every failed write showed a rep the literal text
   `[object Object]`. It only surfaced when the KAM board started reporting write
@@ -1503,7 +1611,7 @@ this, block non-client writes in the shim and re-query the table at the end —
   **Any new single-slot jsonb that a draft and a finished record share needs all four.**
 - **A photo that renders as `"1 photo"` is a photo nobody can see.** Area-adjustment photos were
   captured, uploaded and stored correctly — 18 adjustments held 32 Storage URLs, all 32 HTTP 200,
-  zero base64 — and then `AuditRoomViews.tsx` printed the array's *length* while `pdfBrand.ts` drew
+  zero base64 — and then `components/site-audit/ui/audit-room-views.tsx` printed the array's *length* while `components/site-audit/brand/pdf-brand.ts` drew
   the adjustment table with no image column at all. The segment photo strip two lines below worked,
   which is exactly why nobody caught it: a site auditor reported *"after uploading any image
   related to adjustment area it's not showing in the job card after the final submission"* and
@@ -1541,7 +1649,7 @@ this, block non-client writes in the shim and re-query the table at the end —
   score is never projected for a call that didn't), and Category Ops →
   ⭐ Review scores finds and pushes anything that slipped through. The same
   shape still exists elsewhere in this repo — `upsertSiteAuditProfile()` in
-  `app/App.tsx` is fire-and-forget with `.catch(console.error)`. Treat
+  `components/crm/index.tsx` is fire-and-forget with `.catch(console.error)`. Treat
   `.catch(console.error)` on a write as a bug report waiting to happen.
 - **`audit_ticked->sign->>name` is cheap to transfer and expensive to READ.**
   The json path keeps the job-card room photos off the wire, but Postgres still
@@ -1568,7 +1676,7 @@ this, block non-client writes in the shim and re-query the table at the end —
   older period is this, not a code fault — check `coe_track` for calls inside the
   window before touching the pipeline.
 
-- **A floor has no height — per-category wording belongs in `auditRegistry.ts`,
+- **A floor has no height — per-category wording belongs in `components/site-audit/data/audit-registry/index.ts`,
   not in the capture form.** `SegmentAdjustments` hardcoded the rectangle
   dimension pair as Height x Width, which is right for a wall and wrong for
   `flooring`, whose own fields are Room length / Room width. It is not a rare
@@ -1607,8 +1715,8 @@ this, block non-client writes in the shim and re-query the table at the end —
   `audit-ops/AuditOrderDrawer`'s `patch()` already had this shape — copy it, and
   treat a write wrapper with no catch the same way as `.catch(console.error)`.
 - **A field app's stale-write guard has to compare like with like — the guard
-  itself was the outage.** `advanceStatus` (`SiteInstallerApp.tsx`) and `adv`
-  (`SiteAuditorApp.tsx`) re-read the row before writing so an SM's concurrent
+  itself was the outage.** `advanceStatus` (`components/site-audit/apps/installer/index.tsx`) and `adv`
+  (`components/site-audit/apps/auditor/index.tsx`) re-read the row before writing so an SM's concurrent
   change can't be clobbered (added 2026-08-21, `41a60d1`). Both compared a RAW
   DB status against the flattened on-screen one — different vocabularies — so
   the guard fired on jobs nobody had touched, and its own toast ("refresh to see
@@ -1644,7 +1752,7 @@ this, block non-client writes in the shim and re-query the table at the end —
   status this repo has never heard of can appear in shared data at any time.**
   `partial` is a first-class SUB-JOB status written by
   `material-depot-site`'s `Site_Installer_App.html` partial-completion flow;
-  `SiteInstallerApp.tsx` knew nothing about it, so those sub-jobs rendered a raw
+  `components/site-audit/apps/installer/index.tsx` knew nothing about it, so those sub-jobs rendered a raw
   `partial` pill above a detail panel with **no stage card and no buttons** —
   the same dead end as a hard block, just quieter. Both field apps now carry a
   stage registry (`INSTALL_STAGES` / `AUDITOR_STAGES`) and fall through to a
@@ -1656,10 +1764,10 @@ this, block non-client writes in the shim and re-query the table at the end —
   auditors saw held store slots as jobs — un-actionable by definition, since the
   real audit is a separate row (the reservation's `po` is that row's `pi`; 13 of
   the 18 were already `completed` there). `SiteAuditorApp`'s `loadJobs` now
-  filters both statuses out, matching what `audit-ops/Views.tsx` already does
+  filters both statuses out, matching what `components/site-audit/audit-ops/views/` already does
   for the ops list.
 - **A derived force-add set can still be reverted back to a hand-written one —
-  this has now happened twice.** `SITE_AUDIT_ROLES` (`app/App.tsx`) drifted
+  this has now happened twice.** `SITE_AUDIT_ROLES` (`components/crm/constants.ts`) drifted
   from `CRM_ROLE_TO_SITE_AUDIT_ROLE` once before (`delivery` mapped to
   `service_mgr` there but was missing here), was made genuinely derived in
   commit `3bc84a6` (2026-08-19) — `...OVERSIGHT_CRM_ROLES,
@@ -1735,7 +1843,7 @@ this, block non-client writes in the shim and re-query the table at the end —
   permanently on one failed fetch.** That is what killed auditor assignment;
   `loadOrders`-style retry + a self-describing empty state is the fix, not a
   louder `console.error`. See the `Array.isArray` section above.
-- **`AUDIT_COLS` (`SiteAuditBmView.tsx`) now also carries `bm_journey` and
+- **`AUDIT_COLS` (`components/site-audit/views/bm/index.tsx`) now also carries `bm_journey` and
   `coe_track`**, so the conversion funnel can honour a manual "order placed"
   tick from either the BM or the COE for the whole list in one pass. They add
   ~16 KB to a ~2 MB payload (`log` + `skus` are almost all of it) — but do NOT
@@ -1753,22 +1861,22 @@ this, block non-client writes in the shim and re-query the table at the end —
   mandatory notes for status changes, follow-up date set/clear, installer
   assignment, added 2026-08-24) hit exactly this: a click did nothing, no
   error, indistinguishable from a broken button (fixed 2026-08-25). Use
-  `useNoteModal()` (`components/site-audit/NoteModal.tsx`) instead — a
+  `useNoteModal()` (`components/site-audit/hooks/use-note-modal.tsx`) instead — a
   controlled in-page modal with the same "returns the trimmed note, or `null`
   if cancelled/left blank; caller MUST abort on `null`" contract, just as real
-  DOM instead of a native dialog. `OrderDrawer.tsx`, `AssignSection.tsx`,
-  `AuditOrderDrawer.tsx` and — since 2026-09-01 — `coe-ops/Followups.tsx`
-  ("Mark lost") and `coe-ops/Wallpaper.tsx` ("Put on hold", "Cancel PO") use it.
+  DOM instead of a native dialog. `components/site-audit/install-ops/order-drawer/index.tsx`, `components/site-audit/install-ops/ui/assign-section.tsx`,
+  `components/site-audit/audit-ops/order-drawer/index.tsx` and — since 2026-09-01 — `components/site-audit/coe-ops/views/followups.tsx`
+  ("Mark lost") and `components/site-audit/coe-ops/wallpaper/index.tsx` ("Put on hold", "Cancel PO") use it.
   Reuse it rather than reaching for `window.prompt` again anywhere in Site
   Audit/Install. Those three survived four weeks past the first sweep because
   nothing about a silently no-opping button looks broken in code review, so
   **grep for `window.prompt` rather than assuming the sweep was complete.** The
-  last live one — `install-ops/OrderDrawer.tsx`'s required reason for
+  last live one — `components/site-audit/install-ops/order-drawer/index.tsx`'s required reason for
   force-completing an order with no signed job card, which also had a
   `window.confirm` in front of it — was converted 2026-09-03; the warning the
   confirm carried is now that `askNote` call's `preface`. As of that date a grep
   finds `window.prompt` only inside comments like this one. `RetireStaffModal`
-  (`StaffModals.tsx`) was built as a modal from the start for the same reason:
+  (`components/site-audit/staff/staff-modals.tsx`) was built as a modal from the start for the same reason:
   its exit reason is what the attrition breakdown groups by.
 - **`branch_mgr` was added to the app on 2026-08-14 but the Site Audit
   Supabase's `profiles_role_check` CHECK constraint (plain `role in (...)`,
@@ -1776,18 +1884,18 @@ this, block non-client writes in the shim and re-query the table at the end —
   that sets `role='branch_mgr'` fails at the DB layer, silently in some
   paths.** Found 2026-08-25 when 6 real branch managers (CRM `manager`/
   `store_manager` permission) had been stuck at "0 members" for 11 days.
-  Three separate call sites hit this: `SiteAuditUsersView.tsx`'s "Add New
+  Three separate call sites hit this: `components/site-audit/staff/users/index.tsx`'s "Add New
   User" (`sbPost`, surfaces the raw Postgres error to the admin — this is how
   it was found); `applyRoleSync`'s bulk "Sync roles from CRM permissions"
   (`sbPatch`, same failure); and `upsertSiteAuditProfile()` fired from the
   CRM's own Admin > Users when `site_audit.branch_mgr` is ticked
-  (`app/App.tsx`, fire-and-forget with `.catch(console.error)` — fails on
+  (`components/crm/index.tsx`, fire-and-forget with `.catch(console.error)` — fails on
   *every* save of that permission with no admin-visible error at all).
   Migration: `site-audit-migration-002-branch-mgr-role.sql` (run against the
   Site Audit Supabase, same as migration 001).
   **Also worth knowing while chasing this**: a Branch Manager doesn't
   actually need a `profiles` row to see their dashboard at all —
-  `SiteAuditOwnDashboard.tsx`'s `sessionOnlyRole` branch renders
+  `components/site-audit/views/own-dashboard/index.tsx`'s `sessionOnlyRole` branch renders
   `SiteAuditBranchManagerView` straight off the CRM session once
   `permissionRole==='branch_mgr'`, which comes purely from the
   `site_audit.branch_mgr` sub-permission slug on their CRM account (see the
@@ -1850,7 +1958,7 @@ this, block non-client writes in the shim and re-query the table at the end —
   Sharma)" seven times over: both were true, and only one was on screen. There
   is now ONE derivation — `assigneeStatus` / `subjobDisplayStatus` /
   `assigneeProgress` in `install-ops/shared.ts`, mirrored by
-  `subjobEffectiveStatus` in `SiteInstallerApp.tsx` — and every sub-job status
+  `subjobEffectiveStatus` in `components/site-audit/apps/installer/index.tsx` — and every sub-job status
   the SM sees goes through it, so the badge, the calendar, the drawer and the
   order row cannot disagree. Three rules it must keep: a sub-job rolls up to
   `completed` only when **every** assignee is (one installer finishing must not
@@ -1891,8 +1999,8 @@ this, block non-client writes in the shim and re-query the table at the end —
   what's missing and who fixes it (see the amber notices in
   `SiteAuditBranchManagerView`) instead of rendering a bare empty list.
 - Reuse the existing status/stage registries (`install-ops/shared.ts` `STATUS`,
-  `coe-ops/wpTrack.ts`) rather than re-declaring labels.
-- New Site Audit drawers are built from `drawerUi.tsx` (`DrawerShell`, `Sec`,
+  `components/site-audit/coe-ops/wallpaper/track.ts`) rather than re-declaring labels.
+- New Site Audit drawers are built from `components/site-audit/ui/drawer-ui.tsx` (`DrawerShell`, `Sec`,
   `KV`) rather than a fresh copy of the slide-over markup — `Sec`/`KV` had
   already been duplicated into two drawers before it existed.
 
