@@ -235,6 +235,11 @@ Gotchas:
 - Two Supabase projects means "the profiles table" is always the Site Audit one.
   Migrations like `site-audit-migration-001-branch-column.sql` must be run
   against `jqrdfnjfxqxrazfkaofm`, not the CRM project.
+- Every `.sql` file lives in `supabase/migrations/`, and its filename prefix is
+  the only thing saying which project it targets. `supabase/migrations/README.md`
+  is the index: target project per file, plus which ones were never actually
+  applied. New DDL goes in that folder — nothing runs it, so say in the PR that
+  it still needs pasting into the right SQL Editor.
 
 ## Auth, and why a fake session won't work
 
