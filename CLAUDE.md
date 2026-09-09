@@ -116,33 +116,30 @@ Every module, at every depth, has the same shape:
 
 Rules, all of which the repo currently satisfies:
 
-- **Filenames are kebab-case,** `app/` included. Next.js only owns the *reserved*
+- **Filenames are kebab-case,** `app/` included. Next.js owns only the *reserved*
   names there (`page.tsx`, `layout.tsx`, `route.ts`, `manifest.ts`); anything
-  colocated alongside them is a normal file and follows the rule —
-  `app/pwa-register.tsx`, not `app/pwa-register.tsx`.
-- **No `shared.ts` grab-bags.** A file mixing constants + types + helpers is the
-  thing this layout exists to prevent; `install-ops/shared.ts` (388 lines) and
-  `audit-ops/shared.ts` (301) were split into `constants.ts`/`types.ts`/`utils.ts`
-  and their 36 import sites pointed at the specific module. A module's barrel is
-  `index.ts`, never `shared.ts`.
+  colocated beside them is a normal file — `app/pwa-register.tsx`, never
+  `pwaRegister.tsx`.
+- **No `shared.ts` grab-bags.** A file mixing constants + types + helpers is what
+  this layout exists to prevent. A module's barrel is `index.ts`, never
+  `shared.ts`.
 - **`.ts` unless the file contains JSX**, then `.tsx`.
 - **Hooks live in `hooks/`,** one per file, named `use-*`. A function containing
   a hook call must itself be named `use*` — including the action factories
   (`useLeadsView`, `useAuditDrawerActions`), which is why some are `use*` and
   others `make*`.
 - **Keep a directory at 5 files or fewer.** Support files (`index`, `constants`,
-  `types`, `utils`) plus one domain folder is the usual shape. Two `cards/`
-  folders sit at 7 because one card per file is the point; don't split those
-  just to hit the number.
-- **Constants/types/utils belong to the module that uses them.** A role file
-  moves up to the feature root only when more than one sub-module imports it
-  (`components/b2b/constants/ui.ts` is shared by `drawers/` and `views/`).
+  `types`, `utils`) plus one domain folder is the usual shape. The two `cards/`
+  folders sit at 7 because one card per file is the point — don't split those to
+  hit the number.
+- **Constants/types/utils belong to the module that uses them.** They move up to
+  the feature root only when more than one sub-module imports them
+  (`components/b2b/constants/ui.ts`, shared by `drawers/` and `views/`).
 - **No re-export-only wrapper modules.** `index.ts` as a module's public API is
-  fine (`components/site-audit/shared/index.ts`, `lib/api/index.ts`); a second
-  file next to it that merely re-exports it is not — six of those were deleted
-  and their importers pointed at the real modules.
-- **No comments.** They were removed repo-wide deliberately; the archive is at
-  `/tmp/comment-archive.json`. Don't reintroduce them without being asked.
+  fine (`lib/api/index.ts`); a second file beside it that merely re-exports it is
+  not.
+- **No comments.** Removed repo-wide deliberately — see House style for the two
+  narrow exceptions.
 
 `lib/` follows the same rules: `lib/api/{core,crm,dashboards,b2b,ops}/`,
 `lib/b2b/{mappers,data,leads,orders,stats}/`. **`lib/api/index.ts` is the barrel
