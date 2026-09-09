@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import B2BDashboard from './Dashboard';
-import InboundLeads from './InboundLeads';
-import OutreachLeads from './OutreachLeads';
-import LeadsTab from './LeadsTab';
-import ClientDatabase from './ClientDatabase';
-import KAMs from './KAMs';
+import B2BDashboard from './dashboard/index';
+import InboundLeads from './inbound/index';
+import OutreachLeads from './outreach/index';
+import LeadsTab from './leads/index';
+import ClientDatabase from './client-db/index';
+import KAMs from './kams/index';
 import LeadershipBoard from './LeadershipBoard';
 import Targets from './Targets';
 

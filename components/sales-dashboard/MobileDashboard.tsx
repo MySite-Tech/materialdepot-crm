@@ -1,7 +1,7 @@
 "use client";
 
-import MobileEscalationClient from "@/components/sales-dashboard/MobileEscalationClient";
-import MobileRaiseClient from "@/components/sales-dashboard/MobileRaiseClient";
+import MobileEscalationClient from "@/components/sales-dashboard/escalation/index";
+import MobileRaiseClient from "@/components/sales-dashboard/raise/index";
 import { useState } from "react";
 
 export default function MobileDashboard(

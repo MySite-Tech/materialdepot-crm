@@ -5,9 +5,9 @@ import dynamic from 'next/dynamic';
 import SiteAuditRoleViewerView from '@/components/site-audit/views/SiteAuditRoleViewerView';
 import SiteAuditJobsView from '@/components/site-audit/views/SiteAuditJobsView';
 import SiteAuditPerfView from '@/components/site-audit/views/SiteAuditPerfView';
-import SiteAuditAnalyticsView from '@/components/site-audit/views/SiteAuditAnalyticsView';
+import SiteAuditAnalyticsView from '@/components/site-audit/views/analytics/index';
 import SiteAuditBmView from '@/components/site-audit/views/SiteAuditBmView';
-import SiteAuditUsersView from '@/components/site-audit/staff/SiteAuditUsersView';
+import SiteAuditUsersView from '@/components/site-audit/staff/users/index';
 import { CITIES, loadCityFilter, saveCityFilter, type CityFilter } from '@/components/site-audit/siteAuditShared';
 
 const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/views/SiteAuditLiveView'), { ssr: false });

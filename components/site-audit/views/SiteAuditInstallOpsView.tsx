@@ -11,7 +11,7 @@ import { InstallersView, SlotsView } from '../install-ops/SetupViews';
 import { DeletedView, RectificationsView } from '../install-ops/DataViews';
 import { FoamView, PayoutsView } from '../install-ops/FoamPayoutViews';
 import type { ShadowerOption } from '../install-ops/ShadowerSelect';
-import OrderDrawer from '../install-ops/OrderDrawer';
+import OrderDrawer from '../install-ops/order-drawer/index';
 import { AddOrderOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from '../install-ops/Overlays';
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../staff/StaffModals';
 import { Toast } from '../install-ops/ui';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, createContext, useContext } from 'react';
-import StoreVisitFormSimple from '@/components/store-visit/StoreVisitFormSimple';
+import StoreVisitFormSimple from '@/components/store-visit/form/index';
 
 interface Toast {
   id: number;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import FootfallDashboard from '@/components/footfall/FootfallDashboard';
+import FootfallDashboard from '@/components/footfall/dashboard/index';
 import FootfallRepeatDashboard from '@/components/footfall/FootfallRepeatDashboard';
 import FootfallBreakdownDashboard from '@/components/footfall/FootfallBreakdownDashboard';
 
