@@ -2,14 +2,14 @@
 
 import { CategoryOption } from '../../../lib/api/dashboards/weekly-funnel';
 import { Lead } from '../../../types/crm';
-import { STATUS_COLORS } from '../constants/crm';
+import { STATUS_COLORS } from '../constants';
 import { LeadsFiltersDesktop } from './filters/desktop';
 import { LeadsFiltersMobile } from './filters/mobile';
 import { LeadsCardList } from './table/cards';
 import { LeadsStats } from './table/stats';
 import { LeadsTable } from './table';
-import { DateEditState } from '../types/crm';
-import { fmtINR } from '../utils/crm';
+import { DateEditState } from '../types';
+import { fmtINR } from '../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
 export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, branchFilter, branches, cartValueGt, categoryFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalPages, userAllowedBranches, wonCount }: {

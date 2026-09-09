@@ -7,7 +7,8 @@ import {
   loadSetting, payoutAggregate, payoutRows, saveSetting,
 } from '.';
 import type { PayField, PayoutAgg, PayoutOverrides } from '.';
-import { dstr, today } from '../shared';
+import { today } from '../constants';
+import { dstr } from '../utils';
 import type { FoamConfig, FoamLedgerRow, InstallOrder, Installer, PayRates } from '../types';
 
 export function FoamView({

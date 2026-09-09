@@ -12,7 +12,7 @@ import { DEFAULT_PAGE_SIZE, PAGE_SIZE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_
 import { AssociatedDeal, ContactResult, Props } from './types';
 import { extractEscSupport, isSalesDeal } from './utils';
 import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/api';
-import { Deal, DealsSearchResponse } from '@/lib/types/index';
+import { Deal, DealsSearchResponse } from '@/lib/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function MobileRaiseClient({ onViewDeal }: Props) {

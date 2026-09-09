@@ -1,7 +1,7 @@
 import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPost, syntheticSiteAuditEmail } from '../shared';
 import { autoLinkBmsFromRows } from './resolve-bm-from-backend';
-import { AUDIT_SKU } from '../audit-ops/shared';
-import { INSTALL_SKU } from '../install-ops/shared';
+import { AUDIT_SKU } from '../audit-ops/constants';
+import { INSTALL_SKU } from '../install-ops/constants';
 import { confirmServiceStage, poFieldFor } from './oms-service';
 import { getToken } from '@/lib/api';
 

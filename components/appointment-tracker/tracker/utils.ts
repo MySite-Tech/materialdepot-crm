@@ -1,7 +1,7 @@
 'use client';
 
 import { PRESET_LABELS, SHIFT_ORDER, SLOTS } from './constants';
-import { DatePreset, DateRange, RotaBranchData, RotaPlan, ShiftCode } from '../types/appointments';
+import { DatePreset, DateRange, RotaBranchData, RotaPlan, ShiftCode } from '../types';
 import { BRANCHES, Branch, ApptLead as Lead, ymd } from '@/lib/appointments/appt-shared';
 
 export function isWeekend(d: Date): boolean {

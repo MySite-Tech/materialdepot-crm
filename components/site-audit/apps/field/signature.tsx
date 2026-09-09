@@ -2,7 +2,7 @@
 
 import { SIGN_EXPORT_LINE_WIDTH, SIGN_EXPORT_QUALITY, SIGN_EXPORT_RATIO_FALLBACK, SIGN_EXPORT_WIDTH, SIGN_LINE_WIDTH, SIGN_STROKE_COLOR } from './constants';
 import { SignaturePadHandle, SignaturePadProps, SketchPoint, SketchStroke } from '../types/field-app';
-import { cn } from '@/lib/utils/index';
+import { cn } from '@/lib/utils';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(function SignaturePad(

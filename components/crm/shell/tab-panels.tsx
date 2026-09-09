@@ -17,8 +17,8 @@ import WeeklyFunnelDashboard from '../../weekly-funnel/dashboard';
 
 import { AppUser } from '../../../types/crm';
 import { AdminDashboard } from '../admin/dashboard';
-import { MainTab } from '../types/crm';
-import { canAdminStoreDisplay } from '../utils/crm';
+import { MainTab } from '../types';
+import { canAdminStoreDisplay } from '../utils';
 
 export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveTab, searchParams, siteAuditIsOversight, siteAuditRole, userAllowedBranches }: {
   branches: string[];

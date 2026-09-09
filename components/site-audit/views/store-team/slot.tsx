@@ -1,6 +1,6 @@
 'use client';
 
-import { fmtDate } from '../../install-ops/shared';
+import { fmtDate } from '../../install-ops/utils';
 
 
 import { SLOT_DEFS } from './constants';

@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_CAP } from '../../audit-ops/shared';
+import { DEFAULT_CAP } from '../../audit-ops/constants';
 import { cityOf, mapCaps, rosterQuery, sbGet, sbPatch, staffCapOn } from '../../shared';
 import { ASSIGNED_STATUSES, SLOT_DEFS, STORES } from './constants';
 import { BookingSheet } from './sheet';

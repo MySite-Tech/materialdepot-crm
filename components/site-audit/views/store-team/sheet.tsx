@@ -1,6 +1,6 @@
 'use client';
 
-import { fmtDate } from '../../install-ops/shared';
+import { fmtDate } from '../../install-ops/utils';
 
 import { activeStaffFilter, sbGet, sbPost } from '../../shared';
 import { BookingSheetProps } from './types';

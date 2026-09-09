@@ -4,7 +4,7 @@ import { fetchLocations, fetchFacets, flattenLocationRow } from '../../../lib/st
 import { getImageUrl } from '../../../lib/store-display/image-url';
 import { STORES, STORE_CODE_TO_BRANCH_ID, STORE_NAMES, BRANCH_ID_TO_STORE } from '../../../lib/store-display/display-supabase';
 import { ProductDetailPanel } from '../product-detail';
-import { AddToDisplayDialog } from '../ui/add-to-display-dialog';
+import { AddToDisplayDialog } from '../add-to-display-dialog';
 
 interface VariantLocationRow {
   id: number;

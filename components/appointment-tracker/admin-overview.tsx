@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { branchFrom, ymd } from "@/lib/appointments/appt-shared";
 import type { Branch } from "@/lib/appointments/appt-shared";
 import type { ApptLead as Lead, EcReadyMap } from "@/lib/appointments/appt-shared";
-import type { DateRange } from "./types/appointments";
+import type { DateRange } from "./types";
 
 function computeStats(leads: Lead[], ec: EcReadyMap) {
   const todayStr = ymd(new Date());

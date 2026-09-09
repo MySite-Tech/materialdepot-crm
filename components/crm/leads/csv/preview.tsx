@@ -1,8 +1,8 @@
 'use client';
 
-import { CsvRow } from '../../types/crm';
+import { CsvRow } from '../../types';
 import { StatusBadge } from '../../ui';
-import { fmtDate, fmtINR } from '../../utils/crm';
+import { fmtDate, fmtINR } from '../../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function CsvPreviewModal({ csvPreview, csvSelected, importCsvLeads, setCsvPreview, setCsvSelected }: {

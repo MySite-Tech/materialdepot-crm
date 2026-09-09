@@ -1,9 +1,9 @@
 'use client';
 
 import { Lead } from '../../../../types/crm';
-import { DateEditState } from '../../types/crm';
+import { DateEditState } from '../../types';
 import { Avatar, EditableStatus, Th } from '../../ui';
-import { fmtDate, fmtINR } from '../../utils/crm';
+import { fmtDate, fmtINR } from '../../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leadsLoading, paginatedRows, setDateEditPopup, setDrawerLead, sortCol, sortDir }: {

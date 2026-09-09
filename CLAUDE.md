@@ -38,8 +38,15 @@ Every module, at every depth, has the same shape:
 
 Rules, all of which the repo currently satisfies:
 
-- **Filenames are kebab-case.** No `PascalCase.tsx`, no `camelCase.ts`. The
-  exception is `app/`, where Next.js owns the filenames (`page.tsx`, `route.ts`).
+- **Filenames are kebab-case,** `app/` included. Next.js only owns the *reserved*
+  names there (`page.tsx`, `layout.tsx`, `route.ts`, `manifest.ts`); anything
+  colocated alongside them is a normal file and follows the rule —
+  `app/pwa-register.tsx`, not `app/PwaRegister.tsx`.
+- **No `shared.ts` grab-bags.** A file mixing constants + types + helpers is the
+  thing this layout exists to prevent; `install-ops/shared.ts` (388 lines) and
+  `audit-ops/shared.ts` (301) were split into `constants.ts`/`types.ts`/`utils.ts`
+  and their 36 import sites pointed at the specific module. A module's barrel is
+  `index.ts`, never `shared.ts`.
 - **`.ts` unless the file contains JSX**, then `.tsx`.
 - **Hooks live in `hooks/`,** one per file, named `use-*`. A function containing
   a hook call must itself be named `use*` — including the action factories

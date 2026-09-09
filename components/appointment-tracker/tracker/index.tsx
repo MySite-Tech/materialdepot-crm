@@ -6,7 +6,7 @@ import { DateRangeControl, SelectChip } from './ui/chips';
 import { ManagerSummary, ReceptionistList } from './ui/lists';
 import { RotaPlanner } from './rota';
 import { fetchFootfall, fetchPlan } from './rota/data';
-import { DateRange, FootfallMap, RotaPlan } from '../types/appointments';
+import { DateRange, FootfallMap, RotaPlan } from '../types';
 import { ageLabel, defaultPlan, defaultRange, shortDate } from './utils';
 import { Branch, EcReadyEntry, EcReadyMap, LS, ApptLead as Lead, Role, apptBranchesFor, apptBranchesFromCrm, branchFrom, fetchApptFeed, loadEcReady, resolveApptRole, saveEcReady } from '@/lib/appointments/appt-shared';
 import { AppUser } from '@/types/crm';

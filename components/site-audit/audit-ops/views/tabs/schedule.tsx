@@ -1,7 +1,9 @@
 'use client';
 
 import { Chip } from '../../order-drawer/ui/fields';
-import { AuditOrder, Auditor, SlotDef, addDays, dailyTotalCap, dstr, saveAuditSlots, slotLabel, today } from '../../shared';
+import { today } from '../../constants';
+import { AuditOrder, Auditor, SlotDef } from '../../types';
+import { addDays, dailyTotalCap, dstr, saveAuditSlots, slotLabel } from '../../utils';
 import { Cats, Head } from '../cells';
 import { TH } from '../../constants';
 import { useState } from 'react';

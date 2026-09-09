@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CITIES, EXIT_REASONS, ROLES, exitColumnsAvailable } from '../shared';
 import { createFieldStaff, restoreFieldStaff, retireFieldStaff, validateStaffInput } from './staff-directory';
-import { inputCls } from '../constants/ui';
+import { inputCls } from '../constants';
 
 const FIELD_STAFF_ROLES: Array<[string, string]> = [
   ['site_auditor', 'Site Auditor'],

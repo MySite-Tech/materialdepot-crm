@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { CITIES, sbGet, sbPatch, sbPost } from '../shared';
 import { getToken } from '@/lib/api';
-import { AUDIT_SKU, type AuditOrder } from './shared';
-import { inputCls } from '../constants/ui';
+import { AUDIT_SKU } from './constants';
+import { type AuditOrder } from './types';
+import { inputCls } from '../constants';
 
 type BmOption = { name: string; email?: string; contact?: string };
 

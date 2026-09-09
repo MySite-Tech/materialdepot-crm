@@ -1,7 +1,8 @@
 'use client';
 
 import { Chip } from '../../order-drawer/ui/fields';
-import { AuditOrder, Auditor, auditorNameOf, fmtDate } from '../../shared';
+import { AuditOrder, Auditor } from '../../types';
+import { auditorNameOf, fmtDate } from '../../utils';
 import { Addr, Customer, Empty, Head } from '../cells';
 import { TD, TH } from '../../constants';
 import { useState } from 'react';

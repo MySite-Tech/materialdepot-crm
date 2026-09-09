@@ -1,6 +1,6 @@
 'use client';
 
-import { DatePreset, ShiftCode } from '../types/appointments';
+import { DatePreset, ShiftCode } from '../types';
 
 export const SLOTS: { key: string; label: string; startH: number; endH: number }[] = [
   { key: "s1", label: "10 AM – 12 PM", startH: 10, endH: 12 },

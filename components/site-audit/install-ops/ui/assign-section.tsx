@@ -4,9 +4,8 @@ import { useMemo, useRef, useState } from 'react';
 import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch, type CityFilter, type Shadower } from '../../shared';
 import { useNoteModal } from '../../hooks/use-note-modal';
 import ShadowerSelect, { type ShadowerOption } from './shadower-select';
-import {
-  STATUS, dateRange, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,
-} from '../shared';
+import { STATUS, today } from '../constants';
+import { dateRange, dstr, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls } from '../utils';
 import type { Assignment, InstallOrder, Installer, SlotDef, Subjob } from '../types';
 
 interface Props {

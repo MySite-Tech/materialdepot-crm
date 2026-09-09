@@ -1,6 +1,6 @@
-import { MD_CATEGORIES } from '../../constants/audit-registry';
-import { CategoryDef, CategoryField, RoomLike } from '../../types/audit-registry';
-import { roomV } from '../../utils/audit-registry';
+import { MD_CATEGORIES } from '../constants';
+import { CategoryDef, CategoryField, RoomLike } from '../types';
+import { roomV } from '../utils';
 export function categoryFor(type?: string | null): CategoryDef {
   return (type && MD_CATEGORIES[type]) || MD_CATEGORIES.flooring;
 }

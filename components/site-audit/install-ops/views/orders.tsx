@@ -1,7 +1,8 @@
 'use client';
 
 import { Chip, MapLink, OrderCategoryPills, StatTile, SubjobSummary } from '../ui';
-import { INSTALL_SKU, dstr, fmtDate, hasOpenFollowUp, installOrderHasDate, opsCallDue, today } from '../shared';
+import { INSTALL_SKU, today } from '../constants';
+import { dstr, fmtDate, hasOpenFollowUp, installOrderHasDate, opsCallDue } from '../utils';
 import type { InstallOrder, Installer, ViewKey } from '../types';
 
 const FILTERS = ['all', 'followup', 'pending', 'deliv_delayed', 'created', 'scheduled', 'assigned', 'partial', 'completed'];

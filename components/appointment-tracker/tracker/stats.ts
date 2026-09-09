@@ -1,6 +1,6 @@
 'use client';
 
-import { FootfallMap } from '../types/appointments';
+import { FootfallMap } from '../types';
 import { EcReadyMap, ApptLead as Lead, ymd } from '@/lib/appointments/appt-shared';
 
 export function computeStats(leads: Lead[], ec: EcReadyMap) {

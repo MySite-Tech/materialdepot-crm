@@ -11,11 +11,9 @@ import {
 } from '../../audit-ops/views';
 import { AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from '../../audit-ops/overlays';
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../../staff/staff-modals';
-import {
-  AUDIT_CATEGORY_QUERY, AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, applyAuditCategories,
-  dstr, hasOpenFollowUp, loadAuditSlots, mapAuditRow, today,
-  type AuditOrder, type AuditViewKey, type Auditor, type SlotDef,
-} from '../../audit-ops/shared';
+import { AUDIT_CATEGORY_QUERY, AUDIT_COLS, DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, today } from '../../audit-ops/constants';
+import { type AuditOrder, type AuditViewKey, type Auditor, type SlotDef } from '../../audit-ops/types';
+import { applyAuditCategories, dstr, hasOpenFollowUp, loadAuditSlots, mapAuditRow } from '../../audit-ops/utils';
 import type { ShadowerOption } from '../../install-ops/ui/shadower-select';
 
 const DEFAULT_ATTRIBUTION = 'Service Manager (CRM)';

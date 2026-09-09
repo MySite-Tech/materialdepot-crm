@@ -1,7 +1,7 @@
 'use client';
 
-import { DateRangePickerProps, MultiSelectProps } from '../types/crm';
-import { fmtDate } from '../utils/crm';
+import { DateRangePickerProps, MultiSelectProps } from '../types';
+import { fmtDate } from '../utils';
 import { useEffect, useRef, useState } from 'react';
 import { DateRange, DayPicker } from 'react-day-picker';
 

@@ -5,7 +5,7 @@ import { inCity, phoneKey, sbGet, type CityFilter } from '../../shared';
 import {
   AUDIT_COLS, AUDIT_TICKED_QUERY, INSTALL_COLS, RATING_COLS, applyCoeCategories, auditCategoryMap,
   mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder, type RatingRow,
-} from '../../coe-ops/shared';
+} from '../../coe-ops';
 import type { WpRow } from '../../coe-ops/wallpaper/track';
 import Followups from '../../coe-ops/views/followups';
 import InstallReviews from '../../coe-ops/views/install-reviews';

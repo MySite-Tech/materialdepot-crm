@@ -1,8 +1,8 @@
 'use client';
 
 import { Branch } from '../../../types/crm';
-import { PERMISSION_TAB_ORDER, ROLE_OPTIONS, SITE_AUDIT_SUBROLES, SITE_AUDIT_SUBROLE_SLUGS, STORE_DISPLAY_ADMIN_SLUG, TAB_LABELS } from '../constants/crm';
-import { roleLabel } from '../utils/crm';
+import { PERMISSION_TAB_ORDER, ROLE_OPTIONS, SITE_AUDIT_SUBROLES, SITE_AUDIT_SUBROLE_SLUGS, STORE_DISPLAY_ADMIN_SLUG, TAB_LABELS } from '../constants';
+import { roleLabel } from '../utils';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 export function RoleSelect({ value, onChange, className }: { value: string; onChange: (role: string) => void; className: string }) {

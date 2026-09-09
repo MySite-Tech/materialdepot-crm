@@ -1,9 +1,9 @@
 'use client';
 
 import { Lead } from '../../../../types/crm';
-import { STATUS_COLORS } from '../../constants/crm';
+import { STATUS_COLORS } from '../../constants';
 import { Avatar } from '../../ui';
-import { fmtDate, fmtINR } from '../../utils/crm';
+import { fmtDate, fmtINR } from '../../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function LeadsCardList({ isOverdue, leadsLoading, paginatedRows, setDrawerLead }: {

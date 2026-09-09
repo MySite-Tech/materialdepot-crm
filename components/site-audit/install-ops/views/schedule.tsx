@@ -1,7 +1,8 @@
 'use client';
 
 import { Chip, MapLink, TypeTag } from '../ui';
-import { STATUS, addDays, assigneeProgress, assigneeStatus, dstr, fmtDate, slotLabel, sjsForDay, subjobDisplayStatus, today } from '../shared';
+import { STATUS, today } from '../constants';
+import { addDays, assigneeProgress, assigneeStatus, dstr, fmtDate, sjsForDay, slotLabel, subjobDisplayStatus } from '../utils';
 import type { InstallOrder, Installer, SlotDef } from '../types';
 
 const th = 'px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap';

@@ -1,7 +1,7 @@
 'use client';
 
 import { typeLabel } from '../../../data/audit-registry';
-import { rollHintText, skuQtyField } from '../../shared';
+import { rollHintText, skuQtyField } from '../../utils';
 import { InstallCategory, ServiceSkuRow } from '../../types';
 import { DraftState } from '../types';
 

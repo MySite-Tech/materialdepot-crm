@@ -1,9 +1,9 @@
 import { fetchCRMLeads } from '../../crm/leads';
 import { kylasFetch } from '../../core/kylas-client';
-import { B2B_INBOUND_OWNER_IDS, B2B_INBOUND_PAGE_SIZE } from '../../../constants/b2b-inbound';
+import { B2B_INBOUND_OWNER_IDS, B2B_INBOUND_PAGE_SIZE } from './constants';
 import { b2bInboundRule, kylasLeadIdentity, mapInboundLead } from './mappers';
-import { B2BInboundPage, ClientTicketResult, InboundLeadDetail, InboundLeadEdit, KylasWriteResult } from '../../../types/b2b-inbound';
-import { categoryIdsFromLabels, categoryLabelsFromIds, cf, cfCount, cfString, normalizeTicketPhone } from '../../../utils/b2b-inbound';
+import { B2BInboundPage, ClientTicketResult, InboundLeadDetail, InboundLeadEdit, KylasWriteResult } from './types';
+import { categoryIdsFromLabels, categoryLabelsFromIds, cf, cfCount, cfString, normalizeTicketPhone } from './utils';
 import { selectionsFromKylasLabels, selectionsToKylasLabels } from '@/components/b2b/models/inbound';
 export async function fetchB2BInboundLeads(
   page = 0,

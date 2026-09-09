@@ -1,6 +1,6 @@
 'use client';
 
-import { MainTab } from '../types/crm';
+import { MainTab } from './types';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/site-audit/shared';
 
 export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];

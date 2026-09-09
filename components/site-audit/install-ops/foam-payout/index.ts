@@ -1,5 +1,5 @@
 import { SQFT_PER_ROLL, loadSetting, saveSetting } from '../../shared';
-import { sjEffectiveAssignments } from '../shared';
+import { sjEffectiveAssignments } from '../utils';
 import type { FoamConfig, FoamLedgerRow, InstallOrder, Installer, PayRates, Subjob } from '../types';
 
 export { loadSetting, saveSetting };

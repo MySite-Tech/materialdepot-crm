@@ -5,7 +5,7 @@ import { INSTALLER_TYPES, PAY_FIELDS, ROLE_OPTIONS } from '../constants';
 import { ProfileRow } from '../types';
 import { Field, Foot, Modal, RoleBadge } from '.';
 import { isInstallerRole } from '../utils';
-import { inputCls } from '../../../constants/ui';
+import { inputCls } from '../../../constants';
 import { addUser } from '@/lib/api';
 import { useState } from 'react';
 

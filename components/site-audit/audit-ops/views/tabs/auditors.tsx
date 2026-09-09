@@ -1,7 +1,9 @@
 'use client';
 
 import { StaffExit, WDAYS, sbPatch } from '../../../shared';
-import { Auditor, DEFAULT_CAP, addDays, capFor, dstr, fmtDate, offReason, today } from '../../shared';
+import { DEFAULT_CAP, today } from '../../constants';
+import { Auditor } from '../../types';
+import { addDays, capFor, dstr, fmtDate, offReason } from '../../utils';
 import { Empty, Head } from '../cells';
 import { TH } from '../../constants';
 import { useState } from 'react';

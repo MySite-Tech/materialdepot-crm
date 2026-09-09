@@ -1,7 +1,7 @@
 'use client';
 
-import { STATUS_COLORS } from '../constants/crm';
-import { AvatarProps, EditableStatusProps, ThProps } from '../types/crm';
+import { STATUS_COLORS } from '../constants';
+import { AvatarProps, EditableStatusProps, ThProps } from '../types';
 
 export function Avatar({ name, size = 24 }: AvatarProps) {
   const initial = name ? name.charAt(0).toUpperCase() : '?';

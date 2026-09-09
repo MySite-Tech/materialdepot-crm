@@ -6,9 +6,9 @@ import { syncEstimate } from '../../../lib/api/ops/kylas-sync';
 import { appendRemarkToLead, createLead, fetchLead, upsertLead } from '../../../lib/api/crm/lead-details';
 import { assignBMToClient } from '../../../lib/api/ops/store-visit';
 import { AppUser, Lead, Remark } from '../../../types/crm';
-import { MIN_LOST_AGE_DAYS } from '../constants/crm';
-import { DateEditState } from '../types/crm';
-import { canBypassLostAge, canMarkLostByAge, fmtDate, mergeLead } from '../utils/crm';
+import { MIN_LOST_AGE_DAYS } from '../constants';
+import { DateEditState } from '../types';
+import { canBypassLostAge, canMarkLostByAge, fmtDate, mergeLead } from '../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast }: {

@@ -2,7 +2,7 @@
 
 import { DOW_SHORT, SHIFT_META, SHIFT_ORDER, SLOTS } from '../constants';
 import { capacityForDate, savePlan } from './data';
-import { RotaBranchData, RotaPlan, ShiftCode } from '../../types/appointments';
+import { RotaBranchData, RotaPlan, ShiftCode } from '../../types';
 import { codeAt, emptyBranchData, isWeekend, mondayKeyOf, mondayOf, newMemberId, shortDate, withCodeAt } from '../utils';
 import { Branch, ymd } from '@/lib/appointments/appt-shared';
 import { useEffect, useMemo, useState } from 'react';

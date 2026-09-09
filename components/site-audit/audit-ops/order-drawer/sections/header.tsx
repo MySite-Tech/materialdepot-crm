@@ -1,6 +1,6 @@
 'use client';
 
-import { AuditOrder } from '../../shared';
+import { AuditOrder } from '../../types';
 import { Chip } from '../ui/fields';
 
 export function AuditDrawerHeader({ isPreBooking, o, onClose }: {

@@ -1,6 +1,6 @@
 import { categoryFor, fieldsFor } from './categories';
-import { MD_JOURNEY_STAGES } from '../../constants/audit-registry';
-import { AuditRoomV2, AuditSegment, CategoryDef, JourneyStage, PrereqEntry, RoomLike } from '../../types/audit-registry';
+import { MD_JOURNEY_STAGES } from '../constants';
+import { AuditRoomV2, AuditSegment, CategoryDef, JourneyStage, PrereqEntry, RoomLike } from '../types';
 export function prereqFlagged(seg: { prereq?: Record<string, PrereqEntry> } | null | undefined): boolean {
   const p = seg && seg.prereq;
   if (!p) return false;

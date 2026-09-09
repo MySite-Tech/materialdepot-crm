@@ -3,7 +3,7 @@
 import { Branch } from '@/lib/appointments/appt-shared';
 
 import { ROTA_FUTURE_DAYS, ROTA_PAST_DAYS, SHIFT_HOURS } from '../constants';
-import { FootfallMap, RotaBranchData, RotaMember, RotaPlan, ShiftCode } from '../../types/appointments';
+import { FootfallMap, RotaBranchData, RotaMember, RotaPlan, ShiftCode } from '../../types';
 import { defaultPlan, emptyBranchData, isWeekend, mondayKeyOf, mondayOf, planBranchKeys } from '../utils';
 
 function pruneBranchData(data: RotaBranchData): RotaBranchData {

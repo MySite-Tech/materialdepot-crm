@@ -1,8 +1,6 @@
 import { SQFT_PER_ROLL, publishSlotConfig, sbGet, staffCapOn } from '../shared';
-import type { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
-
-export { SQFT_PER_ROLL };
-
+import { LS_KEY_FL, LS_KEY_WP, DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, FLOOR_DAY_CAP, WALLPANEL_DAY_CAP, WP_DAY_SLOTS, today } from './constants';
+import { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
 export async function detectAuditBy(phone: string): Promise<'material_depot' | 'customer' | null> {
   if (!phone) return null;
   try {
@@ -14,11 +12,6 @@ export async function detectAuditBy(phone: string): Promise<'material_depot' | '
   }
 }
 
-export const INSTALL_SKU = 'SVC-INSTALL-001';
-export const FLOOR_DAY_CAP = 1;
-export const WP_DAY_SLOTS = 3;
-export const WALLPANEL_DAY_CAP = 1;
-
 export function typeDayCap(t: InstallCategory | null | undefined): number {
   return t === 'wallpaper' ? WP_DAY_SLOTS : t === 'wallpanel' ? WALLPANEL_DAY_CAP : FLOOR_DAY_CAP;
 }
@@ -26,20 +19,6 @@ export function typeDayCap(t: InstallCategory | null | undefined): number {
 export function installerDayCap(a: Installer | null | undefined, ds: string | null | undefined): number {
   return staffCapOn(a, ds, typeDayCap(a?.type));
 }
-
-export const DEFAULT_SLOTS_FL: SlotDef[] = [
-  { id: 'sf1', label: '9 AM – 12 PM' },
-  { id: 'sf2', label: '12 PM – 3 PM' },
-  { id: 'sf3', label: '3 PM – 6 PM' },
-];
-export const DEFAULT_SLOTS_WP: SlotDef[] = [
-  { id: 'sw1', label: '8:00 AM – 11:00 AM' },
-  { id: 'sw2', label: '11:00 AM – 2:00 PM' },
-  { id: 'sw3', label: '2:00 PM – 5:00 PM' },
-];
-
-const LS_KEY_FL = 'md_install_slots_fl';
-const LS_KEY_WP = 'md_install_slots_wp';
 
 export function loadSlots(kind: 'fl' | 'wp'): SlotDef[] {
   const fallback = kind === 'fl' ? DEFAULT_SLOTS_FL : DEFAULT_SLOTS_WP;
@@ -55,6 +34,7 @@ export function loadSlots(kind: 'fl' | 'wp'): SlotDef[] {
   }
   return fallback;
 }
+
 export function saveSlots(kind: 'fl' | 'wp', slots: SlotDef[]) {
   const key = kind === 'fl' ? LS_KEY_FL : LS_KEY_WP;
   try {
@@ -70,9 +50,11 @@ export function slotsForWp(rolls: number): number {
   const r = Number(rolls) || 0;
   return r <= 3 ? 1 : r <= 6 ? 2 : 3;
 }
+
 export function totalRolls(sj: Subjob): number {
   return (sj.items || []).reduce((s, it) => s + Math.ceil((parseFloat(it.sqft as any) || 0) / SQFT_PER_ROLL), 0);
 }
+
 export function dateRange(from: string, to: string): string[] {
   if (!from || !to || from > to) return from ? [from] : [];
   const out: string[] = [];
@@ -89,53 +71,17 @@ export function dstr(d: Date): string {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
 }
-export const today = (() => {
-  const t = new Date();
-  t.setHours(0, 0, 0, 0);
-  return t;
-})();
 
-if (typeof window !== 'undefined') {
-  setInterval(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    if (now.getTime() !== today.getTime()) today.setTime(now.getTime());
-  }, 60000);
-}
 export function addDays(n: number): Date {
   const d = new Date(today);
   d.setDate(d.getDate() + n);
   return d;
 }
+
 export function fmtDate(ds: string | null | undefined): string {
   if (!ds) return '—';
   const d = new Date(ds + 'T00:00');
   return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-export const STATUS: Record<string, { l: string; badge: string }> = {
-  pending: { l: 'Pending', badge: 'bg-gray-100 text-gray-600' },
-  deliv_ontime: { l: 'Delivery on time', badge: 'bg-green-100 text-green-700' },
-  deliv_delayed: { l: 'Delivery Delayed', badge: 'bg-red-100 text-red-700' },
-  created: { l: 'Service Created', badge: 'bg-purple-100 text-purple-700' },
-  call_na: { l: 'Call not picked', badge: 'bg-red-100 text-red-700' },
-  scheduled: { l: 'Site Installation Scheduled', badge: 'bg-sky-100 text-sky-700' },
-  assigned: { l: 'Site Installer Assigned', badge: 'bg-amber-100 text-amber-700' },
-  callpending: { l: 'Call Pending (Installer)', badge: 'bg-amber-100 text-amber-700' },
-  reschedule: { l: 'To Reschedule', badge: 'bg-red-100 text-red-700' },
-  onway: { l: 'On The Way', badge: 'bg-blue-100 text-blue-700' },
-  atsite: { l: 'At Site', badge: 'bg-indigo-100 text-indigo-700' },
-  partial: { l: 'Partially Completed', badge: 'bg-teal-100 text-teal-700' },
-  completed: { l: 'Site Installation Completed', badge: 'bg-green-100 text-green-700' },
-};
-export const AUTO_STATUSES = ['onway', 'atsite', 'completed'];
-
-const TRAVEL_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite'];
-
-function reconciledOrderStatus(stored: string, subjobs: Subjob[] | null): string {
-  if (!subjobs || !subjobs.length) return stored;
-  if (!TRAVEL_STATUSES.includes(stored)) return stored;
-  return syncParentStatus(subjobs, stored);
 }
 
 export function mapInstallRow(r: any): InstallOrder {
@@ -204,11 +150,6 @@ export function installerById(installers: Installer[], id: string | null | undef
   return installers.find((a) => a.id === id) || null;
 }
 
-function subjobAssignList(sj: Subjob): Array<{ installer_id?: string; date?: string | null; dates?: string[]; mode: string }> {
-  if (sj.assignments && sj.assignments.length) return sj.assignments;
-  return sj.installer ? [{ installer_id: sj.installer, date: sj.date, dates: [], mode: 'standard' }] : [];
-}
-
 export function opsCallDue(o: InstallOrder): boolean {
   if (!['pending', 'deliv_delayed', 'call_na'].includes(o.status)) return false;
   if (!o.deliveryDate) return false;
@@ -242,6 +183,7 @@ export function wpnlLoad(orders: InstallOrder[], id: string, date: string): numb
   }));
   return n;
 }
+
 export function wpSlotLoad(orders: InstallOrder[], id: string, date: string): number {
   let n = 0;
   orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
@@ -288,12 +230,15 @@ export function sjsForDay(orders: InstallOrder[], installers: Installer[], ds: s
   }));
   return res;
 }
+
 export function hasOpenFollowUp(o: InstallOrder): boolean {
   return !!(o.service && o.service.follow_up_date) && o.status !== 'completed';
 }
+
 export function followUpDue(o: InstallOrder, todayStr: string): boolean {
   return hasOpenFollowUp(o) && o.service!.follow_up_date! <= todayStr;
 }
+
 export function needActionCount(orders: InstallOrder[]): number {
   const opsDue = orders.filter(opsCallDue).length;
   const todayStr = dstr(today);
@@ -331,11 +276,13 @@ export function fmtLogLocal(d?: string | null): string {
 export function emptySkuRow(grp: InstallCategory) {
   return grp === 'wallpaper' ? { sku: '', name: '', sqft: '' } : { sku: '', name: '', sqft: '', link: '' };
 }
+
 export function skuQtyField(grp: InstallCategory) {
   if (grp === 'wallpaper') return { label: 'Area to be wallpapered (sq.ft)', ph: 'e.g. 120' };
   if (grp === 'wallpanel') return { label: 'Area of wall panel installation (sq.ft)', ph: 'e.g. 150' };
   return { label: 'Area of installation (sq.ft)', ph: 'e.g. 180' };
 }
+
 export function rollHintText(sqft: string | number | undefined) {
   const n = parseFloat(String(sqft ?? '')) || 0;
   if (!n) return SQFT_PER_ROLL + ' sq.ft = 1 roll, rounded up';
@@ -363,6 +310,7 @@ export function mintSubjobId(o: InstallOrder, baseType: InstallCategory): string
 export function sjDeliveryDate(o: InstallOrder, sj: Subjob): string | null {
   return sj.deliveryDate !== undefined ? sj.deliveryDate ?? null : o.deliveryDate;
 }
+
 export function sjCustomWp(o: InstallOrder, sj: Subjob): boolean {
   if (sj.customWp !== undefined && sj.customWp !== null) return !!sj.customWp;
   return sj.type === 'wallpaper' ? !!o.customWp : false;
@@ -384,4 +332,17 @@ export function sjEffectiveAssignments(sj: Subjob): Assignment[] {
     return [{ installer_id: sj.installer || '', installer_email: sj.installer_email || '', installer_name: '', mode: 'standard', date: sj.date, dates: [], primary: true }];
   }
   return [];
+}
+
+const TRAVEL_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite'];
+
+function reconciledOrderStatus(stored: string, subjobs: Subjob[] | null): string {
+  if (!subjobs || !subjobs.length) return stored;
+  if (!TRAVEL_STATUSES.includes(stored)) return stored;
+  return syncParentStatus(subjobs, stored);
+}
+
+function subjobAssignList(sj: Subjob): Array<{ installer_id?: string; date?: string | null; dates?: string[]; mode: string }> {
+  if (sj.assignments && sj.assignments.length) return sj.assignments;
+  return sj.installer ? [{ installer_id: sj.installer, date: sj.date, dates: [], mode: 'standard' }] : [];
 }

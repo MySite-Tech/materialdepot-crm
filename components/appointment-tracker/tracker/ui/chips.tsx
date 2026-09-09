@@ -1,7 +1,7 @@
 'use client';
 
 import { CHIP_DOTS, PRESET_LABELS } from '../constants';
-import { DatePreset, DateRange } from '../../types/appointments';
+import { DatePreset, DateRange } from '../../types';
 import { rangeForPreset } from '../utils';
 
 export function SelectChip<T extends string>({ dot, value, onChange, options, title }: {

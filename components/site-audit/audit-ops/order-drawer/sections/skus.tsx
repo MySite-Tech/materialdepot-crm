@@ -1,6 +1,6 @@
 'use client';
 
-import { AuditSkuRow } from '../../shared';
+import { AuditSkuRow } from '../../types';
 
 export function SkuGroup({
   grp, label, draft, grpOn, onToggle, onField, onAdd, onDel,

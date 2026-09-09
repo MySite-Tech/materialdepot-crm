@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { WDAYS, fmtDate as fmtDateShort, offDayReason, sbPatch, type StaffExit } from '../../shared';
-import { FLOOR_DAY_CAP, WALLPANEL_DAY_CAP, WP_DAY_SLOTS, dstr, flLoad, installerDayCap, saveSlots, today, typeDayCap, wpSlotLoad, wpnlLoad } from '../shared';
+import { FLOOR_DAY_CAP, WALLPANEL_DAY_CAP, WP_DAY_SLOTS, today } from '../constants';
+import { dstr, flLoad, installerDayCap, saveSlots, typeDayCap, wpSlotLoad, wpnlLoad } from '../utils';
 import { typeLabel } from '../../data/audit-registry';
 import type { InstallOrder, Installer, SlotDef } from '../types';
 

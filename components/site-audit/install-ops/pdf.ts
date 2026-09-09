@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
-import { fmtDate } from './shared';
-import { installerById } from './shared';
+import { fmtDate } from './utils';
+import { installerById } from './utils';
 import { categoryFor, mdInstallTermsBlock } from '../data/audit-registry';
 import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfConsent, mdPdfHeader, mdPdfInstallRoom } from '../brand/pdf-brand';
 import type { InstallOrder, Installer, JobCard, Subjob } from './types';

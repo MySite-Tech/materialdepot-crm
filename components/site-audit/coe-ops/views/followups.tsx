@@ -9,7 +9,7 @@ import {
   loadOrderLog, mapUrl, matchesCategory, orderPlacedFor, patchCoe, postJobRating, presetRange, todayStr,
   type BucketKey, type CheckpointState, type CoeInstall, type CoeOrder, type DatePresetKey,
   type DateRange, type FollowupRow as Row,
-} from '../shared';
+} from '..';
 import { BucketTiles, CategoryFilter, CategoryPills, DateRangeFilter, FrozenBar } from '../filters';
 import { useFrozenBar } from '../hooks/use-frozen-bar';
 import ClientCarts from './client-carts';

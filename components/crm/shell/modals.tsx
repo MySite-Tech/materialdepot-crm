@@ -7,7 +7,7 @@ import { CsvPreviewModal } from '../leads/csv/preview';
 import { KylasSyncModal } from '../leads/kylas-modal';
 import { LeadDrawer } from '../leads/drawer';
 import { DateEditPopup } from '../ui/prompts';
-import { CsvRow, DateEditState } from '../types/crm';
+import { CsvRow, DateEditState } from '../types';
 import { Dispatch, SetStateAction } from 'react';
 
 export function CrmModals({ addRemark, availableBMs, branches, csvErrors, csvPreview, csvSelected, currentUser, dateEditPopup, drawerLead, handleDateEditSave, handleKylasModalSync, importCsvLeads, kylasModalInput, kylasModalResult, leads, saveLead, setCsvErrors, setCsvPreview, setCsvSelected, setDateEditPopup, setDrawerLead, setKylasModalInput, setKylasModalResult, setLeads, setShowAddDrawer, setShowKylasModal, showAddDrawer, showKylasModal, showSaveError, visitsLoading }: {

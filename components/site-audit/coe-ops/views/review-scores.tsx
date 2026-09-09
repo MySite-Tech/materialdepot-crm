@@ -8,7 +8,7 @@ import {
   auditReviewProgress, followupRows, installReviewProgress, installReviewRows,
   pushScoredCalls, scoredCalls, unprojectedScoredCalls,
   type CoeInstall, type CoeOrder, type RatingRow, type ReviewProgress, type ScoredCall,
-} from '../shared';
+} from '..';
 
 const PERIODS: Array<{ k: string; l: string; days: number | null }> = [
   { k: '30', l: 'Last 30 days', days: 30 },

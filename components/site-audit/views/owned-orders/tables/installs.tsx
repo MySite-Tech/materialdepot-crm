@@ -3,7 +3,8 @@
 import LinkAuditSection from '../../../ui/link-audit-section';
 import WpLadder from '../../../coe-ops/wallpaper/ladder';
 import { WpRow } from '../../../coe-ops/wallpaper/track';
-import { STATUS as INSTALL_STATUS, fmtDate, sjDeliveryDate, sjEffectiveAssignments, sjShortLabel } from '../../../install-ops/shared';
+import { STATUS as INSTALL_STATUS } from '../../../install-ops/constants';
+import { fmtDate, sjDeliveryDate, sjEffectiveAssignments, sjShortLabel } from '../../../install-ops/utils';
 import { InstallOrder, Subjob } from '../../../install-ops/types';
 import { fmtDateA, fmtLog, sbGet } from '../../../shared';
 import { InstallRoomCard } from '../../../ui/audit-room-views';

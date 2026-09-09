@@ -15,9 +15,8 @@ import OrderDrawer from '../../install-ops/order-drawer';
 import { AddOrderOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from '../../install-ops/ui/overlays';
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../../staff/staff-modals';
 import { Toast } from '../../install-ops/ui';
-import {
-  DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, INSTALL_SKU, detectAuditBy, dstr, followUpDue, loadSlots, mapInstallRow, needActionCount, opsCallDue, today,
-} from '../../install-ops/shared';
+import { DEFAULT_SLOTS_FL, DEFAULT_SLOTS_WP, INSTALL_SKU, today } from '../../install-ops/constants';
+import { detectAuditBy, dstr, followUpDue, loadSlots, mapInstallRow, needActionCount, opsCallDue } from '../../install-ops/utils';
 import { SM_ATTRIBUTION } from '../../install-ops/types';
 import type { InstallOrder, Installer, SlotDef, ViewKey } from '../../install-ops/types';
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { fmtLog } from '../../shared';
-import { createWpRow, patchWp, stampWpStage, todayStr, type CoeInstall } from '../shared';
+import { createWpRow, patchWp, stampWpStage, todayStr, type CoeInstall } from '..';
 import WpLadder from './ladder';
 import { KV, Sec } from '../../ui/drawer-ui';
 import { useNoteModal } from '../../hooks/use-note-modal';

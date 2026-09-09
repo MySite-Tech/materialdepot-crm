@@ -1,6 +1,6 @@
 'use client';
 
-import { MainTab } from '../types/crm';
+import { MainTab } from '../types';
 import { Dispatch, SetStateAction } from 'react';
 
 export function CrmTabBar({ allowedTabs, canSeeAppointmentTracker, effectiveTab, setMainTab }: {

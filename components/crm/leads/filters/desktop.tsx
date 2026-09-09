@@ -6,7 +6,7 @@ import { Download, FileSpreadsheet, FileText, FileType2 } from 'lucide-react';
 
 import { CategoryOption } from '../../../../lib/api/dashboards/weekly-funnel';
 import { Lead } from '../../../../types/crm';
-import { STATUSES } from '../../constants/crm';
+import { STATUSES } from '../../constants';
 import { DateRangePicker, MultiSelect } from '../../ui/inputs';
 import { ChangeEvent, Dispatch, SetStateAction } from 'react';
 

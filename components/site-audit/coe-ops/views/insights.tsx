@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   addDays, anchorDate, auditCategories, followupRows, todayStr,
   type CoeInstall, type CoeOrder, type FollowupRow,
-} from '../shared';
+} from '..';
 import { WP_STAGES, WP_VENDORS, wpBucket, wpDurations, wpEverReached, wpFmtDur, wpNext, wpSla, wpStageAt, wpStageLabel, type WpBucketKey, type WpNext, type WpRow, type WpSla } from '../wallpaper/track';
 
 function median(xs: number[]): number | null {

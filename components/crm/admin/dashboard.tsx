@@ -3,9 +3,9 @@
 import { addUser, fetchBranchList, fetchUsers, updateUser, updateUserBranches } from '../../../lib/api';
 import { AppUser, Branch } from '../../../types/crm';
 import { BranchManager } from './branches';
-import { SITE_AUDIT_ROLES } from '../constants/crm';
+import { SITE_AUDIT_ROLES } from '../constants';
 import { BranchAccessDropdown, PermissionChecklist, RoleSelect } from './permissions';
-import { defaultPermissionsForRole, roleLabel } from '../utils/crm';
+import { defaultPermissionsForRole, roleLabel } from '../utils';
 import { isSiteAuditOversightRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/shared';
 import { Fragment, useEffect, useState } from 'react';
 

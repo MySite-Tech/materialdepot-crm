@@ -1,5 +1,5 @@
 import './globals.css';
-import PwaRegister from './PwaRegister';
+import PwaRegister from './pwa-register';
 
 export const metadata = {
   title: 'MaterialDepot CRM',

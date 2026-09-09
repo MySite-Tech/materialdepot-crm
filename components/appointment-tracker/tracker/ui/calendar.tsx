@@ -2,7 +2,7 @@
 
 import { SLOTS } from '../constants';
 import { capacityForDate } from '../rota/data';
-import { FootfallMap, RotaPlan } from '../../types/appointments';
+import { FootfallMap, RotaPlan } from '../../types';
 import { customerName, emptyBranchData, shortDate, slotIndexFor, timeOnly } from '../utils';
 import { Branch, ApptLead as Lead, ymd } from '@/lib/appointments/appt-shared';
 import { useMemo } from 'react';

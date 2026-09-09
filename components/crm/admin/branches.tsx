@@ -3,7 +3,7 @@
 import { addBranch, updateBranch } from '../../../lib/api';
 import { useState } from 'react';
 
-import { BranchManagerProps } from '../types/crm';
+import { BranchManagerProps } from '../types';
 
 export function BranchManager({ branches, setBranches }: BranchManagerProps) {
   const [newBranch, setNewBranch] = useState('');

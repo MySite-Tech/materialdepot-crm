@@ -1,4 +1,4 @@
-import { KYLAS_CATEGORIES } from '../constants/b2b-inbound';
+import { KYLAS_CATEGORIES } from './constants';
 export function categoryLabelsFromIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw

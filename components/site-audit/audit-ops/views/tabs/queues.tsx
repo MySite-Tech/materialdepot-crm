@@ -1,7 +1,9 @@
 'use client';
 
 import { Chip } from '../../order-drawer/ui/fields';
-import { AuditOrder, Auditor, SlotDef, auditorNameOf, dstr, fmtDate, hasOpenFollowUp, slotLabel, today } from '../../shared';
+import { today } from '../../constants';
+import { AuditOrder, Auditor, SlotDef } from '../../types';
+import { auditorNameOf, dstr, fmtDate, hasOpenFollowUp, slotLabel } from '../../utils';
 import { Addr, Cats, Customer, Empty, Head } from '../cells';
 import { TD, TH } from '../../constants';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Lead } from '../../../../types/crm';
-import { fmtINR } from '../../utils/crm';
+import { fmtINR } from '../../utils';
 
 export function LeadsStats({ activeCount, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, statsLoading, wonCount }: {
   activeCount: number;

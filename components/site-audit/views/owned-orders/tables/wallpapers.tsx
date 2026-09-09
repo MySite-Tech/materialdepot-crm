@@ -2,7 +2,7 @@
 
 import WpLadder from '../../../coe-ops/wallpaper/ladder';
 import { WP_BUCKETS, WpRow, wpBucket, wpNext, wpVendor } from '../../../coe-ops/wallpaper/track';
-import { STATUS as INSTALL_STATUS } from '../../../install-ops/shared';
+import { STATUS as INSTALL_STATUS } from '../../../install-ops/constants';
 import { fmtDateA, fmtLog, sbGet } from '../../../shared';
 import { DrawerShell, KV, Sec } from '../../../ui/drawer-ui';
 import { WP_DRAWER_COLS, WP_STATE_BADGE } from '../constants';

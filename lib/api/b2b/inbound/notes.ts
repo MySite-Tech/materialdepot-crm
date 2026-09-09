@@ -1,6 +1,6 @@
 import { KYLAS_API_KEY, KYLAS_API_URL, kylasFetch } from '../../core/kylas-client';
-import { CallOutcome } from '../../../types/b2b-inbound';
-import { formatKylasTs, pickName, stripHtml } from '../../../utils/b2b-inbound';
+import { CallOutcome } from './types';
+import { formatKylasTs, pickName, stripHtml } from './utils';
 export async function fetchLeadNotes(
   leadId: string | number,
   ownerId?: number,

@@ -22,11 +22,11 @@ import { CrmTabBar } from './shell/tab-bar';
 
 import { CRMLeadsStats, CategoryOption, fetchCategoryOptions, fetchLeadRemarks, fetchLeadVisits } from '../../lib/api';
 import { AppUser, Lead } from '../../types/crm';
-import { DEFAULT_BRANCHES } from './constants/crm';
+import { DEFAULT_BRANCHES } from './constants';
 import { useDebouncedValue } from './hooks/use-debounced-value';
 import { LoginScreen } from './login';
-import { CsvRow, DateEditState, MainTab } from './types/crm';
-import { resolveAllowedTabs } from './utils/crm';
+import { CsvRow, DateEditState, MainTab } from './types';
+import { resolveAllowedTabs } from './utils';
 import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/shared';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';

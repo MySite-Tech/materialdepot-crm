@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Chip, EmptyRow, MapLink } from '../ui';
-import { fmtDate } from '../shared';
+import { fmtDate } from '../utils';
 import type { InstallOrder } from '../types';
 
 function RestoreBtn({ id, pi, onRestore }: { id: string | number | null; pi: string; onRestore: (id: string | number, pi: string) => Promise<void> }) {

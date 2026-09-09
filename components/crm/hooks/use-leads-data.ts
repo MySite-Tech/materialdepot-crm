@@ -4,8 +4,8 @@ import { fetchBranchList } from '../../../lib/api/crm/branches';
 import { CRMLeadsStats, fetchCRMLeads, fetchCRMLeadsStats } from '../../../lib/api/crm/leads';
 import { fetchUsers } from '../../../lib/api/crm/users';
 import { AppUser, Lead } from '../../../types/crm';
-import { BACKEND_SORTABLE_COLS } from '../constants/crm';
-import { MainTab } from '../types/crm';
+import { BACKEND_SORTABLE_COLS } from '../constants';
+import { MainTab } from '../types';
 import { Dispatch, SetStateAction, useEffect } from 'react';
 
 export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {

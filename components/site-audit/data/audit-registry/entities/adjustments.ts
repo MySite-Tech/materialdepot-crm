@@ -1,7 +1,7 @@
 import { unitFor } from './categories';
-import { UNIT_DIV } from '../../constants/audit-registry';
-import { AdjustDisplayRow, AdjustRow, CategoryDef, RoomLike } from '../../types/audit-registry';
-import { n, r2 } from '../../utils/audit-registry';
+import { UNIT_DIV } from '../constants';
+import { AdjustDisplayRow, AdjustRow, CategoryDef, RoomLike } from '../types';
+import { n, r2 } from '../utils';
 function adjArea(a: AdjustRow | null | undefined, div: number): number {
   if (!a) return 0;
   if (String(a.area ?? '') !== '') return n(a.area);

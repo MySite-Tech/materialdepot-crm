@@ -1,7 +1,7 @@
 'use client';
 
 import { clearToken, loginWithPhone, sendOtp, verifyOtp } from '../../lib/api';
-import { LoginScreenProps } from './types/crm';
+import { LoginScreenProps } from './types';
 import { FormEvent, useState } from 'react';
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {

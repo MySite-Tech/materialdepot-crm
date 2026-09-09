@@ -13,7 +13,7 @@ import { PAGE_SIZE } from './constants';
 import { DateFilter, MobileEscalationProps, NoteEntry, StatusFilter, TimelineEntry } from './types';
 import { buildBody, classifyStage, dateFilterLabel, dateFilterRange, endOfDay, isEscalationOrSupport, parseTimeline, startOfDay } from './utils';
 import { getEscalationRaisedBy } from '@/lib/api';
-import { CallLog, Deal, DealsSearchResponse } from '@/lib/types/index';
+import { CallLog, Deal, DealsSearchResponse } from '@/lib/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function MobileEscalationClient({ jumpToSearch, userName }: MobileEscalationProps) {

@@ -3,11 +3,11 @@
 import { CartItem, Lead, Remark, Visit } from '../../../types/crm';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
 
-import { CLIENT_TYPES, MARK_LOST_ELIGIBLE, MIN_LOST_AGE_DAYS, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../constants/crm';
+import { CLIENT_TYPES, MARK_LOST_ELIGIBLE, MIN_LOST_AGE_DAYS, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../constants';
 import { DateEditPopup } from '../ui/prompts';
-import { LeadDrawerProps } from '../types/crm';
+import { LeadDrawerProps } from '../types';
 import { Avatar, Field } from '../ui';
-import { canBypassLostAge, canMarkLostByAge, fmtDate, fmtTimestamp, todayStr } from '../utils/crm';
+import { canBypassLostAge, canMarkLostByAge, fmtDate, fmtTimestamp, todayStr } from '../utils';
 
 export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
   const isEdit = !!lead;

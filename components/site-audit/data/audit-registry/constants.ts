@@ -1,5 +1,5 @@
-import { CategoryDef, CategoryField, JourneyStage } from '../types/audit-registry';
-import { skipDim } from '../utils/audit-registry';
+import { CategoryDef, CategoryField, JourneyStage } from './types';
+import { skipDim } from './utils';
 const MM2_PER_SQFT = 92903.04;
 
 export const UNIT_DIV: Record<string, number> = { ft: 1, in: 144, mm: MM2_PER_SQFT };

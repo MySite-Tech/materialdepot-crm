@@ -1,4 +1,4 @@
-import { CallOutcome } from '../types/b2b-inbound';
+import { CallOutcome } from './types';
 export const B2B_INBOUND_PIPELINE = 31627;
 
 export const B2B_INBOUND_STAGES = [220515, 220290];

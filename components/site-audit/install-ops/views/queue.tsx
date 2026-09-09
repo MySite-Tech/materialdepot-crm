@@ -1,7 +1,8 @@
 'use client';
 
 import { Chip, EmptyRow, TypeTag } from '../ui';
-import { dstr, fmtDate, followUpDue, hasOpenFollowUp, opsCallDue, slotLabel, today } from '../shared';
+import { today } from '../constants';
+import { dstr, fmtDate, followUpDue, hasOpenFollowUp, opsCallDue, slotLabel } from '../utils';
 import type { InstallOrder, SlotDef } from '../types';
 
 interface BaseProps {

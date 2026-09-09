@@ -4,7 +4,7 @@ import { DS_DEFAULT_CORNERS, DS_HANDLE_INDICES, DS_MAX_OUTPUT_DIM } from './cons
 import { DocScannerModalProps, SketchPoint } from '../types/field-app';
 import { dsEnhanceCanvas, dsWarp } from './utils';
 import { uploadPhoto } from '@/components/site-audit/shared';
-import { cn } from '@/lib/utils/index';
+import { cn } from '@/lib/utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalProps) {

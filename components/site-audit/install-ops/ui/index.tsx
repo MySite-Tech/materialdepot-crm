@@ -1,7 +1,8 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { assigneeProgress, fmtDate, installerById, STATUS, subjobDisplayStatus } from '../shared';
+import { STATUS } from '../constants';
+import { assigneeProgress, fmtDate, installerById, subjobDisplayStatus } from '../utils';
 import { typeTag } from '../../data/audit-registry';
 import type { InstallCategory, InstallOrder, Installer } from '../types';
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { AppUser, Lead } from '../../../types/crm';
-import { APPOINTMENT_TRACKER_ROLES, B2B_SALES_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from '../constants/crm';
-import { MainTab } from '../types/crm';
+import { AppUser, Lead } from '../../types/crm';
+import { APPOINTMENT_TRACKER_ROLES, B2B_SALES_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
+import { MainTab } from './types';
 
 export const roleLabel = (role?: string | null): string => {
   if (!role) return '\u2014';

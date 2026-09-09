@@ -1,6 +1,7 @@
 'use client';
 
-import { AuditOrder, categoriesAreFromStore, mapUrl, orderCategories } from '../shared';
+import { AuditOrder } from '../types';
+import { categoriesAreFromStore, mapUrl, orderCategories } from '../utils';
 
 export function Empty({ cols, msg }: { cols: number; msg: string }) {
   return <tr><td colSpan={cols} className="border-t border-gray-100 py-8 text-center text-[13px] text-gray-400">{msg}</td></tr>;

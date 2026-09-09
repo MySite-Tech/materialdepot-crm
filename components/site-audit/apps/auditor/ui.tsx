@@ -3,7 +3,7 @@
 import { STATUS_LABELS } from './constants';
 import { Order } from '../types/auditor';
 import { addDays, dstr } from './utils';
-import { cn } from '@/lib/utils/index';
+import { cn } from '@/lib/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export function Spinner() {

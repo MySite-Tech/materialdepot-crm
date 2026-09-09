@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   CATEGORY_ORDER, CATEGORY_TONE, CAT_UNSET, DATE_PRESETS, fmtRangeLabel, presetRange,
   type DatePresetKey, type DateRange,
-} from './shared';
+} from '.';
 
 export function FrozenBar({ top, setRef, children }: { top: number; setRef: (el: HTMLDivElement | null) => void; children: React.ReactNode }) {
   return (

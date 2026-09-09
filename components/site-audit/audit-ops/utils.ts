@@ -1,73 +1,7 @@
 import { offDayReason, publishSlotConfig, staffCapOn } from '../shared';
-import type { Availability, StaffCaps } from '../shared';
-
-export const AUDIT_SKU = 'SVC-AUDIT-001';
-
-export interface AuditSkuRow {
-  sku: string;
-  name: string;
-  link?: string;
-}
-
-interface AuditService {
-  flooring?: AuditSkuRow[];
-  wallpaper?: AuditSkuRow[];
-  follow_up_date?: string | null;
-  rectification_of?: string;
-  rectification_raised?: boolean;
-  rectification_pi?: string;
-  rectification_type?: 'audit' | 'install';
-  issue?: string;
-}
-
-interface AuditLogEntry {
-  t: string;
-  d: string;
-  by?: 'auto' | 'manual';
-  who?: string;
-}
-
-export interface AuditOrder {
-  id: string;
-  pi: string;
-  po: string[];
-  skus: Array<{ c: string; n: string; audit?: boolean }>;
-  auditTicked: any;
-
-  storeCategories: string[];
-  bm: string;
-  bmEmail: string | null;
-  name: string;
-  phone: string;
-  addr: string;
-  status: string;
-  service: AuditService | null;
-  slot: string | null;
-  date: string | null;
-  auditor: string | null;
-  auditorName: string | null;
-  auditorEmail: string | null;
-  shadowerEmail: string | null;
-  shadowerName: string | null;
-  city: string;
-  log: AuditLogEntry[];
-}
-
-export interface Auditor extends Availability, StaffCaps {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  zone: string;
-  activeFrom: string | null;
-  city: string;
-
-  contact?: string | null;
-}
-
-export const AUDIT_COLS =
-  'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_id,auditor_name,auditor_email,shadower_email,shadower_name,log,created_by_email,city';
-
+import { CONFLICT_STATUSES, FOLLOWUP_ACTIVE_STATUSES } from './constants';
+import { DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, DEFAULT_CAP, FLOW, today } from './constants';
+import { AuditOrder, Auditor, SlotDef } from './types';
 export function mapAuditRow(r: any): AuditOrder {
   return {
     id: r.id,
@@ -96,28 +30,6 @@ export function mapAuditRow(r: any): AuditOrder {
   };
 }
 
-export const STATUS: Record<string, { l: string; badge: string }> = {
-  slot_reserved: { l: 'Pre-booked (Store)', badge: 'bg-sky-100 text-sky-800' },
-  slot_converted: { l: 'Pre-booking Fulfilled', badge: 'bg-green-100 text-green-700' },
-  pending: { l: 'Pending', badge: 'bg-gray-100 text-gray-600' },
-  created: { l: 'Service Created', badge: 'bg-sky-100 text-sky-700' },
-  call_na: { l: 'Call not picked', badge: 'bg-red-100 text-red-700' },
-  scheduled: { l: 'Site Audit Scheduled', badge: 'bg-sky-100 text-sky-700' },
-  assigned: { l: 'Site Auditor Assigned', badge: 'bg-purple-100 text-purple-700' },
-  callpending: { l: 'Call Pending (Auditor)', badge: 'bg-purple-100 text-purple-700' },
-  reschedule: { l: 'To Reschedule', badge: 'bg-red-100 text-red-700' },
-  onway: { l: 'On The Way', badge: 'bg-amber-100 text-amber-700' },
-  atsite: { l: 'At Site', badge: 'bg-amber-100 text-amber-700' },
-  completed: { l: 'Site Audit Completed', badge: 'bg-green-100 text-green-700' },
-};
-
-export const AUTO_STATUSES = ['onway', 'atsite', 'completed'];
-export const FLOW = ['pending', 'created', 'scheduled', 'assigned', 'completed'];
-export const FLOW_LABELS = ['Pending', 'Service created', 'Scheduled', 'Auditor assigned', 'Completed'];
-const CONFLICT_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite', 'slot_reserved'];
-
-const FOLLOWUP_ACTIVE_STATUSES = ['created', 'call_na', 'reschedule'];
-
 export function hasOpenFollowUp(o: AuditOrder): boolean {
   return !!(o.service && o.service.follow_up_date) && FOLLOWUP_ACTIVE_STATUSES.includes(o.status);
 }
@@ -129,17 +41,6 @@ export function flowIndexOf(status: string): number {
   return FLOW.indexOf(status);
 }
 
-export interface SlotDef { id: string; label: string }
-export const DEFAULT_AUDIT_SLOTS_FL: SlotDef[] = [
-  { id: 'sf1', label: '9 AM – 12 PM' },
-  { id: 'sf2', label: '12 PM – 3 PM' },
-  { id: 'sf3', label: '3 PM – 6 PM' },
-];
-export const DEFAULT_AUDIT_SLOTS_WP: SlotDef[] = [
-  { id: 'sw1', label: '9 AM – 12 PM' },
-  { id: 'sw2', label: '12 PM – 3 PM' },
-  { id: 'sw3', label: '3 PM – 6 PM' },
-];
 export function loadAuditSlots(kind: 'fl' | 'wp'): SlotDef[] {
   const fallback = kind === 'fl' ? DEFAULT_AUDIT_SLOTS_FL : DEFAULT_AUDIT_SLOTS_WP;
   if (typeof window === 'undefined') return fallback;
@@ -152,6 +53,7 @@ export function loadAuditSlots(kind: 'fl' | 'wp'): SlotDef[] {
   } catch { /* malformed override — use defaults */ }
   return fallback;
 }
+
 export function saveAuditSlots(kind: 'fl' | 'wp', slots: SlotDef[]) {
   const key = kind === 'fl' ? 'md_audit_slots_fl' : 'md_audit_slots_wp';
   try { localStorage.setItem(key, JSON.stringify(slots)); } catch { /* best-effort */ }
@@ -176,37 +78,31 @@ export function dstr(d: Date): string {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
 }
-export const today = (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; })();
-if (typeof window !== 'undefined') {
 
-  setInterval(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    if (now.getTime() !== today.getTime()) today.setTime(now.getTime());
-  }, 60000);
-}
 export function addDays(n: number): Date {
   const d = new Date(today);
   d.setDate(d.getDate() + n);
   return d;
 }
+
 export function fmtDate(ds: string | null | undefined): string {
   if (!ds) return '—';
   return new Date(ds + 'T00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-export const DEFAULT_CAP = 3;
-
 export function capFor(auditors: Auditor[], aid: string, ds: string | null): number {
   if (!ds) return DEFAULT_CAP;
   return staffCapOn(auditors.find((x) => x.id === aid), ds, DEFAULT_CAP);
 }
+
 export function offReason(a: Auditor, ds: string | null): string {
   return offDayReason(a, ds);
 }
+
 export function dailyTotalCap(auditors: Auditor[], ds: string): number {
   return auditors.reduce((s, a) => s + capFor(auditors, a.id, ds), 0);
 }
+
 export function auditorLoad(orders: AuditOrder[], aid: string, date: string | null, excludeId?: string): number {
   if (!date) return 0;
   return orders.filter((o) => o.auditor === aid && o.date === date && o.id !== excludeId && ['assigned', 'onway', 'atsite', 'completed'].includes(o.status)).length;
@@ -229,14 +125,6 @@ export function auditorConflictOrder(
     return (gapAB < 0 && gapBA < 0) || (gapAB >= 0 && gapAB < 120) || (gapBA >= 0 && gapBA < 120);
   }) || null;
 }
-
-const PRE_CARD_STATUSES = [
-  'slot_reserved', 'slot_converted', 'pending', 'created', 'call_na',
-  'scheduled', 'assigned', 'callpending', 'reschedule',
-];
-
-export const AUDIT_CATEGORY_QUERY =
-  'audit_orders?select=id,pi,po,status,audit_ticked&status=in.(' + PRE_CARD_STATUSES.join(',') + ')';
 
 export function applyAuditCategories(orders: AuditOrder[], catRows: any[]): AuditOrder[] {
   const own = new Map<string, any>();
@@ -285,6 +173,7 @@ export function categoriesAreFromStore(o: AuditOrder): boolean {
 export function auditorById(auditors: Auditor[], id: string | null | undefined) {
   return auditors.find((a) => a.id === id) || null;
 }
+
 export function auditorNameOf(o: AuditOrder, auditors: Auditor[]): string | null {
   if (!o.auditor) return null;
   const a = auditorById(auditors, o.auditor);
@@ -294,7 +183,3 @@ export function auditorNameOf(o: AuditOrder, auditors: Auditor[]): string | null
 export function mapUrl(a: string) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
-
-export type AuditViewKey =
-  | 'orders' | 'schedule' | 'reschedule' | 'followups' | 'calendar'
-  | 'slots' | 'auditors' | 'deleted' | 'rectifications';

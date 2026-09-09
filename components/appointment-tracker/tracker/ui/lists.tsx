@@ -2,7 +2,7 @@
 
 import { SLOTS, VALUE_TONE } from '../constants';
 import { bookedVsVisitedByDate, computeStats, footfallBySlot, sumFootfallForDate } from '../stats';
-import { DateRange, FootfallMap } from '../../types/appointments';
+import { DateRange, FootfallMap } from '../../types';
 import { customerName, inRange, link3d, phoneOf, rangeLabel, requirement, slotIndexFor, timeOnly } from '../utils';
 import { Branch, EcReadyMap, ApptLead as Lead, ymd } from '@/lib/appointments/appt-shared';
 import { useMemo } from 'react';

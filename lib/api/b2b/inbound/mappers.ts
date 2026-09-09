@@ -1,6 +1,6 @@
-import { B2B_INBOUND_FIELDS, B2B_INBOUND_OWNERS, B2B_INBOUND_PIPELINE, B2B_INBOUND_STAGES } from '../../../constants/b2b-inbound';
-import { KylasIdentity } from '../../../types/b2b-inbound';
-import { categoryLabelsFromIds, cf, cfCount, cfString, kylasIdName } from '../../../utils/b2b-inbound';
+import { B2B_INBOUND_FIELDS, B2B_INBOUND_OWNERS, B2B_INBOUND_PIPELINE, B2B_INBOUND_STAGES } from './constants';
+import { KylasIdentity } from './types';
+import { categoryLabelsFromIds, cf, cfCount, cfString, kylasIdName } from './utils';
 import { selectionsFromKylasLabels } from '@/components/b2b/models/inbound';
 function mapInboundSource(raw: unknown): import('../../../../components/b2b/models/mock-data').InboundLead['source'] {
   const name = (typeof raw === 'object' && raw ? (raw as { name?: string }).name || '' : String(raw || '')).toLowerCase();

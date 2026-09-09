@@ -2,7 +2,7 @@
 
 import { CRMLeadsStats } from '../../../lib/api/crm/leads';
 import { AppUser, Lead } from '../../../types/crm';
-import { STATUSES } from '../constants/crm';
+import { STATUSES } from '../constants';
 import { useMemo } from 'react';
 
 export function useLeadsView({ crmUsers, currentUser, leads, leadsStats, sortCol, sortDir }: {

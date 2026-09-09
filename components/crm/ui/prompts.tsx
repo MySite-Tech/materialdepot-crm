@@ -1,7 +1,7 @@
 'use client';
 
-import { DateEditPopupProps } from '../types/crm';
-import { fmtDate } from '../utils/crm';
+import { DateEditPopupProps } from '../types';
+import { fmtDate } from '../utils';
 import { useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 

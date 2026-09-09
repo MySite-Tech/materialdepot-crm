@@ -1,7 +1,8 @@
 'use client';
 
 import { typeLabel } from '../../../data/audit-registry';
-import { STATUS, assigneeProgress, fmtDate, sjDeliveryDate } from '../../shared';
+import { STATUS } from '../../constants';
+import { assigneeProgress, fmtDate, sjDeliveryDate } from '../../utils';
 import { InstallOrder, Subjob } from '../../types';
 import { useState } from 'react';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { AuditOrder } from '../../shared';
+import { AuditOrder } from '../../types';
 
 export function AuditDrawerActions({ assignAuditor, bookDate, bookSlot, bookTime, busy, cancelReservation, createService, delOrder, markPreBookingFulfilled, o, onClose, onRaiseRect, pickedAuditor, saveReschedFollowUp, setStatus }: {
   assignAuditor: () => Promise<void>;

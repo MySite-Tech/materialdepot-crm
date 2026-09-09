@@ -10,7 +10,9 @@ import { useNoteModal } from '../../hooks/use-note-modal';
 
 import { JourneyEntry } from '../../data/audit-registry';
 import { Shadower, fmtLog, parseShadowers, sbGet } from '../../shared';
-import { AuditSkuRow, auditorNameOf, categoriesAreFromStore, dstr, flowIndexOf, fmtDate, mapUrl, orderCategories, slotLabel, today } from '../shared';
+import { today } from '../constants';
+import { AuditSkuRow } from '../types';
+import { auditorNameOf, categoriesAreFromStore, dstr, flowIndexOf, fmtDate, mapUrl, orderCategories, slotLabel } from '../utils';
 import { KV, Note, Section } from './ui/fields';
 import { JourneyBlock } from './sections/journey';
 import { Props } from './types';

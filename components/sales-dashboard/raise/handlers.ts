@@ -1,7 +1,7 @@
 'use client';
 
 import { KylasDealInfo, SyncEstimateResult, fetchKylasDealInfo, syncEstimate } from '../../../lib/api/ops/kylas-sync';
-import { Deal, DealsSearchResponse } from '../../../lib/types/index';
+import { Deal, DealsSearchResponse } from '../../../lib/types';
 import { DEFAULT_PAGE_SIZE, RAISE_OPTIONS, SALES_PIPELINE_RULE, SEARCH_FIELDS } from './constants';
 import { AssociatedDeal, ContactResult } from './types';
 import { formatCurrency, friendlyPatchError, isSalesDeal } from './utils';

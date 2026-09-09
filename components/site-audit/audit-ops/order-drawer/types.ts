@@ -1,7 +1,7 @@
 'use client';
 
 import { ShadowerOption } from '../../install-ops/ui/shadower-select';
-import { AuditOrder, Auditor, SlotDef } from '../shared';
+import { AuditOrder, Auditor, SlotDef } from '../types';
 
 export type BmOption = { name: string; email?: string; contact?: string };
 

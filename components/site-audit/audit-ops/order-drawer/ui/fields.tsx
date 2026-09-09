@@ -1,6 +1,6 @@
 'use client';
 
-import { STATUS } from '../../shared';
+import { STATUS } from '../../constants';
 
 export function Chip({ st }: { st: string }) {
   const s = STATUS[st] || { l: st, badge: 'bg-gray-100 text-gray-600' };

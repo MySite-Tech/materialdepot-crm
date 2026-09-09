@@ -8,7 +8,7 @@ import {
   subjobCategory, todayStr,
   type CoeInstall, type CoeSubjob, type DatePresetKey, type DateRange,
   type InstallReviewBucketKey, type InstallReviewRow as Row,
-} from '../shared';
+} from '..';
 import { BucketTiles, CategoryFilter, CategoryPills, DateRangeFilter, FrozenBar } from '../filters';
 import { useFrozenBar } from '../hooks/use-frozen-bar';
 import ClientCarts from './client-carts';
