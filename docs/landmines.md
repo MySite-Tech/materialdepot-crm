@@ -5,6 +5,53 @@
 ## Purpose
 Bugs that have already been shipped and fixed here, kept because the shape recurs. These entries cross-reference each other, so they live in one file rather than split across modules.
 
+## Contents
+
+41 entries. They live in one file because they cross-reference each other —
+grep for a term, then read around the line you hit rather than opening all of it.
+
+- A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
+- Availability is per CITY, and the Store Team kiosk was the one surface that did not know it
+- `AddStaffOverlay` never wrote a city
+- Daily caps live on `profiles`, not in localStorage — and the columns are probe-gated
+- Installer assignment flags caps, it does not block them; the auditor drawer DOES block
+- `audit_ticked` / `subjobs[].jobcard` is ONE mutable slot holding both the 3s draft autosave…
+- A photo that renders as `"1 photo"` is a photo nobody can see
+- An optimistic-then-swap upload MUST go through a functional state updater
+- The field apps write a log line more than once for one event
+- A second write that only `console.error`s on failure is silent data loss
+- `audit_ticked->sign->>name` is cheap to transfer and expensive to READ. The json path keeps…
+- COE calling began on 2026-08-31, so nothing before that date has a field-service NPS at all
+- A floor has no height
+- The read side aliases `customer_name` to `name`, and both order drawers wrote the alias back
+- `install-ops/OrderDrawer`'s `persist()` had no error handling
+- A field app's stale-write guard has to compare like with like — the guard itself was the outage
+- An SM re-assignment resets `sj.status` to `assigned` but used to leave the per-assignee…
+- These two apps are PORTS of PWA apps that are still being changed
+- `slot_reserved`/`slot_converted` pre-bookings were reaching auditors' own job lists
+- A derived force-add set can still be reverted back to a hand-written one
+- `defaultPermissionsForRole` had the identical drift, one level up
+- One phone can have several `profiles` rows (a field-app account under a personal email…
+- 13 of 129 profiles have a NULL `contact`
+- `profiles.branch` exists but is blank for every row
+- An empty `allowedBranches` means "all branches", not "no branches"
+- `planSiteAuditRoleSync` short-circuits on `profile.role === target`
+- `SiteAuditPerfView` only computes stats for people who perform jobs (`statsFor` keys off…
+- Field staff are not assigned to a store anywhere in either system
+- A service manager must only ever see EXECUTION analytics
+- Site Audit `profiles` rows double as login identities on the still-live public…
+- A reference list loaded once on mount
+- `AUDIT_COLS` (`components/site-audit/views/bm/index.tsx`) now also carries `bm_journey` and…
+- `SiteAuditBranchManagerView`'s `ROLLUP_AUDIT_COLS` is deliberately narrower than `AUDIT_COLS`…
+- Never gate a mandatory action note on `window.prompt()`/`window.confirm()`/ `window.alert()`
+- `branch_mgr` was added to the app on 2026-08-14 but the Site Audit Supabase's…
+- A boolean "cancelled" flag on a retryable capture is a one-way door
+- Never disable a field app's only forward control on a permission or device probe
+- `if (busy) return` where `busy` is state is not a lock
+- A re-assignment must only reset the assignees whose work actually changed
+- Only the PRIMARY installer writes `sj.status`
+- `audit_ticked` is excluded from `AUDIT_COLS` for good reason
+
 - **A Supabase write error is not an `Error`, so `String(e)` said
   "[object Object]".** `upsert`/`deleteB2BRow` in `lib/b2b/` reported failures
   as `e instanceof Error ? e.message : String(e)`, and a PostgrestError is a
