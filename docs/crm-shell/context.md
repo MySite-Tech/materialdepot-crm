@@ -1,0 +1,66 @@
+# components/crm (app shell)
+
+**Covers:** `components/crm/** · lib/api/core/auth.ts · types/crm.ts`
+
+## Purpose
+The app shell: login, session restore, and the tab permission gate that decides which of the 13 main tabs a role can see.
+
+## Auth, and why a fake session won't work
+
+Login is phone + OTP (`sendOtp` → `verifyOtp`), which stores `jwt_token` /
+`refresh_token` in localStorage; the identity itself lives in
+`localStorage.materialdepot_user`.
+
+**Any 401/403 from `mdFetch` calls `forceReLogin()`, which deletes
+`materialdepot_user` and reloads.** So hand-writing a session into localStorage
+to preview the app does not survive: `components/crm/index.tsx` calls `loginWithPhone()` on
+mount, that 401s without a real JWT, and you're bounced to the login screen.
+
+Two ways to see a real dashboard without an OTP:
+
+1. **`/site-audit-view?person=<profile-email>`** — checks only that
+   `materialdepot_user` exists, never calls the Django backend. The cheapest way
+   to preview any Site Audit dashboard against real data.
+2. **Stub the Django host only.** Monkey-patch `window.fetch` to intercept
+   `api-dev2.materialdepot.in` (return a token from `/verify-otp/`, a record
+   from `/crm/user-profile/`, a roster from `/user-organisation/`, and `200 []`
+   for everything else — never a 401, or `forceReLogin` fires), then drive the
+   login form. Every Supabase read stays live, so order/attribution numbers are
+   real. **Say explicitly which half was stubbed when reporting results.**
+
+React inputs here ignore synthetic `type` events; set values via the native
+`HTMLInputElement.prototype.value` setter + `dispatchEvent(new Event('input',
+{bubbles:true}))`.
+
+## Tab permissions (`components/crm/index.tsx`)
+
+`resolveAllowedTabs(user)` decides which tabs render:
+
+1. If `user.individualPermissions` is **non-empty** it is the WHOLE answer —
+   tabs come from `PERMISSION_TAB_ORDER`, and an absent slug means "no".
+2. Only if the list is empty/NULL: `ROLE_TABS[role]` (falling back to
+   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES`,
+   `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
+   is a **bootstrap for un-migrated accounts only**.
+
+`permission_name` is an HR cost-centre label, not an access level — it says
+`tech` for a Service Manager and `admin` for Category/Delivery/Marketing staff —
+so nothing may be gated on it. Anything a role must guarantee has to exist as a
+slug on those people; **adding a role to a force-add set no longer reaches
+anyone who has a permission list**, which is nearly everyone. The 2026-08-20
+backfill wrote the slugs for every force-add set (see below).
+
+`?tab=` is validated against `VALID_MAIN_TABS` **and** clamped to the user's own
+tabs into `effectiveTab`; every render block keys off `effectiveTab`, never
+`mainTab`. Before that, only Admin and Appointment Tracker re-checked at render,
+so every other tab was reachable by typing its name.
+
+`siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
+which is fetched async — so that tab can appear a beat after the others. That is
+deliberate: caching it would keep showing a tab after a role was revoked in Site
+Audit > Users, and a failed fetch leaves the role `undefined` so the CRM role
+alone decides (a dropped request can never take a tab away). Nothing forces the
+user off a disallowed `?tab=`, so the late arrival can't bounce anyone.
+
+Tab render order is fixed by the literal array in the header JSX, not by the
+order tabs were resolved in.
