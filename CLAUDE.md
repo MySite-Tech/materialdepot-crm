@@ -27,13 +27,27 @@ This file is loaded into **every** session, so it holds only what applies
 repo-wide: the layout rule, the request budget, the deploy path and house style.
 Everything module-specific lives in `docs/`, which is read on demand.
 
+Every module is documented. Each doc opens with a **Data** table mapping each
+call to its endpoint, so "where does this number come from" is answerable without
+reading the module.
+
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/context.md` | Three overlapping role models, the roster, order attribution, the BM order book, conversion, analytics, NPS, the COE tabs |
-| B2B sales CRM | `docs/b2b/context.md` | Inbound (PRD + three systems holding one lead), Outreach, Leads, Client Database, KAM |
+| B2B sales CRM | `docs/b2b/context.md` | Inbound (PRD + three systems holding one lead), Outreach, Leads, Client Database, KAM, and the `lib/b2b` data layer |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 13-tab permission gate |
-| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds |
+| Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
+| Retail overview + Order Lost | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap |
+| Footfall | `docs/footfall/context.md` | Five endpoints, the funnel, repeat buckets, the data-driven breakdown grid |
+| NPS | `docs/nps/context.md` | Promoter/passive/detractor cutoffs, the NPS formula, per-customer dedupe |
+| Report card | `docs/report-card/context.md` | One call, six sections; `has_bm`; cart temperature vs closure stage |
+| Weekly funnel | `docs/weekly-funnel/context.md` | Fixed value buckets, column-dynamic category tables, the shared filter-option calls |
+| Appointment tracker | `docs/appointment-tracker/context.md` | Kylas feed via a route handler, the rota table, EC-ready being per-browser, fuzzy branch matching |
+| Store visit | `docs/store-visit/context.md` | One endpoint doing lookup and write, the whole-body Kylas lead update |
+| Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
+| Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
 | Shipped-and-fixed bugs | `docs/landmines.md` | 41 bugs already fixed here, kept because the shape recurs |
+| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
 ### A code change is not done until its doc matches
