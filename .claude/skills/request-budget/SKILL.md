@@ -63,6 +63,20 @@ calls take a date range; before the split, every click on Last Month re-fetched
 the Kylas board, the owner totals, the row read and the client histories — nine
 requests to change two numbers.
 
+**Never key an effect on a filter the query does not use.** No Site Audit query
+filters by city server-side — `city=eq.` appears nowhere. Every list is fetched
+whole and narrowed in memory by `inCity()`. So an effect with `[city]` in its
+deps refetches data the browser already has each time the chip changes: Jobs
+Overview repeated 3 calls, and `analytics/sections/execution.tsx` still repeats
+**7 `sbGetLong` calls** (the 8s `sbGet` cache only covers rapid switching). Fetch
+once with `[]`, tag each row with its `city`, and narrow in a `useMemo` on
+`[rows, city]`.
+
+The exception is real and worth checking for: `views/live/index.tsx` legitimately
+keys on `[city]`, because it city-scopes the profile list first and then queries
+orders **for those emails** — there the chip genuinely changes what must be
+fetched. Confirm which case you have before removing a dep.
+
 **Polling is 30s or slower and gated on visibility.** The shape, used by all
 twelve pollers: `setInterval(() => { if (!document.hidden) load(); }, 30000)`
 plus a `visibilitychange` listener that refreshes on focus, and a cleanup that

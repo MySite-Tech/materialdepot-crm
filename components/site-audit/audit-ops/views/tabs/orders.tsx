@@ -1,11 +1,15 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { Chip } from '../../order-drawer/ui/fields';
 import { STATUS, today } from '../../constants';
 import { AuditOrder, Auditor } from '../../types';
 import { auditorNameOf, dstr, fmtDate, hasOpenFollowUp } from '../../utils';
 import { Addr, Cats, Customer, Empty, Head } from '../cells';
 import { TD, TH } from '../../constants';
+
+const ORDERS_PAGE_SIZE = 25;
 
 export function OrdersView({
   orders, auditors, filterStatus, setFilterStatus, filterDate, setFilterDate, searchQ, setSearchQ,
@@ -68,6 +72,12 @@ export function OrdersView({
 
   const todayPre = orders.filter((o) => o.status === 'slot_reserved' && o.date === todayStr);
 
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / ORDERS_PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = rows.slice((curPage - 1) * ORDERS_PAGE_SIZE, curPage * ORDERS_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [filterStatus]);
+
   return (
     <>
       <Head
@@ -121,7 +131,7 @@ export function OrdersView({
         <table className="w-full">
           <thead><tr>{['PI / PO', 'SKUs in cart', 'Categories', 'Customer', 'Address', 'Audit date', 'Auditor allocated', 'Status'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
           <tbody>
-            {rows.length ? rows.map((o) => {
+            {pageRows.length ? pageRows.map((o) => {
               const fu = hasOpenFollowUp(o) ? o.service!.follow_up_date : null;
               return (
                 <tr key={o.id} onClick={() => onOpenOrder(o.pi)} className="cursor-pointer hover:bg-gray-50">
@@ -142,6 +152,15 @@ export function OrdersView({
             }) : <Empty cols={8} msg="No orders match." />}
           </tbody>
         </table>
+        {rows.length > ORDERS_PAGE_SIZE ? (
+          <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 text-[12.5px] text-gray-500">
+            <span>Showing {(curPage - 1) * ORDERS_PAGE_SIZE + 1}–{Math.min(curPage * ORDERS_PAGE_SIZE, rows.length)} of {rows.length}</span>
+            <span className="flex gap-2">
+              <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
+              <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+            </span>
+          </div>
+        ) : null}
       </div>
     </>
   );

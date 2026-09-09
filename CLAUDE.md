@@ -215,6 +215,35 @@ whatever `main` fixed (it nearly lost `e2d0eaf`, the revenue-donut colour fix).
 
 ## House style
 
+### Optimised and concise, stated so you can actually apply it
+
+"Write clean, optimised code" is not a rule anyone can follow or review against,
+so these are the specific ones. Each exists because this repo has already paid
+for it.
+
+- **A table renders one page, not one row per record.** Anything that can hold
+  more than ~50 rows paginates client-side: `PAGE_SIZE = 25`, a
+  `Showing X–Y of Z` line, Prev/Next disabled at the bounds, and a reset to page 1
+  when any filter changes. Copy `views/jobs/index.tsx` or
+  `nps/dashboard/tabs/tracker.tsx`; do not invent a third shape. **The stat cards
+  above a table keep counting the full set** — paging the rows must never change
+  the totals. Jobs Overview put 900 `<tr>`s in the DOM before this rule.
+- **One number, one function.** If a figure appears in two places — a tab badge
+  and the tab's own list, a card and the table under it — both read the *same*
+  exported function. Four badges drifted from the lists they labelled because
+  each was re-derived inline; see the badge landmine.
+- **Derive with `useMemo`, keyed on exactly what it reads.** A filter/sort/slice
+  chain recomputed on every render is the usual cause of a sluggish tab. Equally:
+  never depend on an array whose identity changes each render — key on a stable
+  string instead, or the effect re-fetches in a loop.
+- **No file over 500 lines.** The repo currently satisfies this at every path.
+  Split by domain per the folder-structure rules above, not by arbitrary line
+  count.
+- **Delete rather than keep.** No dead exports, no commented-out blocks, no
+  re-export shims, no `_unused` parameters. `git` is the archive.
+- Concision is about what the reader must hold in their head, not character
+  count: prefer one clear pass over a dense one-liner chaining four operations.
+
 - **Do not write explanatory comments between lines of code.** No narration, no
   restating what the next line does, no verbose JSDoc. If a line encodes a
   non-obvious constraint, that belongs in the module's `docs/` entry, where it is

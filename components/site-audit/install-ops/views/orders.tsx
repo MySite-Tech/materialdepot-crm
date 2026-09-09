@@ -1,9 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { Chip, MapLink, OrderCategoryPills, StatTile, SubjobSummary } from '../ui';
 import { INSTALL_SKU, today } from '../constants';
 import { dstr, fmtDate, hasOpenFollowUp, installOrderHasDate, opsCallDue } from '../utils';
 import type { InstallOrder, Installer, ViewKey } from '../types';
+
+const ORDERS_PAGE_SIZE = 25;
 
 const FILTERS = ['all', 'followup', 'pending', 'deliv_delayed', 'created', 'scheduled', 'assigned', 'partial', 'completed'];
 const FILTER_LABELS: Record<string, string> = {
@@ -66,6 +70,12 @@ export default function OrdersView({
       const da = a.deliveryDate || '', db = b.deliveryDate || '';
       return sortDelivery === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
     });
+
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = filteredOrders.slice((curPage - 1) * ORDERS_PAGE_SIZE, curPage * ORDERS_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [filterStatus, filterDate, searchQ]);
 
   return (
     <>
@@ -140,7 +150,7 @@ export default function OrdersView({
             </tr>
           </thead>
           <tbody>
-            {filteredOrders.length ? filteredOrders.map((o) => {
+            {pageRows.length ? pageRows.map((o) => {
               const delayed = o.status === 'deliv_delayed';
               const delivClass = delayed ? 'text-red-600' : o.status === 'deliv_ontime' || ['created', 'scheduled', 'assigned', 'partial', 'completed'].includes(o.status) ? 'text-green-700' : 'text-gray-900';
               const auditBadge = o.auditBy === 'material_depot'
@@ -185,6 +195,15 @@ export default function OrdersView({
             }) : <tr><td colSpan={8} className="text-center text-gray-400 py-8 border-t border-gray-100">No orders match.</td></tr>}
           </tbody>
         </table>
+          {filteredOrders.length > ORDERS_PAGE_SIZE ? (
+            <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 text-[12.5px] text-gray-500">
+              <span>Showing {(curPage - 1) * ORDERS_PAGE_SIZE + 1}–{Math.min(curPage * ORDERS_PAGE_SIZE, filteredOrders.length)} of {filteredOrders.length}</span>
+              <span className="flex gap-2">
+                <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
+                <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+              </span>
+            </div>
+          ) : null}
       </div>
     </>
   );

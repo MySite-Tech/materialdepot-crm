@@ -304,7 +304,10 @@ type Job = {
   status: string;
   date: string | null;
   installDates?: string[];
+  city?: string | null;
 };
+
+const JOBS_PAGE_SIZE = 25;
 
 const FILTER_KEYS = ['all', 'audit', 'install', 'pending', 'assigned', 'scheduled', 'onway', 'atsite', 'completed', 'reschedule'];
 
@@ -315,6 +318,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
   const [jobsDateFilter, setJobsDateFilter] = useState('');
   const [jobsSearch, setJobsSearch] = useState('');
   const [selectedJob, setSelectedJob] = useState<{ pi: string; type: 'audit' | 'install' } | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let alive = true;
@@ -331,15 +335,15 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
       const jobs: Job[] = [];
 
       if (Array.isArray(auditRes)) {
-        inCity(auditRes, city).forEach((r: any) => jobs.push({
+        auditRes.forEach((r: any) => jobs.push({
           id: r.pi || '—', type: 'audit',
           customer: r.customer_name || '—', addr: r.addr || '—',
           assignee: r.auditor_name || (r.auditor_email ? nameMap[r.auditor_email] : null),
-          status: r.status || 'pending', date: r.date || null,
+          status: r.status || 'pending', date: r.date || null, city: r.city ?? null,
         }));
       }
       if (Array.isArray(installRes)) {
-        inCity(installRes, city).forEach((r: any) => {
+        installRes.forEach((r: any) => {
           const emails = [...new Set((r.subjobs || []).flatMap((sj: any) => {
             if (sj.assignments && sj.assignments.length) return sj.assignments.map((a: any) => a.installer_email).filter(Boolean);
             return sj.installer_email ? [sj.installer_email] : [];
@@ -353,7 +357,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
             customer: r.customer_name || '—', addr: r.addr || '—',
             assignee: emails.length ? emails.map((e) => nameMap[e] || e.split('@')[0]).join(', ') : null,
             status: r.status || 'pending', date: r.delivery_date || null,
-            installDates,
+            installDates, city: r.city ?? null,
           });
         });
       }
@@ -366,19 +370,21 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
     load();
     const tid = setInterval(() => { if (!document.hidden) load(); }, 30000);
     return () => { alive = false; clearInterval(tid); };
-  }, [city]);
+  }, []);
+
+  const cityJobs = useMemo(() => inCity(realJobs, city), [realJobs, city]);
 
   const jc = useMemo(() => {
-    const c = { total: realJobs.length, active: 0, done: 0, unassigned: 0 };
-    realJobs.forEach((j) => {
+    const c = { total: cityJobs.length, active: 0, done: 0, unassigned: 0 };
+    cityJobs.forEach((j) => {
       if (['assigned', 'onway', 'atsite', 'scheduled'].includes(j.status)) c.active++;
       if (j.status === 'completed') c.done++;
       if (!j.assignee) c.unassigned++;
     });
     return c;
-  }, [realJobs]);
+  }, [cityJobs]);
 
-  const filtered = useMemo(() => realJobs.filter((j) => {
+  const filtered = useMemo(() => cityJobs.filter((j) => {
     if (jobsFilter === 'audit') return j.type === 'audit';
     if (jobsFilter === 'install') return j.type === 'install';
     if (JOB_STATUS[jobsFilter]) return j.status === jobsFilter;
@@ -395,7 +401,13 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
     const hay = [j.id, j.customer, j.addr, j.assignee, JOB_STATUS[j.status]?.l || j.status, dates]
       .filter(Boolean).join(' ').toLowerCase();
     return hay.includes(q);
-  }), [realJobs, jobsFilter, jobsDateFilter, jobsSearch]);
+  }), [cityJobs, jobsFilter, jobsDateFilter, jobsSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / JOBS_PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((curPage - 1) * JOBS_PAGE_SIZE, curPage * JOBS_PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [jobsFilter, jobsDateFilter, jobsSearch]);
 
   if (loading) {
     return (
@@ -417,7 +429,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
         <div className="rounded-lg border border-gray-200 bg-white px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Completed</p><p className="mt-1 font-mono text-[22px] font-bold text-black">{jc.done}</p></div>
         <div className="rounded-lg border border-gray-200 bg-white px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Unassigned</p><p className="mt-1 font-mono text-[22px] font-bold text-black">{jc.unassigned}</p></div>
       </div>
-      {!realJobs.length ? (
+      {!cityJobs.length ? (
         <div className="rounded-lg border border-gray-200 bg-white px-4 sm:px-6 py-4">
           <div className="text-center py-8">
             <div className="text-2xl mb-2">📋</div>
@@ -468,7 +480,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
               </tr>
             </thead>
             <tbody>
-              {filtered.length ? filtered.map((j, i) => (
+              {pageRows.length ? pageRows.map((j, i) => (
                 <tr key={i} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedJob({ pi: j.id, type: j.type })}>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100"><b className="font-mono text-xs text-gray-900">{j.id}</b></td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100"><span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${j.type === 'audit' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{j.type === 'audit' ? 'Audit' : 'Install'}</span></td>
@@ -481,6 +493,15 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
               )) : <tr><td colSpan={7} className="border-t border-gray-100"><div className="text-center py-8"><div className="text-2xl mb-2">🔍</div><div className="text-[13px] text-gray-400">No jobs match this filter</div></div></td></tr>}
             </tbody>
           </table>
+          {filtered.length > JOBS_PAGE_SIZE ? (
+            <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 sm:px-6 py-3 text-[12.5px] text-gray-500">
+              <span>Showing {(curPage - 1) * JOBS_PAGE_SIZE + 1}–{Math.min(curPage * JOBS_PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+              <span className="flex gap-2">
+                <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
+                <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+              </span>
+            </div>
+          ) : null}
         </div>
       )}
 
