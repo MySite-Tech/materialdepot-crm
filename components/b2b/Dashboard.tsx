@@ -644,7 +644,15 @@ export default function B2BDashboard() {
 
   const achievedPct = monthlyTarget > 0 ? Math.round((monthRevenue / monthlyTarget) * 100) : 0;
   const overallPipeline = verticals.reduce((s, v) => s + v.active.value, 0);
-  const revenueBySource = verticals.map((v) => ({ source: v.label, value: v.won.value }));
+  // The colour is assigned here, on the FULL list, and travels with the row —
+  // the donut drops zero-value sources and the legend does not, so colouring by
+  // position in either list shifts every source after a ₹0 one and the legend
+  // then names the wrong slice (HYD's revenue read as Outreach's).
+  const revenueBySource = verticals.map((v, i) => ({
+    source: v.label,
+    value: v.won.value,
+    color: SOURCE_COLORS[i % SOURCE_COLORS.length],
+  }));
   const gap = runRate - monthlyTarget;
 
   const maxStage = Math.max(...d.pipelineByStage.map((s) => s.count), 1);
@@ -861,16 +869,16 @@ export default function B2BDashboard() {
             <ResponsiveContainer width="45%" height={150}>
               <PieChart>
                 <Pie data={revenueBySource.filter((s) => s.value > 0)} dataKey="value" nameKey="source" cx="50%" cy="50%" innerRadius={30} outerRadius={62} paddingAngle={2}>
-                  {revenueBySource.filter((s) => s.value > 0).map((_, i) => <Cell key={i} fill={SOURCE_COLORS[i % SOURCE_COLORS.length]} />)}
+                  {revenueBySource.filter((s) => s.value > 0).map((s) => <Cell key={s.source} fill={s.color} />)}
                 </Pie>
                 <Tooltip formatter={(v) => fmtL(Number(v))} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 flex flex-col gap-2">
-              {revenueBySource.map((s, i) => (
+              {revenueBySource.map((s) => (
                 <div key={s.source} className="flex items-center justify-between text-[13px]">
                   <span className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
                     {s.source}
                   </span>
                   <span className="font-mono font-semibold">{fmtL(s.value)}</span>
