@@ -226,7 +226,10 @@ export function sjsForDay(orders: InstallOrder[], installers: Installer[], ds: s
       : sj.installer
         ? [{ installer_id: sj.installer, installer_name: (installerById(installers, sj.installer) || { name: '?' } as Installer).name, date: sj.date, mode: 'standard', primary: true, dates: [] }]
         : [];
-    if (asgns.some((a) => { const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : []; return dates.includes(ds); })) res.push({ o, sj });
+    const booked = asgns.length
+      ? asgns.some((a) => { const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : []; return dates.includes(ds); })
+      : sj.date === ds;
+    if (booked) res.push({ o, sj });
   }));
   return res;
 }

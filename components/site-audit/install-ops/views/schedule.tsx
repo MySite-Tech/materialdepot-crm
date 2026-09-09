@@ -20,6 +20,10 @@ export function ScheduleView({ orders, installers, onOpenOrder, slotsWp }: { ord
       : sj.installer
         ? [{ installer_id: sj.installer, installer_name: (installers.find((i) => i.id === sj.installer) || { name: '?' }).name, date: sj.date, dates: [], mode: 'standard', slots: sj.slot ? [sj.slot] : [] }]
         : [];
+    if (!asgns.length) {
+      if (sj.date === todayStr) items.push({ o, sj, a: { slots: sj.slot ? [sj.slot] : [] } });
+      return;
+    }
     asgns.forEach((a: any) => {
       const dates = a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : [];
       if (dates.includes(todayStr)) items.push({ o, sj, a });

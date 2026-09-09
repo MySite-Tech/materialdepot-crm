@@ -7,10 +7,11 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-41 entries. They live in one file because they cross-reference each other —
+42 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
+- A booking's date must come from the sub-job, not from its assignment
 - Availability is per CITY, and the Store Team kiosk was the one surface that did not know it
 - `AddStaffOverlay` never wrote a city
 - Daily caps live on `profiles`, not in localStorage — and the columns are probe-gated
@@ -62,6 +63,23 @@ grep for a term, then read around the line you hit rather than opening all of it
   matters: **42703 is the missing-column signature** this repo hits every time a
   migration has not been run, and it was being hidden. Any new catch that shows
   a backend error to a user goes through that helper.
+
+- **A booking's date must come from the sub-job, not from its assignment.**
+  `sjsForDay` derived a day's installs purely from `sj.assignments` (falling back
+  to a synthetic assignment when only `sj.installer` was set), and returned
+  nothing when both were empty — so an install that is **booked but not yet
+  assigned to an installer** did not exist as far as the Schedule tab was
+  concerned. Because future bookings are unassigned until an installer is
+  allocated, every day after today read **"No installs"** while the legacy
+  `material-depot-site` SM app showed them correctly as "Unassigned · scheduled".
+  Past days looked fine, which is what hid it: they are assigned. The nav
+  counter three files away had it right all along
+  (`orders.filter(o => o.subjobs.some(sj => sj.date === todayStr))`), so the two
+  numbers silently disagreed for any unassigned day. `sjsForDay` and
+  `ScheduleView` now fall back to `sj.date === ds` when there is no assignment.
+  Fixed 2026-09-10; the same logic was on `main` (`install-ops/shared.ts:376`)
+  since before the refactor. **An assignment is a staffing decision; the date is
+  the booking. Never read one to learn the other.**
 
 - **Availability is per CITY, and the Store Team kiosk was the one surface that
   did not know it.** An auditor/installer is assigned a city when they join and
