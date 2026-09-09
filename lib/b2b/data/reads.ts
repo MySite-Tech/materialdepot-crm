@@ -1,4 +1,5 @@
 import { rowToOutreach } from '../mappers/outreach';
+import { withB2BCache } from './cache';
 import { B2BLeadRow, B2B_FRESH_START, Pipeline, TABLE, floorToFreshStart } from './rows';
 import { B2B_INBOUND_OWNER_LIST, fetchB2BInboundLeads } from '@/lib/api';
 import { ClientEntity } from '@/components/b2b/models/client';
@@ -15,19 +16,41 @@ function nextDay(day: string): string {
   return new Date(ms + 86_400_000).toISOString().slice(0, 10);
 }
 
+const ROW_PAGE = 1000;
+
+// Every B2B view wants a different pipeline out of the same table, which used to
+// be four `select=* where pipeline=…` round trips per dashboard load. One paged
+// read answers all of them; pipeline and date narrowing happen in memory.
+function fetchAllRows(): Promise<B2BLeadRow[]> {
+  return withB2BCache('rows|all', async () => {
+    const all: B2BLeadRow[] = [];
+    for (let page = 0; ; page++) {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(page * ROW_PAGE, page * ROW_PAGE + ROW_PAGE - 1);
+      if (error) throw error;
+      const rows = (data || []) as B2BLeadRow[];
+      all.push(...rows);
+      if (rows.length < ROW_PAGE) return all;
+    }
+  });
+}
+
 export async function fetchRows(
   pipeline: Pipeline,
   opts?: { createdFrom?: string; createdTo?: string },
 ): Promise<B2BLeadRow[]> {
-  let query = supabase
-    .from(TABLE)
-    .select('*')
-    .eq('pipeline', pipeline);
-  if (opts?.createdFrom) query = query.gte('created_at', opts.createdFrom);
-  if (opts?.createdTo) query = query.lt('created_at', nextDay(opts.createdTo));
-  const { data, error } = await query.order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []) as B2BLeadRow[];
+  const all = await fetchAllRows();
+  const to = opts?.createdTo ? nextDay(opts.createdTo) : undefined;
+  return all.filter((r) => {
+    if (r.pipeline !== pipeline) return false;
+    const createdAt = String(r.created_at ?? '');
+    if (opts?.createdFrom && createdAt < opts.createdFrom) return false;
+    if (to && createdAt >= to) return false;
+    return true;
+  });
 }
 
 interface InboundBoardPage {
@@ -105,27 +128,32 @@ export interface B2BData {
   failed: ('inbound' | 'outreach' | 'kam' | 'clients')[];
 }
 
+// One call per owner, asking for size=1 because only totalElements is read.
+// Deriving the last owner from the board total would save a call, but
+// fetchB2BInboundLeads reports a failed request as total=0, so a Kylas 429
+// would silently move one rep's leads onto another's card.
 async function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
-  const entries = await Promise.all(
-    B2B_INBOUND_OWNER_LIST.map(async (o) => {
-      try {
-        const res = await fetchB2BInboundLeads(
-          0, [o.id], '', new Date(`${B2B_FRESH_START}T00:00:00+05:30`).toISOString(),
-        );
-        return [o.name, res.total] as const;
-      } catch {
-        return [o.name, 0] as const;
-      }
-    }),
-  );
+  const since = new Date(`${B2B_FRESH_START}T00:00:00+05:30`).toISOString();
+  const entries: (readonly [string, number])[] = [];
+  for (const o of B2B_INBOUND_OWNER_LIST) {
+    try {
+      const res = await fetchB2BInboundLeads(0, [o.id], '', since, '', undefined, 1);
+      entries.push([o.name, res.total] as const);
+    } catch {
+      entries.push([o.name, 0] as const);
+    }
+  }
   return Object.fromEntries(entries);
 }
 
 export async function fetchB2BData(): Promise<B2BData> {
+  return withB2BCache('b2bdata', fetchB2BDataUncached);
+}
+
+async function fetchB2BDataUncached(): Promise<B2BData> {
   const inboundP = fetchInboundBoard()
     .then((p) => ({ leads: p.leads, total: p.total }))
     .catch((e) => { console.error('[b2b] inbound aggregate fetch failed', e); return { leads: [] as InboundLead[], total: 0 }; });
-  const ownerTotalsP = fetchInboundOwnerTotals().catch(() => ({} as Record<string, number>));
   const outreachP = fetchOutreachLeads()
     .catch((e) => { console.error('[b2b] outreach aggregate fetch failed', e); return [] as OutreachLead[]; });
   const failed: B2BData['failed'] = [];
@@ -133,6 +161,7 @@ export async function fetchB2BData(): Promise<B2BData> {
     .catch((e) => { console.error('[b2b] kam orders fetch failed', e); failed.push('kam'); return [] as KamOrder[]; });
   const clientsP = fetchClients()
     .catch((e) => { console.error('[b2b] client database fetch failed', e); failed.push('clients'); return [] as ClientEntity[]; });
+  const ownerTotalsP = fetchInboundOwnerTotals().catch(() => ({} as Record<string, number>));
   const [inbound, outreach, kam, clients, inboundOwnerTotals] = await Promise.all([
     inboundP, outreachP, kamP, clientsP, ownerTotalsP,
   ]);

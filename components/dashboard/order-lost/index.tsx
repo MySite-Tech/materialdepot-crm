@@ -3,7 +3,7 @@
 import { makeSummaryRows } from './rows';
 
 import { BMFilterChip, CartValueRangeChip, DateRangeChip, DaysRangeChip, FilterChip } from './chips';
-import { DETAIL_MAX_PAGES, DETAIL_PAGE_SIZE, LOST_REASON_OPTIONS } from './constants';
+import { CSV_FETCH_CONCURRENCY, DETAIL_MAX_PAGES, DETAIL_PAGE_SIZE, LOST_REASON_OPTIONS } from './constants';
 import { BranchSummary, Props } from './types';
 import { daysBetween, emptyGroups, emptyReasons, fmtDetailDate, fmtFull, normalizeReason, pct, triggerDownload } from './utils';
 import { AvailableBM, CRMLeadRow, CategoryOption, OrderLostBranchSummary, fetchAvailableBMs, fetchCRMLeads, fetchCategoryOptions, fetchOrderLostSummary } from '@/lib/api';
@@ -218,12 +218,22 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
   const downloadDetailCsv = async () => {
     setCsvBusy(true);
     try {
-      const all: CRMLeadRow[] = [];
-      for (let page = 1; page <= DETAIL_MAX_PAGES; page++) {
-        const res = await fetchCRMLeads({ page, pageSize: DETAIL_PAGE_SIZE, ...detailQuery });
-        all.push(...res.results);
-        if (page >= (res.totalPages || 1)) break;
-      }
+      const first = await fetchCRMLeads({ page: 1, pageSize: DETAIL_PAGE_SIZE, ...detailQuery });
+      const all: CRMLeadRow[] = [...first.results];
+      const lastPage = Math.min(first.totalPages || 1, DETAIL_MAX_PAGES);
+
+      const pages = Array.from({ length: Math.max(0, lastPage - 1) }, (_, i) => i + 2);
+      const chunks: CRMLeadRow[][] = new Array(pages.length);
+      let cursor = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(CSV_FETCH_CONCURRENCY, pages.length) }, async () => {
+          for (let i = cursor++; i < pages.length; i = cursor++) {
+            const res = await fetchCRMLeads({ page: pages[i], pageSize: DETAIL_PAGE_SIZE, ...detailQuery });
+            chunks[i] = res.results;
+          }
+        }),
+      );
+      for (const chunk of chunks) if (chunk) all.push(...chunk);
       const wanted = lostReasonFilter.length ? new Set(lostReasonFilter.map(normalizeReason)) : null;
       const rowsData = (wanted || dDaysGtNum != null || dDaysLtNum != null)
         ? all.filter(r => matchesDetailClientFilters(r, wanted))

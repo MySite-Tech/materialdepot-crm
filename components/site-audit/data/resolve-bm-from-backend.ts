@@ -7,27 +7,35 @@ const MAX_PAGES = 10;
 
 type BmOwner = { name: string; contact: string };
 
-async function fetchBmOwnersByEnquiry(): Promise<{ owners: Map<string, BmOwner>; truncated: boolean }> {
+async function fetchBmOwnerPages(type: string): Promise<{ rows: any[]; truncated: boolean }> {
   const token = getToken();
-  const owners = new Map<string, BmOwner>();
-  let truncated = false;
+  const rows: any[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const res = await fetch(`/api/site-audit/install-pos?type=${type}&page_size=${PAGE_SIZE}&page=${page}`, {
+      headers: token ? { Authorization: 'Bearer ' + token } : undefined,
+    });
+    const data = await res.json().catch(() => null);
+    const page_rows = data && Array.isArray(data.results) ? data.results : null;
+    if (!page_rows) break;
+    rows.push(...page_rows);
+    if (page_rows.length < PAGE_SIZE) break;
+    if (page === MAX_PAGES) return { rows, truncated: true };
+  }
+  return { rows, truncated: false };
+}
 
-  for (const type of ['site_audit', 'installation']) {
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const res = await fetch(`/api/site-audit/install-pos?type=${type}&page_size=${PAGE_SIZE}&page=${page}`, {
-        headers: token ? { Authorization: 'Bearer ' + token } : undefined,
-      });
-      const data = await res.json().catch(() => null);
-      const rows = data && Array.isArray(data.results) ? data.results : null;
-      if (!rows) break;
-      for (const r of rows) {
-        const lead = String((r && r.estimate_lead_id) || '').trim();
-        const contact = r && r.bm && r.bm.contact != null ? String(r.bm.contact) : '';
-        if (!lead || !phoneKey(contact) || owners.has(lead)) continue;
-        owners.set(lead, { name: (r.bm && r.bm.name) || '', contact });
-      }
-      if (rows.length < PAGE_SIZE) break;
-      if (page === MAX_PAGES) truncated = true;
+async function fetchBmOwnersByEnquiry(): Promise<{ owners: Map<string, BmOwner>; truncated: boolean }> {
+  const owners = new Map<string, BmOwner>();
+
+  const results = await Promise.all(['site_audit', 'installation'].map(fetchBmOwnerPages));
+  const truncated = results.some((r) => r.truncated);
+
+  for (const { rows } of results) {
+    for (const r of rows) {
+      const lead = String((r && r.estimate_lead_id) || '').trim();
+      const contact = r && r.bm && r.bm.contact != null ? String(r.bm.contact) : '';
+      if (!lead || !phoneKey(contact) || owners.has(lead)) continue;
+      owners.set(lead, { name: (r.bm && r.bm.name) || '', contact });
     }
   }
   return { owners, truncated };

@@ -1,9 +1,14 @@
 import { TargetStore, defaultTargetStore } from '@/components/b2b/models/mock-data';
 import { supabase } from '@/lib/supabase';
+import { invalidateB2BCache, withB2BCache } from '../data/cache';
 const TARGET_TABLE = 'b2b_target';
 const TARGET_ROW_ID = 'default';
 
 export async function fetchTargets(): Promise<TargetStore> {
+  return withB2BCache('targets', fetchTargetsUncached);
+}
+
+async function fetchTargetsUncached(): Promise<TargetStore> {
   const base = defaultTargetStore();
   try {
     const { data, error } = await supabase
@@ -30,6 +35,7 @@ export async function saveTargets(store: TargetStore): Promise<void> {
       { onConflict: 'id' },
     );
     if (error) throw error;
+    invalidateB2BCache();
   } catch (e) {
     console.error('[b2b] save targets failed', e);
   }

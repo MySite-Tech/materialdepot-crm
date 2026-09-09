@@ -12,7 +12,7 @@ import { SeedModal } from './seed';
 import { Metric, StatusPill } from './ui';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
-import { ClientOrderDetails, ClientOrderHistory, ORDER_DETAIL_PHONE_CAP, clientFromSeed, clientMetricsFrom, deleteB2BRow, fetchClientOrderHistories, fetchClientOrderRows, fetchClients, invalidateClientTickets, orderDatesFromRows, upsertClient } from '@/lib/b2b';
+import { ClientOrderDetails, ClientOrderHistory, clientFromSeed, clientMetricsFrom, deleteB2BRow, fetchB2BBulk, fetchClientOrderRows, fetchClients, invalidateClientTickets, orderDatesFromAggregates, upsertClient } from '@/lib/b2b';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function ClientDatabase() {
@@ -30,7 +30,6 @@ export default function ClientDatabase() {
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [capped, setCapped] = useState(0);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all');
@@ -48,12 +47,9 @@ export default function ClientDatabase() {
       setClients(list);
 
       const phones = list.flatMap((c) => contactNumbers(c.contacts));
-      const agg = await fetchClientOrderHistories(phones);
+      const { histories: agg, ok: aggOk } = await fetchB2BBulk(phones, []);
       setAggregates(agg);
-      const head = phones.slice(0, ORDER_DETAIL_PHONE_CAP);
-      setCapped(Math.max(0, phones.length - head.length));
-      const details = await fetchClientOrderRows(head);
-      setDates(orderDatesFromRows(details, head));
+      setDates(orderDatesFromAggregates(agg, phones, aggOk));
     } catch (e) {
       console.error('[b2b] client database load failed', e);
       setLoadError(e instanceof Error ? e.message : String(e));
@@ -233,13 +229,6 @@ export default function ClientDatabase() {
         </div>
       )}
 
-      {!!capped && (
-        <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-[12px] text-blue-900">
-          {capped} contact number{capped === 1 ? '' : 's'}{' '}beyond the {ORDER_DETAIL_PHONE_CAP}-number cap were not{' '}
-          date-checked, so those clients show a status of <span className="font-semibold">Unknown</span> rather than a
-          guess. Expanding a client always reads its own tickets in full.
-        </div>
-      )}
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <input

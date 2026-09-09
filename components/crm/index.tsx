@@ -249,14 +249,14 @@ export default function App() {
 
   const COL_COUNT = visibleCols.length + 1;
 
+  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+
   if (!userLoaded) return null;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
 
   if (!permsLoaded) return (
     <div className="flex items-center justify-center h-screen text-sm text-gray-400">Loading…</div>
   );
-
-  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">

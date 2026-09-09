@@ -10,7 +10,7 @@ import { KamDashboardSection } from './ui/kam';
 import { RangeKey } from './types';
 import { MetricCard, Panel } from './ui';
 import { rangeFor } from './utils';
-import { B2BData, B2BPipelineStats, ORDER_DETAIL_PHONE_CAP, VerticalStats, clientMetricsFrom, fetchB2BData, fetchB2BPipelineStats, fetchClientOrderHistories, fetchClientOrderRows, fetchTargets, fetchVerticalStats, firstOrderValue, istToday, orderDatesFromRows, resolveKamOrders } from '@/lib/b2b';
+import { B2BData, B2BPipelineStats, B2B_STATS_BRANCH, VerticalStats, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
 import { useCallback, useEffect, useState } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -23,53 +23,48 @@ export default function B2BDashboard() {
   const [monthlyTarget, setMonthlyTarget] = useState(0);
   const [runRate, setRunRate] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [baseBusy, setBaseBusy] = useState(false);
+  const [rangeBusy, setRangeBusy] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [health, setHealth] = useState<HealthOverview<ClientEntity> | null>(null);
   const [kamDash, setKamDash] = useState<KamDashboard | null>(null);
   const [failed, setFailed] = useState<B2BData['failed']>([]);
   const [clientCount, setClientCount] = useState(0);
-  const [datesCapped, setDatesCapped] = useState(0);
-  const [datesFailed, setDatesFailed] = useState(0);
   const [unresolvedOrders, setUnresolvedOrders] = useState(0);
 
-  const load = useCallback(async () => {
-    setRefreshing(true);
+  // Only the pipeline and vertical stats depend on the range selector, so the
+  // board data, KAM resolution and client histories load once and survive a
+  // range switch instead of being re-fetched with every click.
+  const loadBase = useCallback(async () => {
+    setBaseBusy(true);
     try {
       const now = new Date();
 
-      const selected = rangeFor(range, now);
-      const [fetched, targets, pipeline, byVertical, monthVertical] = await Promise.all([
-        fetchB2BData(), fetchTargets(), fetchB2BPipelineStats(selected),
-        fetchVerticalStats(selected),
-        range === 'month' ? Promise.resolve(null) : fetchVerticalStats(rangeFor('month', now)),
-      ]);
+      const [fetched, targets] = await Promise.all([fetchB2BData(), fetchTargets()]);
       let data = fetched;
       const today = istToday(now);
 
-      const { resolutions } = await resolveKamOrders(data.kam);
+      const clientPhones = data.clients.flatMap((c) => contactNumbers(c.contacts));
+      const { histories: aggregates, deals, ok: aggOk } = await fetchB2BBulk(
+        clientPhones, kamEnquiryIdsToResolve(data.kam),
+      );
+
+      const { resolutions } = await resolveKamOrders(data.kam, deals);
       const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
       const kamUnresolved = data.kam.filter((o) =>
         !!String(o.enqId || '').trim() && !resolvedById.has(o.id) && o.orderValue === undefined).length;
       data = { ...data, kam: data.kam.map((o) => resolvedById.get(o.id) ?? o) };
       setUnresolvedOrders(kamUnresolved);
 
-      const clientPhones = data.clients.flatMap((c) => contactNumbers(c.contacts));
-      const aggregates = await fetchClientOrderHistories(clientPhones);
-      const capped = clientPhones.slice(0, ORDER_DETAIL_PHONE_CAP);
-      const details = await fetchClientOrderRows(capped);
-      const dates = orderDatesFromRows(details, capped);
+      const dates = orderDatesFromAggregates(aggregates, clientPhones, aggOk);
       const clientMetrics: ClientMetricsMap = {};
       for (const c of data.clients) {
         clientMetrics[c.id] = clientMetricsFrom(c.contacts, aggregates, dates);
       }
-      setDatesCapped(Math.max(0, clientPhones.length - capped.length));
-      setDatesFailed(details.failedPhones.length);
-
       const m = computeDashboard(data, clientMetrics, today);
       setKamDash(computeKamDashboard(data, {
         clientMetrics,
-        firstOrderValueFor: (c) => firstOrderValue(details, contactNumbers(c.contacts)),
+        firstOrderValueFor: (c) => firstOrderValueFromAggregates(aggregates, contactNumbers(c.contacts)),
         today,
         month: { from: today.slice(0, 8) + '01', to: today },
       }));
@@ -82,23 +77,49 @@ export default function B2BDashboard() {
         (c: ClientEntity) => contactNumbers(c.contacts)
           .reduce((t, p) => t + (aggregates[p]?.openValue ?? 0), 0),
       ));
+      setD(m);
+      setMonthlyTarget(targets.monthlyTargetL * 100000);
+      setUpdatedAt(now);
+    } finally {
+      setBaseBusy(false);
+      setLoading(false);
+    }
+  }, []);
+
+  const loadRange = useCallback(async () => {
+    setRangeBusy(true);
+    try {
+      const now = new Date();
+      const selected = rangeFor(range, now);
+      // One stats request carries both the per-vertical groups and the overall
+      // B2B pipeline (total_branch), so the range selector costs one call.
+      const [selectedStats, monthStats] = await Promise.all([
+        fetchVerticalStats(selected, B2B_STATS_BRANCH),
+        range === 'month' ? Promise.resolve(null) : fetchVerticalStats(rangeFor('month', now)),
+      ]);
+      const byVertical = selectedStats.verticals;
       const dayOfMonth = now.getDate();
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const revenue = (monthVertical ?? byVertical).reduce((s, v) => s + v.won.value, 0);
-      setD(m);
-      setStats(pipeline);
+      const revenue = (monthStats?.verticals ?? byVertical).reduce((s, v) => s + v.won.value, 0);
+      setStats(selectedStats.pipeline ?? await fetchB2BPipelineStats(selected));
       setVerticals(byVertical);
       setMonthRevenue(revenue);
-      setMonthlyTarget(targets.monthlyTargetL * 100000);
       setRunRate(Math.round((revenue / dayOfMonth) * daysInMonth));
       setUpdatedAt(now);
     } finally {
-      setRefreshing(false);
-      setLoading(false);
+      setRangeBusy(false);
     }
   }, [range]);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(
+    () => Promise.all([loadBase(), loadRange()]).then(() => undefined),
+    [loadBase, loadRange],
+  );
+
+  useEffect(() => { loadBase(); }, [loadBase]);
+  useEffect(() => { loadRange(); }, [loadRange]);
+
+  const refreshing = baseBusy || rangeBusy;
 
   if (loading || !d) {
     return <div className="p-4 sm:p-6 text-sm text-gray-400">Loading dashboard…</div>;
@@ -111,7 +132,15 @@ export default function B2BDashboard() {
 
   const achievedPct = monthlyTarget > 0 ? Math.round((monthRevenue / monthlyTarget) * 100) : 0;
   const overallPipeline = verticals.reduce((s, v) => s + v.active.value, 0);
-  const revenueBySource = verticals.map((v) => ({ source: v.label, value: v.won.value }));
+  // The colour is assigned here, on the FULL list, and travels with the row —
+  // the donut drops zero-value sources and the legend does not, so colouring by
+  // position in either list shifts every source after a Rs 0 one and the legend
+  // then names the wrong slice (HYD's revenue read as Outreach's).
+  const revenueBySource = verticals.map((v, i) => ({
+    source: v.label,
+    value: v.won.value,
+    color: SOURCE_COLORS[i % SOURCE_COLORS.length],
+  }));
   const gap = runRate - monthlyTarget;
 
   const maxStage = Math.max(...d.pipelineByStage.map((s) => s.count), 1);
@@ -300,9 +329,7 @@ export default function B2BDashboard() {
                 </div>
               </div>
               <p className="text-[10px] text-gray-400 mt-2">
-                Active = an order in the last {ACTIVE_WINDOW_MONTHS}{' '}months, from the deal tickets. System-computed, never set by hand.{' '}
-                {!!datesCapped && ` ${datesCapped} contact number${datesCapped === 1 ? '' : 's'} beyond the ${ORDER_DETAIL_PHONE_CAP}-number cap were not date-checked and count as Unknown.`}
-                {!!datesFailed && ` ${datesFailed} number${datesFailed === 1 ? '' : 's'} could not be read.`}
+                Active = an order in the last {ACTIVE_WINDOW_MONTHS}{' '}months, from the deal tickets. System-computed, never set by hand.
               </p>
             </>
           )}
@@ -313,16 +340,16 @@ export default function B2BDashboard() {
             <ResponsiveContainer width="45%" height={150}>
               <PieChart>
                 <Pie data={revenueBySource.filter((s) => s.value > 0)} dataKey="value" nameKey="source" cx="50%" cy="50%" innerRadius={30} outerRadius={62} paddingAngle={2}>
-                  {revenueBySource.filter((s) => s.value > 0).map((_, i) => <Cell key={i} fill={SOURCE_COLORS[i % SOURCE_COLORS.length]} />)}
+                  {revenueBySource.filter((s) => s.value > 0).map((s) => <Cell key={s.source} fill={s.color} />)}
                 </Pie>
                 <Tooltip formatter={(v) => fmtL(Number(v))} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 flex flex-col gap-2">
-              {revenueBySource.map((s, i) => (
+              {revenueBySource.map((s) => (
                 <div key={s.source} className="flex items-center justify-between text-[13px]">
                   <span className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
                     {s.source}
                   </span>
                   <span className="font-mono font-semibold">{fmtL(s.value)}</span>

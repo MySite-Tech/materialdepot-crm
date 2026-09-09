@@ -1,14 +1,12 @@
 'use client';
 
-import { ORDER_DETAIL_PHONE_CAP } from '../../../../../lib/b2b';
 import { fmtL } from '../../../models/mock-data';
 import { ClientEntity, ClientStatus } from '../../../types/client';
 import { AssignedClientRow } from '../../../types/kam';
 import { Metric, StatusPill, TemperatureChip } from '../ui';
 import { Dispatch, SetStateAction } from 'react';
 
-export function KamClientsView({ capped, clients, filteredRows, search, setDrawerId, setSearch, setStatusFilter, statusFilter }: {
-  capped: number;
+export function KamClientsView({ clients, filteredRows, search, setDrawerId, setSearch, setStatusFilter, statusFilter }: {
   clients: ClientEntity[];
   filteredRows: AssignedClientRow[];
   search: string;
@@ -27,11 +25,6 @@ export function KamClientsView({ capped, clients, filteredRows, search, setDrawe
           <option value="all">All statuses</option>
           {(['Active', 'Inactive', 'Unknown'] as ClientStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        {!!capped && (
-          <span className="text-[10px] text-blue-600" title={`Beyond the ${ORDER_DETAIL_PHONE_CAP}-number cap`}>
-            {capped}{' '}number(s) not date-checked → Unknown
-          </span>
-        )}
       </div>
     
       {!filteredRows.length ? (

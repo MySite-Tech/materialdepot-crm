@@ -1,4 +1,4 @@
-import { fetchCRMLeads } from '../../crm/leads';
+import { CRMLeadRow, fetchCRMLeads } from '../../crm/leads';
 import { kylasFetch } from '../../core/kylas-client';
 import { B2B_INBOUND_OWNER_IDS, B2B_INBOUND_PAGE_SIZE } from './constants';
 import { b2bInboundRule, kylasLeadIdentity, mapInboundLead } from './mappers';
@@ -12,10 +12,11 @@ export async function fetchB2BInboundLeads(
   createdAfter = '',
   createdBefore = '',
   kylasStage?: number,
+  size = B2B_INBOUND_PAGE_SIZE,
 ): Promise<B2BInboundPage> {
   let res;
   try {
-    res = await kylasFetch(`/search/lead?sort=createdAt,desc&page=${page}&size=${B2B_INBOUND_PAGE_SIZE}`, {
+    res = await kylasFetch(`/search/lead?sort=createdAt,desc&page=${page}&size=${size}`, {
       method: 'POST',
       body: JSON.stringify(b2bInboundRule(ownerIds, search, createdAfter, createdBefore, kylasStage)),
     });
@@ -26,7 +27,7 @@ export async function fetchB2BInboundLeads(
   const total = typeof res?.totalElements === 'number' ? res.totalElements : content.length;
   const totalPages = typeof res?.totalPages === 'number'
     ? res.totalPages
-    : Math.ceil(total / B2B_INBOUND_PAGE_SIZE);
+    : Math.ceil(total / size);
   return {
     leads: content.map(mapInboundLead),
     page,
@@ -88,7 +89,7 @@ export async function fetchLeadDeals(phone: string | number): Promise<import('..
   const q = String(phone || '').trim();
   if (!q) return [];
   try {
-    const { results } = await fetchCRMLeads({ q, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' });
+    const results = await fetchLeadsByPhone(q);
     return results.map((r) => ({
       id: r.id,
       ticketId: r.ticketId,
@@ -107,12 +108,33 @@ export async function fetchLeadDeals(phone: string | number): Promise<import('..
   }
 }
 
+// One `/crm/leads/?q=<phone>` per phone per session, shared by every consumer:
+// KAM enquiry resolution, client order rows and the drawer lookups all want the
+// same page of deal tickets for a phone. Callers filter the rows themselves, so
+// this caches the raw response and leaves interpretation to them.
+const phoneLeadCache = new Map<string, Promise<CRMLeadRow[]>>();
+
+export function fetchLeadsByPhone(phone: string): Promise<CRMLeadRow[]> {
+  const want = normalizeTicketPhone(phone);
+  const hit = phoneLeadCache.get(want);
+  if (hit) return hit;
+
+  const promise = fetchCRMLeads({ q: want, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' })
+    .then(({ results }) => (Array.isArray(results) ? results : []));
+  phoneLeadCache.set(want, promise);
+  promise.catch(() => phoneLeadCache.delete(want));
+  return promise;
+}
+
+export function invalidateLeadsByPhone(phones: string[]): void {
+  for (const p of phones) phoneLeadCache.delete(normalizeTicketPhone(p));
+}
+
 export async function fetchClientTickets(phone: string): Promise<ClientTicketResult> {
   const want = normalizeTicketPhone(phone);
   if (want.length !== 10) return { phone: want, state: 'ok', rows: [], rejected: 0 };
   try {
-    const { results } = await fetchCRMLeads({ q: want, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' });
-    const rows = Array.isArray(results) ? results : [];
+    const rows = await fetchLeadsByPhone(want);
     const kept = rows.filter((r) => normalizeTicketPhone(r.clientPhone) === want);
     return { phone: want, state: 'ok', rows: kept, rejected: rows.length - kept.length };
   } catch (e) {

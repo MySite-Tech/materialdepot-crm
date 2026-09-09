@@ -122,8 +122,8 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
       const next = { ...prev };
       for (const deal of dealList) {
         if (next[deal.id] !== undefined) continue;
-        const c = (deal as typeof deal & { associatedContacts?: { id: number; name: string }[] }).associatedContacts?.[0];
-        next[deal.id] = c ? { id: c.id, name: c.name } : null;
+        const c = deal.associatedContacts?.[0];
+        next[deal.id] = c ? { id: c.id, name: c.name ?? '' } : null;
       }
       return next;
     });

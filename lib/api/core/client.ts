@@ -13,6 +13,7 @@ function getRefreshToken(): string {
 
 export function saveToken(token: string) {
   if (typeof window !== 'undefined') localStorage.setItem(TOKEN_KEY, token);
+  clearGetCache();
 }
 
 export function saveRefreshToken(token: string) {
@@ -24,6 +25,7 @@ export function clearToken() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
   }
+  clearGetCache();
 }
 
 function forceReLogin() {
@@ -86,7 +88,45 @@ function unwrapEnvelope(body: any): any {
   return body;
 }
 
+const GET_TTL_MS = 8000;
+const getCache = new Map<string, { ts: number; promise: Promise<any> }>();
+
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of getCache) {
+      if (now - entry.ts >= GET_TTL_MS) getCache.delete(key);
+    }
+  }, GET_TTL_MS * 2);
+}
+
+function clearGetCache() {
+  getCache.clear();
+}
+
+const isGet = (init?: RequestInit) => !init?.method || init.method.toUpperCase() === 'GET';
+
 export async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
+  if (!isGet(init)) {
+    try {
+      return await mdFetchRaw(path, init, retried);
+    } finally {
+      clearGetCache();
+    }
+  }
+
+  const key = path + '|' + JSON.stringify(init?.headers ?? {});
+  const now = Date.now();
+  const hit = getCache.get(key);
+  if (hit && now - hit.ts < GET_TTL_MS) return hit.promise;
+
+  const promise = mdFetchRaw(path, init, retried);
+  getCache.set(key, { ts: now, promise });
+  promise.catch(() => getCache.delete(key));
+  return promise;
+}
+
+async function mdFetchRaw(path: string, init?: RequestInit, retried = false): Promise<any> {
   const token = getToken();
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -96,7 +136,7 @@ export async function mdFetch(path: string, init?: RequestInit, retried = false)
     if (res.status === 401 || isAuthFailureBody(body)) {
       if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
       const ok = await refreshPromise;
-      if (ok) return mdFetch(path, init, true);
+      if (ok) return mdFetchRaw(path, init, true);
       forceReLogin();
       throw new Error('Session expired');
     }

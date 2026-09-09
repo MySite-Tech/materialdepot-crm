@@ -163,3 +163,47 @@ export const triggerDownload = (blob: Blob, filename: string) => {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
+
+export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
+  bmNameToPhone: Record<string, string>;
+  branchFilter: string[];
+  categoryFilter: string[];
+  closureDateFrom: string;
+  closureDateTo: string;
+  createdDateFrom: string;
+  createdDateTo: string;
+  currentUser: AppUser;
+  debouncedCartValueGt: string;
+  debouncedSearch: string;
+  followUpDateFrom: string;
+  followUpDateTo: string;
+  personFilter: string[];
+  statusFilter: string[];
+  taskFilter: string;
+  userAllowedBranches: string[];
+  userAllowedBranchesLower: Set<string>;
+}) {
+  const effectiveBranches = userAllowedBranches.length > 0
+    ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
+    : branchFilter;
+  const branchCsv = effectiveBranches.join(',');
+  const bmCsv = personFilter.map((name) => bmNameToPhone[name] || name).join(',');
+  const statusCsv = statusFilter.join(',');
+
+  return {
+    branch: branchCsv || undefined,
+    bm: bmCsv || undefined,
+    q: debouncedSearch || undefined,
+    status: statusCsv || undefined,
+    createdFrom: createdDateFrom || undefined,
+    createdTo: createdDateTo || undefined,
+    followupFrom: followUpDateFrom || undefined,
+    followupTo: followUpDateTo || undefined,
+    closureFrom: closureDateFrom || undefined,
+    closureTo: closureDateTo || undefined,
+    cartValueGt: debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined,
+    ownerUserOrgId: currentUser.role === 'sales' ? currentUser.id : undefined,
+    taskFilter: taskFilter || undefined,
+    category: categoryFilter.length ? categoryFilter.join(',') : undefined,
+  };
+}

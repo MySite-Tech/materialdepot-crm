@@ -17,7 +17,7 @@ import { OrderModal } from './orders/modal';
 import { StatTile } from './ui';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
-import { ClientOrderHistory, ORDER_DETAIL_PHONE_CAP, clientMetricsFrom, fetchClientOrderHistories, fetchClientOrderRows, fetchClients, fetchKamOrders, orderDatesFromRows, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
+import { ClientOrderHistory, clientMetricsFrom, fetchB2BBulk, fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function KAMs() {
@@ -27,7 +27,6 @@ export default function KAMs() {
   const [failed, setFailed] = useState<string[]>([]);
   const [aggregates, setAggregates] = useState<Record<string, ClientOrderHistory>>({});
   const [dates, setDates] = useState<{ byPhone: Record<string, { last?: string; loaded: boolean }> } | null>(null);
-  const [capped, setCapped] = useState(0);
   const [sync, setSync] = useState<{
     matched: number; noMatch: number; unavailable: number; overflow: number;
     advanced: number; writeErrors: string[];
@@ -60,16 +59,13 @@ export default function KAMs() {
     setFailed(bad);
 
     const phones = cl.flatMap((c) => contactNumbers(c.contacts));
-    const agg = await fetchClientOrderHistories(phones);
+    const { histories: agg, deals, ok: aggOk } = await fetchB2BBulk(phones, kamEnquiryIdsToResolve(ord));
     setAggregates(agg);
-    const head = phones.slice(0, ORDER_DETAIL_PHONE_CAP);
-    setCapped(Math.max(0, phones.length - head.length));
-    const details = await fetchClientOrderRows(head);
-    setDates(orderDatesFromRows(details, head));
+    setDates(orderDatesFromAggregates(agg, phones, aggOk));
     setLoading(false);
 
     if (!ord.length) return;
-    const { resolutions, overflow } = await resolveKamOrders(ord);
+    const { resolutions, overflow } = await resolveKamOrders(ord, deals);
     const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
     const afterResolve = ord.map((o) => resolvedById.get(o.id) ?? o);
 
@@ -120,6 +116,14 @@ export default function KAMs() {
   const scopedOrders = useMemo(
     () => (kamFilter === 'all' ? orders : orders.filter((o) => o.kam === kamFilter)),
     [orders, kamFilter],
+  );
+
+  // Unscoped, for the empty-state banner only: it counts every order, while the
+  // Active Orders chip counts the open ones. Naming both numbers is what stops
+  // "30 orders exist" reading as a contradiction of a chip that says 4.
+  const openOrderCount = useMemo(
+    () => orders.filter((o) => KAM_OPEN_STATUSES.includes(o.status)).length,
+    [orders],
   );
 
   const rows = useMemo(() => assignedClientRows(scopedClients, metricsFor, today), [scopedClients, metricsFor, today]);
@@ -243,7 +247,7 @@ export default function KAMs() {
           <span className="font-semibold">No clients are assigned yet.</span> §7 says this module shares its client
           universe with the Client Database — seed that tab and assigned clients, the call cadence and the temperature
           readings all appear here.
-          {!!orders.length && ` ${orders.length} order${orders.length === 1 ? '' : 's'} already exist and are on the Active Orders view.`}
+          {!!orders.length && ` ${orders.length} order${orders.length === 1 ? '' : 's'} already exist and are on the Active Orders view — ${openOrderCount} still open, which is the number that view's own chip counts.`}
         </div>
       )}
 
@@ -296,7 +300,6 @@ export default function KAMs() {
 
       {!loading && view === 'clients' && (
         <KamClientsView
-        capped={capped}
         clients={clients}
         filteredRows={filteredRows}
         search={search}

@@ -2,9 +2,8 @@ import { lookupEnqId } from '../leads/enq-lookup';
 import { ClientOrderHistory } from './history';
 import { ClientContact, ClientOrderMetrics, averageOrderValue, contactNumbers, dealIsOpen, dealIsOrder, normalizeContactNumber } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
-import { CRMLeadRow, ClientTicketResult, fetchClientTickets } from '@/lib/api';
+import { CRMLeadRow, ClientTicketResult, fetchClientTickets, invalidateLeadsByPhone } from '@/lib/api';
 
-export const ORDER_DETAIL_PHONE_CAP = 120;
 const ORDER_DETAIL_CONCURRENCY = 4;
 
 export interface ClientOrderRow {
@@ -70,15 +69,68 @@ interface KamOrderResolveResult {
   overflow: number;
 }
 
-export async function resolveKamOrders(orders: KamOrder[]): Promise<KamOrderResolveResult> {
+const wireEnqId = (v: string | undefined): string =>
+  String(v || '').trim().replace(/\s+/g, '');
 
-  const needing = orders.filter((o) =>
+// Matching is case-insensitive on both sides, but the id sent to the backend
+// keeps its original case so the indexed __in lookup can hit exactly.
+const normalizeEnqId = (v: string | undefined): string => wireEnqId(v).toUpperCase();
+
+export type B2BDealRef = Pick<CRMLeadRow, 'id' | 'clientPhone' | 'cartValue' | 'status'>;
+
+function indexDeals(deals: B2BDealRef[]): Map<string, B2BDealRef> {
+  const byEnqId = new Map<string, B2BDealRef>();
+  for (const row of deals) {
+    const key = normalizeEnqId(row.id);
+    if (key && !byEnqId.has(key)) byEnqId.set(key, row);
+  }
+  return byEnqId;
+}
+
+function ordersNeedingResolve(orders: KamOrder[]): KamOrder[] {
+  return orders.filter((o) =>
     !!String(o.enqId || '').trim()
     && !!String(o.phone || '').trim()
     && !(o.orderValueSource === 'deal' && o.orderValue !== undefined && o.dealStatus));
+}
+
+export function kamEnquiryIdsToResolve(orders: KamOrder[]): string[] {
+  return [...new Set(
+    ordersNeedingResolve(orders)
+      .slice(0, ENQ_RESOLVE_CAP)
+      .map((o) => wireEnqId(o.enqId))
+      .filter(Boolean),
+  )];
+}
+
+export async function resolveKamOrders(
+  orders: KamOrder[],
+  deals: B2BDealRef[],
+): Promise<KamOrderResolveResult> {
+
+  const needing = ordersNeedingResolve(orders);
   const head = needing.slice(0, ENQ_RESOLVE_CAP);
 
+  // The caller resolves the whole board by enquiry id in the same request that
+  // fetches the client histories. Anything that comes back unmatched falls back
+  // to the per-phone search, which is what this used to do for every row.
+  const byEnqId = indexDeals(deals);
+
   const resolutions = await pooled(head, ORDER_DETAIL_CONCURRENCY, async (o): Promise<KamOrderResolution> => {
+    const bulk = byEnqId.get(normalizeEnqId(o.enqId));
+    if (bulk && normalizeContactNumber(bulk.clientPhone ?? '') === normalizeContactNumber(o.phone)) {
+      return {
+        order: o,
+        outcome: 'matched',
+        resolved: {
+          ...o,
+          orderValue: Number(bulk.cartValue) || 0,
+          orderValueSource: 'deal',
+          dealStatus: bulk.status || undefined,
+          value: Number(bulk.cartValue) || 0,
+        },
+      };
+    }
     const r = await lookupEnqId(o.phone, o.enqId);
     if (r.status === 'matched') {
       return {
@@ -144,7 +196,9 @@ export async function fetchClientOrderRows(phones: string[]): Promise<ClientOrde
 }
 
 export function invalidateClientTickets(phones: string[]): void {
-  for (const p of phones.map(normalizeContactNumber)) ticketCache.delete(p);
+  const normalized = phones.map(normalizeContactNumber);
+  for (const p of normalized) ticketCache.delete(p);
+  invalidateLeadsByPhone(normalized);
 }
 
 export function clientMetricsFrom(
@@ -196,33 +250,36 @@ export function clientMetricsFrom(
   };
 }
 
-export function orderDatesFromRows(
-  details: ClientOrderDetails,
+// `loaded` gates clientStatus: false reads "Unknown", true with no date reads
+// "Inactive". Pass ok=false when the history request failed so a client is
+// never labelled Inactive on the strength of an answer we never received.
+export function orderDatesFromAggregates(
+  aggregates: Record<string, ClientOrderHistory>,
   phones: string[],
+  ok = true,
 ): { byPhone: Record<string, { last?: string; loaded: boolean }> } {
   const byPhone: Record<string, { last?: string; loaded: boolean }> = {};
-  const failed = new Set(details.failedPhones);
   for (const p of phones.map(normalizeContactNumber)) {
     if (!p) continue;
-    byPhone[p] = { loaded: !failed.has(p) };
-  }
-  for (const r of details.rows) {
-    if (!r.ordered) continue;
-    const day = r.orderPlacedDate || r.createdAt;
-    if (!day) continue;
-    const slot = byPhone[r.contactNumber];
-    if (slot && (!slot.last || day > slot.last)) slot.last = day;
+    byPhone[p] = { loaded: ok, last: aggregates[p]?.lastOrderDate ?? undefined };
   }
   return { byPhone };
 }
 
-export function firstOrderValue(details: ClientOrderDetails, phones: string[]): number | undefined {
-  const wanted = new Set(phones.map(normalizeContactNumber));
-  const ordered = details.rows
-    .filter((r) => r.ordered && wanted.has(r.contactNumber))
-    .map((r) => ({ day: r.orderPlacedDate || r.createdAt || '', value: r.orderValue }))
-    .filter((r) => r.day)
-    .sort((a, b) => a.day.localeCompare(b.day));
-  return ordered.length ? ordered[0].value : undefined;
+export function firstOrderValueFromAggregates(
+  aggregates: Record<string, ClientOrderHistory>,
+  phones: string[],
+): number | undefined {
+  let bestDay: string | undefined;
+  let bestValue: number | undefined;
+  for (const p of phones.map(normalizeContactNumber)) {
+    const a = aggregates[p];
+    if (!a || a.firstOrderValue == null) continue;
+    const day = a.firstOrderDate || '';
+    if (bestDay === undefined || day < bestDay) {
+      bestDay = day;
+      bestValue = a.firstOrderValue;
+    }
+  }
+  return bestValue;
 }
-

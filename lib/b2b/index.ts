@@ -1,15 +1,15 @@
 export { B2B_FRESH_START } from './data/rows';
 export { fetchB2BData, fetchClients, fetchInboundBoard, fetchKamOrders, fetchOutreachLeads } from './data/reads';
 export type { B2BData } from './data/reads';
-export { fetchB2BPipelineStats, istToday } from './stats/pipeline';
+export { B2B_STATS_BRANCH, fetchB2BPipelineStats, istToday } from './stats/pipeline';
 export type { B2BPipelineStats } from './stats/pipeline';
-export { fetchClientOrderHistories } from './orders/history';
+export { fetchB2BBulk } from './orders/history';
 export type { ClientOrderHistory } from './orders/history';
 export { lookupEnqId } from './leads/enq-lookup';
 export type { EnqLookup } from './leads/enq-lookup';
 export { fetchInboundKamLoad, fetchKamLoad, fetchVerticalStats } from './leads/kam-load';
 export type { VerticalStats } from './leads/kam-load';
-export { ENQ_RESOLVE_CAP, ORDER_DETAIL_PHONE_CAP, clientMetricsFrom, fetchClientOrderRows, firstOrderValue, invalidateClientTickets, orderDatesFromRows, resolveKamOrders } from './orders/details';
+export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClientOrderRows, firstOrderValueFromAggregates, invalidateClientTickets, orderDatesFromAggregates, resolveKamOrders } from './orders/details';
 export type { ClientOrderDetails, ClientOrderRow } from './orders/details';
 export { clientFromSeed, planClientSeed } from './leads/client-seed';
 export type { ClientSeedPlan } from './leads/client-seed';

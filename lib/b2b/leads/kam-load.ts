@@ -1,7 +1,7 @@
 
-import { EMPTY_BUCKET } from '../stats/pipeline';
+import { B2BPipelineStats, EMPTY_BUCKET } from '../stats/pipeline';
 import { TABLE } from '../data/rows';
-import { CRMLeadsStatsBucket, fetchCRMLeadsStats } from '@/lib/api';
+import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStatsByBmGroup } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 export async function fetchKamLoad(): Promise<Record<string, number>> {
@@ -53,25 +53,38 @@ export interface VerticalStats {
   won: CRMLeadsStatsBucket;
 }
 
+export interface VerticalStatsResult {
+  verticals: VerticalStats[];
+
+  pipeline: B2BPipelineStats | null;
+}
+
+// `totalBranch` folds the dashboard's overall B2B pipeline into this same
+// response, so the two slices cost one request instead of two.
 export async function fetchVerticalStats(
   range?: { from?: string; to?: string },
-): Promise<VerticalStats[]> {
-  return Promise.all(
-    B2B_VERTICALS.map(async (v) => {
-      const stats = await fetchCRMLeadsStats({
-        bm: v.reps.map((r) => r.contact).join(','),
-        createdFrom: range?.from,
-        createdTo: range?.to,
-      }).catch((e) => {
-        console.error(`[b2b] vertical stats fetch failed (${v.label})`, e);
-        return null;
-      });
-      return {
-        label: v.label,
-        active: stats?.active ?? EMPTY_BUCKET,
-        won: stats?.won ?? EMPTY_BUCKET,
-      };
-    }),
-  );
+  totalBranch?: string,
+): Promise<VerticalStatsResult> {
+  const res = await fetchCRMLeadsStatsByBmGroup(
+    B2B_VERTICALS.map((v) => ({ label: v.label, contacts: v.reps.map((r) => r.contact) })),
+    { createdFrom: range?.from, createdTo: range?.to },
+    totalBranch,
+  ).catch((e) => {
+    console.error('[b2b] vertical stats fetch failed', e);
+    return { groups: {} as Record<string, CRMLeadsStats>, branchTotal: null };
+  });
+
+  const byLabel = res.groups;
+  const t = res.branchTotal;
+  return {
+    verticals: B2B_VERTICALS.map((v) => ({
+      label: v.label,
+      active: byLabel[v.label]?.active ?? EMPTY_BUCKET,
+      won: byLabel[v.label]?.won ?? EMPTY_BUCKET,
+    })),
+    pipeline: t
+      ? { total: t.total, active: t.active, won: t.won, lost: t.lost, byStatus: t.byStatus }
+      : null,
+  };
 }
 

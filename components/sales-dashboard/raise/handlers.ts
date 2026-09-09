@@ -143,26 +143,39 @@ async function fetchContactDeals(contactId: number) {
     );
     if (!res.ok) return;
     const data: DealsSearchResponse = await res.json();
-    const matched: AssociatedDeal[] = [];
     const all = data.content ?? [];
+    const toAssociated = (d: Deal): AssociatedDeal => {
+      const pName = (d.pipeline?.name ?? "").toLowerCase();
+      return {
+        id: d.id,
+        name: d.name,
+        pipeline: pName.includes("escalation") ? "escalation" : pName.includes("support") ? "support" : "sales",
+        pipelineName: d.pipeline?.name ?? "—",
+        stage: d.pipelineStage?.name ?? "—",
+        estimatedValue: formatCurrency(d.estimatedValue),
+      };
+    };
+    const holdsContact = (d: Deal) => !!d.associatedContacts?.some((c) => c.id === contactId);
+
+    // SEARCH_FIELDS asks for associatedContacts, so the search response already
+    // carries the association this used to confirm with one /api/deals/<id>
+    // request per deal — up to 200 of them for a single contact.
+    const matched: AssociatedDeal[] = [];
+    const unknown: Deal[] = [];
+    for (const d of all) {
+      if (d.associatedContacts === undefined) unknown.push(d);
+      else if (holdsContact(d)) matched.push(toAssociated(d));
+      if (matched.length >= 20) break;
+    }
+
     const BATCH = 8;
-    outer: for (let i = 0; i < all.length; i += BATCH) {
-      const batch = all.slice(i, i + BATCH);
-      const results = await Promise.all(batch.map(async (d) => {
+    outer: for (let i = 0; i < unknown.length && matched.length < 20; i += BATCH) {
+      const results = await Promise.all(unknown.slice(i, i + BATCH).map(async (d) => {
         try {
           const dr = await fetch(`/api/deals/${d.id}`, { cache: "no-store" });
           if (!dr.ok) return null;
           const dd = await dr.json();
-          if (!dd.associatedContacts?.some((c: { id: number }) => c.id === contactId)) return null;
-          const pName = (d.pipeline?.name ?? "").toLowerCase();
-          return {
-            id: d.id,
-            name: d.name,
-            pipeline: pName.includes("escalation") ? "escalation" : pName.includes("support") ? "support" : "sales",
-            pipelineName: d.pipeline?.name ?? "—",
-            stage: d.pipelineStage?.name ?? "—",
-            estimatedValue: formatCurrency(d.estimatedValue),
-          } as AssociatedDeal;
+          return holdsContact(dd as Deal) ? toAssociated(d) : null;
         } catch { return null; }
       }));
       for (const r of results) {
@@ -170,7 +183,7 @@ async function fetchContactDeals(contactId: number) {
         if (matched.length >= 20) break outer;
       }
     }
-    setContactDeals(matched);
+    setContactDeals(matched.slice(0, 20));
   } catch { /* ignore */ }
   finally { setLoadingContactDeals(false); }
 }

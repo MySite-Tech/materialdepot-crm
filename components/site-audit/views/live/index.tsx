@@ -113,10 +113,13 @@ export default function SiteAuditLiveView({ city = 'all' }: { city?: CityFilter 
       setState({ loading: false, error: false, workers, wOrds });
     }
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(() => { if (!document.hidden) load(); }, 30000);
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       alive = false;
       clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;

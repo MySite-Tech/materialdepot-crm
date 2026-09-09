@@ -73,6 +73,9 @@ export interface ClientOrderHistoryRow {
   enquiries: number;
   enquiryValue: number;
   furthestStatus: string | null;
+  firstOrderDate: string | null;
+  firstOrderValue: number | null;
+  lastOrderDate: string | null;
 }
 
 export async function fetchClientOrderHistoriesApi(
@@ -117,6 +120,64 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
     won: data.won || { count: 0, value: 0 },
     lost: data.lost || { count: 0, value: 0 },
     byStatus: data.byStatus || [],
+  };
+}
+
+const emptyBucket = () => ({ count: 0, value: 0 });
+
+const toStats = (data: any): CRMLeadsStats => ({
+  total: data?.total || emptyBucket(),
+  active: data?.active || emptyBucket(),
+  won: data?.won || emptyBucket(),
+  lost: data?.lost || emptyBucket(),
+  byStatus: data?.byStatus || [],
+});
+
+export interface CRMLeadsStatsGroups {
+  groups: Record<string, CRMLeadsStats>;
+
+  branchTotal: CRMLeadsStats | null;
+}
+
+export async function fetchCRMLeadsStatsByBmGroup(
+  groups: { label: string; contacts: string[] }[],
+  query: Omit<CRMLeadsQuery, 'page' | 'pageSize' | 'bm'> = {},
+  totalBranch?: string,
+): Promise<CRMLeadsStatsGroups> {
+  const usable = groups.filter((g) => g.label && g.contacts.length);
+  if (!usable.length) return { groups: {}, branchTotal: null };
+  const params = new URLSearchParams();
+  if (query.createdFrom) params.set('created_from', query.createdFrom);
+  if (query.createdTo) params.set('created_to', query.createdTo);
+  if (query.branch) params.set('branch', query.branch);
+  if (totalBranch) params.set('total_branch', totalBranch);
+  params.set('bm_groups', usable.map((g) => `${g.label}:${g.contacts.join(',')}`).join('|'));
+  const data = await mdFetch(`/crm/leads/stats/?${params.toString()}`);
+  const out: Record<string, CRMLeadsStats> = {};
+  for (const [label, raw] of Object.entries((data?.groups || {}) as Record<string, unknown>)) {
+    out[label] = toStats(raw);
+  }
+  return { groups: out, branchTotal: data?.branchTotal ? toStats(data.branchTotal) : null };
+}
+
+export interface B2BBulkResult {
+  histories: Record<string, ClientOrderHistoryRow>;
+
+  deals: Pick<CRMLeadRow, 'id' | 'clientPhone' | 'cartValue' | 'status'>[];
+}
+
+export async function fetchB2BBulkApi(
+  phones: string[],
+  enquiryIds: string[],
+): Promise<B2BBulkResult> {
+  if (!phones.length && !enquiryIds.length) return { histories: {}, deals: [] };
+  const params = new URLSearchParams();
+  if (phones.length) params.set('phones', phones.join(','));
+  if (enquiryIds.length) params.set('enquiry_ids', enquiryIds.join(','));
+  const data = await mdFetch(`/crm/leads/b2b-bulk/?${params.toString()}`);
+  return {
+    histories: (data?.histories || {}) as Record<string, ClientOrderHistoryRow>,
+    deals: (data?.deals || []) as B2BBulkResult['deals'],
   };
 }
 

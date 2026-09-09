@@ -1,5 +1,5 @@
 import { LeadDeal } from '@/components/b2b/models/mock-data';
-import { fetchCRMLeads } from '@/lib/api';
+import { fetchLeadsByPhone } from '@/lib/api';
 
 export interface EnqLookup {
   status: 'matched' | 'no-match' | 'unavailable';
@@ -25,7 +25,7 @@ export async function lookupEnqId(phone: string | undefined, enqId: string | und
 
   let deals: LeadDeal[];
   try {
-    const { results } = await fetchCRMLeads({ q: ph, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' });
+    const results = await fetchLeadsByPhone(ph);
     if (!Array.isArray(results)) throw new Error('deal ticket search returned a non-array');
     deals = results.map((r) => ({
       id: r.id,

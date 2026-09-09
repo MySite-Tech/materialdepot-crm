@@ -7,6 +7,7 @@ import { ClientEntity } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { supabase } from '@/lib/supabase';
+import { invalidateB2BCache } from './cache';
 
 function writeErrorMessage(e: unknown): string {
   if (e instanceof Error && e.message) return e.message;
@@ -28,6 +29,7 @@ async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | nul
   try {
     const { error } = await supabase.from(TABLE).upsert(row, { onConflict });
     if (error) throw error;
+    invalidateB2BCache();
     return null;
   } catch (e) {
     console.error('[b2b] upsert failed', e);
@@ -55,6 +57,7 @@ export async function deleteB2BRow(id: string): Promise<string | null> {
   try {
     const { error } = await supabase.from(TABLE).delete().eq('id', id);
     if (error) throw error;
+    invalidateB2BCache();
     return null;
   } catch (e) {
     console.error('[b2b] delete failed', e);

@@ -6,6 +6,7 @@ import { fetchUsers } from '../../../lib/api/crm/users';
 import { AppUser, Lead } from '../../../types/crm';
 import { BACKEND_SORTABLE_COLS } from '../constants';
 import { MainTab } from '../types';
+import { buildLeadsQuery } from '../utils';
 import { Dispatch, SetStateAction, useEffect } from 'react';
 
 export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
@@ -66,35 +67,14 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUser || mainTab !== 'leads') return;
 
-  const effectiveBranches = userAllowedBranches.length > 0
-    ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
-    : branchFilter;
-  const branchCsv = effectiveBranches.join(',');
-  const bmCsv = personFilter.map((name) => bmNameToPhone[name] || name).join(',');
-  const statusCsv = statusFilter.join(',');
-  const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
-  const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
   setLeadsLoading(true);
   let cancelled = false;
   fetchCRMLeads({
+    ...buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
     page: page + 1,
     pageSize,
-    branch: branchCsv || undefined,
-    bm: bmCsv || undefined,
-    q: debouncedSearch || undefined,
-    status: statusCsv || undefined,
-    createdFrom: createdDateFrom || undefined,
-    createdTo: createdDateTo || undefined,
-    followupFrom: followUpDateFrom || undefined,
-    followupTo: followUpDateTo || undefined,
-    closureFrom: closureDateFrom || undefined,
-    closureTo: closureDateTo || undefined,
-    cartValueGt: cartGt,
-    ownerUserOrgId,
     sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt') as any,
     sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
-    taskFilter: taskFilter || undefined,
-    category: categoryFilter.length ? categoryFilter.join(',') : undefined,
   }).then((crmLeadsPage) => {
     if (cancelled) return;
     setLeads(crmLeadsPage.results as Lead[]);
@@ -122,32 +102,11 @@ useEffect(() => {
 
 useEffect(() => {
   if (!currentUser || mainTab !== 'leads') return;
-  const effectiveBranches = userAllowedBranches.length > 0
-    ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
-    : branchFilter;
-  const branchCsv = effectiveBranches.join(',');
-  const bmCsv = personFilter.map((name) => bmNameToPhone[name] || name).join(',');
-  const statusCsv = statusFilter.join(',');
-  const cartGt = debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined;
-  const ownerUserOrgId = currentUser.role === 'sales' ? currentUser.id : undefined;
   let cancelled = false;
   setStatsLoading(true);
-  fetchCRMLeadsStats({
-    branch: branchCsv || undefined,
-    bm: bmCsv || undefined,
-    q: debouncedSearch || undefined,
-    status: statusCsv || undefined,
-    createdFrom: createdDateFrom || undefined,
-    createdTo: createdDateTo || undefined,
-    followupFrom: followUpDateFrom || undefined,
-    followupTo: followUpDateTo || undefined,
-    closureFrom: closureDateFrom || undefined,
-    closureTo: closureDateTo || undefined,
-    cartValueGt: cartGt,
-    ownerUserOrgId,
-    taskFilter: taskFilter || undefined,
-    category: categoryFilter.length ? categoryFilter.join(',') : undefined,
-  }).then((stats) => {
+  fetchCRMLeadsStats(
+    buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
+  ).then((stats) => {
     if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
   }).catch(() => { if (!cancelled) setStatsLoading(false); });
   return () => { cancelled = true; };
@@ -161,7 +120,4 @@ useEffect(() => {
   taskFilter,
   categoryFilter,
 ]);
-
-
-  return {  };
 }

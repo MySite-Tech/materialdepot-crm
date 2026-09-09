@@ -9,3 +9,5 @@ export const LOST_REASON_OPTIONS = [
 export const DETAIL_PAGE_SIZE = 100;
 
 export const DETAIL_MAX_PAGES = 30;
+
+export const CSV_FETCH_CONCURRENCY = 4;

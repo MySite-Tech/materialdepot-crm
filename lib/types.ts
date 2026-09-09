@@ -12,6 +12,7 @@ export interface Deal {
   createdAt?: string | null;
   updatedAt?: string | null;
   customFieldValues?: Record<string, unknown>;
+  associatedContacts?: { id: number; name?: string }[];
 }
 
 export interface DealsSearchResponse {

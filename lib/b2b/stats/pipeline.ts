@@ -1,6 +1,6 @@
 import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStats } from '@/lib/api';
 
-const B2B_BRANCH = 'B2B';
+export const B2B_STATS_BRANCH = 'B2B';
 
 export interface B2BPipelineStats {
   total: CRMLeadsStatsBucket;
@@ -20,7 +20,7 @@ export async function fetchB2BPipelineStats(
   range?: { from?: string; to?: string },
 ): Promise<B2BPipelineStats> {
   const stats = await fetchCRMLeadsStats({
-    branch: B2B_BRANCH, createdFrom: range?.from, createdTo: range?.to,
+    branch: B2B_STATS_BRANCH, createdFrom: range?.from, createdTo: range?.to,
   }).catch((e) => { console.error('[b2b] leads stats fetch failed', e); return null; });
   return {
     total: stats?.total ?? EMPTY_BUCKET,
