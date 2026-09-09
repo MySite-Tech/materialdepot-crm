@@ -208,7 +208,16 @@ function RoleSelect({ value, onChange, className }: { value: string; onChange: (
 
 const defaultPermissionsForRole = (role: string): string[] => {
   const tabs = new Set(defaultTabsForRole(role));
-  return PERMISSION_TAB_ORDER.filter(([, tab]) => tabs.has(tab)).map(([slug]) => slug);
+  /* Store Display on top of the role's own tabs, for every role, so nobody has
+     to tick it by hand — except the roles clamped to Site Audit, where the
+     ceiling in resolveAllowedTabs ignores the slug anyway and a ticked box
+     would promise access the app then withholds. Only the LEVEL varies, and it
+     comes from STORE_DISPLAY_ADMIN_ROLES rather than a second hand-written
+     list, so the pre-check can't drift from the fallback granting the same
+     sections. Seeds the form only — access is still the saved slugs. */
+  if (!SITE_AUDIT_ONLY_ROLES.has(role)) tabs.add('storeDisplay');
+  const slugs = PERMISSION_TAB_ORDER.filter(([, tab]) => tabs.has(tab)).map(([slug]) => slug);
+  return STORE_DISPLAY_ADMIN_ROLES.has(role) ? [...slugs, STORE_DISPLAY_ADMIN_SLUG] : slugs;
 };
 
 // Generic "button that opens a checkbox panel" — closes on outside click.
@@ -264,15 +273,48 @@ function PermissionChecklist({ value, onChange, hideLabel }: { value: string[]; 
     onChange(slug ? [...withoutSubRoles, slug] : withoutSubRoles);
   };
   const hasSiteAudit = value.includes('crm.site_audit');
+  const hasStoreDisplay = value.includes('crm.store_display');
+  /* Store Display grants one of two levels, so it is a pick-one like the Site
+     Audit view rather than two independent tab slugs: two flat checkboxes
+     would let a granter tick Partial AND Full, and resolveAllowedTabs would
+     have to rank them to decide one tab. Partial is the absence of the admin
+     slug, which is also what every already-granted account has. */
+  const hasStoreDisplayFull = value.includes(STORE_DISPLAY_ADMIN_SLUG);
+  // Unticking the tab drops the Full marker with it, so re-ticking it later
+  // can't silently restore an Admin grant nobody chose the second time.
+  const toggleStoreDisplay = () => onChange(
+    hasStoreDisplay
+      ? value.filter((s) => s !== 'crm.store_display' && s !== STORE_DISPLAY_ADMIN_SLUG)
+      : [...value, 'crm.store_display'],
+  );
+  const setStoreDisplayFull = (full: boolean) => onChange(
+    full
+      ? (hasStoreDisplayFull ? value : [...value, STORE_DISPLAY_ADMIN_SLUG])
+      : value.filter((s) => s !== STORE_DISPLAY_ADMIN_SLUG),
+  );
   const summary = value.length === 0 ? 'None (role-based tabs)' : `${value.length} permission${value.length === 1 ? '' : 's'} set`;
   return (
     <CheckboxDropdown label="CRM Permissions" summary={summary} hideLabel={hideLabel}>
       <p className="text-[10.5px] text-gray-400 mb-2 pb-2 border-b border-gray-100">Optional — overrides role-based tabs once any are set.</p>
       {PERMISSION_TAB_ORDER.map(([slug, tab]) => (
         <Fragment key={slug}>
-          <CheckboxRow checked={value.includes(slug)} onChange={() => toggle(slug)}>
+          <CheckboxRow
+            checked={value.includes(slug)}
+            onChange={() => (slug === 'crm.store_display' ? toggleStoreDisplay() : toggle(slug))}
+          >
             {TAB_LABELS[tab]}
           </CheckboxRow>
+          {slug === 'crm.store_display' && hasStoreDisplay && (
+            <div className="my-1.5 py-1.5 border-y border-gray-100 pl-3 border-l-2 border-l-amber-200">
+              <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Store Display access (pick one)</span>
+              {([[false, 'Partial — without Admin section'], [true, 'Full — including Admin section']] as const).map(([full, label]) => (
+                <label key={label} className="flex items-center gap-2 cursor-pointer text-[12.5px] text-gray-600 py-1">
+                  <input type="radio" name="store-display-level" className="accent-[#EAB308]" checked={hasStoreDisplayFull === full} onChange={() => setStoreDisplayFull(full)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
           {slug === 'crm.site_audit' && hasSiteAudit && (
             <div className="my-1.5 py-1.5 border-y border-gray-100 pl-3 border-l-2 border-l-amber-200">
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Site Audit view (pick one)</span>
@@ -394,7 +436,9 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   return defaultTabsForRole(user?.role ?? '');
 };
 
-/* Sub-tabs of Store Display that expose stock movement and its admin controls.
+/* The Admin sub-tab of Store Display — the only section withheld from someone
+   who has the tab. Store Products, Discontinued List, Removed and Movement
+   Status are open to every role, so this slug is the whole Full/Partial split.
    Role-keyed for un-migrated accounts only, like the force-adds above. */
 const STORE_DISPLAY_ADMIN_SLUG = 'crm.store_display_admin';
 const STORE_DISPLAY_ADMIN_ROLES = new Set(['superadmin', 'admin', 'tech', 'manager']);

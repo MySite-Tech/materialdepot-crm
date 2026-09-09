@@ -1,11 +1,26 @@
-// ── KAM client-list bulk import: parse + validate ─────────────────────────────
+// ── KAM Active Order bulk import: parse + validate ────────────────────────────
 // Pure functions, no React and no network, so the rules can be reasoned about
 // (and tested) on their own. KAMs.tsx renders whatever this reports.
 //
 // The column order is positional, not header-driven — that is the existing
-// contract with the ops team's sheet, so it stays.
+// contract with the ops team's sheet, so it stays. The sheet itself is unchanged
+// too; what changed is what a row becomes. It used to produce a `KamClient`,
+// the old board's client-and-order-in-one row. The KAM PRD splits those, and
+// every column in this sheet describes an ORDER (Enq ID, value, expected
+// closure, PI status), so a row is now a `KamOrder` — §5's Active Order. The
+// CLIENT half is uploaded from the Client Database's own §7 template, which
+// `clientImport.ts` implements.
+//
+// The primitives below (cell hygiene, delimiter sniffing, the CSV parser, the
+// phone/value/date coercions) are shared with `clientImport.ts` rather than
+// copied into it. Two copies of a date parser is exactly how the two hand-kept
+// registries in this repo drifted.
 
-import { KAM_STAGES, KAMS, type KamClient, type KamStage } from './mockData';
+import { KAMS } from './mockData';
+import {
+  KAM_ORDER_STATUSES, normalizeKamOrderStatus, isLegacyKamStage,
+  type KamOrder, type KamOrderStatus,
+} from './kamModel';
 
 export const UPLOAD_COLUMNS = [
   'Client Name', 'Contact Person', 'Phone', 'ENQ ID', 'Value',
@@ -25,7 +40,7 @@ export interface ParsedRow {
   company: string;           // best-effort label for the log, even when invalid
   severity: RowSeverity;
   issues: RowIssue[];
-  client?: KamClient;        // absent when severity === 'error'
+  order?: KamOrder;          // absent when severity === 'error'
   isUpdate?: boolean;        // matched an existing client, so this is an update
   saveError?: string;        // filled in after the write is attempted
 }
@@ -35,7 +50,7 @@ export interface ParsedRow {
 // A BOM, a non-breaking space or a zero-width char in the first cell is the
 // single most common reason a re-uploaded export "fails": the header stops
 // matching and lands in the board as a client called "Client Name".
-function cleanCell(v: unknown): string {
+export function cleanCell(v: unknown): string {
   return String(v ?? '')
     .replace(/^﻿/, '')
     .replace(/[​-‍⁠﻿]/g, '')
@@ -43,7 +58,7 @@ function cleanCell(v: unknown): string {
     .trim();
 }
 
-const normalize = (v: string) => cleanCell(v).toLowerCase().replace(/\s+/g, ' ');
+export const normalize = (v: string) => cleanCell(v).toLowerCase().replace(/\s+/g, ' ');
 
 // ── Delimited-text parsing ────────────────────────────────────────────────────
 
@@ -185,10 +200,21 @@ export function parseClosureDate(raw: string): { date?: string; error?: string }
 }
 
 // Case- and spacing-insensitive, so "pi shared" and "PI  Shared" both land.
-export function matchStage(raw: string): KamStage | null {
+//
+// The old seven stage names are still accepted, because the ops team's sheet
+// has them in it and rejecting a status the board itself displayed until last
+// week would fail rows that are perfectly correct. They come back as the PRD
+// status they map to, via the same `normalizeKamOrderStatus` the reader uses —
+// so there is one mapping, not one here and one in `b2bLeads.ts`.
+export function matchStage(raw: string): { status: KamOrderStatus; wasLegacy: boolean } | null {
   const n = normalize(raw);
   if (!n) return null;
-  return (KAM_STAGES.find((s) => normalize(s) === n) as KamStage | undefined) ?? null;
+  const current = KAM_ORDER_STATUSES.find((s) => normalize(s) === n);
+  if (current) return { status: current, wasLegacy: false };
+  const legacy = ['No Active Enquiry', 'Quote Approval Pending', 'PI Shared', 'Awaiting Payment', 'Order Placed', 'Closed', 'Lost']
+    .find((s) => normalize(s) === n);
+  if (legacy) return { status: normalizeKamOrderStatus(legacy), wasLegacy: isLegacyKamStage(legacy) };
+  return null;
 }
 
 // Exact match first, then unique first-name/substring match, so "jadhav" finds
@@ -226,16 +252,16 @@ export interface ValidateResult {
 
 const clientKey = (company: string, phone: string) => phone || `name:${normalize(company)}`;
 
-export function validateRows(rows: string[][], existing: KamClient[] = []): ValidateResult {
+export function validateRows(rows: string[][], existing: KamOrder[] = []): ValidateResult {
   const out: ParsedRow[] = [];
   let skipped = 0;
   const stamp = Date.now();
 
   // Existing clients, keyed by phone first (authoritative) then by name, so a
   // re-upload updates the same row instead of creating a duplicate board card.
-  const existingByKey = new Map<string, KamClient>();
+  const existingByKey = new Map<string, KamOrder>();
   for (const c of existing) {
-    const phone = parsePhone(c.phone).phone;
+    const phone = parsePhone(c.phone || '').phone;
     if (phone) existingByKey.set(phone, c);
     const nameKey = `name:${normalize(c.company)}`;
     if (!existingByKey.has(nameKey)) existingByKey.set(nameKey, c);
@@ -271,7 +297,13 @@ export function validateRows(rows: string[][], existing: KamClient[] = []): Vali
     if (stageRaw && !stage) {
       issues.push({
         column: 'PI Status',
-        message: `"${stageRaw}" is not a stage — defaulting to No Active Enquiry`,
+        message: `"${stageRaw}" is not a status — defaulting to Requirement Logged`,
+        severity: 'warn',
+      });
+    } else if (stage?.wasLegacy) {
+      issues.push({
+        column: 'PI Status',
+        message: `"${stageRaw}" is the old board's wording — imported as ${stage.status}`,
         severity: 'warn',
       });
     }
@@ -338,13 +370,23 @@ export function validateRows(rows: string[][], existing: KamClient[] = []): Vali
     const resolvedKam = kam || KAMS[0];
     const note = cells[8] || '';
 
+    const status: KamOrderStatus = stage?.status ?? 'Requirement Logged';
+
+    // A `Lost` row with no reason and a `PI Shared` row with no Enq ID are the
+    // two things §5.2 says "Requires". They are warnings here rather than
+    // rejections, because the sheet is a bulk load of history and refusing the
+    // row would lose the order entirely; the board then shows the gap.
+    if (status === 'PI Shared' && !cells[3]) {
+      issues.push({ column: 'ENQ ID', message: 'PI Shared requires an Enquiry ID (§5.2) — imported without one, so no order value can be fetched', severity: 'warn' });
+    }
+
     out.push({
       line,
       company,
       severity: issues.length ? 'warn' : 'ok',
       issues,
       isUpdate: !!match,
-      client: {
+      order: {
         // Reusing the matched id makes the upsert an update, so re-importing the
         // same sheet can't fill the board with duplicates.
         id: match?.id ?? `KAM-${stamp}-${line}`,
@@ -352,11 +394,24 @@ export function validateRows(rows: string[][], existing: KamClient[] = []): Vali
         contactName: cells[1] || '',
         phone,
         enqId: cells[3] || undefined,
-        value,
+        // The sheet's "Value" column is what a KAM typed, so it is the ESTIMATE.
+        // `orderValue` stays unset until the Enq ID resolves against a deal
+        // ticket, and `value` — the column analytics sums as revenue — is 0
+        // until then. Putting the sheet figure into `value` is the bug this
+        // module was rebuilt to remove.
+        estimatedValue: value || undefined,
+        orderValue: match?.orderValue,
+        orderValueSource: match?.orderValueSource,
+        value: Number(match?.orderValue) || 0,
         expectedClosure,
-        stage: stage ?? 'No Active Enquiry',
+        status,
+        statusChangedAt: match && match.status === status ? match.statusChangedAt : new Date().toISOString(),
         kam: resolvedKam,
         source: match?.source ?? 'Existing',
+        clientId: match?.clientId,
+        requirement: match?.requirement,
+        createdAt: match?.createdAt ?? new Date().toISOString(),
+        legacyEscalations: match?.legacyEscalations,
         notes: note
           ? [...(match?.notes || []), { ts: 'just now', author: resolvedKam, text: note }]
           : (match?.notes || []),

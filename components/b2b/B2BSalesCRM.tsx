@@ -3,18 +3,29 @@
 import { useState } from 'react';
 import B2BDashboard from './Dashboard';
 import InboundLeads from './InboundLeads';
-import OutboundLeads from './OutboundLeads';
+import OutreachLeads from './OutreachLeads';
+import LeadsTab from './LeadsTab';
+import ClientDatabase from './ClientDatabase';
 import KAMs from './KAMs';
 import LeadershipBoard from './LeadershipBoard';
 import Targets from './Targets';
 
-type B2BView = 'dashboard' | 'inbound' | 'outbound' | 'kams' | 'leadership' | 'targets';
+// `outreach` was `outbound` — the module is called Outreach in its PRD, and the
+// Leads tab's Source column reads Inbound / Outreach. Only the reading
+// vocabulary changed; the stored `b2b_lead.pipeline` value is still 'outbound'
+// (see the note in mockData.ts).
+type B2BView = 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'leadership' | 'targets';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
   { key: 'dashboard',  label: 'Dashboard',        ready: true },
+  { key: 'leads',      label: 'Leads',            ready: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
-  { key: 'outbound',   label: 'Outbound Leads',   ready: true },
-  { key: 'kams',       label: 'KAMs',             ready: true },
+  { key: 'outreach',   label: 'Outreach',         ready: true },
+  // The Client Database sits directly above KAM because §7 of the KAM PRD makes
+  // it the source of that module's client universe — a reader who opens KAM
+  // first and finds it empty needs the next tab up, not a search.
+  { key: 'clients',    label: 'Client Database',  ready: true },
+  { key: 'kams',       label: 'KAM',              ready: true },
   { key: 'leadership', label: 'Leadership Board', ready: true },
   { key: 'targets',    label: 'Targets',          ready: true },
 ];
@@ -72,7 +83,9 @@ export default function B2BSalesCRM() {
       <main className="flex-1 overflow-y-auto min-w-0">
         {view === 'dashboard' && <B2BDashboard />}
         {view === 'inbound' && <InboundLeads />}
-        {view === 'outbound' && <OutboundLeads />}
+        {view === 'leads' && <LeadsTab />}
+        {view === 'outreach' && <OutreachLeads />}
+        {view === 'clients' && <ClientDatabase />}
         {view === 'kams' && <KAMs />}
         {view === 'leadership' && <LeadershipBoard />}
         {view === 'targets' && <Targets />}
