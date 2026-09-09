@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { completeMovement, fetchMovements, type MovementType } from '../../lib/displayApi';
+import { completeMovement, fetchMovements, type MovementType } from '../../lib/store-display/displayApi';
 
 interface MovementItem {
   id?: number;

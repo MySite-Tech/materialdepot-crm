@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { rateLimitedFetch } from "@/lib/rateLimiter";
+import { rateLimitedFetch } from "@/lib/server/rateLimiter";
 
 export const dynamic = "force-dynamic";
 

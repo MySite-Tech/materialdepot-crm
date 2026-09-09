@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { cancelMovement, completeMovement, initiateMovement, fetchMovements } from '../../lib/displayApi';
-import { getImageUrl } from '../../lib/imageUrl';
+import { cancelMovement, completeMovement, initiateMovement, fetchMovements } from '../../lib/store-display/displayApi';
+import { getImageUrl } from '../../lib/store-display/imageUrl';
 
 interface VariantLocationRow {
   id: number;

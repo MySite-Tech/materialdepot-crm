@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { WDAYS, fmtDate as fmtDateShort, offDayReason, sbPatch, type StaffExit } from '../siteAuditShared';
 import { FLOOR_DAY_CAP, WALLPANEL_DAY_CAP, WP_DAY_SLOTS, dstr, flLoad, installerDayCap, saveSlots, today, typeDayCap, wpSlotLoad, wpnlLoad } from './shared';
-import { typeLabel } from '../auditRegistry';
+import { typeLabel } from '../data/auditRegistry';
 import type { InstallOrder, Installer, SlotDef } from './types';
 
 /* ── Slots & timings — device-local config, exactly like the source (kept

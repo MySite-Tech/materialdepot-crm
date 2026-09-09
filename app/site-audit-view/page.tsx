@@ -4,20 +4,20 @@ import { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { CITIES, decodePerson, initials, isSiteAuditOversightRole, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/siteAuditShared';
-import SiteAuditorApp from '@/components/site-audit/SiteAuditorApp';
-import SiteInstallerApp from '@/components/site-audit/SiteInstallerApp';
-import SiteAuditJobsView from '@/components/site-audit/SiteAuditJobsView';
-import SiteAuditPerfView from '@/components/site-audit/SiteAuditPerfView';
-import SiteAuditAnalyticsView from '@/components/site-audit/SiteAuditAnalyticsView';
-import SiteAuditInstallOpsView from '@/components/site-audit/SiteAuditInstallOpsView';
-import SiteAuditOpsView from '@/components/site-audit/SiteAuditOpsView';
-import SiteShadowerApp from '@/components/site-audit/SiteShadowerApp';
-import SiteAuditBmView from '@/components/site-audit/SiteAuditBmView';
-import SiteAuditCoeView from '@/components/site-audit/SiteAuditCoeView';
-import SiteAuditBranchManagerView from '@/components/site-audit/SiteAuditBranchManagerView';
+import SiteAuditorApp from '@/components/site-audit/apps/SiteAuditorApp';
+import SiteInstallerApp from '@/components/site-audit/apps/SiteInstallerApp';
+import SiteAuditJobsView from '@/components/site-audit/views/SiteAuditJobsView';
+import SiteAuditPerfView from '@/components/site-audit/views/SiteAuditPerfView';
+import SiteAuditAnalyticsView from '@/components/site-audit/views/SiteAuditAnalyticsView';
+import SiteAuditInstallOpsView from '@/components/site-audit/views/SiteAuditInstallOpsView';
+import SiteAuditOpsView from '@/components/site-audit/views/SiteAuditOpsView';
+import SiteShadowerApp from '@/components/site-audit/apps/SiteShadowerApp';
+import SiteAuditBmView from '@/components/site-audit/views/SiteAuditBmView';
+import SiteAuditCoeView from '@/components/site-audit/views/SiteAuditCoeView';
+import SiteAuditBranchManagerView from '@/components/site-audit/views/SiteAuditBranchManagerView';
 
 /* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
-const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/SiteAuditLiveView'), { ssr: false });
+const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/views/SiteAuditLiveView'), { ssr: false });
 
 /* Dashboard-only preview target for the Role Viewer's "open in new tab" links
    (see SiteAuditRoleViewerView.tsx). Deliberately outside the CRM's

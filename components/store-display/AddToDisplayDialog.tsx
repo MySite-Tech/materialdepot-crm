@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { initiateMovement, completeMovement } from '../../lib/displayApi';
-import { STORES, STORE_CODE_TO_BRANCH_ID } from '../../lib/displaySupabase';
+import { initiateMovement, completeMovement } from '../../lib/store-display/displayApi';
+import { STORES, STORE_CODE_TO_BRANCH_ID } from '../../lib/store-display/displaySupabase';
 
 const DISPLAY_TYPES = ['shelves', 'drawer', 'catalogue', 'panel_display', 'flaps', 'slots', 'wall_display', 'floor_stand'];
 

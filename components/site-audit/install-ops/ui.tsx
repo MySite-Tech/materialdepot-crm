@@ -7,7 +7,7 @@
 
 import type { ReactElement } from 'react';
 import { assigneeProgress, fmtDate, installerById, STATUS, subjobDisplayStatus } from './shared';
-import { typeTag } from '../auditRegistry';
+import { typeTag } from '../data/auditRegistry';
 import type { InstallCategory, InstallOrder, Installer, Subjob } from './types';
 
 export function Chip({ st }: { st: string }) {

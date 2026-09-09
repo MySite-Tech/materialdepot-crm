@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, fmtLog } from '../siteAuditShared';
-import { useNoteModal } from '../NoteModal';
+import { useNoteModal } from '../ui/NoteModal';
 import {
   BUCKETS, CATEGORY_ORDER, CAT_UNSET, CHECKPOINTS, OUTCOMES, addDays, anchorDate, auditCategories,
   bucketFor, checkpointState, coeCalls, daysBetween, followupRows, inDateRange,

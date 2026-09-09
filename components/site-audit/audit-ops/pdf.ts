@@ -5,10 +5,10 @@
 
 import { jsPDF } from 'jspdf';
 import { fmtDateA } from '../siteAuditShared';
-import { categoryFor, mdInstallTermsBlock } from '../auditRegistry';
+import { categoryFor, mdInstallTermsBlock } from '../data/auditRegistry';
 import {
   MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfAuditRoom, mdPdfConsent, mdPdfHeader,
-} from '../pdfBrand';
+} from '../brand/pdfBrand';
 
 /* ---- sketch/photo helpers for PDF generation (verbatim, lines 81-93) ---- */
 export function renderSketchA(r: any): string | null {

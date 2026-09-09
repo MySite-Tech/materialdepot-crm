@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchLocations, fetchFacets, flattenLocationRow, initiateMovement } from '../../lib/displayApi';
-import { getImageUrl } from '../../lib/imageUrl';
-import { STORES, STORE_CODE_TO_BRANCH_ID, BRANCH_ID_TO_STORE } from '../../lib/displaySupabase';
+import { fetchLocations, fetchFacets, flattenLocationRow, initiateMovement } from '../../lib/store-display/displayApi';
+import { getImageUrl } from '../../lib/store-display/imageUrl';
+import { STORES, STORE_CODE_TO_BRANCH_ID, BRANCH_ID_TO_STORE } from '../../lib/store-display/displaySupabase';
 
 interface VariantLocationRow {
   id: number;

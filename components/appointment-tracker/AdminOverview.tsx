@@ -6,9 +6,9 @@
 // AppointmentTrackerClient only renders this for role === "admin".
 
 import { useMemo } from "react";
-import { branchFrom, ymd } from "@/lib/appt-shared";
-import type { Branch } from "@/lib/appt-shared";
-import type { ApptLead as Lead, EcReadyMap } from "@/lib/appt-shared";
+import { branchFrom, ymd } from "@/lib/appointments/appt-shared";
+import type { Branch } from "@/lib/appointments/appt-shared";
+import type { ApptLead as Lead, EcReadyMap } from "@/lib/appointments/appt-shared";
 import type { DateRange } from "./AppointmentTrackerClient";
 
 function computeStats(leads: Lead[], ec: EcReadyMap) {

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import SiteAuditStoreTeamView from '@/components/site-audit/SiteAuditStoreTeamView';
+import SiteAuditStoreTeamView from '@/components/site-audit/views/SiteAuditStoreTeamView';
 
 export const metadata: Metadata = {
   title: 'Store Booking — Material Depot',

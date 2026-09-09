@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { fmtLog } from '../siteAuditShared';
 import { createWpRow, patchWp, stampWpStage, todayStr, type CoeInstall } from './shared';
 import WpLadder from './WpLadder';
-import { KV, Sec } from '../drawerUi';
-import { useNoteModal } from '../NoteModal';
+import { KV, Sec } from '../ui/drawerUi';
+import { useNoteModal } from '../ui/NoteModal';
 import {
   WP_BUCKETS, WP_DECISIONS, WP_VENDORS, wpBucket, wpFmtDur, wpNext, wpRounds,
   wpSla, wpVendor, type WpBucketKey, type WpNext, type WpRow, type WpSla,

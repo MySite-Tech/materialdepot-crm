@@ -5,8 +5,8 @@ import {
   BRANCHES, Branch, Role, LS,
   apptBranchesFor, apptBranchesFromCrm, branchFrom, fetchApptFeed, loadEcReady,
   resolveApptRole, saveEcReady, ymd,
-} from "@/lib/appt-shared";
-import type { ApptLead as Lead, EcReadyEntry, EcReadyMap } from "@/lib/appt-shared";
+} from "@/lib/appointments/appt-shared";
+import type { ApptLead as Lead, EcReadyEntry, EcReadyMap } from "@/lib/appointments/appt-shared";
 import type { AppUser } from "@/types/crm";
 import AdminOverview from "./AdminOverview";
 

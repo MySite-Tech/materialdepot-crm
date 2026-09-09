@@ -9,14 +9,14 @@ import { fetchCRMLeads, fetchCRMLeadsStats, markLeadLost, sendOtp, verifyOtp, cl
 import Dashboard from '@/components/dashboard/Dashboard';
 import FootfallTab from '@/components/footfall/FootfallTab';
 import NPSDashboard from '@/components/nps/NPSDashboard';
-import SiteAuditRail from '@/components/site-audit/SiteAuditRail';
-import SiteAuditOwnDashboard from '@/components/site-audit/SiteAuditOwnDashboard';
+import SiteAuditRail from '@/components/site-audit/views/SiteAuditRail';
+import SiteAuditOwnDashboard from '@/components/site-audit/views/SiteAuditOwnDashboard';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES, isSiteAuditOversightRole, siteAuditRoleFromPermissions, upsertSiteAuditProfile } from '@/components/site-audit/siteAuditShared';
 import WeeklyFunnelDashboard from '@/components/weekly-funnel/WeeklyFunnelDashboard';
 import ReportCardDashboard from '@/components/report-card/ReportCardDashboard';
 import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
 import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
-import B2BSalesCRM from '@/components/b2b/B2BSalesCRM';
+import B2BSalesCRM from '@/components/b2b/views/B2BSalesCRM';
 import AppointmentTrackerClient from '@/components/appointment-tracker/AppointmentTrackerClient';
 import StoreDisplayTab from '@/components/store-display/StoreDisplayTab';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem } from '../types/crm';

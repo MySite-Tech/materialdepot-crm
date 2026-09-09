@@ -13,7 +13,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch, type CityFilter, type Shadower } from '../siteAuditShared';
-import { useNoteModal } from '../NoteModal';
+import { useNoteModal } from '../ui/NoteModal';
 import ShadowerSelect, { type ShadowerOption } from './ShadowerSelect';
 import {
   STATUS, dateRange, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls, dstr, today,

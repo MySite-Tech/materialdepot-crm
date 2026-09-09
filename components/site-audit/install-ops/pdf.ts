@@ -6,8 +6,8 @@
 import { jsPDF } from 'jspdf';
 import { fmtDate } from './shared';
 import { installerById } from './shared';
-import { categoryFor, mdInstallTermsBlock } from '../auditRegistry';
-import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfConsent, mdPdfHeader, mdPdfInstallRoom } from '../pdfBrand';
+import { categoryFor, mdInstallTermsBlock } from '../data/auditRegistry';
+import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfConsent, mdPdfHeader, mdPdfInstallRoom } from '../brand/pdfBrand';
 import type { InstallOrder, Installer, JobCard, Subjob } from './types';
 
 async function compressForPdf(dataUrl: string | null | undefined): Promise<string | null> {

@@ -7,7 +7,7 @@ import {
   cancelMovement,
   getEcProducts,
   deleteLocations,
-} from '../../lib/displayApi';
+} from '../../lib/store-display/displayApi';
 
 /* branch_name must match OrganisationBranch.branch_name EXACTLY. The backend
    lower-cases and de-spaces the value first, but only to hit a four-entry

@@ -13,11 +13,11 @@
    demands a note that lands in the activity log. */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AuditRoomCard } from '../AuditRoomViews';
-import { useNoteModal } from '../NoteModal';
-import RoomSkuEditor, { auditRoomSkuSaver } from '../RoomSkuEditor';
+import { AuditRoomCard } from '../ui/AuditRoomViews';
+import { useNoteModal } from '../ui/NoteModal';
+import RoomSkuEditor, { auditRoomSkuSaver } from '../ui/RoomSkuEditor';
 import ShadowerSelect, { type ShadowerOption } from '../install-ops/ShadowerSelect';
-import { MD_JOURNEY_STAGES, journeyStage, type JourneyEntry } from '../auditRegistry';
+import { MD_JOURNEY_STAGES, journeyStage, type JourneyEntry } from '../data/auditRegistry';
 import {
   fmtLog, initials, joinShadowers, parseShadowers, sbGet, sbPatch, type Shadower,
 } from '../siteAuditShared';

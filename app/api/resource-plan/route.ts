@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
-import { getCached, setCache } from "@/lib/cache";
-import { rateLimitedFetch } from "@/lib/rateLimiter";
-import { readPlan, writePlan, type RotaBranchData } from "@/lib/rotaPlan";
-import { isValidBranchName, type Branch } from "@/lib/appt-shared";
+import { getCached, setCache } from "@/lib/server/cache";
+import { rateLimitedFetch } from "@/lib/server/rateLimiter";
+import { readPlan, writePlan, type RotaBranchData } from "@/lib/appointments/rotaPlan";
+import { isValidBranchName, type Branch } from "@/lib/appointments/appt-shared";
 
 export const dynamic = "force-dynamic";
 

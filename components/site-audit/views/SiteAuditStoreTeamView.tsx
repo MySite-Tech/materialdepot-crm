@@ -1,0 +1,941 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CITIES, activeStaffFilter, cityOf, mapCaps, rosterQuery, sbGet, sbPost, sbPatch, staffCapOn, fmtDate } from '../siteAuditShared';
+import { DEFAULT_CAP } from '../audit-ops/shared';
+
+/* Verbatim port of material-depot-site's app/src/pages/StoreTeam.jsx (slot-
+   booking tool for in-store staff to pre-book Site Audit visit slots for
+   walk-in customers). Same business logic (SLOT_DEFS, STORES, slotsConflict,
+   getAvailability, genSlotPI, buildDateChips) and same sbGet/sbPost/sbPatch
+   queries against `audit_orders` — restyled to this CRM's Tailwind
+   conventions. The only deliberate behavior change: the original persists
+   the selected store via localStorage (shared kiosk device per store); here
+   it's plain in-component state since a CRM user's browser/session isn't a
+   fixed device. */
+
+interface SlotDef {
+  id: string;
+  label: string;
+  rangeEnd: string;
+  startMin: number;
+  endMin: number;
+  group: 'Morning' | 'Afternoon' | 'Evening';
+}
+
+const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka', 'Gachibowli', 'Kompally', 'HSR Layout'];
+
+/* Which city each store books into. An auditor is assigned a city when they
+   join and works only that city, so a Bengaluru store's slots-left count must
+   be computed from Bengaluru auditors alone. Until 2026-09-02 this map did not
+   exist: the kiosk knew its STORE but had no notion of a city, so it counted
+   every auditor in the company — JP Nagar read "13 of 15 auditors available"
+   off a roster of 18 that included 7 idle Hyderabad auditors, when Bengaluru
+   actually had 9 available that day. A store missing from this map falls back
+   to CITIES[0] rather than to "everyone", so the failure mode of adding a new
+   store and forgetting this line is a wrong-but-bounded count, not a global one. */
+const STORE_CITY: Record<string, string> = {
+  'JP Nagar': 'Bengaluru',
+  Whitefield: 'Bengaluru',
+  Yelahanka: 'Bengaluru',
+  'HSR Layout': 'Bengaluru',
+  Gachibowli: 'Hyderabad',
+  Kompally: 'Hyderabad',
+};
+const cityOfStore = (store: string | null) => (store && STORE_CITY[store]) || CITIES[0];
+
+const SLOT_DEFS: SlotDef[] = [
+  { id: '10:00', label: '10:00 AM', rangeEnd: '11:00 AM', startMin: 600, endMin: 660, group: 'Morning' },
+  { id: '11:00', label: '11:00 AM', rangeEnd: '12:00 PM', startMin: 660, endMin: 720, group: 'Morning' },
+  { id: '13:00', label: '1:00 PM', rangeEnd: '2:00 PM', startMin: 780, endMin: 840, group: 'Afternoon' },
+  { id: '14:00', label: '2:00 PM', rangeEnd: '3:00 PM', startMin: 840, endMin: 900, group: 'Afternoon' },
+  { id: '16:00', label: '4:00 PM', rangeEnd: '5:00 PM', startMin: 960, endMin: 1020, group: 'Evening' },
+  { id: '17:00', label: '5:00 PM', rangeEnd: '6:00 PM', startMin: 1020, endMin: 1080, group: 'Evening' },
+];
+/* Statuses that consume an auditor's day against their cap — a real assigned
+   visit, not a store pre-booking that has no auditor yet. */
+const ASSIGNED_STATUSES = ['assigned', 'scheduled', 'callpending', 'onway', 'atsite', 'completed'];
+
+/* Strong evening cutoff: after this time (local) the store can no longer pre-book TOMORROW's
+   morning slots — the service manager leaves early and can't absorb a last-minute morning booking
+   made the evening before. Later slots tomorrow and all slots on later days stay open. SMs are
+   unaffected; this is Store-Team-only. */
+const MORNING_CUTOFF_MIN = 18 * 60; // 6:00 PM
+const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/* ── Local date helpers (mirrors material-depot-site's lib/dates.js; not
+   worth promoting to the shared file for a handful of lines). ────────────── */
+function dstr(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+const today = (() => {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
+})();
+
+/* True when `date` is tomorrow and the local clock is past the morning cutoff — used to hide
+   tomorrow's morning slots from the store's booking list. */
+function morningCutoffHit(date: string): boolean {
+  const tmr = new Date(today);
+  tmr.setDate(tmr.getDate() + 1);
+  if (date !== dstr(tmr)) return false;
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes() >= MORNING_CUTOFF_MIN;
+}
+
+/* ── Business logic (verbatim from StoreTeam.jsx) ─────────────────────────── */
+function fmtSlotId(id: string) {
+  const s = SLOT_DEFS.find((x) => x.id === id);
+  return s ? s.label : '—';
+}
+
+function slotsConflict(slotA: SlotDef, slotB: SlotDef) {
+  const gapAB = slotB.startMin - slotA.endMin;
+  const gapBA = slotA.startMin - slotB.endMin;
+  if (gapAB < 0 && gapBA < 0) return true;
+  return (gapAB >= 0 && gapAB < 120) || (gapBA >= 0 && gapBA < 120);
+}
+
+/* `capBlocked` = auditors who have already hit the daily cap their service
+   manager set for this date, so they are unavailable in EVERY slot, not just
+   one that conflicts. Before caps moved into the DB the kiosk had no way to
+   know this — it counted raw headcount and ignored caps entirely. */
+function getAvailability(slotId: string, dayOrders: any[], auditorCount: number, capBlocked: Set<string>) {
+  const slot = SLOT_DEFS.find((s) => s.id === slotId);
+  if (!slot) return { available: 0, total: auditorCount, used: 0 };
+  const blockedAuditors = new Set<string>(capBlocked);
+  let reservationConflicts = 0;
+  for (const o of dayOrders) {
+    if (o.status === 'deleted' || o.status === 'slot_converted') continue;
+    if (o.status === 'slot_reserved' && !o.auditor_id) {
+      const nm = (o.customer_name || '').trim().toLowerCase();
+      const absorbed = dayOrders.some(
+        (r) =>
+          r.slot === o.slot &&
+          r.status !== 'deleted' &&
+          r.status !== 'slot_reserved' &&
+          r.status !== 'slot_converted' &&
+          ((o.po && r.pi === o.po) || (nm && (r.customer_name || '').trim().toLowerCase() === nm))
+      );
+      if (absorbed) continue;
+    }
+    const oSlot = SLOT_DEFS.find((s) => s.id === o.slot);
+    if (!oSlot || !slotsConflict(slot, oSlot)) continue;
+    if (o.auditor_id) {
+      blockedAuditors.add(o.auditor_id);
+    } else {
+      reservationConflicts++;
+    }
+  }
+  const used = blockedAuditors.size + reservationConflicts;
+  return { available: Math.max(0, auditorCount - used), total: auditorCount, used };
+}
+
+function genSlotPI(store: string) {
+  const ts = Date.now().toString().slice(-9);
+  const code = store.replace(/\s+/g, '').toUpperCase().slice(0, 6);
+  return 'SRES-' + code + '-' + ts;
+}
+
+function buildDateChips() {
+  const t = today;
+  const chips: Array<{ ds: string; lbl: string; num: number }> = [];
+  for (let i = 0; chips.length < 14 && i < 30; i++) {
+    const d = new Date(t);
+    d.setDate(t.getDate() + i);
+    if (d.getDay() === 0) continue;
+    const ds = dstr(d);
+    const lbl = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : DAYS_SHORT[d.getDay()];
+    chips.push({ ds, lbl, num: d.getDate() });
+  }
+  return chips;
+}
+
+/* ── Root component ────────────────────────────────────────────────────────── */
+export default function SiteAuditStoreTeamView() {
+  const dateChips = useMemo(buildDateChips, []);
+
+  const [myStore, setMyStore] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(dateChips[0].ds);
+  const [dayOrders, setDayOrders] = useState<any[]>([]);
+  const [auditorCount, setAuditorCount] = useState(3);
+  const [capBlocked, setCapBlocked] = useState<Set<string>>(() => new Set());
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [storeOverlay, setStoreOverlay] = useState<null | 'boot' | 'header'>(null);
+  const [bookingSlot, setBookingSlot] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastShow, setToastShow] = useState(false);
+  const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useCallback((msg: string) => {
+    setToastMsg(msg);
+    setToastShow(true);
+    if (toastT.current) clearTimeout(toastT.current);
+    toastT.current = setTimeout(() => setToastShow(false), 3200);
+  }, []);
+
+  const selectedDateRef = useRef(selectedDate);
+  /* loadDay is a stable useCallback that the 30s poll holds onto, so it must
+     read the store through a ref — closing over `myStore` would leave the poll
+     scoping availability to whichever store was selected when it was created. */
+  const myStoreRef = useRef(myStore);
+  myStoreRef.current = myStore;
+  const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadDay = useCallback(async (date: string, silent = false) => {
+    setSelectedDate(date);
+    selectedDateRef.current = date;
+    if (!silent) {
+      setLoading(true);
+      setLoadError(false);
+    }
+    try {
+      const [orders, auditors] = await Promise.all([
+        sbGet(
+          'audit_orders?select=id,pi,po,customer_name,phone,status,slot,date,auditor_id,bm,city,audit_ticked,log&date=eq.' +
+            date +
+            '&status=neq.deleted'
+        ),
+        /* The kiosk's availability and slots-left count. Retired auditors
+           must be gone from BOTH or a store books a slot against somebody who
+           has left — the same class of bug as the cross-city bleed this view
+           already carries a note about. */
+        rosterQuery('id,active_from,weekly_off,leave_dates,city').then(({ select, filter }) => sbGet('profiles?select=' + select + '&role=in.(site_auditor,auditor_installer)' + filter)),
+      ]);
+      /* sbGet resolves a PostgREST ERROR OBJECT for any 4xx/5xx rather than
+         rejecting, so a non-array here is a FAILED load, not an empty roster.
+         Treating it as empty would show the store "0 auditors available" and
+         block every booking off a transient server error — the exact shape of
+         the roster incident in CLAUDE.md. Fail loudly and keep the last good
+         count instead. */
+      if (!Array.isArray(orders) || !Array.isArray(auditors)) throw new Error('slot availability unavailable');
+      /* City scope. Filtered here rather than with `city=eq.` in the query
+         because 2 live audit_orders rows have a NULL city and `cityOf` reads
+         NULL as Bengaluru — a server-side filter would silently drop them. */
+      const storeCity = cityOfStore(myStoreRef.current);
+      const orderList = orders.filter((o: any) => cityOf(o) === storeCity);
+      // An auditor in another city, before their start date, on their weekly
+      // off, on leave, or capped to 0 for the date isn't available — so none of
+      // them may inflate this store's slots-left count (same rule, and now the
+      // same stored caps, that the SM's Auditors & caps view applies).
+      const roster = auditors
+        .filter((a: any) => cityOf(a) === storeCity)
+        .map((a: any) => ({
+          id: a.id as string,
+          activeFrom: a.active_from || null,
+          weeklyOff: a.weekly_off == null ? null : a.weekly_off,
+          leaveDates: Array.isArray(a.leave_dates) ? a.leave_dates : [],
+          ...mapCaps(a),
+        }));
+      const workingToday = roster.filter((a) => staffCapOn(a, date, DEFAULT_CAP) >= 1);
+      // Already at their cap for the day → unavailable in every slot.
+      const blocked = new Set<string>();
+      for (const a of workingToday) {
+        const load = orderList.filter((o: any) => o.auditor_id === a.id && ASSIGNED_STATUSES.includes(o.status)).length;
+        if (load >= staffCapOn(a, date, DEFAULT_CAP)) blocked.add(a.id);
+      }
+      setDayOrders(orderList);
+      setAuditorCount(workingToday.length);
+      setCapBlocked(blocked);
+      setLoading(false);
+    } catch (e) {
+      if (!silent) {
+        setLoadError(true);
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  // Boot: show the store picker until a store is chosen; once chosen, load
+  // the day and start the 30s poll + visibilitychange-triggered refresh.
+  useEffect(() => {
+    if (!myStore) {
+      setStoreOverlay('boot');
+      return;
+    }
+    loadDay(selectedDateRef.current);
+    refreshTimer.current = setInterval(() => {
+      if (!document.hidden) loadDay(selectedDateRef.current, true);
+    }, 30000);
+    const onVis = () => {
+      if (!document.hidden && selectedDateRef.current) loadDay(selectedDateRef.current, true);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      if (refreshTimer.current) clearInterval(refreshTimer.current);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [myStore, loadDay]);
+
+  useEffect(() => {
+    return () => {
+      if (toastT.current) clearTimeout(toastT.current);
+    };
+  }, []);
+
+  const selectStore = (s: string) => {
+    setMyStore(s);
+    setStoreOverlay(null);
+  };
+
+  const onDateClick = (ds: string) => {
+    loadDay(ds);
+  };
+
+  const cancelReservation = async (id: string) => {
+    if (!window.confirm('Cancel this slot reservation?')) return;
+    setCancellingId(id);
+    try {
+      await sbPatch('audit_orders', id, { status: 'deleted' });
+      toast('Slot reservation cancelled.');
+      loadDay(selectedDateRef.current);
+    } catch (e) {
+      toast('Failed to cancel — please try again.');
+      setCancellingId(null);
+    }
+  };
+
+  /* ── Derived render data ───────────────────────────────────────────────── */
+  const isMyBooking = (o: any) =>
+    o.status === 'slot_reserved' && ((o.log && o.log[0] && o.log[0].who === myStore) || o.bm === myStore);
+  const myRes = dayOrders.filter(isMyBooking);
+  const allBooked = dayOrders.filter((o) => o.status !== 'slot_reserved');
+
+  const isToday = selectedDate === dstr(today);
+  const nowMin = isToday
+    ? (() => {
+        const n = new Date();
+        return n.getHours() * 60 + n.getMinutes();
+      })()
+    : null;
+
+  const bookingSlotDef = bookingSlot ? SLOT_DEFS.find((s) => s.id === bookingSlot) : null;
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-black">Store Team</h1>
+          <p className="text-[13px] text-gray-500">Pre-book Site Audit visit slots for walk-in customers.</p>
+        </div>
+        <button
+          className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:bg-gray-50"
+          onClick={() => setStoreOverlay('header')}
+        >
+          {myStore || 'Select store'}
+        </button>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+        {dateChips.map((c) => (
+          <div
+            key={c.ds}
+            onClick={() => onDateClick(c.ds)}
+            className={`flex flex-col items-center justify-center w-14 h-14 shrink-0 rounded-lg border cursor-pointer select-none ${
+              c.ds === selectedDate
+                ? 'border-[#EAB308] bg-yellow-50 text-gray-900'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-wide">{c.lbl}</div>
+            <div className="text-sm font-bold">{c.num}</div>
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-gray-400 text-[13px]">
+          <span className="animate-spin border-2 border-gray-300 border-t-[#EAB308] rounded-full h-5 w-5"></span>
+        </div>
+      ) : loadError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 text-red-600 text-[13px] font-semibold px-4 py-3">
+          Failed to load — check connection.
+        </div>
+      ) : (
+        <SlotContent
+          date={selectedDate}
+          myStore={myStore}
+          dayOrders={dayOrders}
+          auditorCount={auditorCount}
+          capBlocked={capBlocked}
+          storeCity={cityOfStore(myStore)}
+          myRes={myRes}
+          allBooked={allBooked}
+          nowMin={nowMin}
+          isMyBooking={isMyBooking}
+          cancellingId={cancellingId}
+          onBook={(slotId: string) => setBookingSlot(slotId)}
+          onCancel={cancelReservation}
+        />
+      )}
+
+      {/* Store picker overlay (boot: forced, no store yet; header: dismissible switcher) */}
+      {storeOverlay && (
+        <div
+          className="fixed inset-0 bg-black/30 z-[900] flex items-center justify-center"
+          onClick={
+            storeOverlay === 'header'
+              ? (e) => {
+                  if (e.target === e.currentTarget) setStoreOverlay(null);
+                }
+              : undefined
+          }
+        >
+          <div className="bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-5">
+            <div className="text-base font-bold text-black mb-1">Select your store</div>
+            <div className="text-[13px] text-gray-500 mb-4">Choose the experience centre you're working at today.</div>
+            <div className="flex flex-col gap-2">
+              {STORES.map((s) => (
+                <div
+                  key={s}
+                  onClick={() => selectStore(s)}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md border cursor-pointer text-[13px] font-medium ${
+                    myStore === s ? 'border-[#EAB308] bg-yellow-50 text-gray-900' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${myStore === s ? 'bg-[#EAB308]' : 'bg-gray-300'}`}></div>
+                  {s}
+                </div>
+              ))}
+            </div>
+            <div className="text-[11.5px] text-gray-400 text-center pt-3">Contact IT to add a new store.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking sheet */}
+      {bookingSlot && bookingSlotDef && (
+        <BookingSheet
+          slot={bookingSlotDef}
+          date={selectedDate}
+          myStore={myStore as string}
+          onClose={() => setBookingSlot(null)}
+          onBooked={(name: string) => {
+            setBookingSlot(null);
+            toast('Slot booked for ' + name + ' · ' + bookingSlotDef.label);
+            loadDay(selectedDateRef.current);
+          }}
+        />
+      )}
+
+      {/* Toast */}
+      <div
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] bg-gray-900 text-white text-[13px] font-medium px-4 py-2.5 rounded-md shadow-lg transition-opacity duration-300 ${
+          toastShow ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {toastMsg}
+      </div>
+    </div>
+  );
+}
+
+/* ── Slot grid + reservations ────────────────────────────────────────────────── */
+interface SlotContentProps {
+  date: string;
+  myStore: string | null;
+  dayOrders: any[];
+  auditorCount: number;
+  capBlocked: Set<string>;
+  storeCity: string;
+  myRes: any[];
+  allBooked: any[];
+  nowMin: number | null;
+  isMyBooking: (o: any) => boolean;
+  cancellingId: string | null;
+  onBook: (slotId: string) => void;
+  onCancel: (id: string) => void;
+}
+
+function SlotContent({
+  date,
+  myStore,
+  dayOrders,
+  auditorCount,
+  capBlocked,
+  storeCity,
+  myRes,
+  allBooked,
+  nowMin,
+  isMyBooking,
+  cancellingId,
+  onBook,
+  onCancel,
+}: SlotContentProps) {
+  const anyContent = myRes.length || allBooked.length;
+  return (
+    <div className="flex flex-col gap-6">
+      {(['Morning', 'Afternoon', 'Evening'] as const).map((grp) => {
+        const cutMorning = grp === 'Morning' && morningCutoffHit(date);
+        const slots = cutMorning ? [] : SLOT_DEFS.filter((s) => s.group === grp && (nowMin === null || s.startMin > nowMin));
+        return (
+          <div key={grp}>
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
+              {grp}
+            </div>
+            {!slots.length ? (
+              <div className="text-[13px] text-gray-400 px-1">
+                {cutMorning
+                  ? 'Morning slots for tomorrow close at 6:00 PM. Please pick an afternoon/evening slot, or a morning slot on a later day.'
+                  : 'No upcoming slots'}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+                {slots.map((sl) => {
+                  const av = getAvailability(sl.id, dayOrders, auditorCount, capBlocked);
+                  const isFull = av.available <= 0;
+                  const myBookingsForSlot = myRes.filter((r) => r.slot === sl.id);
+                  const hasMyBooking = myBookingsForSlot.length > 0;
+                  const dotClass = isFull ? 'bg-red-500' : av.available === 1 ? 'bg-amber-500' : 'bg-green-500';
+
+                  let availText: string;
+                  if (av.total === 0) {
+                    // A real zero for this city — everyone is on leave, capped
+                    // to 0, or hasn't started. Say so, rather than "all 0
+                    // auditors booked", which reads like a loading bug.
+                    availText = `No ${storeCity} auditors are working this day`;
+                  } else if (isFull && !hasMyBooking) {
+                    availText = `Full — all ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} booked`;
+                  } else {
+                    availText = `${av.available} of ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} available`;
+                  }
+
+                  const otherResForSlot = dayOrders.filter(
+                    (o) => o.status === 'slot_reserved' && !isMyBooking(o) && o.slot === sl.id
+                  );
+                  const bookable = !isFull;
+
+                  return (
+                    <div
+                      key={sl.id}
+                      onClick={bookable ? () => onBook(sl.id) : undefined}
+                      className={`flex items-center gap-3 px-4 py-3 ${
+                        bookable ? 'cursor-pointer hover:bg-gray-50' : 'opacity-70'
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`}></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px]">
+                          <span className="font-semibold text-black">{sl.label}</span>{' '}
+                          <span className="text-gray-400">– {sl.rangeEnd}</span>
+                        </div>
+                        <div className="text-[12px] text-gray-500">{availText}</div>
+                        {myBookingsForSlot.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {myBookingsForSlot.map((r) => (
+                              <span
+                                key={r.id}
+                                className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"
+                              >
+                                ✓ {r.customer_name || 'Booking'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {otherResForSlot.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {otherResForSlot.map((r) => (
+                              <span key={r.id} className="text-[11px] text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+                                {(r.log && r.log[0] && r.log[0].who) || r.bm || 'Other store'} pre-booked
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {!isFull ? (
+                        <button
+                          className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:opacity-90 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onBook(sl.id);
+                          }}
+                        >
+                          Book
+                        </button>
+                      ) : (
+                        <span className="text-xs font-bold text-red-600 shrink-0">Full</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {myRes.length > 0 && (
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
+            Pre-bookings from {myStore} · {fmtDate(date)}
+          </div>
+          <div className="flex flex-col gap-3">
+            {myRes.map((r) => {
+              const cats = Array.isArray(r.audit_ticked) ? r.audit_ticked.filter(Boolean) : [];
+              const bookingBm = r.bm && r.bm !== myStore ? r.bm : null;
+              return (
+                <div key={r.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded-md px-2 py-1">
+                      {fmtSlotId(r.slot)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-sm text-black">{r.customer_name || '—'}</div>
+                      <div className="text-[12px] text-gray-500">
+                        {r.phone || '—'}
+                        {bookingBm ? ' · BM: ' + bookingBm : ''}
+                      </div>
+                      {r.po && <div className="text-[11.5px] text-gray-400 mt-0.5">ENQ: {r.po}</div>}
+                    </div>
+                  </div>
+                  {cats.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2.5">
+                      {cats.map((c: string, i: number) => (
+                        <span key={i} className="inline-block px-2 py-0.5 rounded-full text-[11px] bg-gray-100 text-gray-600">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                    <span className="text-[12px] text-gray-400 flex-1">Booking ID: {r.pi}</span>
+                    <button
+                      disabled={cancellingId === r.id}
+                      onClick={() => onCancel(r.id)}
+                      className="bg-white text-red-600 border border-red-200 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {cancellingId === r.id ? 'Cancelling…' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {allBooked.length > 0 && (
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
+            All confirmed bookings · {fmtDate(date)}
+          </div>
+          <div className="text-[12px] text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-3 py-2 mb-3">
+            These are already-assigned audit visits on this date. They are accounted for in the slot availability above.
+          </div>
+          <div className="flex flex-col gap-3">
+            {allBooked.map((o) => (
+              <div key={o.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border border-gray-100 rounded-md px-2 py-1">
+                    {fmtSlotId(o.slot)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-sm text-black">{o.customer_name || o.pi || '—'}</div>
+                    <div className="text-[12px] text-gray-500">
+                      {o.pi} · {(o.status || '').replace(/_/g, ' ')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!anyContent && (
+        <div className="text-center py-8 text-gray-400 text-[13px]">No bookings for this date yet.</div>
+      )}
+    </div>
+  );
+}
+
+/* ── Booking sheet ───────────────────────────────────────────────────────────── */
+interface BookingSheetProps {
+  slot: SlotDef;
+  date: string;
+  myStore: string;
+  onClose: () => void;
+  onBooked: (name: string) => void;
+}
+
+/* The BM is PICKED, not typed. Free text here is where `Janvi`/`janvi` (vs the
+   account `Jhanvi`), `Soheb`, `Beema` and — when the field was still optional
+   and fell back to `myStore` — `Whitefield`/`JP Nagar`/`Yelahanka` came from:
+   66 of the 128 rows with no BM account link were booked at a store counter.
+   The list is `profiles` rather than the CRM roster because this route is a
+   PUBLIC kiosk (app/store-booking/page.tsx) with no CRM token to call
+   fetchUsers() with — and profiles is the better source anyway: picking one
+   yields the `bm_email` that actually links the order, instead of a name
+   somebody else has to reconcile later. Only names are rendered; the anon key
+   already reads this table from this page.
+
+   A typed fallback stays, because a brand-new BM missing from the list must
+   not block a walk-in customer's slot — it is just no longer the default path,
+   and a row created that way is the exception rather than every row. */
+function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetProps) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [addr, setAddr] = useState('');
+  const [enqId, setEnqId] = useState('');
+  const [bmName, setBmName] = useState('');
+  const [bmList, setBmList] = useState<Array<{ name: string; email: string }>>([]);
+  const [bmPick, setBmPick] = useState('');
+  const [bmTyped, setBmTyped] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    /* BM picker on the kiosk's booking form — a new booking must not be
+       attributed to a BM who has left. */
+    activeStaffFilter().then((f) => sbGet('profiles?select=name,email&role=eq.bm&order=name.asc' + f))
+      .then((r) => { if (alive && Array.isArray(r)) setBmList(r.filter((p: any) => p && p.name && p.email)); })
+      /* The list failing to load must not lock the counter out of booking —
+         fall through to the typed field, same as an unlisted BM. */
+      .catch(() => { if (alive) setBmTyped(true); });
+    return () => { alive = false; };
+  }, []);
+  const [comments, setComments] = useState('');
+  const [fl, setFl] = useState(false);
+  const [wp, setWp] = useState(false);
+  const [cwp, setCwp] = useState(false);
+  const [cnc, setCnc] = useState(false);
+  const [wpnl, setWpnl] = useState(false);
+  const [err, setErr] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const confirm = async () => {
+    const nm = name.trim();
+    const ph = phone.trim();
+    const ad = addr.trim();
+    const enq = enqId.trim();
+    const picked = bmList.find((b) => b.email === bmPick) || null;
+    const bm = picked ? picked.name : bmName.trim();
+    const cm = comments.trim();
+    setErr('');
+    if (!nm) {
+      setErr('Customer name is required.');
+      return;
+    }
+    if (!ph) {
+      setErr('Phone number is required.');
+      return;
+    }
+    if (!ad) {
+      setErr('Address is required.');
+      return;
+    }
+    if (!enq) {
+      setErr('Enquiry ID is required.');
+      return;
+    }
+    if (!bm) {
+      setErr('BM name is required.');
+      return;
+    }
+    if (!fl && !wp && !cwp && !cnc && !wpnl) {
+      setErr('Select what the audit is for — at least one material.');
+      return;
+    }
+
+    const cats: string[] = [];
+    if (fl) cats.push('Wooden Flooring');
+    if (wp) cats.push('Standard Wallpapers');
+    if (cwp) cats.push('Custom Wallpapers');
+    if (cnc) cats.push('CNC');
+    if (wpnl) cats.push('Wall Panels');
+
+    setSubmitting(true);
+    try {
+      const pi = genSlotPI(myStore);
+      const logNote = 'Slot pre-booked at ' + myStore + ' store · BM: ' + bm + (cm ? ' · ' + cm : '');
+      await sbPost('audit_orders', {
+        pi,
+        po: enq,
+        customer_name: nm,
+        phone: ph,
+        addr: ad,
+        // Never the store name: `bm` is a person, and "Whitefield" in it is a false attribution
+        // that no later name match can resolve. Unassigned stays visibly unassigned.
+        bm: bm || '—',
+        ...(picked ? { bm_email: picked.email } : {}),
+        date,
+        slot: slot.id,
+        status: 'slot_reserved',
+        skus: [{ c: 'AUDIT', n: 'Site Audit', audit: true }],
+        audit_ticked: cats,
+        service: null,
+        log: [{ t: logNote, d: new Date().toISOString(), by: 'manual', who: myStore }],
+        created_by_email: 'store-team',
+      });
+      onBooked(nm);
+    } catch (e: any) {
+      setErr('Booking failed — ' + (e?.message || 'please try again'));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 z-[900] flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5">
+        <div className="text-base font-bold text-black mb-0.5">Book {slot.label}</div>
+        <div className="text-[13px] text-gray-500 mb-4">
+          {fmtDate(date)} · {myStore}
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Customer name *</label>
+          <input
+            className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Phone number *</label>
+          <input
+            className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            type="tel"
+            placeholder="9876543210"
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Address *</label>
+          <textarea
+            className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400 resize-y"
+            value={addr}
+            onChange={(e) => setAddr(e.target.value)}
+            placeholder="Flat / building / area…"
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">ENQ ID *</label>
+          <input
+            className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400"
+            value={enqId}
+            onChange={(e) => setEnqId(e.target.value)}
+            placeholder="ENQ2026…"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">BM *</label>
+          {bmTyped || !bmList.length ? (
+            <>
+              <input
+                className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400"
+                value={bmName}
+                onChange={(e) => setBmName(e.target.value)}
+                placeholder="Business manager name"
+                autoComplete="off"
+              />
+              {bmList.length ? (
+                <button
+                  type="button"
+                  onClick={() => { setBmTyped(false); setBmName(''); }}
+                  className="mt-1 text-[11.5px] font-semibold text-gray-500 underline"
+                >
+                  Pick from the list instead
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <select
+                className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none bg-white focus:border-yellow-400"
+                value={bmPick}
+                onChange={(e) => {
+                  if (e.target.value === '__other') { setBmTyped(true); setBmPick(''); return; }
+                  setBmPick(e.target.value);
+                }}
+              >
+                <option value="">— select the BM —</option>
+                {bmList.map((b) => <option key={b.email} value={b.email}>{b.name}</option>)}
+                <option value="__other">BM not in this list…</option>
+              </select>
+              <div className="mt-1 text-[11.5px] text-gray-400">Picking from the list puts the booking straight on that BM&apos;s dashboard.</div>
+            </>
+          )}
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+            What is the audit for? * <span className="normal-case font-medium text-gray-400">(select every material)</span>
+          </label>
+          {/* This is the ONLY record of what the visit is for: the audit row the
+              service manager works from is raised later from the OMS, which at
+              that point carries nothing but the audit service line. */}
+          <div className="text-[11.5px] text-gray-500 mb-1.5">Shown to the service manager and the auditor — pick every material the customer wants measured.</div>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={fl} onChange={(e) => setFl(e.target.checked)} />
+              <span>Wooden Flooring</span>
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={wp} onChange={(e) => setWp(e.target.checked)} />
+              <span>Standard Wallpapers</span>
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={cwp} onChange={(e) => setCwp(e.target.checked)} />
+              <span>Custom Wallpapers</span>
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={cnc} onChange={(e) => setCnc(e.target.checked)} />
+              <span>CNC</span>
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-gray-700">
+              <input type="checkbox" checked={wpnl} onChange={(e) => setWpnl(e.target.checked)} />
+              <span>Wall Panels</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+            Comments <span className="normal-case font-medium text-gray-400">(optional)</span>
+          </label>
+          <textarea
+            className="w-full px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none focus:border-yellow-400 resize-y min-h-[70px]"
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            placeholder="Any notes about the customer or visit…"
+          />
+        </div>
+
+        {err && <div className="text-[12px] text-red-600 font-medium mb-3">{err}</div>}
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+          <button
+            className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:bg-gray-50"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            disabled={submitting}
+            onClick={confirm}
+            className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {submitting ? 'Booking…' : 'Confirm booking'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

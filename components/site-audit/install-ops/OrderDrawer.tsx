@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { sbGet, sbPatch, type CityFilter } from '../siteAuditShared';
-import { useNoteModal } from '../NoteModal';
+import { useNoteModal } from '../ui/NoteModal';
 import AssignSection from './AssignSection';
 import { Chip, MapLink, Note, sjTypeClass } from './ui';
 import {
@@ -18,7 +18,7 @@ import {
 } from './shared';
 import { genInstallPDFSM } from './pdf';
 import type { ShadowerOption } from './ShadowerSelect';
-import { typeLabel, typeTag } from '../auditRegistry';
+import { typeLabel, typeTag } from '../data/auditRegistry';
 import type { InstallCategory, InstallOrder, Installer, ServiceSkuRow, SlotDef, Subjob } from './types';
 
 interface DraftState {

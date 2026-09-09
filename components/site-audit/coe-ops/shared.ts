@@ -3,7 +3,7 @@
    call queue). See CLAUDE.md note 102 in that repo for the full spec. */
 
 import { phoneKey, sbGet, sbPatch, sbPost } from '../siteAuditShared';
-import { typeLabel } from '../auditRegistry';
+import { typeLabel } from '../data/auditRegistry';
 import { WP_ROUND_KEYS, wpRounds, wpStageLabel, type WpNext, type WpRow } from './wpTrack';
 
 // Q1/Q2/Q3 review scores, taken on this D+1 call rather than on-site (see note 117 in the sibling
