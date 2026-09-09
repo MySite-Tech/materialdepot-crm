@@ -46,7 +46,7 @@ reading the module.
 | Store visit | `docs/store-visit/context.md` | One endpoint doing lookup and write, the whole-body Kylas lead update |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 41 bugs already fixed here, kept because the shape recurs |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 41 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -77,6 +77,23 @@ were verified against real data.
 
 The house style below applies to code; this section applies to the docs. Both
 are enforced by review, not by tooling — there is no lint step in this repo.
+
+### Locate before you read
+
+`grep -rl "<term>" docs/` costs one cheap tool call. Opening the wrong doc costs
+up to 12,000 tokens, and `docs/site-audit`, `docs/b2b` and `docs/landmines` are
+each big enough that reading one you didn't need is the most expensive mistake
+available here. Grep first, then read the doc that matched — with `offset`/`limit`
+around the matching section when the file is large.
+
+Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
+in particular holds facts about the roster, permissions, uploads and branch
+resolution that you would look for elsewhere.
+
+**Never read these whole — they are machine-generated and will flood the
+context:** `tsconfig.tsbuildinfo` (~83k tokens), `package-lock.json` (~43k),
+`public/md-cat-analytics.js` (~32k, a bundled vendor script). Grep them if you
+must; do not open them.
 
 ## Folder structure — one pattern, everywhere
 
@@ -258,10 +275,9 @@ Two things about that workflow are worth knowing before you touch config:
 - `vercel.json` is tracked and `.vercel/` sits locally (gitignored), so the
   repo looks Vercel-deployed. The workflow above is the deploy path visible in
   the repo. Don't infer the hosting from those files.
-- **`tsconfig.tsbuildinfo` is tracked**, so every `tsc`/`build` dirties the
-  working tree and it shows up in every diff. It is a build artifact and does
-  not belong in git; until someone gitignores it, leave it out of commits
-  rather than staging a diff you did not author.
+- `tsconfig.tsbuildinfo` is gitignored and untracked (it was tracked until
+  2026-09-09 — 330 KB of build artifact in every diff). `"incremental": true`
+  still regenerates it locally. Don't re-add it.
 
 `main` has run **ahead of `Installation-Changes` twice**. Always
 `git fetch && git log HEAD..origin/main` before you merge or claim parity. If
