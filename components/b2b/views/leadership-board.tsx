@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { INBOUND_STAGE_COLORS, fmtL } from '../models/mock-data';
-import { fetchB2BData } from '@/lib/b2b';
+import { fetchB2BData, fetchInboundOwnerTotals } from '@/lib/b2b';
 import { computeLeadership, type LeadershipData } from '../models/analytics';
 
 function Panel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
@@ -36,8 +36,12 @@ export default function LeadershipBoard() {
 
   useEffect(() => {
     let alive = true;
-    fetchB2BData()
-      .then((d) => { if (alive) setData(computeLeadership(d, new Date())); })
+    // The rep leaderboard is the only place inboundOwnerTotals is rendered, so
+    // this tab asks for it and the other three do not.
+    Promise.all([fetchB2BData(), fetchInboundOwnerTotals()])
+      .then(([d, inboundOwnerTotals]) => {
+        if (alive) setData(computeLeadership({ ...d, inboundOwnerTotals }, new Date()));
+      })
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, []);

@@ -132,7 +132,15 @@ export interface B2BData {
 // Deriving the last owner from the board total would save a call, but
 // fetchB2BInboundLeads reports a failed request as total=0, so a Kylas 429
 // would silently move one rep's leads onto another's card.
-async function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
+//
+// Opt-in, and cached separately from fetchB2BData: only computeLeadership reads
+// inboundOwnerTotals, so the Dashboard and Targets tabs were paying two Kylas
+// calls each for a number they never render.
+export function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
+  return withB2BCache('inbound-owner-totals', fetchInboundOwnerTotalsUncached);
+}
+
+async function fetchInboundOwnerTotalsUncached(): Promise<Record<string, number>> {
   const since = new Date(`${B2B_FRESH_START}T00:00:00+05:30`).toISOString();
   const entries: (readonly [string, number])[] = [];
   for (const o of B2B_INBOUND_OWNER_LIST) {
@@ -161,14 +169,13 @@ async function fetchB2BDataUncached(): Promise<B2BData> {
     .catch((e) => { console.error('[b2b] kam orders fetch failed', e); failed.push('kam'); return [] as KamOrder[]; });
   const clientsP = fetchClients()
     .catch((e) => { console.error('[b2b] client database fetch failed', e); failed.push('clients'); return [] as ClientEntity[]; });
-  const ownerTotalsP = fetchInboundOwnerTotals().catch(() => ({} as Record<string, number>));
-  const [inbound, outreach, kam, clients, inboundOwnerTotals] = await Promise.all([
-    inboundP, outreachP, kamP, clientsP, ownerTotalsP,
+  const [inbound, outreach, kam, clients] = await Promise.all([
+    inboundP, outreachP, kamP, clientsP,
   ]);
   if (!inbound.leads.length && !inbound.total) failed.push('inbound');
   return {
     inbound: inbound.leads, outreach, kam, clients,
-    inboundTotal: inbound.total, inboundOwnerTotals, failed,
+    inboundTotal: inbound.total, inboundOwnerTotals: {}, failed,
   };
 }
 
