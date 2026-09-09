@@ -59,8 +59,6 @@ export interface VerticalStatsResult {
   pipeline: B2BPipelineStats | null;
 }
 
-// `totalBranch` folds the dashboard's overall B2B pipeline into this same
-// response, so the two slices cost one request instead of two.
 export async function fetchVerticalStats(
   range?: { from?: string; to?: string },
   totalBranch?: string,

@@ -18,9 +18,6 @@ function nextDay(day: string): string {
 
 const ROW_PAGE = 1000;
 
-// Every B2B view wants a different pipeline out of the same table, which used to
-// be four `select=* where pipeline=…` round trips per dashboard load. One paged
-// read answers all of them; pipeline and date narrowing happen in memory.
 function fetchAllRows(): Promise<B2BLeadRow[]> {
   return withB2BCache('rows|all', async () => {
     const all: B2BLeadRow[] = [];
@@ -128,14 +125,6 @@ export interface B2BData {
   failed: ('inbound' | 'outreach' | 'kam' | 'clients')[];
 }
 
-// One call per owner, asking for size=1 because only totalElements is read.
-// Deriving the last owner from the board total would save a call, but
-// fetchB2BInboundLeads reports a failed request as total=0, so a Kylas 429
-// would silently move one rep's leads onto another's card.
-//
-// Opt-in, and cached separately from fetchB2BData: only computeLeadership reads
-// inboundOwnerTotals, so the Dashboard and Targets tabs were paying two Kylas
-// calls each for a number they never render.
 export function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
   return withB2BCache('inbound-owner-totals', fetchInboundOwnerTotalsUncached);
 }

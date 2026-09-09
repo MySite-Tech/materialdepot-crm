@@ -118,9 +118,6 @@ export default function KAMs() {
     [orders, kamFilter],
   );
 
-  // Unscoped, for the empty-state banner only: it counts every order, while the
-  // Active Orders chip counts the open ones. Naming both numbers is what stops
-  // "30 orders exist" reading as a contradiction of a chip that says 4.
   const openOrderCount = useMemo(
     () => orders.filter((o) => KAM_OPEN_STATUSES.includes(o.status)).length,
     [orders],

@@ -695,3 +695,12 @@ The shape to copy when a load feeds a picker or a gate — see `loadAuditors` in
 `loadShadowers`, `loadBms` and the deploy-safe `detect*` probes share the pattern
 but degrade safely (optional shadower, free-text BM fallback, feature stays
 inert). Leave them; they are not gates.
+
+## Two render-loop guards
+
+- **`use-owned-extras`' `deps` is a stable key for `people`.** The array's
+  identity changes on every render of the parent, so depending on the array
+  itself re-fetches in a loop.
+- **`cat-analytics-panel`'s `nonce` is the redraw trigger** for in-place target
+  edits, working alongside `targetsRef`. Editing a target mutates the ref and
+  bumps the nonce rather than replacing state.

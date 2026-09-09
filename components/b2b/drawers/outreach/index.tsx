@@ -94,10 +94,6 @@ export default function OutreachDrawer({
         orderValue: res.orderValue ?? 0,
         orderValueSource: 'deal',
         dealStatus: res.dealStatus,
-        // Deliberately NOT auto-filling "Assisted at EC" from the ticket's
-        // branch or assignee. A cart's branch is where it was raised; "assisted
-        // at" is a claim about who helped close it, and inferring one from the
-        // other would put a name in a field nobody attested to.
       }));
     } else if (res.status === 'no-match') {
       setDraft((d) => ({ ...d, orderValueSource: 'manual' }));

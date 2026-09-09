@@ -157,9 +157,6 @@ async function fetchContactDeals(contactId: number) {
     };
     const holdsContact = (d: Deal) => !!d.associatedContacts?.some((c) => c.id === contactId);
 
-    // SEARCH_FIELDS asks for associatedContacts, so the search response already
-    // carries the association this used to confirm with one /api/deals/<id>
-    // request per deal — up to 200 of them for a single contact.
     const matched: AssociatedDeal[] = [];
     const unknown: Deal[] = [];
     for (const d of all) {

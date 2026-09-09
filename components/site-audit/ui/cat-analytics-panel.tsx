@@ -233,7 +233,6 @@ export default function CatAnalyticsPanel({
     } catch (e: any) {
       return '<div style="padding:24px;color:var(--red);font-weight:600">⚠ Could not render this tab — ' + (e?.message || 'unknown error') + '</div>';
     }
-    // `nonce` is the redraw trigger for in-place target edits — see targetsRef above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, from, to, store, city, tab, targetMonth, nonce]);
 

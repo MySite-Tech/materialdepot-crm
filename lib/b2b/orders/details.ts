@@ -72,8 +72,6 @@ interface KamOrderResolveResult {
 const wireEnqId = (v: string | undefined): string =>
   String(v || '').trim().replace(/\s+/g, '');
 
-// Matching is case-insensitive on both sides, but the id sent to the backend
-// keeps its original case so the indexed __in lookup can hit exactly.
 const normalizeEnqId = (v: string | undefined): string => wireEnqId(v).toUpperCase();
 
 export type B2BDealRef = Pick<CRMLeadRow, 'id' | 'clientPhone' | 'cartValue' | 'status'>;
@@ -111,9 +109,6 @@ export async function resolveKamOrders(
   const needing = ordersNeedingResolve(orders);
   const head = needing.slice(0, ENQ_RESOLVE_CAP);
 
-  // The caller resolves the whole board by enquiry id in the same request that
-  // fetches the client histories. Anything that comes back unmatched falls back
-  // to the per-phone search, which is what this used to do for every row.
   const byEnqId = indexDeals(deals);
 
   const resolutions = await pooled(head, ORDER_DETAIL_CONCURRENCY, async (o): Promise<KamOrderResolution> => {
@@ -250,9 +245,6 @@ export function clientMetricsFrom(
   };
 }
 
-// `loaded` gates clientStatus: false reads "Unknown", true with no date reads
-// "Inactive". Pass ok=false when the history request failed so a client is
-// never labelled Inactive on the strength of an answer we never received.
 export function orderDatesFromAggregates(
   aggregates: Record<string, ClientOrderHistory>,
   phones: string[],

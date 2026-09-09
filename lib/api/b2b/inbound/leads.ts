@@ -108,10 +108,6 @@ export async function fetchLeadDeals(phone: string | number): Promise<import('..
   }
 }
 
-// One `/crm/leads/?q=<phone>` per phone per session, shared by every consumer:
-// KAM enquiry resolution, client order rows and the drawer lookups all want the
-// same page of deal tickets for a phone. Callers filter the rows themselves, so
-// this caches the raw response and leaves interpretation to them.
 const phoneLeadCache = new Map<string, Promise<CRMLeadRow[]>>();
 
 export function fetchLeadsByPhone(phone: string): Promise<CRMLeadRow[]> {

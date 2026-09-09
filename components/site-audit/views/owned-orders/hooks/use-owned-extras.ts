@@ -20,8 +20,6 @@ export function useOwnedExtras(people: BmProfile[], deps: string) {
     run();
     const tid = setInterval(() => { if (!document.hidden) run(); }, 30000);
     return () => { alive = false; clearInterval(tid); };
-    // `deps` is a stable key for `people` — the array identity changes on every
-    // render of the parent, which would otherwise re-fetch in a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deps]);
 

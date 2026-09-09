@@ -36,8 +36,6 @@ export default function LeadershipBoard() {
 
   useEffect(() => {
     let alive = true;
-    // The rep leaderboard is the only place inboundOwnerTotals is rendered, so
-    // this tab asks for it and the other three do not.
     Promise.all([fetchB2BData(), fetchInboundOwnerTotals()])
       .then(([d, inboundOwnerTotals]) => {
         if (alive) setData(computeLeadership({ ...d, inboundOwnerTotals }, new Date()));

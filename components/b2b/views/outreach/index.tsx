@@ -48,8 +48,6 @@ export default function OutreachLeads() {
     setLoading(true);
     setError(null);
     fetchOutreachLeads({ createdFrom, createdTo })
-      // A failed read is reported, never rendered as "no leads" — a BM would
-      // read an empty board as a day with nothing on it.
       .then(setLeads)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load outreach leads'))
       .finally(() => setLoading(false));

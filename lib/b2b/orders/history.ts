@@ -46,9 +46,6 @@ function absorb(
   }
 }
 
-// A phone the backend simply has no deals for is a real zero and worth caching.
-// A phone we never got an answer for is not: caching that would keep every card
-// on this page reading zero until a full reload, and the cache has no TTL.
 function zeroFill(keys: string[], out: Record<string, ClientOrderHistory>, cache: boolean): void {
   for (const key of keys) {
     if (out[key]) continue;
@@ -102,15 +99,9 @@ export interface B2BBulk {
 
   deals: B2BBulkResult['deals'];
 
-  // False when the request failed. Callers must not present a missing history
-  // as a real zero — a client with unknown dates reads "Unknown", not
-  // "Inactive", which is what the per-phone path used to do.
   ok: boolean;
 }
 
-// The dashboard and the KAM board both need lifetime totals per client phone
-// and the deal behind each enquiry id. Neither depends on the other, so one
-// request answers both instead of two sequential round trips.
 export async function fetchB2BBulk(
   phones: (string | undefined)[],
   enquiryIds: string[],

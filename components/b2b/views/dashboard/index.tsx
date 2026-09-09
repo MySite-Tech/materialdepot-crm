@@ -32,9 +32,6 @@ export default function B2BDashboard() {
   const [clientCount, setClientCount] = useState(0);
   const [unresolvedOrders, setUnresolvedOrders] = useState(0);
 
-  // Only the pipeline and vertical stats depend on the range selector, so the
-  // board data, KAM resolution and client histories load once and survive a
-  // range switch instead of being re-fetched with every click.
   const loadBase = useCallback(async () => {
     setBaseBusy(true);
     try {
@@ -91,8 +88,6 @@ export default function B2BDashboard() {
     try {
       const now = new Date();
       const selected = rangeFor(range, now);
-      // One stats request carries both the per-vertical groups and the overall
-      // B2B pipeline (total_branch), so the range selector costs one call.
       const [selectedStats, monthStats] = await Promise.all([
         fetchVerticalStats(selected, B2B_STATS_BRANCH),
         range === 'month' ? Promise.resolve(null) : fetchVerticalStats(rangeFor('month', now)),
@@ -132,10 +127,6 @@ export default function B2BDashboard() {
 
   const achievedPct = monthlyTarget > 0 ? Math.round((monthRevenue / monthlyTarget) * 100) : 0;
   const overallPipeline = verticals.reduce((s, v) => s + v.active.value, 0);
-  // The colour is assigned here, on the FULL list, and travels with the row —
-  // the donut drops zero-value sources and the legend does not, so colouring by
-  // position in either list shifts every source after a Rs 0 one and the legend
-  // then names the wrong slice (HYD's revenue read as Outreach's).
   const revenueBySource = verticals.map((v, i) => ({
     source: v.label,
     value: v.won.value,
