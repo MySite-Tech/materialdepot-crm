@@ -8,16 +8,15 @@ import { DealResults } from './deal-results';
 import { RaiseModal } from './raise-modal';
 import { SearchForm } from './search-form';
 
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE, RAISE_OPTIONS, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from '../constants/raise';
-import { RaiseField } from './fields';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from '../constants/raise';
 import { AssociatedDeal, ContactResult, Props } from '../types/raise';
-import { cfDisplayValue, extractEscSupport, formatCurrency, friendlyPatchError, isSalesDeal } from '../utils/raise';
-import { KylasDealInfo, SyncEstimateResult, fetchKylasDealInfo, syncEstimate } from '@/lib/mockApi';
+import { extractEscSupport, isSalesDeal } from '../utils/raise';
+import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/mockApi';
 import { Deal, DealsSearchResponse } from '@/lib/types/index';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
-  const [query, setQuery] = useState("");
+export default function MobileRaiseClient({ onViewDeal }: Props) {
+  const [, setQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -260,10 +259,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     ) {
       autoSyncMissingDeal(q);
     }
-  }
-
-  function handleExpandDeal(deal: Deal) {
-    setExpandedDealId(expandedDealId === deal.id ? null : deal.id);
   }
 
   return (

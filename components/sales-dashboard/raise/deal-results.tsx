@@ -5,7 +5,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/raise';
 import { cfDisplayValue, formatCurrency } from '../utils/raise';
 import { Dispatch, SetStateAction } from 'react';
 
-export function DealResults({ currentPage, dealContact, deals, getOngoing, goToPage, pageLoading, selectedDeal, setExpandedDealId, setSelectedDeal, totalCount, totalPages }: {
+export function DealResults({ currentPage, dealContact, deals, goToPage, pageLoading, selectedDeal, setExpandedDealId, setSelectedDeal, totalCount, totalPages }: {
   currentPage: number;
   dealContact: Record<number, string>;
   deals: Deal[];
@@ -21,7 +21,6 @@ export function DealResults({ currentPage, dealContact, deals, getOngoing, goToP
   return (
     <div className="space-y-2">
       {deals.map((deal) => {
-        const escDeals = getOngoing(deal.name);
         const existingSupport = cfDisplayValue(deal.customFieldValues?.["cfRaiseSupportRequest"]);
         const existingEscalation = cfDisplayValue(deal.customFieldValues?.["cfRaiseEscalation"]);
         const contactName = dealContact[deal.id] ?? "User";

@@ -1,5 +1,5 @@
 import { kylasFetch } from './kylasClient';
-import { API_BASE_URL, getToken, mdFetch } from './client';
+import { API_BASE_URL, getToken } from './client';
 
 export interface SyncEstimateResult {
   success: boolean;

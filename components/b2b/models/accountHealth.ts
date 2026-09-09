@@ -1,4 +1,4 @@
-export interface HealthSubject {
+interface HealthSubject {
   id: string;
   company: string;
   kam?: string;
@@ -30,7 +30,7 @@ export interface Escalation {
 export type HealthStatus = 'green' | 'amber' | 'red';
 
 export const HEALTH_WINDOW_DAYS = 60;
-export const HEALTH_DECAY_DAYS = 30;
+const HEALTH_DECAY_DAYS = 30;
 
 export const HEALTH_META: Record<HealthStatus, { label: string; color: string; description: string }> = {
   green: { label: 'Healthy',  color: '#22C55E', description: `No escalations in the last ${HEALTH_WINDOW_DAYS} days` },
@@ -45,16 +45,16 @@ function toUtcMs(day: string): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-export function daysBetween(from: string, to: string): number | null {
+function daysBetween(from: string, to: string): number | null {
   const a = toUtcMs(from);
   const b = toUtcMs(to);
   if (a === null || b === null) return null;
   return Math.floor((b - a) / DAY_MS);
 }
 
-export const isResolved = (e: Escalation): boolean => !!e.resolvedAt;
+const isResolved = (e: Escalation): boolean => !!e.resolvedAt;
 
-export function countsTowardScore(e: Escalation, today: string): boolean {
+function countsTowardScore(e: Escalation, today: string): boolean {
   const age = daysBetween(e.raisedAt, today);
   if (age === null || age < 0) return false;
   if (age > HEALTH_WINDOW_DAYS) return false;
@@ -64,10 +64,10 @@ export function countsTowardScore(e: Escalation, today: string): boolean {
   return sinceResolved < HEALTH_DECAY_DAYS;
 }
 
-export const hasOpenTier1 = (escalations: Escalation[]): boolean =>
+const hasOpenTier1 = (escalations: Escalation[]): boolean =>
   escalations.some((e) => e.tier === 1 && !isResolved(e));
 
-export interface AccountHealth {
+interface AccountHealth {
   status: HealthStatus;
   activeCount: number;
   escalationCount: number;
@@ -142,7 +142,7 @@ export function scoreAccount(escalations: Escalation[] | undefined, today: strin
   };
 }
 
-export interface AccountHealthRow<T extends HealthSubject = HealthSubject> {
+interface AccountHealthRow<T extends HealthSubject = HealthSubject> {
   client: T;
   health: AccountHealth;
   activePipeline: number;

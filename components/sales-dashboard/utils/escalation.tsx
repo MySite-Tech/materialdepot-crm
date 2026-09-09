@@ -1,8 +1,8 @@
 'use client';
 
-import { ESC_SUPPORT_PIPELINE_RULE, PRESETS, SEARCH_FIELDS, TRACKED_FIELDS } from '../constants/escalation';
+import { ESC_SUPPORT_PIPELINE_RULE, SEARCH_FIELDS, TRACKED_FIELDS } from '../constants/escalation';
 import { DateFilter, Preset, StatusFilter, TimelineEntry } from '../types/escalation';
-import { CallLog, Deal } from '@/lib/types/index';
+import { Deal } from '@/lib/types/index';
 
 export function buildBody(query: string, fromIso: string | null, toIso: string | null) {
   const rules: unknown[] = [ESC_SUPPORT_PIPELINE_RULE];
@@ -77,33 +77,9 @@ function presetRange(p: Preset): { from: string; to: string } {
   }
 }
 
-function detectPreset(from: string, to: string): Preset | "all" | "" {
-  if (!from && !to) return "all";
-  for (const { value } of PRESETS) {
-    const r = presetRange(value);
-    if (r.from === from && r.to === to) return value;
-  }
-  return "";
-}
-
 export function isEscalationOrSupport(deal: Deal) {
   const p = (deal.pipeline?.name ?? "").toLowerCase();
   return p.includes("escalation") || p.includes("support");
-}
-
-function isEscalationPipeline(deal: Deal) {
-  return (deal.pipeline?.name ?? "").toLowerCase().includes("escalation");
-}
-
-function formatDateTime(iso: string | null | undefined) {
-  if (!iso) return "\u2014";
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function cfDisplayValue(val: unknown): string {
@@ -118,45 +94,6 @@ export function cfDisplayValue(val: unknown): string {
   if (typeof val === "object" && (val as { name?: string }).name)
     return (val as { name: string }).name;
   return String(val);
-}
-
-function stripHtml(html: string) {
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim();
-}
-
-function normalizePhone(p: string | null | undefined) {
-  return (p ?? "").replace(/\D/g, "");
-}
-
-function relationMatches(
-  call: CallLog,
-  contactId: number,
-  leadIds: number[]
-): boolean {
-  const rels = call.relatedTo ?? [];
-  return rels.some(
-    (r) =>
-      (r.entity === "contact" && r.id === contactId) ||
-      (r.entity === "lead" && leadIds.includes(r.id))
-  );
-}
-
-function phoneMatches(call: CallLog, phones: string[]): boolean {
-  if (phones.length === 0) return false;
-  const candidates = [call.phoneNumber, call.originator, call.receiver]
-    .map(normalizePhone)
-    .filter((s) => s.length >= 7);
-  if (candidates.length === 0) return false;
-  return candidates.some((c) =>
-    phones.some((p) => {
-      const a = c.slice(-10);
-      const b = p.slice(-10);
-      return a === b;
-    })
-  );
 }
 
 function isTrackedField(key: string) {
@@ -193,7 +130,6 @@ export function parseTimeline(feeds: { id: number; action?: { event?: string; na
     const by = f.performedBy?.name ?? "System";
     const at = f.createdAt ?? "";
     const newP = f.payload?.new ?? {};
-    const oldP = f.payload?.old ?? {};
 
     if (event === "CREATED") {
       entries.push({ id: f.id, event: "Created", description: "", performedBy: by, createdAt: at, icon: "create" });

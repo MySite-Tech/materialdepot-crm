@@ -1,4 +1,4 @@
-export type WpVendor = { k: string; label: string; dispatchFrom: string; note?: string };
+type WpVendor = { k: string; label: string; dispatchFrom: string; note?: string };
 
 export const WP_VENDORS: WpVendor[] = [
   { k: 'indura', label: 'Indura', dispatchFrom: 'Hyderabad' },
@@ -7,7 +7,7 @@ export const WP_VENDORS: WpVendor[] = [
   { k: 'other', label: 'Other vendor', dispatchFrom: 'vendor' },
 ];
 
-export type WpStage = { k: string; label: string; group: string; slaH?: number; soft?: boolean; round?: boolean; decision?: boolean };
+type WpStage = { k: string; label: string; group: string; slaH?: number; soft?: boolean; round?: boolean; decision?: boolean };
 
 export const WP_STAGES: WpStage[] = [
   { k: 'dimensions_shared', label: 'Dimensions shared with vendor', group: 'prepress', slaH: 6 },
@@ -24,7 +24,7 @@ export const WP_STAGES: WpStage[] = [
   { k: 'install_scheduled', label: 'Installation scheduled', group: 'logistics' },
 ];
 
-export type WpDecisionKey = 'approved' | 'changes_suggested' | 'no_reply' | 'cancelled';
+type WpDecisionKey = 'approved' | 'changes_suggested' | 'no_reply' | 'cancelled';
 export const WP_DECISIONS: Array<{ k: WpDecisionKey; l: string; terminalOk?: boolean; loops?: boolean; cancels?: boolean }> = [
   { k: 'approved', l: 'Approved by client', terminalOk: true },
   { k: 'changes_suggested', l: 'Changes suggested', loops: true },
@@ -34,7 +34,7 @@ export const WP_DECISIONS: Array<{ k: WpDecisionKey; l: string; terminalOk?: boo
 
 export const WP_ROUND_KEYS = ['render_generated', 'render_to_bm', 'render_to_client', 'client_approval'];
 
-export type WpRound = {
+type WpRound = {
   n: number;
   render_generated?: { at: string; by?: { email?: string; name?: string }; note?: string };
   render_to_bm?: { at: string; by?: { email?: string; name?: string }; note?: string };
@@ -56,7 +56,7 @@ export type WpRow = {
 export function wpVendor(k?: string | null): WpVendor {
   return WP_VENDORS.find((v) => v.k === k) || { k: k || 'other', label: k || 'Unknown vendor', dispatchFrom: 'vendor' };
 }
-export function wpStage(k: string): WpStage {
+function wpStage(k: string): WpStage {
   return WP_STAGES.find((s) => s.k === k) || { k, label: k, group: 'logistics' };
 }
 export function wpStageLabel(k: string, vendorKey?: string | null): string {
@@ -81,7 +81,7 @@ export function wpStageAt(row: WpRow, k: string): string | null {
   return stagesOf(row)[k]?.at || null;
 }
 
-export function wpDecision(row: WpRow): WpDecisionKey | null {
+function wpDecision(row: WpRow): WpDecisionKey | null {
   const rs = wpRounds(row);
   const cur = rs[rs.length - 1] || {};
   return cur.approval?.decision || null;
@@ -108,7 +108,7 @@ export function wpNext(row: WpRow | null | undefined): WpNext | null {
   return null;
 }
 
-export function wpPrevAt(row: WpRow): string | null {
+function wpPrevAt(row: WpRow): string | null {
   const next = wpNext(row);
   if (!next) return null;
   const order = WP_STAGES.map((s) => s.k);
@@ -172,7 +172,7 @@ export const WP_BUCKETS: Array<{ k: WpBucketKey; l: string; cls: string }> = [
   { k: 'cancelled', l: 'Cancelled', cls: '' },
 ];
 
-export type WpDuration = { k: string; hours: number; round: number | null; vendor: string };
+type WpDuration = { k: string; hours: number; round: number | null; vendor: string };
 
 export function wpDurations(row: WpRow | null | undefined): WpDuration[] {
   if (!row) return [];

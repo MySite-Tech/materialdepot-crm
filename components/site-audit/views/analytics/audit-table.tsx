@@ -1,7 +1,5 @@
 'use client';
 
-import type { TileProps } from './cards';
-
 import { ArrCell, NpsCard, PctCard, RatingCard, RatingCell } from './cards';
 
 import { CatAnalyticsApi } from '../../data/catAnalytics';

@@ -28,7 +28,7 @@ const RANK_ORDER = DEAL_PIPELINE.indexOf('Order Placed');
 export type FunnelStepKey =
   | 'audit_done' | 'cart_created' | 'quote_shared' | 'order_placed' | 'install_ordered' | 'installed';
 
-export type FunnelStepDef = { k: FunnelStepKey; label: string; short: string; hint: string };
+type FunnelStepDef = { k: FunnelStepKey; label: string; short: string; hint: string };
 
 export const FUNNEL_STEPS: FunnelStepDef[] = [
   { k: 'audit_done', label: 'Site audit completed', short: 'Audit', hint: 'The auditor finished the visit and signed off the job card.' },
@@ -39,7 +39,7 @@ export const FUNNEL_STEPS: FunnelStepDef[] = [
   { k: 'installed', label: 'Installation completed', short: 'Installed', hint: 'The installer finished the job on site.' },
 ];
 
-export type FunnelState =
+type FunnelState =
 
   | 'done'
   /* a LATER step is done, so this one must have happened, but nothing on this
@@ -55,7 +55,7 @@ export type FunnelState =
   /* not reached */
   | 'pending';
 
-export type FunnelStep = FunnelStepDef & {
+type FunnelStep = FunnelStepDef & {
   state: FunnelState;
   at: string | null;
   ref: string;
@@ -80,7 +80,7 @@ export type Funnel = {
   pipelineKnown: boolean;
 };
 
-export type FunnelInput = {
+type FunnelInput = {
 
   auditDate: string | null;
   auditCompleted: boolean;
@@ -244,7 +244,7 @@ export function forgetDeals(phone: string | null | undefined): void {
   if (k) dealCache.delete(k);
 }
 
-export const FUNNEL_BADGE: Record<FunnelStepKey, string> = {
+const FUNNEL_BADGE: Record<FunnelStepKey, string> = {
   audit_done: 'bg-gray-100 text-gray-600',
   cart_created: 'bg-indigo-100 text-indigo-700',
   quote_shared: 'bg-amber-100 text-amber-800',

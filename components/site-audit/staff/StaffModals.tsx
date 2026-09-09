@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CITIES, EXIT_REASONS, ROLES, exitColumnsAvailable } from '../siteAuditShared';
 import { createFieldStaff, restoreFieldStaff, retireFieldStaff, validateStaffInput } from './staffDirectory';
 
-export const FIELD_STAFF_ROLES: Array<[string, string]> = [
+const FIELD_STAFF_ROLES: Array<[string, string]> = [
   ['site_auditor', 'Site Auditor'],
   ['installer', 'Site Installer'],
   ['auditor_installer', 'Site Auditor + Installer'],
@@ -14,7 +14,7 @@ export const INSTALLER_TYPES: Array<[string, string]> = [
   ['wallpaper', 'Wallpaper'],
   ['wallpanel', 'Wall Panels'],
 ];
-export const needsInstallerType = (r: string) => r === 'installer' || r === 'auditor_installer';
+const needsInstallerType = (r: string) => r === 'installer' || r === 'auditor_installer';
 
 const inputCls = 'w-full rounded-md border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-blue-400';
 

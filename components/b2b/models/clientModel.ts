@@ -1,12 +1,12 @@
-export type { ClientEntityType, ClientSource, ClientContact, GstCheck, ClientGst, GstValidation, ClientMergeRecord, KamAssignment, ClientEntity, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, DuplicateEvidence, DuplicateSuggestion, MergeField, MergeConflict, MergeChoices, MergeResult, ClientFieldInput, ClientFieldSpec } from '../types/client';
-export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, GST_STATE_NAMES, DEAL_ORDER_STATUSES, DEAL_LOST_STATUSES, INTERACTION_TYPES, TEMPERATURE_MIN, TEMPERATURE_MAX, TEMPERATURE_BANDS, EMPTY_ORDER_METRICS, ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL, CLIENT_FIELDS, CLIENT_FIELDS_BY_SECTION } from '../constants/client';
-export { clientTypeFromLead, contactLabel, normalizeContactNumber, isValidContactNumber, primaryContact, contactNumbers, normalizeGst, gstCheckDigit, clampTemperature, monthsBefore, normalizeCompanyName } from '../utils/client';
+export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, DuplicateSuggestion, MergeChoices } from '../types/client';
+export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_MAX, TEMPERATURE_BANDS, ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL } from '../constants/client';
+export { clientTypeFromLead, contactLabel, normalizeContactNumber, isValidContactNumber, primaryContact, contactNumbers, normalizeGst, clampTemperature, normalizeCompanyName } from '../utils/client';
 export { validateGst, gstNumbers } from './client/gst';
-export { dealIsOrder, dealIsLost, dealIsOpen, averageOrderValue } from './client/deals';
-export { sortedInteractions, latestInteraction, currentTemperature, previousTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './client/interactions';
+export { dealIsOrder, dealIsOpen, averageOrderValue } from './client/deals';
+export { sortedInteractions, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './client/interactions';
 export { clientStatus, daysToInactive } from './client/status';
 export { findDuplicates } from './client/duplicates';
 export { mergeConflicts, mergeClients } from './client/merge';
 export { clientGateErrors, clientEnrichmentGaps } from './client/gates';
-export type { Segment, FieldOwner } from './inboundModel';
+export type { Segment } from './inboundModel';
 export { SEGMENTS, istToday } from './inboundModel';

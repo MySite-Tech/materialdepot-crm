@@ -2,7 +2,7 @@
 
 import { InstallOrder, Subjob } from '../install-ops/types';
 
-export type AuditSource = 'material_depot' | 'customer' | null;
+type AuditSource = 'material_depot' | 'customer' | null;
 
 export type OwnedInstall = {
   id: string; pi: string; po: string[]; bm: string; name: string; phone: string; addr: string;

@@ -2,20 +2,16 @@
 
 import { computeAnalyticsMetrics } from './metrics';
 
-import { NpsCard, PctCard, RatingCard, ArrCell, RatingCell, pc, pcBarClass, pcColorClass } from './cards';
-
 import { AnalyticsAuditTable } from './audit-table';
 import { AnalyticsFilters } from './filters';
 import { AnalyticsFootnote } from './footnote';
 import { AnalyticsInstallTable } from './install-table';
 
 import { CatAnalyticsApi } from '../../data/catAnalytics';
-import { JOB_STATUS, NPS_BAND_LABELS, NPS_HOUSE_NOTE, avgScore, npsFrom } from '../../siteAuditShared';
 import { _anArrivalStats, _anAttachAuditRatings, _anAttachInstallRatings, _anAuditorMap, _anInstallAttempts, _anInstallerMap } from './aggregate';
-import { BookExecSection } from './book-exec';
 import { DrillModal } from './drill';
-import { AnalyticsData, Drill, DrillRow } from '../../types/analytics';
-import { _anAuditSigned, _anDateIST, _anDstr, _anInstallSigned, npsSummary } from '../../utils/analytics';
+import { AnalyticsData } from '../../types/analytics';
+import { _anAuditSigned, _anDateIST, _anDstr, _anInstallSigned } from '../../utils/analytics';
 import { useMemo, useState } from 'react';
 
 export function AnalyticsBody({

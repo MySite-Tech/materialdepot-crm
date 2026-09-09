@@ -12,12 +12,8 @@ import { OutreachStatusCard } from './status-card';
 
 import { Selection } from '../../models/outreachModel';
 
-import { B2B_REPS, KAMS, LeadDeal, LeadNote, OutreachLead, fmtINR } from '../../models/mockData';
-import { COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, MAX_MEETINGS, MEETING_STATUSES, MeetingStatus, OUTREACH_ENRICHMENT_FIELD_COUNT, OUTREACH_LOST_REASONS, OUTREACH_STATUSES, OUTREACH_STATUS_HINT, OutreachMeeting, OutreachStatus, SEGMENTS, SELECTIONS, Segment, canScheduleMeeting, hasMet, istToday, meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors, outreachStatusPrompts } from '../../models/outreachModel';
-import EcPicker from '../../ui/EcPicker';
-import { LostReasonSelect } from '../../ui/exportUtils';
-import { Empty, Field, FollowUpChip, GateErrors, ReadValue, SectionCard, Spinner, errorInputCls, fmtDay, inputCls } from '../../ui/inboundChips';
-import { MeetingStatusChip, OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreachChips';
+import { KAMS, LeadDeal, LeadNote, OutreachLead } from '../../models/mockData';
+import { MAX_MEETINGS, OutreachMeeting, canScheduleMeeting, hasMet, istToday, meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors, outreachStatusPrompts } from '../../models/outreachModel';
 import { SaveState } from '../../types/outreach-drawer';
 import { nowIso } from '../../utils/outreach-drawer';
 import { EnqLookup, fetchKamLoad, lookupEnqId, upsertOutreachLead } from '@/lib/b2bLeads';

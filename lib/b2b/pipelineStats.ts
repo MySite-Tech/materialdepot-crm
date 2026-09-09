@@ -1,6 +1,6 @@
 import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStats } from '@/lib/mockApi';
 
-export const B2B_BRANCH = 'B2B';
+const B2B_BRANCH = 'B2B';
 
 export interface B2BPipelineStats {
   total: CRMLeadsStatsBucket;

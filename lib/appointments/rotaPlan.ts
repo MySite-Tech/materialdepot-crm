@@ -1,9 +1,9 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { BRANCHES, Branch, isValidBranchName } from "./appt-shared";
 
-export type RotaMember = { id: string; name: string };
+type RotaMember = { id: string; name: string };
 export type RotaBranchData = { members: RotaMember[]; weeks: Record<string, Record<string, string>> };
-export type RotaPlan = { version: 2; branches: Record<Branch, RotaBranchData> };
+type RotaPlan = { version: 2; branches: Record<Branch, RotaBranchData> };
 
 const TABLE = "rota_plan";
 
@@ -19,11 +19,11 @@ function admin(): SupabaseClient {
   return _admin;
 }
 
-export function emptyBranchData(): RotaBranchData {
+function emptyBranchData(): RotaBranchData {
   return { members: [], weeks: {} };
 }
 
-export function emptyPlan(): RotaPlan {
+function emptyPlan(): RotaPlan {
   const branches = {} as Record<Branch, RotaBranchData>;
   for (const b of BRANCHES) branches[b] = emptyBranchData();
   return { version: 2, branches };

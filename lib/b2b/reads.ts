@@ -30,7 +30,7 @@ export async function fetchRows(
   return (data || []) as B2BLeadRow[];
 }
 
-export interface InboundBoardPage {
+interface InboundBoardPage {
   leads: InboundLead[];
   page: number;
   hasMore: boolean;

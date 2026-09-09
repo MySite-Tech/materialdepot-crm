@@ -57,14 +57,14 @@ async function pooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<
 
 export const ENQ_RESOLVE_CAP = 60;
 
-export interface KamOrderResolution {
+interface KamOrderResolution {
   order: KamOrder;
   outcome: 'matched' | 'no-match' | 'unavailable' | 'skipped';
 
   resolved?: KamOrder;
 }
 
-export interface KamOrderResolveResult {
+interface KamOrderResolveResult {
   resolutions: KamOrderResolution[];
 
   overflow: number;

@@ -4,11 +4,10 @@ import {
   type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder,
 } from './inboundModel';
 import {
-  OUTREACH_STATUSES, OUTREACH_STATUS_COLORS,
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
 } from './outreachModel';
 
-export type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
+type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
 
 export type InboundStage = InboundStatus;
 export const INBOUND_STAGES: InboundStatus[] = INBOUND_STATUSES;
@@ -19,11 +18,8 @@ export const NEW_KYLAS_STAGES: { id: number; label: string }[] = [
   { id: 220290, label: 'Won' },
 ];
 
-export type ProductCategory = 'Tiles' | 'Plywood' | 'Laminate' | 'Liner Laminate' | 'Panel' | 'Others';
-export const PRODUCT_CATEGORIES: ProductCategory[] = ['Tiles', 'Plywood', 'Laminate', 'Liner Laminate', 'Panel', 'Others'];
-
-export type CallOutcome = 'Connected' | 'RNR' | null;
-export interface CallStep {
+type CallOutcome = 'Connected' | 'RNR' | null;
+interface CallStep {
   label: string;
   outcome: CallOutcome;
   ts?: string;
@@ -117,9 +113,6 @@ export interface InboundLead {
 
   expectedClosure?: string;
 }
-
-export type OutreachStage = OutreachStatus;
-export const OUTREACH_STAGES: OutreachStatus[] = OUTREACH_STATUSES;
 export type { OutreachStatus, OutreachMeeting, MeetingStatus, CompanyType };
 
 export interface OutreachLead {
@@ -168,27 +161,17 @@ export interface OutreachLead {
   value: number;
 }
 
-export type KamSource = 'Existing' | 'Inbound' | 'Outbound';
-
-export const B2B_LOST_REASONS = [
-  'Selection Not Liked',
-  'Price Issue',
-  'Timeline/Delivery Delay',
-] as const;
-
 export const KAMS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
 export const B2B_ADMINS = ['Krishna Bhagavatula'];
 
 export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATUS_COLORS;
 
-export const OUTREACH_STAGE_COLORS: Record<OutreachStatus, string> = OUTREACH_STATUS_COLORS;
-
 export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
 
 export type RepRole = 'KAM' | 'Inbound' | 'Outbound';
 
-export interface RepTargetConfig {
+interface RepTargetConfig {
   rep: string;
   role: RepRole;
   revenueTargetL: number;
@@ -212,7 +195,7 @@ export const REP_ROLE_COLORS: Record<RepRole, string> = {
   Outbound: '#EAB308',
 };
 
-export const B2B_MONTHLY_TARGET_L = 120;
+const B2B_MONTHLY_TARGET_L = 120;
 
 export interface TargetStore {
   monthlyTargetL: number;
@@ -234,9 +217,3 @@ export const fmtL = (n: number): string => {
 };
 
 export const fmtINR = (n: number): string => '₹' + Number(n || 0).toLocaleString('en-IN');
-
-export const ordinal = (n: number): string => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};

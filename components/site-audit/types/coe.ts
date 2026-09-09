@@ -25,7 +25,7 @@ export type CoeInstall = {
   subjobs: CoeSubjob[]; log: any[];
 };
 
-export type CoeSubjobAssignment = { installer_email?: string; installer_name?: string; primary?: boolean };
+type CoeSubjobAssignment = { installer_email?: string; installer_name?: string; primary?: boolean };
 
 export type CoeSubjob = {
   id: string; type: string; status: string; assignments?: CoeSubjobAssignment[];

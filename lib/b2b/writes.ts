@@ -24,7 +24,7 @@ function writeErrorMessage(e: unknown): string {
   return String(e);
 }
 
-export async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | null> {
+async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | null> {
   try {
     const { error } = await supabase.from(TABLE).upsert(row, { onConflict });
     if (error) throw error;

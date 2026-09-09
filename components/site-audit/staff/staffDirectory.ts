@@ -5,7 +5,7 @@ import {
 } from '../siteAuditShared';
 import { addUser, fetchUsers, updateUser } from '@/lib/mockApi';
 
-export type CreateStaffInput = {
+type CreateStaffInput = {
   name: string;
   email: string;
   phone: string;
@@ -17,7 +17,7 @@ export type CreateStaffInput = {
   withCrmLogin?: boolean;
 };
 
-export type CreateStaffResult = { profileId: string | null; crmOk: boolean; crmNote: string };
+type CreateStaffResult = { profileId: string | null; crmOk: boolean; crmNote: string };
 
 const FIELD_STAFF_CRM_ROLE = 'post_sales';
 
@@ -82,7 +82,7 @@ export async function createCrmLoginFor(p: { name: string; contact: string | nul
   });
 }
 
-export type RetireResult = { crmOk: boolean; crmNote: string };
+type RetireResult = { crmOk: boolean; crmNote: string };
 
 export async function retireFieldStaff(
   p: { id: string; name: string; contact: string | null },

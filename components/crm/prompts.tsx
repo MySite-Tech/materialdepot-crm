@@ -1,45 +1,11 @@
 'use client';
 
-import { Lead } from '../../types/crm';
-
-import { DateEditPopupProps, DeleteConfirmProps, FollowUpRemarkPromptProps } from './types/crm';
+import { DateEditPopupProps } from './types/crm';
 import { fmtDate } from './utils/crm';
 import { useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 
-function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }: FollowUpRemarkPromptProps) {
-  const [text, setText] = useState('');
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
-      <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[400px]">
-        <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
-          <span className="font-semibold text-sm">Follow-up Date Changed</span>
-        </div>
-        <div className="p-5">
-          <p className="mb-3 text-[13px]">
-            <span className="text-gray-400">{fmtDate(oldDate)}</span>
-            {' → '}
-            <span className="font-semibold">{fmtDate(newDate)}</span>
-          </p>
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">REASON FOR CHANGE *</label>
-          <textarea
-            className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full min-h-[80px] mt-1 resize-y"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter reason for changing follow-up date..."
-            autoFocus
-          />
-          <div className="flex gap-2 mt-4 justify-end">
-            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
-            <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer ${text.trim() ? 'opacity-100' : 'opacity-50'}`} disabled={!text.trim()} onClick={() => onConfirm(text.trim())}>Confirm</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function DateEditPopup({ field, currentDate, followUpDate, closureDate, assignedTo, onSave, onCancel }: DateEditPopupProps) {
+export function DateEditPopup({ field, currentDate, followUpDate, closureDate, onSave, onCancel }: DateEditPopupProps) {
   const label = field === 'followUpDate' ? 'Follow-up Date' : 'Closure Date';
   const [newDate, setNewDate] = useState(currentDate || '');
   const [remark, setRemark] = useState('');
@@ -130,25 +96,6 @@ export function DateEditPopup({ field, currentDate, followUpDate, closureDate, a
           <div className="flex gap-2 mt-3">
             <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
             <button className={`bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer flex-1 ${warning || !newDate || (remarkRequired && !remark.trim()) ? 'opacity-50' : 'opacity-100'}`} disabled={!!warning || !newDate || (remarkRequired && !remark.trim())} onClick={handleSave}>Save</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DeleteConfirm({ leadId, onConfirm, onCancel }: DeleteConfirmProps) {
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
-      <div className="bg-white rounded-lg overflow-hidden w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] max-w-[360px]">
-        <div className="bg-[#1A1A1A] text-white px-5 py-3 flex justify-between items-center">
-          <span className="font-semibold text-sm">Delete Lead</span>
-        </div>
-        <div className="p-5 text-center">
-          <p className="mb-4 text-[13px]">Are you sure you want to delete lead <strong>{leadId}</strong>? This action cannot be undone.</p>
-          <div className="flex gap-2 justify-center">
-            <button className="bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={onCancel}>Cancel</button>
-            <button className="bg-red-500 text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer" onClick={onConfirm}>Delete</button>
           </div>
         </div>
       </div>

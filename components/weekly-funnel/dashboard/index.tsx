@@ -139,7 +139,7 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
                 {!loading && weeklyRows.length === 0 && (
                   <tr><td colSpan={12} className="px-4 py-8 text-center text-[12px] text-gray-400">No data</td></tr>
                 )}
-                {weeklyRows.map((row, i) => {
+                {weeklyRows.map((row, _i) => {
                   const isTotal = row.week === 'Total';
                   const isNew = row.customer_type === 'New';
                   return (

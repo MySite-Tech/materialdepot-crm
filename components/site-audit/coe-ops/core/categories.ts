@@ -4,7 +4,7 @@ function sortCats(list: string[]): string[] {
   return [...new Set(list)].sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b));
 }
 
-export function tickedCategories(auditTicked: any): string[] {
+function tickedCategories(auditTicked: any): string[] {
   if (Array.isArray(auditTicked)) {
     return sortCats(auditTicked
       .map((x: any) => TICKED_LIST_LABELS[String(x || '').trim().toLowerCase()])

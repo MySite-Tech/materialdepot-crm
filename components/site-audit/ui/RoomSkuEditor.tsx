@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { sbGet, sbPatchLong } from '../siteAuditShared';
 
-export type SkuSaveResult = { ok: boolean; card?: any; error?: string; unchanged?: boolean };
-export type SkuSaver = (value: string) => Promise<SkuSaveResult>;
+type SkuSaveResult = { ok: boolean; card?: any; error?: string; unchanged?: boolean };
+type SkuSaver = (value: string) => Promise<SkuSaveResult>;
 
 function logEntry(label: string, sku: string, prev: string, attribution: string) {
   return {

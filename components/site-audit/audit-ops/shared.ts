@@ -9,7 +9,7 @@ export interface AuditSkuRow {
   link?: string;
 }
 
-export interface AuditService {
+interface AuditService {
   flooring?: AuditSkuRow[];
   wallpaper?: AuditSkuRow[];
   follow_up_date?: string | null;
@@ -20,7 +20,7 @@ export interface AuditService {
   issue?: string;
 }
 
-export interface AuditLogEntry {
+interface AuditLogEntry {
   t: string;
   d: string;
   by?: 'auto' | 'manual';
@@ -114,11 +114,9 @@ export const STATUS: Record<string, { l: string; badge: string }> = {
 export const AUTO_STATUSES = ['onway', 'atsite', 'completed'];
 export const FLOW = ['pending', 'created', 'scheduled', 'assigned', 'completed'];
 export const FLOW_LABELS = ['Pending', 'Service created', 'Scheduled', 'Auditor assigned', 'Completed'];
-
-const BOOKED = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite', 'completed', 'slot_reserved'];
 const CONFLICT_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite', 'slot_reserved'];
 
-export const FOLLOWUP_ACTIVE_STATUSES = ['created', 'call_na', 'reschedule'];
+const FOLLOWUP_ACTIVE_STATUSES = ['created', 'call_na', 'reschedule'];
 
 export function hasOpenFollowUp(o: AuditOrder): boolean {
   return !!(o.service && o.service.follow_up_date) && FOLLOWUP_ACTIVE_STATUSES.includes(o.status);
@@ -206,16 +204,8 @@ export function capFor(auditors: Auditor[], aid: string, ds: string | null): num
 export function offReason(a: Auditor, ds: string | null): string {
   return offDayReason(a, ds);
 }
-
-export function auditorsAvailable(auditors: Auditor[], ds: string): number {
-  return auditors.filter((a) => capFor(auditors, a.id, ds) >= 1).length;
-}
 export function dailyTotalCap(auditors: Auditor[], ds: string): number {
   return auditors.reduce((s, a) => s + capFor(auditors, a.id, ds), 0);
-}
-
-export function slotUsage(orders: AuditOrder[], date: string, slotId: string): number {
-  return orders.filter((o) => o.date === date && o.slot === slotId && BOOKED.includes(o.status)).length;
 }
 export function auditorLoad(orders: AuditOrder[], aid: string, date: string | null, excludeId?: string): number {
   if (!date) return 0;
@@ -240,7 +230,7 @@ export function auditorConflictOrder(
   }) || null;
 }
 
-export const PRE_CARD_STATUSES = [
+const PRE_CARD_STATUSES = [
   'slot_reserved', 'slot_converted', 'pending', 'created', 'call_na',
   'scheduled', 'assigned', 'callpending', 'reschedule',
 ];

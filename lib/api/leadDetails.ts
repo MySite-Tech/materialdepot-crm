@@ -1,6 +1,5 @@
 import { updateLeadProperties } from './clientProperties';
 import { mdFetch } from './client';
-import { fetchCRMLeads } from './crmLeads';
 
 export async function fetchLeadRemarks(ticketId: number): Promise<import('../../types/crm').Remark[]> {
   if (!ticketId) return [];

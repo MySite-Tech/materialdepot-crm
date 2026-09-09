@@ -1,10 +1,10 @@
-import { SQFT_PER_ROLL, loadSetting, saveSetting, sbGet } from '../siteAuditShared';
+import { SQFT_PER_ROLL, loadSetting, saveSetting } from '../siteAuditShared';
 import { sjEffectiveAssignments } from './shared';
 import type { FoamConfig, FoamLedgerRow, InstallOrder, Installer, PayRates, Subjob } from './types';
 
 export { loadSetting, saveSetting };
 
-export function istDate(iso?: string | null): string | null {
+function istDate(iso?: string | null): string | null {
   try {
     return new Date(new Date(iso as string).getTime() + 19800000).toISOString().substring(0, 10);
   } catch {
@@ -14,7 +14,7 @@ export function istDate(iso?: string | null): string | null {
 function catLogWord(t: string): string {
   return t === 'wallpaper' ? 'Wallpaper' : t === 'wallpanel' ? 'Wall Panels' : 'Flooring';
 }
-export function sjCompletionDate(o: InstallOrder, sj: Subjob): string | null {
+function sjCompletionDate(o: InstallOrder, sj: Subjob): string | null {
   const key = catLogWord(sj.type) + ' installation ' + (sj.status === 'partial' ? 'partially completed' : 'completed');
   let cd: string | null = null;
   for (const l of o.log || []) {
@@ -57,7 +57,7 @@ function foamLookup(map: Record<string, number>, i: Installer): number {
   return byId + byEmail + byName;
 }
 
-export function foamConsumption(orders: InstallOrder[], cfg: FoamConfig): Record<string, number> {
+function foamConsumption(orders: InstallOrder[], cfg: FoamConfig): Record<string, number> {
   const start = cfg.tracking_start || '';
   const by: Record<string, number> = {};
   for (const o of orders) {
@@ -77,7 +77,7 @@ export function foamConsumption(orders: InstallOrder[], cfg: FoamConfig): Record
   }
   return by;
 }
-export function foamIssued(ledger: FoamLedgerRow[]): Record<string, number> {
+function foamIssued(ledger: FoamLedgerRow[]): Record<string, number> {
   const by: Record<string, number> = {};
   for (const r of ledger) {
     const k = foamKey(r.installer_id, r.installer_email, r.installer_name);
@@ -87,7 +87,7 @@ export function foamIssued(ledger: FoamLedgerRow[]): Record<string, number> {
   return by;
 }
 
-export type FoamBalance = { inst: Installer; issued: number; consumed: number; balance: number; low: boolean };
+type FoamBalance = { inst: Installer; issued: number; consumed: number; balance: number; low: boolean };
 
 export function foamBalances(orders: InstallOrder[], installers: Installer[], ledger: FoamLedgerRow[], cfg: FoamConfig): FoamBalance[] {
   const cons = foamConsumption(orders, cfg);
@@ -97,9 +97,6 @@ export function foamBalances(orders: InstallOrder[], installers: Installer[], le
     const balance = issued - consumed;
     return { inst: i, issued, consumed, balance, low: balance < (cfg.threshold || 0) };
   }).sort((a, b) => a.balance - b.balance);
-}
-export function foamLowCount(orders: InstallOrder[], installers: Installer[], ledger: FoamLedgerRow[], cfg: FoamConfig): number {
-  return cfg.threshold > 0 ? foamBalances(orders, installers, ledger, cfg).filter((b) => b.low).length : 0;
 }
 
 export function ledgerFor(ledger: FoamLedgerRow[], inst: Installer): FoamLedgerRow[] {
@@ -135,8 +132,8 @@ function isCustomWpForPay(o: InstallOrder, sj: Subjob): boolean {
   return !!o.customWp;
 }
 
-export type PayoutRow = { o: InstallOrder; sj: Subjob; date: string; isPartial: boolean };
-export type PayoutLine = { pi: string; date: string; cat: string; partial: boolean; co: number; share: number; unit: string; rate: number; amt: number };
+type PayoutRow = { o: InstallOrder; sj: Subjob; date: string; isPartial: boolean };
+type PayoutLine = { pi: string; date: string; cat: string; partial: boolean; co: number; share: number; unit: string; rate: number; amt: number };
 export type PayoutAgg = {
   name: string; email: string; jobs: number;
   fl_sqft: number; fl_amt: number;

@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 
-export const csvEscape = (v: unknown): string => {
+const csvEscape = (v: unknown): string => {
   const s = v == null ? '' : String(v);
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 
-export const triggerDownload = (blob: Blob, filename: string) => {
+const triggerDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;

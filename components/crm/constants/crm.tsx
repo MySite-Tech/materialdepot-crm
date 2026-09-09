@@ -54,12 +54,6 @@ export const BACKEND_SORTABLE_COLS = new Set([
   'createdAt', 'clientName', 'clientPhone', 'assignedTo', 'branch', 'cartValue',
 ]);
 
-const PIPELINE_BUCKETS: Record<string, string[]> = {
-  Active: ['In Cart', 'Quote Approval Pending', 'Availability Check', 'Hold Stock'],
-  Won: ['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered'],
-  Lost: ['Refunded', 'Order Lost', 'Order Cancelled'],
-};
-
 export const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre', 'Yelankha Centre', 'HQ Showroom', 'Phone Call'];
 
 export const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'Carpenter', 'Builder'];

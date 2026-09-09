@@ -22,7 +22,7 @@ export function flattenLocationRow(row: any) {
   };
 }
 
-export interface FetchLocationsParams {
+interface FetchLocationsParams {
   branch_id?: string | number;
   page?: number;
   page_size?: number;
@@ -34,7 +34,7 @@ export interface FetchLocationsParams {
   is_deleted?: boolean;
 }
 
-export interface LocationsPage {
+interface LocationsPage {
   status: boolean;
   data: any[];
   page: number;
@@ -73,7 +73,7 @@ export async function fetchFacets(branch_id?: string | number, is_active?: boole
   return { categories: data?.categories ?? [], display_types: data?.display_types ?? [] };
 }
 
-export async function fetchLocationsByBranchName(branch_name: string): Promise<any> {
+async function fetchLocationsByBranchName(branch_name: string): Promise<any> {
   return mdFetch(`/fetch-variant-locations/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -81,16 +81,9 @@ export async function fetchLocationsByBranchName(branch_name: string): Promise<a
   });
 }
 
-export async function lookupVariantLocation(variant_handle: string): Promise<any | null> {
-  const query = locationsQuery({ variant_handle, page_size: 1 });
-  const data = await mdFetch(`/fetch-variant-locations/?${query}`);
-  const rows = data?.data ?? [];
-  return rows.length > 0 ? flattenLocationRow(rows[0]) : null;
-}
-
 export type MovementType = 'add_display' | 'move_display' | 'remove_display';
 
-export interface InitiateMovementPayload {
+interface InitiateMovementPayload {
   movement_type: MovementType;
   variant_handle: string;
   quantity?: number;

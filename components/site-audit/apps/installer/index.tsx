@@ -7,20 +7,17 @@ import { InstallerDetailHost } from './detail-host';
 import { InstallerJobCardHost } from './jobcard-host';
 import { InstallerListHost } from './list-host';
 import { useInstallerFlow } from './use-installer-flow';
-import { useRoomActions } from './use-room-actions';
 
 import { DEFAULT_LOG_MESSAGES, INSTALL_STATUS } from '../../constants/installer';
-import { AuditReportOverlay, JobDetailScreen } from './job-detail';
-import { JobListScreen } from './job-list';
-import { genAuditReportPDF, genInstallerPDF } from './pdf';
-import { ActingAs, Job, JobCard, LogEntry, PersistedRoom, Room } from '../../types/installer';
+import { AuditReportOverlay } from './job-detail';
+import { genAuditReportPDF } from './pdf';
+import { ActingAs, Job, JobCard, LogEntry, Room } from '../../types/installer';
 import { CommentSheet } from './ui';
-import { addDays, appendRoomState, buildSlots, collectRooms, dstr, itemQtyDisplay, rollupStatus, statusForInstaller, subjobEffectiveStatus, today } from '../../utils/installer';
-import { JobCardWizardOverlay } from './wizard';
+import { addDays, buildSlots, dstr, itemQtyDisplay, rollupStatus, statusForInstaller, today } from '../../utils/installer';
 import { ArrivalCameraModal, DocScannerModal, SignaturePadHandle, useLocationTracking } from '@/components/site-audit/apps/fieldAppShared';
 import { typeLabel } from '@/components/site-audit/data/auditRegistry';
 import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/data/omsService';
-import { readCapturedPhoto, sbGet, sbPatch, sbPatchLong, uploadPhoto } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPatch } from '@/components/site-audit/siteAuditShared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {

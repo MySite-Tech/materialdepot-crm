@@ -9,7 +9,7 @@ export function poFieldFor(r: any): string {
   return [r && r.po_number, ref].filter(Boolean).join(', ');
 }
 
-export function stageIdFrom(po: string[] | string | null | undefined): number | null {
+function stageIdFrom(po: string[] | string | null | undefined): number | null {
   const candidates = Array.isArray(po) ? po : typeof po === 'string' ? po.split(',') : [];
   for (const raw of candidates) {
     const m = STAGE_REF.exec(String(raw).trim());

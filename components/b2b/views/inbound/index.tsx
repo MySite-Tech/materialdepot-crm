@@ -5,17 +5,16 @@ import { InboundDailyPanel } from './daily-panel';
 
 import InboundDrawer from '../../drawers/inbound/index';
 
-import { CLIENT_TYPES, INBOUND_LOCATIONS, INBOUND_STATUSES, INBOUND_STATUS_COLORS, INBOUND_STATUS_HINT, InboundStatus, LEAD_TYPES, PRIORITIES, Priority, followUpBucket, istToday, lastAttempt, statusGateErrors } from '../../models/inboundModel';
-import { InboundLead, NEW_KYLAS_STAGES, fmtINR } from '../../models/mockData';
+import { INBOUND_STATUS_COLORS, InboundStatus, Priority, followUpBucket, istToday, statusGateErrors } from '../../models/inboundModel';
+import { InboundLead, fmtINR } from '../../models/mockData';
 import { ExportButton, ExportFormat, ExportScope, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll } from '../../ui/exportUtils';
-import { Empty, EnrichmentBadge, LeadName, LeadTypeChip, PriorityChip, Spinner, StatusBadge, fmtDay, inputCls } from '../../ui/inboundChips';
+import { Spinner } from '../../ui/inboundChips';
 import { EXPORT_HEADERS } from '../../constants/inbound-leads';
 import { MoveModal } from './modals';
-import { DailyTable } from './table';
 import { View } from '../../types/inbound-leads';
-import { LeadCard, SidePanel, Tile } from './ui';
+import { Tile } from './ui';
 import { gapsFor, istDay, toExportRow } from '../../utils/inbound-leads';
-import { B2B_FRESH_START, fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
+import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
 import { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
 import { useEffect, useMemo, useState } from 'react';
 

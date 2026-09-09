@@ -8,7 +8,7 @@ export function isValidBranchName(name: unknown): name is Branch {
   return typeof name === "string" && name.trim().length > 0 && name.length <= 64;
 }
 
-export const ROLES = [
+const ROLES = [
   { key: "presales", label: "Presales" },
   { key: "receptionist", label: "Receptionist" },
   { key: "manager", label: "Store Manager" },
@@ -30,7 +30,7 @@ const CRM_ROLE_TO_APPT: Record<string, Role> = {
 
 const ALL_BRANCH_ROLES = new Set(["superadmin", "admin", "tech"]);
 
-export function roleFromCrmRole(crmRole: string | undefined): Role {
+function roleFromCrmRole(crmRole: string | undefined): Role {
   return CRM_ROLE_TO_APPT[crmRole ?? ""] ?? "presales";
 }
 
@@ -38,7 +38,7 @@ export function resolveApptRole(user: AppUser | null | undefined): Role {
   return roleFromCrmRole(user?.role);
 }
 
-export function isApptAdmin(user: AppUser | null | undefined): boolean {
+function isApptAdmin(user: AppUser | null | undefined): boolean {
   return resolveApptRole(user) === "admin";
 }
 
@@ -118,7 +118,7 @@ export function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export type ApptFeed = {
+type ApptFeed = {
   leads: ApptLead[];
 
   fetchedAt: string;

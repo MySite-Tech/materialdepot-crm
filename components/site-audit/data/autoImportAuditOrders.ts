@@ -5,7 +5,7 @@ import { INSTALL_SKU } from '../install-ops/shared';
 import { confirmServiceStage, poFieldFor } from './omsService';
 import { getToken } from '@/lib/mockApi';
 
-export const AUTO_ATTRIBUTION = 'Auto-import (backend)';
+const AUTO_ATTRIBUTION = 'Auto-import (backend)';
 
 const MAX_AGE_DAYS = 30;
 

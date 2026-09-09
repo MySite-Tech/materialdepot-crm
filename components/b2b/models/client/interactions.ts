@@ -18,11 +18,6 @@ export function currentTemperature(list: ClientInteraction[] | undefined): { val
   return undefined;
 }
 
-export function previousTemperature(list: ClientInteraction[] | undefined): number | undefined {
-  const scored = sortedInteractions(list).filter((i) => typeof i.temperature === 'number');
-  return scored.length > 1 ? scored[1].temperature : undefined;
-}
-
 export function temperatureBand(v: number | undefined): TemperatureBand | undefined {
   if (typeof v !== 'number') return undefined;
   return TEMPERATURE_BANDS.find((b) => v >= b.min && v <= b.max)?.key;

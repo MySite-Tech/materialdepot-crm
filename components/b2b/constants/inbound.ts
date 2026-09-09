@@ -1,5 +1,5 @@
 import { Selection } from '../types/inbound';
-import { ClientType, EnrichmentInput, FieldOwner, FollowUpBucket, InboundFieldSpec, InboundLocation, InboundStatus, LeadType, LegacyDecomposition, LegacyStage, PlacedUnder, Priority } from '../types/inbound';
+import { ClientType, EnrichmentInput, FieldOwner, FollowUpBucket, InboundLocation, InboundStatus, LeadType, LegacyDecomposition, LegacyStage, PlacedUnder, Priority } from '../types/inbound';
 export const OWNER_LABEL: Record<FieldOwner, string> = {
   'kylas':       'From Presales',
   'kylas-write': 'Synced to Kylas',
@@ -34,7 +34,7 @@ export const INBOUND_STATUS_HINT: Record<InboundStatus, string> = {
   'Lost':      'Needs a lost reason',
 };
 
-export const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
+const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
 
 export const LEGACY_STAGES: Record<LegacyStage, LegacyDecomposition> = {
   'New':               { status: 'New' },
@@ -126,43 +126,6 @@ export const FOLLOW_UP_COLORS: Record<FollowUpBucket, string> = {
   upcoming: '#0F766E',
   none:     '#9CA3AF',
 };
-
-export const INBOUND_FIELDS: InboundFieldSpec[] = [
-
-  { key: 'phone',            label: 'Contact number',  section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'contactName',      label: 'Contact name',    section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'owner',            label: 'Assigned to',     section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'leadCreatedAt',    label: 'Lead date & time', section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'qualificationTag', label: 'Qualified as',    section: '3.1', owner: 'kylas', input: 'readonly', hint: 'Kylas tag that routed this lead here' },
-  { key: 'presalesOwner',    label: 'Qualified by',    section: '3.1', owner: 'kylas', input: 'readonly', hint: 'Presales rep who handed this over' },
-  { key: 'leadSummary',      label: 'Lead summary',    section: '3.1', owner: 'kylas', input: 'readonly', hint: 'Enquiry type as Presales recorded it' },
-  { key: 'urgency',          label: 'Urgency',         section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'pincode',          label: 'Pincode',         section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'presalesClientType', label: 'Client type (Presales)', section: '3.1', owner: 'kylas', input: 'readonly' },
-  { key: 'presalesMissedCalls', label: 'Missed calls (Presales)', section: '3.1', owner: 'kylas', input: 'readonly' },
-
-  { key: 'companyName', label: 'Client company name', section: '3.2', owner: 'crm', input: 'text', hint: 'Kylas ships the phone number in the name field — this is the real company' },
-  { key: 'gstNumber',   label: 'GST number',          section: '3.2', owner: 'crm', input: 'text' },
-  { key: 'segment',     label: 'Segment',             section: '3.2', owner: 'crm', input: 'select', options: SEGMENTS },
-  { key: 'clientType',  label: 'Client type',         section: '3.2', owner: 'crm', input: 'select', options: CLIENT_TYPES },
-  { key: 'leadType',    label: 'Lead type',           section: '3.2', owner: 'crm', input: 'select', options: LEAD_TYPES },
-  { key: 'priority',    label: 'Priority',            section: '3.2', owner: 'crm', input: 'select', options: PRIORITIES },
-  { key: 'location',    label: 'Location',            section: '3.2', owner: 'derived', input: 'select', options: INBOUND_LOCATIONS, hint: 'Defaults from the pincode; override if the lead is worked elsewhere' },
-
-  { key: 'selections',         label: 'Selection',           section: '3.3', owner: 'crm',         input: 'chips', options: SELECTIONS },
-  { key: 'requirement',        label: 'Requirement summary', section: '3.3', owner: 'kylas-write', input: 'textarea' },
-  { key: 'expectedOrderValue', label: 'Expected order value', section: '3.3', owner: 'crm',        input: 'number', hint: "Your estimate at qualification — not the PI or order figure" },
-
-  { key: 'status',       label: 'Status',          section: '3.4', owner: 'crm', input: 'select', options: INBOUND_STATUSES },
-  { key: 'followUpDate', label: 'Next follow-up',  section: '3.4', owner: 'crm', input: 'date', statuses: ['Follow up', 'PI Shared'] },
-  { key: 'followUpTime', label: 'Follow-up time',  section: '3.4', owner: 'crm', input: 'time', statuses: ['Follow up', 'PI Shared'] },
-  { key: 'enqId',        label: 'Enq ID',          section: '3.4', owner: 'crm', input: 'text', statuses: ['PI Shared', 'Closed'] },
-  { key: 'orderValue',   label: 'Order value',     section: '3.4', owner: 'deals', input: 'number', statuses: ['PI Shared', 'Closed'], hint: 'Fetched from the deal ticket matching the Enq ID' },
-  { key: 'lostReason',   label: 'Lost reason',     section: '3.4', owner: 'crm', input: 'select', statuses: ['Lost'] },
-];
-
-export const FIELDS_BY_SECTION = (section: InboundFieldSpec['section']): InboundFieldSpec[] =>
-  INBOUND_FIELDS.filter((f) => f.section === section);
 
 export const INBOUND_LOST_REASONS = [
   'Selection Not Liked',

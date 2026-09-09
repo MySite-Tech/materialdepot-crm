@@ -5,16 +5,16 @@ import { KamOrdersView } from './orders-view';
 
 import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, istToday, primaryContact } from '../../models/clientModel';
 import { applyAdvance, planAdvances } from '../../models/kamAutoStage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_ORDER_STATUSES, KAM_ORDER_STATUS_COLORS, KAM_ORDER_STATUS_HINT, KAM_VIEWS, KamOrder, KamOrderStatus, KamView, assignedClientRows, callsLoggedOn, followUpQueue, isLegacyKamStage, kamPipeline, todaysCalls } from '../../models/kamModel';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_VIEWS, KamOrder, KamOrderStatus, KamView, assignedClientRows, callsLoggedOn, followUpQueue, isLegacyKamStage, kamPipeline, todaysCalls } from '../../models/kamModel';
 import { KAMS, fmtL } from '../../models/mockData';
 import { ExportButton, ExportFormat, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll } from '../../ui/exportUtils';
 import { ClientDrawer } from './drawer';
 import { CadenceList, InteractionModal } from './interactions';
 import { OrderModal } from './orders';
-import { Metric, StatTile, StatusPill, TemperatureChip } from './ui';
+import { StatTile } from './ui';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../utils/kams';
-import { ClientOrderHistory, ENQ_RESOLVE_CAP, ORDER_DETAIL_PHONE_CAP, clientMetricsFrom, fetchClientOrderHistories, fetchClientOrderRows, fetchClients, fetchKamOrders, orderDatesFromRows, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2bLeads';
+import { ClientOrderHistory, ORDER_DETAIL_PHONE_CAP, clientMetricsFrom, fetchClientOrderHistories, fetchClientOrderRows, fetchClients, fetchKamOrders, orderDatesFromRows, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2bLeads';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function KAMs() {

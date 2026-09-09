@@ -2,10 +2,9 @@
 
 import { Pill } from './inboundChips';
 import {
-  OUTREACH_STATUS_COLORS, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS,
-  companyTypeLabel, meetingLocation,
+  OUTREACH_STATUS_COLORS, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
   type OutreachStatus, type MeetingStatus, type OutreachMeeting,
-  type LeadType, type CompanyType,
+  type LeadType,
 } from '../models/outreachModel';
 
 export function OutreachStatusBadge({ s }: { s: OutreachStatus }) {
@@ -19,12 +18,6 @@ export function MeetingStatusChip({ s }: { s: MeetingStatus }) {
 export function OutreachLeadTypeChip({ t }: { t?: LeadType }) {
   if (!t) return null;
   return <Pill color={LEAD_TYPE_COLORS[t]}>{t}</Pill>;
-}
-
-export function CompanyTypeText({ type, other }: { type?: CompanyType; other?: string }) {
-  const label = companyTypeLabel(type, other);
-  if (!label) return <span className="text-gray-300">—</span>;
-  return <span>{label}</span>;
 }
 
 export function MeetingLine({ m }: { m: OutreachMeeting }) {

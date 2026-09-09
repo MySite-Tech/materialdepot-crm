@@ -5,7 +5,7 @@ import { TimelineEntry } from '../types/escalation';
 import { cardBorderColor, relativeAge, stagePillStyle } from '../utils/escalation';
 import { Dispatch, SetStateAction } from 'react';
 
-export function EscalationList({ contactMap, filteredDeals, handleAddNote, handleExpandDeal, handleUpload, lastAction, noteError, noteSuccess, noteTargetDeal, noteText, savingNote, selectedDeal, setNoteTargetDeal, setNoteText, setSelectedDeal, setUploadTargetDeal, timelineMap, uploadError, uploadSuccess, uploadTargetDeal, uploading }: {
+export function EscalationList({ contactMap, filteredDeals, handleAddNote, handleExpandDeal, handleUpload, lastAction, noteError, noteSuccess, noteTargetDeal, noteText, savingNote, selectedDeal, setNoteTargetDeal, setNoteText, setSelectedDeal, setUploadTargetDeal, uploadError, uploadSuccess, uploadTargetDeal, uploading }: {
   contactMap: Record<number, { id: number; name: string; } | null>;
   filteredDeals: Deal[];
   handleAddNote: (dealId: number) => Promise<void>;
@@ -31,7 +31,6 @@ export function EscalationList({ contactMap, filteredDeals, handleAddNote, handl
   return (
     <div className="space-y-3">
       {filteredDeals.map((deal) => {
-        const timeline = timelineMap[deal.id] ?? [];
         return (
           <div
             key={deal.id}

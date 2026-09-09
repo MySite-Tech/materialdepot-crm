@@ -1,5 +1,5 @@
-import { SEGMENTS } from '../models/inboundModel';
-import { ClientFieldSpec, ClientOrderMetrics, ClientStatus, DuplicateEvidence, MergeField } from '../types/client';
+
+import { ClientStatus, DuplicateEvidence, MergeField } from '../types/client';
 
 export const CLIENT_ENTITY_TYPES = [
   'Architect', 'Interior Designer', 'Contractor', 'Builder', 'End Consumer', 'Other',
@@ -24,12 +24,12 @@ export const GST_STATE_NAMES: Record<string, string> = {
   '37': 'Andhra Pradesh', '38': 'Ladakh', '97': 'Other Territory', '99': 'Centre Jurisdiction',
 };
 
-export const DEAL_ORDER_STATUSES = [
+const DEAL_ORDER_STATUSES = [
   'Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped',
   'Partly Delivered', 'Delivered',
 ] as const;
 
-export const DEAL_LOST_STATUSES = [
+const DEAL_LOST_STATUSES = [
   'Order Lost', 'Order Cancelled', 'Refunded',
 ] as const;
 
@@ -48,8 +48,6 @@ export const TEMPERATURE_BANDS = [
   { key: 'warm',  label: '4–6 · watch',    min: 4, max: 6,  color: '#F59E0B' },
   { key: 'hot',   label: '7–10 · healthy', min: 7, max: 10, color: '#22C55E' },
 ] as const;
-
-export const EMPTY_ORDER_METRICS: ClientOrderMetrics = { dateState: 'pending' };
 
 export const ACTIVE_WINDOW_MONTHS = 3;
 
@@ -85,23 +83,3 @@ export const MERGE_FIELD_LABEL: Record<MergeField, string> = {
 };
 
 export const MERGE_FIELDS: MergeField[] = ['company', 'segment', 'clientType', 'kam', 'source'];
-
-export const CLIENT_FIELDS: ClientFieldSpec[] = [
-  { key: 'company',    label: 'Company / business entity name', section: '3.1', owner: 'crm', input: 'text', onCreate: true, required: true },
-  { key: 'contacts',   label: 'Contact numbers',                section: '3.1', owner: 'crm', input: 'contacts', onCreate: true, required: true, hint: 'One or more, each with a name and a label. Orders link to a client by these numbers.' },
-  { key: 'gsts',       label: 'GST numbers',                    section: '3.1', owner: 'crm', input: 'gsts', onCreate: true, hint: 'Structure and check digit are validated here; the registered company name needs a GST Validator this stack does not have' },
-  { key: 'segment',    label: 'Segment',                        section: '3.1', owner: 'crm', input: 'select', options: SEGMENTS, onCreate: true, required: true },
-  { key: 'clientType', label: 'Client type',                    section: '6.1', owner: 'crm', input: 'select', options: CLIENT_ENTITY_TYPES, onCreate: true, required: true },
-  { key: 'kam',        label: 'KAM',                            section: '3.2', owner: 'crm', input: 'select', hint: 'Assigned at the Inbound/Outreach handoff; reassignable, and every change is recorded' },
-  { key: 'source',     label: 'Source',                         section: '2',   owner: 'crm', input: 'select', options: CLIENT_SOURCES },
-  { key: 'remarks',    label: 'Remarks',                        section: '6.1', owner: 'crm', input: 'textarea' },
-
-  { key: 'lastOrderPlaced',    label: 'Last order placed',     section: '2', owner: 'deals', input: 'readonly', hint: 'Most recent ordered ticket on any of this client’s numbers' },
-  { key: 'orders',             label: 'Number of orders',      section: '2', owner: 'deals', input: 'readonly' },
-  { key: 'totalRevenue',       label: 'Total revenue',         section: '2', owner: 'deals', input: 'readonly' },
-  { key: 'averageOrderValue',  label: 'Average order value',   section: '2', owner: 'derived', input: 'readonly', hint: 'Total revenue ÷ number of orders' },
-  { key: 'clientStatus',       label: 'Client status',         section: '2', owner: 'derived', input: 'readonly', hint: `Active = ordered within ${ACTIVE_WINDOW_MONTHS} months. System-computed; never set by hand.` },
-];
-
-export const CLIENT_FIELDS_BY_SECTION = (section: ClientFieldSpec['section']): ClientFieldSpec[] =>
-  CLIENT_FIELDS.filter((f) => f.section === section);

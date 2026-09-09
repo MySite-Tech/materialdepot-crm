@@ -1,63 +1,4 @@
-export type LeadStatus =
-  | "New"
-  | "Contacted"
-  | "Qualified"
-  | "Proposal Sent"
-  | "Won"
-  | "Lost";
 
-export type TicketStatus =
-  | "Open"
-  | "In Progress"
-  | "Pending"
-  | "Resolved"
-  | "Closed";
-
-export type TicketPriority = "Low" | "Medium" | "High" | "Urgent";
-
-export interface Lead {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  company: string;
-  status: LeadStatus;
-  source: string;
-  assignedTo: string;
-  createdAt: string;
-  updatedAt: string;
-  value: number;
-}
-
-export interface Ticket {
-  id: number;
-  subject: string;
-  contactName: string;
-  contactEmail: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  assignedTo: string;
-  createdAt: string;
-  updatedAt: string;
-  dueDate: string | null;
-}
-
-export interface DashboardStats {
-  leads: {
-    total: number;
-    newToday: number;
-    won: number;
-    lost: number;
-    conversionRate: number;
-  };
-  tickets: {
-    total: number;
-    open: number;
-    inProgress: number;
-    resolved: number;
-    avgResolutionHours: number;
-  };
-}
 
 export interface Deal {
   id: number;
@@ -73,15 +14,6 @@ export interface Deal {
   customFieldValues?: Record<string, unknown>;
 }
 
-export interface DealDetail extends Deal {
-  associatedContacts?: { id: number; name: string }[];
-  createdBy?: { id: number; name: string } | null;
-  updatedAt?: string | null;
-  forecastingType?: string | null;
-  aging?: number | null;
-  actualValue?: { value: number; currencyId?: number } | null;
-}
-
 export interface DealsSearchResponse {
   content: Deal[];
   totalElements: number;
@@ -90,7 +22,7 @@ export interface DealsSearchResponse {
   size: number;
 }
 
-export interface CallLogPerson {
+interface CallLogPerson {
   id: number;
   name: string;
   phoneNumber?: string | null;
@@ -113,11 +45,4 @@ export interface CallLog {
   notesCount: number;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface CallLogsResponse {
-  content: CallLog[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
 }

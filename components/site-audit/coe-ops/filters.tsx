@@ -22,7 +22,7 @@ function measureStickyTop(el: HTMLElement | null): number {
   return Math.max(0, Math.round(total));
 }
 
-export type FrozenBarGeometry = {
+type FrozenBarGeometry = {
   ref: (el: HTMLDivElement | null) => void;
 
   top: number;

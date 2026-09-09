@@ -4,14 +4,6 @@ import { AppUser, Lead } from '../../../types/crm';
 import { APPOINTMENT_TRACKER_ROLES, B2B_SALES_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from '../constants/crm';
 import { MainTab } from '../types/crm';
 
-function getFirstDayOfCurrentMonth(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = '01';
-  return `${y}-${m}-${d}`;
-}
-
 export const roleLabel = (role?: string | null): string => {
   if (!role) return '\u2014';
   return ROLE_LABEL_OVERRIDES[role] ?? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -75,13 +67,6 @@ export const canBypassLostAge = (user?: AppUser | null): boolean => {
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) return perms.includes(MARK_LOST_BYPASS_SLUG);
   return LOST_AGE_BYPASS_ROLES.has(user?.role ?? '');
-};
-
-const genId = (): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let r = '';
-  for (let i = 0; i < 6; i++) r += chars[Math.floor(Math.random() * chars.length)];
-  return `MD-${r}`;
 };
 
 export const mergeLead = (existing: Lead, incoming: Lead): Lead => {

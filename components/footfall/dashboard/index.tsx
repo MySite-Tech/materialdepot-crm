@@ -3,8 +3,6 @@
 import { FootfallFilterBar } from './filter-bar';
 import { FootfallNoCartTable } from './no-cart-table';
 import { FootfallNonConvertedTable } from './non-converted-table';
-
-import { BMFilterChip, DateChip, FilterChip } from './chips';
 import { FunnelTable } from './tables';
 import { DateRange, Props } from '../types/footfall';
 import { csvRow, downloadCsv, fmtPct } from '../utils/footfall';

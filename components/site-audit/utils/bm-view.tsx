@@ -35,7 +35,7 @@ export function dropSupersededPreBookings<T extends { pi?: string | null; po?: s
   });
 }
 
-export function bmNames(bm: BmProfile): Set<string> {
+function bmNames(bm: BmProfile): Set<string> {
   const out = new Set<string>();
   for (const n of [bm.name, ...(bm.aliases || [])]) {
     const v = norm(n);

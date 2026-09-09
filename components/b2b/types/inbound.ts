@@ -71,17 +71,3 @@ export interface EnrichmentInput {
 export interface EnrichmentGap { key: keyof EnrichmentInput; label: string }
 
 export type FollowUpBucket = 'overdue' | 'today' | 'upcoming' | 'none';
-
-export type FieldInput = 'text' | 'textarea' | 'number' | 'date' | 'time' | 'select' | 'chips' | 'readonly';
-
-export interface InboundFieldSpec {
-  key: string;
-  label: string;
-  section: '3.1' | '3.2' | '3.3' | '3.4' | '3.5';
-  owner: FieldOwner;
-  input: FieldInput;
-  options?: readonly string[];
-  hint?: string;
-
-  statuses?: InboundStatus[];
-}

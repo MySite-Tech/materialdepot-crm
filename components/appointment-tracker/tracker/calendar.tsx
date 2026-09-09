@@ -83,7 +83,6 @@ export function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
                   const isFull = pct >= 1;
                   const isNear = !isFull && pct >= 0.7;
                   const isFilling = !isFull && !isNear && pct >= 0.3;
-                  const isFree = !isFull && !isNear && !isFilling;
 
                   const container = isFull
                     ? "bg-gray-900 text-white ring-gray-900"

@@ -1,8 +1,6 @@
-import { rowToOutreach } from './outreachMapper';
+
 import { EMPTY_BUCKET } from './pipelineStats';
-import { fetchRows } from './reads';
 import { TABLE } from './rows';
-import { OutreachLead } from '@/components/b2b/models/mockData';
 import { CRMLeadsStatsBucket, fetchCRMLeadsStats } from '@/lib/mockApi';
 import { supabase } from '@/lib/supabase';
 
@@ -28,9 +26,9 @@ export async function fetchKamLoad(): Promise<Record<string, number>> {
 
 export const fetchInboundKamLoad = fetchKamLoad;
 
-export interface VerticalRep { name: string; contact: string }
+interface VerticalRep { name: string; contact: string }
 
-export const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
+const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
   { label: 'Bangalore KAM', reps: [
     { name: 'Tharun', contact: '8309230101' },
     { name: 'Krishna Jadhav', contact: '9187200807' },

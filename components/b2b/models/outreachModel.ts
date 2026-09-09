@@ -106,12 +106,7 @@ export function openMeeting(meetings: OutreachMeeting[] | undefined): OutreachMe
   return (meetings || []).find((m) => m.status === 'Scheduled');
 }
 
-export function lastMeeting(meetings: OutreachMeeting[] | undefined): OutreachMeeting | undefined {
-  const m = meetings || [];
-  return m.length ? m[m.length - 1] : undefined;
-}
-
-export function completedMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
+function completedMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
   return (meetings || []).filter((m) => m.status === 'Completed');
 }
 
@@ -144,7 +139,7 @@ export function meetingLocation(m: OutreachMeeting | undefined): string {
   return [m.area, m.officeLocation].map((s) => String(s || '').trim()).filter(Boolean).join(' · ');
 }
 
-export interface OutreachGateInput {
+interface OutreachGateInput {
   status: OutreachStatus;
   followUpDate?: string;
   lostReason?: string;
@@ -182,7 +177,7 @@ export function outreachStatusPrompts(l: {
   return prompts;
 }
 
-export interface OutreachEnrichmentInput {
+interface OutreachEnrichmentInput {
   contactPerson?: string;
   designation?: string;
   segment?: string;
@@ -231,7 +226,7 @@ export const OUTREACH_PRD_VIEWS: { key: OutreachView; label: string; note: strin
   { key: 'lost',      label: 'Lost',       note: 'Every lost lead with the reason recorded.' },
 ];
 
-export interface OutreachSummaryInput {
+interface OutreachSummaryInput {
   status: OutreachStatus;
   meetings?: OutreachMeeting[];
   followUpDate?: string;
@@ -239,7 +234,7 @@ export interface OutreachSummaryInput {
   expectedOrderValue?: number;
 }
 
-export interface OutreachSummary {
+interface OutreachSummary {
   meetingsToday: number;
   followUp: { count: number; overdue: number; dueToday: number };
   quoteShared: { count: number; estimatedValue: number };
@@ -271,51 +266,3 @@ export function outreachSummary(
     lost: leads.filter((l) => l.status === 'Lost').length,
   };
 }
-
-export type FieldInput = 'text' | 'textarea' | 'number' | 'date' | 'time' | 'select' | 'chips' | 'readonly';
-
-export interface OutreachFieldSpec {
-  key: string;
-  label: string;
-  section: '3.1' | '3.2' | '3.3' | '3.4' | '7';
-  owner: FieldOwner;
-  input: FieldInput;
-  options?: readonly string[];
-  hint?: string;
-
-  statuses?: OutreachStatus[];
-
-  onCreate?: boolean;
-}
-
-export const OUTREACH_FIELDS: OutreachFieldSpec[] = [
-
-  { key: 'company',       label: 'Company name',   section: '3.1', owner: 'crm', input: 'text', onCreate: true },
-  { key: 'contactPerson', label: 'Contact person', section: '3.1', owner: 'crm', input: 'text', onCreate: true },
-  { key: 'designation',   label: 'Designation',    section: '3.1', owner: 'crm', input: 'text', onCreate: true },
-  { key: 'phone',         label: 'Contact number', section: '3.1', owner: 'crm', input: 'text', onCreate: true, hint: 'Not in the PRD field list, but the Leads tab shows it and the deal-ticket lookup matches on it' },
-  { key: 'gstNumber',     label: 'GST',            section: '3.1', owner: 'crm', input: 'text', onCreate: true, hint: 'Optional — never blocks a save' },
-  { key: 'segment',       label: 'Segment',        section: '3.1', owner: 'crm', input: 'select', options: SEGMENTS, onCreate: true },
-  { key: 'leadType',      label: 'Lead type',      section: '3.1', owner: 'crm', input: 'select', options: LEAD_TYPES, onCreate: true },
-  { key: 'companyType',   label: 'Company type',   section: '3.1', owner: 'crm', input: 'select', options: COMPANY_TYPES, onCreate: true },
-
-  { key: 'meetings',      label: 'Meetings',       section: '3.2', owner: 'crm', input: 'readonly', hint: 'Up to 4, each Completed or Postponed' },
-
-  { key: 'selections',         label: 'Selection',            section: '3.3', owner: 'crm', input: 'chips', options: SELECTIONS },
-  { key: 'requirement',        label: 'Requirement summary',  section: '3.3', owner: 'crm', input: 'textarea' },
-  { key: 'expectedOrderValue', label: 'Expected order value', section: '3.3', owner: 'crm', input: 'number', hint: "Your estimate at qualification — never reported as revenue" },
-
-  { key: 'status',        label: 'Status',         section: '3.4', owner: 'crm',   input: 'select', options: OUTREACH_STATUSES },
-  { key: 'followUpDate',  label: 'Next follow-up', section: '3.4', owner: 'crm',   input: 'date', statuses: ['Follow up', 'PI Shared'] },
-  { key: 'followUpTime',  label: 'Follow-up time', section: '3.4', owner: 'crm',   input: 'time', statuses: ['Follow up', 'PI Shared'] },
-  { key: 'enqId',         label: 'Enq ID',         section: '3.4', owner: 'crm',   input: 'text', statuses: ['PI Shared', 'Closed'] },
-  { key: 'orderValue',    label: 'Order value',    section: '3.4', owner: 'deals', input: 'number', statuses: ['PI Shared', 'Closed'], hint: 'Fetched from the deal ticket matching the Enq ID' },
-  { key: 'expectedClosure', label: 'Expected date of closure', section: '3.4', owner: 'crm', input: 'date', hint: 'Shown as a column on the Leads tab' },
-  { key: 'lostReason',    label: 'Lost reason',    section: '3.4', owner: 'crm',   input: 'select', options: OUTREACH_LOST_REASONS, statuses: ['Lost'] },
-
-  { key: 'kam',  label: 'KAM',  section: '7', owner: 'crm', input: 'select', statuses: ['Closed'], hint: 'Round-robin on order placement' },
-  { key: 'spok', label: 'Spok', section: '7', owner: 'crm', input: 'text', hint: 'Whoever is speaking to this lead — the Leads tab shows it' },
-];
-
-export const OUTREACH_FIELDS_BY_SECTION = (section: OutreachFieldSpec['section']): OutreachFieldSpec[] =>
-  OUTREACH_FIELDS.filter((f) => f.section === section);

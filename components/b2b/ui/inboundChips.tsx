@@ -9,7 +9,7 @@ import {
 
 export const inputCls =
   'w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white focus:border-[#0F766E] disabled:bg-gray-50 disabled:text-gray-400';
-export const readonlyCls =
+const readonlyCls =
   'w-full px-2.5 py-1.5 text-[12px] rounded-md bg-gray-50 text-gray-600 border border-transparent';
 export const errorInputCls =
   'w-full px-2.5 py-1.5 text-[12px] border border-red-300 rounded-md outline-none bg-red-50/40 focus:border-red-500';

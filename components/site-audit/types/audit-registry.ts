@@ -89,16 +89,6 @@ export type AuditRoomV2 = {
   segments: AuditSegment[];
 };
 
-export type InstallRoomV2 = {
-  v: 2;
-  category: string;
-  name: string;
-  sku: string;
-  fields: FieldValues;
-  photos: string[];
-  comments: string;
-};
-
 export type JourneyStage = {
   k: string;
   label: string;
@@ -118,13 +108,4 @@ export type JourneyEntry = {
   note?: string;
   refId?: string;
   by?: { email?: string; name?: string; role?: string };
-};
-
-export type SegmentMaterial = {
-  sku?: string;
-  productName?: string;
-  url?: string;
-  image?: string | null;
-  by?: { email?: string; name?: string };
-  at?: string;
 };

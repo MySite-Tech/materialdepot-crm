@@ -1,10 +1,10 @@
 import { mdFetch } from '@/lib/mockApi';
 
-export const CAT_ANALYTICS_SRC = '/md-cat-analytics.js';
+const CAT_ANALYTICS_SRC = '/md-cat-analytics.js';
 
 export const INITIAL_RANGE_DAYS = 30;
 
-export const MAX_RANGE_DAYS = 1200;
+const MAX_RANGE_DAYS = 1200;
 
 export const ALL_DATA_DAYS = 730;
 
@@ -32,7 +32,7 @@ function installLiveSource(api: CatAnalyticsApi) {
   api.MD_AN_SOURCE.mode = 'metabase';
 }
 
-export type CatFilter = { from: string; to: string; store: string; city: string };
+type CatFilter = { from: string; to: string; store: string; city: string };
 
 export type CatAnalyticsApi = {
   MD_AN_DATA_FROM: string;

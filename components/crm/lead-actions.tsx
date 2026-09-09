@@ -1,7 +1,5 @@
 'use client';
 
-import { deleteLead as deleteLeadDb } from '@/lib/mockApi';
-
 import { getKylasDealUrl } from '../../lib/api/b2bInbound';
 import { markLeadLost } from '../../lib/api/dashboards';
 import { syncEstimate } from '../../lib/api/kylasSync';
@@ -13,7 +11,7 @@ import { DateEditState } from './types/crm';
 import { canBypassLostAge, canMarkLostByAge, fmtDate, mergeLead } from './utils/crm';
 import { Dispatch, SetStateAction } from 'react';
 
-export function makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDeleteLeadState, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast }: {
+export function makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast }: {
   bmNameToPhone: Record<string, string>;
   currentUser: AppUser | null;
   dateEditPopup: DateEditState | null;
@@ -65,13 +63,6 @@ const saveLead = (formData: Lead) => {
   }
   setDrawerLead(null);
   setShowAddDrawer(false);
-};
-
-const removeLead = (id: string) => {
-  const lead = leads.find((l) => l.id === id);
-  setLeads((prev) => prev.filter((l) => !(l.id === id && l.clientPhone === (lead ? lead.clientPhone : ''))));
-  deleteLeadDb(id, lead ? lead.clientPhone || '' : '').catch((e) => console.error('Delete failed:', e));
-  setDeleteLeadState(null);
 };
 
 const handleKylasSync = async (leadId: string) => {

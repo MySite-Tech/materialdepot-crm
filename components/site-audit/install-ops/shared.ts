@@ -15,7 +15,6 @@ export async function detectAuditBy(phone: string): Promise<'material_depot' | '
 }
 
 export const INSTALL_SKU = 'SVC-INSTALL-001';
-export const CUSTOM_WP_SKU = 'WP-CUST';
 export const FLOOR_DAY_CAP = 1;
 export const WP_DAY_SLOTS = 3;
 export const WALLPANEL_DAY_CAP = 1;
@@ -26,10 +25,6 @@ export function typeDayCap(t: InstallCategory | null | undefined): number {
 
 export function installerDayCap(a: Installer | null | undefined, ds: string | null | undefined): number {
   return staffCapOn(a, ds, typeDayCap(a?.type));
-}
-
-export function installersAvailable(installers: Installer[], ds: string): number {
-  return installers.filter((a) => installerDayCap(a, ds) >= 1).length;
 }
 
 export const DEFAULT_SLOTS_FL: SlotDef[] = [
@@ -135,13 +130,9 @@ export const STATUS: Record<string, { l: string; badge: string }> = {
 };
 export const AUTO_STATUSES = ['onway', 'atsite', 'completed'];
 
-export function mapUrl(a: string) {
-  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
-}
-
 const TRAVEL_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite'];
 
-export function reconciledOrderStatus(stored: string, subjobs: Subjob[] | null): string {
+function reconciledOrderStatus(stored: string, subjobs: Subjob[] | null): string {
   if (!subjobs || !subjobs.length) return stored;
   if (!TRAVEL_STATUSES.includes(stored)) return stored;
   return syncParentStatus(subjobs, stored);
@@ -324,10 +315,6 @@ export function syncParentStatus(subjobs: Subjob[] | null, fallback: string): st
   if (sts.some((s) => s === 'scheduled')) return 'scheduled';
   if (sts.every((s) => s === 'created')) return 'created';
   return fallback;
-}
-
-export function initials(n?: string | null) {
-  return (n || '').split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase();
 }
 
 export function fmtLogLocal(d?: string | null): string {

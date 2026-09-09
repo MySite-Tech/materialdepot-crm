@@ -7,11 +7,10 @@ import { C, Q3_OPTIONS } from '../constants/nps';
 import { DateDropdown, MultiDropdown } from './dropdowns';
 import { SurveyModal } from './survey';
 import { CatFilter, NPSDashboardProps, SortKey, Understood } from '../types/nps';
-import { ChartCard, Delta, EmptyChart, KpiTile, ResultPill, Segmented, WaitChip } from './ui';
-import { addDaysISO, bucketOf, catOf, computeMetrics, daysBetweenISO, daysSince, exportCSV, fmtDate, fmtPhone, fmtSigned, npsOf, okBm, okCategory, okSearch, okUnderstood, presetRange, uniqueCustomers, uniqueReviews } from '../utils/nps';
+import { Segmented } from './ui';
+import { addDaysISO, bucketOf, catOf, computeMetrics, daysBetweenISO, daysSince, exportCSV, fmtDate, fmtPhone, npsOf, okBm, okCategory, okSearch, okUnderstood, presetRange, uniqueCustomers, uniqueReviews } from '../utils/nps';
 import { NPSRow, fetchNPSTracker, submitNPS } from '@/lib/mockApi';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export default function NPSDashboard({ branches = [], allowedBranches = [] }: NPSDashboardProps) {
   const branchOptions = allowedBranches.length > 0 ? allowedBranches : branches;

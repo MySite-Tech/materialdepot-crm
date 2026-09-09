@@ -7,7 +7,7 @@ import { Segment } from '@/components/b2b/models/inboundModel';
 import { KamOrder } from '@/components/b2b/models/kamModel';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mockData';
 
-export interface ClientSeedCandidate {
+interface ClientSeedCandidate {
   company: string;
   phone: string;
   contactName?: string;

@@ -27,11 +27,6 @@ export const fmtDateShort = (iso: string) => {
   return `${MONTH_SHORT[m - 1]} ${String(d).padStart(2, '0')}`;
 };
 
-const todayISO = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
 export const monthStartISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;

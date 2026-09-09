@@ -1,6 +1,6 @@
 'use client';
 
-import { DateFilter, Preset, TimelineEntry } from '../types/escalation';
+import { DateFilter, TimelineEntry } from '../types/escalation';
 
 export const PAGE_SIZE = 20;
 
@@ -25,13 +25,6 @@ export const ESC_SUPPORT_PIPELINE_RULE = {
   id: "pipeline", field: "pipeline", type: "string", input: "select",
   operator: "in", value: [ESCALATION_PIPELINE_ID, SUPPORT_PIPELINE_ID],
 };
-
-export const PRESETS: { value: Preset; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "current_week", label: "Current week" },
-  { value: "current_month", label: "Current month" },
-];
 
 export const TRACKED_FIELDS: Record<string, string> = {
   cfResolution: "Resolution",

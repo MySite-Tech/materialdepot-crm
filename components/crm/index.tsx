@@ -17,50 +17,19 @@ import { makeLeadActions } from './lead-actions';
 import { makeLeadsCsv } from './csv-actions';
 
 import { CrmTabPanels } from './tab-panels';
-
-import { CsvErrorsModal } from './csv-errors';
-import { CsvPreviewModal } from './csv-preview';
-import { KylasSyncModal } from './kylas-modal';
-
-import { LeadsStats } from './leads-stats';
-import { LeadsTable } from './leads-table';
-
-import { LeadsFiltersDesktop } from './filters-desktop';
-import { LeadsFiltersMobile } from './filters-mobile';
 import { CrmHeader } from './header';
-import { LeadsCardList } from './leads-cards';
 import { CrmTabBar } from './tab-bar';
 
-import { Branch } from '../../types/crm';
-
-import { CRMLeadsStats, CategoryOption, appendRemarkToLead, assignBMToClient, createLead, deleteLead as deleteLeadDb, fetchBranchList, fetchCRMLeads, fetchCRMLeadsStats, fetchCategoryOptions, fetchLead, fetchLeadRemarks, fetchLeadVisits, fetchUsers, getKylasDealUrl, loginWithPhone, markLeadLost, syncEstimate, upsertLead, upsertLeads } from '../../lib/mockApi';
-import { AppUser, CartItem, Lead, Remark, Visit } from '../../types/crm';
-import { AdminDashboard } from './admin';
-import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, DEFAULT_BRANCHES, MIN_LOST_AGE_DAYS, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, STATUS_COLORS, VISIT_CHANNELS } from './constants/crm';
+import { CRMLeadsStats, CategoryOption, fetchCategoryOptions, fetchLeadRemarks, fetchLeadVisits } from '../../lib/mockApi';
+import { AppUser, Lead } from '../../types/crm';
+import { DEFAULT_BRANCHES } from './constants/crm';
 import { useDebouncedValue } from './hooks';
-import { DateRangePicker, MultiSelect } from './inputs';
-import { LeadDrawer } from './lead-drawer';
 import { LoginScreen } from './login';
-import { DateEditPopup } from './prompts';
 import { CsvRow, DateEditState, MainTab } from './types/crm';
-import { Avatar, EditableStatus, StatusBadge, Th } from './ui';
-import { canAdminStoreDisplay, canBypassLostAge, canMarkLostByAge, csvEscape, fmtDate, fmtINR, leadToExportRow, mergeLead, resolveAllowedTabs, todayStr, triggerDownload } from './utils/crm';
-import AppointmentTrackerClient from '@/components/appointment-tracker/AppointmentTrackerClient';
-import B2BSalesCRM from '@/components/b2b/views/B2BSalesCRM';
-import Dashboard from '@/components/dashboard/overview/index';
-import FootfallTab from '@/components/footfall/FootfallTab';
-import NPSDashboard from '@/components/nps/dashboard/index';
-import ReportCardDashboard from '@/components/report-card/dashboard/index';
-import MobileDashboard from '@/components/sales-dashboard/MobileDashboard';
+import { resolveAllowedTabs } from './utils/crm';
 import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/siteAuditShared';
-import SiteAuditOwnDashboard from '@/components/site-audit/views/SiteAuditOwnDashboard';
-import SiteAuditRail from '@/components/site-audit/views/SiteAuditRail';
-import StoreDisplayTab from '@/components/store-display/StoreDisplayTab';
-import StoreVisitWrapper from '@/components/store-visit/StoreVisitWrapper';
-import WeeklyFunnelDashboard from '@/components/weekly-funnel/dashboard/index';
-import { Download, FileSpreadsheet, FileText, FileType2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function App() {
   const searchParams = useSearchParams();
@@ -92,7 +61,7 @@ export default function App() {
   const siteAuditRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
   const siteAuditIsOversight = isSiteAuditOversightRole(siteAuditRole);
 
-  const {  } = useRestoreSession({ setCurrentUser, setPermsLoaded, setUserLoaded });
+  useRestoreSession({ setCurrentUser, setPermsLoaded, setUserLoaded });
 
 
   const handleLogin = (user: AppUser) => {
@@ -134,7 +103,7 @@ export default function App() {
 
   const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
-  const [dbReady, setDbReady] = useState(false);
+  const [, setDbReady] = useState(false);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsTotal, setLeadsTotal] = useState(0);
   const [leadsTotalPages, setLeadsTotalPages] = useState(1);
@@ -186,7 +155,7 @@ export default function App() {
   }, [drawerLead?.id, drawerLead?.clientPhone]);
 
   const [showAddDrawer, setShowAddDrawer] = useState(false);
-  const [deleteLeadState, setDeleteLeadState] = useState<Lead | null>(null);
+  const [, setDeleteLeadState] = useState<Lead | null>(null);
   const [dateEditPopup, setDateEditPopup] = useState<DateEditState | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -253,13 +222,6 @@ export default function App() {
     return ALL_COLUMNS.map((c) => c.key);
   });
   const isColVisible = (key: string) => visibleCols.includes(key);
-  const toggleCol = (key: string) => {
-    setVisibleCols((prev) => {
-      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
-      localStorage.setItem('materialdepot_cols', JSON.stringify(next));
-      return next;
-    });
-  };
 
   const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
 
@@ -284,9 +246,6 @@ export default function App() {
   const isOverdue = (l: Lead): boolean => !!(l.followUpDate && l.followUpDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
   const isClosureOverdue = (l: Lead): boolean => !!(l.closureDate && l.closureDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
 
-  const toggleStatusFilter = useCallback((status: string) => {
-    setStatusFilter((prev) => prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]);
-  }, []);
 
   const COL_COUNT = visibleCols.length + 1;
 
@@ -297,7 +256,7 @@ export default function App() {
     <div className="flex items-center justify-center h-screen text-sm text-gray-400">Loading…</div>
   );
 
-  const {  } = useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">

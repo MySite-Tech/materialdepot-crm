@@ -37,7 +37,7 @@ export function cleanCell(v: unknown): string {
 
 export const normalize = (v: string) => cleanCell(v).toLowerCase().replace(/\s+/g, ' ');
 
-export function sniffDelimiter(text: string): string {
+function sniffDelimiter(text: string): string {
   const firstLine = text.replace(/^﻿/, '').split(/\r?\n/).find((l) => l.trim()) || '';
   let best = ',';
   let bestCount = -1;
@@ -87,7 +87,7 @@ export function parsePhone(raw: string): { phone: string; error?: string } {
   return { phone: local };
 }
 
-export function parseValue(raw: string): { value: number; error?: string } {
+function parseValue(raw: string): { value: number; error?: string } {
   const cleaned = cleanCell(raw);
   if (!cleaned) return { value: 0 };
 
@@ -110,7 +110,7 @@ function validYmd(y: number, m: number, d: number): boolean {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
-export function parseClosureDate(raw: string): { date?: string; error?: string } {
+function parseClosureDate(raw: string): { date?: string; error?: string } {
   const cleaned = cleanCell(raw);
   if (!cleaned) return {};
 
@@ -154,7 +154,7 @@ export function parseClosureDate(raw: string): { date?: string; error?: string }
   return { error: `"${cleaned}" is not a recognised date — use YYYY-MM-DD` };
 }
 
-export function matchStage(raw: string): { status: KamOrderStatus; wasLegacy: boolean } | null {
+function matchStage(raw: string): { status: KamOrderStatus; wasLegacy: boolean } | null {
   const n = normalize(raw);
   if (!n) return null;
   const current = KAM_ORDER_STATUSES.find((s) => normalize(s) === n);
@@ -165,7 +165,7 @@ export function matchStage(raw: string): { status: KamOrderStatus; wasLegacy: bo
   return null;
 }
 
-export function matchKam(raw: string): string | null {
+function matchKam(raw: string): string | null {
   const n = normalize(raw);
   if (!n) return null;
   const exact = KAMS.find((k) => normalize(k) === n);
@@ -183,7 +183,7 @@ export function isHeaderRow(row: string[]): boolean {
   return hits >= 3;
 }
 
-export interface ValidateResult {
+interface ValidateResult {
   rows: ParsedRow[];
   skipped: number;
 }
@@ -346,7 +346,7 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
   return { rows: out, skipped };
 }
 
-export interface ImportSummary {
+interface ImportSummary {
   valid: number;
   updates: number;
   warnings: number;

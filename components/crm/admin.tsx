@@ -1,6 +1,6 @@
 'use client';
 
-import { addUser, deleteUser, fetchBranchList, fetchUsers, updateUser, updateUserBranches } from '../../lib/mockApi';
+import { addUser, fetchBranchList, fetchUsers, updateUser, updateUserBranches } from '../../lib/mockApi';
 import { AppUser, Branch } from '../../types/crm';
 import { BranchManager } from './branch-manager';
 import { SITE_AUDIT_ROLES } from './constants/crm';
@@ -57,16 +57,6 @@ export function AdminDashboard() {
       setNewName(''); setNewPhone(''); setNewEmail(''); setNewRole('sales'); setNewPermissions([]);
     } catch (e: any) {
       setError(e.message || 'Failed to add user');
-    }
-  };
-
-  const handleDelete = async (id: string | number, name: string) => {
-    if (!window.confirm(`Delete user "${name}"?`)) return;
-    try {
-      await deleteUser(id);
-      setUsers((prev) => prev.filter((u) => u.id !== id));
-    } catch (e: any) {
-      setError(e.message || 'Failed to delete user');
     }
   };
 

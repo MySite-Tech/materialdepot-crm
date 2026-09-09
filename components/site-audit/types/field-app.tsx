@@ -31,7 +31,7 @@ export interface LocationTracker {
   stop(): void;
 }
 
-export interface ArrivalCaptureResult {
+interface ArrivalCaptureResult {
   photo: string | null;
   lat: number | null;
   lng: number | null;

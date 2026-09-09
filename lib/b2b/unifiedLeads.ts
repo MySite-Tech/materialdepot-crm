@@ -77,7 +77,7 @@ function outreachToUnified(l: OutreachLead): UnifiedLead {
   };
 }
 
-export interface UnifiedLeadsResult {
+interface UnifiedLeadsResult {
   leads: UnifiedLead[];
 
   inboundTotal: number;

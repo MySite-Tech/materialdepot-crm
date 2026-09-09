@@ -9,7 +9,7 @@ export interface ClientOrderHistory {
   furthestStatus: string | null;
 }
 
-export function normalizeClientPhone(phone: string | undefined): string {
+function normalizeClientPhone(phone: string | undefined): string {
   return (phone || '').replace(/\D/g, '').slice(-10);
 }
 

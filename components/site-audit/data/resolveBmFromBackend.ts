@@ -5,9 +5,9 @@ const PAGE_SIZE = 200;
 
 const MAX_PAGES = 10;
 
-export type BmOwner = { name: string; contact: string };
+type BmOwner = { name: string; contact: string };
 
-export async function fetchBmOwnersByEnquiry(): Promise<{ owners: Map<string, BmOwner>; truncated: boolean }> {
+async function fetchBmOwnersByEnquiry(): Promise<{ owners: Map<string, BmOwner>; truncated: boolean }> {
   const token = getToken();
   const owners = new Map<string, BmOwner>();
   let truncated = false;
@@ -33,7 +33,7 @@ export async function fetchBmOwnersByEnquiry(): Promise<{ owners: Map<string, Bm
   return { owners, truncated };
 }
 
-export function enquiryIdOf(row: { pi?: string | null; po?: string | null }): string | null {
+function enquiryIdOf(row: { pi?: string | null; po?: string | null }): string | null {
   const hit = /ENQ\d+/.exec(String(row.pi || '') + ' ' + String(row.po || ''));
   return hit ? hit[0] : null;
 }

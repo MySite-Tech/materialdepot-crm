@@ -16,7 +16,7 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
   const [dateFrom, setDateFrom] = useState(monthStartISO);
   const [dateTo, setDateTo] = useState(monthEndISO);
   const [store, setStore] = useState('');
-  const [bmLabel, setBmLabel] = useState('');
+  const [, setBmLabel] = useState('');
   const [bmContact, setBmContact] = useState('');
   const [category, setCategory] = useState('');
 

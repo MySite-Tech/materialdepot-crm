@@ -196,7 +196,7 @@ export function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBran
                     </div>
                   )}
                 </td>
-                {days.map((d, dayIdx) => {
+                {days.map((_d, dayIdx) => {
                   const code = codeAt(branchData.weeks[weekKey]?.[m.id], dayIdx);
                   const meta = code !== "-" ? SHIFT_META[code] : null;
                   return (

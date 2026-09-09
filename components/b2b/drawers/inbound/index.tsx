@@ -11,9 +11,9 @@ import { InboundPresalesCard } from './presales-card';
 import { InboundRequirementCard } from './requirement-card';
 import { InboundStatusCard } from './status-card';
 
-import { CLIENT_TYPES, CallAttempt, CallAttemptOutcome, ENRICHMENT_FIELD_COUNT, INBOUND_LOCATIONS, INBOUND_LOST_REASONS, INBOUND_STATUSES, INBOUND_STATUS_HINT, InboundStatus, LEAD_TYPES, MAX_CALL_ATTEMPTS, PLACED_UNDER_FIELDS, PRIORITIES, PlacedUnder, SEGMENTS, SELECTIONS, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nameIsJustThePhone, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inboundModel';
-import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote, fmtINR } from '../../models/mockData';
-import { Empty, Field, FollowUpChip, GateErrors, LeadTypeChip, PriorityChip, ProvenanceChip, ReadValue, SectionCard, Spinner, StatusBadge, errorInputCls, fmtLeadDateTime, inputCls } from '../../ui/inboundChips';
+import { CallAttempt, CallAttemptOutcome, InboundStatus, PLACED_UNDER_FIELDS, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inboundModel';
+import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote } from '../../models/mockData';
+import { Field, SectionCard, Spinner, inputCls } from '../../ui/inboundChips';
 import { KYLAS_OUTCOME } from '../../constants/inbound-drawer';
 import { SaveState } from '../../types/inbound-drawer';
 import { EnqLookup, fetchInboundKamLoad, lookupEnqId, upsertInboundLead } from '@/lib/b2bLeads';

@@ -5,7 +5,7 @@ import {
   MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfAuditRoom, mdPdfConsent, mdPdfHeader,
 } from '../brand/pdfBrand';
 
-export function renderSketchA(r: any): string | null {
+function renderSketchA(r: any): string | null {
   if (!r.sketchStrokes || !r.sketchStrokes.length) return null;
   const W = 1000, H = 500;
   const c = document.createElement('canvas'); c.width = W; c.height = H;

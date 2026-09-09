@@ -27,7 +27,7 @@ export function installReviewProgress(rows: InstallReviewRow[]): ReviewProgress 
   return p;
 }
 
-export function installCompletionDate(order: CoeInstall, sj: CoeSubjob): string | null {
+function installCompletionDate(order: CoeInstall, sj: CoeSubjob): string | null {
   const prefix = typeLabel(sj.type) + ' installation completed';
   let latest: string | null = null;
   for (const l of order.log || []) {

@@ -1,7 +1,5 @@
 'use client';
 
-import { Segment } from '../../models/clientModel';
-
 import { ACTIVE_WINDOW_MONTHS, CLIENT_ENTITY_TYPES, ClientEntity, ClientOrderMetrics, ClientStatus, EVIDENCE_IS_EXACT, MergeChoices, SEGMENTS, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact, temperatureColor, validateGst } from '../../models/clientModel';
 import { KAMS, fmtL } from '../../models/mockData';
 import { ExportButton, ExportFormat, exportRowsCsv, exportRowsExcel, todayStr } from '../../ui/exportUtils';

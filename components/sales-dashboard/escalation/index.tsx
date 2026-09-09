@@ -9,9 +9,9 @@ import { EscalationPager } from './pager';
 import { EscalationSearch } from './search';
 import { EscalationStats } from './stats';
 
-import { DATE_CHIPS, PAGE_SIZE, TIMELINE_ICONS } from '../constants/escalation';
+import { PAGE_SIZE } from '../constants/escalation';
 import { DateFilter, MobileEscalationProps, NoteEntry, StatusFilter, TimelineEntry } from '../types/escalation';
-import { buildBody, cardBorderColor, cfDisplayValue, classifyStage, dateFilterLabel, dateFilterRange, endOfDay, isEscalationOrSupport, outcomeStyle, parseTimeline, relativeAge, relativeTimeBetween, stagePillStyle, startOfDay } from '../utils/escalation';
+import { buildBody, classifyStage, dateFilterLabel, dateFilterRange, endOfDay, isEscalationOrSupport, parseTimeline, startOfDay } from '../utils/escalation';
 import { getEscalationRaisedBy } from '@/lib/mockApi';
 import { CallLog, Deal, DealsSearchResponse } from '@/lib/types/index';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -50,10 +50,10 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
 
   const [lastAction, setLastAction] = useState<Record<number, { type: "note" | "doc"; text: string }>>({});
 
-  const [callLogMap, setCallLogMap] = useState<
+  const [, setCallLogMap] = useState<
     Record<number, { incoming: CallLog | null; outgoing: CallLog | null }>
   >({});
-  const [noteMap, setNoteMap] = useState<Record<number, NoteEntry | null>>({});
+  const [, setNoteMap] = useState<Record<number, NoteEntry | null>>({});
   const [contactMap, setContactMap] = useState<
     Record<number, { id: number; name: string } | null>
   >({});

@@ -1,5 +1,5 @@
 import {
-  KAM_ORDER_STATUSES, dealIsOrder,
+  dealIsOrder,
   type KamOrder, type KamOrderStatus,
 } from './kamModel';
 
@@ -22,7 +22,7 @@ const DEAL_STATUS_TO_ORDER_STATUS: Record<string, KamOrderStatus> = {
   'Hold Stock': 'PI Shared',
 };
 
-export function statusForDealStatus(dealStatus: string | null | undefined): KamOrderStatus | null {
+function statusForDealStatus(dealStatus: string | null | undefined): KamOrderStatus | null {
   const s = String(dealStatus || '');
   if (!s) return null;
 
@@ -30,7 +30,7 @@ export function statusForDealStatus(dealStatus: string | null | undefined): KamO
   return DEAL_STATUS_TO_ORDER_STATUS[s] ?? null;
 }
 
-export interface StatusAdvance {
+interface StatusAdvance {
   order: KamOrder;
   from: KamOrderStatus;
   to: KamOrderStatus;
@@ -38,7 +38,7 @@ export interface StatusAdvance {
   trigger: string;
 }
 
-export function planAdvance(order: KamOrder): StatusAdvance | null {
+function planAdvance(order: KamOrder): StatusAdvance | null {
 
   if (!String(order.enqId || '').trim()) return null;
   const target = statusForDealStatus(order.dealStatus);
@@ -74,6 +74,3 @@ export function applyAdvance(advance: StatusAdvance): KamOrder {
     notes: alreadyNoted ? notes : [...notes, { ts: 'just now', author: 'Automation', text }],
   };
 }
-
-export const AUTO_STATUSES: KamOrderStatus[] = KAM_ORDER_STATUSES.filter((s) =>
-  s === 'Closed' || Object.values(DEAL_STATUS_TO_ORDER_STATUS).includes(s));

@@ -3,7 +3,7 @@ import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbou
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mockData';
 import { CompanyType, OutreachMeeting, normalizeOutreachStatus } from '@/components/b2b/models/outreachModel';
 
-export const OUTREACH_META: MetaSpec<OutreachLead> = {
+const OUTREACH_META: MetaSpec<OutreachLead> = {
   company:            { col: 'company',          read: (v) => String(v ?? '') },
   contactPerson:      { col: 'contact_person',   read: (v) => String(v ?? '') },
   designation:        { col: 'designation',      read: str },

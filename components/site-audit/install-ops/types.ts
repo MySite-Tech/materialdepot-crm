@@ -2,7 +2,7 @@ export type SkuType = 'flooring' | 'wallpaper' | 'wallpanel' | 'install';
 
 export type InstallCategory = 'flooring' | 'wallpaper' | 'wallpanel';
 
-export interface SkuItem {
+interface SkuItem {
   c: string;
   n: string;
   type: SkuType;
@@ -19,7 +19,7 @@ export interface ServiceSkuRow {
   qty?: string;
 }
 
-export interface ServiceData {
+interface ServiceData {
   flooring?: ServiceSkuRow[];
   wallpaper?: ServiceSkuRow[];
   wallpanel?: ServiceSkuRow[];
@@ -44,7 +44,7 @@ export interface Assignment {
   status?: string;
 }
 
-export interface RoomEntry {
+interface RoomEntry {
 
   v?: number;
   category?: string;
@@ -89,7 +89,7 @@ export interface Subjob {
   customWpMeta?: Record<string, any>;
 }
 
-export interface LogEntry {
+interface LogEntry {
   t: string;
   d: string;
   by?: 'auto' | 'manual';

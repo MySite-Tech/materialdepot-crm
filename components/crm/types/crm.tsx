@@ -40,13 +40,6 @@ export interface DateRangePickerProps {
   className?: string;
 }
 
-export interface FollowUpRemarkPromptProps {
-  oldDate: string;
-  newDate: string;
-  onConfirm: (text: string) => void;
-  onCancel: () => void;
-}
-
 type DrawerUser = { id: string | number; name: string };
 
 export interface LeadDrawerProps {
@@ -68,12 +61,6 @@ export interface DateEditPopupProps {
   closureDate?: string;
   assignedTo?: string;
   onSave: (newDate: string, remark: string) => void;
-  onCancel: () => void;
-}
-
-export interface DeleteConfirmProps {
-  leadId: string;
-  onConfirm: () => void;
   onCancel: () => void;
 }
 

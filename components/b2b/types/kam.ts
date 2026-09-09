@@ -1,5 +1,5 @@
 import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, InteractionType, TemperatureBand, clientStatus } from '../models/clientModel';
-import { FieldOwner, FollowUpBucket, Segment } from '../models/inboundModel';
+import { FollowUpBucket, Segment } from '../models/inboundModel';
 export type KamOrderStatus =
   | 'Requirement Logged' | 'Quote Shared' | 'PI Shared' | 'Closed' | 'Lost';
 
@@ -145,16 +145,3 @@ export interface NewVsRepeat {
 }
 
 export type KamView = 'clients' | 'today' | 'queue' | 'orders' | 'dashboard';
-
-export type KamFieldInput = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'readonly';
-
-export interface KamFieldSpec {
-  key: string;
-  label: string;
-  section: '2' | '3.1' | '5.1';
-  owner: FieldOwner;
-  input: KamFieldInput;
-  options?: readonly string[];
-  hint?: string;
-  onCreate?: boolean;
-}

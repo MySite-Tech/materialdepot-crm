@@ -1,4 +1,4 @@
-import { KamFieldSpec, KamOrderStatus, KamPipelineSplit, KamView, LegacyKamStage } from '../types/kam';
+import { KamOrderStatus, KamView, LegacyKamStage } from '../types/kam';
 export const KAM_ORDER_STATUSES: KamOrderStatus[] = [
   'Requirement Logged', 'Quote Shared', 'PI Shared', 'Closed', 'Lost',
 ];
@@ -50,8 +50,6 @@ export const TEMPERATURE_SILENCE_DAYS = 45;
 
 export const AT_RISK_WINDOW_DAYS = 30;
 
-export const EMPTY_SPLIT: KamPipelineSplit = { pipeline: 0, estimatedPipeline: 0, count: 0 };
-
 export const STATUS_RANK: Record<KamOrderStatus, number> = {
   'Requirement Logged': 0, 'Quote Shared': 1, 'PI Shared': 2, 'Closed': 3, 'Lost': 3,
 };
@@ -62,24 +60,4 @@ export const KAM_VIEWS: { key: KamView; label: string; section: string; note: st
   { key: 'queue',     label: 'Follow-up Queue',  section: '§4.3', note: 'Overdue follow-ups, oldest first. A row clears when you log the call.' },
   { key: 'orders',    label: 'Active Orders',    section: '§5', note: 'Repeat and upsell orders you have raised against an existing client.' },
   { key: 'dashboard', label: 'KAM Dashboard',    section: '§6', note: 'Pipeline, funnel, cohort and call compliance for the KAM book.' },
-];
-
-export const KAM_ORDER_FIELDS: KamFieldSpec[] = [
-  { key: 'company',        label: 'Company name',        section: '5.1', owner: 'crm',   input: 'select', onCreate: true, hint: 'Your assigned clients only — an order cannot be raised against an account you do not hold' },
-  { key: 'requirement',    label: 'Requirement details', section: '5.1', owner: 'crm',   input: 'textarea', onCreate: true },
-  { key: 'estimatedValue', label: 'Order value',         section: '5.1', owner: 'crm',   input: 'number', onCreate: true, hint: 'Your estimate at creation — never reported as revenue' },
-  { key: 'status',         label: 'Status',              section: '5.1', owner: 'crm',   input: 'select', options: KAM_ORDER_STATUSES, onCreate: true },
-  { key: 'enqId',          label: 'Enquiry ID',          section: '5.1', owner: 'crm',   input: 'text', hint: 'Required at PI Shared (§5.2)' },
-  { key: 'orderValue',     label: 'Order value (Procurement)', section: '5.1', owner: 'deals', input: 'readonly', hint: 'Read from the deal ticket matching the Enquiry ID. This is the only figure counted as revenue.' },
-  { key: 'expectedClosure',label: 'Expected date of closure', section: '5.1', owner: 'crm', input: 'date', onCreate: true },
-  { key: 'lostReason',     label: 'Lost reason',         section: '5.1', owner: 'crm',   input: 'select', options: KAM_ORDER_LOST_REASONS, hint: 'Required at Lost (§5.2)' },
-];
-
-export const KAM_INTERACTION_FIELDS: KamFieldSpec[] = [
-  { key: 'type',             label: 'Interaction type',        section: '3.1', owner: 'crm', input: 'select', options: ['Call', 'Meeting'], onCreate: true },
-  { key: 'date',             label: 'Date',                    section: '3.1', owner: 'crm', input: 'date', onCreate: true },
-  { key: 'summary',          label: 'Summary',                 section: '3.1', owner: 'crm', input: 'textarea', onCreate: true },
-  { key: 'temperature',      label: 'Account temperature',     section: '3.1', owner: 'crm', input: 'number', onCreate: true, hint: '0–10. 0 is very bad, 10 is very good (§3.2).' },
-  { key: 'upcomingProject',  label: 'Upcoming project details',section: '3.1', owner: 'crm', input: 'textarea', onCreate: true },
-  { key: 'nextFollowUpDate', label: 'Next follow-up date',     section: '3.1', owner: 'crm', input: 'date', onCreate: true, hint: 'Required on a call (§4.1) — it is what fills Today\'s Calls and the Follow-up Queue' },
 ];

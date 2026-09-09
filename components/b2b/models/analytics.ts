@@ -27,7 +27,7 @@ const sum = (ns: (number | undefined)[]) => ns.reduce((a: number, b) => a + (Num
 
 export type ClientMetricsMap = Record<string, ClientOrderMetrics>;
 
-export function repUniverse(data: B2BData): string[] {
+function repUniverse(data: B2BData): string[] {
   const seen = new Set<string>(REP_TARGETS.map((r) => r.rep));
   data.inbound.forEach((l) => l.owner && seen.add(l.owner));
   data.outreach.forEach((l) => l.bm && seen.add(l.bm));
@@ -36,7 +36,7 @@ export function repUniverse(data: B2BData): string[] {
   return [...seen].filter((r) => !B2B_ADMINS.includes(r));
 }
 
-export function kamUniverse(data: B2BData): string[] {
+function kamUniverse(data: B2BData): string[] {
   const seen = new Set<string>();
   data.kam.forEach((o) => o.kam && seen.add(o.kam));
   data.clients.forEach((c) => c.kam && seen.add(c.kam));
@@ -114,7 +114,7 @@ export function computeDashboard(
   };
 }
 
-export interface VerticalPipeline {
+interface VerticalPipeline {
   label: string;
 
   pipeline: number;
@@ -125,7 +125,7 @@ export interface VerticalPipeline {
   statuses: string[];
 }
 
-export interface TemperatureDistribution {
+interface TemperatureDistribution {
   bands: { label: string; key: string; count: number; color: string }[];
   unscored: number;
 
@@ -152,7 +152,7 @@ export interface KamDashboard {
   unreadableClients: number;
 }
 
-export interface KamDashboardOptions {
+interface KamDashboardOptions {
   clientMetrics?: ClientMetricsMap;
 
   firstOrderValueFor?: (c: ClientEntity) => number | undefined;
@@ -295,7 +295,7 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
   };
 }
 
-export interface RepLeaderboardRow {
+interface RepLeaderboardRow {
   rep: string;
   inbound: number;
   outreach: number;

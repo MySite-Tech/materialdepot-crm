@@ -3,7 +3,7 @@
 import type { ReactElement } from 'react';
 import { assigneeProgress, fmtDate, installerById, STATUS, subjobDisplayStatus } from './shared';
 import { typeTag } from '../data/auditRegistry';
-import type { InstallCategory, InstallOrder, Installer, Subjob } from './types';
+import type { InstallCategory, InstallOrder, Installer } from './types';
 
 export function Chip({ st }: { st: string }) {
   const s = STATUS[st] || { l: st, badge: 'bg-gray-100 text-gray-600' };

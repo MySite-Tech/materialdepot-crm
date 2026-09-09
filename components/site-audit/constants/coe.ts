@@ -33,9 +33,9 @@ export const CAT_WALLPAPER = 'Wallpaper';
 
 export const CAT_CUSTOM_WP = 'Custom Wallpaper';
 
-export const CAT_WALLPANEL = 'Wall Panels';
+const CAT_WALLPANEL = 'Wall Panels';
 
-export const CAT_CNC = 'CNC';
+const CAT_CNC = 'CNC';
 
 export const CAT_UNSET = 'Not recorded';
 

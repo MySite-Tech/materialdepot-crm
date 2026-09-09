@@ -1,5 +1,5 @@
 import { Escalation } from '../models/accountHealth';
-import { FieldOwner, Segment } from '../models/inboundModel';
+import { Segment } from '../models/inboundModel';
 import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_BANDS } from '../constants/client';
 export type ClientEntityType = typeof CLIENT_ENTITY_TYPES[number];
 
@@ -14,7 +14,7 @@ export interface ClientContact {
   primary?: boolean;
 }
 
-export type GstCheck = 'valid' | 'bad-format' | 'bad-checksum' | 'unknown-state' | 'empty';
+type GstCheck = 'valid' | 'bad-format' | 'bad-checksum' | 'unknown-state' | 'empty';
 
 export interface ClientGst {
 
@@ -145,20 +145,4 @@ export interface MergeResult {
   merged: ClientEntity;
 
   absorbed: ClientEntity[];
-}
-
-export type ClientFieldInput = 'text' | 'textarea' | 'select' | 'contacts' | 'gsts' | 'readonly';
-
-export interface ClientFieldSpec {
-  key: string;
-  label: string;
-  section: '2' | '3.1' | '3.2' | '6.1';
-  owner: FieldOwner;
-  input: ClientFieldInput;
-  options?: readonly string[];
-  hint?: string;
-
-  onCreate?: boolean;
-
-  required?: boolean;
 }

@@ -5,7 +5,7 @@ import { AppUser, Lead } from '../../types/crm';
 import { STATUSES } from './constants/crm';
 import { useMemo } from 'react';
 
-export function useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir }: {
+export function useLeadsView({ crmUsers, currentUser, leads, leadsStats, sortCol, sortDir }: {
   crmUsers: AppUser[];
   currentUser: AppUser | null;
   leads: Lead[];
@@ -45,8 +45,6 @@ const stageSummary = STATUSES.map((status) => {
   const row = statsByStatus.get(status);
   return { status, count: row?.count || 0, value: row?.value || 0 };
 });
-
-const totalLeadsCount = leadsStats?.total.count ?? leadsTotal ?? filtered.length;
 const activeCount = leadsStats?.active.count ?? 0;
 const wonCount = leadsStats?.won.count ?? 0;
 const lostCount = leadsStats?.lost.count ?? 0;

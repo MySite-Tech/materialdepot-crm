@@ -13,13 +13,13 @@ import {
 
 applyPlugin(jsPDF as any);
 
-export type RGB = [number, number, number];
+type RGB = [number, number, number];
 
 export const MD_INK: RGB = [26, 28, 36];
-export const MD_YELLOW: RGB = [244, 194, 13];
+const MD_YELLOW: RGB = [244, 194, 13];
 export const MD_MUTED: RGB = [110, 116, 130];
-export const MD_LINE: RGB = [214, 214, 220];
-export const MD_LABELFILL: RGB = [246, 246, 243];
+const MD_LINE: RGB = [214, 214, 220];
+const MD_LABELFILL: RGB = [246, 246, 243];
 
 export function mdCompress(dataUrl?: string | null, maxW = 1600, maxH = 1200, q = 0.88): Promise<string | null> {
   return new Promise((resolve) => {
@@ -83,7 +83,7 @@ export function mdPdfHeader(doc: any, opts: { title?: string; right?: string; M?
   return y + 17;
 }
 
-export function mdSectionTitle(doc: any, text: string, y: number, M = 40): number {
+function mdSectionTitle(doc: any, text: string, y: number, M = 40): number {
   doc.setFillColor(...MD_YELLOW);
   doc.rect(M, y - 8, 4, 13, 'F');
   doc.setFont('helvetica', 'bold');
@@ -114,7 +114,7 @@ export function mdInfoTable(doc: any, y: number, body: (string | number)[][], M 
   return doc.lastAutoTable.finalY + 10;
 }
 
-export type RoomPdfOpts = {
+type RoomPdfOpts = {
   M?: number;
   W?: number;
   H?: number;
@@ -334,7 +334,7 @@ export async function mdPdfInstallRoom(doc: any, room: any, yStart: number, opts
   return y;
 }
 
-export type ConsentPdfOpts = {
+type ConsentPdfOpts = {
   y?: number;
   M?: number;
   W?: number;

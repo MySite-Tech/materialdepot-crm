@@ -1,7 +1,6 @@
 'use client';
 
-import { addBranch, deleteBranch, updateBranch } from '../../lib/mockApi';
-import { Branch } from '../../types/crm';
+import { addBranch, updateBranch } from '../../lib/mockApi';
 import { useState } from 'react';
 
 import { BranchManagerProps } from './types/crm';
@@ -23,16 +22,6 @@ export function BranchManager({ branches, setBranches }: BranchManagerProps) {
       setNewBranch('');
     } catch (e: any) {
       setBranchError(e.message || 'Failed to add branch');
-    }
-  };
-
-  const handleDeleteBranch = async (id: string | number, name: string) => {
-    if (!window.confirm(`Delete branch "${name}"?`)) return;
-    try {
-      await deleteBranch(id);
-      setBranches((prev) => prev.filter((b) => b.id !== id));
-    } catch (e: any) {
-      setBranchError(e.message || 'Failed to delete branch');
     }
   };
 

@@ -2,9 +2,9 @@
 
 export type TileProps = (key: string | undefined, base: string) => Record<string, unknown>;
 
-export const pc = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : null);
-export const pcColorClass = (p: number | null) => (p === null ? 'text-gray-400' : p >= 80 ? 'text-green-600' : p >= 50 ? 'text-amber-600' : 'text-red-600');
-export const pcBarClass = (p: number | null) => (p === null ? 'bg-gray-300' : p >= 80 ? 'bg-green-600' : p >= 50 ? 'bg-amber-600' : 'bg-red-600');
+const pc = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : null);
+const pcColorClass = (p: number | null) => (p === null ? 'text-gray-400' : p >= 80 ? 'text-green-600' : p >= 50 ? 'text-amber-600' : 'text-red-600');
+const pcBarClass = (p: number | null) => (p === null ? 'bg-gray-300' : p >= 80 ? 'bg-green-600' : p >= 50 ? 'bg-amber-600' : 'bg-red-600');
 
 import { NPS_BAND_LABELS } from '../../shared/format';
 

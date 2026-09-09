@@ -3,16 +3,14 @@
 import { WizardSetupPhase } from './wizard-setup';
 
 import { archiveAuditTicked } from './data';
-import { JobDetailsHeader } from './job-detail';
 import { genPDF } from './pdf';
-import { RoomEditor, RoomReviewCard } from './rooms';
 import { ActingAs, LogEntry, Order, Room, RoomPatch, SignData, WizardPhase } from '../../types/auditor';
-import { KV, Spinner } from './ui';
-import { buildAuditTC, draftPayload, dstr, initialCategory, makeRoom, normalizeRestoredRoom, pdfFileName, saveStatusDisplay, serializeRoom, slotLabel, todayMidnight } from '../../utils/auditor';
-import { LocationTracker, SignaturePad, SignaturePadHandle } from '@/components/site-audit/apps/fieldAppShared';
-import { adjMissingPhoto, adjMissingReason, categoryFor, mdInstallTermsBlock } from '@/components/site-audit/data/auditRegistry';
+import { Spinner } from './ui';
+import { draftPayload, dstr, initialCategory, makeRoom, normalizeRestoredRoom, saveStatusDisplay, serializeRoom, todayMidnight } from '../../utils/auditor';
+import { LocationTracker, SignaturePadHandle } from '@/components/site-audit/apps/fieldAppShared';
+import { adjMissingPhoto, adjMissingReason, categoryFor } from '@/components/site-audit/data/auditRegistry';
 import { confirmServicePerformed } from '@/components/site-audit/data/omsService';
-import { fmtDateA, sbGet, sbPatch, sbPatchLong, uploadPhoto } from '@/components/site-audit/siteAuditShared';
+import { sbGet, sbPatch, sbPatchLong, uploadPhoto } from '@/components/site-audit/siteAuditShared';
 import { cn } from '@/lib/utils/index';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

@@ -4,7 +4,6 @@
 import { sbGet, sbPatch, sbPatchLong } from '../../shared/sbClient';
 import { Job, PersistedRoom, Room } from '../../types/installer';
 import { appendRoomState, collectRooms } from '../../utils/installer';
-import { useInstallerFlow } from './use-installer-flow';
 import { useRoomActions } from './use-room-actions';
 import { Dispatch, RefObject, SetStateAction, useCallback } from 'react';
 

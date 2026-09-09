@@ -2,7 +2,7 @@ import { unitFor } from './categories';
 import { UNIT_DIV } from '../../constants/audit-registry';
 import { AdjustDisplayRow, AdjustRow, CategoryDef, RoomLike } from '../../types/audit-registry';
 import { n, r2 } from '../../utils/audit-registry';
-export function adjArea(a: AdjustRow | null | undefined, div: number): number {
+function adjArea(a: AdjustRow | null | undefined, div: number): number {
   if (!a) return 0;
   if (String(a.area ?? '') !== '') return n(a.area);
   if (a.shape === 'Other') return 0;
