@@ -225,10 +225,14 @@ This is the single most common source of confusion here.
 
 Gotchas:
 
-- `API_BASE_URL` in `lib/api/core/client.ts:1` is **hardcoded**. The `API_BASE_URL` line
-  in `.env.local` is dead — editing it changes nothing.
-- `components/site-audit/shared/sb-client.ts` hardcodes the Site Audit URL **and** anon key too. The
-  `NEXT_PUBLIC_SITE_AUDIT_*` env vars exist but that module doesn't read them.
+- `API_BASE_URL` in `lib/api/core/client.ts:1` is **hardcoded**, so editing
+  `API_BASE_URL` in the env file changes nothing *for browser calls*. It is not
+  dead, though: `app/api/store-display/route.ts:5` reads
+  `process.env.API_BASE_URL` (falling back to the same dev URL). Don't delete
+  the var — one server route depends on it.
+- `components/site-audit/shared/sb-client.ts` hardcodes the Site Audit URL **and** anon key too.
+  Nothing reads `NEXT_PUBLIC_SITE_AUDIT_*`, so those two keys were dropped from
+  the env file; re-add them only if you also make that module read them.
 - The Site Audit project is shared with the separate `material-depot-site`
   vanilla-JS PWA and **runs with RLS off** — its anon key is public by design.
   Do not "fix" that by enabling RLS; it breaks every read in both apps.
