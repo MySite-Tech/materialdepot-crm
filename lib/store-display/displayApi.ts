@@ -1,10 +1,3 @@
-/* Store-display data access.
- *
- * Every call goes straight to the Django backend via `mdFetch` (the same authed
- * fetch the rest of the CRM uses) — there is no `/api/store-display` proxy any
- * more. The backend now paginates and product-name-searches server-side, so the
- * cross-branch "scan" only remains for the filters it still can't do itself
- * (category / display_type / is_deleted, and multi-field text search). */
 import { mdFetch } from '../mockApi';
 
 export function flattenLocationRow(row: any) {
@@ -19,8 +12,7 @@ export function flattenLocationRow(row: any) {
     category: row.location?.category ?? '',
     display_type: row.location?.display_type ?? '',
     location_string: row.location?.location_string ?? '',
-    // The store-location's own soft-delete flag (serializer now exposes it at the
-    // row level) — not the location map's is_active.
+
     is_active: row.is_active ?? true,
     is_deleted: row.variant?.is_deleted ?? false,
     image_url: row.variant?.variant_image?.[0]?.image_url ?? null,
@@ -30,15 +22,11 @@ export function flattenLocationRow(row: any) {
   };
 }
 
-// ─── Locations: fetch / search ───────────────────────────────────────────────
-
 export interface FetchLocationsParams {
   branch_id?: string | number;
   page?: number;
   page_size?: number;
-  /* Free-text query. On its own (no other filter) it is handed to the backend
-     as a product_name search; combined with a filter it becomes a multi-field
-     client-side filter over the scanned rows (name / sku / handle / PL / loc). */
+
   search?: string;
   category?: string;
   display_type?: string;
@@ -65,9 +53,6 @@ function locationsQuery(params: Record<string, string | number | boolean | undef
   return q.toString();
 }
 
-/* Single direct call — the backend does all filtering (branch, category,
-   display_type, is_active, is_deleted) and product-name search + pagination.
-   No client-side page-walking. */
 export async function fetchLocations(params: FetchLocationsParams): Promise<LocationsPage> {
   const query = locationsQuery({
     page: Math.max(1, Number(params.page) || 1),
@@ -82,16 +67,12 @@ export async function fetchLocations(params: FetchLocationsParams): Promise<Loca
   return mdFetch(`/fetch-variant-locations/?${query}`);
 }
 
-/* Distinct category / display_type options for the filter dropdowns — one
-   cached backend request, no scanning. */
 export async function fetchFacets(branch_id?: string | number, is_active?: boolean): Promise<{ categories: string[]; display_types: string[] }> {
   const q = locationsQuery({ branch_id, is_active });
   const data = await mdFetch(`/variant-location-facets/${q ? `?${q}` : ''}`, { method: 'GET' });
   return { categories: data?.categories ?? [], display_types: data?.display_types ?? [] };
 }
 
-/* Server-side Google-Sheet export of a branch's locations (also the "Get all EC
-   Products" action) — the one POST the fetch endpoint takes. */
 export async function fetchLocationsByBranchName(branch_name: string): Promise<any> {
   return mdFetch(`/fetch-variant-locations/`, {
     method: 'POST',
@@ -107,22 +88,20 @@ export async function lookupVariantLocation(variant_handle: string): Promise<any
   return rows.length > 0 ? flattenLocationRow(rows[0]) : null;
 }
 
-// ─── Movements (unified v2, two-step: initiated → completed) ──────────────────
-
 export type MovementType = 'add_display' | 'move_display' | 'remove_display';
 
 export interface InitiateMovementPayload {
   movement_type: MovementType;
   variant_handle: string;
   quantity?: number;
-  // move: source map id + destination display/location
+
   from_location_id?: number | null;
   display_type_to?: string;
   location_string_to?: string;
-  // add: destination map id, or branch + display/location to get_or_create it
+
   location_id?: number | null;
   branch_id?: string | number;
-  // remove
+
   removal_reason?: 'discontinued_permanently' | 'retired_from_store_display';
   additional_remarks?: string;
   assigned_to_id?: number | null;
@@ -148,14 +127,10 @@ export async function cancelMovement(vsm_id: number): Promise<any> {
   return post(`/cancel-variant-store-movement/`, { vsm_id });
 }
 
-/* Lists movements still awaiting completion (backend returns status=initiated).
-   Optionally scoped to one movement_type. */
 export async function fetchMovements(movement_type?: MovementType): Promise<any> {
   const qs = movement_type ? `?movement_type=${movement_type}` : '';
   return mdFetch(`/v2/initiate-variant-store-movement/${qs}`, { method: 'GET' });
 }
-
-// ─── Admin / bulk ─────────────────────────────────────────────────────────────
 
 export async function deleteLocations(vsl_ids: number[]): Promise<any> {
   return post(`/delete-variant-store-locations/`, { vsl_ids });

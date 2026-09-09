@@ -17,8 +17,6 @@ interface Props {
   allowedBranches: string[];
 }
 
-// ── Filter chips ──────────────────────────────────────────────────────────────
-
 function FilterChip({
   label, options, selected, onChange, color,
 }: {
@@ -211,8 +209,6 @@ function DateRangeChip({
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 const fmtINR = (n: number) =>
   n >= 10000000
     ? `₹${(n / 10000000).toFixed(2)}Cr`
@@ -229,8 +225,6 @@ const pctCell = (v: number) => (
 );
 
 const VALUE_BUCKETS = ['0-25k', '25-50k', '50-100k', '100k-250k', '250k-500k', '500k+'] as const;
-
-// ── Main component ────────────────────────────────────────────────────────────
 
 export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Props) {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
@@ -315,7 +309,6 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
   return (
     <div className="px-3 sm:px-6 py-4 space-y-5">
 
-      {/* Filter bar */}
       <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 shadow-sm">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
         <FilterChip
@@ -339,7 +332,6 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
         </span>
       </div>
 
-      {/* ── Section 1: Weekly funnel rows ─────────────────────────────────── */}
       <section>
         <h2 className="text-[14px] font-bold text-gray-900 mb-2">Footfall → Cart → PI → Order by Visit Week</h2>
         <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -399,7 +391,6 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
         </div>
       </section>
 
-      {/* ── Section 2: Cart & Order splits by month ───────────────────────── */}
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Cart / Order Split filter</span>
         <FilterChip
@@ -455,7 +446,6 @@ export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Pro
         ))}
       </div>
 
-      {/* ── Section 3 & 4: Category split & revenue split, side by side ──── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <section>
           <h2 className="text-[14px] font-bold text-gray-900 mb-2">Category Split by Month (Top 5)</h2>

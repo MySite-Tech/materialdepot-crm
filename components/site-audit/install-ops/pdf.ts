@@ -1,8 +1,3 @@
-/* Verbatim port of genInstallPDFSM from SMInstall.jsx (the Service Manager's
-   "Download Job Card PDF" button on a completed sub-job). Layout/field order
-   matches the installer-side genInstallerPDF in SiteInstallerApp.tsx exactly
-   — both apps produce the same document for the same completed job. */
-
 import { jsPDF } from 'jspdf';
 import { fmtDate } from './shared';
 import { installerById } from './shared';

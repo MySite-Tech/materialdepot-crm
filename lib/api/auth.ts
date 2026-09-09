@@ -1,10 +1,6 @@
 import { EXCLUDED_ROLES } from './roles';
 import { API_BASE_URL, mdFetch, saveToken, saveRefreshToken } from './client';
 
-// ---------------------------------------------------------------------------
-// OTP Auth
-// ---------------------------------------------------------------------------
-
 export async function sendOtp(phone: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/login-otp/?contact=${phone}&country_code=91`);
   if (!res.ok) throw new Error(`Failed to send OTP: ${res.status}`);
@@ -20,11 +16,6 @@ export async function verifyOtp(phone: string, otp: string): Promise<boolean> {
   } catch {}
   return true;
 }
-
-// ---------------------------------------------------------------------------
-// CRM Auth — replaces Supabase loginWithPhone
-// ---------------------------------------------------------------------------
-
 
 export async function loginWithPhone(phone: string): Promise<import('../../types/crm').AppUser | null> {
   try {

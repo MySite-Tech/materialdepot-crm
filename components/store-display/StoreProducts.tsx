@@ -34,9 +34,7 @@ export function StoreProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  // Search only fires on submit (Enter / button), never on keystroke — the
-  // upstream has no server-side search, so each query drags a full scan through
-  // the DB; debouncing every keystroke still fired one scan per pause.
+
   const [submittedSearch, setSubmittedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categories, setCategories] = useState<string[]>(['All']);
@@ -50,9 +48,6 @@ export function StoreProducts() {
     setSubmittedSearch(search.trim());
   };
 
-  /* Categories come from a scan of the whole scope, not from whichever 500 rows
-     happened to be on page 1 of a 71k-row table — that made the dropdown an
-     arbitrary sample of the real category list. */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -66,9 +61,6 @@ export function StoreProducts() {
     return () => { alive = false; };
   }, [selectedStore]);
 
-  /* Guards against out-of-order responses: changing store and page in the same
-     interaction fires two overlapping requests, and the slower one used to be
-     able to land last and repaint the table with the wrong page. */
   const reqRef = useRef(0);
 
   const fetchPage = useCallback(async (storeCode: string, pageNum: number, category: string, searchQ: string) => {
@@ -124,7 +116,7 @@ export function StoreProducts() {
 
   return (
     <div className="px-6 py-4">
-      {/* Controls */}
+
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Store</label>
@@ -198,7 +190,6 @@ export function StoreProducts() {
         </div>
       )}
 
-      {/* Table */}
       {loading ? (
         <div className="py-16 text-center text-gray-400">Loading products...</div>
       ) : error ? (
@@ -269,7 +260,6 @@ export function StoreProducts() {
             </div>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-4">
               <button

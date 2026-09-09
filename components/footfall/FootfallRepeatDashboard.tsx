@@ -19,8 +19,6 @@ const fmtDate = (d?: string | null) => {
 const fmtInt = (v: number) => (v ?? 0).toLocaleString('en-IN');
 const fmtMoney = (v: number) => `₹${Math.round(v ?? 0).toLocaleString('en-IN')}`;
 
-// ── Store (branch) multi-select chip ─────────────────────────────────────────
-
 function StoreChip({
   options, selected, onChange,
 }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
@@ -61,8 +59,6 @@ function StoreChip({
   );
 }
 
-// ── Date range chip ──────────────────────────────────────────────────────────
-
 function DateChip({
   label, value, onChange,
 }: { label: string; value: DateRange; onChange: (v: DateRange) => void }) {
@@ -101,8 +97,6 @@ function DateChip({
     </div>
   );
 }
-
-// ── Table ─────────────────────────────────────────────────────────────────────
 
 const COLS: Array<{ key: keyof FootfallRepeatRow; label: string; kind: 'int' | 'money' }> = [
   { key: 'unique_clients',   label: 'Total Unique Clients',   kind: 'int' },
@@ -162,7 +156,7 @@ export default function FootfallRepeatDashboard({ branches, allowedBranches }: P
 
   return (
     <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5">
-      {/* Filter bar */}
+
       <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 sm:gap-2.5 shadow-sm">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
         <DateChip label="Date Range" value={dateRange} onChange={setDateRange} />
@@ -181,7 +175,6 @@ export default function FootfallRepeatDashboard({ branches, allowedBranches }: P
         </span>
       </div>
 
-      {/* Repeat footfall table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex items-center gap-3">
           <span className="text-[13px] font-bold text-gray-800">Repeat Footfall</span>

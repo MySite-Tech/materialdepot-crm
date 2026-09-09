@@ -1,21 +1,5 @@
 'use client';
 
-/* The SKU line on a job card ("Wooden Flooring · SKU: NA").
-
-   Both card types carry one per room — audits at
-   `audit_ticked.rooms[i].sku`, installs at
-   `subjobs[j].jobcard.rooms[i].sku` — typed by the auditor/installer on site
-   and left blank often enough that the card and the PDF print NA. This is the
-   one shared editor for fixing either, so every SM surface writes it the same
-   way.
-
-   Two rules every write here keeps:
-   - Re-fetch the card blob (and the log) immediately before merging. The field
-     apps autosave the same blob, so patching a copy this screen loaded minutes
-     ago would clobber photos captured since. Same guard as the BM's material
-     selection.
-   - Long-timeout PATCH: those blobs carry the room photos. */
-
 import { useState } from 'react';
 import { sbGet, sbPatchLong } from '../siteAuditShared';
 
@@ -33,7 +17,6 @@ function logEntry(label: string, sku: string, prev: string, attribution: string)
   };
 }
 
-/* audit_orders.audit_ticked.rooms[roomIdx].sku */
 export function auditRoomSkuSaver(orderId: string, roomIdx: number, attribution: string): SkuSaver {
   return async (value: string) => {
     const sku = value.trim();
@@ -57,8 +40,6 @@ export function auditRoomSkuSaver(orderId: string, roomIdx: number, attribution:
   };
 }
 
-/* install_orders.subjobs[<subjobId>].jobcard.rooms[roomIdx].sku — the sub-job is
-   found by id, never by position, since splits reorder the array. */
 export function installRoomSkuSaver(orderId: string, subjobId: string, roomIdx: number, attribution: string): SkuSaver {
   return async (value: string) => {
     const sku = value.trim();
@@ -85,8 +66,6 @@ export function installRoomSkuSaver(orderId: string, subjobId: string, roomIdx: 
   };
 }
 
-/* Collapsed to one line per room until clicked, so a card whose SKUs are all
-   filled stays quiet and only the blank ones ask for attention. */
 export default function RoomSkuEditor({ room, save, onSaved, toast }: {
   room: any;
   save: SkuSaver;

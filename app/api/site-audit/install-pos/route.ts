@@ -2,15 +2,6 @@ import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Proxies to the Django `SiteAuditInstallationPOListAPI` (order/views.py),
-// which requires IsInternalOrgUser — the caller's CRM token is forwarded
-// straight through. This is the real backend behind material-depot-site's
-// Vercel rewrite `/api/pos` -> https://api-dev2.materialdepot.in/apiV1/site-audit-installation-pos/
-// (see that repo's vercel.json). The Install Ops "Pending POs" overlay here
-// calls this route instead of hitting the legacy app's rewrite directly.
-// Same backend host the rest of the CRM talks to (lib/mockApi.ts) — hardcoded
-// for the same reason: one host, no per-environment variable to forget, and the
-// 403 that a wrong one produces looks like "nothing to import".
 const MD_API_BASE = "https://api-dev2.materialdepot.in/apiV1";
 
 const PASSTHROUGH_PARAMS = ["type", "page_size", "search", "status", "page"];

@@ -8,24 +8,13 @@ import { mergeKylasIntoRow, rowToInbound } from './inboundMapper';
 import { rowToClient } from './clientMapper';
 import { rowToKamOrder } from './kamMapper';
 import { supabase } from '@/lib/supabase';
-// ── Reads ────────────────────────────────────────────────────────────────────
 
-// 'YYYY-MM-DD' + 1 day, as a string. Used to build a half-open upper bound.
 function nextDay(day: string): string {
   const ms = Date.parse(`${day}T00:00:00Z`);
   if (Number.isNaN(ms)) return day;
   return new Date(ms + 86_400_000).toISOString().slice(0, 10);
 }
 
-// createdFrom/createdTo are 'YYYY-MM-DD', both inclusive.
-//
-// created_at is a *text* column, so these are lexicographic comparisons — which
-// match chronological order for ISO-8601-shaped strings. The range is half-open
-// (`>= from`, `< to+1day`) rather than `<= to` so it is correct whether a value
-// is day-only ('2026-08-06') or a full timestamp ('2026-08-06T18:00:00Z'):
-// both sort below '2026-08-07'. A `<= '2026-08-06'` bound would drop the
-// timestamped one, and a `<= '2026-08-06T23:59:59'` bound would drop the
-// day-only one (a string sorts before its own longer extension).
 export async function fetchRows(
   pipeline: Pipeline,
   opts?: { createdFrom?: string; createdTo?: string },
@@ -48,10 +37,6 @@ export interface InboundBoardPage {
   total: number;
 }
 
-// Inbound board = promoted DB rows + Kylas "New" leads not yet in the DB.
-// Paginated over the Kylas side; DB overlay is loaded once on the first page.
-// createdFrom/createdTo are plain 'YYYY-MM-DD' days. The IST-anchored instants
-// Kylas needs are derived here, so the two sides can't drift apart.
 export async function fetchInboundBoard(
   opts?: {
     page?: number; ownerId?: number; search?: string;
@@ -68,15 +53,10 @@ export async function fetchInboundBoard(
     page, ownerIds, search, createdAfter, createdBefore, opts?.kylasStage,
   );
 
-  // A New-stage filter is about the Kylas New pool only, so the DB overlay is
-  // skipped entirely.
   let dbLeads: InboundLead[] = [];
   if (page === 0 && !opts?.kylasStage) {
     try {
-      // Same created-date window Kylas applied to the New pool, so promoted
-      // leads in the other columns honour the filter too. Applied in SQL against
-      // the created_at column rather than a mapped field, so it doesn't depend on
-      // the row mapper carrying a date through.
+
       const rows = await fetchRows('inbound', {
         createdFrom,
         createdTo: opts?.createdTo,
@@ -93,10 +73,7 @@ export async function fetchInboundBoard(
       console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
     }
   }
-  // Refresh the Kylas half of every promoted row that this page also returned.
-  // Without this a lead keeps rendering the §3.1 snapshot taken when it was
-  // first dragged out of New — so a reassignment in Kylas, or a name Presales
-  // corrected, never reaches the board.
+
   const kylasById = new Map(kylas.leads.map((k) => [k.id, k]));
   dbLeads = dbLeads.map((l) => {
     const fresh = kylasById.get(l.id);
@@ -118,25 +95,16 @@ export async function fetchInboundBoard(
 export interface B2BData {
   inbound: InboundLead[];
   outreach: OutreachLead[];
-  /**
-   * KAM Active Orders (KAM PRD §5). Was `KamClient[]`, the old board's
-   * client-and-order-in-one row; the KAM module split those apart, so the
-   * orders are here and the client entities are in `clients`.
-   */
+
   kam: KamOrder[];
-  /** Client Database entities (Client DB PRD §2). Empty until the master is seeded. */
+
   clients: ClientEntity[];
-  inboundTotal: number;                        // true Kylas total of "New" inbound leads (board only loads page 0)
-  inboundOwnerTotals: Record<string, number>;  // New-stage count per owner name (for the leaderboard)
-  /**
-   * Which halves failed to load. A dashboard quietly showing only the inbound
-   * half looks exactly like a CRM with no KAM orders — the same rule the Leads
-   * tab follows.
-   */
+  inboundTotal: number;
+  inboundOwnerTotals: Record<string, number>;
+
   failed: ('inbound' | 'outreach' | 'kam' | 'clients')[];
 }
 
-// Per-owner New-stage totals from Kylas (one light count query per inbound owner).
 async function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
   const entries = await Promise.all(
     B2B_INBOUND_OWNER_LIST.map(async (o) => {
@@ -153,10 +121,6 @@ async function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
   return Object.fromEntries(entries);
 }
 
-// Aggregation feed for Dashboard / Leadership / Targets — one pull across all
-// three pipelines. Inbound = full DB overlay + first page of Kylas "New" leads;
-// inboundTotal / inboundOwnerTotals carry the real New-stage counts so the
-// numbers don't reflect only page 0.
 export async function fetchB2BData(): Promise<B2BData> {
   const inboundP = fetchInboundBoard()
     .then((p) => ({ leads: p.leads, total: p.total }))
@@ -178,14 +142,12 @@ export async function fetchB2BData(): Promise<B2BData> {
     inboundTotal: inbound.total, inboundOwnerTotals, failed,
   };
 }
-// ── Client Database reads ────────────────────────────────────────────────────
 
 export async function fetchClients(): Promise<ClientEntity[]> {
   const rows = await fetchRows('client');
   return rows.map(rowToClient);
 }
 
-/** Every KAM Active Order (KAM PRD §5.3). */
 export async function fetchKamOrders(): Promise<KamOrder[]> {
   const rows = await fetchRows('kam');
   return rows.map(rowToKamOrder);

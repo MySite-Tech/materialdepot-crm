@@ -1,15 +1,5 @@
 import type { NextRequest } from 'next/server';
 
-/* Given ?url=<materialdepot.com product page>, fetches it server-side (the
-   browser can't, for CORS) and scrapes its og:image — falling back to
-   twitter:image — so the BM dashboard can show a product thumbnail from a
-   pasted product URL. Port of material-depot-site's api/fetch-og-image.js.
-
-   Host-allowlisted to *.materialdepot.com on BOTH the requested URL and the
-   final URL after redirects: checking only the requested URL would let a
-   materialdepot.com page redirect elsewhere and have this route fetch
-   arbitrary attacker-controlled URLs (SSRF). */
-
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_HOST = /(^|\.)materialdepot\.com$/i;

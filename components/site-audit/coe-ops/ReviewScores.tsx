@@ -1,18 +1,5 @@
 'use client';
 
-/* Category Ops → ⭐ Review scores.
-
-   The COE has been collecting Q1/Q2/Q3 on every D+1 call since note 117 and
-   had nowhere to see the result — the numbers only existed in Admin's
-   Analytics, which the COE role can't reach. So the person doing the work
-   couldn't tell a good week from a bad one, or notice that scores had stopped
-   reaching the analytics table at all.
-
-   Everything here is computed from the CALL LOG (coe_track.calls[] /
-   subjobs[].coe_review.calls[]), never from the `ratings` table. That's
-   deliberate: the call log is the source of truth, `ratings` is a projection
-   of it, and this tab's whole job includes showing when the two disagree. */
-
 import { useMemo, useState } from 'react';
 import {
   NPS_BAND_LABELS, NPS_HOUSE_NOTE, avgScore, fmtDate, npsBand, npsFrom,
@@ -74,8 +61,6 @@ function AvgCard({ label, scores }: { label: string; scores: number[] }) {
   );
 }
 
-/* Coverage, not just score. 20 tens out of 200 completed jobs is not a +100,
-   and the gap between "due" and "scored" is the COE's actual worklist. */
 function CoverageCard({ label, p }: { label: string; p: ReviewProgress }) {
   const pct = p.due ? Math.round((p.scored / p.due) * 100) : null;
   const c = pct == null ? 'text-gray-400' : pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600';
@@ -99,11 +84,7 @@ export default function ReviewScores({ orders, installs, installByPhone, ratings
   orders: CoeOrder[];
   installs: CoeInstall[];
   installByPhone: Map<string, CoeInstall[]>;
-  /* `null` means the ratings load FAILED — not "there are no ratings". The
-     difference matters more here than anywhere else in this app: treating a
-     failed load as an empty table would mark every score ever captured as
-     un-projected and offer to re-push all of them, writing hundreds of
-     duplicate rows. So the repair banner is suppressed entirely on null. */
+
   ratings: RatingRow[] | null;
   onChanged: () => void;
 }) {
@@ -118,10 +99,6 @@ export default function ReviewScores({ orders, installs, installByPhone, ratings
   const audit = inPeriod.filter((s) => s.orderType === 'audit');
   const install = inPeriod.filter((s) => s.orderType === 'install');
 
-  /* Coverage is deliberately all-time, not period-scoped: the queue it
-     describes is "every review currently owed", which is exactly what the two
-     calling tabs work off. Period-scoping it would invent a different
-     denominator from the one the Overdue buckets show. */
   const aProgress = useMemo(() => auditReviewProgress(followupRows(orders, installByPhone)), [orders, installByPhone]);
   const iProgress = useMemo(() => installReviewProgress(installReviewRows(installs)), [installs]);
 

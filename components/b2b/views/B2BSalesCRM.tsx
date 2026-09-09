@@ -10,10 +10,6 @@ import KAMs from './KAMs';
 import LeadershipBoard from './LeadershipBoard';
 import Targets from './Targets';
 
-// `outreach` was `outbound` — the module is called Outreach in its PRD, and the
-// Leads tab's Source column reads Inbound / Outreach. Only the reading
-// vocabulary changed; the stored `b2b_lead.pipeline` value is still 'outbound'
-// (see the note in mockData.ts).
 type B2BView = 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'leadership' | 'targets';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
@@ -21,9 +17,7 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
   { key: 'leads',      label: 'Leads',            ready: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
   { key: 'outreach',   label: 'Outreach',         ready: true },
-  // The Client Database sits directly above KAM because §7 of the KAM PRD makes
-  // it the source of that module's client universe — a reader who opens KAM
-  // first and finds it empty needs the next tab up, not a search.
+
   { key: 'clients',    label: 'Client Database',  ready: true },
   { key: 'kams',       label: 'KAM',              ready: true },
   { key: 'leadership', label: 'Leadership Board', ready: true },
@@ -35,7 +29,7 @@ export default function B2BSalesCRM() {
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-84px)] bg-[#FAFAFA]">
-      {/* ── Sidebar (desktop) ── */}
+
       <aside className="hidden md:flex w-52 shrink-0 bg-[#1A1A1A] flex-col py-3 overflow-y-auto">
         <div className="px-4 pb-3 mb-1 border-b border-gray-700">
           <div className="text-sm font-bold text-white">Material Depot</div>
@@ -59,7 +53,6 @@ export default function B2BSalesCRM() {
         </nav>
       </aside>
 
-      {/* ── Top nav (mobile) ── */}
       <div className="md:hidden shrink-0 bg-[#1A1A1A]">
         <nav className="flex overflow-x-auto no-scrollbar">
           {NAV.map((item) => (
@@ -79,7 +72,6 @@ export default function B2BSalesCRM() {
         </nav>
       </div>
 
-      {/* ── Content ── */}
       <main className="flex-1 overflow-y-auto min-w-0">
         {view === 'dashboard' && <B2BDashboard />}
         {view === 'inbound' && <InboundLeads />}

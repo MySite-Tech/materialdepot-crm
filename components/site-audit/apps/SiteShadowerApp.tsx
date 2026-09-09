@@ -1,17 +1,5 @@
 'use client';
 
-/* "My Shadowing" — port of material-depot-site's Site_Shadower_App.html.
-
-   A read-only schedule of the sites this person has been assigned to shadow
-   (observe), across BOTH audits (audit_orders.shadower_email) and
-   installation sub-jobs (install_orders.subjobs[].shadower_email). There is
-   deliberately no job card and no attendance here: a shadower only tags
-   along, so nothing in this view writes.
-
-   Shadowing is cross-role — anyone registered can be picked to shadow
-   anything — so unlike SiteAuditorApp/SiteInstallerApp this view is not
-   gated on a role, only on which person it is rendered for. */
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchSharedSlotLabels, fmtDateA, parseShadowers, sbGet } from '../siteAuditShared';
 import { typeTag } from '../data/auditRegistry';
@@ -58,11 +46,7 @@ function dstr(d: Date): string {
 function mapUrl(a: string) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
-/* Slot ids (sf1/sw2/…) mean whatever the audit and install dashboards have
-   them configured as, so resolve against those saved windows rather than
-   assuming the stock three. Audit and install keep separate configs and reuse
-   the same ids, hence two maps. Falls back to the stock windows when a
-   dashboard has never customised them (or on a device that never opened one). */
+
 const DEF_WINDOWS = ['9 AM – 12 PM', '12 PM – 3 PM', '3 PM – 6 PM'];
 
 function readSlotMap(flKey: string, wpKey: string): Record<string, string> {
@@ -94,8 +78,6 @@ function slotLabel(id: string | null | undefined, map: Record<string, string>): 
   return DEF_WINDOWS[n - 1] || '—';
 }
 
-/* A shadowed install sub-job's date/slot/installer comes from its (primary)
-   assignment, falling back to the sub-job's own fields. */
 function sjSched(sj: any): { date: string | null; slot: string | null; who: string } {
   const a = sj.assignments && sj.assignments.length ? sj.assignments.find((x: any) => x.primary) || sj.assignments[0] : null;
   return {
@@ -111,8 +93,7 @@ export default function SiteShadowerApp({ actingAs }: { actingAs: { name: string
   const today = useMemo(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; }, []);
   const [auditSlots, setAuditSlots] = useState<Record<string, string>>(() => readSlotMap('md_audit_slots_fl', 'md_audit_slots_wp'));
   const [installSlots, setInstallSlots] = useState<Record<string, string>>(() => readSlotMap('md_install_slots_fl', 'md_install_slots_wp'));
-  /* A shadower's own phone has no copy of the office's slot config, so pull the
-     shared copy the dashboards publish. Local wins where it exists. */
+
   useEffect(() => {
     let alive = true;
     fetchSharedSlotLabels(['md_audit_slots_fl', 'md_audit_slots_wp'])
@@ -129,12 +110,9 @@ export default function SiteShadowerApp({ actingAs }: { actingAs: { name: string
     const me = (actingAs.email || '').toLowerCase();
     const mine = (emailStr?: string | null) => parseShadowers(emailStr).some((s) => s.email.toLowerCase() === me);
     const [aRows, iRows] = await Promise.all([
-      // A comma-joined shadower_email can't be matched with eq — fetch all
-      // shadowed audits and filter client-side (same as the source app).
+
       sbGet('audit_orders?shadower_email=not.is.null&select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc'),
-      // The install shadower lives inside the subjobs jsonb, which PostgREST
-      // can't cheaply filter on — fetch non-deleted orders (slim strips
-      // photos) and match sub-jobs client-side.
+
       sbGet('install_orders_slim?select=' + INSTALL_COLS + '&status=neq.deleted&order=created_at.desc'),
     ]);
     const out: ShadowJob[] = [];

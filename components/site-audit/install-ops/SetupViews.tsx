@@ -6,9 +6,6 @@ import { FLOOR_DAY_CAP, WALLPANEL_DAY_CAP, WP_DAY_SLOTS, dstr, flLoad, installer
 import { typeLabel } from '../data/auditRegistry';
 import type { InstallOrder, Installer, SlotDef } from './types';
 
-/* ── Slots & timings — device-local config, exactly like the source (kept
-   as localStorage, per the porting brief: this is genuinely a local-device
-   setting in the original too, not data that belongs in Supabase) ───────── */
 export function SlotsView({
   slotsFl, slotsWp, setSlotsFl, setSlotsWp, toast,
 }: {
@@ -102,20 +99,13 @@ export function SlotsView({
   );
 }
 
-/* ── Installers roster ──────────────────────────────────────────────────
-   Also the availability editor: a weekly off day and explicit leave dates per
-   installer (profiles.weekly_off / profiles.leave_dates). Both are advisory —
-   they tag the assignment picker and force an override reason there, they
-   never hard-block an assignment. Edits are staged locally and written on
-   "Save availability", diffed against the loaded roster. */
 export function InstallersView({
   installers, orders, formerInstallers = [], canRetire = false, onAddStaff, onRemove, onRestore, reload, toast,
 }: {
   installers: Installer[]; orders: InstallOrder[];
-  /* City-scoped by the caller, same as `installers`. */
+
   formerInstallers?: Array<Installer & StaffExit>;
-  /* False until migration 004 has been run, which hides the whole
-     former-staff affordance rather than offering a Remove that can only fail. */
+
   canRetire?: boolean;
   onAddStaff: () => void;
   onRemove?: (a: Installer) => void;
@@ -135,9 +125,6 @@ export function InstallersView({
   };
   const setAvail = (a: Installer, next: Draft) => setDraft((d) => ({ ...d, [a.id]: next }));
 
-  /* A per-date cap. Setting it back to this installer's own default clears the
-     override instead of storing a redundant one, so `cap_overrides` stays a
-     record of real exceptions rather than growing a key per rendered day. */
   const setCap = (a: Installer, ds: string, v: number) => {
     const av = availOf(a);
     const dflt = av.dailyCap ?? typeDayCap(a.type);
@@ -210,10 +197,7 @@ export function InstallersView({
           </tr></thead>
           <tbody>
             {installers.map((a, i) => {
-              /* Load is shown against the installer's EFFECTIVE cap for today,
-                 not the per-type constant — otherwise an SM who caps someone
-                 to 0 for a day still sees "0/1 job" and reads it as spare
-                 capacity. */
+
               const todayCap = installerDayCap({ ...a, ...availOf(a) }, todayStr);
               const load = a.type === 'wallpaper'
                 ? wpSlotLoad(orders, a.id, todayStr) + '/' + todayCap + ' slots (3h each)'

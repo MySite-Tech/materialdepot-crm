@@ -47,8 +47,7 @@ export default function SiteAuditLiveView({ city = 'all' }: { city?: CityFilter 
           'install_orders_slim?select=pi,addr,subjobs,status&status=not.in.(deleted,pending,deliv_ontime,deliv_delayed)'
         ),
         sbGet(
-          /* Live locations of people currently on the road — a retired
-             person has no current location, only a stale last-seen pin. */
+
           'profiles?select=name,email,role,last_lat,last_lng,last_loc_at,last_order_pi,city&role=in.(site_auditor,installer,auditor_installer)' + activeFilter
         ),
       ]);
@@ -57,7 +56,7 @@ export default function SiteAuditLiveView({ city = 'all' }: { city?: CityFilter 
         setState({ loading: false, error: true, workers: [], wOrds: {} });
         return;
       }
-      // City scope — the map only shows staff based in the selected city.
+
       const scopedProfs = inCity(allProfs as any[], city);
       const profMap: Record<string, Profile> = {};
       for (const p of scopedProfs) profMap[p.email] = p;

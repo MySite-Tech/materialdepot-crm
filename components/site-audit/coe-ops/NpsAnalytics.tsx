@@ -1,36 +1,5 @@
 'use client';
 
-/* Category Ops → 📊 NPS analytics.
-
-   The COE takes Q1/Q2/Q3 on every client after a site audit and after every
-   installation, and ⭐ Review scores already shows the resulting NPS — but only
-   as three fixed periods (30 / 90 / all) with no trend, no per-person view and
-   no way to answer "how did last month compare". This tab is that: the same
-   numbers over a SELECTED DATE RANGE, laid out like the store-visit NPS
-   dashboard the CRM already has (`components/nps/NPSDashboard.tsx`), which is
-   the shape the business already reads (requested 2026-09-01).
-
-   THREE THINGS THIS TAB DOES NOT DO, EACH FOR A REASON WRITTEN DOWN ELSEWHERE:
-
-   1. It does not use textbook NPS bands. Field-service NPS runs on Material
-      Depot's stricter house bands (promoter 9–10, neutral 8, detractor ≤7) via
-      `npsFrom`/`npsBand` — ONE definition shared with Analytics and Review
-      scores. The store-visit dashboard this borrows its layout from uses
-      textbook bands on a different population; the two numbers are never
-      averaged and this page prints its own bands on screen so a reader can't
-      mistake which is on it. See CLAUDE.md, "Two different NPS numbers".
-   2. It does not read the `ratings` table. Everything comes from the CALL LOGS
-      (`scoredCalls`), the source of truth — `ratings` is a projection that can
-      and has fallen behind it. That is also why this tab and ⭐ Review scores
-      can never disagree: same function, same rows.
-   3. It does not date-filter on `ratings.created_at`, because it isn't reading
-      that table. A scored call is placed on the day the COE MADE it, which is
-      the only date this data has and the one the COE is measured on.
-
-   Expect the last day or two of any range to look thin: a D+1 call for a job
-   finished yesterday hasn't happened yet. That is stated on the page rather
-   than smoothed over. */
-
 import { useMemo, useState } from 'react';
 import {
   BarChart, Bar, CartesianGrid, Cell, LineChart, Line, ReferenceLine,
@@ -64,10 +33,6 @@ const SIDES: Array<{ k: Side; l: string }> = [
 
 const fmtSigned = (n: number) => (n > 0 ? '+' : '') + n;
 
-/* ── Tiles ────────────────────────────────────────────────────────────────
-   `null` is rendered as "—" everywhere, never as 0: a zero NPS is a real and
-   bad result and must not be produced by an empty range. `npsFrom` already
-   returns null for no scores; every tile here keeps that distinction. */
 function Delta({ cur, prev, unit = '', dir = 1, dec = 0 }: { cur: number | null; prev: number | null; unit?: string; dir?: number; dec?: number }) {
   if (cur == null || prev == null) return <div className="mt-1.5 text-[11.5px] text-gray-400">no prior period</div>;
   const diff = cur - prev;
@@ -116,13 +81,6 @@ const BAND_PILL = {
   detractor: 'bg-red-50 text-red-700',
 } as const;
 
-/* ── Derivations ──────────────────────────────────────────────────────────── */
-
-/* One point per DAY IN THE RANGE, including the days with no scores — those
-   carry `nps: null` and the line breaks (`connectNulls={false}`) rather than
-   drawing straight through them. A gap is "nobody was called", which is
-   information; interpolating it invents scores. Capped so a multi-year custom
-   range doesn't render 800 ticks: past the cap the trend switches to weeks. */
 const TREND_DAY_CAP = 92;
 
 type TrendPoint = { label: string; nps: number | null; n: number };
@@ -138,12 +96,12 @@ function buildTrend(scored: ScoredCall[], r: DateRange): { points: TrendPoint[];
   const buckets = new Map<string, number[]>();
   const keyOf = (day: string) => {
     if (unit === 'day') return day;
-    // ISO-ish week key: Monday of that day's week, so a bucket label is a real date.
+
     const d = new Date(day + 'T00:00');
     d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  // Seed every bucket in the range so empty ones are visible as gaps.
+
   for (let d = from; d <= to;) {
     const k = keyOf(d);
     if (!buckets.has(k)) buckets.set(k, []);
@@ -167,11 +125,6 @@ function buildTrend(scored: ScoredCall[], r: DateRange): { points: TrendPoint[];
   return { points, unit };
 }
 
-/* NPS per rated staff member. Small denominators are the norm here (this is a
-   handful of calls a day), so the minimum sample is SHOWN as the response count
-   next to each bar rather than used to hide rows — a person with two scores is
-   a fact about coverage, and dropping them would hide the auditors nobody is
-   reviewing. Sorted worst-first: the point of the chart is who needs attention. */
 function byStaff(scored: ScoredCall[]): Array<{ name: string; nps: number; n: number }> {
   const m = new Map<string, number[]>();
   for (const s of scored) {
@@ -192,22 +145,12 @@ function distribution(scored: ScoredCall[]): Array<{ score: number; count: numbe
   return counts.map((count, score) => ({ score, count })).filter((d) => d.score > 0);
 }
 
-/* Diverging bar list rather than a Recharts BarChart, on purpose.
-
-   A bar chart draws NOTHING for a value of exactly 0 — no bar, and Recharts
-   skips the label too — and "worst first" sorting puts precisely that row at the
-   top. The one person a reader most needs to see was the one row with nothing on
-   it (live: an auditor on NPS 0 from 2 scores, rendered blank). Built from divs
-   the same way the store-visit dashboard's "response mix" block is, so a zero
-   gets a visible tick at the centre line and its own number, and the sample size
-   rides along — an NPS of +100 off one score should not read like an NPS of +100
-   off forty. */
 function StaffBars({ rows }: { rows: Array<{ name: string; nps: number; n: number }> }) {
   const tone = (nps: number) => (nps >= 50 ? C.promoter : nps >= 0 ? C.neutral : C.detractor);
   return (
     <div>
       {rows.map((d) => {
-        const mag = Math.min(100, Math.abs(d.nps)) / 2; // % of the full track, which spans -100..100
+        const mag = Math.min(100, Math.abs(d.nps)) / 2;
         return (
           <div key={d.name} className="mb-2 flex items-center gap-2 last:mb-0">
             <div className="w-[104px] shrink-0 truncate text-right text-[11.5px] font-medium text-gray-700" title={d.name}>{d.name}</div>
@@ -219,7 +162,7 @@ function StaffBars({ rows }: { rows: Array<{ name: string; nps: number; n: numbe
                   background: tone(d.nps),
                   left: d.nps >= 0 ? '50%' : (50 - mag) + '%',
                   width: mag + '%',
-                  // A 0 still has to be visible: a 2px tick on the centre line.
+
                   minWidth: 2,
                 }}
               />
@@ -281,9 +224,7 @@ export default function NpsAnalytics({ orders, installs, installByPhone }: {
   const sided = useMemo(() => (side === 'both' ? all : all.filter((s) => s.orderType === side)), [all, side]);
 
   const inRange = useMemo(() => sided.filter((s) => inDateRange(s.at, range)), [sided, range]);
-  /* The immediately preceding window of the same length, for the "vs prev"
-     deltas. `null` on an unbounded range — "before all time" is not a period,
-     and inventing one would put a delta on a tile that cannot have one. */
+
   const prevWindow = useMemo(() => previousRange(range), [range]);
   const inPrev = useMemo(
     () => (prevWindow ? sided.filter((s) => inDateRange(s.at, prevWindow)) : []),
@@ -303,11 +244,6 @@ export default function NpsAnalytics({ orders, installs, installByPhone }: {
   const staff = useMemo(() => byStaff(inRange), [inRange]);
   const dist = useMemo(() => distribution(inRange), [inRange]);
 
-  /* Coverage is deliberately ALL-TIME, not range-scoped — the same choice
-     ⭐ Review scores makes and for the same reason: the queue it describes is
-     "every review currently owed", which is exactly what the two calling tabs
-     work off. Range-scoping it would invent a denominator that no bucket count
-     on this dashboard agrees with. Said on screen, not just here. */
   const aProgress = useMemo(() => auditReviewProgress(followupRows(orders, installByPhone)), [orders, installByPhone]);
   const iProgress = useMemo(() => installReviewProgress(installReviewRows(installs)), [installs]);
 

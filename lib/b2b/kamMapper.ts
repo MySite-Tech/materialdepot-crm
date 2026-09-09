@@ -3,18 +3,6 @@ import { Escalation } from '@/components/b2b/models/accountHealth';
 import { ClientSource } from '@/components/b2b/models/clientModel';
 import { KamOrder, isLegacyKamStage, normalizeKamOrderStatus } from '@/components/b2b/models/kamModel';
 import { LeadNote } from '@/components/b2b/models/mockData';
-// ── KAM Active Orders (KAM PRD §5) ───────────────────────────────────────────
-//
-// The SAME `pipeline='kam'` rows the old board used — 30 of them, live. Nothing
-// is rewritten in place; the vocabulary change is applied on read by
-// `normalizeKamOrderStatus`, and `estimated_value` falls back to the legacy
-// `value` column because that column was a figure a KAM typed on the old form.
-//
-// The one behavioural change is which column analytics reads. `value` is now
-// the deal ticket's order value or 0 — never the estimate. That is the third
-// time this exact bug has been fixed on this board family (see
-// `OutreachLead.value`), and it means an auto-advanced row contributes real
-// rupees or nothing rather than a guess.
 
 const KAM_ORDER_META: MetaSpec<KamOrder> = {
   clientId:         { col: 'client_id',          read: str },
@@ -43,11 +31,9 @@ export function rowToKamOrder(r: B2BLeadRow): KamOrder {
   }
   o.status = normalizeKamOrderStatus(r.stage);
   if (isLegacyKamStage(r.stage)) o.legacyStage = r.stage;
-  // The KAM's estimate. Legacy rows kept it in the `value` column, which is why
-  // the fallback is there and why it must never be removed: dropping it would
-  // blank the only figure 30 live rows carry.
+
   o.estimatedValue = num(m.estimated_value) ?? num(r.value);
-  // Realised rupees only — the column analytics sums.
+
   o.value = Number(o.orderValue) || 0;
   if (!o.createdAt) o.createdAt = str(r.created_at);
   if (!o.phone && m.phone) o.phone = str(m.phone);
@@ -61,12 +47,7 @@ export function kamOrderToRow(o: KamOrder): B2BLeadRow {
     meta[spec.col] = v === undefined ? null : v;
   }
   meta.estimated_value = o.estimatedValue ?? null;
-  // `escalations` used to live on these rows. They belong to the CLIENT now (an
-  // escalation is about an account, not one order), and `KamOrder` has no field
-  // for them — so they are read into `legacyEscalations` and written straight
-  // back. Leaving them out of the writer would silently delete them on the
-  // first save of a row that has any, which is precisely the read/write
-  // asymmetry `OUTREACH_META` exists to prevent.
+
   meta.escalations = o.legacyEscalations || [];
   return {
     id: o.id,

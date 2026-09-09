@@ -29,11 +29,9 @@ const mockApi = {
     assignBMToClient(clientContact, bmContact),
 };
 
-// Property IDs for the 2 questions in UserInfoProperty table
-// NOTE: Backend data shows ID 48 actually stores categories, 81 stores user_type
 const USER_TYPE_PROPERTY_ID = 81;
 const CATEGORIES_PROPERTY_ID = 48;
-// Free-text "Location" property — captured as Locality, optional
+
 const LOCALITY_PROPERTY_ID = 2;
 
 interface FormData {
@@ -46,7 +44,6 @@ interface FormData {
   propertyType: null;
   propertyName: string;
 }
-
 
 function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
@@ -322,7 +319,6 @@ function BMAssignmentStep({ bms, selectedBM, onSelect, onSubmit, isLoading, isFe
           Assign Sales BM <span className="text-red-500">*</span>
         </label>
 
-        {/* Show current sales BM if available */}
         {currentSalesBM && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
             <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">Current Sales BM</p>
@@ -485,25 +481,23 @@ export default function StoreVisitFormSimple() {
       const response = await mockApi.lookupLeadByPhone(formData.phoneNumber, branch);
       setUserId(response.userId || null);
 
-      // Pre-fill form data with existing values
       const updates: Partial<FormData> = {};
 
       if (response.name) {
         updates.name = response.name;
       }
 
-      // Pre-fill user properties if available
       if (response.userProperties) {
         const props = response.userProperties;
-        // ID 48 stores categories (comma-separated string)
+
         if (props[48]) {
           updates.categories = props[48].split(',').map(c => c.trim()).filter(Boolean);
         }
-        // ID 81 stores user type
+
         if (props[81]) {
           updates.userType = props[81];
         }
-        // ID 2 stores locality (free text)
+
         if (props[2]) {
           updates.locality = props[2];
         }
@@ -513,7 +507,6 @@ export default function StoreVisitFormSimple() {
         setFormData(prev => ({ ...prev, ...updates }));
       }
 
-      // Store current sales BM info and pre-select if available
       if (response.currentSalesBM) {
         setCurrentSalesBM(response.currentSalesBM);
         setSelectedBM(response.currentSalesBM.bm_contact);
@@ -522,7 +515,6 @@ export default function StoreVisitFormSimple() {
         setSelectedBM(null);
       }
 
-      // Store footfall count
       setFootfallCount(response.footfallCount || 0);
 
       setCurrentStep(2);
@@ -538,7 +530,6 @@ export default function StoreVisitFormSimple() {
     try {
       const saves: Promise<unknown>[] = [];
 
-      // Save user properties (questions 48 & 81)
       if (userId) {
         const properties: Array<{ property_id: number; value: string }> = [];
         if (formData.userType) properties.push({ property_id: USER_TYPE_PROPERTY_ID, value: formData.userType });
@@ -547,12 +538,10 @@ export default function StoreVisitFormSimple() {
         if (properties.length > 0) saves.push(saveUserProperties(userId, properties));
       }
 
-      // Update user name in Django User table
       if (formData.name.trim()) {
         saves.push(updateLeadProperties(formData.phoneNumber, { name: formData.name.trim() }));
       }
 
-      // Sync cfInterestedCategories and cfUserType to Kylas lead
       if (formData.categories.length > 0 || formData.userType) {
         saves.push(syncLeadToKylas(
           formData.phoneNumber,
@@ -584,7 +573,7 @@ export default function StoreVisitFormSimple() {
           ? 'Previous assignment reactivated!'
           : 'Business Manager already assigned and active.';
       toast({ title: 'Done!', description });
-      // Reset form for next visitor
+
       setTimeout(() => {
         setCurrentStep(1);
         setFormData({ phoneNumber: '', name: '', userType: null, categories: [], locality: '', projectType: null, propertyType: null, propertyName: '' });
@@ -619,7 +608,6 @@ export default function StoreVisitFormSimple() {
         </div>
         {branch && <StepIndicator currentStep={currentStep} totalSteps={totalSteps} />}
 
-        {/* Footfall count badge - visible on all steps when client has history */}
         {branch && footfallCount > 0 && (
           <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center gap-2">

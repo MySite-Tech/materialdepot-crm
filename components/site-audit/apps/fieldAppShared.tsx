@@ -9,7 +9,7 @@ import {
   useState,
   type ChangeEvent,
 } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/index';
 import { sbGet, sbPatch, uploadPhoto, readCapturedPhoto } from '@/components/site-audit/siteAuditShared';
 
 export type SketchPoint = { x: number; y: number };
@@ -460,17 +460,9 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  // Bumped by stopStream so a getUserMedia() promise that resolves AFTER the
-  // modal already closed/retook can tell it's stale and stop the stream it
-  // just got instead of assigning it to streamRef — otherwise that stream is
-  // never released and the camera indicator stays on.
+
   const camGenRef = useRef(0);
-  // Bumped whenever the current capture attempt is abandoned — Cancel, or a
-  // Retake — so a confirm whose uploadPhoto() retry is still in flight (up to
-  // ~48s) can tell on landing that it no longer owns the modal and skip firing
-  // onConfirm. A COUNTER rather than a boolean flag: a flag could mark an
-  // attempt abandoned but had no way to say the next one is live again, so the
-  // first Retake killed every subsequent Confirm for the life of the overlay.
+
   const attemptRef = useRef(0);
 
   const [photo, setPhoto] = useState<string | null>(null);
@@ -481,18 +473,11 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   const [cameraFailed, setCameraFailed] = useState(false);
   const [camReady, setCamReady] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  // State is not a lock: two taps in the same tick both read `confirming` as
-  // false and both run the handler, each pushing its own arrival log line. This
-  // is the documented root cause of identical log entries seconds apart.
+
   const confirmingRef = useRef(false);
-  // getUserMedia can neither resolve NOR reject — an Android webview with a
-  // pending permission sheet, or a camera another app already holds, just
-  // leaves the promise open. `camReady` then stays false forever, and a shutter
-  // disabled on `!camReady` is a dead button with Cancel as the only way out:
-  // the worker can never mark themselves at site. Fall back to the OS camera.
+
   const camWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // A getCurrentPosition fix that lands inside handleConfirm cannot be read
-  // back off `lat`/`lng` in the same tick, so it is mirrored here.
+
   const resolvedLoc = useRef<{ lat: number; lng: number } | null>(null);
 
   const stopStream = useCallback(() => {
@@ -527,9 +512,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   const startCam = useCallback(() => {
     const gen = ++camGenRef.current;
     if (camWatchdogRef.current) clearTimeout(camWatchdogRef.current);
-    // Nothing here is allowed to leave the worker with no usable button, so an
-    // in-app preview that hasn't arrived in 6s is treated exactly like one that
-    // failed: the shutter relabels to "Open Camera" and hands off to the OS.
+
     camWatchdogRef.current = setTimeout(() => {
       if (gen !== camGenRef.current) return;
       if (!streamRef.current) { setCameraFailed(true); setCamReady(false); }
@@ -573,11 +556,6 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     };
   }, [open, captureLocation, startCam, stopStream]);
 
-  /* Bind the stream in an effect rather than at the getUserMedia callsite. The
-     <video> is unmounted while `cameraFailed` is set, so a permission grant that
-     lands AFTER the 6s watchdog assigned srcObject to a null ref and left a
-     black preview behind a live "Take Photo". Here the two are re-attached
-     whenever both exist, in either order. */
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !camReady || photo) return;
@@ -598,18 +576,11 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     if (lat === null) captureLocation({ timeout: 5000, enableHighAccuracy: true });
   }, [lat, stopStream, captureLocation]);
 
-  /* Downscale to the same budget doSnap() uses (800px wide, q 0.6). Without this the picker
-     handed back the camera roll's full-resolution file — a ~3 MB JPEG — and when the upload then
-     failed, handleConfirm's fallback wrote all of it into the order's log as base64. One such
-     photo was 4.1 MB, 81% of an Execution-tab query's entire payload. */
   const onFileChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      /* Keeping the original bytes when the canvas could not decode them (what this did until
-         2026-09-07) put HEIC files into log[] as .jpg — an arrival photo nobody can open. The
-         arrival must stay recordable either way, so a refused photo is reported and the confirm
-         proceeds without one; the location and timestamp are the parts that matter most here. */
+
       readCapturedPhoto(file, 800, 0.6).then((got) => {
         if (!got.ok) { setPhoto(null); setPhotoErr(got.error); return; }
         setPhotoErr(null);
@@ -621,9 +592,6 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     [lat, captureLocation],
   );
 
-  /* The shutter is never disabled and never a no-op: shoot from the live
-     preview when there is one, otherwise open the OS camera. A worker standing
-     at a site cannot debug getUserMedia. */
   const takePhoto = useCallback(() => {
     const vid = videoRef.current;
     const previewUsable = !!streamRef.current && !!vid && (vid.readyState >= 2 || vid.videoWidth > 0);
@@ -632,13 +600,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
   }, [doSnap]);
 
   const retake = useCallback(() => {
-    /* Disown any confirm still in flight, and — the part the old boolean flag
-       could not express — leave the NEXT attempt live. With a flag, one Retake
-       set "cancelled" permanently, so handleConfirm's post-upload bail swallowed
-       every later Confirm: the overlay stayed open, the button cycled
-       Uploading… → Confirm, and no arrival was ever recorded. Retaking a photo
-       is the most ordinary thing a worker does here, which made that stale flag
-       a silent dead end between "on the way" and "at site". */
+
     attemptRef.current++;
     confirmingRef.current = false;
     setPhoto(null);
@@ -658,8 +620,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
     confirmingRef.current = true;
     const attempt = attemptRef.current;
     setConfirming(true);
-    /* Last chance at a fix: the first attempt runs while the camera is still
-       warming up, which is when a cold GPS is least likely to have answered. */
+
     if (lat === null) {
       await new Promise<void>((res) => {
         if (!navigator.geolocation) { res(); return; }
@@ -675,17 +636,12 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
       try {
         ph = await uploadPhoto(ph);
       } catch {
-        /* Only ever hand back a Storage URL. log[] is fetched in full by every
-           poll in these apps and has no slim view, so embedding a failed
-           upload's base64 permanently bloats this order for every future read
-           (~30-50 KB a time in live rows). Losing the photo is the cheaper
-           loss; the arrival itself must still be recordable. */
+
         ph = null;
       }
     }
     setConfirming(false);
-    // Abandoned while we were uploading (Cancel, or a Retake) — this attempt no
-    // longer owns the modal, so it must not record an arrival.
+
     if (attempt !== attemptRef.current) { confirmingRef.current = false; return; }
     const fixed = resolvedLoc.current;
     handleClose();
@@ -736,9 +692,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
           Cancel
         </button>
         {!photo && (
-          /* Deliberately NOT disabled on `!camReady`. The preview may never
-             arrive, and a dead shutter means the arrival can never be marked at
-             all — `takePhoto` falls through to the OS camera instead. */
+
           <button
             type="button"
             onClick={takePhoto}
@@ -748,10 +702,7 @@ export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraMo
           </button>
         )}
         {!photo && photoErr && (
-          /* The photo was refused, not merely missing. Confirm has to stay reachable or a phone
-             that only shoots HEIC could never mark an arrival at all — the same "never disable
-             the only forward control" rule the shutter above follows. handleConfirm already
-             treats the photo as optional; location and timestamp still get recorded. */
+
           <button
             type="button"
             onClick={handleConfirm}
@@ -890,10 +841,7 @@ export function DocScannerModal({ open, onClose, onScanned }: DocScannerModalPro
   const previewImgRef = useRef<HTMLImageElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const camGenRef = useRef(0);
-  // apply() defers its actual work by 80ms; if the user hits Retake/Cancel
-  // inside that window the deferred callback would still run, warp the STALE
-  // captured frame, and re-close/re-scan over whatever the user just chose
-  // instead — bump this so the deferred callback can tell it's stale and bail.
+
   const applySeqRef = useRef(0);
 
   const [phase, setPhase] = useState<'camera' | 'review'>('camera');

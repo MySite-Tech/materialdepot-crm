@@ -16,20 +16,6 @@ export const JOB_STATUS: Record<string, { l: string; c: string }> = {
 
 export const SQFT_PER_ROLL = 57;
 
-/* ── NPS bands: ONE definition for every Site Audit surface ────────────────
-   Field-service NPS is computed from Q1 ("overall experience", 1–10) on the
-   `ratings` table. Material Depot deliberately runs a STRICTER band than
-   textbook NPS — a 7 is a detractor here, and only an 8 is neutral — which is
-   why every card that shows this number also prints the band next to it
-   (`NPS_BAND_LABELS`) rather than leaving the reader to assume the textbook
-   one. `material-depot-site`'s Admin.html analytics uses the same three
-   thresholds; keep them in step.
-
-   Do NOT reuse these for the `crm.nps` tab (components/nps). That dashboard
-   measures a different question asked of store-visit footfall through the
-   Django tracker, on textbook bands (detractor ≤6) — a separate measure that
-   happens to share the word "NPS". Two numbers, two definitions, both
-   labelled; never averaged together. */
 export const NPS_PROMOTER_MIN = 9;
 export const NPS_DETRACTOR_MAX = 7;
 export type NpsBand = 'promoter' | 'neutral' | 'detractor';
@@ -48,9 +34,6 @@ export function npsBand(q1: number): NpsBand {
 
 export type NpsSummary = { nps: number | null; prom: number; neu: number; det: number; total: number };
 
-/* `null` NPS means "no scores", which every card renders as "—" rather than
-   as a zero — a zero NPS is a real, bad result and must not be produced by an
-   empty set. Non-numeric/blank scores are dropped, not counted as detractors. */
 export function npsFrom(scores: Array<number | string | null | undefined>): NpsSummary {
   let prom = 0, neu = 0, det = 0;
   for (const s of scores) {
@@ -65,8 +48,6 @@ export function npsFrom(scores: Array<number | string | null | undefined>): NpsS
   return { nps: total ? Math.round(((prom - det) / total) * 100) : null, prom, neu, det, total };
 }
 
-/* Mean of a 1–10 question, to one decimal — shared so the Q1/Q2/Q3 average
-   tiles on the COE dashboard and in Analytics can never round differently. */
 export function avgScore(scores: Array<number | string | null | undefined>): number | null {
   const vs = scores.map((s) => Number(s)).filter((n) => Number.isFinite(n) && n > 0);
   return vs.length ? +(vs.reduce((a, b) => a + b, 0) / vs.length).toFixed(1) : null;
@@ -95,18 +76,6 @@ export function fmtLog(d?: string | null) {
   return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + ts;
 }
 
-/* ── CRM role → the Site Audit dashboard that role should land on ───────────
-   The sub-permission slugs above (`site_audit.*`) are set by hand per person
-   in Admin > Users, and almost nobody has one — which is why BMs and store
-   managers saw nothing in the Site Audit tab even once it was granted. Their
-   CRM permission already says what they are, so derive the dashboard from it
-   and use the hand-set sub-permission only as an override.
-
-   Returns null when the CRM role implies no dashboard of its own: `admin`
-   (which gets the company-wide oversight rail instead, not a personal
-   dashboard), anything mapped to null ("no Site Audit access"), and
-   `field_worker`/unknown permissions, which can't be resolved to auditor vs
-   installer without a human — see siteAuditTargetForCrmPermission. */
 export function siteAuditRoleForCrmRole(crmRole?: string | null): string | null {
   const target = siteAuditTargetForCrmPermission(String(crmRole || ''));
   if (target === FIELD_WORKER_SKIP || target === null || target === 'admin') return null;

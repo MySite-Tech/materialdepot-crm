@@ -1,10 +1,6 @@
 import { EXCLUDED_ROLES } from './roles';
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// CRM Users — replaces Supabase users table
-// ---------------------------------------------------------------------------
-
 const PERMISSION_ID_TO_ROLE: Record<number, string> = {
   1: 'admin', 2: 'manager', 3: 'sales', 4: 'pre_sales', 5: 'procurement',
   6: 'delivery', 7: 'tech', 8: 'data', 9: 'accounts', 10: 'retail',
@@ -59,11 +55,7 @@ export async function updateUser(id: string | number, updates: Partial<import('.
     body: JSON.stringify({
       ...rest,
       ...(individualPermissions !== undefined ? { individual_permissions: individualPermissions } : {}),
-      /* `active` is this repo's name for it; the backend column is `status`.
-         `_mapUserOrg` reads it back the same way (`active: u.status !== false`).
-         Without this rename the key rode through untouched and Django ignored
-         it, so deactivating an account looked like it worked and changed
-         nothing. */
+
       ...(active !== undefined ? { status: active } : {}),
     }),
   });

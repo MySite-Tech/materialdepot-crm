@@ -2,10 +2,6 @@ import { updateLeadProperties } from './clientProperties';
 import { mdFetch } from './client';
 import { fetchCRMLeads } from './crmLeads';
 
-// ---------------------------------------------------------------------------
-// CRM Lead Remarks — replaces Supabase remarks in leads table
-// ---------------------------------------------------------------------------
-
 export async function fetchLeadRemarks(ticketId: number): Promise<import('../../types/crm').Remark[]> {
   if (!ticketId) return [];
   try {
@@ -30,10 +26,6 @@ export async function appendRemarkToLead(
   return fetchLeadRemarks(ticketId);
 }
 
-// ---------------------------------------------------------------------------
-// CRM Lead Visits — replaces Supabase visits in leads table
-// ---------------------------------------------------------------------------
-
 export async function fetchLeadVisits(clientPhone: string): Promise<import('../../types/crm').Visit[]> {
   if (!clientPhone) return [];
   try {
@@ -43,10 +35,6 @@ export async function fetchLeadVisits(clientPhone: string): Promise<import('../.
     return [];
   }
 }
-
-// ---------------------------------------------------------------------------
-// CRM Lead upsert / fetch / create / delete — replaces Supabase leads table
-// ---------------------------------------------------------------------------
 
 export async function upsertLead(lead: import('../../types/crm').Lead): Promise<void> {
   if (!lead.clientPhone) return;

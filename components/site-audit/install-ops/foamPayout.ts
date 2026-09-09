@@ -1,27 +1,9 @@
-/* Foam-roll balances and installer payouts — pure logic ported from
-   material-depot-site (foam: SM_Install_Dashboard.html; payouts: Admin.html).
-
-   Both read the same two small tables: `app_settings` (key → jsonb config)
-   and `foam_ledger` (append-only foam hand-outs). Neither is derived from the
-   other, but they share the "done sub-job" rules, so they live together here:
-
-   - A sub-job counts as DONE when it is `completed` OR `partial`.
-   - Its completion date is the latest matching "…installation (partially)
-     completed" log entry in IST, falling back to jobcard.partialAt, then to
-     the latest scheduled date (orders predating the log format keep working).
-   - A job's area/rolls are split EQUALLY across its co-assigned installers
-     (600 sqft across 3 installers = 200 each), never credited in full to
-     each — that is deliberately different from the Analytics attribution. */
-
 import { SQFT_PER_ROLL, loadSetting, saveSetting, sbGet } from '../siteAuditShared';
 import { sjEffectiveAssignments } from './shared';
 import type { FoamConfig, FoamLedgerRow, InstallOrder, Installer, PayRates, Subjob } from './types';
 
-// app_settings access moved to siteAuditShared (the audit side needs it too);
-// re-exported so the foam/payout views keep importing it from here.
 export { loadSetting, saveSetting };
 
-/* ── shared "done sub-job" date rules ─────────────────────────────────── */
 export function istDate(iso?: string | null): string | null {
   try {
     return new Date(new Date(iso as string).getTime() + 19800000).toISOString().substring(0, 10);
@@ -63,15 +45,8 @@ function rollsOf(sj: Subjob): number {
   }, 0);
 }
 
-/* ── Foam ─────────────────────────────────────────────────────────────────
-   Each flooring installer carries a personal foam stock (≈1 sqft of foam per
-   sqft of floor). Balance = Σ issued (foam_ledger) − Σ consumed (derived from
-   their done flooring sub-jobs dated on/after the tracking start). */
 export const FOAM_DEFAULTS: FoamConfig = { threshold: 0, tracking_start: '' };
 
-/* One canonical key per person — installer_id, else email:<e>, else name:<n>
-   — so each ledger/consumption entry lands under exactly one key and summing
-   a person's three possible keys can never double-count. */
 function foamKey(idLike?: string | null, email?: string | null, name?: string | null): string | null {
   return idLike || (email ? 'email:' + String(email).toLowerCase() : name ? 'name:' + String(name).toLowerCase() : null);
 }
@@ -126,7 +101,7 @@ export function foamBalances(orders: InstallOrder[], installers: Installer[], le
 export function foamLowCount(orders: InstallOrder[], installers: Installer[], ledger: FoamLedgerRow[], cfg: FoamConfig): number {
   return cfg.threshold > 0 ? foamBalances(orders, installers, ledger, cfg).filter((b) => b.low).length : 0;
 }
-/* Ledger rows belonging to one installer, matched through the same three keys. */
+
 export function ledgerFor(ledger: FoamLedgerRow[], inst: Installer): FoamLedgerRow[] {
   return ledger.filter((r) => {
     const k = foamKey(r.installer_id, r.installer_email, r.installer_name);
@@ -134,14 +109,11 @@ export function ledgerFor(ledger: FoamLedgerRow[], inst: Installer): FoamLedgerR
   });
 }
 
-/* ── Payouts ──────────────────────────────────────────────────────────── */
 export const PAY_DEFAULTS: Required<PayRates> = { fl_sqft: 0, wp_std_roll: 0, wp_custom_sqft: 0, wpnl_sqft: 0 };
 export type PayField = keyof PayRates;
 
 export type PayoutOverrides = Record<string, PayRates>;
 
-/* profiles.pay_rates keyed by both email and name:<name>, so a row missing an
-   email still resolves. */
 export function buildPayoutOverrides(profiles: Array<{ name?: string; email?: string; pay_rates?: PayRates | null }>): PayoutOverrides {
   const out: PayoutOverrides = {};
   for (const p of profiles || []) {
@@ -174,7 +146,6 @@ export type PayoutAgg = {
   total: number; lines: PayoutLine[];
 };
 
-/* One row per DONE sub-job whose completion date lands inside [from,to]. */
 export function payoutRows(orders: InstallOrder[], from: string, to: string): PayoutRow[] {
   const rows: PayoutRow[] = [];
   for (const o of orders) {

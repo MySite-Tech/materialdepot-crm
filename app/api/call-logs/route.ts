@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await res.json();
-    // Only cache if content is non-empty
+
     if (data.content?.length > 0) setCache(cacheKey, data, 60_000);
     return Response.json(data);
   } catch (err) {

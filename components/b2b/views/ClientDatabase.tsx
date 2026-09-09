@@ -57,7 +57,6 @@ function StatusPill({ status, days }: { status: ClientStatus; days?: number }) {
   );
 }
 
-/** A metric cell with three states — loaded, unreadable, or not applicable. */
 function Metric({ value, state, format }: {
   value: number | string | undefined;
   state: ClientOrderMetrics['dateState'];
@@ -71,8 +70,6 @@ function Metric({ value, state, format }: {
   }
   return <span>{typeof value === 'number' && format ? format(value) : String(value)}</span>;
 }
-
-// ── §3.1 Business Entity editors ──────────────────────────────────────────────
 
 function ContactRows({ contacts, onChange }: { contacts: ClientContact[]; onChange: (c: ClientContact[]) => void }) {
   const set = (i: number, patch: Partial<ClientContact>) =>
@@ -157,8 +154,6 @@ function GstRows({ gsts, onChange }: { gsts: ClientGst[]; onChange: (g: ClientGs
   );
 }
 
-// ── §3.2 Order Details ────────────────────────────────────────────────────────
-
 function OrderDetailsTable({ rows, failedPhones, rejected, loading, onRecheck }: {
   rows: ClientOrderRow[];
   failedPhones: string[];
@@ -212,9 +207,7 @@ function OrderDetailsTable({ rows, failedPhones, rejected, loading, onRecheck }:
                     <span className="font-mono">{r.contactNumber}</span>
                     {r.contactName && <span className="text-gray-400"> · {r.contactName}</span>}
                   </td>
-                  {/* Two columns §3.2 asks for that the deal tickets simply do
-                      not carry. Said so, rather than left blank — a blank cell
-                      reads as "this order had no company name on it". */}
+
                   <td className="py-1.5 pr-2 text-gray-300 italic" title="Not in the deal-ticket response — see ClientOrderRow in b2bLeads.ts">not in Procurement</td>
                   <td className="py-1.5 pr-2 text-gray-300 italic" title="Not in the deal-ticket response">not in Procurement</td>
                   <td className="py-1.5 pr-2 text-right font-mono font-semibold text-gray-700 whitespace-nowrap">{fmtINR(r.orderValue)}</td>
@@ -253,8 +246,6 @@ function OrderDetailsTable({ rows, failedPhones, rejected, loading, onRecheck }:
     </>
   );
 }
-
-// ── Manual entry (§6.1) ───────────────────────────────────────────────────────
 
 function ClientModal({ client, isNew, onClose, onSave }: {
   client: ClientEntity;
@@ -397,8 +388,6 @@ function ClientModal({ client, isNew, onClose, onSave }: {
     </div>
   );
 }
-
-// ── Merge (§4) ────────────────────────────────────────────────────────────────
 
 function MergeModal({ clients, suggestions, onClose, onMerge }: {
   clients: ClientEntity[];
@@ -585,8 +574,6 @@ function MergeModal({ clients, suggestions, onClose, onMerge }: {
   );
 }
 
-// ── Bulk upload (§6.2 / §7) ───────────────────────────────────────────────────
-
 function UploadModal({ existing, onClose, onImport }: {
   existing: ClientEntity[];
   onClose: () => void;
@@ -610,8 +597,7 @@ function UploadModal({ existing, onClose, onImport }: {
       } else {
         const XLSX = await import('xlsx');
         const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-        // The template's own data sheet is called "Template"; fall back to the
-        // first sheet so a hand-made file still works.
+
         const ws = wb.Sheets['Template'] || wb.Sheets[wb.SheetNames[0]];
         if (!ws) throw new Error('the workbook has no readable sheet');
         setFileRows(XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, blankrows: true, raw: false, defval: '' }));
@@ -746,7 +732,6 @@ function UploadModal({ existing, onClose, onImport }: {
                 </div>
               )}
 
-              {/* Entity plan — what will actually be written, before it is. */}
               <div className="border border-gray-200 rounded-md overflow-hidden">
                 <div className="max-h-[180px] overflow-y-auto">
                   <table className="w-full text-[11px]">
@@ -781,7 +766,6 @@ function UploadModal({ existing, onClose, onImport }: {
                 </div>
               </div>
 
-              {/* Row-level issues */}
               {withSave.rows.some((r) => r.issues.length) && (
                 <div className="border border-gray-200 rounded-md overflow-hidden">
                   <div className="max-h-[180px] overflow-y-auto">
@@ -824,8 +808,6 @@ function UploadModal({ existing, onClose, onImport }: {
     </div>
   );
 }
-
-// ── Seeding the master (open question #4) ─────────────────────────────────────
 
 function SeedModal({ onClose, onSeed }: {
   onClose: () => void;
@@ -946,8 +928,6 @@ function SeedModal({ onClose, onSeed }: {
   );
 }
 
-// ── The tab ───────────────────────────────────────────────────────────────────
-
 export default function ClientDatabase() {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -980,8 +960,6 @@ export default function ClientDatabase() {
       const list = await fetchClients();
       setClients(list);
 
-      // Counts and values for every client in one batched request; dates from
-      // the per-phone pass, capped, with the overflow reported.
       const phones = list.flatMap((c) => contactNumbers(c.contacts));
       const agg = await fetchClientOrderHistories(phones);
       setAggregates(agg);
@@ -1064,9 +1042,7 @@ export default function ClientDatabase() {
 
   const runMerge = async (sources: ClientEntity[], choices: MergeChoices): Promise<string | null> => {
     const { merged, absorbed } = mergeClients(sources, choices, undefined);
-    // The survivor is written FIRST. If the deletes then fail the user sees
-    // duplicates and is told why, which is recoverable; deleting first and
-    // failing to write would lose the records outright.
+
     const writeError = await upsertClient(merged);
     if (writeError) return `The merged client could not be saved, so nothing was deleted: ${writeError}`;
 
@@ -1084,8 +1060,7 @@ export default function ClientDatabase() {
         ? next.map((c) => (c.id === merged.id ? merged : c))
         : [merged, ...next];
     });
-    // Order metrics change on a merge (numbers roll up), so the aggregates
-    // have to be re-read rather than reused.
+
     load();
 
     return deleteErrors.length
@@ -1179,7 +1154,6 @@ export default function ClientDatabase() {
         </div>
       )}
 
-      {/* ── Filters ── */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <input
           value={search}
@@ -1207,7 +1181,6 @@ export default function ClientDatabase() {
         <span className="text-[11px] text-gray-400 ml-auto">{rows.length} of {clients.length}</span>
       </div>
 
-      {/* ── List (§2) ── */}
       {loading ? (
         <p className="text-sm text-gray-400 py-8 text-center">Loading clients…</p>
       ) : !clients.length ? (
@@ -1294,12 +1267,11 @@ export default function ClientDatabase() {
                         </td>
                       </tr>
 
-                      {/* ── §3 Detail, expanded in place ── */}
                       {isOpen && (
                         <tr className="bg-gray-50/60">
                           <td colSpan={11} className="px-3 pb-4 pt-1">
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                              {/* §3.1 */}
+
                               <div className="bg-white rounded-md border border-gray-200 p-3">
                                 <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Business entity · §3.1</div>
                                 <div className="text-[13px] font-semibold text-gray-800">{client.company}</div>
@@ -1345,7 +1317,6 @@ export default function ClientDatabase() {
                                 )}
                               </div>
 
-                              {/* §3.2 */}
                               <div className="bg-white rounded-md border border-gray-200 p-3 lg:col-span-2">
                                 <OrderDetailsTable
                                   rows={detailsByClient[client.id]?.rows || []}

@@ -6,21 +6,6 @@ import { ClientEntity, ClientEntityType, ClientSource, clientTypeFromLead, conta
 import { Segment } from '@/components/b2b/models/inboundModel';
 import { KamOrder } from '@/components/b2b/models/kamModel';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mockData';
-// ── Seeding the client universe (Client DB open question #4) ──────────────────
-//
-// "Is there a Procurement export needed to seed Order Details for clients who
-// ordered before this module existed?"
-//
-// No — Order Details is derived from the deal tickets, which already hold every
-// historical order. What DOES need seeding is the entity list itself, and the
-// CRM already knows about every client it has closed: a won Inbound lead, a won
-// Outreach lead, and the 30 legacy KAM rows each name a company and a phone.
-//
-// `planClientSeed` proposes entities from those and is never run automatically.
-// Matching is EXACT on the normalized phone — a company-name similarity is
-// reported as a possible duplicate for the merge screen instead, because two
-// firms with similar names are not one client and a seed that guessed would
-// silently fuse two books of business.
 
 export interface ClientSeedCandidate {
   company: string;
@@ -32,18 +17,18 @@ export interface ClientSeedCandidate {
   clientType?: ClientEntityType;
   source: ClientSource;
   kam?: string;
-  /** Where the candidate came from, for the preview. */
+
   origin: 'Inbound lead' | 'Outreach lead' | 'KAM board';
-  /** Set when an existing client already holds this phone. */
+
   existingClientId?: string;
   existingCompany?: string;
 }
 
 export interface ClientSeedPlan {
   create: ClientSeedCandidate[];
-  /** Already covered by a client entity — nothing to do. */
+
   alreadyLinked: ClientSeedCandidate[];
-  /** Named a company but no usable phone, so nothing could link its orders. */
+
   unusable: ClientSeedCandidate[];
 }
 
@@ -104,9 +89,6 @@ export async function planClientSeed(existing: ClientEntity[]): Promise<ClientSe
     });
   }
 
-  // One candidate per phone. The first origin wins for the source (leads are
-  // listed before the KAM board precisely so a client's real source survives),
-  // and every later candidate only fills fields the first one left blank.
   const merged = new Map<string, ClientSeedCandidate>();
   const unusable: ClientSeedCandidate[] = [];
   for (const cand of raw) {

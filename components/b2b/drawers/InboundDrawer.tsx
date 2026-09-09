@@ -1,15 +1,5 @@
 'use client';
 
-// ── Inbound lead drawer ──────────────────────────────────────────────────────
-// Organised by the PRD's own sections, in the order a rep works them:
-//
-//   From Presales (§3.1) → Client (§3.2) → Requirement (§3.3)
-//   → Call log (§3.2) → Status (§3.4) → Placed under (§3.5)
-//
-// Every block states which system owns it. Three systems hold pieces of one
-// lead and a rep has no other way to tell why a field is read-only, or why a
-// value they typed reappeared different after a sync.
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchLeadNotes, createLeadNote, fetchLeadCallLogs, createInboundCallLog,
@@ -35,9 +25,6 @@ import {
   inputCls, errorInputCls, fmtLeadDateTime,
 } from '../ui/inboundChips';
 
-// PRD §3.2 logs an attempt as Connected or RNR (Ring No Response). Kylas's own
-// outcome vocabulary is wider; these are the two exact equivalents, not a
-// nearest match.
 const KYLAS_OUTCOME: Record<CallAttemptOutcome, 'connected' | 'no_answer'> = {
   Connected: 'connected',
   RNR: 'no_answer',
@@ -45,7 +32,7 @@ const KYLAS_OUTCOME: Record<CallAttemptOutcome, 'connected' | 'no_answer'> = {
 
 interface SaveState {
   saving: boolean;
-  /** Shown after a save that partially failed — never swallowed. */
+
   warning?: string;
   error?: string;
 }
@@ -55,7 +42,7 @@ export default function InboundDrawer({
 }: {
   lead: InboundLead;
   onClose: () => void;
-  /** Called with the persisted lead so the board can update in place. */
+
   onSaved: (updated: InboundLead) => void;
 }) {
   const [draft, setDraft] = useState<InboundLead>(lead);
@@ -65,7 +52,6 @@ export default function InboundDrawer({
   const set = <K extends keyof InboundLead>(k: K, v: InboundLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
-  // ── Live Kylas read (§3.1 + the shared §3.3 fields) ──
   const [detailLoading, setDetailLoading] = useState(true);
   const [detailFailed, setDetailFailed] = useState(false);
   const [phoneId, setPhoneId] = useState<number | undefined>(undefined);
@@ -81,7 +67,7 @@ export default function InboundDrawer({
         setPhoneId(d.phoneId);
         setDraft((prev) => ({
           ...prev,
-          // Presales owns these; the live read wins over the stored snapshot.
+
           leadSummary: d.leadSummary ?? prev.leadSummary,
           urgency: d.urgency ?? prev.urgency,
           pincode: d.pincode ?? prev.pincode,
@@ -91,12 +77,10 @@ export default function InboundDrawer({
           qualificationTag: d.qualificationTag ?? prev.qualificationTag,
           leadCreatedAt: d.leadCreatedAt ?? prev.leadCreatedAt,
           phone: d.phone || prev.phone,
-          // Kylas owns the name (§3.1). Refreshed here because a promoted lead
-          // is often absent from the board's Kylas page, so `mergeKylasIntoRow`
-          // never reaches it — and the old placeholder is what was stored.
+
           contactName: d.contactName ?? prev.contactName,
           company: d.kylasName || prev.company,
-          // Shared: keep an unsaved local edit, otherwise take Kylas's copy.
+
           requirement: prev.requirement || d.requirement,
           selections: prev.selections?.length ? prev.selections : d.selections,
         }));
@@ -105,7 +89,6 @@ export default function InboundDrawer({
     return () => { alive = false; };
   }, [lead.id]);
 
-  // ── Notes, call logs, deals ──
   const [kylasNotes, setKylasNotes] = useState<LeadNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
   const [callLogs, setCallLogs] = useState<CallLogEntry[]>([]);
@@ -145,7 +128,6 @@ export default function InboundDrawer({
     return () => { alive = false; };
   }, [lead.phone]);
 
-  // ── Gates ──
   const gateErrors = useMemo(() => statusGateErrors({
     status: draft.stage,
     followUpDate: draft.followUpDate,
@@ -175,7 +157,6 @@ export default function InboundDrawer({
     return gateErrors.find((e) => e.toLowerCase().includes(map[field].toLowerCase()));
   };
 
-  // ── Enq ID → order value (PRD §3.4) ──
   const [enq, setEnq] = useState<EnqLookup | null>(null);
   const [enqChecking, setEnqChecking] = useState(false);
   const lastCheckedEnq = useRef<string>('');
@@ -192,25 +173,21 @@ export default function InboundDrawer({
         ...d,
         orderValue: res.orderValue ?? 0,
         orderValueSource: 'deal',
-        // PRD §3.5: "BM Name — fetched from Procurement".
+
         placedUnder: { ...(d.placedUnder || {}), bmName: res.bmName || d.placedUnder?.bmName },
       }));
     } else if (res.status === 'no-match') {
-      // Hand the field back to the rep rather than leaving a stale fetched
-      // figure attached to an Enq ID that no longer resolves.
+
       setDraft((d) => ({ ...d, orderValueSource: 'manual' }));
     }
     setEnqChecking(false);
   };
 
-  // A changed Enq ID invalidates the previous lookup immediately, so a matched
-  // value can never sit under an ID it did not come from.
   useEffect(() => {
     const cur = (draft.enqId || '').trim();
     if (cur !== lastCheckedEnq.current) setEnq(null);
   }, [draft.enqId]);
 
-  // ── Call attempts (PRD §3.2 + the retry loop) ──
   const attempts = draft.callAttempts || [];
   const attemptNo = nextAttemptNumber(attempts);
   const exhausted = retriesExhausted(attempts);
@@ -239,9 +216,7 @@ export default function InboundDrawer({
       note: logNote.trim() || undefined,
     };
     const nextAttempts = [...attempts, attempt];
-    // A logged call always carries the next follow-up date the PRD requires,
-    // and a lead being actively called is by definition on follow-up — unless
-    // it has already moved past that (PI Shared / Closed / Lost).
+
     const nextStatus: InboundStatus =
       draft.stage === 'New' ? 'Follow up' : draft.stage;
     const updated: InboundLead = {
@@ -252,9 +227,6 @@ export default function InboundDrawer({
       statusChangedAt: nextStatus !== draft.stage ? new Date().toISOString() : draft.statusChangedAt,
     };
 
-    // Kylas holds the call-log record; b2b_lead holds the attempt counter the
-    // PRD reports on. The Kylas half needs a phoneId we may not have, so a
-    // failure there must not lose the attempt — it is reported instead.
     let kylasNote = '';
     if (phoneId) {
       const ok = await createInboundCallLog({
@@ -283,7 +255,6 @@ export default function InboundDrawer({
     if (phoneId) reloadCalls();
   };
 
-  // ── KAM handoff (PRD §3.5) ──
   const [kamLoad, setKamLoad] = useState<Record<string, number> | null>(null);
   const [kamAssigning, setKamAssigning] = useState(false);
 
@@ -300,7 +271,6 @@ export default function InboundDrawer({
   const setPlaced = (k: keyof PlacedUnder, v: string) =>
     setDraft((d) => ({ ...d, placedUnder: { ...(d.placedUnder || {}), [k]: v } }));
 
-  // ── Notes ──
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
@@ -318,10 +288,6 @@ export default function InboundDrawer({
     setSavingNote(false);
   };
 
-  // ── Save ─────────────────────────────────────────────────────────────────
-  // Two systems, reported separately. The old drawer discarded the Kylas result
-  // and rendered every save as a success, so a rejected PATCH left Kylas and
-  // the CRM disagreeing with nothing on screen to say so.
   const handleSave = async () => {
     if (save.saving) return;
     if (gateErrors.length) { setShowGates(true); return; }
@@ -333,7 +299,7 @@ export default function InboundDrawer({
       company: draft.companyName?.trim() || draft.company,
       value: Number(draft.orderValue) || 0,
       statusChangedAt: statusChanged ? new Date().toISOString() : draft.statusChangedAt,
-      // Kept in step for the shared boards, which read the old aliases.
+
       timeline: draft.urgency,
       requirementBrief: draft.leadSummary,
     };
@@ -384,7 +350,6 @@ export default function InboundDrawer({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-[780px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
 
-        {/* ── Header ── */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 pt-5 pb-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -423,7 +388,6 @@ export default function InboundDrawer({
 
         <div className="p-5 flex flex-col gap-4">
 
-          {/* ── §3.1 From Presales ── */}
           <SectionCard
             title="From Presales"
             owner="kylas"
@@ -469,7 +433,6 @@ export default function InboundDrawer({
             </div>
           </SectionCard>
 
-          {/* ── §3.2 Client ── */}
           <SectionCard title="Client" owner="crm" subtitle="§3.2 — your team owns these">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field
@@ -534,7 +497,6 @@ export default function InboundDrawer({
             </div>
           </SectionCard>
 
-          {/* ── §3.3 Requirement ── */}
           <SectionCard title="Requirement" owner="kylas-write" subtitle="§3.3 — Requirement summary and Selection sync to Kylas">
             <Field label="Selection">
               <div className="flex flex-wrap gap-1.5">
@@ -589,7 +551,6 @@ export default function InboundDrawer({
             </Field>
           </SectionCard>
 
-          {/* ── §3.2 Call log ── */}
           <SectionCard
             title="Call log"
             owner="crm"
@@ -603,7 +564,7 @@ export default function InboundDrawer({
               </button>
             )}
           >
-            {/* Attempt tracker — the PRD's retry loop, 1 to 4 */}
+
             <div className="flex items-center gap-2 mb-3">
               {Array.from({ length: MAX_CALL_ATTEMPTS }, (_, i) => {
                 const a = attempts[i];
@@ -635,7 +596,6 @@ export default function InboundDrawer({
               </p>
             ) : null}
 
-            {/* PRD: 4th attempt RNR → mark Lost (unreachable) or park for long-term follow-up */}
             {exhausted && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 mb-3">
                 <p className="text-[11px] text-amber-800 leading-snug font-semibold">
@@ -662,7 +622,6 @@ export default function InboundDrawer({
               </div>
             )}
 
-            {/* Log-an-attempt form */}
             {logOpen && (
               <div className="rounded-md border border-gray-200 bg-gray-50/60 p-3 mb-3 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
@@ -717,7 +676,6 @@ export default function InboundDrawer({
               </div>
             )}
 
-            {/* Attempt history */}
             {attempts.length > 0 && (
               <div className="flex flex-col divide-y divide-gray-100 mb-3">
                 {attempts.slice().reverse().map((a, i) => (
@@ -735,7 +693,6 @@ export default function InboundDrawer({
               </div>
             )}
 
-            {/* Kylas's own call records */}
             <div className="border-t border-gray-100 pt-2.5">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Kylas call records</span>
@@ -774,7 +731,6 @@ export default function InboundDrawer({
             </div>
           </SectionCard>
 
-          {/* ── §3.4 Status ── */}
           <SectionCard title="Status" owner="crm" subtitle="§3.4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Status" hint={INBOUND_STATUS_HINT[draft.stage]}>
@@ -888,7 +844,7 @@ export default function InboundDrawer({
                   >
                     <option value="">Select a reason…</option>
                     {INBOUND_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                    {/* A reason recorded before this list existed must survive an edit. */}
+
                     {draft.lostReason && !(INBOUND_LOST_REASONS as readonly string[]).includes(draft.lostReason) && (
                       <option value={draft.lostReason}>{draft.lostReason} (previously recorded)</option>
                     )}
@@ -898,7 +854,6 @@ export default function InboundDrawer({
             </div>
           </SectionCard>
 
-          {/* ── §3.5 Placed under ── */}
           {draft.stage === 'Closed' && (
             <SectionCard title="Placed under" owner="crm" subtitle="§3.5 — captured on order won">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -945,7 +900,6 @@ export default function InboundDrawer({
             </SectionCard>
           )}
 
-          {/* ── Deals ── */}
           <SectionCard
             title="Deal tickets"
             owner="deals"
@@ -980,7 +934,6 @@ export default function InboundDrawer({
                 )}
           </SectionCard>
 
-          {/* ── Notes ── */}
           <SectionCard title="Notes" owner="kylas-write" subtitle="Written to Kylas, visible to Presales">
             <textarea
               value={noteText}
@@ -1009,7 +962,6 @@ export default function InboundDrawer({
           </SectionCard>
         </div>
 
-        {/* ── Footer ── */}
         <div className="mt-auto sticky bottom-0 bg-white border-t border-gray-200 px-6 py-3.5 flex flex-col gap-2">
           {showGates && gateErrors.length > 0 && <GateErrors errors={gateErrors} />}
           {save.error && <GateErrors errors={[save.error]} />}

@@ -1,29 +1,9 @@
 'use client';
 
-/* The three staff modals every surface shares: add, retire, restore.
-
-   There used to be two add-staff forms — `AddAuditorOverlay` in
-   audit-ops/Overlays and `AddStaffOverlay` in install-ops/Overlays — with
-   separate role lists, separate validation and separate copies of the CRM
-   permission map. The consequence a service manager actually hit: the Audit
-   dashboard's "+ Add Staff" offered Site Auditor and Auditor + Installer only,
-   so an SM sitting in the audit console could not add a plain installer and
-   had to know to cross over to the Install dashboard to do it. One form, one
-   role list, both dashboards.
-
-   Retiring is new here. It was previously admin-only, a hard `sbDel`, and
-   reachable from exactly one screen — which is why the roster filled up with
-   people who had left. See siteAuditShared's staff-exit section. */
-
 import { useEffect, useMemo, useState } from 'react';
 import { CITIES, EXIT_REASONS, ROLES, exitColumnsAvailable } from '../siteAuditShared';
 import { createFieldStaff, restoreFieldStaff, retireFieldStaff, validateStaffInput } from './staffDirectory';
 
-/* ── Which roles a surface may create ─────────────────────────────────────
-   The SM dashboards get the four field roles — the people they schedule.
-   `bm`/`coe`/`branch_mgr`/`admin` stay admin-only: they are oversight
-   accounts, not manpower, and they are created against a CRM login rather
-   than a field profile. */
 export const FIELD_STAFF_ROLES: Array<[string, string]> = [
   ['site_auditor', 'Site Auditor'],
   ['installer', 'Site Installer'],
@@ -61,12 +41,6 @@ function Foot({ children }: { children: React.ReactNode }) {
   return <div className="-mx-5 -mb-4 mt-1 flex justify-end gap-2 border-t border-gray-100 px-5 py-3.5">{children}</div>;
 }
 
-/* ── Add ──────────────────────────────────────────────────────────────────
-   `defaultCity` is the city the SM is currently filtered to. An auditor or
-   installer works only the city they are assigned on joining, and both older
-   forms defaulted to Bengaluru (the install one wrote no city at all, which
-   is how one live installer still has NULL and reads as Bengaluru), so
-   defaulting to the city being looked at is the safer wrong answer. */
 export function AddFieldStaffModal({
   open, onClose, onDone, defaultCity, roles = FIELD_STAFF_ROLES, defaultRole,
 }: {
@@ -103,12 +77,7 @@ export function AddFieldStaffModal({
     setBusy(true);
     try {
       const res = await createFieldStaff(input);
-      /* Says WHERE they landed, because the two SM dashboards keep separate
-         rosters: "Auditors & caps" reads site_auditor + auditor_installer,
-         "Installers" reads installer + auditor_installer. Adding a plain
-         installer from the audit console works and is meant to, but the person
-         then appears on the OTHER dashboard — without this the add looked like
-         it had silently done nothing. */
+
       const lands = role === 'site_auditor'
         ? 'Audit dashboard → Auditors & caps'
         : role === 'installer'
@@ -161,19 +130,13 @@ export function AddFieldStaffModal({
   );
 }
 
-/* ── Retire ───────────────────────────────────────────────────────────────
-   A modal rather than `window.confirm` + `window.prompt`, because the reason
-   is the whole point: it is what the attrition breakdown groups by, and
-   `window.prompt` is the landmine this repo keeps re-treading (it is
-   suppressed outright in an installed PWA, so a required reason collected
-   that way is a dead end — see NoteModal). */
 export type RetireTarget = { id: string; name: string; email: string; role: string; contact: string | null; city?: string | null };
 
 export function RetireStaffModal({
   person, actorEmail, onClose, onDone,
 }: {
   person: RetireTarget;
-  /* Recorded as `deleted_by` so an accidental removal has an owner to ask. */
+
   actorEmail?: string | null;
   onClose: () => void;
   onDone: (msg: string) => Promise<void> | void;
@@ -185,9 +148,6 @@ export function RetireStaffModal({
   const [busy, setBusy] = useState(false);
   const [canRetire, setCanRetire] = useState<boolean | null>(null);
 
-  /* The columns are probe-gated (migration 004). Asking up front means the
-     operator learns the migration is missing BEFORE typing a reason, rather
-     than on submit. */
   useEffect(() => { exitColumnsAvailable().then(setCanRetire); }, []);
 
   const finalReason = useMemo(() => {
@@ -241,9 +201,6 @@ export function RetireStaffModal({
   );
 }
 
-/* ── Restore ──────────────────────────────────────────────────────────────
-   Retiring the wrong person is the cost of putting removal in more hands, so
-   undoing it is one click and needs no form. */
 export function RestoreStaffModal({
   person, onClose, onDone,
 }: {

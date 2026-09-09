@@ -1,9 +1,5 @@
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// CRM Leads from backend
-// ---------------------------------------------------------------------------
-
 export interface CRMLeadRow {
   id: string;
   leadId?: string;
@@ -38,18 +34,18 @@ export interface CRMLeadsPage {
 
 export interface CRMLeadsQuery {
   page?: number;
-  pageSize?: number; // 25..100, clamped server-side
+  pageSize?: number;
   branch?: string;
   bm?: string;
   q?: string;
-  status?: string;            // CSV of CRM-vocabulary statuses
-  createdFrom?: string;       // YYYY-MM-DD
+  status?: string;
+  createdFrom?: string;
   createdTo?: string;
   followupFrom?: string;
   followupTo?: string;
   closureFrom?: string;
   closureTo?: string;
-  lostFrom?: string;           // Lost Mark Date range (deal resolution date)
+  lostFrom?: string;
   lostTo?: string;
   cartValueGt?: number;
   cartValueLt?: number;
@@ -57,7 +53,7 @@ export interface CRMLeadsQuery {
   sortBy?: 'createdAt' | 'clientName' | 'clientPhone' | 'assignedTo' | 'branch' | 'cartValue';
   sortDir?: 'asc' | 'desc';
   taskFilter?: string;
-  category?: string;          // CSV of category names
+  category?: string;
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number }
@@ -70,9 +66,6 @@ export interface CRMLeadsStats {
   byStatus: CRMLeadsStatsByStatus[];
 }
 
-// Lifetime deal totals for many clients at once, keyed by the phone the backend
-// matched. One request for a whole board — /crm/leads/stats/?q=<phone> per client
-// does an unindexed icontains over a cast of client__contact and does not scale.
 export interface ClientOrderHistoryRow {
   orders: number;
   lifetimeValue: number;

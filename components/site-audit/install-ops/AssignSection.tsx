@@ -1,16 +1,5 @@
 'use client';
 
-/* Installer/slot assignment — the highest-stakes piece of the port. Kept as
-   a near-verbatim port of AssignSection in SMInstall.jsx (source lines
-   1111-1293), including its ref-based mutable-draft + forced-redraw style
-   (assignsRef/customModeRef/editingSlotRef), because the load-balancing
-   inputs (flLoad/wpSlotLoad) and the standard-vs-custom/date-range/slot
-   logic are exactly the kind of business rule this port must not
-   reinterpret. Only the persistence plumbing changes: instead of mutating
-   module-level ORDERS and calling the module's own loadOrders()/toast(),
-   it calls the `reload`/`toast`/`onOpenOrder` props threaded down from the
-   root view. */
-
 import { useMemo, useRef, useState } from 'react';
 import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch, type CityFilter, type Shadower } from '../siteAuditShared';
 import { useNoteModal } from '../ui/NoteModal';
@@ -30,8 +19,7 @@ interface Props {
   slotsFl: SlotDef[];
   slotsWp: SlotDef[];
   attribution: string;
-  /* True when the roster FAILED to load, as opposed to genuinely having nobody
-     of this trade — an empty <select> alone reads as "the team is full". */
+
   installersErr?: boolean;
   onRetryInstallers?: () => void;
   reload: () => Promise<void>;
@@ -39,8 +27,6 @@ interface Props {
   onOpenOrder: (pi: string) => void;
 }
 
-/* An empty pool has three different causes and an empty dropdown states none of
-   them, sending the SM chasing a capacity problem that isn't there. */
 function EmptyInstallerPool({ err, anyLoaded, type, onRetry }: { err: boolean; anyLoaded: boolean; type: string; onRetry?: () => void }) {
   if (err) {
     return (
@@ -64,20 +50,10 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
   const redraw = () => setTick((x) => x + 1);
   const { ask: askNote, modal: noteModal } = useNoteModal();
 
-  // Pool is city-scoped (an installer can only take jobs in their own city);
-  // installerById below still resolves against the FULL roster so an existing
-  // cross-city assignment keeps rendering its installer's name.
   const pool = useMemo(() => inCity(installers.filter((i) => i.type === sj.type), city), [installers, sj.type, city]);
-  // A split sub-job can carry its own delivery date — the warning below has to
-  // be about THIS sub-job's material landing, not the order's.
+
   const sjDeliv = sjDeliveryDate(o, sj);
-  /* Pickers open from TODAY, never from the delivery date. Material routinely
-     lands before its recorded delivery date, and a hard `min` of
-     max(today, delivery) greyed out tomorrow with no explanation at all — SMs
-     read it as a broken calendar. The delivery date is a SOFT gate now:
-     `delivFloor` drives the amber note under the Date field plus a confirm and
-     a logged override on save, the same shape as the availability override in
-     saveAssign. Do NOT fold delivFloor back into `min`. */
+
   const minDate = dstr(today);
   const delivFloor = (sjDeliv && sjDeliv > minDate) ? sjDeliv : '';
   const beforeDeliv = (d?: string | null) => !!(delivFloor && d && d < delivFloor);
@@ -93,13 +69,9 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     if (assigns.length && !assigns.some((a) => a.primary)) assigns[0].primary = true;
     assignsRef.current = assigns;
   }
-  /* Shadowers are edited alongside the assignment and saved with it (Save
-     assignments), and cleared whenever the slot/assignment is cleared — a
-     shadower has nothing to observe once the visit is gone. */
+
   const [shadowers, setShadowers] = useState<Shadower[]>(() => parseShadowers(sj.shadower_email, sj.shadower_name));
-  /* Mirrors the Step-1 date input purely so the delivery warning can react to
-     typing — the authoritative value still comes off stepDateRef at Book-slot
-     time, keeping the input uncontrolled like the rest of this section. */
+
   const [pickedDate, setPickedDate] = useState<string>(() => sj.date || (sj.assignments && sj.assignments[0] && sj.assignments[0].date) || delivFloor || dstr(today));
 
   const customModeRef = useRef(assignsRef.current.length > 0 && assignsRef.current[0].mode === 'custom');
@@ -219,8 +191,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
         const missingSlots = valid.find((a) => !a.slots || !a.slots.length || !a.slots[0]);
         if (missingSlots) { toast('Please set a start time for each wallpaper installer'); return; }
       }
-      /* Custom mode owns its own dates, so it asks here rather than inheriting
-         Step 1's confirm. */
+
       const early = valid.filter((a) => beforeDeliv((a.dates && a.dates[0]) || a.date));
       if (early.length) {
         const firstEarly = (early[0].dates && early[0].dates[0]) || early[0].date || '';
@@ -232,9 +203,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
       const t = sj.slot && /^\d{1,2}:\d{2}$/.test(sj.slot) ? sj.slot : '09:00';
       valid.forEach((a) => { a.date = d; a.slots = [t]; a.mode = 'standard'; });
     }
-    /* Availability guard — assigning an installer on their weekly off or a
-       leave date is allowed, but only with a logged override reason (soft
-       gate, same shape as the source app's conflict override). */
+
     let availOverrideNote = '';
     const conflicts: string[] = [];
     for (const a of valid) {
@@ -252,32 +221,13 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     const wasResched = sj.status === 'reschedule';
     const remark = remarkRef.current ? (remarkRef.current.value || '').trim() : '';
     if (wasResched && !remark) { toast('Please enter a reason for the reschedule'); return; }
-    /* A reschedule already carries a mandatory remark above — don't prompt twice. */
+
     const assignNote = wasResched ? remark : await askNote('Assign ' + sj.type + ' installer(s): ' + valid.map((a) => a.installer_name).join(', '));
     if (assignNote === null) return;
 
     const joined = joinShadowers(shadowers);
     const prevSh = parseShadowers(sj.shadower_email, sj.shadower_name);
-    /* A (re)assignment resets the sub-job to `assigned`, so an installer whose
-       booking actually MOVED has to reset with it — `assigns` is seeded by
-       spreading the existing rows, so without this a re-assign after a reschedule
-       left `status:'reschedule'` on the assignment while the sub-job said
-       `assigned`, and the field app (which reads the installer's own status via
-       statusForInstaller) showed them "To Reschedule — nothing to do" on a job
-       just booked for them.
 
-       But resetting EVERY assignee is the opposite bug, and it is the one the
-       field sees: the SM re-opens this form to add a second installer or to fix a
-       note, and a colleague who is already On The Way is yanked back to
-       "Call the customer". They confirm they're on the way again, the next edit
-       resets them again, and the order collects a run of identical log lines with
-       no way to reach At Site — the exact shape of ENQ2026071780139's 32 "on the
-       way" entries on 2026-08-26, each burst following an SM re-assignment.
-
-       So the reset is scoped to assignees whose work actually changed: someone
-       new to the sub-job, someone whose date or slots moved, or someone still
-       carrying `reschedule` (which is never a state to leave a fresh booking in).
-       `completed` stays terminal exactly as in OrderDrawer's setStatus. */
     const prevByKey = new Map<string, Assignment>();
     (sj.assignments || []).forEach((a) => {
       const k = (a.installer_email || a.installer_id || '').toString();
@@ -335,10 +285,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
           <div className="w-6 h-6 rounded-full bg-[#1F3A5F] text-white text-[11px] font-bold grid place-items-center shrink-0">{idx + 1}</div>
           <div className="flex-1">
             <div className="font-bold text-[13px]">{inst ? inst.name : 'Select installer'}</div>
-            {/* This installer's OWN progress. On a shared sub-job only the primary
-                writes `sj.status`, so for everyone else this is the only place
-                their visit is recorded — and the only way the SM can see that
-                someone has already finished. */}
+
             <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
               {sj.type} installer
               {a.status ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${(STATUS[a.status] || { badge: 'bg-gray-100 text-gray-600' }).badge}`}>{(STATUS[a.status] || { l: a.status }).l}</span> : null}
@@ -355,12 +302,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
             <select className="w-full px-2 py-1.5 border border-gray-200 rounded-md text-[13px] bg-white" value={a.installer_id || ''} onChange={(e) => pickInstaller(idx, e.target.value)}>
               <option value="">— pick installer —</option>
               {pool.map((p) => {
-                // Flag (but never block) an installer who's off, not yet
-                // started, or already at the daily cap their SM set for the
-                // date being assigned. Soft by design — this repo soft-gates
-                // and surfaces rather than hard-blocking a scheduling call the
-                // SM may have a good reason to make. Assigning past a cap is a
-                // judgement call; hiding the cap is not.
+
                 const dateForOff = showDates ? (a.dates && a.dates[0]) || a.date || '' : curDate;
                 const off = isOffDay(p, dateForOff);
                 const notStarted = !!(p.activeFrom && dateForOff && dateForOff < p.activeFrom);
@@ -405,7 +347,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
   return (
     <div>
       {noteModal}
-      {/* Shown in BOTH modes — the dropdown is equally empty in either. */}
+
       {pool.length ? null : <EmptyInstallerPool err={installersErr} anyLoaded={!!installers.length} type={sj.type} onRetry={onRetryInstallers} />}
       <div className="flex rounded-md border border-gray-200 overflow-hidden mb-3 text-[12.5px] font-semibold">
         <div className={`flex-1 text-center py-1.5 cursor-pointer ${!customMode ? 'bg-[#1F3A5F] text-white' : 'bg-white text-gray-600'}`} onClick={() => setMode('standard')}>Standard</div>

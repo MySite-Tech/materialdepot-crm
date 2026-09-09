@@ -59,10 +59,6 @@ export interface DashboardStats {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Deals / Escalations
-// ---------------------------------------------------------------------------
-
 export interface Deal {
   id: number;
   name: string;
@@ -93,10 +89,6 @@ export interface DealsSearchResponse {
   number: number;
   size: number;
 }
-
-// ---------------------------------------------------------------------------
-// Call Logs
-// ---------------------------------------------------------------------------
 
 export interface CallLogPerson {
   id: number;

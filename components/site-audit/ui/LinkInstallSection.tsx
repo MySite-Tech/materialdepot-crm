@@ -1,21 +1,5 @@
 'use client';
 
-/* "Linked installation" — the BM states which installation job card belongs to
-   this site audit.
-
-   Nothing in the data can decide this on its own. An installation and its audit
-   share only `pi` (the lead id), and when a BM raised them under different ids
-   the rows have nothing in common but a phone number — which a client with two
-   unrelated projects also shares. So the link is declared here rather than
-   guessed, and stored in app_settings (see jobCardLinks.ts) — one audit can
-   feed several installations.
-
-   The link itself lives outside the order rows, but each link and unlink is
-   still written into the installation's own activity log, so the change shows
-   up where an SM or installer would look for it. That write re-fetches the log
-   first, the same guard the room-SKU editor uses: the field apps autosave that
-   blob. */
-
 import { useCallback, useEffect, useState } from 'react';
 import { fmtDateA, sbGet, sbPatch } from '../siteAuditShared';
 import { linkInstall, loadLinkedInstallPis, unlinkInstall } from '../data/jobCardLinks';
@@ -50,9 +34,7 @@ export default function LinkInstallSection({ auditPi, auditPhone, attribution, o
   const load = useCallback(async () => {
     const pis = await loadLinkedInstallPis(auditPi);
     if (!pis.length) { setLinked([]); return; }
-    /* The link stores lead ids only; the rows behind them are read here so the
-       BM sees who and when, not just an id. A linked order that was since
-       deleted simply drops out of the list. */
+
     const rows = await sbGet(
       'install_orders?pi=in.(' + pis.map((p) => '"' + p.replace(/"/g, '') + '"').join(',')
       + ')&status=neq.deleted&select=' + INSTALL_COLS,
@@ -62,8 +44,6 @@ export default function LinkInstallSection({ auditPi, auditPhone, attribution, o
 
   useEffect(() => { load(); }, [load]);
 
-  /* Opening the picker suggests the obvious candidates first — the same lead id,
-     then the same phone — but they are only suggestions; the BM confirms. */
   const suggest = useCallback(async () => {
     const clauses = ['pi.eq.' + auditPi];
     const ph = String(auditPhone || '').replace(/\D/g, '').slice(-10);

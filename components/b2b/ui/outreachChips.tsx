@@ -1,13 +1,5 @@
 'use client';
 
-// ── Outreach board — shared chips ────────────────────────────────────────────
-// The pieces that are specific to the Outreach vocabulary. Everything generic
-// (Pill, Field, SectionCard, ReadValue, Spinner, Empty, GateErrors,
-// EnrichmentBadge, FollowUpChip, inputCls, fmtDay) already exists in
-// `inboundChips.tsx` and is imported from there rather than copied — the two
-// boards are read by the same people and a second spelling of a status pill is
-// how they start looking like two different products.
-
 import { Pill } from './inboundChips';
 import {
   OUTREACH_STATUS_COLORS, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS,
@@ -35,13 +27,6 @@ export function CompanyTypeText({ type, other }: { type?: CompanyType; other?: s
   return <span>{label}</span>;
 }
 
-/**
- * A meeting on one line: number, when, where, outcome.
- *
- * A meeting with no date is rendered as "not scheduled" rather than blank —
- * the PRD's whole retry loop is about which of the four have happened, and a
- * row that just looks empty tells a reader nothing about which state it is in.
- */
 export function MeetingLine({ m }: { m: OutreachMeeting }) {
   const where = meetingLocation(m);
   return (
@@ -56,7 +41,6 @@ export function MeetingLine({ m }: { m: OutreachMeeting }) {
   );
 }
 
-/** "2 of 4 · 1 completed" — the retry loop at a glance on a card or a row. */
 export function MeetingProgress({ meetings }: { meetings?: OutreachMeeting[] }) {
   const all = meetings || [];
   if (!all.length) return <span className="text-[10px] text-gray-400">No meetings yet</span>;

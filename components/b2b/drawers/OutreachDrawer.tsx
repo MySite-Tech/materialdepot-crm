@@ -1,15 +1,5 @@
 'use client';
 
-// ── Outreach lead drawer ─────────────────────────────────────────────────────
-// Organised by the PRD's own sections, in the order a BM works them:
-//
-//   Client (§3.1) → Meetings (§3.2) → Requirement (§3.3) → Status (§3.4)
-//   → Handoff (§7)
-//
-// Unlike the Inbound drawer there is no Kylas leg to reconcile — a BM created
-// this lead in the field and the CRM owns every field on it except the money,
-// which comes from the deal ticket behind the Enq ID.
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchLeadDeals } from '@/lib/mockApi';
 import { upsertOutreachLead, lookupEnqId, fetchKamLoad, type EnqLookup } from '@/lib/b2bLeads';
@@ -45,7 +35,7 @@ export default function OutreachDrawer({
 }: {
   lead: OutreachLead;
   onClose: () => void;
-  /** Called with the persisted lead so the board can update in place. */
+
   onSaved: (updated: OutreachLead) => void;
 }) {
   const [draft, setDraft] = useState<OutreachLead>(lead);
@@ -56,7 +46,6 @@ export default function OutreachDrawer({
   const set = <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
-  // ── Deal tickets on this client's number ──
   const [deals, setDeals] = useState<LeadDeal[] | null>(null);
   const [dealsFailed, setDealsFailed] = useState(false);
 
@@ -70,7 +59,6 @@ export default function OutreachDrawer({
     return () => { alive = false; };
   }, [lead.phone]);
 
-  // ── Gates ──
   const gateErrors = useMemo(() => outreachGateErrors({
     status: draft.status,
     followUpDate: draft.followUpDate,
@@ -99,11 +87,6 @@ export default function OutreachDrawer({
     return gateErrors.find((e) => e.toLowerCase().includes(needle));
   };
 
-  // ── Enq ID → order value (PRD §3.4 "auto-fetched from Procurement") ──
-  //
-  // Identical rule to Inbound: EXACT match against the deal tickets already on
-  // the client's phone, and a Django outage is reported as unavailable rather
-  // than as an invalid Enq ID.
   const [enq, setEnq] = useState<EnqLookup | null>(null);
   const [enqChecking, setEnqChecking] = useState(false);
   const lastCheckedEnq = useRef<string>('');
@@ -132,14 +115,11 @@ export default function OutreachDrawer({
     setEnqChecking(false);
   };
 
-  // A changed Enq ID invalidates the previous lookup immediately, so a matched
-  // value can never sit under an ID it did not come from.
   useEffect(() => {
     const cur = (draft.enqId || '').trim();
     if (cur !== lastCheckedEnq.current) setEnq(null);
   }, [draft.enqId]);
 
-  // ── Meetings (PRD §3.2) ──
   const meetings = draft.meetings || [];
   const open = openMeeting(meetings);
   const exhausted = meetingsExhausted(meetings);
@@ -177,7 +157,6 @@ export default function OutreachDrawer({
       meetings: (d.meetings || []).map((m) => (m.n === n ? { ...m, ...patch, updatedAt: nowIso() } : m)),
     }));
 
-  // ── KAM handoff (PRD §7) ──
   const [kamLoad, setKamLoad] = useState<Record<string, number> | null>(null);
   const [kamAssigning, setKamAssigning] = useState(false);
 
@@ -191,7 +170,6 @@ export default function OutreachDrawer({
     if (pick) set('kam', pick);
   };
 
-  // ── Notes ──
   const [noteText, setNoteText] = useState('');
   const addNote = () => {
     const text = noteText.trim();
@@ -211,10 +189,6 @@ export default function OutreachDrawer({
       return { ...d, selections: cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s] };
     });
 
-  // ── Save ──
-  // One system, so unlike the Inbound drawer there is no partial-success case:
-  // the write either lands or it does not, and a failure never closes the panel
-  // (which would look exactly like a successful save).
   const handleSave = async () => {
     if (save.saving) return;
     if (gateErrors.length) { setShowGates(true); return; }
@@ -226,7 +200,7 @@ export default function OutreachDrawer({
       company: draft.company.trim(),
       statusChangedAt: statusChanged ? nowIso() : draft.statusChangedAt,
       quoteSharedAt: draft.status === 'Quote Share' && !draft.quoteSharedAt ? nowIso() : draft.quoteSharedAt,
-      // Realised rupees only — the BM's estimate never reaches this field.
+
       value: Number(draft.orderValue) || 0,
     };
 
@@ -248,7 +222,6 @@ export default function OutreachDrawer({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-[780px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
 
-        {/* ── Header ── */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 pt-5 pb-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -278,7 +251,6 @@ export default function OutreachDrawer({
 
         <div className="p-5 flex flex-col gap-4">
 
-          {/* ── §3.1 Client ── */}
           <SectionCard title="Client" owner="crm" subtitle="Captured on the field visit">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <Field label="Company name" required className="col-span-2 sm:col-span-1">
@@ -327,7 +299,6 @@ export default function OutreachDrawer({
             </div>
           </SectionCard>
 
-          {/* ── §3.2 Meetings ── */}
           <SectionCard
             title={`Meetings · ${meetings.length} of ${MAX_MEETINGS}`}
             owner="crm"
@@ -406,8 +377,7 @@ export default function OutreachDrawer({
                         <input value={m.officeLocation || ''} onChange={(e) => patchMeeting(m.n, { officeLocation: e.target.value })} className={inputCls} />
                       </Field>
                     </div>
-                    {/* PRD: notes are "captured once a meeting is Completed". The box
-                        appears then rather than inviting notes on a meeting nobody attended. */}
+
                     {m.status === 'Completed' ? (
                       <Field label="Meeting notes" className="mt-2.5">
                         <textarea
@@ -429,7 +399,6 @@ export default function OutreachDrawer({
             )}
           </SectionCard>
 
-          {/* ── §3.3 Requirement ── */}
           <SectionCard title="Requirement" owner="crm" subtitle="PRD §3.3">
             <Field label="Selection">
               <div className="flex flex-wrap gap-2">
@@ -469,7 +438,6 @@ export default function OutreachDrawer({
             </div>
           </SectionCard>
 
-          {/* ── §3.4 Status ── */}
           <SectionCard title="Status" owner="crm" subtitle={OUTREACH_STATUS_HINT[draft.status]}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Status" required>
@@ -584,7 +552,6 @@ export default function OutreachDrawer({
             )}
           </SectionCard>
 
-          {/* ── §7 Handoff ── */}
           <SectionCard
             title="Handoff"
             owner="crm"
@@ -626,7 +593,6 @@ export default function OutreachDrawer({
             )}
           </SectionCard>
 
-          {/* ── Notes ── */}
           <SectionCard title="Notes" owner="crm" subtitle="Stored in the CRM only">
             <textarea
               value={noteText}
@@ -653,7 +619,6 @@ export default function OutreachDrawer({
             </p>
           </SectionCard>
 
-          {/* ── Deal tickets on this number ── */}
           <SectionCard title="Deal tickets on this number" owner="deals" subtitle="Every cart Procurement holds for this contact">
             {deals === null ? <Spinner label="Loading deal tickets…" />
               : dealsFailed ? (
@@ -688,7 +653,6 @@ export default function OutreachDrawer({
           </SectionCard>
         </div>
 
-        {/* ── Footer ── */}
         <div className="mt-auto sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
           {save.error && (
             <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{save.error}</div>

@@ -1,41 +1,5 @@
 'use client';
 
-/* "Which site audit does this installation come from" — the install→audit
-   direction of the link `LinkInstallSection` declares from the audit side.
-
-   An installation order marked as a Material Depot audit is a promise that a
-   job card exists somewhere; this is what finds it, so the BM can open the room
-   measurements the installer is about to work from without leaving their own
-   order book.
-
-   HOW A MATCH IS DECIDED, and why it stops where it does:
-
-   - A declared link always wins. `jobCardLinks` stores both directions, so an
-     audit a BM has already tied to this installation (from either side) is
-     simply read back.
-   - Otherwise, candidates are audits sharing the client's EXACT phone digits.
-     The two rows practically never share a `pi` — measured on live data, 4 of
-     182 Material-Depot-audited installations do — because the audit is raised
-     pre-sale and the installation post-sale against the order's PI. Phone is
-     all they have in common, which is exactly why CLAUDE.md's
-     `jobCardLinks.ts` header says nothing in the data can decide this on its
-     own.
-   - Exactly one candidate → shown as the match, labelled as matched by phone
-     rather than declared, with the audit's date on it so a wrong one is
-     visible. 157 of those 182 installations resolve this way.
-   - Two or more → NOTHING is picked. A client running two projects shares one
-     number, and a best guess here puts the wrong room measurements in front of
-     an installer. The BM chooses, and that choice becomes the declared link.
-   - None → said plainly, with what to check. An installation flagged as a
-     Material Depot audit with no audit on the number usually means the audit
-     was booked against a different phone.
-
-   Pre-bookings are never candidates. A `slot_reserved`/`slot_converted` row is
-   a held store slot, not the audit that came out of it (see CLAUDE.md, "A
-   pre-booking and the audit it becomes are two rows, not one"), and its phone
-   is often the store's own — so treating one as the audit would attach a job
-   card that does not exist. */
-
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { AuditRoomCard } from './AuditRoomViews';
 import { STATUS as AUDIT_STATUS, isPreBooking } from '../views/SiteAuditBmView';
@@ -62,10 +26,6 @@ function auditLine(a: AuditCandidate) {
   return [a.date ? fmtDateA(a.date) : 'no visit date', a.auditor_name || 'no auditor', st].filter(Boolean).join(' · ');
 }
 
-/* Mirrors LinkInstallSection's own log write — the link lives outside both
-   rows, so the installation's activity log is the only place an SM or installer
-   would see it happen. Re-reads the log first because the field apps autosave
-   that same blob. */
 async function appendInstallLog(installId: string, text: string, who: string) {
   const rows = await sbGet('install_orders?id=eq.' + installId + '&select=log');
   const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -76,10 +36,7 @@ export default function LinkAuditSection({ installId, installPi, installPhone, a
   installId: string;
   installPi: string;
   installPhone?: string;
-  /* Who to attribute the declaration to. ABSENT means nobody identifiable is
-     looking (a rollup view rendering someone else's orders), and then the
-     section is strictly read-only: it still resolves and shows the job card,
-     but a link nobody can be named for is not a link worth writing. */
+
   attribution?: string;
   onMsg: (m: string) => void;
 }) {
@@ -95,18 +52,13 @@ export default function LinkAuditSection({ installId, installPi, installPhone, a
     const declaredPi = await loadLinkedAuditPi(installPi).catch(() => '');
     if (declaredPi) {
       const rows = await sbGet('audit_orders?pi=eq.' + encodeURIComponent(declaredPi) + '&status=neq.deleted&select=' + AUDIT_LINK_COLS);
-      /* A declared link whose audit row has since been deleted falls through to
-         the candidate search rather than rendering an empty section. */
+
       if (Array.isArray(rows) && rows[0]) { setRes({ kind: 'declared', audit: rows[0] }); return; }
     }
 
     const key = phoneKey(installPhone);
     if (!key) { setRes({ kind: 'none' }); return; }
-    /* `like` on the last 10 digits rather than `eq` on the raw string: both
-       tables are filled in by different apps and either side may carry a +91 or
-       spaces. Still exact — the ten digits have to be there — and re-checked
-       through phoneKey below so a longer number that merely contains them
-       can't slip in. */
+
     const rows = await sbGet(
       'audit_orders?phone=like.*' + key + '*&status=neq.deleted&order=created_at.desc&select=' + AUDIT_LINK_COLS,
     );
@@ -119,9 +71,6 @@ export default function LinkAuditSection({ installId, installPi, installPhone, a
 
   useEffect(() => { resolve(); }, [resolve]);
 
-  /* The job card is the heaviest thing on this screen (`audit_ticked` carries
-     every room photo), so it is fetched only once an audit is actually
-     resolved, and only for that one row. */
   const resolvedAudit = res.kind === 'declared' || res.kind === 'matched' ? res.audit : null;
   useEffect(() => {
     if (!resolvedAudit) { setCard(null); return; }
@@ -242,8 +191,6 @@ export default function LinkAuditSection({ installId, installPi, installPhone, a
   );
 }
 
-/* Free search for the audit, for the cases the phone can't resolve — the same
-   shape LinkInstallSection's picker uses, pointed the other way. */
 function AuditSearch({ installPi, busy, onPick }: { installPi: string; busy: boolean; onPick: (a: AuditCandidate) => void }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<AuditCandidate[] | null>(null);

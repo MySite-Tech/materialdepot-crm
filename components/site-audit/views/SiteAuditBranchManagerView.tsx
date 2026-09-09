@@ -1,34 +1,5 @@
 'use client';
 
-/* Store / Branch Manager dashboard — a read-only rollup of everything the
-   manager's own store has in the field: site audits, installations and
-   custom-wallpaper runs, plus how their people are performing. No field-ops
-   scheduling power (that stays with the Service Manager) — this role exists so
-   a store manager can see their store's work, mirroring what the CRM's own
-   `manager`/`store_manager` permission is meant to see.
-
-   WHERE THE STORE ROSTER COMES FROM. The CRM is the source of truth for who
-   works at which store (Admin > Users > Branch Access, i.e. `allowedBranches`
-   from lib/mockApi's fetchUsers()), so the roster starts there and is matched
-   to field-app `profiles` rows by exact phone — never by name, never fuzzily.
-   `profiles.branch` is honoured too when an admin has populated it via "Sync
-   roles from CRM permissions", but is deliberately NOT required: that column
-   is blank for every profile in production today, and requiring it is what
-   made this view show an empty branch.
-
-   Someone whose CRM record has NO Branch Access set is treated as belonging to
-   no store rather than to every store — an empty `allowedBranches` means "all
-   branches" for lead visibility, and quietly reading it the same way here would
-   put every BM's orders in every manager's store. Those people are counted and
-   named in a notice instead, so the gap is visible and fixable rather than
-   silently wrong. That rule binds the manager VIEWING this page just as much as
-   the BMs it rolls up: an unscoped manager gets the same notice and an empty
-   dashboard, never the whole company's field ops.
-
-   Order attribution reuses SiteAuditBmView's `orderBelongsToBm` unmodified,
-   called once per BM in the store and unioned — the same function a BM's own
-   dashboard uses, so a manager's list and their BM's list can never disagree. */
-
 import { useEffect, useMemo, useState } from 'react';
 import { fmtDateA, phoneKey, sbGet, siteAuditRoleForCrmRole, type CityFilter } from '../siteAuditShared';
 import SiteAuditPerfView from './SiteAuditPerfView';
@@ -44,30 +15,16 @@ type RollupOrder = {
 };
 
 type Scope = {
-  branches: string[];          // empty = every store (an unrestricted manager)
-  roster: BmProfile[];         // everyone attributed to those stores
-  bms: BmProfile[];            // the subset whose orders roll up here
-  rosterEmails: string[];      // field-WORKER emails only, for the Performance rollup
-  unassigned: number;          // CRM people with a BM role but no Branch Access
-  crmReachable: boolean;       // false when the CRM roster couldn't be loaded
+  branches: string[];
+  roster: BmProfile[];
+  bms: BmProfile[];
+  rosterEmails: string[];
+  unassigned: number;
+  crmReachable: boolean;
 };
 
-/* SiteAuditPerfView only computes stats for people who actually perform jobs
-   (its `statsFor` keys off auditor_email / created_by_email); a BM has no jobs
-   of their own, so feeding BMs into it renders a wall of zeros that reads as
-   "these nine people did nothing". Restrict the Performance roster to the
-   roles it can actually measure and let its own empty state speak otherwise. */
 const FIELD_WORK_ROLES = new Set(['site_auditor', 'installer', 'auditor_installer', 'service_mgr']);
 
-/* Only the columns RollupOrder actually maps, plus the two `orderBelongsToBm`
-   needs to attribute a row. Reusing SiteAuditBmView's AUDIT_COLS pulled `log`
-   and `skus` as well — jsonb that averages ~7 KB a row and is never read here,
-   which made this list 1.9 MB per poll (every 30s, per open tab) to render
-   107 KB of it. The BM's own dashboard still needs the wide select; it opens a
-   drawer over these rows, this view doesn't. */
-/* `po` is not rendered here — it carries the enquiry ID a store pre-booking
-   was raised against, which dropSupersededPreBookings needs to tell a held slot
-   apart from the audit that came out of it. */
 const ROLLUP_AUDIT_COLS = 'id,pi,po,bm,bm_email,customer_name,phone,status,date,created_at';
 
 const EMPTY_SCOPE: Scope = { branches: [], roster: [], bms: [], rosterEmails: [], unassigned: 0, crmReachable: false };
@@ -77,11 +34,7 @@ export default function SiteAuditBranchManagerView({
   contact = null,
   city = 'all',
 }: {
-  /* The stores in scope. `null` means "resolve them from the CRM record whose
-     phone matches `contact`" — what the logged-in manager gets, and what Role
-     Viewer passes so an admin previewing the role sees exactly what that
-     person would. An explicit list overrides the lookup; an explicit empty
-     list means every store. */
+
   branches?: string[] | null;
   contact?: string | null;
   city?: CityFilter;
@@ -100,17 +53,13 @@ export default function SiteAuditBranchManagerView({
 
   const branchKey = branches === null ? 'auto:' + phoneKey(contact) : branches.join('|');
 
-  /* Resolve the store scope + roster. */
   useEffect(() => {
     let alive = true;
     setScopeReady(false);
     (async () => {
       const [crmUsers, profileRows] = await Promise.all([
         fetchUsers().catch(() => null),
-        /* Identity map (phone -> profile) used to resolve who owns existing
-           rows. Keeps people who have left on purpose: the CRM side is already
-           filtered by `active !== false` just below, and dropping them here
-           would unattribute their historic orders. */
+
         sbGet('profiles?select=id,name,email,role,contact,branch&order=name.asc').catch(() => null),
       ]);
       if (!alive) return;
@@ -121,16 +70,14 @@ export default function SiteAuditBranchManagerView({
       for (const p of profiles) {
         const key = phoneKey(p.contact);
         if (!key) continue;
-        // A phone shared by two profiles is ambiguous — link neither.
+
         if (profileByPhone.has(key)) ambiguousPhones.add(key);
         else profileByPhone.set(key, p);
       }
 
       const crmReachable = Array.isArray(crmUsers);
       const allUsers = Array.isArray(crmUsers) ? crmUsers : [];
-      // Deactivated employees stay in the CRM roster so Admin > Users can
-      // manage them, but they are not this store's staff and their old orders
-      // must not roll up as if someone still owns them.
+
       const users = allUsers.filter((u) => u.active !== false);
 
       let inScope = branches;
@@ -140,13 +87,7 @@ export default function SiteAuditBranchManagerView({
         const me = key ? allUsers.find((u) => phoneKey(u.phone) === key) : undefined;
         if (!me && crmReachable) { setNotFoundInCrm(true); setNoBranchAccess(false); setScope({ ...EMPTY_SCOPE, crmReachable }); setScopeReady(true); return; }
         inScope = me?.allowedBranches || [];
-        /* A manager with no Branch Access has no store, NOT every store. The
-           same rule this view already applies to the BMs it rolls up (see the
-           `unassigned` notice) has to apply to the manager themselves —
-           reading "unset" as "all" is what would silently hand one store's
-           manager the whole company's field ops. An explicitly-passed empty
-           list still means every store: that's Role Viewer/an admin asking
-           for the unscoped view on purpose, not an unfilled field. */
+
         unscopedManager = inScope.length === 0;
       }
       setNotFoundInCrm(false);
@@ -170,7 +111,7 @@ export default function SiteAuditBranchManagerView({
 
       for (const u of users) {
         const saRole = siteAuditRoleForCrmRole(u.role);
-        if (!saRole) continue;                     // no Site Audit presence at all
+        if (!saRole) continue;
         const key = phoneKey(u.phone);
         const profile = key && !ambiguousPhones.has(key) ? profileByPhone.get(key) || null : null;
         if (saRole === 'bm' && !everyStore && !u.allowedBranches?.length) { unassigned++; continue; }
@@ -181,8 +122,7 @@ export default function SiteAuditBranchManagerView({
           email: profile?.email,
           contact: u.phone,
           role: profile?.role || saRole,
-          /* Both names are authoritative records of the same person, already
-             tied together by an exact phone match — see BmProfile.aliases. */
+
           aliases: [u.name, profile?.name].filter((n): n is string => !!n),
         };
         roster.push(person);
@@ -190,8 +130,6 @@ export default function SiteAuditBranchManagerView({
         if (person.role === 'bm' || saRole === 'bm') bms.push(person);
       }
 
-      /* Profiles an admin has already stamped with a branch count too, even if
-         the CRM roster was unreachable or the person isn't in it. */
       for (const p of profiles) {
         if (p.role === 'admin') continue;
         if (!p.branch || !belongs([p.branch])) continue;
@@ -221,7 +159,6 @@ export default function SiteAuditBranchManagerView({
 
   const bmKey = scope.bms.map((b) => phoneKey(b.contact) || b.name).join('|');
 
-  /* Load all three order tables once the roster is known. */
   useEffect(() => {
     if (!scopeReady) return;
     if (!scope.bms.length) { setAudits([]); setInstalls([]); setWallpapers([]); setLoading(false); return; }
@@ -234,8 +171,7 @@ export default function SiteAuditBranchManagerView({
         loadOwnedWallpapers(scope.bms),
       ]);
       if (!alive) return;
-      /* Dropped against the whole table, before the rows are narrowed to this
-         store's BMs — see dropSupersededPreBookings. */
+
       const list = dropSupersededPreBookings(Array.isArray(auditRows) ? auditRows : []);
       setAudits(
         list

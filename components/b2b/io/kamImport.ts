@@ -1,21 +1,3 @@
-// ── KAM Active Order bulk import: parse + validate ────────────────────────────
-// Pure functions, no React and no network, so the rules can be reasoned about
-// (and tested) on their own. KAMs.tsx renders whatever this reports.
-//
-// The column order is positional, not header-driven — that is the existing
-// contract with the ops team's sheet, so it stays. The sheet itself is unchanged
-// too; what changed is what a row becomes. It used to produce a `KamClient`,
-// the old board's client-and-order-in-one row. The KAM PRD splits those, and
-// every column in this sheet describes an ORDER (Enq ID, value, expected
-// closure, PI status), so a row is now a `KamOrder` — §5's Active Order. The
-// CLIENT half is uploaded from the Client Database's own §7 template, which
-// `clientImport.ts` implements.
-//
-// The primitives below (cell hygiene, delimiter sniffing, the CSV parser, the
-// phone/value/date coercions) are shared with `clientImport.ts` rather than
-// copied into it. Two copies of a date parser is exactly how the two hand-kept
-// registries in this repo drifted.
-
 import { KAMS } from '../models/mockData';
 import {
   KAM_ORDER_STATUSES, normalizeKamOrderStatus, isLegacyKamStage,
@@ -36,20 +18,15 @@ export interface RowIssue {
 }
 
 export interface ParsedRow {
-  line: number;              // 1-based row number in the source file/paste
-  company: string;           // best-effort label for the log, even when invalid
+  line: number;
+  company: string;
   severity: RowSeverity;
   issues: RowIssue[];
-  order?: KamOrder;          // absent when severity === 'error'
-  isUpdate?: boolean;        // matched an existing client, so this is an update
-  saveError?: string;        // filled in after the write is attempted
+  order?: KamOrder;
+  isUpdate?: boolean;
+  saveError?: string;
 }
 
-// ── Cell hygiene ──────────────────────────────────────────────────────────────
-
-// A BOM, a non-breaking space or a zero-width char in the first cell is the
-// single most common reason a re-uploaded export "fails": the header stops
-// matching and lands in the board as a client called "Client Name".
 export function cleanCell(v: unknown): string {
   return String(v ?? '')
     .replace(/^﻿/, '')
@@ -60,10 +37,6 @@ export function cleanCell(v: unknown): string {
 
 export const normalize = (v: string) => cleanCell(v).toLowerCase().replace(/\s+/g, ' ');
 
-// ── Delimited-text parsing ────────────────────────────────────────────────────
-
-// Excel on a European locale exports semicolon-delimited .csv, and copying out
-// of a spreadsheet gives tabs. Sniff the first line rather than assuming commas.
 export function sniffDelimiter(text: string): string {
   const firstLine = text.replace(/^﻿/, '').split(/\r?\n/).find((l) => l.trim()) || '';
   let best = ',';
@@ -75,8 +48,6 @@ export function sniffDelimiter(text: string): string {
   return bestCount > 0 ? best : ',';
 }
 
-// Full-text CSV parser. The previous line-by-line split broke any row containing
-// a quoted newline (a multi-line note), silently shifting every later column.
 export function parseDelimited(text: string, delimiter = sniffDelimiter(text)): string[][] {
   const t = text.replace(/^﻿/, '');
   const rows: string[][] = [];
@@ -98,24 +69,18 @@ export function parseDelimited(text: string, delimiter = sniffDelimiter(text)): 
     if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; continue; }
     cur += ch;
   }
-  // A trailing newline must not manufacture a phantom final row.
+
   if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
 
-  // Blank rows are kept deliberately: `line` in the error log has to be the row
-  // number the user sees in their spreadsheet, so compacting here would make
-  // every reported row number wrong after the first gap.
   return rows;
 }
-
-// ── Field coercion ────────────────────────────────────────────────────────────
 
 export function parsePhone(raw: string): { phone: string; error?: string } {
   const cleaned = cleanCell(raw);
   if (!cleaned) return { phone: '' };
   const digits = cleaned.replace(/\D/g, '');
   if (!digits) return { phone: '', error: `"${cleaned}" has no digits` };
-  // Tolerate a 91/0 prefix; anything else of the wrong length is a real problem
-  // and must not be stored, because deal-ticket matching keys on this.
+
   const local = digits.length > 10 ? digits.slice(-10) : digits;
   if (local.length !== 10) return { phone: '', error: `expected 10 digits, got ${digits.length} ("${cleaned}")` };
   if (!/^[6-9]/.test(local)) return { phone: local, error: `"${local}" is not a valid Indian mobile number` };
@@ -125,8 +90,7 @@ export function parsePhone(raw: string): { phone: string; error?: string } {
 export function parseValue(raw: string): { value: number; error?: string } {
   const cleaned = cleanCell(raw);
   if (!cleaned) return { value: 0 };
-  // Strips ₹, Rs, spaces and Indian digit grouping (2,65,000). A stray second
-  // decimal point used to yield NaN and be stored as 0 with no warning.
+
   const stripped = cleaned.replace(/[₹,\s]/g, '').replace(/^rs\.?/i, '');
   if (!/^-?\d*\.?\d+$/.test(stripped)) return { value: 0, error: `"${cleaned}" is not a number` };
   const n = Number(stripped);
@@ -140,16 +104,12 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-// Real calendar check — 31/02 must not silently become 03/03.
 function validYmd(y: number, m: number, d: number): boolean {
   if (m < 1 || m > 12 || d < 1 || d > 31) return false;
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
-// Accepts ISO, D/M/Y, D-M-Y, D Mon Y, Mon D Y and Excel serial numbers, and
-// always returns ISO. Previously the cell was stored verbatim, so anything but
-// ISO rendered as an empty <input type="date"> — data loss with no message.
 export function parseClosureDate(raw: string): { date?: string; error?: string } {
   const cleaned = cleanCell(raw);
   if (!cleaned) return {};
@@ -160,8 +120,6 @@ export function parseClosureDate(raw: string): { date?: string; error?: string }
     return validYmd(y, m, d) ? { date: iso(y, m, d) } : { error: `"${cleaned}" is not a real date` };
   }
 
-  // Excel serial (days since 1899-12-30). Only in a plausible date range, so a
-  // bare number like 45000 isn't mistaken for something else.
   if (/^\d{5}$/.test(cleaned)) {
     const serial = Number(cleaned);
     if (serial >= 20000 && serial <= 60000) {
@@ -170,8 +128,6 @@ export function parseClosureDate(raw: string): { date?: string; error?: string }
     }
   }
 
-  // D/M/Y or D-M-Y. Day-first: the sheet is Indian, and 13/08/2026 is
-  // unambiguous proof of that ordering.
   const dmy = cleaned.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
   if (dmy) {
     const d = Number(dmy[1]);
@@ -183,7 +139,6 @@ export function parseClosureDate(raw: string): { date?: string; error?: string }
     return { error: `"${cleaned}" is not a real date` };
   }
 
-  // "12 Aug 2026" / "Aug 12 2026"
   const words = cleaned.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
   if (words.length === 3) {
     const monthIdx = words.findIndex((w) => MONTHS.indexOf(w.slice(0, 3).toLowerCase()) >= 0);
@@ -199,13 +154,6 @@ export function parseClosureDate(raw: string): { date?: string; error?: string }
   return { error: `"${cleaned}" is not a recognised date — use YYYY-MM-DD` };
 }
 
-// Case- and spacing-insensitive, so "pi shared" and "PI  Shared" both land.
-//
-// The old seven stage names are still accepted, because the ops team's sheet
-// has them in it and rejecting a status the board itself displayed until last
-// week would fail rows that are perfectly correct. They come back as the PRD
-// status they map to, via the same `normalizeKamOrderStatus` the reader uses —
-// so there is one mapping, not one here and one in `b2bLeads.ts`.
 export function matchStage(raw: string): { status: KamOrderStatus; wasLegacy: boolean } | null {
   const n = normalize(raw);
   if (!n) return null;
@@ -217,9 +165,6 @@ export function matchStage(raw: string): { status: KamOrderStatus; wasLegacy: bo
   return null;
 }
 
-// Exact match first, then unique first-name/substring match, so "jadhav" finds
-// "Jadhav" and "krishna b" finds "Krishna Bhagavatula". A name matching two KAMs
-// stays unresolved rather than picking one.
 export function matchKam(raw: string): string | null {
   const n = normalize(raw);
   if (!n) return null;
@@ -229,11 +174,6 @@ export function matchKam(raw: string): string | null {
   return partial.length === 1 ? partial[0] : null;
 }
 
-// ── Header detection ──────────────────────────────────────────────────────────
-
-// Position-independent and BOM-proof. The old check only looked at row 0 and
-// compared the raw string, so an export with a BOM, a title row above the
-// header, or different casing imported its own header as a client.
 export function isHeaderRow(row: string[]): boolean {
   const first = normalize(row[0] || '');
   if (first === 'client name' || first === 'clientname' || first === 'company') return true;
@@ -243,11 +183,9 @@ export function isHeaderRow(row: string[]): boolean {
   return hits >= 3;
 }
 
-// ── Row validation ────────────────────────────────────────────────────────────
-
 export interface ValidateResult {
   rows: ParsedRow[];
-  skipped: number;           // blank / header rows, not worth logging individually
+  skipped: number;
 }
 
 const clientKey = (company: string, phone: string) => phone || `name:${normalize(company)}`;
@@ -257,8 +195,6 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
   let skipped = 0;
   const stamp = Date.now();
 
-  // Existing clients, keyed by phone first (authoritative) then by name, so a
-  // re-upload updates the same row instead of creating a duplicate board card.
   const existingByKey = new Map<string, KamOrder>();
   for (const c of existing) {
     const phone = parsePhone(c.phone || '').phone;
@@ -311,8 +247,7 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
     const kamRaw = cells[7] || '';
     const kam = matchKam(kamRaw);
     if (kamRaw && !kam) {
-      // An error, not a silent default: quietly handing the account to KAMS[0]
-      // misassigns ownership, which is worse than rejecting the row.
+
       issues.push({ column: 'KAM', message: `"${kamRaw}" is not a known KAM`, severity: 'error' });
     } else if (!kamRaw) {
       issues.push({ column: 'KAM', message: `blank — assigned to ${KAMS[0]}`, severity: 'warn' });
@@ -342,9 +277,7 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
 
     const match = existingByKey.get(key);
     if (match) {
-      // Two rows can reach the same client by different keys (one by phone, one
-      // by name). Both would carry the same id and the second upsert would
-      // silently overwrite the first, so the later row is rejected instead.
+
       const claimedBy = claimedExistingIds.get(match.id);
       if (claimedBy) {
         out.push({
@@ -372,10 +305,6 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
 
     const status: KamOrderStatus = stage?.status ?? 'Requirement Logged';
 
-    // A `Lost` row with no reason and a `PI Shared` row with no Enq ID are the
-    // two things §5.2 says "Requires". They are warnings here rather than
-    // rejections, because the sheet is a bulk load of history and refusing the
-    // row would lose the order entirely; the board then shows the gap.
     if (status === 'PI Shared' && !cells[3]) {
       issues.push({ column: 'ENQ ID', message: 'PI Shared requires an Enquiry ID (§5.2) — imported without one, so no order value can be fetched', severity: 'warn' });
     }
@@ -387,18 +316,13 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
       issues,
       isUpdate: !!match,
       order: {
-        // Reusing the matched id makes the upsert an update, so re-importing the
-        // same sheet can't fill the board with duplicates.
+
         id: match?.id ?? `KAM-${stamp}-${line}`,
         company,
         contactName: cells[1] || '',
         phone,
         enqId: cells[3] || undefined,
-        // The sheet's "Value" column is what a KAM typed, so it is the ESTIMATE.
-        // `orderValue` stays unset until the Enq ID resolves against a deal
-        // ticket, and `value` — the column analytics sums as revenue — is 0
-        // until then. Putting the sheet figure into `value` is the bug this
-        // module was rebuilt to remove.
+
         estimatedValue: value || undefined,
         orderValue: match?.orderValue,
         orderValueSource: match?.orderValueSource,
@@ -444,7 +368,6 @@ export function summarize(rows: ParsedRow[], skipped: number): ImportSummary {
 
 export const IMPORT_LOG_HEADERS = ['Row', 'Client Name', 'Result', 'Column', 'Message'];
 
-// One line per issue, so the ops team can fix the sheet cell by cell.
 export function importLogRows(rows: ParsedRow[]): string[][] {
   const out: string[][] = [];
   for (const r of rows) {

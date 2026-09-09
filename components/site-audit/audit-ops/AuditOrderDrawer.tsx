@@ -1,17 +1,5 @@
 'use client';
 
-/* Audit order drawer — port of drawerBody / drawerFoot / wireDrawer from
-   material-depot-site's SM_Audit_Dashboard.html. This is where an audit order
-   actually moves: service creation → slot booking → auditor assignment, plus
-   the manual overrides, follow-ups, shadowers, journey, job card and delete.
-
-   Every guard from the source is kept, because each one exists for a reason
-   that's documented there: the cap is a hard block while the 2-hour travel
-   conflict is a soft override; forcing Completed without a signed job card
-   needs a confirm + reason; moving a completed audit backwards archives the
-   signed card into audit_ticked_history first; and every manual action
-   demands a note that lands in the activity log. */
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuditRoomCard } from '../ui/AuditRoomViews';
 import { useNoteModal } from '../ui/NoteModal';
@@ -38,8 +26,7 @@ interface Props {
   shadowerPool: ShadowerOption[];
   bmOptions: BmOption[];
   attribution: string;
-  /* True when the roster FAILED to load, as opposed to genuinely having nobody
-     in it — the picker's empty state has to tell those apart. */
+
   auditorsErr?: boolean;
   onRetryAuditors?: () => void;
   onClose: () => void;
@@ -50,9 +37,6 @@ interface Props {
   toast: (m: string) => void;
 }
 
-/* An empty auditor picker used to read "No auditors in this city" whatever the
-   reason, which sends the SM to the city toggle for what is usually a failed
-   fetch. Each cause now names itself, and a failed load offers a way back. */
 function EmptyAuditorPool({ err, anyLoaded, onRetry }: { err: boolean; anyLoaded: boolean; onRetry?: () => void }) {
   if (err) {
     return (
@@ -80,9 +64,6 @@ export default function AuditOrderDrawer({
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState<any>(null);
 
-  /* Service-creation / edit draft. Pre-seeded from the created service, else
-     from the auditor-ticked categories against the cart SKUs — same fallback
-     the source uses so the SM rarely types a SKU twice. */
   const [draft, setDraft] = useState<{ flooring: AuditSkuRow[]; wallpaper: AuditSkuRow[] }>(() => {
     if (o.service) {
       return {
@@ -128,8 +109,6 @@ export default function AuditOrderDrawer({
 
   useEffect(() => { loadJourney(); }, [loadJourney]);
 
-  /* audit_ticked is excluded from the list query (photos make it huge) — pull
-     it on demand once, for the completed view's rooms + PDF. */
   useEffect(() => {
     if (o.status !== 'completed') return;
     let alive = true;
@@ -158,7 +137,6 @@ export default function AuditOrderDrawer({
   }
   const logged = (t: string) => [...o.log, { t, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
 
-  /* ── stepper: free backward movement, with the forward data cleared ──── */
   async function stepBack(target: string) {
     const tIdx = FLOW.indexOf(target);
     if (tIdx >= flowIdx) return;
@@ -173,7 +151,6 @@ export default function AuditOrderDrawer({
     await patch(body, 'Moved back to ' + STATUS[target].l);
   }
 
-  /* ── manual status override, with the two job-card guards ────────────── */
   async function setStatus(st: string) {
     if (st === o.status) return;
     let forcedNoCard = false;
@@ -195,8 +172,7 @@ export default function AuditOrderDrawer({
     }
     if (o.status === 'completed' && st !== 'completed' && hasSigned) {
       if (!window.confirm('This audit already has a signed job card on file (client signature + ratings).\n\nMoving it back to "' + STATUS[st].l + '" will let the auditor reopen and redo it — the existing signed record is kept safe unless they explicitly capture a new signature.\n\nContinue?')) return;
-      // Archive the signed snapshot now, deduped by signature image. Best-effort:
-      // never block the status change on it (the field app backfills too).
+
       try {
         const histRows = await sbGet('audit_orders?id=eq.' + o.id + '&select=audit_ticked_history');
         const hist = Array.isArray(histRows) && histRows[0] && Array.isArray(histRows[0].audit_ticked_history) ? histRows[0].audit_ticked_history : [];
@@ -207,8 +183,6 @@ export default function AuditOrderDrawer({
       } catch { /* history is best-effort */ }
     }
 
-    // Manually forcing At Site skips the auditor app's arrival confirmation,
-    // which is what Analytics' Arrival On Time % matches on — flag it in the log.
     const isManualAtSite = st === 'atsite' && o.status !== 'atsite';
     const note = await askNote('Status → ' + STATUS[st].l);
     if (note === null) return;
@@ -231,7 +205,6 @@ export default function AuditOrderDrawer({
       : 'Status: ' + STATUS[st].l);
   }
 
-  /* ── service create / edit ───────────────────────────────────────────── */
   const rowsOf = (grp: 'flooring' | 'wallpaper') => draft[grp].filter((r) => r.sku || r.name);
   function setRow(grp: 'flooring' | 'wallpaper', i: number, f: keyof AuditSkuRow, v: string) {
     setDraft((d) => ({ ...d, [grp]: d[grp].map((r, ri) => (ri === i ? { ...r, [f]: v } : r)) }));
@@ -262,7 +235,6 @@ export default function AuditOrderDrawer({
     }, 'Service details saved');
   }
 
-  /* ── slot booking ────────────────────────────────────────────────────── */
   async function bookSlot() {
     if (!bookDate || !bookTime) { toast('Pick a date and time'); return; }
     const wasResched = o.status === 'reschedule';
@@ -281,7 +253,6 @@ export default function AuditOrderDrawer({
       'Slot updated → ' + slotLabel(bookTime, slots) + ' on ' + fmtDate(bookDate));
   }
 
-  /* ── follow-up ───────────────────────────────────────────────────────── */
   async function setFollowUpDate() {
     if (!followUp) { toast('Pick a date first'); return; }
     const note = await askNote('Set follow-up to ' + fmtDate(followUp));
@@ -296,7 +267,7 @@ export default function AuditOrderDrawer({
     delete svc.follow_up_date;
     await patch({ service: svc, log: logged('Follow-up cleared — note: "' + note + '"') }, 'Follow-up cleared');
   }
-  /* Reschedule with no confirmed date yet: note + optional follow-up only. */
+
   async function saveReschedFollowUp() {
     const rem = reschedRemark.trim();
     if (!rem) { toast('A note is required to save the follow-up'); return; }
@@ -306,10 +277,6 @@ export default function AuditOrderDrawer({
     }, 'Follow-up saved');
   }
 
-  /* ── auditor assignment ──────────────────────────────────────────────── */
-  /* A store pre-booking for this same customer/slot is excluded from the
-     conflict set, so assigning the reserved auditor to the real order can't
-     warn against itself. */
   const linkedPre = useMemo(() => {
     const nm = o.name ? o.name.trim().toLowerCase() : null;
     return orders.find((r) => r.id !== o.id && r.status === 'slot_reserved' && r.slot === o.slot && r.date === o.date
@@ -374,7 +341,6 @@ export default function AuditOrderDrawer({
     await patch({ shadower_email: joined.email, shadower_name: joined.name, log }, shadowers.length ? 'Shadowers saved (' + shadowers.length + ')' : 'Shadowers cleared');
   }
 
-  /* ── customer detail correction (OMS auto-fetch is sometimes wrong) ────── */
   async function saveCustomer() {
     const nm = custName.trim(), ph = custPhone.trim(), ad = custAddr.trim();
     if (!nm || !ph || !ad) { toast('Name, phone and address are all required'); return; }
@@ -383,9 +349,7 @@ export default function AuditOrderDrawer({
     if (ph !== (o.phone || '')) changed.push('phone');
     if (ad !== (o.addr || '')) changed.push('address');
     if (!changed.length) { toast('No changes to save'); return; }
-    // `customer_name`, NOT `name` — the read side maps it to `o.name`
-    // (audit-ops/shared.ts) and writing that alias back 400s the whole PATCH,
-    // so the phone and address were lost along with it.
+
     const saved = await patch({
       customer_name: nm, phone: ph, addr: ad,
       log: logged('Customer details corrected — ' + changed.join(', ') + ' updated'),
@@ -393,7 +357,6 @@ export default function AuditOrderDrawer({
     if (saved) setCustOpen(false);
   }
 
-  /* ── BM link ─────────────────────────────────────────────────────────── */
   async function saveBm() {
     const match = bmOptions.find((b) => (b.email || b.name) === bmPick);
     if (!match) { toast('Select a BM first'); return; }
@@ -403,7 +366,6 @@ export default function AuditOrderDrawer({
     }, 'BM updated');
   }
 
-  /* ── pre-booking (store) actions ─────────────────────────────────────── */
   async function cancelReservation() {
     if (!window.confirm('Cancel this slot reservation? It will be removed from the calendar.')) return;
     setBusy(true);
@@ -435,7 +397,7 @@ export default function AuditOrderDrawer({
   async function downloadPdf() {
     setPdfBusy(true);
     try {
-      // Always fetch fresh — audit_ticked carries the photos and may not be loaded.
+
       const rows = await sbGet('audit_orders?id=eq.' + o.id + '&select=audit_ticked');
       const t = Array.isArray(rows) && rows[0] ? rows[0].audit_ticked : ticked;
       if (!t) { toast('No job card data found for this order'); setPdfBusy(false); return; }
@@ -446,7 +408,6 @@ export default function AuditOrderDrawer({
     setPdfBusy(false);
   }
 
-  /* ── journey ─────────────────────────────────────────────────────────── */
   async function addJourney(entry: Omit<JourneyEntry, 'id' | 'ts' | 'by'>) {
     const rows = await sbGet('audit_orders?id=eq.' + o.id + '&select=bm_journey');
     const fresh: JourneyEntry[] = Array.isArray(rows) && rows[0] && Array.isArray(rows[0].bm_journey) ? rows[0].bm_journey : [];
@@ -464,8 +425,7 @@ export default function AuditOrderDrawer({
   const rooms = ticked && !Array.isArray(ticked) && Array.isArray(ticked.rooms) ? ticked.rooms : [];
   const isPreBooking = o.status === 'slot_reserved' || o.status === 'slot_converted';
   const auditorName = auditorNameOf(o, auditors);
-  /* On a reservation `po` holds the enquiry id the store was given; on a real
-     order it holds the MD order ids. Same column, opposite meaning. */
+
   const preBookingEnq = o.po;
   const linkedOrder = (enq: string) => orders.some((x) => x.pi === enq);
   const preCats = Array.isArray(o.auditTicked) ? o.auditTicked.filter(Boolean) : [];
@@ -495,9 +455,7 @@ export default function AuditOrderDrawer({
             <KV k="Customer" v={o.name || '—'} />
             <KV k="Phone" v={o.phone || '—'} />
             <KV k="Address" v={o.addr ? <a className="text-blue-600" href={mapUrl(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
-            {/* The enquiry ID the store typed IS the `pi` of the audit row this
-                reservation becomes, so it is both the thing the SM was missing
-                here and a working link to the other half of the job. */}
+
             <KV k="Enquiry ID" v={
               preBookingEnq.length ? (
                 <span className="flex flex-wrap items-center gap-1.5">
@@ -521,7 +479,7 @@ export default function AuditOrderDrawer({
           </Section>
         ) : (
           <>
-            {/* stepper — tap an earlier step to move the order back */}
+
             <div className="mb-4">
               <div className="flex gap-1">
                 {FLOW.map((s, i) => (
@@ -543,10 +501,7 @@ export default function AuditOrderDrawer({
               <KV k="PI ID" v={o.pi} />
               <KV k="PO numbers" v={o.po.join(', ') || '—'} />
               <KV k="SKUs in cart" v={<div className="flex flex-wrap gap-1">{o.skus.map((s, i) => <span key={i} className={`rounded-md px-2 py-0.5 text-[10.5px] font-bold ${s.audit ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-[#1F3A5F]'}`}>{s.c}{s.n && s.n !== s.c ? ' · ' + s.n : ''}</span>)}</div>} />
-              {/* An audit raised from the OMS carries only the service line, so its
-                  own `audit_ticked` is empty and the store's pre-booking is the
-                  only record of what material the visit is for. Say which of the
-                  two is on screen — they were ticked by different people. */}
+
               <KV k="Audit is for" v={
                 auditCats.length
                   ? <span className="flex flex-wrap items-center gap-1.5">
@@ -817,7 +772,6 @@ export default function AuditOrderDrawer({
   );
 }
 
-/* ── journey block ────────────────────────────────────────────────────── */
 function JourneyBlock({ entries, onAdd }: { entries: JourneyEntry[] | null; onAdd: (e: Omit<JourneyEntry, 'id' | 'ts' | 'by'>) => Promise<void> }) {
   const [stage, setStage] = useState(MD_JOURNEY_STAGES[0].k);
   const [round, setRound] = useState('');
@@ -882,7 +836,6 @@ function JourneyBlock({ entries, onAdd }: { entries: JourneyEntry[] | null; onAd
   );
 }
 
-/* ── small shared bits ────────────────────────────────────────────────── */
 export function Chip({ st }: { st: string }) {
   const s = STATUS[st] || { l: st, badge: 'bg-gray-100 text-gray-600' };
   return <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${s.badge}`}>{s.l}</span>;

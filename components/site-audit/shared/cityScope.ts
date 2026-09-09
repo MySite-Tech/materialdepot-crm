@@ -1,6 +1,3 @@
-/* ── City scope ───────────────────────────────────────────────────────────
-   Rows without a city are Bengaluru (the original city) — matching
-   material-depot-site's `(o.city||'Bengaluru')` default everywhere. */
 export const CITIES = ['Bengaluru', 'Hyderabad'];
 export type CityFilter = 'all' | string;
 

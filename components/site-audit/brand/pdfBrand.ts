@@ -1,8 +1,3 @@
-/* Shared job-card PDF branding + registry-driven room renderers.
-   TypeScript port of material-depot-site's /md-pdf.js — brand palette is black / white / yellow,
-   and every job-card PDF in this app (auditor, installer, SM audit, SM install) renders the same
-   logo header, section titles and table styling through these helpers. */
-
 import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 import { MD_LOGO_H, MD_LOGO_W, brandLogoPng, loadBrandLogo } from './mdLogo';
@@ -16,11 +11,6 @@ import {
   segmentRows,
 } from '../data/auditRegistry';
 
-/* jspdf-autotable v5 only patches `doc.autoTable` when jsPDF is present as a UMD global on
-   `window` — which it never is in a bundled app, so the plugin's bare side-effect import silently
-   does nothing and every `doc.autoTable(...)` call throws "not a function". Apply it explicitly,
-   once, here: every PDF generator in this tab imports this module, so the prototype is patched
-   before any of them build a document. */
 applyPlugin(jsPDF as any);
 
 export type RGB = [number, number, number];
@@ -31,8 +21,6 @@ export const MD_MUTED: RGB = [110, 116, 130];
 export const MD_LINE: RGB = [214, 214, 220];
 export const MD_LABELFILL: RGB = [246, 246, 243];
 
-/* Shared image downscale/compress. Resolves a JPEG dataURL, or null on any failure so a caller's
-   addImage try/catch is a harmless no-op. */
 export function mdCompress(dataUrl?: string | null, maxW = 1600, maxH = 1200, q = 0.88): Promise<string | null> {
   return new Promise((resolve) => {
     if (!dataUrl) {
@@ -59,12 +47,8 @@ export function mdCompress(dataUrl?: string | null, maxW = 1600, maxH = 1200, q 
   });
 }
 
-/* Rasterises the brand logo so the (synchronous) header below can place it. Call once before
-   generating a PDF; the result is cached for the rest of the session. */
 export { loadBrandLogo };
 
-/* Branded page header: logo top-left, title + optional right-side ref on the right, and a yellow
-   accent rule. Returns the new y so callers can do `y = mdPdfHeader(doc, {...})`. */
 export function mdPdfHeader(doc: any, opts: { title?: string; right?: string; M?: number } = {}): number {
   const M = opts.M ?? 40;
   const W = doc.internal.pageSize.getWidth();
@@ -99,7 +83,6 @@ export function mdPdfHeader(doc: any, opts: { title?: string; right?: string; M?
   return y + 17;
 }
 
-/* Yellow left-bar + bold ink section title. Returns the new y. */
 export function mdSectionTitle(doc: any, text: string, y: number, M = 40): number {
   doc.setFillColor(...MD_YELLOW);
   doc.rect(M, y - 8, 4, 13, 'F');
@@ -110,7 +93,6 @@ export function mdSectionTitle(doc: any, text: string, y: number, M = 40): numbe
   return y + 12;
 }
 
-/* Brand-styled autoTable options (ink header, off-white label column, grey grid). */
 export function mdBrandGrid(extra: Record<string, any> = {}): Record<string, any> {
   return {
     theme: 'grid',
@@ -120,7 +102,6 @@ export function mdBrandGrid(extra: Record<string, any> = {}): Record<string, any
   };
 }
 
-/* Label-column body table used for the order/job header block on page 1. */
 export function mdInfoTable(doc: any, y: number, body: (string | number)[][], M = 40): number {
   doc.autoTable(
     mdBrandGrid({
@@ -142,9 +123,6 @@ export type RoomPdfOpts = {
   header?: () => number;
 };
 
-/* Renders ONE audit room's full body — measurement tables + prerequisites + per-segment photos +
-   room sketch + notes — page-break aware. `room` may be a legacy {type,calc} shape or a v2
-   {v:2,segments:[…]} shape; it is normalized internally. Returns the new y. */
 export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: RoomPdfOpts = {}): Promise<number> {
   const M = opts.M ?? 40;
   const W = opts.W ?? doc.internal.pageSize.getWidth();
@@ -217,11 +195,7 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
         }),
       );
       y = doc.lastAutoTable.finalY + 8;
-      // The adjustment table states WHAT was added/subtracted; only the photo shows the office
-      // WHY, so it belongs in the PDF the same way a segment photo does. Drawn at half a segment
-      // photo's height — an adjustment is a door or a cupboard footprint, not a whole wall, and a
-      // job card with several of them stayed readable in testing at this size. Captioned with the
-      // reason so a reader can tell three "Cupboard" deductions apart.
+
       for (let ai = 0; ai < adj.length; ai++) {
         const aph = adj[ai].photos.filter(Boolean);
         for (let ph = 0; ph < aph.length; ph++) {
@@ -299,8 +273,6 @@ export async function mdPdfAuditRoom(doc: any, room: any, yStart: number, opts: 
   return y;
 }
 
-/* Renders ONE installation room's body — installed-detail table + photos + comments, page-break
-   aware. Handles flat v2 install rooms and legacy {sku,qty,height,width} rooms. */
 export async function mdPdfInstallRoom(doc: any, room: any, yStart: number, opts: RoomPdfOpts = {}): Promise<number> {
   const M = opts.M ?? 40;
   const W = opts.W ?? doc.internal.pageSize.getWidth();
@@ -377,12 +349,6 @@ export type ConsentPdfOpts = {
   header?: () => number;
 };
 
-// Shared "Client Acknowledgement" page — consent paragraph, optional per-category installation
-// terms block (from mdInstallTermsBlock), and one signature per signature supplied. This app's 6
-// PDF generators (audit + install, across the auditor/installer apps and the ops views) used to
-// hand-roll this page; a new feature touching it once here reaches all 6 with no per-generator
-// changes, the same reason mdPdfAuditRoom/mdPdfInstallRoom exist. Always the last page of a job
-// card. `sign`/`installerSign` are {img,name} or falsy.
 export async function mdPdfConsent(doc: any, opts: ConsentPdfOpts): Promise<void> {
   const M = opts.M ?? 40;
   const W = opts.W ?? doc.internal.pageSize.getWidth();
@@ -435,8 +401,7 @@ export async function mdPdfConsent(doc: any, opts: ConsentPdfOpts): Promise<void
   doc.text('Client name: ' + (opts.personName || ''), M, y);
   y += 18;
   doc.text('Date: ' + (opts.personDate || ''), M, y);
-  // One signature block per signature supplied — installer on the left, client on the right — so
-  // a customer-only page (audit) looks exactly as it always has.
+
   const sigs: { label: string; sign?: { img?: string | null; name?: string } | null }[] = [];
   if (opts.installerSign) sigs.push({ label: 'Installer signature', sign: opts.installerSign });
   if (opts.sign) sigs.push({ label: 'Client signature', sign: opts.sign });

@@ -1,22 +1,5 @@
 'use client';
 
-/* Install Ops — port of material-depot-site's app/src/pages/SMInstall.jsx
-   (the Service Manager's installation-order operations center) into this
-   CRM. The caller (SiteAuditOwnDashboard / site-audit-view / Role Viewer)
-   already knows who's looking at it — the `attribution` prop carries that
-   real name through so activity-log entries aren't all attributed to the
-   same generic `SM_ATTRIBUTION` fallback (still used for a caller that
-   genuinely has no resolved person, same deliberate deviation as
-   SiteAuditStoreTeamView.tsx, which attributes writes to the selected store
-   name instead of a person).
-
-   Internal navigation is this view's OWN flat horizontal tab bar (styled
-   like SiteAuditRail.tsx's outer tab bar), not the original's left rail —
-   the outer Site Audit tab bar already made that call for this feature
-   area. "Live Locations" from the original rail is intentionally omitted:
-   it's already covered by SiteAuditLiveView.tsx (owned separately), which
-   shows the same profiles-based location tracking for installers/auditors. */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from '../data/omsService';
 import { autoImportInstallOrders } from '../data/autoImportAuditOrders';
@@ -54,17 +37,13 @@ const TABS: Array<{ view: ViewKey; label: string }> = [
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-/* `actorEmail` is recorded as `profiles.deleted_by` when this SM removes
-   someone — see SiteAuditOpsView. */
 export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
   const [activeView, setActiveView] = useState<ViewKey>('orders');
   const [rawOrders, setOrders] = useState<InstallOrder[]>([]);
   const [rawDeleted, setDeleted] = useState<InstallOrder[]>([]);
   const [deletedLoaded, setDeletedLoaded] = useState(false);
   const [installers, setInstallers] = useState<Installer[]>([]);
-  /* Every list, counter and capacity check below runs on the city-scoped
-     slice; the drawer still looks its order up in the unscoped list so an
-     open order never vanishes mid-edit when the toggle changes. */
+
   const orders = useMemo(() => inCity(rawOrders, city), [rawOrders, city]);
   const cityInstallers = useMemo(() => inCity(installers, city), [installers, city]);
   const deleted = useMemo(() => inCity(rawDeleted, city), [rawDeleted, city]);
@@ -104,30 +83,20 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
   const [kylasOpen, setKylasOpen] = useState(false);
   const [rectOrder, setRectOrder] = useState<InstallOrder | null>(null);
   const [asOpen, setAsOpen] = useState(false);
-  /* Retired installers, kept OUT of `installers` rather than flagged inside
-     it — see SiteAuditOpsView's formerAuditors for why absence beats a flag. */
+
   const [formerInstallers, setFormerInstallers] = useState<Array<Installer & StaffExit>>([]);
   const [canRetire, setCanRetire] = useState(false);
   const [retiring, setRetiring] = useState<RetireTarget | null>(null);
   const [restoring, setRestoring] = useState<(RetireTarget & StaffExit) | null>(null);
-  /* "Roster failed to load" vs "nobody registered" — the picker's empty state
-     has to say which, see loadInstallers. */
+
   const [installersErr, setInstallersErr] = useState(false);
   const instRetryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
   const installersErrRef = useRef(false);
   installersErrRef.current = installersErr;
 
-  /* Fetched once on mount but read by the assignment picker on every drawer
-     open, so one failed fetch left the installer dropdown empty for as long as
-     the view stayed mounted — see SiteAuditOpsView's loadAuditors for the full
-     story. `Array.isArray(rows) ? rows : []` is the sharp edge: sbGet resolves a
-     PostgREST error object on any 4xx/5xx, which mapped a server error onto
-     "zero installers" and wiped a roster that had been working. */
   const loadInstallers = useCallback(async () => {
     try {
-      /* Both probe-gated column sets in one call — the caps columns (003) and
-         `deleted_at is null` (004). Naming either unconditionally 42703s the
-         whole select, which is the query the assignment picker depends on. */
+
       const { select, filter } = await rosterQuery('id,name,email,contact,installer_type,city,weekly_off,leave_dates,active_from');
       const rows = await sbGet('profiles?role=in.(installer,auditor_installer)&select=' + select + filter);
       if (!Array.isArray(rows)) throw new Error('installer roster unavailable');
@@ -143,15 +112,13 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
       setInstallersErr(false);
       if (instRetryTid.current) { clearTimeout(instRetryTid.current); instRetryTid.current = null; }
     } catch {
-      /* keep previous roster on transient failure */
+
       setInstallersErr(true);
       if (!instRetryTid.current) instRetryTid.current = setTimeout(() => { instRetryTid.current = null; loadInstallers(); }, 8000);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Attrition list — see SiteAuditOpsView.loadFormerAuditors. Degrades to
-     empty and hides the affordance when migration 004 hasn't been run. */
   const loadFormerInstallers = useCallback(async () => {
     if (!(await exitColumnsAvailable())) { setCanRetire(false); setFormerInstallers([]); return; }
     setCanRetire(true);
@@ -180,10 +147,6 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
     await Promise.all([loadInstallers(), loadFormerInstallers()]);
   }, [loadInstallers, loadFormerInstallers]);
 
-  /* Shadower pool = everyone registered except store staff, whose kiosk app
-     has no login and therefore no personal shadow schedule. Deliberately a
-     separate list from `installers` so it can never leak into capacity or
-     conflict logic. */
   const loadShadowers = useCallback(async () => {
     try {
       const rows = await sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name');
@@ -225,15 +188,13 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
 
   useEffect(() => {
     Promise.all([loadInstallers(), loadShadowers(), loadOrders()]);
-    /* Jobs the backend already has but nobody imported are pulled in here, so
-       Pending POs is a fallback rather than the only way in. */
+
     autoImportInstallOrders().then((added) => {
       if (!added) return;
       loadOrders();
       toast(added + (added === 1 ? ' new installation order' : ' new installation orders') + ' imported from the backend');
     });
-    /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
-       case still costs exactly one query per tick. */
+
     const poll = setInterval(() => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } }, 60000);
     const vis = () => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } };
     document.addEventListener('visibilitychange', vis);
@@ -254,7 +215,6 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
     setActiveView(v); setFilterStatus('all'); setFilterDate('');
   }
 
-  /* ── Add Order ─────────────────────────────────────────────────────── */
   function openAddOrder() { setAoOpen(true); }
   function closeAddOrder() {
     setAoOpen(false);
@@ -283,8 +243,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
       { t: 'Order added manually by ' + attribution, d: new Date().toISOString() },
     ];
     setAoBusy(true);
-    // Live lookup at creation time (not a locally-cached phone set) so it's
-    // always accurate to the moment and never needs a manual refresh.
+
     const auditBy = await detectAuditBy(phone);
     if (auditBy) {
       logEntries.push({
@@ -345,7 +304,6 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
     setAoOpen(true);
   }
 
-  /* ── Restore ───────────────────────────────────────────────────────── */
   async function restoreOrder(id: string | number, pi: string) {
     try {
       await sbPatch('install_orders', String(id), { status: 'pending' });

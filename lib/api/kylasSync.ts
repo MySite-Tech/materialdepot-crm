@@ -1,10 +1,6 @@
 import { kylasFetch } from './kylasClient';
 import { API_BASE_URL, getToken, mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// Kylas — sync estimate to deal
-// ---------------------------------------------------------------------------
-
 export interface SyncEstimateResult {
   success: boolean;
   mode?: string;
@@ -27,18 +23,18 @@ export interface KylasDealInfo {
 
 function detectInputType(value: string): { lead_id?: string; estimate_id?: number; user_id?: string; cart_number?: string } {
   const trimmed = value.trim();
-  // UUID pattern → user_id
+
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
     return { user_id: trimmed };
   }
   if (/^CT/i.test(trimmed)) {
     return { cart_number: trimmed };
   }
-  // All digits → estimate_id
+
   if (/^\d+$/.test(trimmed)) {
     return { estimate_id: parseInt(trimmed, 10) };
   }
-  // Otherwise → lead_id (ENQ..., etc.)
+
   return { lead_id: trimmed };
 }
 
@@ -63,7 +59,6 @@ export async function syncEstimate(value: string): Promise<SyncEstimateResult> {
   }
   return data ?? { success: false, error: `API error: ${res.status}` };
 }
-
 
 export async function fetchKylasDealInfo(dealId: number | string): Promise<KylasDealInfo | null> {
   try {

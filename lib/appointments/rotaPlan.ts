@@ -1,14 +1,3 @@
-// Rota planner storage, backed by the `rota_plan` Supabase table.
-//
-// This used to live as a single JSON blob on Kylas lead 39871021's
-// `cfResourceplanjson` field. That layout had a data-loss bug: the client PUT
-// its whole snapshot of all six branches on every save, so a tab that had been
-// open for a while would silently overwrite whatever other branches had changed
-// since it loaded. One row per branch makes cross-branch clobbering impossible.
-//
-// Server-only: uses the service-role key, which bypasses RLS. Never import this
-// from a client component.
-
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { BRANCHES, Branch, isValidBranchName } from "./appt-shared";
 
@@ -20,11 +9,6 @@ const TABLE = "rota_plan";
 
 let _admin: SupabaseClient | null = null;
 
-/**
- * Service-role client. The anon key is deliberately not accepted as a fallback:
- * it ships to the browser, so allowing it here would mean any visitor could
- * rewrite every branch's roster.
- */
 function admin(): SupabaseClient {
   if (_admin) return _admin;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -51,16 +35,13 @@ type Row = {
   weeks: Record<string, Record<string, string>> | null;
 };
 
-/** Read every branch. Branches with no row yet come back empty, not missing. */
 export async function readPlan(): Promise<RotaPlan> {
   const { data, error } = await admin().from(TABLE).select("branch, members, weeks");
   if (error) throw new Error(error.message);
 
   const plan = emptyPlan();
   for (const row of (data ?? []) as Row[]) {
-    // The branch list is CRM data now (see appt-shared), so a stored row for a
-    // branch this build's seed list has never heard of is still that branch's
-    // roster — return it rather than silently dropping it.
+
     if (!isValidBranchName(row.branch)) continue;
     plan.branches[row.branch as Branch] = {
       members: Array.isArray(row.members) ? row.members : [],
@@ -70,11 +51,6 @@ export async function readPlan(): Promise<RotaPlan> {
   return plan;
 }
 
-/**
- * Write only the branches present in `partial`. A save from the Whitefield
- * manager touches the Whitefield row and nothing else, so concurrent edits to
- * other branches survive.
- */
 export async function writePlan(
   partial: Partial<Record<Branch, RotaBranchData>>,
   updatedBy?: string,

@@ -1,44 +1,11 @@
 'use client';
 
-/* "Every cart this client has ever built" — the Leads tab's view of one phone
-   number, inside the COE's own drawer.
-
-   The COE's job on a D+1/D+3/D+14 call is to find out whether the audit turned
-   into anything, and until now this dashboard could only answer that with the
-   one signal `orderPlacedFor` derives: an INSTALLATION order on the same phone.
-   A client who took a site audit and then bought tiles, wallpaper and laminates
-   as three separate product carts read as "Not yet" — and the COE had to leave
-   the dashboard, open the Leads tab, and search the number by hand to find out
-   otherwise (requested 2026-09-01, with exactly that example).
-
-   So this is the same rows the Leads tab renders, for one number:
-   `/crm/leads/?q=<phone>`, which is where carts, quotations and orders actually
-   live (see conversionFunnel.ts's header for why that endpoint and not the
-   batched one). Two rules it inherits from that module and must not bend:
-
-     1. MATCHING IS EXACT. `q` is a free-text search that also hits names and
-        cart ids, so results are re-filtered on `phoneKey` — the last-10
-        normalisation both order tables already use. A client whose NAME
-        contains the digits must never inherit somebody else's deals.
-     2. A FAILED REQUEST IS NOT AN EMPTY CART LIST. Django being unreachable is
-        reported as unreadable. Rendering it as "no carts" would tell the COE a
-        client walked away when they may have already paid — the single most
-        expensive wrong answer this panel could give.
-
-   Deals are split by the audit day rather than filtered to it: everything on
-   the number is shown (that is the ask), but the ones raised BEFORE this audit
-   are separated out and never counted as its conversion — the same scoping rule
-   `funnelFor` enforces. */
-
 import { useEffect, useState } from 'react';
 import { fetchCRMLeads, type CRMLeadRow } from '@/lib/mockApi';
 import { phoneKey } from '../siteAuditShared';
 
-/* Statuses that mean the deal stopped moving, for the row tint. Mirrors
-   `DEAL_LOST` in conversionFunnel.ts — same vocabulary, same three values. */
 const LOST = new Set(['Refunded', 'Order Lost', 'Order Cancelled']);
-/* Statuses at or past "Order Placed" in app/App.tsx's STATUSES — a committed
-   order rather than a live cart. */
+
 const ORDERED = new Set(['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered']);
 
 function statusPill(status: string): string {
@@ -58,12 +25,6 @@ function fmtDay(v: string | null | undefined): string {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-/* Deliberately NOT `conversionFunnel`'s `dealCache`. That cache is keyed to the
-   funnel's own list-wide load and is invalidated by `forgetDeals` when a BM
-   re-checks a pipeline; this panel is one drawer on one number and refetches on
-   open, which is what a COE who has just been told "I placed the order
-   yesterday" needs. One request per drawer open is the cost, and the drawer is
-   opened to make a phone call. */
 type State =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
@@ -71,8 +32,7 @@ type State =
 
 export default function ClientCarts({ phone, anchorDate, anchorLabel }: {
   phone: string;
-  /* The audit (or installation) day this drawer is about. Deals on or after it
-     belong to this job; earlier ones are that client's history. */
+
   anchorDate: string | null;
   anchorLabel: string;
 }) {
@@ -87,15 +47,14 @@ export default function ClientCarts({ phone, anchorDate, anchorLabel }: {
     fetchCRMLeads({ q: key, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc' })
       .then(({ results }) => {
         if (!alive) return;
-        // Rule 1 — re-filter on the digits, never trust the free-text match.
+
         setState({ kind: 'ok', deals: (results || []).filter((r) => phoneKey(r.clientPhone) === key) });
       })
       .catch((e: any) => {
-        // Rule 2 — unreadable, not empty.
+
         if (alive) setState({ kind: 'error', message: e?.message || 'the CRM did not answer' });
       });
-    /* The flag matters on Re-check: a slow first request must not land after the
-       retry and overwrite the newer answer. */
+
     return () => { alive = false; };
   }, [key, nonce]);
 

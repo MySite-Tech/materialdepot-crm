@@ -10,11 +10,6 @@ import type { ApptLead as Lead, EcReadyEntry, EcReadyMap } from "@/lib/appointme
 import type { AppUser } from "@/types/crm";
 import AdminOverview from "./AdminOverview";
 
-// ── Types & constants ─────────────────────────────────────────
-// Branch/Role/AccessMap types, BRANCHES seed, and the fetch/save helpers live in
-// @/lib/appt-shared so the branch list and the Kylas field mapping can't drift.
-
-// Slots covering 10 AM – 9 PM. Five 2-hour slots + a final 1-hour late-evening slot.
 const SLOTS: { key: string; label: string; startH: number; endH: number }[] = [
   { key: "s1", label: "10 AM – 12 PM", startH: 10, endH: 12 },
   { key: "s2", label: "12 PM – 2 PM",  startH: 12, endH: 14 },
@@ -24,10 +19,8 @@ const SLOTS: { key: string; label: string; startH: number; endH: number }[] = [
   { key: "s6", label: "8 PM – 9 PM",   startH: 20, endH: 21 },
 ];
 
-const DOW_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // index 0=Mon..6=Sun, matches rota day-code strings
+const DOW_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// Shift codes a rota cell can hold. "1"/"2"/"g" contribute headcount hours;
-// "o"/"l"/"c" (and unset "-") contribute none.
 type ShiftCode = "1" | "2" | "g" | "o" | "l" | "c";
 const SHIFT_META: Record<ShiftCode, { label: string; short: string; dot: string; bg: string }> = {
   "1": { label: "1st Shift",     short: "1st",  dot: "bg-indigo-500",  bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
@@ -39,8 +32,6 @@ const SHIFT_META: Record<ShiftCode, { label: string; short: string; dot: string;
 };
 const SHIFT_ORDER: ShiftCode[] = ["1", "2", "g", "o", "l", "c"];
 
-// Working-hours windows per shift. Index 0 = weekday start/end, 1 = weekend start/end
-// (in fractional hours, e.g. 9.5 = 9:30 AM). Week off / Leave / Comp off have no hours.
 const SHIFT_HOURS: Record<"1" | "2" | "g", { weekday: [number, number]; weekend: [number, number] }> = {
   "1": { weekday: [10, 19],   weekend: [10, 20] },   // 10 AM – 7 PM weekday / 10 AM – 8 PM weekend
   "2": { weekday: [12, 21],   weekend: [11, 21] },   // 12 PM – 9 PM weekday / 11 AM – 9 PM weekend
@@ -52,9 +43,6 @@ function isWeekend(d: Date): boolean {
   return dow === 0 || dow === 6;
 }
 
-// ── Small helpers ─────────────────────────────────────────────
-// The Lead shape, the paged Kylas fetch, ymd() and the EC-ready store are all
-// imported from @/lib/appt-shared so AdminOverview reads the same data.
 function toLocalDate(input: string | Date): Date {
   return input instanceof Date ? input : new Date(input);
 }
@@ -71,7 +59,7 @@ function slotIndexFor(iso: string): number {
   const h = dt.getHours();
   return SLOTS.findIndex((s) => h >= s.startH && h < s.endH);
 }
-// branchFrom now imported from @/lib/appt-shared — takes the raw field value.
+
 function customerName(l: Lead): string {
   return [l.firstName, l.lastName].filter(Boolean).join(" ").trim() || `Lead #${l.id}`;
 }
@@ -83,8 +71,7 @@ function link3d(l: Lead): string | null {
   if (!raw) return null;
   return raw.startsWith("http") ? raw : `https://${raw}`;
 }
-// How old the cached appointment feed is — the tracker no longer re-sweeps Kylas
-// on every interaction, so the age is worth showing next to Refresh.
+
 function ageLabel(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return "updated just now";
@@ -97,9 +84,6 @@ function requirement(l: Lead): string {
   return l.requirementName ?? "—";
 }
 
-// ── Rota Plan store ────────────────────────────────────────────
-// Per branch: a roster of members, plus per-ISO-week (keyed by that week's Monday
-// ymd) a 7-char shift-code string per member (index 0=Mon..6=Sun; "-" = unset).
 type RotaMember = { id: string; name: string };
 type RotaBranchData = { members: RotaMember[]; weeks: Record<string, Record<string, string>> };
 type RotaPlan = { version: 2; branches: Record<Branch, RotaBranchData> };
@@ -129,18 +113,12 @@ function defaultPlan(): RotaPlan {
   return p;
 }
 
-// Branches the server actually has rows for, plus the seed list. Iterating the
-// stored keys (not just BRANCHES) is what keeps a branch added in the CRM after
-// this code shipped from having its roster silently dropped on every read.
 function planBranchKeys(parsed: Partial<RotaPlan> | undefined): Branch[] {
   const keys = new Set<Branch>(BRANCHES);
   for (const k of Object.keys(parsed?.branches ?? {})) keys.add(k);
   return [...keys];
 }
 
-// Drop week keys far outside the useful planning window, and shift entries for
-// members no longer on the roster, so the stored JSON stays well under the
-// server's 60KB cap however long the tool stays in use.
 const ROTA_PAST_DAYS = 60;
 const ROTA_FUTURE_DAYS = 180;
 function pruneBranchData(data: RotaBranchData): RotaBranchData {
@@ -161,8 +139,6 @@ function pruneBranchData(data: RotaBranchData): RotaBranchData {
   return { members: data.members, weeks };
 }
 
-// Merge/sanitize a partial plan onto empty defaults so newly-added branches don't
-// leave gaps and malformed/legacy (old numeric) data is tolerated as empty.
 function mergeWithDefaults(partial: unknown): RotaPlan {
   const base = defaultPlan();
   if (!partial || typeof partial !== "object") return base;
@@ -188,8 +164,6 @@ function mergeWithDefaults(partial: unknown): RotaPlan {
   return base;
 }
 
-// Fetch the shared rota (via /api/resource-plan, backed by the `rota_plan`
-// Supabase table). Falls back to empty defaults if the API is unreachable.
 async function fetchPlan(): Promise<RotaPlan> {
   try {
     const res = await fetch("/api/resource-plan", { cache: "no-store" });
@@ -199,11 +173,6 @@ async function fetchPlan(): Promise<RotaPlan> {
   } catch { return defaultPlan(); }
 }
 
-/**
- * Saves ONE branch. Sending only the edited branch is what stops a tab that has
- * been open a while from overwriting branches other people changed in the
- * meantime — the server writes just the rows it receives.
- */
 async function savePlan(p: RotaPlan, branch: Branch): Promise<void> {
   const branches = { [branch]: pruneBranchData(p.branches[branch] ?? emptyBranchData()) };
   const res = await fetch("/api/resource-plan", {
@@ -217,13 +186,10 @@ async function savePlan(p: RotaPlan, branch: Branch): Promise<void> {
   }
 }
 
-// Fractional headcount for one slot on one date: each rostered member contributes
-// (their shift's overlap with the slot ÷ the slot's own duration), so someone whose
-// shift only covers half a slot counts as half a head.
 function headcountForSlot(data: RotaBranchData, date: Date, slot: { startH: number; endH: number }): number {
   const week = data.weeks[mondayKeyOf(date)];
   if (!week) return 0;
-  const dayIdx = (date.getDay() + 6) % 7; // Mon=0..Sun=6
+  const dayIdx = (date.getDay() + 6) % 7;
   const weekend = isWeekend(date);
   const slotDur = slot.endH - slot.startH;
   let total = 0;
@@ -239,18 +205,12 @@ function headcountForSlot(data: RotaBranchData, date: Date, slot: { startH: numb
   return total;
 }
 
-// Final bookable capacity for a slot: 80% of scheduled headcount on weekdays,
-// 50% on weekends, rounded to the nearest whole slot.
 function capacityForDate(data: RotaBranchData, date: Date, slot: { startH: number; endH: number }): number {
   const factor = isWeekend(date) ? 0.5 : 0.8;
   return Math.round(headcountForSlot(data, date, slot) * factor);
 }
 
-// ── Live footfall (walk-ins) — stub for now ───────────────────
-// The footfall service-account JWT is not yet wired in; when it is, this route
-// will query /apiV1/footfall-record/ per branch+day and bucket into slots.
-// Until then returns an empty map so the UI renders 0 walk-ins.
-type FootfallMap = Record<string, number>; // key = `${ymd(date)}|${slotKey}`
+type FootfallMap = Record<string, number>;
 async function fetchFootfall(_branch: Branch, _from: string, _to: string): Promise<FootfallMap> {
   try {
     const params = new URLSearchParams({ branch: _branch, from: _from, to: _to });
@@ -261,11 +221,6 @@ async function fetchFootfall(_branch: Branch, _from: string, _to: string): Promi
   } catch { return {}; }
 }
 
-// ── Date range ────────────────────────────────────────────────
-// One range for the whole tracker. Every view used to carry its own date filter
-// (the calendar had from/to inputs, reception + summary each had a preset card,
-// admin overview a third), which meant a full-width card per view showing one
-// dropdown, and a range that silently reset when you switched sub-tabs.
 type DatePreset = "today" | "tomorrow" | "next_7" | "this_month" | "next_week" | "next_month" | "custom";
 const PRESET_LABELS: Record<DatePreset, string> = {
   today: "Today",
@@ -279,7 +234,7 @@ const PRESET_LABELS: Record<DatePreset, string> = {
 
 function rangeForPreset(preset: DatePreset): [string, string] {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const dow = (today.getDay() + 6) % 7; // Mon=0..Sun=6
+  const dow = (today.getDay() + 6) % 7;
   const monThisWeek = new Date(today); monThisWeek.setDate(today.getDate() - dow);
   switch (preset) {
     case "today": return [ymd(today), ymd(today)];
@@ -324,15 +279,10 @@ export function defaultRange(): DateRange {
   return { preset: "next_7", from: f, to: t };
 }
 
-/** Label for the active range, for use in view headings. */
 function rangeLabel(r: DateRange): string {
   return r.preset === "custom" ? `${shortDate(r.from)} – ${shortDate(r.to)}` : PRESET_LABELS[r.preset];
 }
 
-// A native <select> dressed as one of the CRM's filter chips: same pill shape,
-// height, type scale and leading dot as FilterChip/DateChip in the dashboards,
-// with the browser's arrow swapped for the chip caret. The dot colours are the
-// CRM's own per-filter colours (date = amber, branch = blue).
 const CHIP_DOTS = { date: "#F59E0B", branch: "#3B82F6" } as const;
 
 function SelectChip<T extends string>({ dot, value, onChange, options, title }: {
@@ -362,9 +312,6 @@ function SelectChip<T extends string>({ dot, value, onChange, options, title }: 
   );
 }
 
-// Sits in the tracker's top control bar, next to the branch picker — one date
-// control for every sub-tab. Custom swaps the resolved-dates caption for two
-// day inputs, in place, so the bar never changes height.
 function DateRangeControl({ value, onChange }: {
   value: DateRange;
   onChange: (v: DateRange) => void;
@@ -394,19 +341,12 @@ function DateRangeControl({ value, onChange }: {
   );
 }
 
-// ── Root component ────────────────────────────────────────────
 export default function AppointmentTrackerClient({ currentUser, branches }: {
   currentUser: AppUser | null;
-  /**
-   * The CRM's branch list, fetched by App.tsx the same way Leads and Footfall
-   * get theirs (`fetchBranchList()`). Undefined until that lands — and left
-   * undefined if it fails — so the tracker shows its seed ECs rather than a
-   * stale default.
-   */
+
   branches?: string[];
 }) {
-  // Identity comes from the CRM session — no separate sign-in, and no access
-  // list: the CRM role decides the view, its branch list decides the scope.
+
   const role: Role = resolveApptRole(currentUser);
   const branchOptions = useMemo(() => apptBranchesFromCrm(branches), [branches]);
   const allowedBranches = useMemo(
@@ -417,46 +357,31 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
   const userName = currentUser?.name ?? "";
   const [hydrated, setHydrated] = useState(false);
 
-  // Keep the selection inside what this user is allowed to see (their CRM
-  // CRM branch list can change under them on a permission sync).
   useEffect(() => {
     if (allowedBranches.length > 0 && !allowedBranches.includes(branch)) {
       setBranch(allowedBranches[0]);
     }
   }, [allowedBranches, branch]);
 
-  // Admin's view toggle — lets an admin see every role-specific view without
-  // changing role, plus the two screens that were their own admin-only pages in
-  // the standalone app (cross-branch overview, role overrides).
   type AdminView = "calendar" | "reception" | "manager" | "overview";
   const [adminView, setAdminView] = useState<AdminView>("calendar");
   const showBranchBar = !(role === "admin" && adminView === "overview");
 
-  // Data
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
 
-  // One date range shared by every view, owned here and driven by the control in
-  // the top bar. Survives sub-tab switches, which the per-view filters didn't.
   const [range, setRange] = useState<DateRange>(defaultRange);
   const { from: fromDate, to: toDate } = range;
 
-  // Receptionist EC Ready map
   const [ec, setEc] = useState<EcReadyMap>({});
   const [savingEc, setSavingEc] = useState<Record<number, boolean>>({});
 
-  // Resource plan (manager-editable) + live footfall
   const [plan, setPlan] = useState<RotaPlan>(() => defaultPlan());
   const [footfall, setFootfall] = useState<FootfallMap>({});
 
-  // ── Which view is on screen, and therefore what data it needs ──
-  // Non-admins have exactly one view; admins switch between four. Only the
-  // calendar (slot capacity) and the manager screens (planner + walk-ins) need
-  // the rota plan or footfall, so the reception list and admin overview don't
-  // pay for either.
   const view: AdminView = role === "admin"
     ? adminView
     : role === "receptionist" ? "reception"
@@ -465,11 +390,9 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
   const needsPlan = view === "calendar" || view === "manager";
   const needsFootfall = view === "calendar" || view === "manager";
 
-  // Hydrate last-viewed branch + the EC-ready map on mount (both local)
   useEffect(() => {
     try {
-      // Any stored name is accepted — the clamp effect above drops it once the
-      // real branch list arrives if this user may not see it.
+
       const b = localStorage.getItem(LS.BRANCH);
       if (b) setBranch(b);
     } catch { /* ignore */ }
@@ -477,9 +400,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
     setHydrated(true);
   }, []);
 
-  // Rota plan (Supabase `rota_plan`) — fetched the first time a view needs it,
-  // then kept. `planLoaded` stops us re-requesting it on every view switch, and
-  // gates the planner's render so it never mounts on an empty default plan.
   const [planLoaded, setPlanLoaded] = useState(false);
   useEffect(() => {
     if (!needsPlan || planLoaded) return;
@@ -492,9 +412,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
     return () => { cancelled = true; };
   }, [needsPlan, planLoaded]);
 
-  // Re-read the plan from the server. Called after a save or a discard so the
-  // planner shows authoritative state — including branches this client didn't
-  // write and edits other people made — rather than trusting its own draft.
   const reloadPlan = useCallback(async () => {
     const fresh = await fetchPlan();
     setPlan(fresh);
@@ -504,10 +421,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
 
   useEffect(() => { if (hydrated) localStorage.setItem(LS.BRANCH, branch); }, [branch, hydrated]);
 
-  // Appointments: one request for every branch and date, so this must NOT depend
-  // on branch/fromDate/toDate — switching either only re-slices what we already
-  // have. Kylas is only re-swept when the user asks (Refresh) or the server
-  // cache has expired.
   const loadLeads = useCallback(async (force = false) => {
     setLoading(true); setError(null);
     try {
@@ -524,9 +437,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
 
   useEffect(() => { loadLeads(); }, [loadLeads]);
 
-  // Walk-ins come from the Django footfall API and ARE branch/date scoped, so
-  // this one legitimately re-runs when either changes — but only for the views
-  // that display walk-ins.
   useEffect(() => {
     if (!needsFootfall) return;
     let cancelled = false;
@@ -536,7 +446,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
 
   const load = useCallback(() => loadLeads(true), [loadLeads]);
 
-  // Derived: scoped leads for the selected branch (admin sees per-branch views too)
   const scopedLeads = useMemo(() => {
     return leads.filter((l) => branchFrom(l.companyBusinessType, branchOptions) === branch);
   }, [leads, branch, branchOptions]);
@@ -546,7 +455,7 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
     const next = { ...ec, [l.id]: entry };
     setEc(next); saveEcReady(next);
     setSavingEc((s) => ({ ...s, [l.id]: true }));
-    // Post a note in Kylas so the CRM record shows it too
+
     try {
       const label = state === "ready" ? "[EC_READY]" : "[EC_NOT_READY]";
       const stampIST = new Date().toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -563,7 +472,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
     setSavingEc((s) => ({ ...s, [l.id]: false }));
   };
 
-  // ── Render ──────────────────────────────────────────────────
   if (!currentUser) {
     return (
       <div className="px-3 sm:px-6 py-4 sm:py-5">
@@ -576,9 +484,7 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
 
   return (
     <div>
-      {/* Sub-tabs, same pill row every other CRM tab uses (see FootfallTab).
-          Admins get one pill per view; everyone else only ever has one view, so
-          the row collapses to just the branch picker + refresh. */}
+
       <div className="px-3 sm:px-6 pt-4 flex items-center gap-2 flex-wrap">
         {role === "admin" && ([
           { key: "calendar",  label: "EC Calendar" },
@@ -598,8 +504,7 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
             {v.label}
           </button>
         ))}
-        {/* One control bar for the whole tracker: date range · branch · refresh,
-            then a muted caption for the resolved dates and the data's age. */}
+
         <div className="flex items-center gap-2 ml-auto">
           <DateRangeControl value={range} onChange={setRange} />
           {showBranchBar && (
@@ -623,7 +528,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
         </div>
       </div>
 
-      {/* Caption sits on its own line so the controls stay a tidy group */}
       <div className="px-3 sm:px-6 pt-1.5 flex justify-end items-center gap-1.5 text-[11px] text-gray-400">
         {range.preset !== "custom" && <span>{shortDate(range.from)} – {shortDate(range.to)}</span>}
         {fetchedAt && (
@@ -643,8 +547,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
         </div>
       )}
 
-      {/* Role-specific views.
-          Presales: calendar only. Receptionist: reception list only. Store manager: reception list + branch summary + planner. Admin: toggle. */}
       {(role === "presales" || (role === "admin" && adminView === "calendar")) && (
         <PresalesCalendar leads={scopedLeads} branch={branch} from={fromDate} to={toDate} plan={plan} footfall={footfall} />
       )}
@@ -671,7 +573,6 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
   );
 }
 
-// ── PRESALES: weekly calendar with availability heatmap ───────
 function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
   leads: Lead[]; branch: Branch; from: string; to: string;
   plan: RotaPlan; footfall: FootfallMap;
@@ -750,8 +651,6 @@ function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
                   const isFilling = !isFull && !isNear && pct >= 0.3;
                   const isFree = !isFull && !isNear && !isFilling;
 
-                  // Refined palette: white card, colored left rail + tinted background.
-                  // Full is inverted for immediate stop-signal.
                   const container = isFull
                     ? "bg-gray-900 text-white ring-gray-900"
                     : isNear
@@ -782,10 +681,9 @@ function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
                           ...bookings.map((b) => `${timeOnly(b.cfVisitScheduled!)} · ${customerName(b)}`),
                         ].join("\n")}
                       >
-                        {/* Left accent rail */}
+
                         <span className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-full ${rail}`} />
 
-                        {/* Header: BIG booked count + status pill */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-baseline gap-1.5">
                             <span className={`text-xl font-bold leading-none ${isFull ? "text-white" : "text-gray-900"}`}>
@@ -800,12 +698,10 @@ function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
                           </span>
                         </div>
 
-                        {/* Progress bar */}
                         <div className={`mt-1.5 h-1 w-full rounded-full ${barTrack} overflow-hidden`}>
                           <div className={`h-full ${barFill} rounded-full transition-all`} style={{ width: `${Math.round(pct * 100)}%` }} />
                         </div>
 
-                        {/* Metric row */}
                         <div className={`mt-1.5 flex items-center gap-2 text-[10px] ${softText}`}>
                           <span className="font-semibold">{free}</span>
                           <span className={mutedText}>free of {capacity}</span>
@@ -818,7 +714,6 @@ function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
                           )}
                         </div>
 
-                        {/* Bookings preview */}
                         {bookings.length > 0 && (
                           <div className={`mt-1.5 pt-1.5 border-t ${isFull ? "border-white/15" : "border-gray-200/70"} space-y-0.5`}>
                             {bookings.slice(0, 2).map((b) => (
@@ -848,7 +743,6 @@ function PresalesCalendar({ leads, branch, from, to, plan, footfall }: {
   );
 }
 
-// ── ROTA PLANNER: manager plans the real per-day shift roster ─
 function codeAt(codeStr: string | undefined, dayIdx: number): ShiftCode | "-" {
   const c = (codeStr ?? "").padEnd(7, "-")[dayIdx];
   return (SHIFT_ORDER as string[]).includes(c) ? (c as ShiftCode) : "-";
@@ -861,10 +755,10 @@ function withCodeAt(codeStr: string | undefined, dayIdx: number, value: ShiftCod
 
 function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBranchSwitch = false }: {
   plan: RotaPlan;
-  /** Re-reads from the server and updates the parent; returns the fresh plan. */
+
   reloadPlan: () => Promise<RotaPlan>;
   branch: Branch;
-  /** Same list the top branch chip offers, so the two can't disagree. */
+
   branchOptions: Branch[];
   allowBranchSwitch?: boolean;
 }) {
@@ -877,10 +771,6 @@ function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBranchSwitc
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // Set the moment the user edits anything, cleared on save/reset. This is what
-  // protects unsaved work from an incoming `plan` update: the old code adopted
-  // the new plan unconditionally, so anything typed before the initial fetch
-  // resolved was silently discarded.
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
@@ -940,10 +830,8 @@ function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBranchSwitc
     setSavingState("saving");
     setSaveError(null);
     try {
-      await savePlan(draft, b); // only the branch on screen — see savePlan
-      // Clear `touched` BEFORE reloading, so the sync effect is allowed to adopt
-      // the server's copy. Re-reading (rather than trusting our own draft) is
-      // what surfaces other branches and other people's concurrent edits.
+      await savePlan(draft, b);
+
       setTouched(false);
       const fresh = await reloadPlan();
       setDraft(fresh);
@@ -955,11 +843,9 @@ function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBranchSwitc
     }
   };
 
-  // Discard: drop local edits AND re-read, so what's on screen afterwards is the
-  // server's current state rather than whatever this tab happened to load with.
   const handleReset = async () => {
     setTouched(false);
-    setDraft(plan); // immediate feedback; the reload below corrects it if stale
+    setDraft(plan);
     try {
       setDraft(await reloadPlan());
     } catch { /* keep the local copy if the refresh fails */ }
@@ -1104,8 +990,6 @@ function RotaPlanner({ plan, reloadPlan, branch, branchOptions, allowBranchSwitc
   );
 }
 
-// Read-only preview showing what this week's roster produces per slot per day,
-// via the same 80%/50% overlap math the Presales calendar uses.
 function RotaCapacityPreview({ branchData, days }: { branchData: RotaBranchData; days: Date[] }) {
   return (
     <div className="mt-4">
@@ -1138,7 +1022,6 @@ function RotaCapacityPreview({ branchData, days }: { branchData: RotaBranchData;
   );
 }
 
-// ── RECEPTIONIST: list + EC Ready toggle ──────────────────────
 function ReceptionistList({ leads, ec, savingEc, onToggle, branch, range }: {
   leads: Lead[];
   ec: EcReadyMap;
@@ -1245,7 +1128,6 @@ function ReceptionistList({ leads, ec, savingEc, onToggle, branch, range }: {
   );
 }
 
-// ── MANAGER SUMMARY: single-branch overview ───────────────────
 function ManagerSummary({ leads, branch, ec, footfall, range }: { leads: Lead[]; branch: Branch; ec: EcReadyMap; footfall: FootfallMap; range: DateRange }) {
   const { from, to } = range;
   const scoped = useMemo(
@@ -1254,8 +1136,7 @@ function ManagerSummary({ leads, branch, ec, footfall, range }: { leads: Lead[];
   );
   const stats = useMemo(() => computeStats(scoped, ec), [scoped, ec]);
   const perDate = useMemo(() => bookedVsVisitedByDate(scoped), [scoped]);
-  // Live footfall = actual walk-ins recorded today (from the footfall service),
-  // independent of the date-range preset above.
+
   const footfallToday = useMemo(() => sumFootfallForDate(footfall, ymd(new Date())), [footfall]);
   return (
     <div>
@@ -1278,7 +1159,6 @@ function ManagerSummary({ leads, branch, ec, footfall, range }: { leads: Lead[];
   );
 }
 
-// Compact table showing per-date booked vs converted counts + conversion %.
 function BookedVsVisitedTable({ rows, branchLabel }: { rows: { date: string; booked: number; visited: number }[]; branchLabel?: string }) {
   return (
     <div className="mt-6">
@@ -1318,7 +1198,6 @@ function BookedVsVisitedTable({ rows, branchLabel }: { rows: { date: string; boo
   );
 }
 
-// ── Shared bits ───────────────────────────────────────────────
 function computeStats(leads: Lead[], ec: EcReadyMap) {
   const todayStr = ymd(new Date());
   let total = 0, today = 0, ready = 0, notReady = 0, unmarked = 0, visited = 0;
@@ -1335,7 +1214,6 @@ function computeStats(leads: Lead[], ec: EcReadyMap) {
   return { total, today, ready, notReady, unmarked, visited };
 }
 
-// Roll up leads into per-date { booked, visited } for the summary tables.
 function bookedVsVisitedByDate(leads: Lead[]): { date: string; booked: number; visited: number }[] {
   const map = new Map<string, { booked: number; visited: number }>();
   for (const l of leads) {
@@ -1351,7 +1229,6 @@ function bookedVsVisitedByDate(leads: Lead[]): { date: string; booked: number; v
     .map(([date, v]) => ({ date, ...v }));
 }
 
-// Sum footfall (walk-in) buckets whose date === the given ymd string.
 function sumFootfallForDate(footfall: FootfallMap, dateStr: string): number {
   let total = 0;
   for (const [key, count] of Object.entries(footfall)) {
@@ -1360,7 +1237,6 @@ function sumFootfallForDate(footfall: FootfallMap, dateStr: string): number {
   return total;
 }
 
-// Per-slot walk-in totals across a [from, to] date window (inclusive).
 function footfallBySlot(footfall: FootfallMap, from: string, to: string): Record<string, number> {
   const bySlot: Record<string, number> = {};
   for (const [key, count] of Object.entries(footfall)) {
@@ -1389,8 +1265,6 @@ function StatCard({ label, value, tone = "default" }: { label: string; value: nu
   );
 }
 
-// Tile accents stay inside the CRM's palette: a hairline left border + a tinted
-// number, rather than the fully-tinted card the standalone app used.
 const VALUE_TONE: Record<string, string> = {
   default: "text-black",
   blue: "text-blue-600",

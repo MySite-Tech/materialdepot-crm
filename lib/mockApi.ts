@@ -1,10 +1,3 @@
-/* Barrel for the API layer, which lives in lib/api/*.
-   Every existing call site imports from '@/lib/mockApi', so this file stays the
-   public entry point; pick the module directly when adding new code.
-
-   The name is a leftover from when this was a Supabase mock. Nothing here is
-   mocked — client.ts talks to Django, kylasClient.ts talks to Kylas. */
-
 export * from './api/client';
 export * from './api/kylasClient';
 export * from './api/auth';

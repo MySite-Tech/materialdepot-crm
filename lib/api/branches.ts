@@ -1,10 +1,6 @@
 import { mdFetch } from './client';
 import { kylasFetch } from './kylasClient';
 
-// ---------------------------------------------------------------------------
-// Branches
-// ---------------------------------------------------------------------------
-
 export interface Branch { id: number; name: string; displayName: string }
 
 export async function fetchBranches(): Promise<Branch[]> {
@@ -15,10 +11,6 @@ export async function fetchBranches(): Promise<Branch[]> {
       id: v.id, name: v.name, displayName: v.displayName,
     }));
 }
-
-// ---------------------------------------------------------------------------
-// Branches — uses existing /orgainsation-branch/ endpoints
-// ---------------------------------------------------------------------------
 
 export async function fetchBranchList(): Promise<import('../../types/crm').Branch[]> {
   const data = await mdFetch('/orgainsation-branch/');

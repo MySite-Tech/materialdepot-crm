@@ -1,9 +1,5 @@
 'use client';
 
-/* Foam Rolls + Installer Payouts — the two money/stock views from
-   material-depot-site (SM_Install_Dashboard "Foam Rolls" and Admin.html
-   "Payouts"). All arithmetic lives in foamPayout.ts; these are the screens. */
-
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { fmtLog, sbGet, sbPost } from '../siteAuditShared';
 import {
@@ -13,8 +9,6 @@ import {
 import type { PayField, PayoutAgg, PayoutOverrides } from './foamPayout';
 import { dstr, today } from './shared';
 import type { FoamConfig, FoamLedgerRow, InstallOrder, Installer, PayRates } from './types';
-
-/* ════════════════════════ FOAM ════════════════════════ */
 
 export function FoamView({
   orders, installers, attribution, toast,
@@ -180,8 +174,6 @@ export function FoamView({
   );
 }
 
-/* ════════════════════════ PAYOUTS ════════════════════════ */
-
 const PAY_FIELDS: Array<{ k: PayField; label: string; unit: string }> = [
   { k: 'fl_sqft', label: 'Flooring', unit: '₹ / sq.ft' },
   { k: 'wp_std_roll', label: 'Standard wallpaper', unit: '₹ / roll' },
@@ -209,9 +201,7 @@ export function PayoutsView({ orders, toast }: { orders: InstallOrder[]; toast: 
     (async () => {
       const [g, profs] = await Promise.all([
         loadSetting('payout_rates'),
-        /* Pay-rate lookup — deliberately NOT filtered to current staff. A
-           leaver's final payout is computed off the same override, and dropping
-           them would silently pay it at the global default instead. */
+
         sbGet('profiles?select=name,email,pay_rates&role=in.(installer,auditor_installer)').catch(() => []),
       ]);
       setRatesId(g.id);

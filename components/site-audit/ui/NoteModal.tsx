@@ -1,15 +1,5 @@
 'use client';
 
-/* Required-note prompt, as an in-page modal instead of window.prompt().
-   window.prompt() is unreliable exactly where this app runs — installed
-   PWAs and mobile webviews commonly no-op or auto-return null for
-   prompt/confirm/alert, and desktop Chrome permanently silences it for an
-   origin once "Prevent this page from creating additional dialogs" gets
-   checked — so a required note could vanish with no error and no visible
-   dialog at all. This is the drop-in replacement for the old
-   requireNote() calls: same "does nothing until a non-blank note is
-   given" contract, but rendered as real DOM the app fully controls. */
-
 import { useCallback, useRef, useState } from 'react';
 
 type NoteReq = { label: string; preface?: string; resolve: (v: string | null) => void };

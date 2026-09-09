@@ -1,31 +1,5 @@
 'use client';
 
-/* Site Audit → Analytics: the COMMERCIAL tabs (Category · Week on week · Penetration · Targets).
-   ─────────────────────────────────────────────────────────────────────────────────────────
-   The Analytics tab has two halves with two different sources, and they are deliberately kept
-   apart — an order lives in the order book (Metabase / materialdepot_azure), a site visit lives
-   in the ops DB (Supabase), and the only bridge between them is the customer phone number:
-
-     • EXECUTION  (bookings, executions, TAT, arrival on time, NPS)  → SiteAuditAnalyticsView
-     • COMMERCIAL (carts, cart conversion, orders, order value, attach rate, audit → order
-                   conversion, store penetration, targets)          → THIS component
-
-   The commercial half is drawn by public/md-cat-analytics.js, carried over byte-for-byte from
-   the material-depot-site Admin console (see catAnalytics.ts). That module returns HTML strings,
-   so this component is a host, not a rewrite: it owns the filter state, the target buffer, the
-   drill-down modal and the CSV downloads, hands the module a filter, and injects what comes back.
-   Rewriting those renderers in JSX would fork a dashboard that is supposed to stay identical in
-   both apps.
-
-   Two deliberate differences from the Admin console version:
-     • City comes from the CRM's own header selector (the `city` prop), so the filter row does not
-       render its own city buttons — one city control per page, not two that can disagree.
-     • The filter row is real React (controlled inputs) instead of an HTML string with inline
-       onclick handlers, because it is this app's chrome rather than part of the shared dashboard.
-   The tab bodies still carry the module's own inline handlers, so those few names are published on
-   `window` for as long as this component is mounted.
-   ───────────────────────────────────────────────────────────────────────────────────────── */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CityFilter } from '../siteAuditShared';
 import { loadSetting, saveSetting } from '../siteAuditShared';
@@ -62,27 +36,18 @@ export default function CatAnalyticsPanel({
   const [targetMonth, setTargetMonth] = useState('');
   const [drillKey, setDrillKey] = useState<string | null>(null);
   const [toast, setToast] = useState('');
-  /* The panel mounts with INITIAL_RANGE_DAYS of order book and re-filters that client-side. Picking
-     a range that reaches outside it triggers one on-demand fetch of the wider window — the loaded
-     window is tracked here so we can tell "re-filter what we have" from "go and get more". */
+
   const [loadedFrom, setLoadedFrom] = useState('');
   const [rangeErr, setRangeErr] = useState('');
   const [fetching, setFetching] = useState(false);
 
   const dsRef = useRef<any>(null);
-  /* Targets are held in a MUTABLE ref, not in state, and edits bump `nonce` to force the redraw.
-     That is the Admin console's design and it is the right one here too: an edit touches one cell
-     of a seven-month × thirteen-store × six-category object, so a mis-typed cell can be abandoned
-     by leaving the tab, and nothing is written to app_settings until Save. Cloning the whole
-     object per keystroke to satisfy immutability would buy nothing and cost every keystroke. */
+
   const targetsRef = useRef<any>(null);
   const targetsIdRef = useRef<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const redraw = useCallback(() => setNonce((n) => n + 1), []);
 
-  /* The module's inline handlers are installed once per mount, so anything they read has to come
-     from a ref — closing over a render's values would freeze them at whatever the first render
-     saw (a CSV export would keep exporting the range the tab opened on). */
   const ctxRef = useRef<any>(null);
   const targetMonthRef = useRef('');
   targetMonthRef.current = targetMonth;
@@ -94,7 +59,6 @@ export default function CatAnalyticsPanel({
     window.setTimeout(() => setToast((cur) => (cur === msg ? '' : cur)), 3200);
   }, []);
 
-  /* ---- load the module, the dataset and the saved targets (once per mount) ---- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -108,9 +72,7 @@ export default function CatAnalyticsPanel({
       try {
         if (!dsRef.current) dsRef.current = await mod.mdAnDataset();
         if (!targetsRef.current) {
-          /* A missing app_settings row (or a missing table) is not an error here — mdAnTargetsMerge
-             seeds the workbook plan, which is exactly what an office that has never opened the
-             Targets tab should see. */
+
           const st = await loadSetting(TARGETS_KEY).catch(() => ({ id: null, value: null }));
           targetsIdRef.current = st.id;
           targetsRef.current = mod.mdAnTargetsMerge(st.value);
@@ -120,9 +82,7 @@ export default function CatAnalyticsPanel({
         return;
       }
       if (!alive) return;
-      /* Default range: the last 30 days — the same window the mount fetch pulled, so the first
-         paint never asks for data that is not loaded. Clamped for the dummy source, which holds a
-         fixed 2026 window and would otherwise open on an empty range. */
+
       setFrom((cur) => cur || defaultFrom(mod));
       setTo((cur) => cur || clampToData(mod, dstr(new Date())));
       setLoadedFrom(mod.MD_AN_DATA_FROM);
@@ -133,7 +93,6 @@ export default function CatAnalyticsPanel({
     };
   }, []);
 
-  /* ---- the module's inline handlers, published only while this panel is mounted ---- */
   useEffect(() => {
     if (!api) return;
     const w = window as any;
@@ -143,7 +102,6 @@ export default function CatAnalyticsPanel({
       w[name] = fn;
     };
 
-    // Clamp a typed target cell the way the Admin console does: no negatives, and rates cap at 100.
     const num = (el: HTMLInputElement, max?: number) => {
       let v = parseFloat(el.value);
       if (isNaN(v) || v < 0) v = 0;
@@ -151,9 +109,7 @@ export default function CatAnalyticsPanel({
       el.value = String(v);
       return v;
     };
-    /* Installation targets are DERIVED (attach % of the product categories, plus the flooring and
-       wallpaper site-audit pull-through), never typed — so any edit that feeds them recomputes the
-       affected store rows, or the grid would show a plan whose own rows disagree. */
+
     const deriveInstall = (month: string, storeId: string) => {
       const t = targetsRef.current;
       const row = ((t.orders[month] || {})[storeId] || {}) as Record<string, number>;
@@ -196,7 +152,7 @@ export default function CatAnalyticsPanel({
         t[kind][month] = t[kind][month] || {};
         t[kind][month][cat] = v;
       }
-      // Attach % feeds every store's derived installation target for that month.
+
       if (kind === 'attach') Object.keys(t.orders[month] || {}).forEach((s) => deriveInstall(month, s));
       redraw();
     });
@@ -222,8 +178,7 @@ export default function CatAnalyticsPanel({
     });
 
     return () => {
-      // Hand the globals back exactly as they were, so two mounts (rail + role viewer preview)
-      // can never leave a dead handler pointing at an unmounted panel.
+
       Object.keys(saved).forEach((k) => {
         if (saved[k] === undefined) delete w[k];
         else w[k] = saved[k];
@@ -231,12 +186,6 @@ export default function CatAnalyticsPanel({
     };
   }, [api, flash, redraw]);
 
-  /* ---- widen the loaded window on demand ----
-     Only ever reaches BACKWARDS: `to` is capped at today by the inputs, and the mount fetch already
-     ends there. Refetching the union (not just the missing slice) keeps one dataset in `dsRef`
-     rather than making the render layer stitch two, and the backend's 60s cache makes a repeated
-     window nearly free. Live source only — the dummy generator holds a fixed window with nothing
-     behind it to fetch. */
   useEffect(() => {
     if (!api || !from || !loadedFrom) return;
     if (api.MD_AN_SOURCE.mode === 'dummy') return;
@@ -254,8 +203,7 @@ export default function CatAnalyticsPanel({
       })
       .catch((e: any) => {
         if (!alive) return;
-        /* Keep the narrower dataset and say so, rather than blanking a working panel: the range on
-           screen is now wider than the data behind it, which is exactly what has to be visible. */
+
         setRangeErr(e?.message || 'could not load that range');
       })
       .finally(() => {
@@ -267,7 +215,6 @@ export default function CatAnalyticsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, from, loadedFrom]);
 
-  /* ---- build the slice, then render the tab ---- */
   const html = useMemo(() => {
     if (!api || !from || !to) return '';
     try {
@@ -322,8 +269,7 @@ export default function CatAnalyticsPanel({
       f = dstr(x);
       u = dstr(t);
     } else {
-      /* Live: reach past the loaded window and let the widening effect fetch it. Dummy: its own
-         window IS all the data there is. */
+
       f = api.MD_AN_SOURCE.mode === 'dummy' ? api.MD_AN_DATA_FROM : daysAgo(ALL_DATA_DAYS - 1);
       u = api.MD_AN_SOURCE.mode === 'dummy' ? api.MD_AN_DATA_TO : dstr(t);
     }
@@ -335,7 +281,7 @@ export default function CatAnalyticsPanel({
 
   return (
     <div className="md-an">
-      {/* One filter row for every commercial tab, not one per chart. */}
+
       <div className="an-filter">
         <div>
           <label>From</label>
@@ -389,8 +335,7 @@ export default function CatAnalyticsPanel({
           <b style={{ color: dummy ? 'var(--amber)' : 'var(--green)' }}>{dummy ? '◆ Dummy data' : '● Live (order book)'}</b>
           <br />
           {dummy ? `Seeded from the Jun–Aug 2026 category workbook · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}` : `Order book, live · data window ${api.MD_AN_DATA_FROM} → ${api.MD_AN_DATA_TO}`}
-          {/* A wider range is one request, and it can take a while on a cold cache — say so rather
-              than leaving the old numbers on screen looking like the answer. */}
+
           {fetching ? (
             <>
               <br />
@@ -410,7 +355,6 @@ export default function CatAnalyticsPanel({
 
       <div dangerouslySetInnerHTML={{ __html: html }} />
 
-      {/* ---- drill-down: which rows make up a metric, with the same CSV the tables offer ---- */}
       {drill ? (
         <div
           onClick={() => setDrillKey(null)}
@@ -509,15 +453,10 @@ export default function CatAnalyticsPanel({
 function defaultFrom(api: CatAnalyticsApi): string {
   const start = clampToData(api, daysAgo(INITIAL_RANGE_DAYS - 1));
   const today = clampToData(api, dstr(new Date()));
-  // Today is past the dummy window's end, so a raw "30 days ago" clamps ABOVE the clamped "today"
-  // and would invert the range — fall back to the window's own start in that case.
+
   return start > today ? clampToData(api, api.MD_AN_DATA_FROM) : start;
 }
 
-/* Where every number on these tabs comes from, and what it does not cover. Kept visible on the
-   page rather than in a doc: the whole point of this dashboard is that no figure on it is
-   unexplained. Text follows md-cat-analytics.js's own MD_AN_LIMITS / MD_AN_ASSUMPTIONS, so
-   editing a limit there updates it here. */
 function footerHtml(api: CatAnalyticsApi): string {
   const L = api.MD_AN_LIMITS;
   const A = api.MD_AN_ASSUMPTIONS;

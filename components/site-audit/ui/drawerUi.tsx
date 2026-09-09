@@ -1,16 +1,5 @@
 'use client';
 
-/* The primitives every Site Audit drawer is built out of — a titled section, a
-   label/value row, and the slide-over shell itself.
-
-   `Sec` and `KV` had been copy-pasted into the BM's audit drawer and the COE's
-   wallpaper drawer independently, and the BM's new installation and
-   custom-wallpaper drawers would have made four. One copy means a drawer opened
-   from one tab can't drift into looking subtly different from the same drawer
-   opened from another. `DrawerShell` is used by all three of the BM's drawers;
-   the COE's own drawer keeps its bespoke header (it carries controls, not just a
-   title) and only borrows Sec/KV. */
-
 import type { ReactNode } from 'react';
 
 export function Sec({ title, children }: { title: string; children: ReactNode }) {
@@ -31,10 +20,6 @@ export function KV({ k, v }: { k: string; v: ReactNode }) {
   );
 }
 
-/* Right-hand slide-over shell: the fixed backdrop, the panel, and the header
-   with its close button — identical in every Site Audit drawer, including the
-   click-outside-to-close behaviour that has to test `e.target === e.currentTarget`
-   so a click that started inside the panel doesn't dismiss it. */
 export function DrawerShell({ title, subtitle, badge, onClose, footer, children }: {
   title: ReactNode;
   subtitle?: ReactNode;

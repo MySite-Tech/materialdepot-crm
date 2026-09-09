@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { jsPDF } from 'jspdf';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/index';
 import { sbGet, sbPost, sbPatch, sbPatchLong, uploadPhoto, readCapturedPhoto, fmtDateA } from '@/components/site-audit/siteAuditShared';
 import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/data/omsService';
 import {
@@ -49,11 +49,6 @@ import {
   loadBrandLogo,
 } from '@/components/site-audit/brand/pdfBrand';
 
-/* Idiomatic React port of material-depot-site's app/src/pages/SiteAuditor.jsx.
-   Identity is supplied via the actingAs prop (Role Viewer) instead of a
-   client session — every ME.name/ME.email reference in the source becomes
-   actingAs.name/actingAs.email here. */
-
 export type ActingAs = { id: string; name: string; email: string };
 
 type SkuItem = { c: string; n?: string; type?: string; audit?: boolean };
@@ -66,15 +61,11 @@ type LogEntry = {
   arrivalPhoto?: string | null;
   lat?: number | null;
   lng?: number | null;
-  /* The visit was recorded with no GPS fix. Written rather than blocked on, so
-     the office can tell an unverified arrival from a verified one. */
+
   locOverride?: boolean;
 };
 type LogExtra = Partial<Pick<LogEntry, 'arrivalPhoto' | 'lat' | 'lng' | 'locOverride'>>;
 
-/* One measured segment of a room — a wall for the multi-segment categories (wallpaper / CNC /
-   wall panels), the single floor for flooring. `sid` is local-only; the serialized room writes it
-   out as `id`. */
 type Segment = {
   sid: number;
   facing: string | null;
@@ -86,8 +77,7 @@ type Segment = {
 
 type Room = {
   id: number;
-  // Schema version — a resumed v2 draft keeps its OWN v (mm whatever the variant, see
-  // auditRegistry's per-variant-unit gate); only a brand-new room gets the current ROOM_V.
+
   v: number;
   category: string;
   name: string;
@@ -102,23 +92,17 @@ type Room = {
 type SignData = {
   img: string;
   name: string;
-  // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never on-site
-  // — this stays optional only so historical job cards with an old sign.ratings still render.
+
   ratings?: { q1: number; q2: number; q3: number; comments: string };
   tcCategories?: string[];
 };
 
-/* Rooms are stored in their serialized v2 shape (see serializeRoom) — the same shape written to
-   audit_orders.audit_ticked, so the PDF and the SM dashboard read one format. */
 type JobCard = { rooms: any[]; sign?: SignData | null };
 
 type Order = {
   id: string;
   pi: string;
-  /* Carried on the row, never re-fetched at completion time: `confirmServicePerformed`
-     reads the stage ref out of this, and a failed read there is indistinguishable from a
-     legacy order with no leg — it silently skipped the confirmation and left the OMS
-     SERVICE leg held (51 audits, Aug 21 – Sep 1). It is already in AUDITOR_COLS. */
+
   po: string | null;
   name: string;
   phone: string;
@@ -157,10 +141,6 @@ const STATUS_LABELS: Record<string, { l: string; chip: string }> = {
   completed: { l: 'Site Audit Completed', chip: 'bg-green-100 text-green-700' },
 };
 
-/* The statuses CurrentStage draws a card for. Anything else falls through to a
-   self-describing block instead of an empty panel — `slot_converted` used to
-   land there, and the field apps share these tables with the material-depot-site
-   PWA, which can add a status this port has never heard of. */
 const AUDITOR_STAGES = ['scheduled', 'callpending', 'reschedule', 'onway', 'atsite', 'completed'];
 
 const DEFAULT_LOG_TEXT: Record<string, string> = {
@@ -171,9 +151,6 @@ const DEFAULT_LOG_TEXT: Record<string, string> = {
   completed: 'Site audit completed',
 };
 
-/* Legacy audit field dicts removed — superseded by MD_CATEGORIES in auditRegistry.ts. */
-
-/* Serialized (DB / draft) shape of one captured room — v2 segments. */
 function serializeRoom(r: Room) {
   return {
     v: r.v || ROOM_V,
@@ -195,12 +172,6 @@ function serializeRoom(r: Room) {
   };
 }
 
-/* Permanent completion history: every signed job card is appended to `audit_ticked_history`
-   (jsonb array), so a later redo, status change or a stray draft write can never erase the record
-   that this audit was once completed — `audit_ticked` itself is a single mutable slot. Deduped by
-   `sign.img`. This is the recovery net the legacy PWA has had since note 66; without it a
-   clobbered CRM job card is simply gone, which is the state 59 of the 63 damaged live rows are in.
-   Best-effort by design: it must never throw into, or delay, the completion flow that calls it. */
 async function archiveAuditTicked(orderId: string | null | undefined, ticked: any, reason: string): Promise<void> {
   if (!orderId || !ticked?.sign) return;
   try {
@@ -214,15 +185,8 @@ async function archiveAuditTicked(orderId: string | null | undefined, ticked: an
   } catch { /* history is best-effort — never block completion on it */ }
 }
 
-/* A photo that has ALREADY reached Storage is a ~120-byte URL and belongs in the draft; only one
-   still sitting as base64 (upload in flight, or a failed upload's fallback) can be multi-MB and
-   has to be left out, or the 12s draft PATCH times out on a site connection and the whole draft
-   is lost. Dropping the photos wholesale — which is what this did until 2026-09-02 — meant an
-   auditor resuming on a second device, or after clearing the browser, silently got their rooms
-   back with every photo missing, and the next completion write made that permanent. */
 const isUploaded = (p: string) => /^https?:/i.test(p);
 
-/* Draft written to the DB on autosave. */
 function draftPayload(rooms: Room[]) {
   return rooms.map((r) => {
     const { segments, ...rest } = serializeRoom(r);
@@ -237,9 +201,6 @@ function draftPayload(rooms: Room[]) {
   });
 }
 
-// `termsBlock` (from mdInstallTermsBlock) fills what used to be a literal, never-written-in
-// placeholder — the install-readiness clauses for whichever categories are in this job card, so
-// the client is confirming the site is ready for installation, not just that the audit happened.
 function buildAuditTC(termsBlock: string): string {
   return `Material Depot — Client Acknowledgement
 
@@ -254,7 +215,6 @@ By ticking the box and signing below, I confirm that:
 ${termsBlock || '[Full terms and conditions will be provided by Material Depot]'}`;
 }
 
-/* ---- date / slot helpers (verbatim logic from source) ---- */
 function todayMidnight(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -284,12 +244,6 @@ function mapUrl(a: string): string {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
 
-/* `assigned` is the DB spelling of what this app calls `scheduled`. loadJobs
-   maps it on the way in, so ANYTHING that compares a fresh DB read against an
-   on-screen Order has to map it too. adv()'s stale-write guard did not, so
-   `assigned !== scheduled` fired on every freshly assigned audit — the auditor
-   could never start the pre-visit call or reschedule, and the toast's advice to
-   refresh could not help because nothing was actually stale. */
 function normalizeAuditStatus(s: string | null | undefined): string {
   return s === 'assigned' ? 'scheduled' : s || '';
 }
@@ -311,7 +265,6 @@ function computeDisplayStatus(o: Order, now: Date, today: Date): string {
   return o.status;
 }
 
-/* ---- pending-completion retry (localStorage recovery, verbatim) ---- */
 let retryingCompletion = false;
 async function retryPendingCompletions() {
   if (retryingCompletion) return;
@@ -325,10 +278,7 @@ async function retryPendingCompletions() {
         if (d) {
           await sbPatch('audit_orders', d.id, { status: 'completed', log: d.log });
           localStorage.removeItem(k);
-          /* This path completes the job just as much as the live one does, so it owes OMS the
-             same confirmation — without it an audit that finished offline billed nothing.
-             `po` is carried in the queued payload; an entry queued before it was stored has
-             none, and the reconcile in autoImportAuditOrders picks that up instead. */
+
           try {
             await confirmServicePerformed(d.po, 'Site audit completed (offline, synced later)');
           } catch {}
@@ -358,10 +308,7 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
         encodeURIComponent(email) +
         '&select=' +
         AUDITOR_COLS +
-        // A pre-booking is a held store slot whose real audit is a SEPARATE row
-        // (the reservation's `po` is that row's `pi`) — 18 live ones carry an
-        // auditor_email and were rendering in six auditors' lists as jobs with
-        // no stage and no buttons. The ops views filter the same two statuses.
+
         '&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc',
     );
     if (!Array.isArray(rows)) return prevOrders;
@@ -390,12 +337,6 @@ async function loadJobs(email: string, prevOrders: Order[]): Promise<Order[]> {
     return prevOrders;
   }
 }
-
-/* ---- image helpers (verbatim resize/sketch/PDF logic) ----
-   Room-photo capture is NOT here any more: it goes through readCapturedPhoto in
-   siteAuditShared, which refuses a file this browser cannot decode instead of passing the
-   original bytes through (the local resizeImageDataUrl used to answer `null` and its one caller
-   wrote `|| dataUrl`, which is how HEIC reached Storage as a .jpg). */
 
 function compressImageDataUrl(dataUrl: string | null | undefined): Promise<string | null> {
   if (!dataUrl) return Promise.resolve(null);
@@ -570,7 +511,6 @@ function pdfFileName(order: Order): string {
   return ('SiteAudit_' + (order.name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_');
 }
 
-/* ---- small reusable UI bits ---- */
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-10">
@@ -596,7 +536,6 @@ function StatusChip({ status }: { status: string }) {
     </span>
   );
 }
-
 
 function CommentDialog({
   title,
@@ -644,7 +583,6 @@ function CommentDialog({
   );
 }
 
-/* ---- day strip + job list ---- */
 function DayStrip({
   orders,
   selDay,
@@ -829,7 +767,6 @@ function JobListView({
   );
 }
 
-/* ---- reschedule form ---- */
 function RescheduleForm({
   showToast,
   busy,
@@ -899,7 +836,6 @@ function RescheduleForm({
   );
 }
 
-/* ---- stage bar (per-status call-to-action) ---- */
 function StageBar({
   order,
   busy,
@@ -1077,7 +1013,6 @@ function StageBar({
   );
 }
 
-/* ---- job detail view ---- */
 function JobDetailView({
   order,
   actingAs,
@@ -1105,16 +1040,9 @@ function JobDetailView({
   const [advBusy, setAdvBusy] = useState(false);
   const advBusyRef = useRef(false);
 
-  // Read-merge-write + busy-guard, mirroring SiteInstallerApp's advanceStatus
-  // — without the fresh read, a double-tap builds its `newLog` off the same
-  // stale `order.log` closure twice, and whichever sbPatch lands last silently
-  // drops the other tap's log entry.
   const adv = useCallback(
     async (st: string, toastMsg: string, logOverride?: string | null, extraLog?: LogExtra): Promise<boolean> => {
-      /* `advBusy` is state: two taps in one tick both read it as false and both
-         write, which is where the repeated identical timeline lines come from
-         (294 of 770 auditor person-day events in live data carry a duplicate,
-         one arrival logged 20 times). The ref is the lock. */
+
       if (advBusyRef.current) return false;
       advBusyRef.current = true;
       setAdvBusy(true);
@@ -1127,11 +1055,7 @@ function JobDetailView({
           try {
             const rows = await sbGet('audit_orders?id=eq.' + order.id + '&select=log,status');
             const fresh = Array.isArray(rows) && rows[0] ? rows[0] : null;
-            // The screen's `order.status` can go stale — an SM action (e.g.
-            // rebooking after a reschedule) can land between this button being
-            // shown and tapped. Without this check a delayed/duplicate tap
-            // here would silently overwrite whatever the SM just set, which is
-            // exactly what made a rebooked slot "revert" to reschedule.
+
             if (fresh && normalizeAuditStatus(fresh.status) !== order.status) {
               const label = (STATUS_LABELS[normalizeAuditStatus(fresh.status)] || { l: fresh.status }).l;
               showToast('The office moved this job to "' + label + '" — showing the latest now');
@@ -1217,11 +1141,7 @@ function JobDetailView({
           onCancel={() => setReschedOpen(false)}
           onConfirm={async (reason, followUp) => {
             const logMsg = 'Reschedule requested: ' + reason + (followUp ? ` · Follow-up: ${followUp}` : '');
-            // Wait for adv() to actually succeed before closing the form —
-            // closing it up front (as this used to) left the Confirm button
-            // fully clickable for the whole round trip, so a slow/flaky
-            // connection invited repeat taps that each wrote their own
-            // duplicate "Reschedule requested" log entry.
+
             const ok = await adv('reschedule', 'Sent to SM to reschedule', logMsg);
             if (!ok) return;
             setReschedOpen(false);
@@ -1316,8 +1236,7 @@ function JobDetailView({
               extra.lat = lat;
               extra.lng = lng;
             } else {
-              /* Never block the auditor on a dead GPS — but the office must see
-                 that this arrival wasn't verified rather than assume it was. */
+
               extra.locOverride = true;
             }
             adv('atsite', 'At site — open the Job Card', haveFix ? null : 'Auditor arrived at site ⚠ (no location captured)', extra);
@@ -1332,7 +1251,6 @@ function JobDetailView({
   );
 }
 
-/* ---- job card details header (read-only prefilled fields) ---- */
 function FieldRO({ label, value, full }: { label: string; value: string; full?: boolean }) {
   return (
     <div className={full ? 'col-span-2' : ''}>
@@ -1374,13 +1292,10 @@ function blankSegment(catKey: string, sid: number, room?: { v?: number; variant?
   fieldsFor(cat, roomCtx).forEach((f) => {
     if (f.default !== undefined) fields[f.k] = f.default;
   });
-  // No measurement is pre-filled: every number on a job card is typed by the auditor/BM.
+
   return { sid, facing: null, photos: [], fields, prereq: {}, adjust: [] };
 }
 
-/* Value a select-type field shows when nothing has been picked yet — the registry's first option,
-   matching the field app (so e.g. flooring's Skirting type reads "None" and its dependent rows
-   stay hidden until the auditor changes it). */
 function fieldValue(seg: Segment, f: { k: string; input?: string; opts?: string[] }): string {
   const v = seg.fields[f.k];
   if (v !== undefined && v !== null && v !== '') return String(v);
@@ -1390,10 +1305,6 @@ function fieldValue(seg: Segment, f: { k: string; input?: string; opts?: string[
 
 const GROUP_LABEL_CLS = 'mt-2.5 text-[11px] font-extrabold uppercase tracking-wider text-gray-400';
 
-/* Grouped measurement inputs for one segment. EVERY field here is a plain editable input the
-   auditor/BM fills in — areas, adjustments, net area, area incl. wastage and rolls included.
-   Nothing on this form is calculated, pre-filled or recomputed from anything else; see MANUAL
-   ENTRY in auditRegistry.ts before adding a formula back. */
 function SegmentFields({
   cat,
   seg,
@@ -1455,20 +1366,6 @@ function SegmentFields({
   );
 }
 
-/* Per-segment area adjustments: add/subtract a small area that belongs to THIS wall/floor rather
-   than to a room of its own (a door to deduct, a niche to add), each with a shape (Rectangle/
-   Triangle also record two dimensions; Other records none), a typed area in sq.ft, a reason and a
-   photo. Dimensions are in the segment's own unit and are the record of what was measured — the
-   auditor types the row's area, and types the segment's Adjustments (± sq.ft) total into the
-   Measurements group as well. Nothing here sums or converts anything. */
-/* `onAdjust` takes an UPDATER, not a finished array, and that is load-bearing rather than
-   stylistic. A photo is added to the row optimistically as base64 and swapped for its Storage URL
-   when the upload lands up to ~20s later; a handler built from a render-time snapshot of
-   `seg.adjust` runs that swap against the array as it looked BEFORE the base64 was inserted, so
-   the swap matches nothing and writes the pre-photo array back — deleting the photo the auditor
-   just attached. That is why adjustment photos went missing while segment photos (always wired
-   through the functional `onChange`) did not. Every mutation here goes through the updater so it
-   composes with whatever else landed in between. */
 function SegmentAdjustments({
   cat,
   room,
@@ -1490,9 +1387,7 @@ function SegmentAdjustments({
     onAdjust((prev) => [...prev, { sign: '-', shape: 'Rectangle', h: '', w: '', area: '', reason: '', photos: [] }]);
   const addPhoto = (i: number, url: string) =>
     onAdjust((prev) => prev.map((a, idx) => (idx === i ? { ...a, photos: [...(a.photos || []), url] } : a)));
-  /* Located by VALUE across every row, not by the row index the upload started on — a row removed
-     or added while the upload was in flight shifts that index, and swapping the wrong row's photo
-     is the same data loss by another route. */
+
   const swapPhoto = (from: string, to: string) =>
     onAdjust((prev) =>
       prev.map((a) =>
@@ -1514,11 +1409,10 @@ function SegmentAdjustments({
       {seg.adjust.map((a, i) => {
         const shape = a.shape || 'Rectangle';
         const isOther = shape === 'Other';
-        // Registry-driven, not hardcoded: a floor's two dimensions are length
-        // and width — it has no height. See `adjDim1` in auditRegistry.ts.
+
         const dim1 = shape === 'Triangle' ? 'Base' : cat.adjDim1 || 'Height';
         const dim2 = shape === 'Triangle' ? 'Height' : 'Width';
-        // The area is typed for every shape now, so it alone says whether this row is real.
+
         const missingReason = !a.reason && String(a.area ?? '') !== '';
         return (
           <div key={i} className="mt-2 rounded-lg border border-gray-200 bg-white p-2.5">
@@ -1540,8 +1434,7 @@ function SegmentAdjustments({
                   value={shape}
                   onChange={(e) => {
                     const nextShape = e.target.value as AdjustRow['shape'];
-                    // The typed area survives a shape change — only the dimensions are
-                    // shape-specific, and 'Other' records none.
+
                     patchRow(i, nextShape === 'Other' ? { shape: nextShape, h: '', w: '' } : { shape: nextShape });
                   }}
                   className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
@@ -1577,7 +1470,7 @@ function SegmentAdjustments({
                   </div>
                 </>
               )}
-              {/* Typed for every shape — the dimensions above are recorded, not multiplied. */}
+
               <div className="col-span-2">
                 <label className="text-xs text-gray-500">Area (sq.ft)</label>
                 <input
@@ -1631,8 +1524,6 @@ function SegmentAdjustments({
   );
 }
 
-/* Per-segment site-readiness checklist (OK / Not OK / N/A + optional note). A "Not OK" is a soft
-   flag — it never blocks completion, it's recorded for the SM to review. */
 function SegmentPrereqs({
   cat,
   seg,
@@ -1687,7 +1578,6 @@ function SegmentPrereqs({
   );
 }
 
-/* ---- room editor (rooms phase of the job card wizard) ---- */
 function SegmentPhotos({
   photos,
   label,
@@ -1707,18 +1597,13 @@ function SegmentPhotos({
   const [uploading, setUploading] = useState(false);
   const [readErr, setReadErr] = useState<string | null>(null);
 
-  // Show the photo instantly (local base64), THEN upload to Storage in the background and swap the
-  // URL in when it lands. Waiting on the upload first meant the thumbnail only appeared after up to
-  // ~20s on a weak site connection, so auditors thought it hadn't attached and re-took it.
   const handleFiles = useCallback(
     async (files: FileList | null) => {
       if (!files || !files.length) return;
       setUploading(true);
       setReadErr(null);
       for (const file of Array.from(files)) {
-        // An undecodable file is refused rather than attached — see readCapturedPhoto. The notice
-        // stays on screen (not a toast) because the fix is a camera setting the auditor has to go
-        // and change before re-shooting.
+
         const got = await readCapturedPhoto(file, 1600, 0.88);
         if (!got.ok) { setReadErr(got.error); continue; }
         const resized = got.dataUrl;
@@ -1907,13 +1792,9 @@ function RoomEditor({
             onChange={(e) => {
               const prev = room.variant;
               const next = e.target.value || null;
-              // The variant can decide the measurement UNIT (Standard wallpaper = ft, Customized =
-              // mm), so switching it may need to clear already-typed measurements — silently
-              // re-labelling 2800mm as 2800ft would put a ~300x wrong area on the job card.
+
               const unitFlips = unitFor(cat, { v: room.v, variant: prev }) !== unitFor(cat, { v: room.v, variant: next });
-              /* Only the LINEAR dimensions carry the unit. Every area on this card is typed
-                 straight in sq.ft, so a unit flip can't make one wrong and must not wipe it —
-                 that would delete work the auditor did by hand. */
+
               const DIM_KEYS = ['height', 'width', 'length'];
               const hasDims = room.segments.some(
                 (s) =>
@@ -2018,8 +1899,7 @@ function RoomEditor({
                 cat={cat}
                 room={room}
                 seg={seg}
-                /* Editing an adjustment row does NOT touch fields.adjArea — the auditor types
-                   that total themselves, like every other number on the card. */
+
                 onAdjust={(updater) =>
                   onChange((r) => ({
                     segments: r.segments.map((s) =>
@@ -2118,7 +1998,6 @@ function RoomEditor({
   );
 }
 
-/* ---- room review card (review phase summary) ---- */
 function RoomReviewCard({ room, index }: { room: Room; index: number }) {
   const cat = categoryFor(room.category);
   const multi = cat.segment.model === 'multi';
@@ -2231,12 +2110,8 @@ function RoomReviewCard({ room, index }: { room: Room; index: number }) {
   );
 }
 
-
-/* ---- job card wizard (rooms -> review -> pass-to-client -> terms -> ratings -> sign -> done) ---- */
 type WizardPhase = 'rooms' | 'review' | 'pass' | 'terms' | 'sign' | 'done';
 
-/* The order's first non-audit SKU picks the starting category, exactly like the field app; an SKU
-   `type` the registry doesn't know falls back to flooring. */
 function initialCategory(order: Order): string {
   const t = order.skus[0]?.type;
   return t && MD_CATEGORIES[t] ? t : 'flooring';
@@ -2257,10 +2132,6 @@ function makeRoom(id: number, category: string): Room {
   };
 }
 
-/* Restores a saved room — either a v2 {segments} room or a legacy {type,calc,photos} one, which
-   normalizeRoom folds into a single segment so it stays editable. A resumed v>=2 draft keeps its
-   OWN v (a v2 wallpaper room was captured in mm whatever its variant — see auditRegistry's
-   room.v>=3 gate); only a fresh/legacy room gets the current ROOM_V. */
 function normalizeRestoredRoom(r: any, id: number): Room {
   const nr = normalizeRoom(r);
   const category = MD_CATEGORIES[nr.category] ? nr.category : 'flooring';
@@ -2326,13 +2197,7 @@ function JobCardWizard({
   const autosaveSeqRef = useRef(0);
   const completionWriteRef = useRef<{ audit_ticked: any } | null>(null);
   const skipNextAutosave = useRef(true);
-  /* True once we know the order already carries a SIGNED job card on the server. `audit_ticked` is
-     a single mutable slot shared by the draft autosave and the finished card, so a draft write on
-     a reopened card destroys the signature, the auditor, the date and every photo. The legacy PWA
-     learned this the hard way (root-caused live on ENQ2026072381434) and guards with `jcHadSign`;
-     this port shipped without the guard, which is how 63 of 331 completed audits ended up with a
-     photo-stripped `{draft:true}` blob as their permanent job card. While this is set the draft
-     stays on-device only. */
+
   const hadSignRef = useRef(false);
   const [hadSign, setHadSign] = useState(false);
   const signPadRef = useRef<SignaturePadHandle>(null);
@@ -2341,9 +2206,7 @@ function JobCardWizard({
     let alive = true;
     (async () => {
       let restoredRooms: any[] | null = null;
-      /* Server first, unconditionally: a signed card is authoritative and a local draft must never
-         be allowed to shadow it, because that is exactly the path on which the guard below never
-         learns the card was signed. */
+
       let signedTicked: any = null;
       if (order.id) {
         try {
@@ -2408,8 +2271,7 @@ function JobCardWizard({
         setSaveStatus('local');
         return;
       }
-      // A signed card on file outranks any draft — edits stay on this device until the redo flow
-      // captures a fresh signature and writes a complete `ticked` again.
+
       if (hadSignRef.current) {
         setSaveStatus('local');
         return;
@@ -2439,13 +2301,6 @@ function JobCardWizard({
     [],
   );
 
-  // Unlike SiteInstallerApp (whose job-card state lives at the app root and
-  // survives navigating back to the detail screen, so its 3s debounce just
-  // keeps ticking in the background), this wizard unmounts on back — the
-  // cleanup above kills the pending timer outright. Flush any pending write
-  // immediately on back instead of waiting out the debounce, so edits made
-  // in the last <3s aren't silently dropped (only the same-device localStorage
-  // draft was protecting them before).
   const flushAutosave = useCallback(async () => {
     if (!autosaveTimerRef.current) return;
     clearTimeout(autosaveTimerRef.current);
@@ -2476,10 +2331,7 @@ function JobCardWizard({
       showToast("Please capture the client's signature");
       return;
     }
-    // Soft gate: a missing adjustment reason/photo, or a missing photo on a custom-measured
-    // wall/floor, is never a hard block on a field auditor mid-visit — acknowledge once and the
-    // job card records it as given (this repo's house style is soft-gate-and-surface, not
-    // hard-blocking; see CLAUDE.md).
+
     const noReason = rooms.some((r) => {
       const cat = categoryFor(r.category);
       return r.segments.some((s) => adjMissingReason(cat, r, s.adjust));
@@ -2531,11 +2383,7 @@ function JobCardWizard({
         try {
           localStorage.removeItem('md_audit_ps_' + order.pi);
         } catch {}
-        // The audit happened → confirm the OMS SERVICE leg, which is what raises its invoice.
-        // Queues itself for retry on failure; a legacy-PO order has no leg and is skipped.
-        // `order.po` is the row we already loaded — this used to re-read it from Supabase, and
-        // that read resolving null (sbGet answers null on any non-2xx/timeout) looked exactly
-        // like "no leg on this order", so the confirmation was dropped without a trace.
+
         try {
           await confirmServicePerformed(order.po, 'Site audit completed by ' + actingAs.name);
         } catch {}
@@ -2555,7 +2403,7 @@ function JobCardWizard({
       completionWriteRef.current = { audit_ticked: ticked };
       try {
         await sbPatchLong('audit_orders', order.id, { audit_ticked: ticked });
-        // The card is signed and on file — snapshot it before anything can overwrite the slot.
+
         void archiveAuditTicked(order.id, ticked, 'completed');
         hadSignRef.current = true;
         setHadSign(true);

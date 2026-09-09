@@ -24,9 +24,6 @@ interface VariantLocationRow {
 
 const PAGE_SIZE = 30;
 
-/* Store locations that have been removed from display (VariantStoreLocation
-   is_active=false) — soft-deleted rows the normal listings hide. Covers both
-   temporary removals and permanently-discontinued products. */
 export function RemovedList() {
   const [selectedStore, setSelectedStore] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -101,7 +98,7 @@ export function RemovedList() {
 
   return (
     <div className="px-6 py-4">
-      {/* Filters */}
+
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Store</label>
@@ -131,7 +128,6 @@ export function RemovedList() {
         </div>
       </div>
 
-      {/* Table */}
       {loading ? (
         <div className="py-16 text-center text-gray-400">Loading removed locations...</div>
       ) : error ? (

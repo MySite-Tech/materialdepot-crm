@@ -1,10 +1,3 @@
-/* Barrel for the B2B data layer, which lives in lib/b2b/*.
-   Re-exports exactly the surface lib/b2bLeads.ts had, so every existing
-   '@/lib/b2bLeads' import keeps working; pick the module directly in new code.
-
-   Rows live in one Supabase table (`b2b_lead`, keyed by `pipeline`) — rows.ts
-   holds the shared row shape and the meta_data helpers each mapper uses. */
-
 export { B2B_FRESH_START } from './b2b/rows';
 export { fetchB2BData, fetchClients, fetchInboundBoard, fetchKamOrders, fetchOutreachLeads } from './b2b/reads';
 export type { B2BData, InboundBoardPage } from './b2b/reads';

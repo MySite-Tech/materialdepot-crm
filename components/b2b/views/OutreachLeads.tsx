@@ -1,20 +1,5 @@
 'use client';
 
-// ── Outreach Leads ───────────────────────────────────────────────────────────
-// Implements the B2B Outreach Module PRD v1.0. The PRD's own five views (§5)
-// over one dataset, plus a board and a full list:
-//
-//   Today      — meetings scheduled for today, soonest first. The default,
-//                because what a BM opens this tab for is where to be at 11am.
-//   Follow-ups — everything with a next follow-up date, overdue first.
-//   PI Shared / Closed / Lost — the PRD's three outcome views.
-//   Board      — the six §3.4 statuses. Drag to move; a status whose required
-//                field is missing opens a form instead of writing a half status.
-//   List       — the whole field set, filterable and exportable.
-//
-// Field ownership, the status machine, the meeting loop and the gates live in
-// `outreachModel.ts`.
-
 import { useEffect, useMemo, useState } from 'react';
 import { fmtINR, B2B_REPS, type OutreachLead } from '../models/mockData';
 import {
@@ -39,7 +24,6 @@ import {
   type ExportFormat, type ExportScope,
 } from '../ui/exportUtils';
 
-// ── Export: the PRD's field set ──────────────────────────────────────────────
 const EXPORT_HEADERS = [
   'Company', 'Contact person', 'Designation', 'Contact number', 'GST',
   'Segment', 'Lead type', 'Company type', 'BM',
@@ -89,8 +73,6 @@ const gapsFor = (l: OutreachLead) => outreachEnrichmentGaps({
 
 const nowIso = () => new Date().toISOString();
 
-// ── Summary tile (PRD §6) ────────────────────────────────────────────────────
-
 function Tile({ label, value, sub, accent, muted }: {
   label: string; value: string; sub?: string; accent?: string; muted?: boolean;
 }) {
@@ -105,13 +87,6 @@ function Tile({ label, value, sub, accent, muted }: {
     </div>
   );
 }
-
-// ── Move-with-requirements modal ─────────────────────────────────────────────
-//
-// Dragging a card into `Follow up`, `PI Shared` or `Lost` needs a field the PRD
-// makes mandatory. Collected here rather than written half-empty — the same
-// mistake the old Inbound board made, which is how 81 leads reached a follow-up
-// status with a follow-up date on none of them.
 
 function MoveModal({ lead, target, onCancel, onDone }: {
   lead: OutreachLead;
@@ -209,16 +184,6 @@ function MoveModal({ lead, target, onCancel, onDone }: {
   );
 }
 
-// ── Create Lead (PRD §3.1) ───────────────────────────────────────────────────
-//
-// Exactly the PRD's create form, plus the contact number (the Leads tab shows
-// it and every deal-ticket lookup matches on it) and an optional first meeting,
-// because a BM logging a lead in the room has just agreed when to come back.
-//
-// Only the company name blocks. GST is explicitly optional in the PRD and
-// everything else is chased through the enrichment badge — a BM standing in an
-// architect's office must never be stopped from recording the lead.
-
 function CreateLeadModal({ onClose, onCreate, defaultBm }: {
   onClose: () => void;
   onCreate: (lead: OutreachLead) => void;
@@ -272,7 +237,7 @@ function CreateLeadModal({ onClose, onCreate, defaultBm }: {
       selections,
       requirement: requirement.trim() || undefined,
       expectedOrderValue: Number(expectedOrderValue) || undefined,
-      // PRD §3.1: "On creation, the lead defaults to Lead Status: Yet to Meet."
+
       status: 'Yet to Meet',
       statusChangedAt: nowIso(),
       spok: bm,
@@ -383,8 +348,6 @@ function CreateLeadModal({ onClose, onCreate, defaultBm }: {
   );
 }
 
-// ── Board card ───────────────────────────────────────────────────────────────
-
 function LeadCard({ lead, today, onClick, onDragStart }: {
   lead: OutreachLead; today: string; onClick: () => void; onDragStart: () => void;
 }) {
@@ -448,8 +411,6 @@ function LeadCard({ lead, today, onClick, onDragStart }: {
   );
 }
 
-// ── Today: the meetings a BM has to be at (PRD §5, §6) ───────────────────────
-
 function TodayTable({ leads, today, onOpen }: {
   leads: OutreachLead[]; today: string; onOpen: (id: string) => void;
 }) {
@@ -509,8 +470,6 @@ function TodayTable({ leads, today, onOpen }: {
     </div>
   );
 }
-
-// ── Follow-ups, bucketed by urgency ──────────────────────────────────────────
 
 const BUCKET_ORDER: FollowUpBucket[] = ['overdue', 'today', 'upcoming', 'none'];
 const BUCKET_TITLE: Record<FollowUpBucket, string> = {
@@ -603,7 +562,6 @@ function FollowUpTable({ leads, today, onOpen }: {
   );
 }
 
-/** The PRD's PI Shared / Closed / Lost views — one status, one table. */
 function StatusTable({ status, leads, onOpen }: {
   status: OutreachStatus; leads: OutreachLead[]; onOpen: (id: string) => void;
 }) {
@@ -657,8 +615,6 @@ function StatusTable({ status, leads, onOpen }: {
   );
 }
 
-// ── Tab ──────────────────────────────────────────────────────────────────────
-
 const PAGE_SIZE = 50;
 
 export default function OutreachLeads() {
@@ -670,7 +626,6 @@ export default function OutreachLeads() {
   const [moveError, setMoveError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  // Filters
   const [bm, setBm] = useState('all');
   const [status, setStatus] = useState<'all' | OutreachStatus>('all');
   const [companyType, setCompanyType] = useState('all');
@@ -723,7 +678,6 @@ export default function OutreachLeads() {
   const byStatus = (s: OutreachStatus) => filtered.filter((l) => l.status === s);
   const summary = useMemo(() => outreachSummary(filtered, today), [filtered, today]);
 
-  // ── Writes ──
   const applyPatch = async (lead: OutreachLead, patch: Partial<OutreachLead>) => {
     const statusChanged = patch.status !== undefined && patch.status !== lead.status;
     const updated: OutreachLead = {
@@ -733,8 +687,7 @@ export default function OutreachLeads() {
       quoteSharedAt: patch.status === 'Quote Share' && !lead.quoteSharedAt ? nowIso() : lead.quoteSharedAt,
       value: Number(patch.orderValue ?? lead.orderValue) || 0,
     };
-    // Optimistic, then reconciled: a failed write rolls the card back rather
-    // than leaving the board showing a status the database never accepted.
+
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
     const err = await upsertOutreachLead(updated);
     if (err) {
@@ -750,8 +703,7 @@ export default function OutreachLeads() {
     if (!lead || lead.status === target) return;
     setMoveError(null);
     const errs = outreachGateErrors({ status: target, followUpDate: lead.followUpDate, lostReason: lead.lostReason });
-    // Quote Share and Closed have no hard gate but do have things worth asking
-    // for, so they open the form too rather than moving silently.
+
     if (errs.length || target === 'Quote Share' || target === 'Closed' || target === 'PI Shared') {
       setMove({ lead, target });
       return;
@@ -769,7 +721,6 @@ export default function OutreachLeads() {
     }
   };
 
-  // ── Export ──
   const handleExport = async (format: ExportFormat, scope: ExportScope) => {
     if (exporting) return;
     const list = scope === 'all' ? leads : filtered;
@@ -803,7 +754,6 @@ export default function OutreachLeads() {
     [filtered],
   );
 
-  // List view pagination over the filtered set.
   const [listPage, setListPage] = useState(0);
   useEffect(() => { setListPage(0); }, [filtered.length, view]);
   const listPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -818,7 +768,7 @@ export default function OutreachLeads() {
 
   return (
     <div className="p-4 sm:p-6">
-      {/* ── Header ── */}
+
       <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h1 className="text-[19px] font-bold text-gray-900">Outreach</h1>
@@ -838,7 +788,6 @@ export default function OutreachLeads() {
         </div>
       </div>
 
-      {/* ── Summary (PRD §6) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
         <Tile
           label="Today's meetings"
@@ -873,7 +822,6 @@ export default function OutreachLeads() {
         value, which is why it is shown as an estimate and never added to the other.
       </p>
 
-      {/* ── Filters ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4">
         <div className="flex items-end gap-2.5 flex-wrap">
           <div className="flex-1 min-w-[200px]">
@@ -929,7 +877,6 @@ export default function OutreachLeads() {
         </div>
       </div>
 
-      {/* ── View switcher (PRD §5 + board/list) ── */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="flex rounded-md border border-gray-200 overflow-hidden">
           {VIEW_TABS.map((v) => (

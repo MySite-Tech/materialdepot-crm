@@ -1,19 +1,10 @@
 'use client';
 
-/* Modal overlays — port of AddOrderOverlay / KylasOverlay / RectOverlay /
-   AddStaffOverlay from SMInstall.jsx. KylasOverlay is the one with an actual
-   backend change: it calls this CRM's own `/api/site-audit/install-pos`
-   Next.js route (proxying Django's SiteAuditInstallationPOListAPI) instead
-   of the legacy app's `/api/pos` Vercel rewrite — same upstream endpoint,
-   same query params (`type`, `page_size`, `search`), same {results,count}
-   response shape. */
-
 import { useEffect, useRef, useState } from 'react';
 import { sbPatch, sbPost } from '../siteAuditShared';
 import { getToken } from '@/lib/mockApi';
 import type { InstallOrder, SkuType } from './types';
 
-/* ── Add / Edit Order ─────────────────────────────────────────────────── */
 export interface AoState { pi: string; po: string; name: string; phone: string; addr: string; bm: string; delivery: string }
 export interface AoSkuRow { code: string; type: SkuType; name: string }
 
@@ -88,7 +79,6 @@ function Field({ label, children }: { label: React.ReactNode; children: React.Re
   return <div><label className="block text-[11px] font-semibold text-gray-500 mb-1">{label}</label>{children}</div>;
 }
 
-/* ── Kylas / Pending POs picker ───────────────────────────────────────── */
 interface KylasRow {
   po_number: string; po_status: string; delivery_date?: string; created_at?: string; estimate_lead_id?: string;
   customer?: { name?: string; contact?: string }; bm?: { name?: string };
@@ -189,7 +179,6 @@ export function KylasOverlay({ open, orders, onClose, onUse }: { open: boolean; 
   );
 }
 
-/* ── Rectification ────────────────────────────────────────────────────── */
 export function RectOverlay({ order, onClose, reload, toast, attribution }: { order: InstallOrder | null; onClose: () => void; reload: () => Promise<void>; toast: (m: string) => void; attribution: string }) {
   const [issue, setIssue] = useState('');
   const [svcType, setSvcType] = useState<'install' | 'audit'>('install');
@@ -213,8 +202,7 @@ export function RectOverlay({ order, onClose, reload, toast, attribution }: { or
       const rectSvc = { rectification_of: o.pi, issue: issue.trim(), flooring: (o.service && o.service.flooring) || [], wallpaper: (o.service && o.service.wallpaper) || [], wallpanel: (o.service && o.service.wallpanel) || [] };
       const base = {
         pi: newPi.trim(), po: (o.po || []).join(','), skus: o.skus || [], bm: o.bm, customer_name: o.name, phone: o.phone, addr: o.addr,
-        // install_orders has no bm_email column, so an install -> audit rectification has nothing
-        // to copy; ensureAuditOrderOwner resolves it from the enquiry id on the way in.
+
         ...((o as any).bm_email ? { bm_email: (o as any).bm_email } : {}),
         status: 'pending', service: rectSvc, log: [{ t: 'Rectification order for ' + o.pi, d: new Date().toISOString(), by: 'manual', who: attribution }], created_by_email: attribution,
       };
@@ -267,8 +255,3 @@ export function RectOverlay({ order, onClose, reload, toast, attribution }: { or
   );
 }
 
-/* `AddStaffOverlay` used to live here, alongside its own copy of the CRM
-   permission map and its own copy of the profile + CRM-login dual write. It is
-   now `AddFieldStaffModal` in ../StaffModals, shared with the audit dashboard
-   and with Site Audit > Users, so the city requirement and the phone
-   requirement can only be got right (or wrong) in one place. */

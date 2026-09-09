@@ -32,18 +32,6 @@ import {
   mdPdfInstallRoom,
 } from '@/components/site-audit/brand/pdfBrand';
 
-/* Idiomatic React rewrite of material-depot-site's app/src/pages/SiteInstaller.jsx
-   (1283 lines, vanilla DOM/innerHTML SPA). Business logic, status flow, validation
-   rules and Supabase data shapes are ported to match exactly — only the
-   implementation style changes (hooks/state/JSX instead of document.querySelector
-   and innerHTML templates). Identity comes from the `actingAs` prop instead of
-   the original's getSession()/localStorage, everything else (rollupStatus,
-   loadJobs flattening, autoFlip, the read-merge-write status-advance sequence,
-   the debounced/race-guarded job-card autosave, the primary-vs-additional
-   installer finish branch, genPDF/genAuditPDF) is a verbatim port. */
-
-/* ── Types ─────────────────────────────────────────────────────────────── */
-
 type LogEntry = {
   t: string;
   d: string;
@@ -52,15 +40,12 @@ type LogEntry = {
   lat?: number;
   lng?: number;
   arrivalPhoto?: string;
-  /* Arrival recorded with no GPS fix — see the ArrivalCameraModal note. */
+
   locOverride?: boolean;
 };
 
 type SkuLine = { code: string; skuName: string; link: string; qty: string };
 
-/* Flat v2 installation room — installed-detail fields come from the category registry's
-   installFields, so a new product category needs no change here. The legacy
-   {qty,height,width} keys are still read (older records) but never written. */
 type PersistedRoom = {
   v?: number;
   category?: string;
@@ -68,10 +53,10 @@ type PersistedRoom = {
   sku: string;
   fields?: FieldValues;
   photos: string[];
-  /** Legacy single-photo field from older persisted records — reads only. */
+
   photo?: string;
   comments: string;
-  /** Legacy pre-v2 fields — read-only, kept so old job cards still render. */
+
   qty?: string;
   height?: string;
   width?: string;
@@ -83,12 +68,10 @@ type Ratings = { q1: number; q2: number; q3: number; comments: string };
 
 type JobCard = {
   draft?: boolean;
-  /** Set by the PWA's partial-completion save ({partial, rooms, note, partialBy,
-      partialAt}) — rooms done so far, no customer signature yet. */
+
   partial?: boolean;
   rooms: PersistedRoom[];
-  // Ratings are collected via a D+1 COE call now (see components/site-audit/coe-ops), never
-  // on-site — optional only so historical job cards with an old sign.ratings still render.
+
   sign?: { img: string; name: string; ratings?: Ratings; tcCategories?: string[] };
   installerSign?: { img: string; name: string };
 };
@@ -105,12 +88,9 @@ type Job = {
   date: string | null;
   slot: string | null;
   slots: string[];
-  /** What the screen shows — `status` with the display-only autoFlip applied. */
+
   status: string;
-  /** What the DB actually holds for this installer, un-flipped. The stale-write
-      guard compares against THIS: `callpending` 3h before the slot is a screen
-      flip that is never persisted, so comparing `status` blocked every job on
-      its own slot day. */
+
   storedStatus: string;
   sku: SkuLine[];
   auditBy: string | null;
@@ -121,8 +101,6 @@ type Job = {
 
 type ActingAs = { id: string; name: string; email: string };
 
-/* ── Local date helpers (mirrors StoreTeam.jsx's dstr/today pattern used
-   elsewhere in this CRM's Site Audit tab) ────────────────────────────────── */
 function dstr(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -140,7 +118,6 @@ function addDays(base: Date, n: number) {
   return d;
 }
 
-/* ── Business logic (verbatim from SiteInstaller.jsx) ─────────────────────── */
 function itemQtyDisplay(it: any, isWallpaper: boolean): string {
   if (it.sqft) return it.sqft + ' sq.ft' + (isWallpaper ? ' (~' + Math.ceil((parseFloat(it.sqft) || 0) / SQFT_PER_ROLL) + ' rolls)' : '');
   if (isWallpaper && it.rolls) return it.rolls + ' rolls';
@@ -171,15 +148,6 @@ function buildSlots(): Record<string, { label: string; start: number }> {
   return m;
 }
 
-/* A sub-job whose ENTIRE crew has marked itself complete is complete, even though
-   only the primary ever writes `sj.status`. Without this the order stayed at
-   `atsite` while its own timeline read "installation done", and the SM dashboard
-   showed the contradiction (ENQ2026082087114, live on 2026-08-26). Deliberately
-   NOT triggered by one installer finishing: the customer signature is the
-   primary's job and `parentStatus === 'completed'` is what bills the OMS service
-   leg. `partial` and `completed` are left as written — `partial` is a statement
-   that rooms are still outstanding. Mirrors subjobDisplayStatus in
-   install-ops/shared.ts; keep the two in step. */
 function subjobEffectiveStatus(sj: any): string {
   const asgns = Array.isArray(sj && sj.assignments) ? sj.assignments : [];
   if (!asgns.length) return sj.status;
@@ -200,17 +168,6 @@ function rollupStatus(subjobs: any[], fallback: string): string {
   return fallback;
 }
 
-/* The status THIS installer is working against, in the vocabulary the screen
-   uses. loadJobs and the stale-write guard in advanceStatus MUST both derive it
-   from here — they were two hand-rolled derivations before, and every way they
-   disagreed was a permanent hard block ("This job was just updated…" on a job
-   nothing had updated, which no amount of refreshing could clear):
-   - `assigned` is the DB spelling of what these field apps call `scheduled`;
-   - on a shared sub-job only the PRIMARY writes `sj.status`, so an additional
-     installer's own progress lives on their assignment row — and
-     markAdditionalComplete writes it NOWHERE else;
-   - an assignment created before per-assignee status existed has none, so fall
-     back to the sub-job rather than reading it as blank. */
 function statusForInstaller(sj: any, email: string): string {
   const assignments = Array.isArray(sj && sj.assignments) ? sj.assignments : [];
   const mine = assignments.find((a: any) => a && a.installer_email === email);
@@ -228,19 +185,11 @@ const INSTALL_STATUS: Record<string, { label: string; badge: string }> = {
   reschedule: { label: 'To Reschedule', badge: 'bg-red-100 text-red-700' },
   onway: { label: 'On The Way', badge: 'bg-blue-100 text-blue-700' },
   atsite: { label: 'At Site', badge: 'bg-blue-100 text-blue-700' },
-  // Written by Site_Installer_App.html's partial-completion flow in the
-  // material-depot-site PWA against the same table — a sub-job status, not just
-  // the order-level rollup. Missing here, it rendered as a raw 'partial' pill
-  // above a detail screen with no stage card and no buttons at all.
+
   partial: { label: 'Partially Completed', badge: 'bg-teal-100 text-teal-700' },
   completed: { label: 'Completed', badge: 'bg-green-100 text-green-700' },
 };
 
-/* The statuses JobDetailScreen draws a stage card for. Anything else falls
-   through to a self-describing block instead of an empty panel — `created` on a
-   legacy sub-job the SM has since unscheduled lands there today, and these
-   tables are shared with the material-depot-site PWA, which can add a status
-   this port has never heard of (`partial` arrived exactly that way). */
 const INSTALL_STAGES = ['scheduled', 'callpending', 'reschedule', 'onway', 'atsite', 'partial', 'completed'];
 
 const DEFAULT_LOG_MESSAGES: Record<string, string> = {
@@ -250,8 +199,6 @@ const DEFAULT_LOG_MESSAGES: Record<string, string> = {
   atsite: 'Installer arrived at site',
   completed: 'Installation completed',
 };
-
-/* Legacy audit field dicts removed — superseded by MD_CATEGORIES in auditRegistry.ts. */
 
 function slotLabel(id: string | null, slots: Record<string, { label: string; start: number }>): string {
   if (!id) return '—';
@@ -272,8 +219,6 @@ function slotsLabel(j: Job, slots: Record<string, { label: string; start: number
   return slotLabel(j.slot, slots) || '—';
 }
 
-/* The sub-job's own type picks the room's starting category; an unknown type falls back to
-   flooring (same rule as the field app). */
 function categoryForJob(job: Job | null, restore?: Partial<PersistedRoom>): string {
   const t = (restore && (restore.category || (restore as any).type)) || job?.type;
   return t && MD_CATEGORIES[t] ? t : 'flooring';
@@ -316,13 +261,6 @@ function collectRooms(rooms: Room[]): PersistedRoom[] {
     comments: rest.comments || '',
   }));
 }
-
-/* Downscale only — the upload happens separately so the thumbnail can appear immediately (see
-   handleFilesForRoom). On a weak site connection the old upload-then-show order left workers
-   waiting up to ~20s and re-taking photos they had already captured. */
-/* Room-photo capture moved to readCapturedPhoto in siteAuditShared. The local resizeDataUrl that
-   used to live here resolved the ORIGINAL dataURL on a decode failure, which is how HEIC files
-   from an iPhone on "High Efficiency" reached Storage named .jpg and unviewable in the office. */
 
 function compressForPdf(dataUrl: string | null | undefined): Promise<string | null> {
   if (!dataUrl) return Promise.resolve(null);
@@ -373,7 +311,6 @@ function renderSketch(r: any): string | null {
   return c.toDataURL('image/jpeg', 0.85);
 }
 
-/* ── PDF generators (verbatim port of genPDF / genAuditPDF, lines 871-983) ── */
 async function genInstallerPDF(job: Job, installerName: string): Promise<void> {
   await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');
@@ -468,7 +405,6 @@ async function genAuditReportPDF(order: { pi: string; name: string; phone: strin
   doc.save(('SiteAudit_' + (order.name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }
 
-/* ── Small presentational bits ─────────────────────────────────────────── */
 function StatusPill({ status }: { status: string }) {
   const s = INSTALL_STATUS[status] || { label: status, badge: 'bg-gray-100 text-gray-600' };
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${s.badge}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{s.label}</span>;
@@ -501,7 +437,6 @@ function CommentSheet({ open, title, onCancel, onConfirm }: { open: boolean; tit
   );
 }
 
-/* ── Root component ────────────────────────────────────────────────────── */
 export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const SLOTS = useMemo(() => buildSlots(), []);
   const days = useMemo(() => Array.from({ length: 37 }, (_, i) => addDays(today, i - 30)), []);
@@ -536,7 +471,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
 
   const location = useLocationTracking(actingAs.email);
 
-  /* ── Fetch installer_type from profiles at mount (source line 165) ──── */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -551,7 +485,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     return () => { alive = false; };
   }, [actingAs.email]);
 
-  /* ── loadJobs (verbatim flattening, source lines 213-253) ────────────── */
   const loadJobs = useCallback(async () => {
     try {
       const rows = await sbGet('install_orders_slim?select=*&status=not.in.(pending,deliv_ontime,deliv_delayed,deleted)&order=created_at.desc');
@@ -570,7 +503,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
               const isPrimary: boolean = myAssign
                 ? myAssign.primary === true || (!sj.assignments.some((a: any) => a.primary) && sj.assignments.indexOf(myAssign) === 0)
                 : true;
-              // Their OWN status, not the primary's — see statusForInstaller.
+
               const myStatus = statusForInstaller(sj, actingAs.email);
               newJobs.push({
                 id: r.id,
@@ -602,7 +535,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     }
   }, [actingAs.email]);
 
-  /* ── autoFlip (verbatim, source line 268) — display-only, never persisted ── */
   const displayJobs = useMemo<Job[]>(() => {
     const now = new Date();
     return jobs.map((o) => {
@@ -616,8 +548,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         } else return o;
         const start = new Date(today);
         start.setHours(Math.floor(startH), Math.round((startH % 1) * 60), 0, 0);
-        // Only `status` flips; `storedStatus` is spread through untouched so the
-        // stale-write guard still sees what the DB holds.
+
         if (now >= new Date(start.getTime() - 3 * 3600 * 1000)) return { ...o, status: 'callpending' };
       }
       return o;
@@ -629,11 +560,9 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     return displayJobs.find((j) => j.pi + '|' + j.sjId === activeKey) || null;
   }, [activeKey, displayJobs]);
 
-  /* ── Poll + visibility refresh (same pattern as elsewhere in this suite) ── */
   useEffect(() => {
     loadJobs();
-    // Drain any OMS service confirmation that failed earlier (idempotent upstream) — an
-    // unretried failure would leave a finished installation unbilled.
+
     retryQueuedServiceConfirms();
     location.start(null);
     const pollId = setInterval(() => { if (!document.hidden) loadJobs(); }, 30000);
@@ -661,7 +590,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
-  /* ── Day strip auto-centering ─────────────────────────────────────────── */
   const dayStripRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const strip = dayStripRef.current;
@@ -670,12 +598,8 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     if (sel) strip.scrollLeft = Math.max(0, sel.offsetLeft - strip.clientWidth / 2 + sel.offsetWidth / 2);
   }, [selDay]);
 
-  /* ── Status-advance read-merge-write (verbatim, source lines 403-437) ──── */
   const advanceStatus = useCallback(async (job: Job, st: string, msg: string, logOverride?: string | null, extraLog?: Record<string, any>) => {
-    /* `advBusy` is state, so two taps inside one tick both read it as false and
-        both write — one status change, two identical log lines. Live data has
-        person-days with 38 of them on a single order. The ref is the actual
-        lock; the state only drives the disabled styling. */
+
     if (advBusyRef.current) return;
     advBusyRef.current = true;
     setAdvBusy(true);
@@ -688,13 +612,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const subjobs = parent.subjobs || [];
         const sj = subjobs.find((s: any) => s.id === job.sjId);
         if (!sj) { toast('Job not found — please refresh'); return; }
-        // Someone else (an SM rebooking after a reschedule, another assignee)
-        // may have moved this sub-job since it was loaded — writing this
-        // transition on top of that would silently clobber it. Both sides of
-        // the comparison have to come from statusForInstaller against the
-        // *stored* status; deriving the fresh half by hand and comparing it to
-        // the flattened+autoFlipped `job.status` is what made this fire on
-        // jobs nobody had touched.
+
         const curStatus = statusForInstaller(sj, actingAs.email);
         if (curStatus !== job.storedStatus) {
           const label = (INSTALL_STATUS[curStatus] || { label: curStatus }).label;
@@ -715,8 +633,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         freshLog.push({ t: logMsg, d: new Date().toISOString(), by: 'auto', who: actingAs.name, ...(extraLog || {}) });
         const parentStatus = rollupStatus(subjobs, parent.status || 'scheduled');
         await sbPatch('install_orders', job.id, { subjobs, status: parentStatus, log: freshLog });
-        // Whole installation done (not just one sub-job) → confirm the OMS SERVICE leg, which is what
-        // raises its invoice. A partial install must NOT bill, so this is gated on the rollup status.
+
         if (parentStatus === 'completed') {
           try {
             await confirmServicePerformed(parent.po, 'Installation completed by ' + actingAs.name);
@@ -736,26 +653,20 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actingAs.email, actingAs.name, loadJobs, location, toast]);
 
-  /* ── Job-card wizard state (lifted to root so the debounced autosave and
-     race-guard survive navigating back to the detail screen — mirrors the
-     source's persistent module-scope jcJob/jcRooms/_autosaveTimer vars,
-     which never get torn down just because #jcScreen is hidden) ─────────── */
   const jcJobRef = useRef<Job | null>(null);
   const jcSeqRef = useRef(0);
   const jcRoomsRef = useRef<Room[]>([]);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSeqRef = useRef(0);
   const completionWriteRef = useRef<{ subjobs: any[] } | null>(null);
-  /* Set when the sub-job opened already carries a SIGNED job card — see the guard in
-     triggerAutosave. Mirrors `hadSignRef` in SiteAuditorApp. */
+
   const hadSignRef = useRef(false);
   const [hadSign, setHadSign] = useState(false);
 
   const [jcRooms, setJcRooms] = useState<Room[]>([]);
   const [jcStage, setJcStage] = useState<'rooms' | 'review' | 'handoff' | 'tcs' | 'signature' | 'installerSignoff'>('rooms');
   const [signName, setSignName] = useState('');
-  // Customer's uploaded signature URL, captured once they finish signing — the SAME signPadRef
-  // canvas is cleared and reused for the installer's own signature on the next stage.
+
   const [customerSignImg, setCustomerSignImg] = useState<string | null>(null);
   const [installerSignName, setInstallerSignName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'local'>('idle');
@@ -778,9 +689,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
       if (completionWriteRef.current) { setSaveStatus('saved'); return; }
       const curJob = jcJobRef.current;
       if (!curJob || !curJob.id || !curJob.sjId) { setSaveStatus('local'); return; }
-      // `sj.jobcard` is a single mutable slot shared by this draft and the finished card, so a
-      // draft write on a REOPENED card destroys its signatures and every photo. Same failure the
-      // auditor app shipped with; keep edits on-device until a fresh signature is captured.
+
       if (hadSignRef.current) { setSaveStatus('local'); return; }
       try {
         const parentRows = await sbGet('install_orders?id=eq.' + curJob.id + '&select=subjobs');
@@ -788,10 +697,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         if (Array.isArray(parentRows) && parentRows[0]) {
           const subjobs = parentRows[0].subjobs || [];
           const sj = subjobs.find((s: any) => s.id === curJob.sjId);
-          // Keep photos that already reached Storage (a ~120-byte URL); leave out only one still
-          // sitting as base64, which can be multi-MB and would time the draft PATCH out. Dropping
-          // them all meant an installer resuming on another device got their rooms back with every
-          // photo gone, and the next completion write made that permanent.
+
           const draftRooms = collectRooms(jcRoomsRef.current).map((r) => ({
             ...r,
             photos: (r.photos || []).filter((ph: string) => /^https?:/i.test(ph)),
@@ -826,8 +732,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     completionWriteRef.current = null;
     setSaveStatus('idle');
     setJcStage('rooms');
-    // A signed card on file is authoritative and outranks any local draft — restoring the draft
-    // instead is the path on which the autosave guard never learns the card was signed.
+
     const signed = !!(job.jobcard && job.jobcard.sign && !(job.jobcard as any).draft && job.jobcard.rooms?.length);
     hadSignRef.current = signed;
     setHadSign(signed);
@@ -898,11 +803,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
             const myA = sj.assignments.find((a: any) => a.installer_email === actingAs.email);
             if (myA) myA.status = 'completed';
             sj.jobcard = newJobcard;
-            /* If that was the last outstanding assignee, write the conclusion to
-               the sub-job rather than leaving every reader to derive it. Reaching
-               here means the primary has already completed, which only happens
-               through finishInstallation (customer signature) or the SM's own
-               force-complete — so no unsigned job can slip through. */
+
             sj.status = subjobEffectiveStatus(sj);
           } else {
             sj.status = 'completed';
@@ -914,8 +815,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         const parentStatus = rollupStatus(subjobs, parentRows[0].status || 'completed');
         await sbPatch('install_orders', job.id, { subjobs, status: parentStatus, log: freshLog });
         try { localStorage.removeItem('md_install_' + job.pi + '_' + job.sjId); } catch { /* ignore */ }
-        // Whole installation done (not just one sub-job) → confirm the OMS SERVICE leg, which is what
-        // raises its invoice. A partial install must NOT bill, so this is gated on the rollup status.
+
         if (parentStatus === 'completed') {
           try {
             await confirmServicePerformed(parentRows[0].po, 'Installation completed by ' + actingAs.name);
@@ -935,9 +835,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setFinishBusy(false);
   }, [actingAs.email, actingAs.name, loadJobs, toast]);
 
-  // Customer has just signed (still on the 'signature' stage) — export + upload that signature,
-  // clear the pad, and hand off to the installer's own confirmation + signature stage. The SAME
-  // signPadRef canvas is reused, so nothing about finishInstallation's pad-export logic changes.
   const onSignNext = useCallback(async () => {
     if (signPadRef.current!.isEmpty()) { toast("Please take the customer's signature"); return; }
     const rawSig = signPadRef.current!.export();
@@ -985,8 +882,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
         }
         const parentStatus = rollupStatus(subjobs, parentRows[0].status || 'completed');
         await sbPatch('install_orders', job.id, { status: parentStatus, log: newParentLog });
-        // Whole installation done (not just one sub-job) → confirm the OMS SERVICE leg, which is what
-        // raises its invoice. A partial install must NOT bill, so this is gated on the rollup status.
+
         if (parentStatus === 'completed') {
           try {
             await confirmServicePerformed(parentRows[0].po, 'Installation completed by ' + actingAs.name);
@@ -1005,8 +901,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
       setFinishBusy(false);
       return;
     }
-    // The job is already saved above — a PDF failure (jsPDF OOM on a low-end phone, a CORS-tainted
-    // image) must never leave the worker stuck on a disabled "Saving…" button thinking it didn't finish.
+
     try { await genInstallerPDF(job, actingAs.name); } catch (e) { console.error('PDF:', e); }
     await loadJobs();
     setJobCardOpen(false);
@@ -1016,7 +911,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     setFinishBusy(false);
   }, [actingAs.email, actingAs.name, signName, customerSignImg, installerSignName, loadJobs, toast]);
 
-  /* ── Photo handling for job-card rooms ─────────────────────────────────── */
   const swapRoomPhoto = useCallback((roomId: number, from: string, to: string) => {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, photos: r.photos.map((p) => (p === from ? to : p)) } : r)));
   }, [updateRooms]);
@@ -1032,8 +926,7 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   const updateRoomField = useCallback((roomId: number, field: keyof PersistedRoom, value: string) => {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, [field]: value } : r)));
   }, [updateRooms]);
-  // Switching category clears the captured install fields — they belong to the old category's
-  // installFields set (same as the field app).
+
   const updateRoomCategory = useCallback((roomId: number, category: string) => {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, category, fields: {} } : r)));
   }, [updateRooms]);
@@ -1041,8 +934,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     updateRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, fields: { ...(r.fields || {}), [k]: value } } : r)));
   }, [updateRooms]);
 
-  /* Returns the reason a file was refused, so RoomBlock can show it next to the photo strip.
-     An undecodable file is never uploaded — see readCapturedPhoto. */
   const handleFilesForRoom = useCallback(async (roomId: number, files: FileList | null): Promise<string | null> => {
     if (!files || !files.length) return null;
     let err: string | null = null;
@@ -1058,7 +949,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     return err;
   }, [addPhotoToRoom, swapRoomPhoto]);
 
-  /* ── Audit report (read-only), source lines 483-514 ───────────────────── */
   const [auditState, setAuditState] = useState<{ loading: boolean; error: 'none' | 'network' | null; ticked: any; auditorName: string | null; date: string | null }>({ loading: true, error: null, ticked: null, auditorName: null, date: null });
 
   useEffect(() => {
@@ -1080,7 +970,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     return () => { alive = false; };
   }, [auditOpen, activeJob]);
 
-  /* ── Detail actions ─────────────────────────────────────────────────────── */
   const openDetail = useCallback((key: string) => {
     setActiveKey(key);
     setScreen('detail');
@@ -1119,14 +1008,12 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
     advanceStatus(activeJob, 'reschedule', 'Sent to office to reschedule', 'Reschedule requested: ' + reason + (followUp ? ' · Follow-up: ' + followUp : ''));
   }, [activeJob, advanceStatus, rescheduleFollowUp, rescheduleReason, toast]);
 
-  /* ── List derived data ──────────────────────────────────────────────────── */
   const list = useMemo(() => displayJobs.filter((j) => j.date === selDay).sort((a, b) => (a.slot || '').localeCompare(b.slot || '')), [displayJobs, selDay]);
   const todo = useMemo(() => list.filter((j) => j.status !== 'completed'), [list]);
   const done = useMemo(() => list.filter((j) => j.status === 'completed'), [list]);
   const unscheduled = useMemo(() => displayJobs.filter((j) => !j.date && !['completed', 'reschedule'].includes(j.status)), [displayJobs]);
   const overdue = useMemo(() => (selDay === todayStr ? displayJobs.filter((j) => j.date && j.date < todayStr && !['completed', 'reschedule'].includes(j.status)) : []), [displayJobs, selDay, todayStr]);
 
-  /* ── JSX ───────────────────────────────────────────────────────────────── */
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-center justify-between">
@@ -1288,7 +1175,6 @@ export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {
   );
 }
 
-/* ── Job list screen ────────────────────────────────────────────────────── */
 function JobListScreen({
   days, selDay, todayStr, onSelectDay, dayStripRef, jobs, overdue, unscheduled, todo, done, slots, onOpen,
 }: {
@@ -1389,7 +1275,6 @@ function JobCardTile({ job, slots, variant, onClick }: { job: Job; slots: Record
   );
 }
 
-/* ── Job detail screen ──────────────────────────────────────────────────── */
 function JobDetailScreen({
   job, slots, advBusy, pdfBusy, rescheduleOpen, rescheduleReason, rescheduleFollowUp,
   onBack, onToCall, onYes, onReached, onOpenJobCard, onTriggerReschedule, onCancelReschedule,
@@ -1506,7 +1391,7 @@ function JobDetailScreen({
                 <div className="mt-1 text-lg font-bold text-teal-700">Partially completed</div>
                 <p className="mt-2 text-[13px] text-gray-500">Some of this job is done. Resume to add the remaining rooms and finish with the customer.</p>
                 <button onClick={onOpenJobCard} className="mt-3 w-full rounded-xl bg-[#1F3A5F] py-3 text-sm font-bold text-white hover:opacity-90">Resume installation card</button>
-                {/* Same gate as the SM drawer: a partial card is only worth downloading once it has rooms on it. */}
+
                 {(job.jobcard?.rooms || []).length > 0 && (
                   <button disabled={pdfBusy} onClick={onDownloadPdf} className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">{pdfBusy ? 'Building PDF…' : 'Download partial job card'}</button>
                 )}
@@ -1568,7 +1453,6 @@ function JobDetailScreen({
   );
 }
 
-/* ── Audit report overlay (read-only), source lines 483-514 ────────────── */
 function AuditReportOverlay({
   job, state, onClose, onDownload,
 }: {
@@ -1605,8 +1489,7 @@ function AuditReportOverlay({
                   <div className="text-gray-400">Rooms audited</div><div>{rooms.length}</div>
                 </div>
               </div>
-              {/* Shared renderer — v2 segment audits (walls, prerequisites, per-segment photos) and
-                  legacy single-block audits display identically here and in the SM dashboard. */}
+
               {rooms.map((r: any, i: number) => (
                 <AuditRoomCard key={i} room={r} index={i} />
               ))}
@@ -1619,7 +1502,6 @@ function AuditReportOverlay({
   );
 }
 
-/* ── Job card wizard overlay ────────────────────────────────────────────── */
 function RoomBlock({
   room, index, onField, onCategory, onInstallField, onFiles, onOpenScanner, onRemovePhoto, onRemove, onOpenLightbox,
 }: {
@@ -1637,8 +1519,7 @@ function RoomBlock({
   const camRef = useRef<HTMLInputElement | null>(null);
   const galRef = useRef<HTMLInputElement | null>(null);
   const cat = categoryFor(room.category);
-  // A refused photo (format this browser can't decode) is reported here rather than as a toast:
-  // the fix is a camera setting the installer has to go and change before re-shooting.
+
   const [readErr, setReadErr] = useState<string | null>(null);
   const pick = useCallback(async (files: FileList | null) => {
     setReadErr(null);
@@ -1668,8 +1549,6 @@ function RoomBlock({
       <label className="mb-1 block text-[12px] font-semibold">SKU Code <span className="text-red-600">★</span></label>
       <input value={room.sku} onChange={(e) => onField('sku', e.target.value)} placeholder="e.g. SKU code" className="mb-3 w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:border-yellow-400" />
 
-      {/* Installed-detail fields come from the category registry — a new product category adapts
-          automatically, no change needed here. */}
       {(cat.installFields || []).map((f) => (
         <div key={f.k}>
           <label className="mb-1 block text-[12px] font-semibold">{f.label}</label>
@@ -1712,9 +1591,6 @@ function RoomBlock({
   );
 }
 
-// `termsBlock` (from mdInstallTermsBlock) fills what used to be a literal, never-written-in
-// placeholder — the installation terms for this job's category, so the customer is confirming the
-// work was carried out per those terms, not just that it happened.
 function buildInstallTC(termsBlock: string): string {
   return `Material Depot — Customer Acknowledgement
 

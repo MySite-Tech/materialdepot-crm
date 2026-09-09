@@ -15,16 +15,7 @@ import SiteAuditBmView from './SiteAuditBmView';
 import SiteAuditCoeView from './SiteAuditCoeView';
 import SiteAuditBranchManagerView from './SiteAuditBranchManagerView';
 
-/* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
-
-/* Role/person picker mirroring the original Admin Console's Role Viewer. The
-   original embeds an iframe and swaps localStorage to impersonate a login;
-   that trick only worked because Admin.html and the field apps shared an
-   origin. Everything here is one Next.js app now, so 👁 renders the person's
-   dashboard inline (PersonPreview below) instead of reaching for that trick
-   or a same-origin iframe — a real embed, not an impersonation hack. ↗ still
-   opens /site-audit-view in a new tab for anyone who wants their own tab. */
 
 const ROLES: Record<string, { label: string; ico: string }> = {
   service_mgr: { label: 'Service Manager', ico: '📋' },
@@ -47,19 +38,12 @@ function avatarColor(name: string): string {
 
 type Person = { id: string; name: string; email: string; role: string; branch: string | null; contact: string | null };
 
-/* Profiles the CRM sync created carry `crm.<phone>@site-audit.internal` (see
-   syntheticSiteAuditEmail) — an addressable-looking string that is not an
-   address and tells a human nothing. Show the phone it encodes instead, which
-   is what someone scanning this list actually recognises. Real emails are
-   shown as-is. */
 const SYNTHETIC_DOMAIN = '@site-audit.internal';
 function subtitleFor(p: Person): string {
   if (!p.email.endsWith(SYNTHETIC_DOMAIN)) return p.email;
   return p.contact || p.email.slice(0, -SYNTHETIC_DOMAIN.length).replace(/^crm\./, '');
 }
 
-/* Name, phone and email all match — someone looking for a person has whichever
-   of the three is to hand, and the phone is often the only one they know. */
 function matchesQuery(p: Person, q: string): boolean {
   if (!q) return true;
   const needle = q.trim().toLowerCase();
@@ -80,9 +64,7 @@ export default function SiteAuditRoleViewerView() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      /* Whose dashboard an admin can preview. Someone marked as no longer
-         staff has no live dashboard to preview — `pickOwnProfile` refuses
-         them, so listing them here would only offer a dead end. */
+
       const rows = await sbGet('profiles?role=neq.admin&select=id,name,email,role,branch,contact&order=name.asc' + await activeStaffFilter());
       if (!alive) return;
       const map: Record<string, Person[]> = {};
@@ -93,10 +75,6 @@ export default function SiteAuditRoleViewerView() {
     return () => { alive = false; };
   }, []);
 
-  /* A query searches EVERY role, not just the selected one: the whole point of
-     looking someone up is that you do not know which bucket they are in.
-     Selecting a role still narrows, so the two compose. store_staff is excluded
-     because it is a shared kiosk, not a person with a dashboard to preview. */
   const searching = query.trim().length > 0;
   const list = searching
     ? ROLE_ORDER
@@ -147,10 +125,7 @@ export default function SiteAuditRoleViewerView() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         {ROLE_ORDER.map((k) => {
-          // Store Team is a shared per-store kiosk tool, not a per-person login —
-          // it's the public /store-booking route (no CRM auth), same as the
-          // original's public link, so this just opens it instead of feeding
-          // it into the role/person picker below.
+
           if (k === 'store_staff') {
             return (
               <a
@@ -199,9 +174,7 @@ export default function SiteAuditRoleViewerView() {
           <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
             {searching ? 'Results' : ROLES[role!].label} · {list.length} {list.length === 1 ? 'member' : 'members'}
           </div>
-          {/* 87 Business Managers in a full-height grid pushed everything below
-              it (including the inline preview) off-screen. Cap it and let the
-              list scroll inside its own box instead of the page. */}
+
           <div className="max-h-[560px] overflow-y-auto rounded-lg pr-0.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
             {list.map((p) => (
@@ -224,8 +197,7 @@ export default function SiteAuditRoleViewerView() {
                   <div className="text-[13px] font-semibold text-black truncate">{p.name}</div>
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[11px] text-gray-400 truncate">{subtitleFor(p)}</span>
-                    {/* Only when results span roles — inside a single role it
-                        would repeat the heading on all 87 cards. */}
+
                     {searching && !role ? (
                       <span className="shrink-0 rounded-full bg-gray-100 px-1.5 text-[9.5px] font-semibold uppercase tracking-wide text-gray-500">
                         {ROLES[p.role]?.label || p.role}
@@ -280,22 +252,15 @@ export default function SiteAuditRoleViewerView() {
   );
 }
 
-/* The same role → dashboard switch SiteAuditOwnDashboard/site-audit-view use,
-   scoped to the roles Role Viewer actually lists (no admin, no store_staff —
-   that one's a public kiosk link above, not a person preview). */
 function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: boolean }) {
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
   const [smTab, setSmTab] = useState<'audit' | 'install'>('audit');
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
-  /* Same read-only switcher SiteAuditOwnDashboard gives a COE — this preview
-     shouldn't be the one place a COE's Service Manager visibility doesn't
-     reach. */
+
   const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
-  /* Attribution fallback if the previewed profile has no name on file — the
-     CRM viewer's own session name, same pattern as SiteAuditOwnDashboard's
-     crmName / site-audit-view's page-level fallback. */
+
   const [crmName, setCrmName] = useState('');
   useEffect(() => {
     try {
@@ -355,7 +320,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
           ) : smAuditSubTab === 'perf' ? (
             <SiteAuditPerfView city={city} />
           ) : smAuditSubTab === 'analytics' ? (
-            // Previewing the SM dashboard, so it must be gated exactly as the SM's own is.
+
             <SiteAuditAnalyticsView city={city} execOnly />
           ) : (
             <SiteAuditLiveView city={city} />
@@ -382,10 +347,7 @@ function PersonPreviewBody({ person, shadowing }: { person: Person; shadowing: b
       </div>
     );
   }
-  /* `branches={null}` + contact makes the preview resolve the store the same
-     way the real person's session does — from their CRM Branch Access — so an
-     admin sees what they'd actually see, not a guess off the blank
-     profiles.branch column. An explicit branch on the profile still wins. */
+
   if (person.role === 'branch_mgr') return <SiteAuditBranchManagerView branches={person.branch ? [person.branch] : null} contact={person.contact} city={city} />;
   if (person.role === 'site_auditor') return <SiteAuditorApp actingAs={actingAs} />;
   if (person.role === 'installer') return <SiteInstallerApp actingAs={actingAs} />;

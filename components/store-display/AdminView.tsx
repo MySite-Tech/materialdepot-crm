@@ -9,13 +9,6 @@ import {
   deleteLocations,
 } from '../../lib/store-display/displayApi';
 
-/* branch_name must match OrganisationBranch.branch_name EXACTLY. The backend
-   lower-cases and de-spaces the value first, but only to hit a four-entry
-   shortcut map (jpnagar/yelahanka/whitefield/gachibowli); every other branch
-   falls through to `get(branch_name=...)`, which is case-sensitive. The
-   lower-case names below therefore resolved for four ECs and raised "Branch not
-   found" for Kompally, HSR Layout and Basaveshwara Nagar. The stored form is
-   upper-case, and it satisfies both paths. */
 const EC_BRANCHES = [
   { id: '1', name: 'JP NAGAR', branch_name: 'JP NAGAR' },
   { id: '2', name: 'YELAHANKA', branch_name: 'YELAHANKA' },
@@ -31,14 +24,8 @@ const CHANGE_REQ_REFERENCE_URL = 'https://docs.google.com/spreadsheets/d/1jxVcfD
 
 const DISPLAY_TYPES = ['panel_display', 'shelves', 'drawer', 'catalogue', 'flaps', 'slots', 'wall_display', 'floor_stand'];
 
-/* Deliberately NOT a passcode. The previous gate compared against a literal
-   sitting in the client bundle, which anyone could read in devtools, and the
-   delete-locations endpoint never checked it — so it stopped nobody while
-   looking like it did. A typed confirmation is honest about being a slip
-   guard; real enforcement has to live on the server. */
 const DELETE_CONFIRM_WORD = 'DELETE';
 
-// ─── Bulk Upload Section ────────────────────────────────────────────────────
 function BulkUploadSection() {
   const [gsheetUrl, setGsheetUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -103,7 +90,6 @@ function BulkUploadSection() {
   );
 }
 
-// ─── Manage Change Requests ─────────────────────────────────────────────────
 function GsheetAction({ title, description, onSubmit, extraInfo }: { title: string; description: string; onSubmit: (gsheet: string) => Promise<any>; extraInfo?: string }) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -180,7 +166,6 @@ function CancelMovementSection() {
   );
 }
 
-// ─── Get EC Products ────────────────────────────────────────────────────────
 function GetEcProductsSection() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [fetching, setFetching] = useState(false);
@@ -233,7 +218,6 @@ function GetEcProductsSection() {
   );
 }
 
-// ─── Delete Locations ───────────────────────────────────────────────────────
 function DeleteLocationsSection() {
   const [passcode, setPasscode] = useState('');
   const [verified, setVerified] = useState(false);
@@ -298,7 +282,6 @@ function DeleteLocationsSection() {
   );
 }
 
-// ─── Main Admin View ────────────────────────────────────────────────────────
 export function AdminView() {
   return (
     <div className="px-6 py-4">

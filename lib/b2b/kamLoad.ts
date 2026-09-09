@@ -5,19 +5,7 @@ import { TABLE } from './rows';
 import { OutreachLead } from '@/components/b2b/models/mockData';
 import { CRMLeadsStatsBucket, fetchCRMLeadsStats } from '@/lib/mockApi';
 import { supabase } from '@/lib/supabase';
-// ── KAM round-robin load (Inbound PRD §3.5 / Outreach PRD §7) ────────────────
-//
-// How many closed leads each KAM already holds, so the rotation stays balanced
-// across sessions instead of restarting at the top of the roster on every page
-// load.
-//
-// Counted across BOTH lead pipelines, not one. The Outreach PRD says its
-// handoff is "on a round-robin basis — consistent with the Inbound module's
-// handoff logic", and its open question #2 asks whether the two share a pool or
-// rotate separately. Two separate rotations would each pick the KAM who looks
-// least loaded to it alone, so the busiest KAM in the CRM keeps winning one of
-// them; one shared count is the only reading under which "consistent with
-// Inbound" is true. Revisit if KK answers the other way.
+
 export async function fetchKamLoad(): Promise<Record<string, number>> {
   try {
     const { data, error } = await supabase
@@ -38,7 +26,6 @@ export async function fetchKamLoad(): Promise<Record<string, number>> {
   }
 }
 
-/** @deprecated Use `fetchKamLoad` — the rotation is one shared pool. */
 export const fetchInboundKamLoad = fetchKamLoad;
 
 export interface VerticalRep { name: string; contact: string }
@@ -62,9 +49,6 @@ export const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
   ] },
 ];
 
-// One call per vertical carries both buckets: `active` is that vertical's open
-// pipeline, `won` is its realised revenue. Both panels read the same fetch, so
-// pipeline and revenue can never be scoped differently.
 export interface VerticalStats {
   label: string;
   active: CRMLeadsStatsBucket;
@@ -93,9 +77,3 @@ export async function fetchVerticalStats(
   );
 }
 
-/**
- * Outreach leads. A failed load THROWS rather than resolving to `[]`: this feeds
- * a board a BM works from, and "no leads today" is a very different message from
- * "the database did not answer". `fetchB2BData` catches it for the aggregate
- * dashboards, where an empty vertical is survivable.
- */

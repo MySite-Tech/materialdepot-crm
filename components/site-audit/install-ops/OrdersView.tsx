@@ -11,8 +11,6 @@ const FILTER_LABELS: Record<string, string> = {
   unassigned: 'Unassigned installer',
 };
 
-/* A sub-job already has a date but no installer on it — the SM's top
-   priority to call and assign, easy to miss in a plain unsorted list. */
 function isUnassignedScheduled(o: InstallOrder): boolean {
   return (o.subjobs || []).some((sj) => !!sj.date && !sj.installer_email);
 }

@@ -17,7 +17,6 @@ const Q3_OPTIONS = [
   'Sales Experience',
 ];
 
-// ── palette ────────────────────────────────────────────────────────────────
 const C = {
   promoter: '#22C55E',
   passive: '#EAB308',
@@ -30,7 +29,6 @@ const C = {
 
 const PILL = 'flex items-center gap-2 h-9 px-3.5 rounded-full bg-white border border-gray-300 text-gray-800 text-[13px] font-semibold hover:border-gray-400 cursor-pointer whitespace-nowrap';
 
-// ── NPS helpers ───────────────────────────────────────────────────────────────
 type Bucket = 'Promoter' | 'Passive' | 'Detractor';
 const bucketOf = (score: number): Bucket =>
   score >= 9 ? 'Promoter' : score >= 7 ? 'Passive' : 'Detractor';
@@ -51,9 +49,6 @@ const BUCKET_TEXT: Record<Bucket, string> = {
 
 const isSubmitted = (r: NPSRow) => r.status === 'submitted' && r.score != null;
 
-// A customer holds one review, which the tracker attaches to every visit row of
-// theirs. Counting rows would count a repeat visitor once per visit, so anything
-// measuring customers or reviews collapses them to their latest visit first.
 const customerKey = (r: NPSRow) => (r.contact != null ? `c:${r.contact}` : `f:${r.id}`);
 const visitedAt = (r: NPSRow) => `${r.visit_date} ${r.time}`;
 
@@ -99,7 +94,6 @@ function presetRange(key: string): { from: string; to: string } {
   }
 }
 
-// ── NPS math (client-side, from tracker rows) ──────────────────────────────────
 function npsOf(rows: NPSRow[]): number | null {
   const c = uniqueReviews(rows);
   if (!c.length) return null;
@@ -131,9 +125,7 @@ interface Metrics {
   nps: number | null; total: number; responseRate: number | null;
   promoterPct: number | null; detractorPct: number | null; avg: number | null;
 }
-// `base` is already search + BM filtered. responseRate is the conversion of unique
-// footfall into unique reviews, so it is measured over the full base (all footfalls)
-// and ignores the understood/category chips.
+
 function computeMetrics(base: NPSRow[], u: Understood, c: CatFilter): Metrics {
   const analysis = base.filter(r => okUnderstood(r, u) && okCategory(r, c));
   const completed = uniqueReviews(analysis);
@@ -149,7 +141,6 @@ function computeMetrics(base: NPSRow[], u: Understood, c: CatFilter): Metrics {
   };
 }
 
-// ── Small UI atoms ────────────────────────────────────────────────────────────
 function ResultPill({ score }: { score: number | null }) {
   if (score == null) return <span className="text-gray-300 text-[13px]">--</span>;
   const b = bucketOf(score);
@@ -169,7 +160,6 @@ function WaitChip({ visitDate }: { visitDate: string }) {
   return <span className={`inline-block px-2.5 py-1 rounded-full text-[12px] font-semibold ${cls}`}>{label}</span>;
 }
 
-// dir: +1 higher-is-better, -1 higher-is-worse
 function Delta({ cur, prev, unit = '', dir = 1, dec = 0 }: { cur: number | null; prev: number | null; unit?: string; dir?: number; dec?: number }) {
   if (cur == null || prev == null) return <div className="text-[12px] text-gray-400 mt-1.5">no prior period</div>;
   const diff = cur - prev;
@@ -227,7 +217,6 @@ function EmptyChart({ msg }: { msg: string }) {
   return <div className="text-[13px] text-gray-400 text-center py-12">{msg}</div>;
 }
 
-// ── Filter pills ──────────────────────────────────────────────────────────────
 function MultiDropdown({ label, dot, accent, options, selected, onChange, searchable }: {
   label: string; dot: string; accent: string; options: string[]; selected: string[];
   onChange: (v: string[]) => void; searchable?: boolean;
@@ -313,7 +302,6 @@ function DateDropdown({ from, to, preset, onApply }: { from: string; to: string;
   );
 }
 
-// ── Survey modal ──────────────────────────────────────────────────────────────
 function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => void; onSubmit: (payload: { footfall_id: number; score: number | null; understood: boolean | null; better: string[]; remark: string }) => Promise<void> }) {
   const [score, setScore] = useState<number | null>(row.score);
   const [understood, setUnderstood] = useState<boolean | null>(row.understood);
@@ -338,7 +326,7 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[640px] max-h-[90vh] flex flex-col">
-        {/* header */}
+
         <div className="flex items-start justify-between px-6 pt-5 pb-3 shrink-0">
           <div>
             <h2 className="text-[18px] font-bold text-gray-900">NPS Survey</h2>
@@ -347,9 +335,8 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer">×</button>
         </div>
 
-        {/* scrollable body */}
         <div className="overflow-y-auto flex-1">
-        {/* visitor info */}
+
         <div className="px-6 grid grid-cols-2 gap-y-3 gap-x-6 pb-5">
           {[['Name', row.name || '—'], ['Phone', fmtPhone(row.contact)], ['Store', row.store || '—'], ['BM', row.bm || '—'], ['Visit Date', fmtDate(row.visit_date)]].map(([k, v]) => (
             <div key={k}>
@@ -360,7 +347,7 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
         </div>
 
         <div className="px-6 pb-5 space-y-6">
-          {/* Q1 */}
+
           <div>
             <div className="text-[15px] font-bold text-gray-900">Q1. How likely are you to recommend Material Depot to a friend? <span className="text-red-500">*</span></div>
             <div className="text-[12px] text-gray-400 mt-0.5">0 = Not at all likely, 10 = Extremely likely</div>
@@ -381,7 +368,6 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
             {bucket && <div className={`text-[13px] font-semibold mt-2 ${BUCKET_TEXT[bucket]}`}>{bucket} ({bucket === 'Promoter' ? '9–10' : bucket === 'Passive' ? '7–8' : '0–6'})</div>}
           </div>
 
-          {/* Q2 */}
           <div>
             <div className="text-[15px] font-bold text-gray-900">Q2. Did our team understand what you were looking for? <span className="text-red-500">*</span></div>
             <div className="flex gap-3 mt-3">
@@ -396,7 +382,6 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
             </div>
           </div>
 
-          {/* Q3 — only when Q2 = No */}
           {understood === false && (
           <div>
             <div className="text-[15px] font-bold text-gray-900">Q3. What could we have done better? <span className="text-[13px] font-normal text-gray-400">(optional)</span></div>
@@ -420,7 +405,6 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
           </div>
           )}
 
-          {/* Q4 */}
           <div>
             <div className="text-[15px] font-bold text-gray-900">Q4. Any suggestions for us? <span className="text-[13px] font-normal text-gray-400">(optional)</span></div>
             <textarea
@@ -433,7 +417,6 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
         </div>
         </div>
 
-        {/* footer */}
         <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
           <div className="flex items-center gap-2 mr-auto">
             <ResultPill score={score} />
@@ -451,7 +434,6 @@ function SurveyModal({ row, onClose, onSubmit }: { row: NPSRow; onClose: () => v
   );
 }
 
-// ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const esc = (v: string | number) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = [headers.join(','), ...rows.map(r => r.map(esc).join(','))].join('\n');
@@ -463,7 +445,6 @@ function exportCSV(filename: string, headers: string[], rows: (string | number)[
   URL.revokeObjectURL(url);
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
 interface NPSDashboardProps {
   branches?: string[];
   allowedBranches?: string[];
@@ -505,13 +486,10 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     : (allowedBranches.length > 0 ? allowedBranches : undefined);
   const branchKey = (effectiveBranches ?? []).join(',');
 
-  // The window immediately preceding the selected range, of equal length.
   const rangeLen = Math.max(1, daysBetweenISO(from, to) + 1);
   const prevTo = addDaysISO(from, -1);
   const prevFrom = addDaysISO(prevTo, -(rangeLen - 1));
 
-  // Fetch the full row set for the range once per branch/date change; slice /
-  // aggregate everything else (search, BM, understood, category, charts) in the client.
   const loadRows = useCallback(() => {
     setLoading(true);
     fetchNPSTracker({ branches: branchKey ? branchKey.split(',') : undefined, from, to })
@@ -522,7 +500,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
 
   useEffect(() => { loadRows(); }, [loadRows]);
 
-  // Prior-period rows power the KPI deltas; only needed on the Overview tab.
   useEffect(() => {
     if (tab !== 'overview') return;
     let cancelled = false;
@@ -546,7 +523,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     applyDate(presetRange('last30').from, presetRange('last30').to, 'last30');
   };
 
-  // ── derived data ──────────────────────────────────────────────────────────
   const bmOptions = useMemo(() => Array.from(new Set(rows.map(r => r.bm).filter(Boolean))).sort() as string[], [rows]);
 
   const base = useMemo(() => rows.filter(r => okSearch(r, debouncedSearch) && okBm(r, bms)), [rows, debouncedSearch, bms]);
@@ -562,7 +538,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     const map: Record<string, NPSRow[]> = {};
     let guard = 0;
     for (let d = from; d <= to && guard < 400; d = addDaysISO(d, 1), guard++) map[d] = [];
-    // Deduplicate before bucketing, so a repeat visitor lands on one day only.
+
     uniqueReviews(analysis).forEach(r => { if (map[r.visit_date]) map[r.visit_date].push(r); });
     return Object.keys(map).sort().map(d => ({ date: d.slice(5), nps: npsOf(map[d]), responses: map[d].length }));
   }, [analysis, from, to]);
@@ -596,8 +572,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     [storeData],
   );
 
-  // Conversion is unique footfall vs unique reviews, over every footfall in `base`
-  // (pending + submitted), so it deliberately ignores the understood/category chips.
   const storeResponseData = useMemo(() => {
     const names = Array.from(new Set(base.map(r => r.store).filter(Boolean))) as string[];
     return names.map(s => {
@@ -614,7 +588,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     }).sort((a, b) => b.rate - a.rate || b.footfalls - a.footfalls);
   }, [base]);
 
-  // Totalled over `base`, not summed across stores: one customer can visit two.
   const responseTotals = useMemo(() => {
     const footfalls = uniqueCustomers(base).length;
     const responses = uniqueReviews(base).length;
@@ -644,8 +617,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     return { data, hasData: noRows.length > 0, max: Math.max(1, ...data.map(d => d.value)) };
   }, [analysis]);
 
-  // ── tracker rows ────────────────────────────────────────────────────────────
-  // One row per customer on both lists, so customers - reviews = pending holds.
   const pendingRows = useMemo(() => uniqueCustomers(base.filter(r => r.status === 'pending')), [base]);
   const completedRows = useMemo(() => uniqueReviews(analysis), [analysis]);
 
@@ -698,7 +669,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
     }
   };
 
-  // summaries
   const staleCount = pendingRows.filter(r => daysSince(r.visit_date) >= 3).length;
   const avgWait = pendingRows.length ? (pendingRows.reduce((a, r) => a + daysSince(r.visit_date), 0) / pendingRows.length).toFixed(1) : '—';
   const compNps = npsOf(completedRows);
@@ -709,17 +679,9 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
 
   return (
     <div className="px-3 py-4 sm:px-6 sm:py-6 max-w-[1400px] mx-auto">
-      {/* heading */}
+
       <h1 className="text-[22px] font-bold text-gray-900">Store Visit NPS</h1>
-      {/* Named explicitly, because this is not the only NPS in the portal.
-          Site Audit > Analytics and Category Ops > Review scores report
-          FIELD-SERVICE NPS: a different question (Q1, "overall experience" of
-          an audit or installation), asked of a different population, on
-          stricter bands (detractor ≤7, neutral 8 — see NPS_BAND_LABELS in
-          siteAuditShared.ts). Both are correct for what they measure; a
-          reader who assumes there is one company NPS will draw the wrong
-          conclusion from whichever tab they happen to be on, so each says
-          which it is. */}
+
       <p className="text-[13px] text-gray-400 mt-0.5">
         Net Promoter Score from store-visit footfall · {storeLabel} · {fmtDate(from)} – {fmtDate(to)}
       </p>
@@ -728,7 +690,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
         installations on stricter bands — the two are not comparable.
       </p>
 
-      {/* filters */}
       <div className="flex flex-wrap items-center gap-3 mt-4">
         <MultiDropdown label="All Stores" dot="#3B82F6" accent="#3B82F6" options={branchOptions} selected={stores} onChange={setStores} />
         <MultiDropdown label="All BMs" dot={C.bm} accent={C.bm} options={bmOptions} selected={bms} onChange={setBms} searchable />
@@ -748,7 +709,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
         <button onClick={doExport} className="px-4 h-9 rounded-full text-[13px] font-bold text-white bg-gray-900 hover:bg-black cursor-pointer">{exportLabel}</button>
       </div>
 
-      {/* sub-tabs */}
       <div className="flex items-center gap-6 mt-5 border-b border-gray-200">
         {([['tracker', 'Tracker'], ['overview', 'Overview']] as const).map(([k, label]) => (
           <button
@@ -761,10 +721,9 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
         ))}
       </div>
 
-      {/* ── Tracker ── */}
       {tab === 'tracker' && (
         <div className="mt-5">
-          {/* subtabs */}
+
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {([['pending', 'Did not fill NPS', pendingRows.length], ['completed', 'NPS Collected', completedRows.length]] as const).map(([k, label, count]) => (
               <button
@@ -778,7 +737,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
             ))}
           </div>
 
-          {/* summary */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-4 text-[13.5px] text-gray-500">
             {subTab === 'pending' ? (
               <>
@@ -869,10 +827,9 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
         </div>
       )}
 
-      {/* ── Overview ── */}
       {tab === 'overview' && (
         <div className="mt-5 space-y-5">
-          {/* KPI tiles */}
+
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             <KpiTile label="NPS Score" accent={C.line}
               value={cur.nps == null ? '—' : fmtSigned(cur.nps)}
@@ -897,7 +854,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
               delta={<Delta cur={cur.detractorPct} prev={prev.detractorPct} unit=" pp" dir={-1} />} />
           </div>
 
-          {/* Daily trend */}
           <ChartCard title="Daily NPS trend" caption="Net Promoter Score by day, for the selected filters">
             {trendHasData ? (
               <ResponsiveContainer width="100%" height={280}>
@@ -915,7 +871,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
           </ChartCard>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* NPS by store */}
+
             <ChartCard title="NPS by store" caption="Sorted highest to lowest">
               {storeNpsData.length ? (
                 <ResponsiveContainer width="100%" height={chartHeight}>
@@ -934,7 +890,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
               ) : <EmptyChart msg="No data for this selection." />}
             </ChartCard>
 
-            {/* NPS by BM */}
             <ChartCard title="NPS by BM (salesperson)" caption="Top 10 by response volume">
               {bmChartData.length ? (
                 <ResponsiveContainer width="100%" height={Math.max(160, bmChartData.length * 42 + 20)}>
@@ -954,7 +909,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
             </ChartCard>
           </div>
 
-          {/* Response rate by store */}
           <ChartCard title="Conversion by store" caption="Unique customers who reviewed vs unique footfall · sorted highest to lowest">
             {storeResponseData.length ? (
               <div className="overflow-x-auto">
@@ -1001,7 +955,7 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
           </ChartCard>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Score distribution */}
+
             <ChartCard title="Score distribution" caption="Count of responses per 0–10 rating">
               {distHasData ? (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1024,7 +978,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
               </div>
             </ChartCard>
 
-            {/* Reason breakdown */}
             <ChartCard title="Why we didn't understand the requirement" caption="Among responses where Q2 = No">
               {reasonData.hasData ? (
                 <div className="space-y-3 pt-1">
@@ -1042,7 +995,6 @@ export default function NPSDashboard({ branches = [], allowedBranches = [] }: NP
             </ChartCard>
           </div>
 
-          {/* Response mix by store */}
           <ChartCard title="Response mix by store" caption="Share of promoters, passives and detractors per store · sorted by net sentiment">
             {mixData.length ? (
               <>

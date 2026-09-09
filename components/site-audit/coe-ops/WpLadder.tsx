@@ -1,20 +1,10 @@
 'use client';
 
-/* The custom-wallpaper production ladder, read-only.
-
-   Lives in its own module because two very different screens render the same
-   ladder: the Category Ops Executive's Wallpaper tab (which also stamps the
-   next step) and a BM's own order book (which only ever reads it). Keeping one
-   copy is what stops the BM being shown a stage list that has drifted from the
-   one the COE is actually working. Nothing here writes — every mutation stays
-   in Wallpaper.tsx, where the COE's own drawer lives. */
-
 import { fmtLog } from '../siteAuditShared';
 import {
   WP_DECISIONS, wpFmtDur, wpNext, wpRounds, wpSla, wpStageLabel, wpVendor, type WpRow,
 } from './wpTrack';
 
-/* Read-only ladder — TSX port of md-wp-track.js's mdWpLadderHtml. */
 export default function WpLadder({ row }: { row: WpRow }) {
   const v = wpVendor(row.vendor);
   const rounds = wpRounds(row);

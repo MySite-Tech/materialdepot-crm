@@ -34,28 +34,17 @@ export default function Insights({ orders, installByPhone, wpRows }: {
       .map((r) => ({ r, next: wpNext(r), sla: wpSla(r, now), bucket: wpBucket(r, now) }));
   }, [wpRows, from, to]);
 
-  // --- conversion funnel ---
   const nAudits = A.length;
   const nReviewed = A.filter((r) => r.cps.find((c) => c.k === 'd1' && c.state === 'done')).length;
   const nPlaced = A.filter((r) => r.placed).length;
   const nLost = A.filter((r) => r.o.coeTrack.result === 'lost').length;
-  // Counted directly rather than as nAudits - nPlaced - nLost: a row can be
-  // both order-placed and marked lost (the client ordered, then the COE closed
-  // it out), which double-subtracts and can drive the tile negative.
+
   const nOpen = A.filter((r) => !r.placed && r.o.coeTrack.result !== 'lost').length;
   const nChasePending = A.filter((r) => r.bucket === 'overdue' || r.bucket === 'today').length;
 
-  /* --- production funnel: how many of the tracked POs ever reached each step ---
-     Reads through wpStageAt, NOT row.stages[k]: the four render/approval steps
-     are stored per round inside rounds[], so a raw stages[] lookup finds
-     nothing for them and the funnel reported them as never reached. That
-     understated "Approved by client" by 19 of 81 POs and drew a 19-order
-     cliff at client approval that never happened — in the one tab whose whole
-     job is locating where things really stall. */
   const reached = (k: string) => W.filter((x) => !!wpStageAt(x.r, k) || wpEverReached(x.r, k)).length;
   const prodFunnel = WP_STAGES.map((s) => ({ s, n: reached(s.k) }));
 
-  // --- per-stage time + breach, split by vendor ---
   const durs = useMemo(() => { const out: Array<{ k: string; hours: number; vendor: string }> = []; W.forEach((x) => wpDurations(x.r).forEach((d) => out.push(d))); return out; }, [W]);
   const stageStats = WP_STAGES.map((s) => {
     const all = durs.filter((d) => d.k === s.k);
@@ -71,7 +60,6 @@ export default function Insights({ orders, installByPhone, wpRows }: {
   });
   const activeVendors = WP_VENDORS.filter((v) => stageStats.some((s) => s.byV[v.k]));
 
-  // --- conversion cut by a chosen dimension ---
   function cut(keyFn: (r: FollowupRow) => string | null | undefined, label: string) {
     const g = new Map<string, { k: string; tot: number; conv: number; chase: number }>();
     A.forEach((r) => {
@@ -193,9 +181,7 @@ function FunnelBars({ steps, total }: { steps: Array<{ l: string; n: number }>; 
       {steps.map((s, i) => {
         const w = total ? Math.max(2, Math.round((s.n / total) * 100)) : 0;
         const prev = i ? steps[i - 1].n : null;
-        // A later step can legitimately show MORE rows than the one before it
-        // (back-filled data, a step never explicitly stamped), and "↓ -3 lost
-        // here" reads as a bug. Only report a real decrease.
+
         const drop = prev != null && prev > s.n ? prev - s.n : null;
         return (
           <div key={s.l} className="mb-2.5">

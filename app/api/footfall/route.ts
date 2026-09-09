@@ -2,12 +2,6 @@ import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Live walk-ins bucketed by IST date + 2-hour slot for a branch/date window.
-// Reuses the existing Django `footfall-record/` list API (currently AllowAny) —
-// we page through the branch/date-scoped records here and bucket into slots (the
-// "frontend" does the bucketing). Always returns { buckets } so the UI degrades
-// gracefully on any upstream issue.
-// Same backend host the rest of the CRM talks to (lib/mockApi.ts).
 const MD_API_BASE = "https://api-dev2.materialdepot.in/apiV1";
 
 const SLOTS: { key: string; startH: number; endH: number }[] = [
@@ -19,7 +13,6 @@ const SLOTS: { key: string; startH: number; endH: number }[] = [
   { key: "s6", startH: 20, endH: 21 },
 ];
 
-// Extract IST calendar date (YYYY-MM-DD) + hour from a UTC timestamp.
 const IST_FMT = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",
   year: "numeric",

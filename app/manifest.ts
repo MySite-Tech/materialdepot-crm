@@ -1,15 +1,5 @@
 import type { MetadataRoute } from 'next';
 
-/* Served by Next at /manifest.webmanifest. `display: standalone` is the point
-   of the exercise: the store tablet running /store-booking and the auditors'
-   and installers' phones get an installed icon and a full-screen app with no
-   URL bar to mistype.
-
-   `start_url` is the root rather than a tab: which view someone lands on is
-   decided by their role (app/App.tsx), not by the launcher. The two icon
-   `purpose`s are both required — Android masks an "any" icon into whatever
-   shape the launcher uses, cropping a transparent logo badly, so `maskable`
-   carries its own padded, solid-background version. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'MaterialDepot CRM',

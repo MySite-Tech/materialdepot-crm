@@ -1,9 +1,5 @@
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// CRM Dashboard aggregates from backend
-// ---------------------------------------------------------------------------
-
 export interface DashboardStatusDatum { status: string; count: number; value: number }
 export interface DashboardBranchStatus {
   branch: string;

@@ -1,6 +1,3 @@
-/* Django backend transport: token storage, refresh-on-401, envelope
-   unwrapping. Every CRM read/write in lib/api/* goes through mdFetch. */
-
 export const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
 
 const TOKEN_KEY = 'jwt_token';
@@ -89,7 +86,6 @@ function unwrapEnvelope(body: any): any {
   return body;
 }
 
-// Shared fetch helpers
 export async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
   const token = getToken();
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
@@ -107,9 +103,7 @@ export async function mdFetch(path: string, init?: RequestInit, retried = false)
     throw new Error('You do not have access to this resource.');
   }
   if (!res.ok) {
-    // Surface the backend's own message when it sends one — these APIs answer
-    // {status:false, data:"<reason>"} on 400, and a bare "API error: 400"
-    // hides useful validation text (e.g. "Insufficient quantity ...").
+
     let msg = `API error: ${res.status}`;
     try {
       const j = JSON.parse(await res.text());

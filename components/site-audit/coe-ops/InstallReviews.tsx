@@ -1,11 +1,5 @@
 'use client';
 
-/* D+1 installation review calls (note 117 in the sibling material-depot-site repo) — one
-   checkpoint per COMPLETED SUB-JOB, not per order, since a mixed order's flooring and wallpaper
-   sub-jobs complete (and so review) independently. Structural mirror of Followups.tsx's audit
-   call-queue UI; every historical "Overdue" on day one is expected, not a bug — the same thing
-   happened when the audit follow-up queue first shipped. */
-
 import { useMemo, useState } from 'react';
 import { fmtDateA, fmtLog } from '../siteAuditShared';
 import {
@@ -30,18 +24,12 @@ export default function InstallReviews({ installs, who, whoEmail, onChanged }: {
   const [preset, setPreset] = useState<DatePresetKey>('all');
   const [range, setRange] = useState<DateRange>(() => presetRange('all'));
   const [cats, setCats] = useState<string[]>([]);
-  // Keyed by "order id · sub-job id" — a sub-job id alone isn't guaranteed unique across orders.
+
   const [openKey, setOpenKey] = useState<string | null>(null);
   const frozen = useFrozenBar();
 
   const everyRow = useMemo(() => installReviewRows(installs), [installs]);
 
-  /* Filtered on the sub-job's COMPLETION date, not the order's creation date:
-     the D+1 review is owed off the day the work finished, so that is the date
-     every count and every due-date on this tab is derived from, and filtering
-     on anything else would put a row outside the window its own "overdue"
-     badge was computed in. Same filter-order rule as the audit queue — date and
-     category before the buckets, search after. */
   const all = useMemo(
     () => everyRow.filter((r) => inDateRange(r.completedOn, range) && matchesCategory([subjobCategory(r.sj, r.order)], cats)),
     [everyRow, range, cats],
@@ -177,12 +165,9 @@ function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; 
   const [msg, setMsg] = useState('');
   const [sj, setSj] = useState<CoeSubjob>(row.sj);
   const calls = (sj.coe_review?.calls || []).slice().sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
-  // The shared vocabulary, so the drawer heading, the row pill and the filter
-  // all name this sub-job's material identically.
+
   const catLabel = subjobCategory(sj, row.order);
 
-  /* Returns whether the write landed — the ratings projection below must not
-     fire for a call that failed to save. Mirrors Followups.tsx's run(). */
   async function run(mutate: (s: CoeSubjob) => CoeSubjob, logText: string, onOk?: string): Promise<boolean> {
     try {
       await patchInstallReview(String(row.order.id), sj.id, mutate, logText, who);
@@ -228,9 +213,6 @@ function ReviewDrawer({ row, who, whoEmail, onClose }: { row: Row; who: string; 
             <LogInstallCallForm order={row.order} sj={sj} who={who} whoEmail={whoEmail} run={run} />
           </Sec>
 
-          {/* Same panel as the audit queue's drawer, anchored on the day this
-              sub-job finished rather than on an audit date: a review call is
-              also the moment to see what else the client has in a cart. */}
           <Sec title="All carts on this number">
             <ClientCarts phone={row.order.phone} anchorDate={row.completedOn} anchorLabel="installation" />
           </Sec>
@@ -262,8 +244,6 @@ function LogInstallCallForm({ order, sj, who, whoEmail, run }: { order: CoeInsta
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Install has exactly one checkpoint, so — unlike the audit side — no stage/who gating is
-  // needed beyond "did we actually reach the client."
   const needsRatings = outcome === 'reached';
 
   async function save() {
@@ -273,10 +253,7 @@ function LogInstallCallForm({ order, sj, who, whoEmail, run }: { order: CoeInsta
     setBusy(true);
     const ratings = needsRatings ? { q1, q2, q3 } : undefined;
     const catLabel = subjobCategory(sj, order);
-    // `by` is the COE who dialled — never the installer being rated (that goes
-    // on the rating's staff_email). Same stamp material-depot-site's
-    // COE_Dashboard writes into this jsonb; without it a call logged from the
-    // CRM can't be attributed to anyone.
+
     const by = { email: whoEmail || undefined, name: who };
     const saved = await run((s) => {
       s.coe_review = s.coe_review || {};
@@ -299,8 +276,7 @@ function LogInstallCallForm({ order, sj, who, whoEmail, run }: { order: CoeInsta
           customerName: order.name, customerPhone: order.phone,
         });
       } catch (e: any) {
-        /* Saved on the call, missing from analytics only — see the identical
-           note in Followups.tsx. Never swallow this into console.error. */
+
         setErr('Call saved with the scores — but writing them to the analytics table failed (' + (e?.message || 'unknown error')
           + '). Nothing is lost: push it from the ⭐ Review scores tab.');
         setBusy(false);

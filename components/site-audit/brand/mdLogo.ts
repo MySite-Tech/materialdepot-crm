@@ -1,12 +1,3 @@
-/* Material Depot wordmark, inlined from the storefront's own asset
-   (https://materialdepot.com/_next/static/media/main_logo.7602b741.svg) so the CRM's job-card PDFs
-   carry the real logo without a runtime network fetch — that host sends no CORS header, so fetching
-   it in the browser would fail and rasterising it would taint the canvas.
-
-   jsPDF cannot place an SVG, so loadBrandLogo() rasterises it to a PNG data URL once per session
-   and caches the result. Callers await it before generating a PDF; if rasterisation fails the
-   header falls back to a plain text wordmark. */
-
 export const MD_LOGO_W = 256;
 export const MD_LOGO_H = 66;
 
@@ -29,7 +20,6 @@ const RASTER_SCALE = 4;
 let logoPng: string | null = null;
 let logoPending: Promise<string | null> | null = null;
 
-/* Rasterises the wordmark to a white-background PNG data URL. Resolves null on any failure. */
 export function loadBrandLogo(): Promise<string | null> {
   if (logoPng) return Promise.resolve(logoPng);
   if (logoPending) return logoPending;
@@ -60,7 +50,6 @@ export function loadBrandLogo(): Promise<string | null> {
   return logoPending;
 }
 
-/* Synchronous accessor for the already-rasterised logo (null until loadBrandLogo() resolves). */
 export function brandLogoPng(): string | null {
   return logoPng;
 }

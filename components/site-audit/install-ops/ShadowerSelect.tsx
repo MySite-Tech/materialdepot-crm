@@ -1,15 +1,5 @@
 'use client';
 
-/* Searchable "Shadowed by" multiselect — React port of the shsel widget in
-   material-depot-site's SM_Install_Dashboard / SM_Audit_Dashboard.
-
-   The pool is EVERYONE registered (any role can shadow any job) minus store
-   staff, whose kiosk app has no login session and therefore no personal
-   shadow schedule. Kept entirely separate from the installer/auditor pickers
-   so it can never touch capacity or conflict logic — a shadower only
-   observes. Multiple shadowers per job are allowed; they persist comma-joined
-   in the existing shadower_email / shadower_name fields. */
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Shadower } from '../siteAuditShared';
 
@@ -51,9 +41,6 @@ export default function ShadowerSelect({
 
   const selected = useMemo(() => new Map(value.map((s) => [s.email, s.name])), [value]);
 
-  /* Anyone already saved as a shadower stays listed even if they've since
-     been deleted from profiles, so an existing selection is never silently
-     dropped by a save. Current picks float to the top. */
   const pool = useMemo(() => {
     const out: ShadowerOption[] = options.slice();
     value.forEach((s) => { if (!out.some((p) => p.email === s.email)) out.push({ email: s.email, name: s.name }); });

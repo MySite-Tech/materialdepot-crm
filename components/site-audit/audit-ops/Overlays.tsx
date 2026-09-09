@@ -1,10 +1,5 @@
 'use client';
 
-/* Add Order / Pending POs / Raise Rectification / Add Staff — ports of the four
-   modals in SM_Audit_Dashboard.html. Pending POs calls this CRM's own
-   /api/site-audit/install-pos route (the Django SiteAuditInstallationPOListAPI)
-   with type=site_audit, same as the legacy app's /api/pos rewrite. */
-
 import { useEffect, useRef, useState } from 'react';
 import { CITIES, sbGet, sbPatch, sbPost } from '../siteAuditShared';
 import { getToken } from '@/lib/mockApi';
@@ -31,7 +26,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><label className="mb-1 block text-[11px] font-semibold text-gray-500">{label}</label>{children}</div>;
 }
 
-/* ── Add order ────────────────────────────────────────────────────────── */
 export interface AoState { pi: string; po: string; name: string; phone: string; addr: string; bm: string; city: string }
 export const EMPTY_AO: AoState = { pi: '', po: '', name: '', phone: '', addr: '', bm: '', city: CITIES[0] };
 
@@ -70,8 +64,6 @@ export function AddOrderOverlay({
     const skus = skuText.trim() ? skuText.split(',').map((s) => s.trim()).filter(Boolean).map((c) => ({ c, n: c, audit: false })) : [];
     skus.push({ c: AUDIT_SKU, n: 'Site Audit', audit: true });
 
-    // Auto-detect the audited categories from the SKU codes when the boxes
-    // weren't ticked manually — same heuristics as the source.
     const up = skuText.toUpperCase();
     const ticked: string[] = [];
     if (ticks.fl || up.includes('WF-') || up.includes('FLOOR')) ticked.push('Wooden Flooring');
@@ -92,8 +84,7 @@ export function AddOrderOverlay({
 
     setBusy(true);
     try {
-      // A unique constraint on `pi` blocks re-inserting even a deleted row, so
-      // update in place when one already exists.
+
       const existing = await sbGet('audit_orders?select=id&pi=eq.' + encodeURIComponent(pi) + '&limit=1').catch(() => []);
       const id = Array.isArray(existing) && existing.length ? existing[0].id : null;
       if (id) await sbPatch('audit_orders', String(id), payload);
@@ -152,7 +143,6 @@ export function AddOrderOverlay({
   );
 }
 
-/* ── Pending POs (backend import) ─────────────────────────────────────── */
 export function KylasOverlay({
   open, orders, onClose, onUse,
 }: {
@@ -236,7 +226,6 @@ export function KylasOverlay({
   );
 }
 
-/* ── Raise rectification ──────────────────────────────────────────────── */
 export function RectOverlay({
   order, attribution, onClose, onSaved, toast,
 }: {
@@ -268,8 +257,7 @@ function RectForm({
       const rectSvc = { rectification_of: o.pi, issue: issue.trim(), flooring: o.service?.flooring || [], wallpaper: o.service?.wallpaper || [] };
       const base: Record<string, any> = {
         pi: newPi.trim(), po: (o.po || []).join(','), skus: o.skus || [], bm: o.bm,
-        // Carry the owner across: a rectification belongs to whoever owned the original. Without
-        // this the clone lands unattributed even though the parent was linked.
+
         ...((o as any).bm_email ? { bm_email: (o as any).bm_email } : {}),
         customer_name: o.name, phone: o.phone, addr: o.addr, status: 'pending', service: rectSvc,
         log: [{ t: 'Rectification order for ' + o.pi, d: new Date().toISOString(), by: 'manual' }],
@@ -309,8 +297,3 @@ function RectForm({
   );
 }
 
-/* `AddAuditorOverlay` used to live here: its own form, its own validation and
-   its own two-of-four copy of the CRM permission map, which is why an SM in
-   the audit console could add an auditor but not an installer. It is now
-   `AddFieldStaffModal` in ../StaffModals, shared with the install dashboard
-   and with Site Audit > Users. */

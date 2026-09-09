@@ -1,31 +1,3 @@
-/* Pulling site-audit and installation jobs in from the backend without anyone
-   clicking.
-
-   Both kinds of job exist in the Django/OMS world the moment the order is placed
-   (SiteAuditInstallationPOListAPI serves each as a SERVICE stage), but the CRM's
-   own tables are only ever written by hand: until someone opens Pending POs and
-   imports the row, the job is invisible to Job Overview, to the scheduler and to
-   the auditor's / installer's app. That gap is measured in hours —
-   ENQ2026082187393 (audit) and ENQ2026082187266 (installation) both sat
-   unimported because the last manual pass ran before the order was placed.
-
-   So the reconcile runs on load instead: fetch what the backend has, diff it
-   against the CRM table's `pi`, insert what is missing. The Pending POs modals
-   stay exactly as they are — they are the manual fallback and the place to fix a
-   row up before saving. Rows created here carry
-   `created_by_email: AUTO_ATTRIBUTION` so an operator can tell an auto-import
-   from a human one in the log.
-
-   The diff reads EVERY pi, deleted rows included: a deleted order is a decision
-   ("not a real job"), and re-inserting it on the next page load would be the
-   worst possible behaviour. `pi` is also uniquely constrained, so two tabs racing
-   the same insert ends with one row and one ignored 409.
-
-   What is deliberately NOT automated: everything after the row exists. Slots,
-   auditor/installer assignment and `subjobs` planning stay human — the manual
-   flow leaves `subjobs` null too, so an auto-imported order lands in exactly the
-   state a hand-imported one does, at Pending, waiting to be scheduled. */
-
 import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPost, syntheticSiteAuditEmail } from '../siteAuditShared';
 import { autoLinkBmsFromRows } from './resolveBmFromBackend';
 import { AUDIT_SKU } from '../audit-ops/shared';
@@ -35,11 +7,6 @@ import { getToken } from '@/lib/mockApi';
 
 export const AUTO_ATTRIBUTION = 'Auto-import (backend)';
 
-/* The backend list is ordered newest-first and only its first page is read, but
-   that page still reaches back weeks — and the CRM holds far fewer orders than
-   the endpoint has in scope, most of the difference being pre-CRM history nobody
-   wants resurrected into Pending. An age cutoff keeps the reconcile to jobs that
-   are actually live work; anything older is still one click away in Pending POs. */
 const MAX_AGE_DAYS = 30;
 
 const PAGE_SIZE = 200;
@@ -50,8 +17,7 @@ type BackendRow = {
   po_number?: string;
   stage_id?: number;
   sales_order_id?: number;
-  /* Derived OMS stage status ('held' while the leg waits on someone confirming the work was
-     performed) — what `confirmCompletedJobs` diffs the CRM's own status against. */
+
   stage_status?: string | null;
   delivery_date?: string | null;
   customer?: { name?: string; contact?: number | string } | null;
@@ -65,16 +31,6 @@ function cityOfRow(r: BackendRow): string {
   return CITIES.find((known) => known.toLowerCase() === c.trim().toLowerCase()) || CITIES[0];
 }
 
-/* The goods the job is about, without the service line — that one is the job
-   itself and is already represented by the AUDIT_SKU / INSTALL_SKU marker both
-   forms append, so passing it through as a SKU too would show the installer a
-   phantom material to fit.
-
-   `is_service` is the authority (the backend sets it from `Variant.is_service`);
-   the handle prefix is the fallback for a row serialised before the endpoint
-   started sending the flag, and for legacy PO rows. A row that predates the
-   backend sending the ordered goods at all yields nothing here — the order still
-   imports, it just needs its SKUs typed in, exactly as a manual import does. */
 function orderedSkus(r: BackendRow): Array<{ handle: string; name: string; category: string }> {
   return (r.skus || [])
     .filter((s) => s.variant_handle && s.is_service !== true && !/^installation-/.test(String(s.variant_handle)))
@@ -85,9 +41,6 @@ function orderedSkus(r: BackendRow): Array<{ handle: string; name: string; categ
     }));
 }
 
-/* Everything the row says about itself, service line included — the service
-   handle is the only place the trade shows up when there are no goods SKUs
-   ('installation-00024-customised-wallpaper-…', '…-woonden-flooring-…'). */
 function handleText(r: BackendRow): string {
   return (r.skus || [])
     .map((s) => [s.variant_handle, s.product_name, s.category_name].filter(Boolean).join(' '))
@@ -96,14 +49,10 @@ function handleText(r: BackendRow): string {
 
 type BmIndex = Map<string, string>;
 
-/* The backend sends the BM's contact number (_site_audit_serialize_bm), which
-   fetchBmEmailsByPhone resolves to a BM account. No match ⇒ `bm_email` stays
-   unset and the row is linkable by hand in Users, exactly as before. */
 function bmEmailFor(r: BackendRow, bms: BmIndex): string | null {
   const key = phoneKey(r.bm && r.bm.contact != null ? String(r.bm.contact) : '');
   if (!key) return null;
-  // The account's own address when it exists, else the synthetic one that
-  // encodes this phone — the number is what attribution compares either way.
+
   return bms.get(key) || syntheticSiteAuditEmail(key);
 }
 
@@ -122,9 +71,6 @@ function common(r: BackendRow, now: string, note: string): Record<string, any> {
   };
 }
 
-/* Same category heuristics the manual Add Order form applies to its SKU text
-   (audit-ops/Overlays.tsx) — the ticks are what the auditor's app keys its
-   measurement forms off, so an auto-imported row has to arrive with them. */
 function tickedCategories(text: string): string[] {
   const up = text.toUpperCase();
   const ticked: string[] = [];
@@ -139,8 +85,7 @@ function auditPayload(r: BackendRow, now: string, bms: BmIndex): Record<string, 
   const ordered = orderedSkus(r);
   const skus: Array<Record<string, any>> = ordered.map((s) => ({ c: s.handle, n: s.name, audit: false }));
   skus.push({ c: AUDIT_SKU, n: 'Site Audit', audit: true });
-  /* Only on the audit payload: `install_orders` has no `bm_email` column at
-     all, and PostgREST rejects the WHOLE insert on an unknown column. */
+
   const bmEmail = bmEmailFor(r, bms);
   return {
     ...common(r, now, 'Audit order imported automatically from the backend'),
@@ -150,12 +95,6 @@ function auditPayload(r: BackendRow, now: string, bms: BmIndex): Record<string, 
   };
 }
 
-/* Which trade a line belongs to, or null when nothing in it says. Deliberately
-   positive-match only: the endpoint reports every product on the sales order, and
-   an order can carry things no installer touches (a napkin ring and a soap dish
-   rode along with ENQ2026082187214's SPC floor). Defaulting the unknowns to
-   flooring the way the form's own guess does would list those as material to
-   fit. */
 function tradeOf(s: { handle: string; name: string; category: string }): string | null {
   const hay = (s.name + ' ' + s.category + ' ' + s.handle).toLowerCase();
   if (/panel|wpc|charcoal/.test(hay)) return 'wallpanel';
@@ -164,10 +103,6 @@ function tradeOf(s: { handle: string; name: string; category: string }): string 
   return null;
 }
 
-/* The trade the SERVICE line is for — 'installation-00030-woonden-flooring-…',
-   '…-standard-wall-paper-installation-…'. This is what the goods are filtered
-   against, so an install order lists the floor and its profiles but not the
-   bathroom fittings that shared the order. */
 function serviceTrade(r: BackendRow): string | null {
   for (const s of r.skus || []) {
     const handle = String(s.variant_handle || '');
@@ -193,18 +128,13 @@ function installPayload(r: BackendRow, now: string, _bms: BmIndex): Record<strin
     delivery_date: r.delivery_date || null,
     original_delivery_date: r.delivery_date || null,
     custom_wp: custom,
-    /* Explicit, because the column defaults to `[]` and an empty array is
-       TRUTHY: `isSplit`, the drawer's sub-job section and the sub-jobs column all
-       branch on `o.subjobs` and would read a planned-but-empty order instead of
-       an unplanned one. Hand-made rows carry null; so must these. */
+
     subjobs: null,
   };
 }
 
 type Kind = {
-  /* `type` param the backend list is filtered by, and the CRM table its rows
-     land in — the only two things that differ between the audit and install
-     reconciles besides the payload shape. */
+
   param: 'site_audit' | 'installation';
   table: 'audit_orders' | 'install_orders';
   payload: (r: BackendRow, now: string, bms: BmIndex) => Record<string, any>;
@@ -220,31 +150,13 @@ async function fetchBackendRows(kind: Kind): Promise<BackendRow[]> {
   });
   const data = await res.json().catch(() => null);
   if (!data || data.error || !Array.isArray(data.results)) {
-    /* Silence here reads exactly like "the backend has nothing to import", which
-       is the wrong conclusion to draw from a proxy error. Say so instead of
-       importing nothing quietly. */
+
     console.warn('[site-audit] auto-import skipped:', (data && data.error) || `HTTP ${res.status}`);
     return [];
   }
   return data.results;
 }
 
-/* The other half of the reconcile: telling OMS about work the CRM already considers done.
-
-   A SERVICE leg is HELD until someone confirms the work happened, and that confirmation is what
-   raises the invoice — so a confirmation that never lands is an order that never bills. It rode
-   entirely on one best-effort call from the auditor's / installer's browser at the moment they hit
-   complete, with a localStorage queue that only drains on app load; between 2026-08-21 and 09-01
-   that dropped 51 completed jobs, every one of them an unraised invoice.
-
-   This is the backstop, and it needs nothing new: the backend list already reports `stage_id` and
-   `stage_status` per leg, the CRM table already holds the job's own status, and this reconcile
-   already has both in hand. Anything the field app missed gets picked up the next time an ops view
-   loads. Idempotent upstream — a second confirmation records nothing new and cannot double-bill. */
-/* A redo/re-visit is a SEPARATE CRM row whose `pi` is the lead with a suffix — 'ENQ…-R',
-   'ENQ… - R', 'ENQ…-1'. It is the same enquiry and the same service leg, and a redo only exists
-   because the work was done, so it counts as completion for the leg the backend reports under the
-   bare lead id. Lead ids carry no internal dash, so this only ever strips a suffix. */
 function leadKey(pi: unknown): string {
   return String(pi).trim().replace(/\s*-\s*(R|\d+)$/i, '');
 }
@@ -259,8 +171,7 @@ async function confirmCompletedJobs(backend: BackendRow[], known: any[]): Promis
   );
   let confirmed = 0;
   for (const r of stragglers) {
-    /* Attributed to the reconcile, not to whoever happens to have the ops view open — they did not
-       perform the work, they just happened to be the authenticated session that noticed. */
+
     if (await confirmServiceStage(Number(r.stage_id), 'Confirmed by CRM reconcile — job already marked completed in the Site Audit tab')) {
       confirmed += 1;
     }
@@ -275,15 +186,9 @@ async function reconcile(kind: Kind): Promise<number> {
     sbGet(kind.table + '?select=pi,status'),
     kind.table === 'audit_orders' ? fetchBmEmailsByPhone() : Promise.resolve(new Map() as BmIndex),
   ]);
-  // A PostgREST error resolves as a non-array here, and treating that as "no
-  // orders exist yet" would re-import the entire history.
+
   if (!Array.isArray(known)) return 0;
 
-  /* Attribution repair, before the insert diff and regardless of it: rows the
-     store counter created carry a typed BM name and no account link, and the
-     page of jobs just fetched names the real owner of each enquiry. What this
-     fixes is EXISTING rows, so it must not be gated on there being something
-     new to import. */
   if (kind.table === 'audit_orders') {
     try {
       const linked = await autoLinkBmsFromRows(backend);
@@ -291,9 +196,6 @@ async function reconcile(kind: Kind): Promise<number> {
     } catch { /* attribution is a repair, never a reason to fail the reconcile */ }
   }
 
-  /* Before the insert diff and regardless of it, like the attribution repair above: this recovers
-     EXISTING rows whose completion never reached OMS, so it must not be gated on there being
-     something new to import. Never a reason to fail the reconcile. */
   try {
     await confirmCompletedJobs(backend, known);
   } catch { /* the field app's own retry queue is the other path; try again next load */ }
@@ -321,11 +223,6 @@ async function reconcile(kind: Kind): Promise<number> {
   return added;
 }
 
-/* Audit Ops, Install Ops and Job Overview all reconcile, and the Role Viewer can
-   mount them one after the other — so a run in progress is shared rather than
-   duplicated, and a finished one holds the door shut briefly. Long-lived tabs
-   still pick up orders placed later: re-mounting or returning to the tab re-runs
-   it once the gap has passed. Tracked per kind, since the two run independently. */
 const MIN_GAP_MS = 60000;
 const runs = new Map<string, { inFlight: Promise<number> | null; finishedAt: number }>();
 
@@ -340,9 +237,6 @@ function run(kind: Kind): Promise<number> {
   return state.inFlight;
 }
 
-/* Each resolves with how many orders were created, so the caller can reload its
-   list (and say so) only when something actually changed. Never reject: a failed
-   reconcile must not take a dashboard down with it. */
 export function autoImportAuditOrders(): Promise<number> {
   return run(AUDIT);
 }
@@ -351,7 +245,6 @@ export function autoImportInstallOrders(): Promise<number> {
   return run(INSTALL);
 }
 
-/* For views that show both kinds — Job Overview. */
 export async function autoImportSiteAuditJobs(): Promise<number> {
   const [audits, installs] = await Promise.all([run(AUDIT), run(INSTALL)]);
   return audits + installs;

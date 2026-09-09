@@ -5,7 +5,7 @@ interface CacheEntry {
 
 const store = new Map<string, CacheEntry>();
 
-const DEFAULT_TTL = 300_000; // 5 minutes
+const DEFAULT_TTL = 300_000;
 
 export function getCached(key: string): unknown | null {
   const entry = store.get(key);
@@ -21,7 +21,6 @@ export function setCache(key: string, data: unknown, ttl = DEFAULT_TTL) {
   store.set(key, { data, expiry: Date.now() + ttl });
 }
 
-// Prevent unbounded growth — evict expired entries periodically
 let lastCleanup = 0;
 export function cleanup() {
   const now = Date.now();

@@ -1,9 +1,5 @@
 'use client';
 
-// ── Inbound board — shared chips, fields and provenance marks ────────────────
-// Small presentational pieces the board, the daily table and the drawer all
-// share, so a status or a priority never renders two different ways.
-
 import {
   INBOUND_STATUS_COLORS, PRIORITY_COLORS, LEAD_TYPE_COLORS,
   FOLLOW_UP_COLORS, FOLLOW_UP_LABEL, OWNER_CHIP, OWNER_LABEL,
@@ -39,11 +35,6 @@ export function PriorityChip({ p }: { p?: Priority }) {
   return <Pill color={PRIORITY_COLORS[p]}>{p}</Pill>;
 }
 
-/**
- * A lead's headline. Falls back to naming the gap rather than repeating the
- * phone number that already sits in the Contact column — see
- * `nameIsJustThePhone`.
- */
 export function LeadName({ lead }: {
   lead: { companyName?: string; company?: string; phone?: string };
 }) {
@@ -64,11 +55,6 @@ export function LeadTypeChip({ t }: { t?: LeadType }) {
   return <Pill color={LEAD_TYPE_COLORS[t]}>{t}</Pill>;
 }
 
-/**
- * The follow-up date, rendered as the reminder the PRD asks for. There is no
- * notification service in this stack, so the badge *is* the reminder — worded
- * as a due date rather than implying anything was sent.
- */
 export function FollowUpChip({ date, today }: { date?: string; today?: string }) {
   const bucket = followUpBucket(date, today);
   const color = FOLLOW_UP_COLORS[bucket];
@@ -83,7 +69,6 @@ export function FollowUpChip({ date, today }: { date?: string; today?: string })
   return <Pill color={color} title={date}>{detail}</Pill>;
 }
 
-/** Marks which system owns a field, so a rep can see why one is read-only. */
 export function ProvenanceChip({ owner }: { owner: FieldOwner }) {
   const muted = owner === 'crm';
   return (
@@ -150,7 +135,6 @@ export function Field({
   );
 }
 
-/** Read-only value with an explicit em-dash for "Presales left this blank". */
 export function ReadValue({ v }: { v?: string | number | null }) {
   const s = v === 0 ? '0' : String(v ?? '').trim();
   return <div className={readonlyCls}>{s || '—'}</div>;
@@ -169,7 +153,6 @@ export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] text-gray-400 text-center py-3">{children}</p>;
 }
 
-/** Blocking-gate list. Rendered wherever a status change is refused. */
 export function GateErrors({ errors }: { errors: string[] }) {
   if (!errors.length) return null;
   return (
@@ -181,7 +164,6 @@ export function GateErrors({ errors }: { errors: string[] }) {
   );
 }
 
-/** Non-blocking enrichment warning — counted and chaseable, never a barrier. */
 export function EnrichmentBadge({ gaps, onClick }: { gaps: string[]; onClick?: () => void }) {
   if (!gaps.length) return null;
   return (

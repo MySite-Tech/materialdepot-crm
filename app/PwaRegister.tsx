@@ -1,16 +1,5 @@
 'use client';
 
-/* Registers the service worker and handles the update everybody forgets.
-
-   Without a prompt, an installed tablet keeps serving whatever bundle it cached
-   on the day it was installed: you fix a bug, deploy, and the store still runs
-   last month's code with no way for anyone to tell. So a waiting worker is
-   surfaced as a toast instead of taking over silently — silent takeovers swap
-   the bundle mid-form, which is the other half of the same problem.
-
-   Dev is skipped entirely: a cached shell over a Turbopack dev server is a
-   debugging trap, and installability only matters in production anyway. */
-
 import { useEffect, useState } from 'react';
 
 export default function PwaRegister() {
@@ -28,15 +17,12 @@ export default function PwaRegister() {
         const next = reg.installing;
         if (!next) return;
         next.addEventListener('statechange', () => {
-          // `controller` is null on the very first install — that is a fresh
-          // start, not an update, and prompting there would be nonsense.
+
           if (next.state === 'installed' && navigator.serviceWorker.controller) setWaiting(next);
         });
       });
     }).catch(() => { /* no service worker is a degraded PWA, not a broken app */ });
 
-    // The new worker calls clients.claim(); reload once so every open tab lands
-    // on the same bundle. Guarded because Chrome can fire this more than once.
     let reloaded = false;
     const onChange = () => { if (!reloaded) { reloaded = true; window.location.reload(); } };
     navigator.serviceWorker.addEventListener('controllerchange', onChange);

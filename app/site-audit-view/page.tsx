@@ -16,16 +16,7 @@ import SiteAuditBmView from '@/components/site-audit/views/SiteAuditBmView';
 import SiteAuditCoeView from '@/components/site-audit/views/SiteAuditCoeView';
 import SiteAuditBranchManagerView from '@/components/site-audit/views/SiteAuditBranchManagerView';
 
-/* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/views/SiteAuditLiveView'), { ssr: false });
-
-/* Dashboard-only preview target for the Role Viewer's "open in new tab" links
-   (see SiteAuditRoleViewerView.tsx). Deliberately outside the CRM's
-   header/nav/tab shell (app/App.tsx) — this tab should show nothing but the
-   person's own dashboard, the same way the real Auditor/Installer apps will
-   look once they log in for real. Still requires an existing CRM session
-   (checked via the same localStorage key App.tsx sets on login) since this
-   surfaces real job/install data, unlike the public /store-booking kiosk. */
 
 const ROLE_LABELS: Record<string, string> = {
   service_mgr: 'Service Manager',
@@ -41,18 +32,14 @@ type Person = { id: string; name: string; email: string; role: string; contact?:
 
 function SiteAuditViewInner() {
   const searchParams = useSearchParams();
-  // `?p=` is the encoded form the Role Viewer links now use; `?person=` stays
-  // supported so links people already bookmarked keep working.
+
   const email = decodePerson(searchParams.get('p') || '') || searchParams.get('person') || '';
-  // ?view=shadowing opens the person's read-only shadowing schedule instead of
-  // their own dashboard — shadowing is cross-role, so it's available for anyone.
+
   const wantShadowing = searchParams.get('view') === 'shadowing';
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [mayPreview, setMayPreview] = useState(false);
   const [permissionRole, setPermissionRole] = useState<string | null>(null);
-  /* Attribution fallback when the Site Audit profile has no name on file
-     (e.g. an un-synced BM/SM) — the CRM session's own name, same pattern as
-     SiteAuditOwnDashboard's crmName. */
+
   const [crmName, setCrmName] = useState('');
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,9 +48,7 @@ function SiteAuditViewInner() {
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
-  /* Same read-only switcher as SiteAuditOwnDashboard/SiteAuditRoleViewerView —
-     a COE's own dashboard is their follow-up queue, but they can look at the
-     Service Manager view (orders, ops/perf/analytics) alongside it. */
+
   const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
 
   useEffect(() => {
@@ -74,12 +59,7 @@ function SiteAuditViewInner() {
       const own = siteAuditRoleFromPermissions(parsed?.individualPermissions);
       setPermissionRole(own);
       setCrmName(parsed?.name || '');
-      /* This route renders SOMEONE ELSE's dashboard by email, so holding a
-         session was never enough authorisation — it is the Role Viewer's
-         preview target, and the Role Viewer belongs to oversight. Profile
-         emails are readable through the field app's public anon key, so
-         without this check any logged-in account could enumerate them and
-         read every auditor's, installer's and BM's dashboard. */
+
       setMayPreview(isSiteAuditOversightRole(own));
     } catch {
       setLoggedIn(false);
@@ -123,11 +103,6 @@ function SiteAuditViewInner() {
   const actingAs = { id: person.id, name: person.name, email: person.email };
   const viewRole = person.role || permissionRole;
 
-  /* One header bar owns the whole top of the page: who you're viewing, the
-     city, and the role's primary tabs — so the page has a single navigation
-     level above whatever the embedded dashboard renders, instead of the three
-     differently-styled pill rows this used to stack. Underline tabs + the
-     CRM's standard select, matching the Site Audit rail in-app. */
   const cityPicker = (
     <div className="flex shrink-0 items-center gap-2">
       <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-400" htmlFor="sav-city">City</label>
@@ -144,9 +119,7 @@ function SiteAuditViewInner() {
   );
 
   const isCombined = viewRole === 'auditor_installer' && !wantShadowing && person.role !== 'bm';
-  /* A COE lands on their own follow-up queue but can switch to the Service
-     Manager dashboard, and a branch manager gets their branch rollup — same
-     two person.role branches SiteAuditOwnDashboard renders in-app. */
+
   const isCoe = person.role === 'coe' && !wantShadowing;
   const isBranchMgr = person.role === 'branch_mgr' && !wantShadowing;
   const isSm = (viewRole === 'service_mgr' || (isCoe && coeShowServiceMgr)) && !wantShadowing && person.role !== 'bm';
@@ -171,7 +144,7 @@ function SiteAuditViewInner() {
   ) : smAuditSubTab === 'perf' ? (
     <SiteAuditPerfView city={city} />
   ) : smAuditSubTab === 'analytics' ? (
-    // Service manager: Execution only — the commercial tabs carry revenue and store targets.
+
     <SiteAuditAnalyticsView city={city} execOnly />
   ) : (
     <SiteAuditLiveView city={city} />

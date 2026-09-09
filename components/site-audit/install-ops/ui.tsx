@@ -1,10 +1,5 @@
 'use client';
 
-/* Small shared presentational bits used across the Install Ops views —
-   Tailwind ports of Chip/MapLink/pill-list/subjob-summary from
-   SMInstall.jsx, styled per this CRM's Site Audit conventions (white cards,
-   #EAB308 accent, status pill patterns already used in SiteAuditJobsView). */
-
 import type { ReactElement } from 'react';
 import { assigneeProgress, fmtDate, installerById, STATUS, subjobDisplayStatus } from './shared';
 import { typeTag } from '../data/auditRegistry';
@@ -74,9 +69,7 @@ export function SubjobSummary({ o, installers }: { o: InstallOrder; installers: 
             : [];
         const names = asgns.map((a: any) => a.installer_name || 'Unassigned').join(', ') || 'Unassigned';
         const st = subjobDisplayStatus(sj);
-        /* Spell out per-installer progress in the tooltip whenever someone's own
-           row is ahead of the sub-job — otherwise "At Site" on a job where two of
-           three installers have finished reads as nothing having happened. */
+
         const prog = assigneeProgress(sj);
         const aheadTip = prog.filter((x) => x.ahead).map((x) => x.name + ': ' + (STATUS[x.status] || { l: x.status }).l);
         return (
@@ -93,8 +86,6 @@ export function SubjobSummary({ o, installers }: { o: InstallOrder; installers: 
   );
 }
 
-/* Shared per-track tag colour — single source so badges across the list, queues and calendar can't
-   drift from each other as categories are added. */
 export function sjTypeClass(type: InstallCategory | string): string {
   return type === 'wallpaper'
     ? 'bg-purple-100 text-purple-700'

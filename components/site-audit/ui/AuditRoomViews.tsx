@@ -1,10 +1,5 @@
 'use client';
 
-/* Shared read-only renderers for one audit room / one installation room.
-   React port of mdAuditRoomHtml + mdInstallRoomHtml from material-depot-site's
-   /md-audit-registry.js — every consumer (SM Audit job drawer, the installer's read-only audit
-   report, the install job-card view) renders v2 segment audits and legacy rooms identically. */
-
 import {
   adjRows,
   categoryFor,
@@ -16,12 +11,6 @@ import {
   segmentRows,
 } from '../data/auditRegistry';
 
-/* An adjustment's photo is the ONLY evidence of what was added or subtracted, so it is rendered
-   as the image itself — not as a "1 photo" count, which is what this showed until 2026-09-01.
-   Auditors were attaching the photo correctly and it was reaching the DB as a Storage URL; every
-   renderer (this one, the PDF, and both legacy equivalents) then dropped it on the floor, so the
-   office saw a bare number and the auditor concluded the upload had failed. Keep the strip here
-   in step with `mdPdfAuditRoom` in pdfBrand.ts. */
 function AdjustmentRows({ rows }: { rows: ReturnType<typeof adjRows> }) {
   if (!rows.length) return null;
   return (

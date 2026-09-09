@@ -10,25 +10,7 @@ import SiteAuditBmView from '@/components/site-audit/views/SiteAuditBmView';
 import SiteAuditUsersView from '@/components/site-audit/staff/SiteAuditUsersView';
 import { CITIES, loadCityFilter, saveCityFilter, type CityFilter } from '@/components/site-audit/siteAuditShared';
 
-/* leaflet touches `window` at module-load time, so it must never be pulled
-   into the server-rendered pass Next.js still does for client components. */
 const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/views/SiteAuditLiveView'), { ssr: false });
-
-/* Sub-tab wrapper for the CRM's Site Audit tab. Role Viewer here is a
-   role/person picker only — the original's iframe+localStorage impersonation
-   trick only works same-origin, so it links out to the real Admin Console
-   instead of embedding it. Store Booking isn't a tab here — it's the public
-   /store-booking route (see app/store-booking/page.tsx), same as the
-   original's public kiosk link. The two SM dashboards (Audit Ops / Install
-   Ops) are deliberately NOT tabs here either: they belong to whoever holds the
-   Service Manager permission, who gets them inside their own dashboard, and an
-   admin opens a specific person's copy through Role Viewer — the same split as
-   the original, where Admin.html links out to the SM dashboards rather than
-   embedding them.
-
-   The city toggle is cross-view context (persisted to md_city, deliberately
-   NOT reset when switching sub-tabs) because it scopes the job lists, the
-   staff rosters and the analytics all at once. */
 
 type View = 'users' | 'roleviewer' | 'jobs' | 'perf' | 'analytics' | 'live' | 'bm';
 

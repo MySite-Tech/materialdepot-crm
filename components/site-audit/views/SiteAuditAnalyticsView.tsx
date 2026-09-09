@@ -6,7 +6,6 @@ import { typeLabel } from '../data/auditRegistry';
 import CatAnalyticsPanel, { type CommercialTab } from '../ui/CatAnalyticsPanel';
 import { catAnalyticsIfLoaded, downloadCsv, loadCatAnalytics, type CatAnalyticsApi } from '../data/catAnalytics';
 
-/* ---- ANALYTICS HELPERS (ported verbatim from material-depot-site Admin.jsx lines 202-334) ---- */
 function _anDstr(d: Date) {
   const z = (n: number) => (n < 10 ? '0' + n : '' + n);
   return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
@@ -21,8 +20,7 @@ function _anMinsIST(iso: string) {
   const d = _anToIST(iso);
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
-// The clock time an arrival was logged, for the drill-down to print next to the booked slot —
-// "10:04 vs 10:00" is the evidence behind a late row, where "late" alone is just an assertion.
+
 function _anHhMmIST(iso: string) {
   const m = _anMinsIST(iso);
   const z = (n: number) => (n < 10 ? '0' + n : '' + n);
@@ -63,16 +61,10 @@ function _anInstallAttempts(installs: any[], from: string, to: string) {
         const primary = asgns.find((a: any) => a.primary) || asgns[0] || null;
         out.push({
           pi: o.pi,
-          // orderId/sjId identify the sub-job a rating belongs to. A multi-day
-          // sub-job emits one attempt row PER DATE, so these are also what
-          // collapses those rows back to one job before ratings are counted —
-          // without that a two-day installation would count its single rating
-          // twice.
+
           orderId: o.id,
           sjId: sj.id,
-          // jobcard.sign is present in install_orders_slim (the signature is a
-          // URL, not a blob), so job-card completion can be measured from the
-          // signature itself instead of inferred from a rating existing.
+
           sign: (sj.jobcard && sj.jobcard.sign) || null,
           type: sj.type,
           status: sj.status,
@@ -93,11 +85,6 @@ function _anInstallAttempts(installs: any[], from: string, to: string) {
   return out;
 }
 
-/* Returns the per-person tally the tiles and the per-person tables use, PLUS `tagged` — one row
-   per arrival that was actually counted, so the metric drill-down can show WHICH visits were on
-   time and which were late instead of only how many. `tagged` is derived in the same loop as the
-   tally, deliberately: a drill that disagrees with the tile it opened from is worse than no drill,
-   so there is exactly one place that decides whether an arrival counts. */
 function _anArrivalStats(orders: any[], trackFrom: string, trackTo: string, isInstall: boolean) {
   const map: Record<string, { onTime: number; late: number }> = {};
   const tagged: Array<{ pi: string; date: string; order: any; who: string; slot: string; arrivedAt: string; diff: number; bucket: 'onTime' | 'late' }> = [];
@@ -108,12 +95,7 @@ function _anArrivalStats(orders: any[], trackFrom: string, trackTo: string, isIn
       if (!l.t.toLowerCase().includes('arrived at site')) continue;
       const dateIST = _anDateIST(l.d);
       if (dateIST < trackFrom || dateIST > trackTo) continue;
-      /* One person, one order, one day = ONE visit, however many times the field app wrote the log
-         line. Without this the same arrival is counted twice (or twenty times — ENQ2026080884597
-         carries 20 identical "arrived at site" rows for one auditor on 2026-08-10), which on live
-         data as of 2026-08-26 inflated the install metric by 13% and the audit metric by 23%. The
-         PWA's Admin console has always deduped this way; this port did not, and the mismatch only
-         became visible once the tiles started listing their own rows. */
+
       const visitKey = o.pi + '|' + l.who + '|' + dateIST;
       if (seenVisits.has(visitKey)) continue;
       let slot = '';
@@ -134,8 +116,7 @@ function _anArrivalStats(orders: any[], trackFrom: string, trackTo: string, isIn
       const mins = _anMinsIST(l.d);
       const diff = mins - (sh * 60 + sm2);
       const bucket: 'onTime' | 'late' = diff > 3 ? 'late' : 'onTime';
-      // Recorded here rather than at the top of the loop: an entry skipped above for an
-      // unresolvable slot must not suppress a later write for the same visit that does resolve.
+
       seenVisits.add(visitKey);
       if (!map[l.who]) map[l.who] = { onTime: 0, late: 0 };
       map[l.who][bucket]++;
@@ -154,35 +135,15 @@ function _anArrivalStats(orders: any[], trackFrom: string, trackTo: string, isIn
   return { byName: map, tagged };
 }
 
-/* ── Ratings → the job they belong to ──────────────────────────────────────
-   Ported from material-depot-site's Admin.html (_anAttachAuditRatings /
-   _anAttachInstallRatings), which this view's original port predates.
-
-   Why it matters here and not before: until 2026-08-24 the rating was written
-   by the field app at the moment the client signed, so "ratings whose
-   created_at falls in the report window" and "jobs done in the report window"
-   were the same set. Collection then moved to a COE phone call made the day
-   after (or later, when a client doesn't pick up), so the two sets have come
-   apart — a job finished on the last day of a month gets its score in the
-   next one. Filtering ratings by their own created_at therefore drops scores
-   from the period whose work they describe and lends them to the period after.
-
-   Joining on the ORDER instead makes the rating counts a strict subset of
-   that section's completed total, however late the call happened. It also
-   de-duplicates: two ratings on one audit (which real data has — the CRM's
-   own field app wrote on-site scores until 2026-08-24, and an auditor who
-   re-signed a job card produced two rows) collapse to the latest one instead
-   of both landing in NPS. */
 function _anAttachAuditRatings(completedRows: any[], ratings: any[]) {
   const byOrder: Record<string, any> = {};
   const byPi: Record<string, any> = {};
   for (const r of ratings) {
     if (r.order_type !== 'audit') continue;
-    // Latest write wins for a given order — a re-signed job card or a COE
-    // correction supersedes the earlier score rather than joining it.
+
     const keep = (cur: any) => !cur || String(r.created_at || '') > String(cur.created_at || '');
     if (r.order_id) { if (keep(byOrder[r.order_id])) byOrder[r.order_id] = r; }
-    else if (r.pi && keep(byPi[r.pi])) byPi[r.pi] = r; // legacy rows written before order_id existed
+    else if (r.pi && keep(byPi[r.pi])) byPi[r.pi] = r;
   }
   const map = new Map<any, any>();
   for (const o of completedRows) {
@@ -192,15 +153,8 @@ function _anAttachAuditRatings(completedRows: any[], ratings: any[]) {
   return map;
 }
 
-/* Install is the harder half: a rating's order_id is the PARENT order, shared
-   by every sub-job on it, so it doesn't say which sub-job was rated. Same
-   three-step disambiguation as Admin.html — assigned-installer email first,
-   then nearest completion date, and the residue is left unattached rather than
-   guessed. Attempts are collapsed to one row per sub-job first (see the
-   orderId/sjId comment in _anInstallAttempts). */
 function _anAttachInstallRatings(attempts: any[], ratings: any[]) {
-  // 'partial' is in-progress and never carries a client signature, so it can't
-  // have been reviewed — matching Admin.html's doneRows.
+
   const done = attempts.filter((a) => a.status === 'completed');
   const perSubjob = new Map<string, any>();
   for (const a of done) {
@@ -244,11 +198,6 @@ function _anAttachInstallRatings(attempts: any[], ratings: any[]) {
   return attached;
 }
 
-/* Did the client actually sign a job card. Measured from the signature, not
-   from "a rating exists" — that proxy was true only while the field app wrote
-   the rating at signing time, and became wrong on 2026-08-24 when collection
-   moved to a COE call the day after. Left as a proxy it would have quietly
-   turned into "% of jobs the COE has got round to reviewing". */
 function _anAuditSigned(o: any): boolean {
   return !!(o.signedName && String(o.signedName).trim());
 }
@@ -287,15 +236,7 @@ function _anInstallerMap(attempts: any[], iRatingMap: Map<any, any>, arrMap: Rec
       }
     }
   }
-  /* Credited through the sub-job the rating was attached to, not by matching
-     rating.staff_email against this map's keys. Two reasons: a rating whose
-     staff_email is blank (or names a co-installer rather than the primary)
-     used to be silently dropped from everyone, and — since collection moved to
-     a D+1 call — a score can arrive in a later period than the job, so keying
-     off the rating alone credited it to nobody unless that installer happened
-     to have another job in the window. Co-assigned installers each get the
-     job's score, the same way this map already gives each of them its full
-     sqft. */
+
   for (const [att, r] of iRatingMap) {
     for (const inst of att.installers || []) {
       const k = inst.installer_email || inst.installer_name;
@@ -322,9 +263,7 @@ function _anAuditorMap(auditFiltered: any[], aRatingMap: Map<any, any>, arrMap: 
     map[k].orders++;
     if (o.status === 'completed') map[k].completed++;
   }
-  // Through the audit order, for the same reason as the installer map above:
-  // the order names its auditor authoritatively, the rating's staff_email is
-  // only a copy of it taken at write time.
+
   for (const [o, r] of aRatingMap) {
     const k = o.auditor_email || o.auditor_name;
     if (!k || !map[k]) continue;
@@ -340,10 +279,6 @@ function _anAuditorMap(auditFiltered: any[], aRatingMap: Map<any, any>, arrMap: 
   return Object.values(map).sort((a: any, b: any) => b.orders - a.orders);
 }
 
-/* ---- ANALYTICS V2 (ported from Admin.jsx lines 1158-1486) ---- */
-
-/* The header line for a ratings drill: the bands and the NPS the tile shows, rather than a
-   pass/fail ratio the rows cannot support. */
 function npsSummary(rated: any[], nps: number | null): string {
   const n = rated.length;
   if (!n) return 'No ratings in this range';
@@ -352,12 +287,6 @@ function npsSummary(rated: any[], nps: number | null): string {
   return `${n} rating${n === 1 ? '' : 's'} · ${prom} ${NPS_BAND_LABELS.promoter} · ${n - prom - det} ${NPS_BAND_LABELS.neutral} · ${det} ${NPS_BAND_LABELS.detractor}${nps === null ? '' : ` · NPS ${nps >= 0 ? '+' : ''}${nps}`}`;
 }
 
-/* ── Metric drill-down ────────────────────────────────────────────────────
-   `hit` is what makes a drill answer the question a percentage raises: 'yes' rows are the
-   numerator, 'no' rows are the rest of the denominator, and 'na' is for a row that is genuinely
-   neither (a Neutral rating, or a signature we could not read) — which must never be quietly
-   folded into "no". Every list is sorted numerator-first so the split is visible without reading
-   the whole table. */
 type DrillHit = 'yes' | 'no' | 'na';
 type DrillRow = {
   pi: string;
@@ -370,16 +299,14 @@ type DrillRow = {
   result: string;
   hit: DrillHit;
 };
-/* `summary` overrides the computed "X of Y — Z%" header. Needed for the ratings drills, where
-   yes/(yes+no) would be promoters over promoters-plus-detractors — which is not NPS and not any
-   other real number. A drill whose rows are a breakdown rather than a pass/fail says so. */
+
 type Drill = { title: string; note: string; rows: DrillRow[]; summary?: string };
 
 interface AnalyticsData {
   installs: any[];
   audits: any[];
   ratings: any[];
-  // false when the audit-signature read failed — see signOk in the loader.
+
   auditSignOk: boolean;
 }
 
@@ -389,8 +316,6 @@ interface AnalyticsState {
   data: AnalyticsData | null;
 }
 
-/* The EXECUTION half: site audits and installations straight off the ops DB (Supabase). Rendered
-   as the Execution tab of the shell at the bottom of this file. */
 function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
   const [analyticsFrom, setAnalyticsFrom] = useState(() => {
     const t = new Date();
@@ -400,10 +325,7 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
   const [analyticsTo, setAnalyticsTo] = useState(() => _anDstr(new Date()));
 
   const [state, setState] = useState<AnalyticsState>({ loading: true, error: false, data: null });
-  /* The bookings/TAT charts are drawn by the shared analytics module (see catAnalytics.ts) so both
-     halves of this page look like one dashboard. Loaded in the background and rendered only once
-     it arrives — the ops metrics below must never wait on it, and a failed load costs those two
-     sections rather than the tab. */
+
   const [chartApi, setChartApi] = useState<CatAnalyticsApi | null>(() => catAnalyticsIfLoaded());
   useEffect(() => {
     if (chartApi) return;
@@ -430,60 +352,33 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
       let installRes: any, auditRes: any, ratingsRes: any;
       try {
         [installRes, auditRes, ratingsRes] = await Promise.all([
-          /* customer_name/bm/phone are for the metric drill-downs — a list of enquiry IDs does not
-             answer "which orders", which is the whole point of opening one. All three are columns on
-             the slim view, so this costs no extra query (and note the column is `customer_name`;
-             `name` does not exist on this table — see CLAUDE.md). `phone` is re-read with the log
-             below for orders from 1 Jul 2026, which is the copy the audit phone-match uses. */
+
           sbGetLong('install_orders_slim?select=id,pi,status,subjobs,service,delivery_date,created_at,city,customer_name,bm,phone&status=neq.deleted'),
           sbGetLong(
             'audit_orders?select=id,pi,status,date,slot,auditor_name,auditor_email,phone,log,created_at,city&status=not.in.(deleted,slot_reserved,slot_converted)'
           ),
-          // order_id is what joins a rating to the job it describes; without it
-          // the only option is the rating's own created_at, which stopped
-          // tracking the job date when collection moved to a D+1 COE call.
+
           sbGetLong('ratings?select=order_type,order_id,pi,q1_score,q2_score,q3_score,created_at,staff_name,staff_email'),
         ]);
       } catch (e) {
         if (alive) setState({ loading: false, error: true, data: null });
         return;
       }
-      // City scope (header toggle) — applied to the two order sets before any
-      // metric is computed, so every tile/chart below reflects the choice.
+
       if (Array.isArray(installRes)) installRes = inCity(installRes, city);
       if (Array.isArray(auditRes)) auditRes = inCity(auditRes, city);
-      // delivMeta and installLogRes are independent enrichments of installRes —
-      // neither depends on the other's result, so fetch them concurrently
-      // instead of one-after-another (saves one full network round-trip).
-      /* Audit signatures come as their own query, scoped to completed rows.
-         `audit_ticked->sign->>name` is a cheap json path to TRANSFER but not
-         to READ: audit_ticked also holds the job-card room photos, so Postgres
-         detoasts the whole blob per row and the same select over all ~1.1k
-         audits dies on the statement timeout (measured: 500
-         "canceling statement due to statement timeout"). Restricted to the 306
-         completed rows — the only ones the metric's denominator counts — it
-         returns in ~3s. */
+
       const [ratingsFallback, delivMeta, installLogRes, signMeta] = await Promise.all([
         Array.isArray(ratingsRes)
           ? Promise.resolve(ratingsRes)
           : sbGetLong('ratings?select=order_type,order_id,pi,q1_score,q2_score,created_at,staff_name,staff_email').catch(() => []),
         sbGetLong('install_orders?select=pi,original_delivery_date&status=neq.deleted').catch(() => []),
         sbGetLong('install_orders?select=pi,phone,log&status=neq.deleted&created_at=gte.2026-07-01').catch(() => []),
-        /* Unpaged again: this timed out while audit_ticked held base64 job-card images (70 MB
-           over the column, single rows past 8 MB). Those were moved to storage, the column is
-           now ~1.3 MB, and this reads in ~0.3s. sbGetPaged remains available if it ever regresses. */
+
         sbGetLong('audit_orders?select=id,signedName:audit_ticked->sign->>name&status=eq.completed').catch(() => null),
       ]);
       ratingsRes = ratingsFallback;
-      /* `ratings` has no city of its own — it's scoped through the order it
-         belongs to. Keyed on order_id first (exact, and the same key the
-         attach helpers join on), falling back to pi only for legacy rows
-         written before that column existed; pi alone was unreliable here
-         because a rating's pi is free text and some test rows carry junk
-         like "x". Without this, NPS/ratings/job-card % would keep reporting
-         both cities while every other tile respects the toggle. Applied after
-         the fallback re-fetch so a first-attempt timeout can't slip an
-         unfiltered set through. */
+
       if (city !== 'all' && Array.isArray(ratingsRes)) {
         const iRows = Array.isArray(installRes) ? installRes : [];
         const aRows = Array.isArray(auditRes) ? auditRes : [];
@@ -497,10 +392,7 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
           return false;
         });
       }
-      /* A failed signature read must NOT read as "nobody signed" — that would
-         render a confident 0% instead of an honest "—". Tracked separately so
-         the card can say which it is (house style: distinguish couldn't-load
-         from genuinely-none). */
+
       const signOk = Array.isArray(signMeta);
       if (signOk && Array.isArray(auditRes)) {
         const sm: Record<string, string | null> = {};
@@ -516,8 +408,7 @@ function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
         const lm: Record<string, any> = {};
         for (const r of installLogRes) lm[r.pi] = { phone: r.phone || null, log: r.log || [] };
         for (const o of installRes) {
-          // Keep the phone from the main select when this order predates the log window, instead of
-          // blanking it — a blank phone can never match a site audit and would read as "no audit".
+
           o.phone = lm[o.pi]?.phone ?? o.phone ?? null;
           o.log = lm[o.pi]?.log || [];
         }
@@ -597,13 +488,6 @@ function AnalyticsBody({
     const aFiltered = audits.filter((o) => o.date && o.date >= from && o.date <= to);
     const aTotal = aFiltered.length;
 
-    /* Ratings are attached to the jobs in range, NOT filtered by their own
-       created_at — see _anAttachAuditRatings. Consequences worth knowing when
-       reading these tiles: the rating count can only ever be a subset of that
-       section's completed total, a score always lands in the period of the job
-       it describes however late the COE's call was, and the last few days of
-       the range legitimately show fewer scores than jobs because their D+1
-       calls haven't happened yet. */
     const aRatingMap = _anAttachAuditRatings(aFiltered.filter((o) => o.status === 'completed'), ratings);
     const iRatingMap = _anAttachInstallRatings(iAttempts, ratings);
     const AR = [...aRatingMap.values()];
@@ -617,20 +501,19 @@ function AnalyticsBody({
       const o = installs.find((r) => r.pi === pi);
       return o && o.phone && auditPhones.has(o.phone);
     }).length;
-    // Signature-based, not rating-based — see _anInstallSigned.
+
     const iJobCard = iAttempts.filter((a) => ['completed', 'partial'].includes(a.status) && _anInstallSigned(a)).length;
     const avgA = (arr: any[], k: string) => avgScore(arr.map((r) => r[k]));
     const IR_q1 = avgA(IR, 'q1_score'),
       IR_q2 = avgA(IR, 'q2_score'),
       IR_q3 = avgA(IR, 'q3_score');
-    // npsFrom is the single house definition of the bands, shared with the
-    // COE's own Review scores tab so the two can never drift apart.
+
     const IR_nps_s = npsFrom(IR.map((r) => r.q1_score));
     const IR_prom = IR_nps_s.prom, IR_det = IR_nps_s.det, IR_nps = IR_nps_s.nps;
 
     const aCompleted = aFiltered.filter((o) => o.status === 'completed').length;
     const aJobCard = aFiltered.filter((o) => o.status === 'completed' && _anAuditSigned(o)).length;
-    // Surfaced so the tile can render "—" rather than a false 0%.
+
     const aSignKnown = auditSignOk;
     const aRescheduled = aFiltered.filter((o) => o.status === 'reschedule').length;
     const AR_q1 = avgA(AR, 'q1_score'),
@@ -666,25 +549,6 @@ function AnalyticsBody({
       iByStatus[a.status] = (iByStatus[a.status] || 0) + 1;
     });
 
-    /* ── BOOKINGS vs EXECUTIONS, and the turnaround between them ──────────────────────────
-       A booking and its execution are two different days and belong on two different dates:
-       someone who buys a ₹999 site audit today for the day after tomorrow is a BOOKING today and
-       an EXECUTION the day after tomorrow. Same for an installation — the order is placed on one
-       day and the installers turn up on another. So, per bucket in the selected range:
-         • bookings   = orders CREATED in the bucket (install: once per parent ORDER, not per
-                        sub-job, since one order books once however many sub-jobs it carries)
-         • executions = work actually DONE in the bucket (audit: the "Site audit completed" log
-                        date, falling back to the scheduled date · install: one row per completed
-                        sub-job, so an order with a wallpaper and a flooring sub-job books once
-                        and executes twice)
-         • TAT        = execution date − booking date, in days, per executed row
-       These are never added together and never share an axis trick: same unit (jobs) on one axis,
-       which is exactly when a grouped column chart is honest. Booking counts here are NOT
-       comparable with the Category tab's order counts — this side counts ops rows in Supabase,
-       that side counts order lines in the order book. */
-    // Some live log rows carry a `d` that Date() cannot parse (258 such entries in audit_orders
-    // on 2026-08-18); _anDateIST would throw RangeError and blank the whole tab, so every date
-    // derived from log/DB text goes through this guard first.
     const dateSafe = (iso: any): string | null => {
       if (!iso) return null;
       const t = new Date(iso);
@@ -710,10 +574,7 @@ function AnalyticsBody({
     const aTats = aExecs.map((x) => dayDiff(x.date, dateSafe(x.o.created_at)));
 
     const iBookings = installs.map((o) => ({ date: dateSafe(o.created_at) })).filter((x) => inRange(x.date));
-    /* One execution per completed SUB-JOB, not per attempt row. _anInstallAttempts emits a row
-       per scheduled date, so a two-day sub-job would otherwise execute twice — collapse on
-       order+sub-job and keep the latest date, which is the completion date for anything with a
-       completion log. */
+
     const iExecMap = new Map<string, string>();
     for (const a of iAttempts) {
       if (!['completed', 'partial'].includes(a.status)) continue;
@@ -727,19 +588,6 @@ function AnalyticsBody({
       return dayDiff(r.date, o ? dateSafe(o.created_at) : null);
     });
 
-    /* ══ METRIC DRILL-DOWNS ═══════════════════════════════════════════════════════════════
-       Every tile on this tab is clickable and opens the rows behind it, split into the ones that
-       met the criterion and the ones that did not — the question a percentage always raises next
-       ("which 5 of the 7 arrived on time, and who were the 2 that didn't?").
-
-       The rule that keeps this honest: a drill's row set IS the tile's denominator, built from the
-       same variable the tile renders. So `iStatus:*` and the delivery tiles iterate `iAttempts`
-       (attempts, matching "total attempts in range"), Job Card iterates only the completed/partial
-       attempts, MD Audit iterates distinct PIs, the ratings drills iterate the rating map, and the
-       arrival drills iterate the arrival rows tagged in _anArrivalStats. Adding a tile means
-       adding its drill off the same variable — never off a fresh filter that happens to look right.
-
-       No extra queries: customer/phone/BM/assignee all come off the order objects already loaded. */
     const label = (st: string) => JOB_STATUS[st]?.l || st;
     const oRow = (o: any) => ({ customer: o?.customer_name || '', phone: o?.phone || '', bm: o?.bm || '' });
     const attemptPerson = (a: any) =>
@@ -770,7 +618,7 @@ function AnalyticsBody({
       }));
 
     const drills: Record<string, Drill> = {
-      /* ---- Site Installation ---- */
+
       iArrival: mk(
         'Site Installation — Installer Arrival On Time %',
         'One row per logged "arrived at site" entry on/after 2 Jul 2026 (when arrival tracking began) whose booked slot could be resolved. A sub-job visited by two installers shows one row each, and a reassigned sub-job can appear once per installer who actually turned up. More than 3 minutes past the slot counts as late.',
@@ -881,7 +729,6 @@ function AnalyticsBody({
         })
       ),
 
-      /* ---- Site Audit ---- */
       aArrival: mk(
         'Site Audit — Auditor Arrival On Time %',
         'One row per logged "arrived at site" entry on/after 2 Jul 2026 (when arrival tracking began) whose booked slot could be resolved. More than 3 minutes past the slot counts as late.',
@@ -938,7 +785,6 @@ function AnalyticsBody({
       ),
     };
 
-    /* One drill per status tile, over the same attempt set the tile's percentage divides by. */
     for (const st of Object.keys(iByStatus)) {
       drills['iStatus:' + st] = mk(
         'Site Installation — ' + label(st),
@@ -954,8 +800,7 @@ function AnalyticsBody({
         }))
       );
     }
-    /* "No delay mentioned" is the same row set as iDelayLog with the verdict inverted, so it is
-       derived from it rather than rebuilt — the two tiles can never then disagree. */
+
     drills.iNoDelayLog = mk('Site Installation — No delay mentioned in log', drills.iDelayLog.note, drills.iDelayLog.rows.map((r) => ({
       ...r,
       hit: r.hit === 'yes' ? 'no' : 'yes',
@@ -1010,8 +855,6 @@ function AnalyticsBody({
   const pcColorClass = (p: number | null) => (p === null ? 'text-gray-400' : p >= 80 ? 'text-green-600' : p >= 50 ? 'text-amber-600' : 'text-red-600');
   const pcBarClass = (p: number | null) => (p === null ? 'bg-gray-300' : p >= 80 ? 'bg-green-600' : p >= 50 ? 'bg-amber-600' : 'bg-red-600');
 
-  /* Every tile opens the rows behind it. `tile()` returns the props that make one clickable, so a
-     tile with no drill registered stays inert rather than looking clickable and doing nothing. */
   const [drillKey, setDrillKey] = useState<string | null>(null);
   const openDrill = M.drills[drillKey || ''] || null;
   const tile = (key?: string) => {
@@ -1031,7 +874,7 @@ function AnalyticsBody({
       className: 'cursor-pointer transition hover:border-gray-400 hover:shadow-sm',
     };
   };
-  // Merges the clickable props into a tile's own className rather than letting one clobber the other.
+
   const tileProps = (key: string | undefined, base: string) => {
     const t = tile(key) as any;
     return { ...t, className: base + (t.className ? ' ' + t.className : '') };
@@ -1193,7 +1036,6 @@ function AnalyticsBody({
         </button>
       </div>
 
-      {/* ══ SITE INSTALLATION ══ */}
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <div className="flex items-center gap-3.5 px-4 sm:px-6 py-4 border-b border-gray-100">
           <span className="text-2xl flex-none">🔧</span>
@@ -1350,7 +1192,6 @@ function AnalyticsBody({
         )}
       </div>
 
-      {/* ══ SITE AUDIT ══ */}
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <div className="flex items-center gap-3.5 px-4 sm:px-6 py-4 border-b border-gray-100">
           <span className="text-2xl flex-none">🔍</span>
@@ -1467,21 +1308,15 @@ function AnalyticsBody({
   );
 }
 
-/* ── The drill-down modal ──────────────────────────────────────────────────────────────────
-   Opens off any tile and shows the rows behind the number, numerator first, with a one-click CSV
-   so an SM can work the "didn't happen" list rather than just read a percentage. Deliberately not
-   built on the module's HTML-string modal — this half of the page is React, and these rows carry a
-   phone number worth making tappable. */
 function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   const yes = drill.rows.filter((r) => r.hit === 'yes');
   const no = drill.rows.filter((r) => r.hit === 'no');
   const na = drill.rows.filter((r) => r.hit === 'na');
   const den = yes.length + no.length;
   const pct = den ? Math.round((yes.length / den) * 100) : null;
-  // Numerator first, then the misses, then anything unjudged — the order an SM reads it in.
+
   const ordered = [...yes, ...no, ...na];
 
-  // Esc to close: this modal is opened by a click on a tile, so the keyboard has to have a way out.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -1589,10 +1424,6 @@ function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   );
 }
 
-/* ── Bookings vs executions + turnaround, drawn with the shared chart primitives ──────────
-   Rendered as HTML from md-cat-analytics.js (mdAnGrouped / mdAnTatHtml) rather than rebuilt in
-   JSX, so this block is pixel-identical to the same block in the Admin console and to the
-   commercial tabs' own charts. The rows it counts are computed above, off the ops DB. */
 function BookExecSection({
   api,
   from,
@@ -1664,32 +1495,6 @@ function BookExecSection({
   return <div className="md-an" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════════════════
-   THE ANALYTICS SHELL — one tab per question.
-
-   Ported from material-depot-site's Admin console (its Analytics V3 revamp), which is where the
-   commercial tabs come from. Five tabs over two sources that are deliberately never mixed:
-
-     Category · Execution · Week on week · Penetration · Targets
-
-   Execution is this repo's own ops-DB view (above). The other four are COMMERCIAL — carts,
-   orders, order value, attach rate, audit → order conversion, store penetration, targets — and
-   read the order book through public/md-cat-analytics.js. An order lives in the order book, a
-   site visit lives in the ops DB, and the only bridge between them is the customer phone number,
-   so no tile ever adds one to the other.
-
-   ROLE GATE: a service manager gets Execution and nothing else. The commercial tabs carry
-   revenue, AOV and store targets, which that role does not get. `execOnly` is passed by every
-   service-manager host (the SM's own dashboard, the SM view inside the Role Viewer, and the
-   /site-audit-view SM body); the oversight rail passes nothing and gets all five. It is gated in
-   two places — the tab bar only renders Execution, AND `pick` refuses anything else, so a stale
-   localStorage tab or a stray call can't get past it. Role gating in this app is client-side
-   throughout, so this is a scoping rule rather than a security boundary, same as the rail items.
-   ══════════════════════════════════════════════════════════════════════════════════════════ */
-
-/* Mirrors MD_AN_TABS in md-cat-analytics.js. Hardcoded rather than read from that module because
-   the bar has to be on screen before the 127 KB module has loaded — the Execution tab must not
-   wait on a download it doesn't need. Keep the two lists in step. */
 const AN_TABS: Array<{ k: string; ico: string; label: string; sub: string }> = [
   { k: 'category', ico: '📦', label: 'Category', sub: 'Carts, orders, value, attach rate, audit conversion' },
   { k: 'execution', ico: '🔧', label: 'Execution', sub: 'Bookings, executions, TAT, arrival on time, NPS' },
@@ -1725,7 +1530,6 @@ export default function SiteAuditAnalyticsView({ city = 'all', execOnly = false 
     [execOnly]
   );
 
-  // A role that loses the commercial tabs must not be left on one it can no longer render.
   useEffect(() => {
     if (execOnly && tab !== 'execution') setTab('execution');
   }, [execOnly, tab]);

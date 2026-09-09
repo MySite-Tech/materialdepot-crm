@@ -1,9 +1,5 @@
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// Weekly Funnel Dashboard
-// ---------------------------------------------------------------------------
-
 export interface WeeklyFunnelRow {
   week: string;
   customer_type: string;
@@ -52,8 +48,8 @@ export interface WeeklyFunnelData {
 export interface WeeklyFunnelFilters {
   branch?: string[];
   bm?: string[];
-  dateFrom?: string; // YYYY-MM-DD, inclusive — lower bound of the visible range
-  dateTo?: string;   // YYYY-MM-DD, inclusive — anchor: W-0 is the 7 days ending on this date
+  dateFrom?: string;
+  dateTo?: string;
   category?: string[];
 }
 

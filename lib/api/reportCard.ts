@@ -1,9 +1,5 @@
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// Report Card
-// ---------------------------------------------------------------------------
-
 export interface WalkinRow {
   walkins: number;
   carts_created: number;
@@ -111,8 +107,8 @@ export interface ReportCardData {
 export interface ReportCardFilters {
   bm?: string;
   branch?: string[];
-  dateFrom?: string; // YYYY-MM-DD
-  dateTo?: string;   // YYYY-MM-DD
+  dateFrom?: string;
+  dateTo?: string;
   category?: string;
 }
 

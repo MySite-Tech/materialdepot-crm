@@ -1,10 +1,5 @@
 "use client";
 
-// Cross-branch summary of appointment activity. Was a separate admin-only page
-// in the standalone tracker app (/dashboard/admin-overview); inside the CRM it's
-// one of the Admin "view as" options, so the old AdminGate wrapper is gone —
-// AppointmentTrackerClient only renders this for role === "admin".
-
 import { useMemo } from "react";
 import { branchFrom, ymd } from "@/lib/appointments/appt-shared";
 import type { Branch } from "@/lib/appointments/appt-shared";
@@ -27,15 +22,11 @@ function computeStats(leads: Lead[], ec: EcReadyMap) {
   return { total, today, ready, notReady, unmarked, visited };
 }
 
-// `allLeads` is the parent's already-fetched, all-branch feed — this view used to
-// re-sweep Kylas for the same rows. `range` is the tracker's shared date range
-// (top control bar), so this screen no longer carries a date card of its own.
 export default function AdminOverview({ allLeads, ec, range, branches }: {
   allLeads: Lead[];
   ec: EcReadyMap;
   range: DateRange;
-  /** The tracker's branch list (CRM-fetched), so this table can't list a
-      different set of branches from the chip that scopes every other view. */
+
   branches: Branch[];
 }) {
   const leads = useMemo(() => {
@@ -63,7 +54,6 @@ export default function AdminOverview({ allLeads, ec, range, branches }: {
   }), { total: 0, today: 0, ready: 0, notReady: 0, unmarked: 0, visited: 0 }), [perBranch]);
   const unmapped = leads.filter((l) => branchFrom(l.companyBusinessType, branches) === null).length;
 
-  // Per-date breakdown across all branches.
   const perDate = useMemo(() => {
     const map = new Map<string, { booked: number; visited: number }>();
     for (const l of leads) {
@@ -130,7 +120,6 @@ export default function AdminOverview({ allLeads, ec, range, branches }: {
         </table>
       </div>
 
-      {/* Per-date booked vs visited breakdown (across all branches) */}
       {perDate.length > 0 && (
         <div className="mt-6">
           <h3 className="text-[13px] font-bold text-gray-800 mb-3 flex items-center gap-2">
@@ -188,8 +177,6 @@ function StatCard({ label, value, tone = "default" }: { label: string; value: nu
   );
 }
 
-// Tile accents stay inside the CRM's palette: a hairline left border + a tinted
-// number, rather than the fully-tinted card the standalone app used.
 const VALUE_TONE: Record<string, string> = {
   default: "text-black",
   blue: "text-blue-600",

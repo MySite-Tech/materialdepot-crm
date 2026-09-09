@@ -1,10 +1,6 @@
 import { mdFetch } from './client';
 import { kylasFetch } from './kylasClient';
 
-// ---------------------------------------------------------------------------
-// Leads
-// ---------------------------------------------------------------------------
-
 export interface CurrentSalesBM {
   bm_contact: string;
   f_name: string;
@@ -62,10 +58,6 @@ export async function syncLeadToKylas(
     }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// User Info Properties (questions + options from Django)
-// ---------------------------------------------------------------------------
 
 export interface UserInfoProperty {
   id: number;
@@ -129,9 +121,6 @@ export async function searchContactByPhone(phoneNumber: string): Promise<number 
     return null;
   }
 }
-// ---------------------------------------------------------------------------
-// Store visit — BMs & assignment
-// ---------------------------------------------------------------------------
 
 export interface BMOption { user_id: string; bm_contact: string; f_name: string; l_name: string; crm_id: string }
 

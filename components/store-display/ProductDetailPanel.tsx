@@ -29,7 +29,7 @@ interface Props {
 }
 
 type RemovalReason = 'discontinued_permanently' | 'removed_temporarily';
-// Two-step lifecycle: the backend only has "initiated" and "completed".
+
 type RemovalStatus = 'removal_initiated' | 'removal_completed';
 type ChangeStatus = 'change_initiated' | 'request_completed' | 'request_cancelled';
 
@@ -54,7 +54,6 @@ const REMOVAL_STEPS: { key: RemovalStatus; label: string }[] = [
   { key: 'removal_completed', label: 'Completed' },
 ];
 
-// ─── Modal Overlay ──────────────────────────────────────────────────────────
 function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
   if (!open) return null;
   return (
@@ -67,7 +66,6 @@ function Modal({ open, onClose, children }: { open: boolean; onClose: () => void
   );
 }
 
-// ─── Toast ──────────────────────────────────────────────────────────────────
 function useToast() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   useEffect(() => {
@@ -83,7 +81,6 @@ function useToast() {
   return { show: (msg: string, type: 'success' | 'error' = 'success') => setToast({ msg, type }), el };
 }
 
-// ─── Change Location Dialog ─────────────────────────────────────────────────
 function ChangeLocationDialog({ open, onClose, initialData, onSave }: {
   open: boolean;
   onClose: () => void;
@@ -102,10 +99,6 @@ function ChangeLocationDialog({ open, onClose, initialData, onSave }: {
     }
   }, [open, initialData]);
 
-  /* A display-type change is a physical re-placement just like a location
-     change — the movement API has a `display_type_to` field for exactly that.
-     Keying this on the location string alone sent display-type edits down the
-     "save directly" path, which saves nothing. */
   const positionChanged = locationString !== initialData.locationString
     || displayType.toLowerCase() !== initialData.displayType.toLowerCase();
 
@@ -168,7 +161,6 @@ function ChangeLocationDialog({ open, onClose, initialData, onSave }: {
   );
 }
 
-// ─── Remove from Display Dialog ─────────────────────────────────────────────
 function RemoveFromDisplayDialog({ open, onClose, productName, storeName, onConfirm }: {
   open: boolean;
   onClose: () => void;
@@ -235,7 +227,6 @@ function RemoveFromDisplayDialog({ open, onClose, productName, storeName, onConf
   );
 }
 
-// ─── Step ladder (shared) ─────────────────────────────────────────────────────
 function StepLadder<T extends string>({ steps, currentIdx }: { steps: { key: T; label: string }[]; currentIdx: number }) {
   return (
     <div className="flex items-center gap-1 mb-3">
@@ -258,7 +249,6 @@ function StepLadder<T extends string>({ steps, currentIdx }: { steps: { key: T; 
   );
 }
 
-// ─── Change Location Status Tracker ─────────────────────────────────────────
 function ChangeLocationStatusTracker({ request, onStatusChange }: {
   request: ChangeLocationRequest;
   onStatusChange: (status: ChangeStatus) => void;
@@ -270,9 +260,7 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
   const currentIdx = CHANGE_STEPS.findIndex(s => s.key === request.status);
 
   const handleComplete = async () => {
-    /* Without a vsm_id there is no movement to complete. Reporting success and
-       moving the badge on anyway would tell the store the product had been
-       relocated while its actual movement sat untouched. */
+
     if (!request.vsmId) {
       toast.show('This change request has no movement ID — reopen the product and initiate it again.', 'error');
       return;
@@ -289,9 +277,6 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
     }
   };
 
-  /* The backend only reverses a COMPLETED move (it puts the stock back), so
-     "Cancel" is an undo offered after completion — not a way to discard a
-     still-pending request. */
   const handleCancel = async () => {
     if (!request.vsmId) return;
     setRevertLoading(true);
@@ -356,7 +341,6 @@ function ChangeLocationStatusTracker({ request, onStatusChange }: {
   );
 }
 
-// ─── Removal Status Tracker ─────────────────────────────────────────────────
 function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
   status: RemovalStatus;
   reason: RemovalReason;
@@ -428,7 +412,6 @@ function RemovalStatusTracker({ status, reason, vsmId, onStatusChange }: {
   );
 }
 
-// ─── Main Product Detail Panel ──────────────────────────────────────────────
 function changeRequestKey(handle: string) { return `sd_change_${handle}`; }
 function removalStateKey(handle: string) { return `sd_removal_${handle}`; }
 
@@ -476,7 +459,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
         const data = await fetchMovements();
         if (cancelled) return;
         const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
-        // Only unfinished move requests for this exact variant + source location.
+
         const active = list.find((m: any) =>
           m.change_request_type === 'move_display'
           && m.variant?.product_name === item.product_name
@@ -487,7 +470,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           const backendId = active.id ?? active.vsm_id;
           const stored = loadStored<ChangeLocationRequest>(changeRequestKey(item.variant_handle));
           setChangeRequest({
-            // Backend returns only initiated movements, so it's always this step.
+
             status: 'change_initiated',
             vsmId: backendId ?? stored?.vsmId,
             newLocationString: active.to_location?.location_string ?? '',
@@ -505,8 +488,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
 
   const handleChangeLocationSave = async (data: { displayType: string; locationString: string; quantity: number }, positionChanged: boolean) => {
     if (!positionChanged) {
-      /* There is no endpoint that persists a quantity-only edit — movement and
-         removal are the only writes this screen has. */
+
       toast.show('Quantity is only editable through the bulk sheet upload in Admin — nothing was changed.', 'error');
       return;
     }
@@ -536,9 +518,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
 
   const handleRemovalConfirm = async (reason: RemovalReason) => {
     try {
-      /* Backend removal_reason vocabulary is {discontinued_permanently,
-         retired_from_store_display}; "temporary" maps to the latter (removed
-         from THIS store's display, not discontinued on the website). */
+
       const apiReason = reason === 'discontinued_permanently' ? 'discontinued_permanently' : 'retired_from_store_display';
       const apiData = await initiateMovement({
         movement_type: 'remove_display',
@@ -563,7 +543,7 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
       </button>
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {/* Image + Info */}
+
         <div className="flex gap-6 p-6">
           <a href={materialDepotUrl} target="_blank" rel="noopener noreferrer" className="block w-48 h-48 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 hover:opacity-90 transition-opacity">
             {item.image_url ? (
@@ -607,7 +587,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </div>
         </div>
 
-        {/* Private Label */}
         {(item.private_label_product_name || item.private_label_brand) && (
           <div className="border-t border-gray-100 px-6 py-4">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Private Label</div>
@@ -628,7 +607,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </div>
         )}
 
-        {/* Location */}
         <div className="border-t border-gray-100 px-6 py-4">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Full Location Path</div>
           <div className="bg-gray-50 rounded px-3 py-2 font-mono text-[13px] text-gray-700">
@@ -636,7 +614,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </div>
         </div>
 
-        {/* Status Trackers */}
         {changeRequest && (
           <div className="border-t border-gray-100 px-6 py-4">
             <ChangeLocationStatusTracker
@@ -657,7 +634,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </div>
         )}
 
-        {/* Actions */}
         <div className="border-t border-gray-100 px-6 py-4">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Actions</div>
           <div className="space-y-2">
@@ -681,7 +657,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
           </div>
         </div>
 
-        {/* Link */}
         <div className="border-t border-gray-100 px-6 py-4">
           <a href={materialDepotUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] text-blue-600 hover:text-blue-800 underline">
             View on Material Depot →
@@ -689,7 +664,6 @@ export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Pro
         </div>
       </div>
 
-      {/* Dialogs */}
       <ChangeLocationDialog
         open={changeLocationOpen}
         onClose={() => setChangeLocationOpen(false)}

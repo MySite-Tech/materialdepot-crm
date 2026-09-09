@@ -64,7 +64,6 @@ function StatusPill({ status }: { status: ClientStatus }) {
   );
 }
 
-/** §3.2 — the 0–10 reading, with the direction of travel when there is one. */
 function TemperatureChip({ value, previous, at }: { value?: number; previous?: number; at?: string }) {
   if (typeof value !== 'number') {
     return <span className="text-[10px] text-gray-300" title="Never scored — §3.2">unscored</span>;
@@ -95,8 +94,6 @@ function Metric({ value, state, format }: { value: number | string | undefined; 
   }
   return <span>{typeof value === 'number' && format ? format(value) : String(value)}</span>;
 }
-
-// ── §3.1 Log an interaction ───────────────────────────────────────────────────
 
 function InteractionModal({ client, kam, today, onClose, onSave }: {
   client: ClientEntity;
@@ -237,8 +234,6 @@ function InteractionModal({ client, kam, today, onClose, onSave }: {
   );
 }
 
-// ── Escalations (unchanged feature, moved onto the client) ────────────────────
-
 function EscalationSection({ client, today, onSave }: {
   client: ClientEntity;
   today: string;
@@ -351,8 +346,6 @@ function EscalationSection({ client, today, onSave }: {
   );
 }
 
-// ── §3 Client detail drawer ───────────────────────────────────────────────────
-
 function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveClient, onOpenOrder, onAddOrder }: {
   row: AssignedClientRow;
   orders: KamOrder[];
@@ -399,7 +392,7 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
         </div>
 
         <div className="px-5 py-4 flex flex-col gap-4">
-          {/* §2 metrics */}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <StatTile label="Orders" value={metrics.orders ?? '—'} />
             <StatTile label="Total revenue" value={metrics.totalRevenue !== undefined ? fmtL(metrics.totalRevenue) : '—'} />
@@ -412,7 +405,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
             </p>
           )}
 
-          {/* Contact block */}
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Contacts</div>
             {(client.contacts || []).map((c) => (
@@ -424,7 +416,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
             ))}
           </div>
 
-          {/* KAM assignment — open question #1 */}
           <div className="flex items-center justify-between gap-2 border border-gray-200 rounded-md px-3 py-2">
             <div className="text-[12px]">
               <span className="text-gray-400">KAM</span>{' '}
@@ -450,7 +441,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
           </div>
           {error && <p className="text-[11px] text-red-600">Could not save: {error}</p>}
 
-          {/* §3.3 upcoming project */}
           <div className="border border-gray-200 rounded-md px-3 py-2">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Upcoming project · §3.3</div>
             {upcoming
@@ -458,7 +448,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
               : <p className="text-[12px] text-gray-300">Nothing on file. It is captured on an interaction.</p>}
           </div>
 
-          {/* §3.2 mismatch — reported, never overridden */}
           {mismatch && (
             <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
               <span className="font-semibold">Temperature vs. the record:</span> {mismatch.message}{' '}
@@ -466,7 +455,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
             </p>
           )}
 
-          {/* §3.1 interaction log */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Latest interaction · §3.1 · {log.length}</span>
@@ -502,7 +490,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
             )}
           </div>
 
-          {/* §5 orders on this client */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Active orders · §5 · {orders.length}</span>
@@ -543,8 +530,6 @@ function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveCli
   );
 }
 
-// ── §5 Active Order form ──────────────────────────────────────────────────────
-
 function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
   order: KamOrder;
   isNew?: boolean;
@@ -574,13 +559,11 @@ function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
       contactName: primary?.name,
       phone: primary?.number,
       source: c.source,
-      // The order follows the account's KAM, so a reassignment does not leave
-      // orders behind on the previous owner's board.
+
       kam: c.kam || d.kam,
     }));
   };
 
-  // §5.1 "Order Value (Procurement) — auto-fetched, in line with the Enquiry ID".
   const runLookup = async () => {
     const enq = String(draft.enqId || '').trim();
     if (!enq || !draft.phone) {
@@ -612,8 +595,7 @@ function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
     const statusChanged = draft.status !== order.status;
     const err = await onSave({
       ...draft,
-      // Realised rupees only. Never the estimate — this is the column analytics
-      // sums as revenue.
+
       value: Number(draft.orderValue) || 0,
       statusChangedAt: statusChanged || isNew ? new Date().toISOString() : draft.statusChangedAt,
       createdAt: draft.createdAt || new Date().toISOString(),
@@ -750,8 +732,6 @@ function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
     </div>
   );
 }
-
-// ── Active Orders bulk upload (the ops team's existing sheet) ─────────────────
 
 function UploadModal({ existing, onClose, onImport }: {
   existing: KamOrder[];
@@ -905,8 +885,6 @@ function UploadModal({ existing, onClose, onImport }: {
   );
 }
 
-// ── Cadence lists (§4.2 / §4.3) ───────────────────────────────────────────────
-
 function CadenceList({ rows, kind, onOpen, emptyNote }: {
   rows: CadenceRow[];
   kind: 'today' | 'queue';
@@ -969,8 +947,6 @@ function CadenceList({ rows, kind, onOpen, emptyNote }: {
   );
 }
 
-// ── The tab ───────────────────────────────────────────────────────────────────
-
 export default function KAMs() {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [orders, setOrders] = useState<KamOrder[]>([]);
@@ -1019,13 +995,6 @@ export default function KAMs() {
     setDates(orderDatesFromRows(details, head));
     setLoading(false);
 
-    // ── §5.1: pull the Procurement value for every order with an Enquiry ID,
-    //    then let the deal ticket advance the status (see kamAutoStage.ts).
-    //
-    // Runs after the board has painted, so a slow Django never holds the list
-    // up, and every write's failure is collected rather than dropped — a
-    // fire-and-forget upsert here is how one live row ended up with the same
-    // auto-advance note twice.
     if (!ord.length) return;
     const { resolutions, overflow } = await resolveKamOrders(ord);
     const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
@@ -1036,7 +1005,6 @@ export default function KAMs() {
     const advancedById = new Map(advanced.map((o) => [o.id, o]));
     const finalOrders = afterResolve.map((o) => advancedById.get(o.id) ?? o);
 
-    // Persist only the rows that actually changed, and await each one.
     const changed = finalOrders.filter((o) => {
       const before = ord.find((x) => x.id === o.id);
       return before && (before.status !== o.status || before.orderValue !== o.orderValue || before.dealStatus !== o.dealStatus);
@@ -1072,7 +1040,6 @@ export default function KAMs() {
     return [...seen].sort();
   }, [clients, orders]);
 
-  /** §2 is "every client assigned to the logged-in KAM" — the filter IS that scope. */
   const scopedClients = useMemo(
     () => (kamFilter === 'all' ? clients : clients.filter((c) => (c.kam || '') === (kamFilter === 'unassigned' ? '' : kamFilter))),
     [clients, kamFilter],
@@ -1096,7 +1063,7 @@ export default function KAMs() {
           || (digits.length >= 4 && contactNumbers(r.client.contacts).some((p) => p.includes(digits)));
       })
       .sort((a, b) => {
-        // Overdue first, then due today, then by how long it has been quiet.
+
         const rank = (x: AssignedClientRow) => (x.followUp === 'overdue' ? 0 : x.followUp === 'today' ? 1 : 2);
         return rank(a) - rank(b) || (b.daysSinceContact ?? -1) - (a.daysSinceContact ?? -1) || a.company.localeCompare(b.company);
       });
@@ -1207,7 +1174,6 @@ export default function KAMs() {
         </div>
       )}
 
-      {/* ── Scope + view switcher ── */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">KAM</span>
         <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)}
@@ -1244,7 +1210,6 @@ export default function KAMs() {
         <span className="font-semibold text-gray-500">{currentView.section}</span> · {currentView.note}
       </p>
 
-      {/* ── Summary tiles ── */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 mb-4">
         <StatTile label="Assigned clients" value={rows.length} sub={`${rows.filter((r) => r.status === 'Active').length} active`} />
         <StatTile label="Calls today" value={`${callsToday}/${callTarget}`} tone={callsToday >= callTarget ? '#15803D' : '#B45309'} sub="§4.1 target, reported not enforced" />
@@ -1256,7 +1221,6 @@ export default function KAMs() {
 
       {loading && <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>}
 
-      {/* ── §2 Assigned Clients ── */}
       {!loading && view === 'clients' && (
         <>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -1336,13 +1300,11 @@ export default function KAMs() {
         </>
       )}
 
-      {/* ── §4.2 Today's Calls ── */}
       {!loading && view === 'today' && (
         <CadenceList rows={today_} kind="today" onOpen={setDrawerId}
           emptyNote="Nothing is due today. A client appears here when the follow-up date on its latest interaction is today." />
       )}
 
-      {/* ── §4.3 Follow-up Queue ── */}
       {!loading && view === 'queue' && (
         <>
           <CadenceList rows={queue} kind="queue" onOpen={setDrawerId}
@@ -1356,7 +1318,6 @@ export default function KAMs() {
         </>
       )}
 
-      {/* ── §5.3 Active Orders ── */}
       {!loading && view === 'orders' && (
         <>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -1377,9 +1338,6 @@ export default function KAMs() {
             )}
           </div>
 
-          {/* What the Procurement sync actually did, in full. Three outcomes stay
-              three: an Enquiry ID that matched nothing is NOT the same as a
-              Django outage, and neither is silently rendered as ₹0. */}
           {sync && (
             <div className="mb-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
               <span className="font-semibold text-gray-700">Procurement sync:</span>{' '}
@@ -1460,7 +1418,6 @@ export default function KAMs() {
         </>
       )}
 
-      {/* ── Modals / drawer ── */}
       {drawerRow && (
         <ClientDrawer
           row={drawerRow}
@@ -1500,8 +1457,7 @@ export default function KAMs() {
           existing={orders}
           onClose={() => setUploading(false)}
           onImport={async (imported) => {
-            // Awaited, so the modal reports which rows actually persisted rather
-            // than claiming success on a fire-and-forget write.
+
             const errors: Record<string, string> = {};
             const saved: KamOrder[] = [];
             for (const o of imported) {

@@ -1,18 +1,5 @@
 'use client';
 
-/* Category Operations Executive dashboard — port of material-depot-site's
-   COE_Dashboard.html. The COE chases a completed site audit through to an
-   order (D+1/D+3/D+14 call cadence) and tracks custom-wallpaper production
-   PO-by-PO through render → approval → print → delivery → install.
-
-   Six tabs, ONE shared data load (audit_orders/install_orders/wp_production/
-   ratings) — every tab reads the same in-memory rows so a number on one tab can
-   never disagree with another (the CLAUDE.md "sum-to-total" lesson this
-   feature's source repo learned the hard way). That is also why 📊 NPS
-   analytics computes from `scoredCalls` over these same rows rather than
-   querying for its own: it and ⭐ Review scores must never be able to disagree
-   about what the COE typed. */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { inCity, phoneKey, sbGet, type CityFilter } from '../siteAuditShared';
 import {
@@ -42,32 +29,20 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
   const [orders, setOrders] = useState<CoeOrder[]>([]);
   const [installs, setInstalls] = useState<CoeInstall[]>([]);
   const [wpRows, setWpRows] = useState<WpRow[]>([]);
-  /* null = the ratings read failed or hasn't run. NOT an empty table — see the
-     `ratings` prop comment in ReviewScores: collapsing the two would offer to
-     re-push every score ever captured. sbGet resolves a PostgREST error object
-     instead of throwing (CLAUDE.md's Array.isArray landmine), so the array
-     check IS the error check here, and the last good value survives a blip. */
+
   const [ratings, setRatings] = useState<RatingRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /* Ticked categories, held outside React state because they are only ever
-     merged INTO the order list (see the fetch below for why they aren't in
-     AUDIT_COLS). The ref is what lets a poll repaint the table with its
-     category pills still on it while the second query is in flight — the same
-     shape SiteAuditOpsView uses for its own AUDIT_CATEGORY_QUERY. */
   const catsRef = useRef<Map<string, string[]>>(new Map());
   const catsInFlight = useRef(false);
 
   const load = useCallback(async () => {
     const [aRows, iRows, wRows, rRows] = await Promise.all([
       sbGet('audit_orders?select=' + AUDIT_COLS + '&status=eq.completed&order=date.desc'),
-      // _slim (not the base table) — INSTALL_COLS now carries subjobs/log for the Install Reviews
-      // tab, and this is the repo's established way to add those columns without reintroducing the
-      // photo-bloat problem the base install_orders table has (see e.g. SiteAuditJobsView.tsx).
+
       sbGet('install_orders_slim?select=' + INSTALL_COLS + '&status=neq.deleted&order=created_at.desc'),
       sbGet('wp_production?select=*&order=created_at.desc'),
-      // Narrow projection of the ratings table — only what's needed to tell
-      // which captured scores already reached it.
+
       sbGet('ratings?select=' + RATING_COLS),
     ]);
     if (Array.isArray(aRows)) {
@@ -77,14 +52,6 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
       });
       setOrders(mapped);
 
-      /* The category query is `audit_ticked` over the same completed rows — the
-         only place the auditor's ticked material is recorded, and 1.2 MB / ~1.4s
-         because on a completed audit that column IS the job card (the detoast
-         trap in CLAUDE.md). So it is NOT part of the 30s poll: a completed
-         audit's job card is terminal, so it is asked once and then only again
-         when an audit turns up that we have no answer for — a fresh completion.
-         Fire-and-forget and fails quietly: no category pill is worth delaying
-         or blanking the queue for, and the previous answer stays on screen. */
       const unknown = mapped.some((o) => !catsRef.current.has(String(o.id)));
       if (unknown && !catsInFlight.current) {
         catsInFlight.current = true;
@@ -106,10 +73,7 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
 
   useEffect(() => {
     load();
-    // Each tab's drawer keeps its own local form state (see Wallpaper.tsx's
-    // WpDrawer / Followups.tsx's LogCallForm), so a background refetch that
-    // replaces `orders`/`wpRows` while one is open can't clobber an
-    // in-progress, uncommitted edit — safe to poll unconditionally.
+
     const tid = setInterval(() => { if (!document.hidden) load(); }, 30000);
     return () => clearInterval(tid);
   }, [load]);
@@ -117,14 +81,13 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
   const installByPhone = useMemo(() => {
     const m = new Map<string, CoeInstall[]>();
     installs.forEach((io) => {
-      // Normalised, not raw — orderPlacedFor looks up by phoneKey too.
+
       const key = phoneKey(io.phone);
       if (!key) return;
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(io);
     });
-    // oldest first, so orderPlacedFor picks the FIRST order after the audit,
-    // not the latest.
+
     m.forEach((list) => list.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))));
     return m;
   }, [installs]);
@@ -132,7 +95,7 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
   const cityScope = city || 'all';
   const scopedOrders = useMemo(() => inCity(orders, cityScope), [orders, cityScope]);
   const scopedWp = useMemo(() => inCity(wpRows as unknown as Array<{ city?: string | null }>, cityScope) as unknown as WpRow[], [wpRows, cityScope]);
-  const scopedInstalls = installs; // installs aren't city-tagged in this table; seeds/phone-matching stay global.
+  const scopedInstalls = installs;
 
   const attribution = who || 'Category Ops';
 

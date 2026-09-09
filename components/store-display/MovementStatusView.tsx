@@ -72,7 +72,7 @@ export function MovementStatusView() {
   const loadMovements = async () => {
     setLoading(true);
     try {
-      // Backend returns the movements still awaiting completion (status=initiated).
+
       const data = await fetchMovements();
       const list = Array.isArray(data) ? data : (data?.data ?? data?.results ?? []);
       if (!Array.isArray(list)) {
@@ -187,7 +187,6 @@ export function MovementStatusView() {
         <span className="text-[12px] text-gray-400 ml-auto">{filtered.length} awaiting completion</span>
       </div>
 
-      {/* Bulk actions bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg">
           <span className="text-[13px] font-medium text-gray-700">{selected.size} selected</span>

@@ -42,7 +42,6 @@ function Panel({ title, children, className = '' }: { title: string; children: R
   );
 }
 
-// Created-date windows for the pipeline strip. 'all' sends no date filter.
 type RangeKey = 'month' | 'lastMonth' | 'all';
 
 const RANGE_LABELS: Record<RangeKey, string> = {
@@ -51,7 +50,6 @@ const RANGE_LABELS: Record<RangeKey, string> = {
   all: 'All Time',
 };
 
-// IST day arithmetic — the API filters created dates on the Indian day.
 function rangeFor(key: RangeKey, now: Date): { from?: string; to?: string } {
   if (key === 'all') return {};
   const today = istToday(now);
@@ -63,8 +61,6 @@ function rangeFor(key: RangeKey, now: Date): { from?: string; to?: string } {
   const lastDay = new Date(Date.UTC(py, pm, 0)).getUTCDate();
   return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${lastDay}` };
 }
-
-// ── Account health widget ─────────────────────────────────────────────────────
 
 function HealthPill({ status }: { status: HealthStatus }) {
   const meta = HEALTH_META[status];
@@ -79,9 +75,6 @@ function HealthPill({ status }: { status: HealthStatus }) {
   );
 }
 
-// What the brief asks to happen at each level. These are flags for a human to
-// act on — nothing is dispatched from here, since this app has no notification
-// transport of its own.
 const HEALTH_ACTION: Record<HealthStatus, string> = {
   green: '—',
   amber: 'Notify KAM to intervene',
@@ -139,7 +132,6 @@ function AccountHealthPanel({ overview }: { overview: HealthOverview }) {
         </div>
       </div>
 
-      {/* Tiles double as a filter — clicking one lists those accounts. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {(['red', 'amber', 'green'] as HealthStatus[]).map((s) => (
           <button key={s} onClick={() => setFilter(filter === s ? null : s)} className="text-left cursor-pointer">
@@ -148,7 +140,6 @@ function AccountHealthPanel({ overview }: { overview: HealthOverview }) {
         ))}
       </div>
 
-      {/* Category mix — which kind of issue is actually driving the reds. */}
       {overview.escalationCount > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-3">
           {ESCALATION_CATEGORIES.map((c) => (
@@ -221,14 +212,6 @@ function AccountHealthPanel({ overview }: { overview: HealthOverview }) {
   );
 }
 
-// ── KAM PRD §6 ────────────────────────────────────────────────────────────────
-//
-// One rule runs through every rupee below and it is worth stating once: a
-// figure from a deal ticket and a figure a rep typed are NEVER added together.
-// Pipeline tiles show both, side by side, labelled — because at Quote Shared no
-// ticket exists yet, so the estimate is the only number there is, and calling
-// it pipeline without saying so is how the old board reported a guess as money.
-
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
@@ -262,7 +245,7 @@ function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDashboard
 
   return (
     <>
-      {/* §6 — Today's / month pipeline, and the three source pipelines */}
+
       <Panel title="KAM Module §6 · Pipeline" className="mt-3">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
           <Tile
@@ -292,7 +275,6 @@ function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDashboard
         </p>
       </Panel>
 
-      {/* §6 — Target vs revenue, and the revenue split */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
         <Panel title="Target vs Revenue">
           <div className="flex items-baseline justify-between">
@@ -326,7 +308,6 @@ function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDashboard
         </Panel>
       </div>
 
-      {/* §6 — the three funnels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
         <Panel title="Inbound Funnel">
           <Bars rows={k.funnels.inbound} colorFor={(l) => (INBOUND_STAGE_COLORS as Record<string, string>)[l] || '#0F766E'} />
@@ -352,7 +333,6 @@ function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDashboard
         </Panel>
       </div>
 
-      {/* §6 — cohort + SPOC split */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
         <Panel title="New Clients by Month · Inbound + Outreach + KAM Cohort">
           {!k.cohort.length ? (
@@ -422,9 +402,6 @@ function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDashboard
         </Panel>
       </div>
 
-      {/* §4.1 measured, §3.2 measured — the two §6.2 additions this module's own
-          sections already promise. The other six are flagged in the PRD "for
-          review rather than assuming they're wanted" and are not built. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
         <Panel title="Call Compliance · §4.1">
           <div className="flex items-baseline justify-between mb-2">
@@ -546,10 +523,7 @@ export default function B2BDashboard() {
     setRefreshing(true);
     try {
       const now = new Date();
-      // Revenue, target % and run rate are month-to-date by definition — the
-      // target is monthly — so they ignore the range selector and always read
-      // the current month. Only the pipeline/revenue-split panels follow it,
-      // and when the selector already is 'This Month' the same fetch serves both.
+
       const selected = rangeFor(range, now);
       const [fetched, targets, pipeline, byVertical, monthVertical] = await Promise.all([
         fetchB2BData(), fetchTargets(), fetchB2BPipelineStats(selected),
@@ -559,16 +533,6 @@ export default function B2BDashboard() {
       let data = fetched;
       const today = istToday(now);
 
-      // ── A KAM order's revenue is the deal ticket's figure, so an order whose
-      //    Enquiry ID has not been resolved yet contributes ₹0. That is right,
-      //    but it must not make the whole revenue tile read ₹0 just because
-      //    nobody has opened the KAM tab since the last order was raised — so
-      //    the dashboard resolves for DISPLAY here.
-      //
-      //    It deliberately does not WRITE what it resolves. The KAM tab owns
-      //    persistence (it is where a rep is looking when a status advances off
-      //    a ticket); two surfaces writing the same rows on load is how the
-      //    duplicate auto-advance note got onto a live row in the first place.
       const { resolutions } = await resolveKamOrders(data.kam);
       const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
       const kamUnresolved = data.kam.filter((o) =>
@@ -576,13 +540,6 @@ export default function B2BDashboard() {
       data = { ...data, kam: data.kam.map((o) => resolvedById.get(o.id) ?? o) };
       setUnresolvedOrders(kamUnresolved);
 
-      // ── Client metrics: two sources, each with its own failure state ──
-      //
-      // The batched endpoint gives counts and values for every client in one
-      // request. Last Order Placed — and therefore Active/Inactive — needs the
-      // per-phone ticket pass, which is one request per number, so it is capped
-      // and the overflow is REPORTED rather than quietly dropped: an uncounted
-      // client reads as Unknown, never as Inactive.
       const clientPhones = data.clients.flatMap((c) => contactNumbers(c.contacts));
       const aggregates = await fetchClientOrderHistories(clientPhones);
       const capped = clientPhones.slice(0, ORDER_DETAIL_PHONE_CAP);
@@ -605,10 +562,6 @@ export default function B2BDashboard() {
       setFailed(data.failed);
       setClientCount(data.clients.length);
 
-      // Account health is scored off each CLIENT's escalation log — it moved off
-      // the KAM board rows when clients and orders were split apart. The "active
-      // pipeline" beside each status is that client's own open cart value from
-      // the deal tickets, summed across every number on the account.
       setHealth(buildHealthOverview(
         data.clients,
         today,
@@ -675,8 +628,6 @@ export default function B2BDashboard() {
         </div>
       </div>
 
-      {/* A half-loaded dashboard says so. A page quietly showing only the inbound
-          half looks exactly like a CRM with no KAM orders. */}
       {!!failed.length && (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
           <span className="font-semibold">Partly loaded.</span>{' '}
@@ -692,9 +643,6 @@ export default function B2BDashboard() {
         </div>
       )}
 
-      {/* ── Pipeline strip — B2B-branch cart values from /crm/leads/stats/ ── */}
-      {/* Scoped by cart created-date, exactly like the Leads tab's Created filter,
-          so a B2B-filtered Leads tab over the same window reports the same rupees. */}
       <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200 mb-3">
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -741,7 +689,6 @@ export default function B2BDashboard() {
         </div>
       </div>
 
-      {/* ── Cart status breakdown (B2B branch) ── */}
       {(stats?.byStatus.length ?? 0) > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
           {stats!.byStatus.map((s) => (
@@ -754,7 +701,6 @@ export default function B2BDashboard() {
         </div>
       )}
 
-      {/* ── Top metric cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Revenue Generated" value={fmtL(monthRevenue)} sub={`of ${fmtL(monthlyTarget)} target`} />
         <MetricCard label="Target Achieved" value={`${achievedPct}%`} />
@@ -762,10 +708,8 @@ export default function B2BDashboard() {
         <MetricCard label="Month Projection" value={fmtL(runRate)} />
       </div>
 
-      {/* ── Account health (escalation-driven RAG + pipeline at stake) ── */}
       {health && <AccountHealthPanel overview={health} />}
 
-      {/* ── Revenue vs Target ── */}
       <Panel title="Revenue vs Target" className="mt-3">
         <div className="font-mono text-lg font-bold text-black">
           {fmtL(monthRevenue)} <span className="text-sm font-normal text-gray-400">of {fmtL(monthlyTarget)}</span>
@@ -776,7 +720,6 @@ export default function B2BDashboard() {
         <div className="text-[11px] text-gray-400 mt-2">{achievedPct}% of monthly target achieved</div>
       </Panel>
 
-      {/* ── Pipeline by Stage ── */}
       <Panel title="Pipeline by Stage" className="mt-3">
         <div className="flex flex-col gap-3">
           {d.pipelineByStage.map((s) => (
@@ -795,7 +738,6 @@ export default function B2BDashboard() {
         </div>
       </Panel>
 
-      {/* ── Pipeline by Vertical ── */}
       <Panel title="Pipeline by Vertical — Overall Pipeline" className="mt-3">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
@@ -811,12 +753,8 @@ export default function B2BDashboard() {
         </div>
       </Panel>
 
-      {/* ── Client + Source pies ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
-        {/* Active / Inactive / Unknown — three states, because a client whose
-            order dates could not be read has NOT gone quiet, and rendering it
-            as Inactive would have a KAM stand down an account that is still
-            ordering. Client DB PRD §2.1. */}
+
         <Panel title="Client Status">
           {d.clientMasterEmpty ? (
             <p className="text-[12px] text-gray-400 py-6 text-center">
@@ -883,7 +821,6 @@ export default function B2BDashboard() {
 
       {kamDash && <KamDashboardSection k={kamDash} monthlyTarget={monthlyTarget} unresolved={unresolvedOrders} />}
 
-      {/* ── Run rate vs required ── */}
       <Panel title="Run Rate vs Required Run Rate" className="mt-3">
         <div className="grid grid-cols-3 gap-4">
           <div>

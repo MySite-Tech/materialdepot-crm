@@ -3,23 +3,6 @@ import { phoneKey } from './identity';
 import { bmPhoneOfOrder, fetchBmEmailsByPhone } from './bmLink';
 import { syntheticSiteAuditEmail } from './roleSync';
 
-/* ── An audit order must never be written without an owner ─────────────────
-   `bm_email` unset is not a cosmetic gap: the row then reaches a BM dashboard only by matching
-   free text against `profiles.name`, which is why a queue of "link these by hand" built up.
-   Rather than fix each writer and hope the next one remembers, sbPost() routes every
-   audit_orders insert through this.
-
-   The identity being resolved is the PHONE, not the address — see bmPhoneOfOrder. `bm_email`
-   holds a real profile address when an account exists and the deterministic
-   crm.<10-digits>@site-audit.internal form when it does not, so attribution works before anyone
-   has a field-app profile. Resolution order, most authoritative first:
-     1. the enquiry's owner from the backend (the estimate's manager assignment) — this is what
-        makes a rectification clone and a hand-typed order land on the right dashboard
-     2. digits already in the free-text `bm` field
-     3. an exact BM-profile name match
-   A store pre-booking made before any enquiry exists has no knowable owner; that row is left for
-   the store team to assign rather than given a fabricated one, and `bm` is never left holding a
-   store name pretending to be a person. */
 const ENQUIRY_RE = /ENQ\d+/;
 
 export function enquiryIdFrom(pi?: string | null, po?: string | null): string | null {
@@ -27,8 +10,6 @@ export function enquiryIdFrom(pi?: string | null, po?: string | null): string | 
   return hit ? hit[0] : null;
 }
 
-/* One narrow lookup, not the paged backfill resolveBmFromBackend runs: this is on the write path
-   and only ever needs a single enquiry. */
 async function fetchBmContactForEnquiry(enquiry: string): Promise<{ name: string; contact: string } | null> {
   const { getToken } = await import('@/lib/mockApi');
   const token = getToken();
@@ -70,7 +51,7 @@ export async function ensureAuditOrderOwner(body: any): Promise<any> {
       const hits = (Array.isArray(rows) ? rows : []).filter(
         (r: any) => String(r.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === target && phoneKey(r.contact),
       );
-      // Two BMs on one name is ambiguous; a wrong link shows one BM another's customer.
+
       if (hits.length === 1) phone = String(hits[0].contact);
     }
   }

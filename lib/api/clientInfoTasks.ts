@@ -1,9 +1,5 @@
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// BM Client-Info Tasks
-// ---------------------------------------------------------------------------
-
 export interface ClientInfoTask {
   id: number;
   client: { id: number; name: string; contact: string } | null;

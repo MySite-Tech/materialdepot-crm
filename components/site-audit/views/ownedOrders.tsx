@@ -1,38 +1,5 @@
 'use client';
 
-/* The installation and custom-wallpaper halves of "my orders".
-
-   A BM's order book is three things, not one: the site audit (audit_orders),
-   the installation that follows it (install_orders) and, when the wallpaper is
-   printed to order, the custom-wallpaper production run (wp_production).
-   SiteAuditBmView only ever loaded audit_orders, so BMs could see an audit was
-   done and nothing about whether the material got installed. Both extra lists
-   are READ-ONLY here — scheduling installs stays with the Service Manager and
-   wallpaper production stays with the Category Ops Executive; this is purely
-   "where has my customer's order got to".
-
-   Each list opens a drawer, the same way the audit list always has, because a
-   status pill answers "is it done" and a BM on a client call needs "what
-   exactly is it waiting on, and since when". The drawers are read-only with two
-   deliberate exceptions, both of them statements only a BM can make:
-   declaring which site audit an installation came from, and (on the audit side)
-   the reverse link.
-
-   WHAT EACH DRAWER LOADS, AND WHY IT ISN'T IN THE LIST QUERY: `log` is jsonb
-   averaging ~7 KB a row — on the install set that is megabytes per poll to
-   render a timeline for one order at a time — and `service`/`skus` are only
-   read once a drawer is open. Both lists poll every 30s, so anything drawer-only
-   is fetched per order on open, the same split coe-ops/shared.ts documents for
-   its own AUDIT_COLS. The one exception is `service->>audit_by`, pulled as a
-   scalar through PostgREST's json path so the list can badge audit ownership
-   without carrying the whole blob.
-
-   Attribution reuses SiteAuditBmView's `orderBelongsToBm` unchanged, so all
-   three lists agree on who owns an order and nothing here matches fuzzily.
-   Note install_orders has no `bm_email` column at all (only audit_orders and
-   wp_production do), so its rows always resolve through the free-text `bm`
-   name/contact path. */
-
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { fmtDateA, fmtLog, sbGet } from '../siteAuditShared';
 import { orderBelongsToBm, type BmProfile } from './SiteAuditBmView';
@@ -44,13 +11,9 @@ import type { InstallOrder, Subjob } from '../install-ops/types';
 import WpLadder from '../coe-ops/WpLadder';
 import { WP_BUCKETS, wpBucket, wpNext, wpVendor, type WpRow } from '../coe-ops/wpTrack';
 
-/* `auditBy` is lifted out of the `service` jsonb as a scalar (PostgREST json
-   path + alias) rather than selecting the whole column: the badge needs one
-   string, and `service` also carries every SKU row. */
 export const OWNED_INSTALL_COLS = 'id,pi,po,bm,customer_name,phone,addr,status,delivery_date,custom_wp,subjobs,city,created_at,auditBy:service->>audit_by';
 export const OWNED_WP_COLS = 'id,pi,md_id,vendor,city,customer_name,phone,bm,bm_email,order_placed_at,stages,rounds,state,imported,install_order_id,audit_order_id,created_at';
 
-/* Only what a drawer adds on top of the list row. */
 const INSTALL_DRAWER_COLS = 'id,log,service,skus';
 const WP_DRAWER_COLS = 'id,log,notes';
 
@@ -83,10 +46,6 @@ export function mapOwnedInstall(r: any): OwnedInstall {
   };
 }
 
-/* One fetch per table, filtered client-side against every person passed in —
-   the same shape SiteAuditBmView and SiteAuditBranchManagerView already use,
-   so a store manager's whole-branch rollup costs the same two requests as one
-   BM's own list. */
 export async function loadOwnedInstalls(people: BmProfile[]): Promise<OwnedInstall[]> {
   if (!people.length) return [];
   const rows = await sbGet('install_orders_slim?select=' + OWNED_INSTALL_COLS + '&status=neq.deleted&order=created_at.desc');
@@ -100,8 +59,6 @@ export async function loadOwnedWallpapers(people: BmProfile[]): Promise<WpRow[]>
   if (!Array.isArray(rows)) return [];
   return rows.filter((r: any) => people.some((p) => orderBelongsToBm(r, p))) as WpRow[];
 }
-
-/* ── Installations ─────────────────────────────────────────────────────── */
 
 const AUDIT_SOURCE_BADGE: Record<'material_depot' | 'customer' | 'unset', { l: string; badge: string; hint: string }> = {
   material_depot: {
@@ -143,9 +100,7 @@ export function InstallOrdersList({ orders, loading, showBm = false, attribution
   orders: OwnedInstall[];
   loading: boolean;
   showBm?: boolean;
-  /* Who is looking, for the one write this list allows: declaring which site
-     audit an installation came from. Omitted in rollup views, where nobody
-     identifiable owns the order — the drawer is then entirely read-only. */
+
   attribution?: string;
 }) {
   const [q, setQ] = useState('');
@@ -191,9 +146,7 @@ export function InstallOrdersList({ orders, loading, showBm = false, attribution
             </button>
           ))}
         </div>
-        {/* Who measured the site is a different question from where the job has
-            got to, so it filters independently rather than joining the status
-            pills. */}
+
         <label className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
           Audit by
           <select
@@ -248,8 +201,6 @@ export function InstallOrdersList({ orders, loading, showBm = false, attribution
   );
 }
 
-/* ── Installation drawer ───────────────────────────────────────────────── */
-
 type InstallExtras = { log: any[]; service: InstallOrder['service']; skus: any[] } | null;
 
 function InstallOrderDrawer({ order: o, attribution, onClose }: { order: OwnedInstall; attribution?: string; onClose: () => void }) {
@@ -261,8 +212,7 @@ function InstallOrderDrawer({ order: o, attribution, onClose }: { order: OwnedIn
   const loadExtras = useCallback(async () => {
     setExtrasFailed(false);
     const rows = await sbGet('install_orders?id=eq.' + o.id + '&select=' + INSTALL_DRAWER_COLS);
-    /* Not `Array.isArray(rows) ? … : []`: a failed request would then render an
-       empty timeline that reads exactly like a job nobody has touched. */
+
     if (!Array.isArray(rows) || !rows[0]) { setExtrasFailed(true); return; }
     setExtras({
       log: Array.isArray(rows[0].log) ? rows[0].log : [],
@@ -273,19 +223,11 @@ function InstallOrderDrawer({ order: o, attribution, onClose }: { order: OwnedIn
 
   useEffect(() => { loadExtras(); }, [loadExtras]);
 
-  /* The production run behind a custom-wallpaper order, by the id the COE's own
-     tracker writes, or the lead id when it was raised before that link existed.
-     Verified against live data: every run whose `install_order_id` is set also
-     agrees on `pi`, so the two clauses never disagree — the second only widens
-     coverage. Never by phone: one client's two projects share a number. */
   useEffect(() => {
     if (!o.customWp) { setWp([]); return; }
     let alive = true;
     const clauses = ['install_order_id.eq.' + o.id];
-    /* A comma or bracket in the value would be read as PostgREST `or=()`
-       syntax rather than as data, so a lead id carrying one is skipped instead
-       of corrupting the whole filter. Enquiry ids never do — this is a guard,
-       not a known case. */
+
     if (o.pi && !/[,()]/.test(o.pi)) clauses.push('pi.eq.' + o.pi);
     sbGet('wp_production?or=(' + clauses.join(',') + ')&select=' + OWNED_WP_COLS + ',notes&order=created_at.desc')
       .then((rows) => { if (alive) setWp(Array.isArray(rows) ? rows : null); })
@@ -326,8 +268,6 @@ function InstallOrderDrawer({ order: o, attribution, onClose }: { order: OwnedIn
         <KV k="Address" v={o.addr ? <a className="text-blue-600" href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(o.addr)} target="_blank" rel="noopener noreferrer">{o.addr}</a> : '—'} />
       </Sec>
 
-      {/* Who measured the site, and — when it was us — the job card the
-          installer is working from. */}
       <Sec title="Site audit">
         <div className="mb-2 flex items-start gap-2">
           <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${src.badge}`}>{src.l}</span>
@@ -390,17 +330,12 @@ function InstallOrderDrawer({ order: o, attribution, onClose }: { order: OwnedIn
   );
 }
 
-/* One installation sub-job: who is on it, when, and the job card they signed.
-   `sjShortLabel`/`sjDeliveryDate`/`sjEffectiveAssignments` are the SM view's own
-   helpers — split sub-jobs and legacy single-installer rows both normalise
-   through them, so this can't disagree with what the SM sees. */
 function SubjobBlock({ order, sj }: { order: OwnedInstall; sj: Subjob }) {
   const st = INSTALL_STATUS[sj.status] || { l: sj.status, badge: 'bg-gray-100 text-gray-600' };
   const asgns = sjEffectiveAssignments(sj);
   const jc = sj.jobcard;
   const rooms = jc && Array.isArray(jc.rooms) ? jc.rooms : [];
-  /* `sjDeliveryDate` wants the SM view's InstallOrder; only these two fields
-     are read, so pass them rather than widening OwnedInstall. */
+
   const deliv = sjDeliveryDate({ deliveryDate: order.deliveryDate } as InstallOrder, sj);
 
   return (
@@ -428,8 +363,6 @@ function SubjobBlock({ order, sj }: { order: OwnedInstall; sj: Subjob }) {
     </div>
   );
 }
-
-/* ── Custom wallpaper production ───────────────────────────────────────── */
 
 const WP_STATE_BADGE: Record<string, { l: string; badge: string }> = {
   active: { l: 'In production', badge: 'bg-sky-100 text-sky-700' },
@@ -497,8 +430,7 @@ export function WallpaperOrdersList({ orders, loading, showBm = false }: { order
                   {o.order_placed_at ? ' · placed ' + fmtDateA(String(o.order_placed_at).slice(0, 10)) : ''}
                 </div>
                 <div className="mt-1 text-[11.5px] font-semibold text-gray-500">
-                  {/* wpNext() returns null both for a finished run and a cancelled
-                      one — don't report a cancelled PO as complete. */}
+
                   {next
                     ? 'Next: ' + next.label + (next.redo ? ' (redo)' : '')
                     : o.state === 'cancelled' ? 'PO cancelled — production stopped' : 'All production stages complete'}
@@ -522,12 +454,8 @@ export function WallpaperOrdersList({ orders, loading, showBm = false }: { order
   );
 }
 
-/* ── Custom wallpaper drawer ───────────────────────────────────────────── */
-
 function WallpaperOrderDrawer({ row, onClose }: { row: WpRow; onClose: () => void }) {
-  /* The ladder needs `notes`, and the activity list needs `log` — neither is in
-     the list query (see the header note). Merged over the list row so the
-     ladder renders immediately from what we already have. */
+
   const [full, setFull] = useState<WpRow>(row);
   const [extrasFailed, setExtrasFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -543,8 +471,6 @@ function WallpaperOrderDrawer({ row, onClose }: { row: WpRow; onClose: () => voi
 
   useEffect(() => { setFull(row); setLoaded(false); loadExtras(); }, [row, loadExtras]);
 
-  /* The installation this run feeds, when the COE recorded one. Not guessed
-     from the phone — see the same note in the installation drawer. */
   useEffect(() => {
     if (!row.install_order_id) { setInstall('none'); return; }
     let alive = true;
@@ -577,8 +503,6 @@ function WallpaperOrderDrawer({ row, onClose }: { row: WpRow; onClose: () => voi
         } />
       </Sec>
 
-      {/* The whole point of the tab: every step this print job goes through,
-          which round it is on, and what it is waiting for right now. */}
       <Sec title="Production ladder"><WpLadder row={full} /></Sec>
 
       <Sec title="Activity">
@@ -599,8 +523,6 @@ function WallpaperOrderDrawer({ row, onClose }: { row: WpRow; onClose: () => voi
   );
 }
 
-/* Loads both extra lists for a set of people and keeps them fresh on the same
-   30s cadence the other Site Audit views poll on. */
 export function useOwnedExtras(people: BmProfile[], deps: string) {
   const [installs, setInstalls] = useState<OwnedInstall[]>([]);
   const [wallpapers, setWallpapers] = useState<WpRow[]>([]);

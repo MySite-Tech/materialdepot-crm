@@ -34,10 +34,6 @@ function exportCsv(rows: Row[]) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/* Both tabs open on the bucket that most needs attention. Until the person
-   picks one themselves, an empty default falls through to the first bucket
-   that actually has rows — otherwise you land on "Overdue" with nothing in
-   it on a fresh install and think the tab is broken. */
 function firstNonEmpty(order: string[], counts: Record<string, number>, fallback: string): string {
   for (const k of order) if (counts[k]) return k;
   return fallback;
@@ -52,19 +48,12 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
   const [preset, setPreset] = useState<DatePresetKey>('all');
   const [range, setRange] = useState<DateRange>(() => presetRange('all'));
   const [cats, setCats] = useState<string[]>([]);
-  // Keyed by row id, not `pi` — pi is free text with no uniqueness guarantee,
-  // so a blank or repeated one would collide React keys and open the wrong row.
+
   const [openId, setOpenId] = useState<string | null>(null);
   const frozen = useFrozenBar();
 
   const everyRow = useMemo(() => followupRows(orders, installByPhone), [orders, installByPhone]);
 
-  /* THE FILTER ORDER MATTERS, and it is: date+category first, THEN buckets, THEN
-     search. The bucket tiles are the denominator the COE works the queue by, so
-     they have to count what the date and category filters leave — "3 Overdue" on
-     a tile above a table showing 40 rows is worse than no tile. Search is the
-     one filter the tiles deliberately IGNORE (as before): typing a name should
-     narrow the list, not renumber the queue you are working. */
   const all = useMemo(
     () => everyRow.filter((r) => inDateRange(anchorDate(r.o), range) && matchesCategory(auditCategories(r.o), cats)),
     [everyRow, range, cats],
@@ -77,9 +66,6 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
     return c;
   }, [all]);
 
-  /* Category counts for the picker come from the DATE-filtered rows but ignore
-     the category selection itself — otherwise every unpicked option reads 0 the
-     moment one is picked, which looks like "this material has no audits". */
   const catCounts = useMemo(() => {
     const c: Record<string, number> = {};
     [...CATEGORY_ORDER, CAT_UNSET].forEach((k) => { c[k] = 0; });
@@ -112,8 +98,6 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
         <button onClick={() => exportCsv(list)} className="ml-auto shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700">⬇ CSV</button>
       </div>
 
-      {/* Pinned: the counts and the controls the COE reads against whichever row
-          is on screen. Everything below scrolls under it. */}
       <FrozenBar top={frozen.top} setRef={frozen.ref}>
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <DateRangeFilter label="Site audit date" preset={preset} range={range} onChange={(p, r) => { setPreset(p); setRange(r); }} />
@@ -141,14 +125,7 @@ export default function Followups({ orders, installByPhone, who, whoEmail, onCha
         {list.length ? (
           <table className="w-full">
             <thead>
-              {/* NOT sticky, and it can't be: the wrapper below is
-                  `overflow-x-auto`, which makes IT the sticky scrollport rather
-                  than the document. `sticky top-N` on a cell in here doesn't
-                  pin to the viewport, it just shifts the header row N pixels
-                  down over the first rows. (CSS won't let the wrapper scroll on
-                  one axis only — `overflow-y: visible` beside `overflow-x: auto`
-                  computes back to auto.) The frozen bar above is outside that
-                  wrapper, which is why it works. */}
+
               <tr>{['Client', 'Audit', 'Categories', 'BM', 'Auditor', 'Order', 'Next call'].map((h) => (
                 <th key={h} className="whitespace-nowrap bg-gray-50 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">{h}</th>
               ))}</tr>
@@ -220,14 +197,9 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { order: CoeOrder; installByPhone: Map<string, CoeInstall[]>; who: string; whoEmail?: string | null; onClose: () => void }) {
   const [, force] = useState(0);
   const [msg, setMsg] = useState('');
-  /* Mark lost used window.prompt() for its required reason, which is the exact
-     shape CLAUDE.md's landmine covers: installed PWAs and mobile webviews
-     commonly return null with no dialog shown, and desktop Chrome silences it
-     per-origin for good once a user ticks "prevent additional dialogs" — so the
-     button just did nothing, indistinguishable from a dead one. Same contract
-     (a blank or cancelled note ABORTS), real DOM. */
+
   const note = useNoteModal();
-  // Fetched per order rather than carried by the list — see AUDIT_COLS.
+
   const [log, setLog] = useState<any[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -237,18 +209,12 @@ function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { 
   const today = todayStr();
   const t = o.coeTrack || {};
   const calls = coeCalls(o).slice().sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
-  // Recomputed on every render (including after a save's force() bump) so the
-  // drawer reflects o.coeTrack's just-mutated state without waiting for the
-  // parent list to refetch.
+
   const placed = orderPlacedFor(o, installByPhone);
   const cps = checkpointState(o, placed, today);
   const nextDue = cps.filter((c) => c.applies && c.state !== 'done').sort((a, b) => String(a.dueOn || '').localeCompare(String(b.dueOn || '')))[0] || null;
   const row: Row = { o, placed, cps, bucket: bucketFor(o, placed, today), nextDue };
 
-  /* Returns whether the write actually landed. Callers that do a SECOND write
-     afterwards (the D+1 form's ratings projection) must not fire it when the
-     call itself failed to save — otherwise a score is projected for a call
-     that isn't in the log. */
   async function run(mutate: (t: any) => any, logText: string, onOk?: string): Promise<boolean> {
     try {
       const next = await patchCoe(o.id, mutate, logText, who);
@@ -290,11 +256,6 @@ function FollowupDrawer({ order: o, installByPhone, who, whoEmail, onClose }: { 
             <OrderStatusSection row={row} run={run} />
           </Sec>
 
-          {/* Every cart on this number, not just the installation order the
-              `Order status` block above can see. The two answer different
-              questions and are deliberately both here: that block is "did this
-              audit convert", this one is "what has this client actually
-              bought". */}
           <Sec title="All carts on this number">
             <ClientCarts phone={o.phone} anchorDate={anchorDate(o)} anchorLabel="site audit" />
           </Sec>
@@ -424,9 +385,6 @@ function OrderStatusSection({ row, run }: { row: Row; run: (mutate: (t: any) => 
   );
 }
 
-// 1-10 score dropdown, shared shape between the two rating questions below and InstallReviews.tsx's
-// own copy — kept as a tiny local component rather than a cross-file export, matching this file's
-// existing preference for small local presentational helpers (see Sec/KV) over shared UI bits.
 function ScoreSelect({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
   return (
     <div className="mb-1.5">
@@ -453,8 +411,6 @@ function LogCallForm({ o, nextDue, who, whoEmail, run }: {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // The D+1 client review is the one checkpoint this app scores — right on this call, never
-  // on-site (note 117: the field worker being rated handing over the phone biased every score up).
   const needsRatings = stage === 'd1' && whoSpoke === 'client' && outcome === 'reached';
 
   async function save() {
@@ -464,12 +420,7 @@ function LogCallForm({ o, nextDue, who, whoEmail, run }: {
     setBusy(true);
     const cp = CHECKPOINTS.find((x) => x.k === stage);
     const ratings = needsRatings ? { q1, q2, q3 } : undefined;
-    // `by` is the COE who made the call — distinct from staff_email/staff_name
-    // on the rating, which is always the auditor being rated. Written here so a
-    // call logged from the CRM carries the same provenance as one logged from
-    // material-depot-site's COE_Dashboard, which has always stamped it: the two
-    // apps append to the same coe_track.calls[], and a call with no `by` is
-    // unattributable to whoever actually dialled.
+
     const by = { email: whoEmail || undefined, name: who };
     const saved = await run((t) => {
       (t.calls = t.calls || []).push({ id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), ts: new Date().toISOString(), stage, who: whoSpoke, outcome, note: note.trim(), ...(ratings ? { ratings } : {}), by });
@@ -485,10 +436,7 @@ function LogCallForm({ o, nextDue, who, whoEmail, run }: {
           customerName: o.name, customerPhone: o.phone,
         });
       } catch (e: any) {
-        /* The score is NOT lost — it is saved on the call above, which is the
-           source of truth. Only the analytics projection failed. Say so, and
-           point at the tab that can push it: swallowing this into console.error
-           is what kept scores out of NPS invisibly until 2026-08-25. */
+
         setErr('Call saved with the scores — but writing them to the analytics table failed (' + (e?.message || 'unknown error')
           + '). Nothing is lost: push it from the ⭐ Review scores tab.');
         setBusy(false);

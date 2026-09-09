@@ -1,10 +1,3 @@
-/* Custom-wallpaper production registry — TS port of material-depot-site's
-   shared md-wp-track.js. Single source of truth for the vendor list, the
-   stage ladder and the SLA maths behind the Category Ops Executive's
-   wp_production tracking.
-
-   ADDING A VENDOR = one object in WP_VENDORS. Nothing else changes. */
-
 export type WpVendor = { k: string; label: string; dispatchFrom: string; note?: string };
 
 export const WP_VENDORS: WpVendor[] = [
@@ -14,18 +7,6 @@ export const WP_VENDORS: WpVendor[] = [
   { k: 'other', label: 'Other vendor', dispatchFrom: 'vendor' },
 ];
 
-/* group    — which phase of the journey this belongs to (drives the bucket tiles)
-   slaH     — hours allowed since the PREVIOUS stage was stamped. OPTIONAL, and
-              deliberately absent from the back six: those come from the vendor
-              sheet's own bracketed headers only for the first five (6h/6h/2h/2h/1day),
-              which are Material Depot's real targets. Everything from printing
-              onwards is MEASURED, not policed — the Category Ops Executive is
-              recording how long each step actually takes, and attaching an
-              invented target there would manufacture "delays" that mean nothing.
-   soft     — only meaningful alongside slaH: true = an attention threshold
-              ("stalled"), false = a promised SLA ("breached").
-   round    — lives inside a render/approval round rather than the linear stage map
-   decision — captures the client's verdict, which is what can send it round again */
 export type WpStage = { k: string; label: string; group: string; slaH?: number; soft?: boolean; round?: boolean; decision?: boolean };
 
 export const WP_STAGES: WpStage[] = [
@@ -34,7 +15,7 @@ export const WP_STAGES: WpStage[] = [
   { k: 'render_to_bm', label: 'Render shared with BM', group: 'prepress', slaH: 2, round: true },
   { k: 'render_to_client', label: 'Shared with client by BM', group: 'prepress', slaH: 2, round: true },
   { k: 'client_approval', label: 'Approved by client', group: 'approval', slaH: 24, round: true, decision: true },
-  // No slaH from here on — measured, not policed. See the note above.
+
   { k: 'sent_for_printing', label: 'Sent for printing', group: 'production' },
   { k: 'dispatched', label: 'Dispatched from {from}', group: 'production' },
   { k: 'at_warehouse', label: 'Reached our warehouse', group: 'logistics' },
@@ -82,8 +63,6 @@ export function wpStageLabel(k: string, vendorKey?: string | null): string {
   return wpStage(k).label.replace('{from}', wpVendor(vendorKey).dispatchFrom);
 }
 
-/* Rounds always read as at least one, so a brand-new row renders the full
-   ladder instead of an empty gap where the render cycle should be. */
 export function wpRounds(row: WpRow): WpRound[] {
   const r = Array.isArray(row?.rounds) ? row.rounds : [];
   return r.length ? r : [{ n: 1 }];
@@ -92,9 +71,6 @@ function stagesOf(row: WpRow) {
   return (row && row.stages && typeof row.stages === 'object') ? row.stages : {};
 }
 
-/* Timestamp for a stage. Round stages resolve against the CURRENT (latest)
-   round — earlier rounds keep their own timestamps and are shown separately
-   in the ladder. */
 export function wpStageAt(row: WpRow, k: string): string | null {
   if (WP_ROUND_KEYS.includes(k)) {
     const rs = wpRounds(row);
@@ -113,10 +89,6 @@ export function wpDecision(row: WpRow): WpDecisionKey | null {
 
 export type WpNext = { k: string; label: string; group: string; redo: boolean };
 
-/* What has to happen next. Returns null when the row has nothing left to do.
-   The one place the loop lives: "changes suggested" means the NEXT action is
-   a fresh render (a new round), while "no reply" means keep chasing the same
-   approval. */
 export function wpNext(row: WpRow | null | undefined): WpNext | null {
   if (!row || row.state === 'cancelled') return null;
   const at = (k: string) => wpStageAt(row, k);
@@ -136,17 +108,12 @@ export function wpNext(row: WpRow | null | undefined): WpNext | null {
   return null;
 }
 
-/* Elapsed is measured from the moment the PREVIOUS stage was stamped (or from
-   the order being placed, for the very first stage) — the same way the
-   vendor sheet's bracketed hour targets read. Wall-clock, not business hours. */
 export function wpPrevAt(row: WpRow): string | null {
   const next = wpNext(row);
   if (!next) return null;
   const order = WP_STAGES.map((s) => s.k);
   const idx = order.indexOf(next.k);
-  // A redo (new round after "changes suggested") clocks from the client's
-  // feedback, not from the previous round's render — that's when the work
-  // actually restarted.
+
   if (next.redo) {
     const rs = wpRounds(row);
     const cur = rs[rs.length - 1] || {};
@@ -167,17 +134,12 @@ export function wpSla(row: WpRow, nowMs?: number): WpSla {
   const s = wpStage(next.k);
   const from = wpPrevAt(row);
   if (!from) return { level: 'none', next, hours: 0, from: null };
-  // An imported row's "previous step" timestamp is the order date, not when
-  // that step actually finished — so a breach/stalled verdict off it would be
-  // invented precision. Report the real elapsed time since the order was
-  // placed, but never colour it as a missed target.
+
   if (row.imported) {
     return { level: 'none', next, imported: true, from, slaH: s.slaH || null, hours: ((nowMs || Date.now()) - new Date(from).getTime()) / 3600000 };
   }
   const hours = ((nowMs || Date.now()) - new Date(from).getTime()) / 3600000;
-  // No target on this stage = no verdict. 'none' rather than 'ok', because
-  // calling a step "on track" against a target that doesn't exist is just as
-  // invented as calling it late. The elapsed hours are still returned.
+
   let level: WpSla['level'] = 'none';
   if (s.slaH) {
     level = 'ok';
@@ -189,8 +151,6 @@ export function wpSla(row: WpRow, nowMs?: number): WpSla {
 
 export type WpBucketKey = 'breach' | 'prepress' | 'approval' | 'production' | 'logistics' | 'onhold' | 'completed' | 'cancelled';
 
-/* Bucket for the stat tiles. Mutually exclusive and exhaustive, so the tiles
-   always sum to the row count. */
 export function wpBucket(row: WpRow, nowMs?: number): WpBucketKey {
   if (row?.state === 'cancelled') return 'cancelled';
   const next = wpNext(row);
@@ -214,17 +174,9 @@ export const WP_BUCKETS: Array<{ k: WpBucketKey; l: string; cls: string }> = [
 
 export type WpDuration = { k: string; hours: number; round: number | null; vendor: string };
 
-/* One entry per stage that actually happened, with the hours it took from
-   whatever legitimately preceded it. EVERY render round contributes its own
-   data points — a job that took three renders is three observations of "how
-   long a render takes," not one. */
 export function wpDurations(row: WpRow | null | undefined): WpDuration[] {
   if (!row) return [];
-  // Rows imported from the vendor spreadsheets carry no real per-step
-  // timestamps — the sheet only ever recorded Yes/No ticks — so every stage
-  // was stamped with the order-placed date. Letting those through would
-  // produce a wall of fake "0 hrs" observations and quietly wreck the
-  // medians. They still count in the funnels (which step did it reach).
+
   if (row.imported) return [];
   const out: WpDuration[] = [];
   const vendor = row.vendor || 'other';
@@ -234,7 +186,7 @@ export function wpDurations(row: WpRow | null | undefined): WpDuration[] {
   function push(k: string, at: string | null | undefined, prev: string | null | undefined, n?: number) {
     if (!at || !prev) return;
     const h = (new Date(at).getTime() - new Date(prev).getTime()) / 3600000;
-    if (!isFinite(h) || h < 0) return; // out-of-order/backfilled data — skip, never negative
+    if (!isFinite(h) || h < 0) return;
     out.push({ k, hours: h, round: n || null, vendor });
   }
   push('dimensions_shared', st.dimensions_shared?.at, start);
@@ -267,9 +219,6 @@ export function wpFmtDur(h: number | null | undefined): string {
   return Math.round(h / 24) + ' days';
 }
 
-/* A row that's already past a step counts as having reached it, even if that
-   specific step was never explicitly stamped — otherwise a back-filled row
-   makes the funnel look like it skipped a stage it demonstrably went through. */
 export function wpEverReached(row: WpRow, k: string): boolean {
   const order = WP_STAGES.map((s) => s.k);
   const idx = order.indexOf(k);

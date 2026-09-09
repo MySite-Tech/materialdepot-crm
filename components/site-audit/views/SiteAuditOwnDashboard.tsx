@@ -15,23 +15,10 @@ import SiteAuditBmView from './SiteAuditBmView';
 import SiteAuditCoeView from './SiteAuditCoeView';
 import SiteAuditBranchManagerView from './SiteAuditBranchManagerView';
 
-/* leaflet touches `window` at module-load time — see SiteAuditRail.tsx. */
 const SiteAuditLiveView = dynamic(() => import('./SiteAuditLiveView'), { ssr: false });
 
 type Person = { id: string; name: string; email: string; role: string; branch: string | null; deleted_at?: string | null };
 
-/* Renders the logged-in CRM user's own Site Audit dashboard, resolving their
-   field-app identity by phone (profiles.contact) instead of email — the CRM
-   only ever has a phone number for its own users, not an email.
-
-   A missing field-app profile is NOT a dead end. BMs and store managers only
-   ever READ here, and requiring someone to be added to the field app first is
-   what made this tab show "no profile found" to every BM and store manager who
-   had never been enrolled there. When the CRM already says what someone is
-   (`permissionRole`, derived from their CRM permission in app/App.tsx), the
-   dashboard renders off the CRM session alone. Roles that actually DO field
-   work — auditor, installer, service manager — still need a real profile,
-   because their own jobs are keyed to it. */
 export default function SiteAuditOwnDashboard({
   contact,
   permissionRole,
@@ -40,42 +27,27 @@ export default function SiteAuditOwnDashboard({
 }: {
   contact: string;
   permissionRole: string | null;
-  /* The CRM's own name for this person (f_name + l_name). Carried through as an
-     order-matching alias — many field-app profiles were created from a short
-     display name while order rows carry the CRM's full name. See
-     SiteAuditBmView's BmProfile.aliases. */
+
   crmName?: string;
-  /* The stores this CRM account is restricted to, for the store-manager
-     rollup. Empty/null means "not restricted" — resolved from the CRM roster
-     instead. */
+
   allowedBranches?: string[] | null;
 }) {
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
-  /* A failed lookup is NOT "not enrolled". sbGet resolves a PostgREST error
-     object rather than rejecting, so the old `Array.isArray(rows) ? rows[0]`
-     rendered a dropped request as "ask an admin to link your profile" — which
-     sends the reader to the wrong control entirely. House style is to name the
-     cause and offer the retry. */
+
   const [loadErr, setLoadErr] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [combinedView, setCombinedView] = useState<'auditor' | 'installer'>('auditor');
   const [smTab, setSmTab] = useState<'audit' | 'install'>('audit');
   const [smAuditSubTab, setSmAuditSubTab] = useState<'ops' | 'jobs' | 'perf' | 'analytics' | 'live'>('ops');
-  /* A COE's landing view stays their own follow-up queue; this only toggles a
-     read-only look at the Service Manager dashboard (orders, timeline logs,
-     ops/perf/analytics) alongside it — same switcher pattern as
-     `siteAuditCanSwitch` in app/App.tsx. */
+
   const [coeShowServiceMgr, setCoeShowServiceMgr] = useState(false);
-  /* Shadowing is cross-role — anyone can be picked to observe a job — so this
-     toggle sits above the role-specific dashboards rather than inside one. */
+
   const [shadowing, setShadowing] = useState(false);
-  /* Same cross-view city context as the admin rail (shared md_city key). */
+
   const [city, setCity] = useState<CityFilter>('all');
   useEffect(() => { setCity(loadCityFilter()); }, []);
 
-  /* Same query string app/App.tsx uses to resolve this person's role, so
-     sbGet's short-lived cache collapses both into one request. */
   useEffect(() => {
     if (!contact) { setLoading(false); return; }
     let alive = true;
@@ -100,9 +72,7 @@ export default function SiteAuditOwnDashboard({
       Retry
     </button>
   );
-  /* BMs and branch managers read off the CRM session alone, so a failed lookup
-     still leaves them a working (if unpersonalised) dashboard — they get the
-     amber notice below instead of a dead end. Everyone else needs the profile. */
+
   const sessionOnlyRole = permissionRole === 'bm' || permissionRole === 'branch_mgr';
   if (loadErr && !person && !sessionOnlyRole) {
     return (
@@ -112,14 +82,7 @@ export default function SiteAuditOwnDashboard({
       </div>
     );
   }
-  /* Stores in scope for a store manager. The CRM session's own Branch Access
-     comes FIRST: it is the live source of truth, it is a list, and it is what
-     the admin screen edits. `profiles.branch` is a single text column written
-     by the role sync, so letting it win would silently narrow a two-store
-     manager to one store the moment a sync stamped it. It stays as the
-     fallback for someone whose CRM record has no branches (a field-app profile
-     an admin scoped by hand), and `null` finally lets the rollup resolve it
-     from the CRM roster by phone. */
+
   const managerBranches = allowedBranches && allowedBranches.length
     ? allowedBranches
     : (person?.branch ? [person.branch] : null);
@@ -132,12 +95,11 @@ export default function SiteAuditOwnDashboard({
   ) : null;
 
   if (!person) {
-    /* Read-only roles work off the CRM session alone — see the note above. */
+
     if (permissionRole === 'branch_mgr') {
       return <div className="p-4 sm:p-6">{loadErrNotice}<SiteAuditBranchManagerView branches={managerBranches} contact={contact} city={city} /></div>;
     }
-    /* No shadow bar here: shadowing is keyed to a real field-app profile
-       (SiteShadowerApp acts as one), which is exactly what this person lacks. */
+
     if (permissionRole === 'bm') {
       return <div className="p-4 sm:p-6">{loadErrNotice}<SiteAuditBmView bm={{ name: crmName, contact }} /></div>;
     }
@@ -164,10 +126,6 @@ export default function SiteAuditOwnDashboard({
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteShadowerApp actingAs={actingAs} /></div></div>;
   }
 
-  /* The Service Manager dashboard's tabs (Audit/Install, then Ops/Jobs/
-     Perf/Analytics/Live) and its city filter — pulled out so the COE's
-     read-only switcher below can render the identical view a service_mgr
-     lands on directly, instead of a second copy that drifts from it. */
   const renderServiceMgrDashboard = () => (
     <>
       <div className="bg-white border-b border-gray-200">
@@ -224,7 +182,7 @@ export default function SiteAuditOwnDashboard({
         ) : smAuditSubTab === 'perf' ? (
           <SiteAuditPerfView city={city} />
         ) : smAuditSubTab === 'analytics' ? (
-          // Service manager: Execution only — the commercial tabs carry revenue and store targets.
+
           <SiteAuditAnalyticsView city={city} execOnly />
         ) : (
           <SiteAuditLiveView city={city} />
@@ -233,17 +191,10 @@ export default function SiteAuditOwnDashboard({
     </>
   );
 
-  // A BM's own dashboard is their order list, regardless of the CRM sub-role
-  // permission (which only covers the auditor/installer/SM apps).
   if (person.role === 'bm') {
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditBmView bm={{ id: person.id, name: person.name, email: person.email, contact, aliases: crmName ? [crmName] : [] }} /></div></div>;
   }
 
-  /* A COE's own dashboard is the follow-up queue, same pattern as BM — but a
-     COE also needs to see what the Service Manager sees (orders, timeline
-     logs, ops/perf/analytics) without that becoming their default landing
-     view. The switcher only changes what's on screen, not which dashboard
-     they land on next time. */
   if (person.role === 'coe') {
     return (
       <div>
@@ -263,20 +214,10 @@ export default function SiteAuditOwnDashboard({
     );
   }
 
-  // Same pattern again — a Branch Manager's own dashboard is their branch's
-  // read-only rollup, regardless of the CRM sub-role permission.
   if (person.role === 'branch_mgr') {
     return <div>{shadowBar}<div className="p-4 sm:p-6"><SiteAuditBranchManagerView branches={managerBranches} contact={contact} city={city} /></div></div>;
   }
 
-  /* Which of the app dashboards below to render. `permissionRole` (the hand-set
-     sub-permission, else the CRM role) normally decides — but it can name a
-     role that has no app of its own down here: a BM or branch manager whose
-     field-app profile says they actually audit sites, or run a service desk.
-     The three person.role branches above already caught the reverse case; this
-     catches the rest, so nobody with a real, working field-app profile lands on
-     "ask an admin to grant a sub-role" while their own dashboard exists. The
-     sub-permission still wins whenever it names something renderable. */
   const APP_ROLES = new Set(['site_auditor', 'installer', 'auditor_installer', 'service_mgr']);
   const viewRole = permissionRole && APP_ROLES.has(permissionRole) ? permissionRole : person.role;
 

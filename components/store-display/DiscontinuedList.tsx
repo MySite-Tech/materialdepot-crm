@@ -57,8 +57,7 @@ export function DiscontinuedList() {
     }
     setActionLoading(prev => ({ ...prev, [item.id]: true }));
     try {
-      // Already discontinued on the website — this only clears the shelf, so use
-      // retired_from_store_display (won't re-trigger a website discontinue).
+
       await initiateMovement({
         movement_type: 'remove_display',
         variant_handle: item.variant_handle,
@@ -80,7 +79,6 @@ export function DiscontinuedList() {
     return () => clearTimeout(t);
   }, [search]);
 
-  /* Facets over the whole scope rather than one page of it — see StoreProducts. */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -146,7 +144,7 @@ export function DiscontinuedList() {
           {toast.msg}
         </div>
       )}
-      {/* Filters */}
+
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Store</label>
@@ -182,7 +180,6 @@ export function DiscontinuedList() {
         </div>
       )}
 
-      {/* Table */}
       {loading ? (
         <div className="py-16 text-center text-gray-400">Loading discontinued products...</div>
       ) : error ? (

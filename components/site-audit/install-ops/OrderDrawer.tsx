@@ -1,11 +1,5 @@
 'use client';
 
-/* Order detail drawer — port of OrderDrawer + SkuGroup/SkuRow +
-   DownloadJobCardBtn from SMInstall.jsx (source lines 804-1108, 1052-1108).
-   Status-transition rules (FIELD_STATUSES/RANK, the "no job card" override
-   confirm+reason prompt), service creation/edit, audit-type, delivery
-   confirm/delay, follow-up date and delete are all ported verbatim. */
-
 import { useState } from 'react';
 import { sbGet, sbPatch, type CityFilter } from '../siteAuditShared';
 import { useNoteModal } from '../ui/NoteModal';
@@ -27,7 +21,6 @@ interface DraftState {
   wallpanel: ServiceSkuRow[];
 }
 
-/* Sub-job id per category — the base ids the installer app and the split/merge logic key off. */
 const SJ_ID: Record<InstallCategory, string> = { flooring: 'sj_fl', wallpaper: 'sj_wp', wallpanel: 'sj_wpl' };
 
 function buildInitDraft(o: InstallOrder): DraftState {
@@ -48,8 +41,7 @@ function buildInitDraft(o: InstallOrder): DraftState {
 
 interface Props {
   order: InstallOrder;
-  /* Every install order in scope — needed only to show an installer's existing
-     load for the date being assigned against the cap their SM set. */
+
   allOrders: InstallOrder[];
   installers: Installer[];
   shadowerPool: ShadowerOption[];
@@ -57,7 +49,7 @@ interface Props {
   slotsFl: SlotDef[];
   slotsWp: SlotDef[];
   attribution: string;
-  /* Passed straight through to AssignSection's empty-pool notice. */
+
   installersErr?: boolean;
   onRetryInstallers?: () => void;
   onClose: () => void;
@@ -68,9 +60,6 @@ interface Props {
   toast: (m: string) => void;
 }
 
-/* Who on the crew is where. Rendered on every sub-job with a crew, not only when
-   they disagree: "everyone is at site" and "two of three have finished" must be
-   equally readable, or the SM learns to distrust the badge. */
 function SubjobCrewProgress({ sj }: { sj: Subjob }) {
   const crew = assigneeProgress(sj);
   if (crew.length < 1) return null;
@@ -125,13 +114,6 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     else setDraft((d) => ({ ...d, [grp]: [] }));
   }
 
-  /* Every write in this drawer goes through here, so this is the one place that
-     has to know a failed PATCH must be surfaced. It used to just `await sbPatch`
-     and let the rejection escape into the click handler — an unhandled promise
-     rejection, no toast, a Save button indistinguishable from a dead one. That
-     is how the customer-details write below sat broken: it PATCHed a `name`
-     column that does not exist, PostgREST 400'd every time, and nothing said so.
-     Returns whether the write landed, so a caller can keep its form open. */
   async function persist(patch: Record<string, any>, toastMsg?: string, reopen = true, failMsg?: string): Promise<boolean> {
     try {
       if (o.id) await sbPatch('install_orders', String(o.id), patch);
@@ -145,9 +127,6 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     return true;
   }
 
-  /* Customer detail correction — the OMS auto-fetch sometimes writes a bad
-     name (literal "client") or address; this is the only place to fix it,
-     since the fetch itself happens upstream in Django/OMS, not here. */
   const saveCustomer = async () => {
     const nm = custName.trim(), ph = custPhone.trim(), ad = custAddr.trim();
     if (!nm || !ph || !ad) { toast('Name, phone and address are all required'); return; }
@@ -157,9 +136,7 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     if (ad !== (o.addr || '')) changed.push('address');
     if (!changed.length) { toast('No changes to save'); return; }
     const nextLog = [...o.log, { t: 'Customer details corrected — ' + changed.join(', ') + ' updated', d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
-    // `customer_name`, NOT `name` — the read side maps it to `o.name` (install-ops/
-    // shared.ts) and writing that alias back 400s the whole PATCH, so the phone and
-    // address were lost along with it.
+
     const saved = await persist({ customer_name: nm, phone: ph, addr: ad, log: nextLog }, 'Customer details updated');
     if (saved) setCustOpen(false);
   };
@@ -177,15 +154,7 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
       const noCard = o.subjobs.filter((sj) => sj.status !== 'completed' && !(sj.jobcard && sj.jobcard.sign));
       if (noCard.length) {
         const names = noCard.map((sj) => typeLabel(sj.type)).join(', ');
-        /* `window.confirm` + `window.prompt`, which is the landmine this repo
-           keeps re-treading: an installed PWA or mobile webview commonly
-           no-ops them and auto-returns null, and desktop Chrome silences them
-           permanently for an origin once "Prevent this page from creating
-           additional dialogs" is ticked. Either way the SM saw no dialog, the
-           reason came back blank, and the status silently refused to change
-           with only a toast to explain it. `askNote` is the same
-           "nothing happens until a non-blank reason is given" contract as real
-           DOM — its `preface` carries the warning the confirm used to. */
+
         overrideReason = ((await askNote(
           'Reason for overriding without a job card (required)',
           'These sub-job(s) have NO signed job card — no photos, signature or customer rating on file: ' + names
@@ -244,8 +213,7 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     const rowsFor = (grp: InstallCategory) => draft[grp].filter((r) => r.sku || r.name);
     const CATS: InstallCategory[] = ['flooring', 'wallpaper', 'wallpanel'];
     const logAdds: Array<{ t: string; d: string; by: 'manual'; who: string }> = [];
-    // Removing a category that already has an installer assigned needs an explicit confirm — same
-    // guard the original applied per category, now applied to all three tracks.
+
     for (const grp of CATS) {
       const sj = o.subjobs && o.subjobs.find((s) => s.id === SJ_ID[grp]);
       if (!rowsFor(grp).length && sj && sj.status !== 'created') {
@@ -270,11 +238,6 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     await persist({ status: nextStatus, service: nextService, subjobs: nextSubjobs, log: nextLog }, 'Service details saved');
   };
 
-  /* ── Per-SKU split / merge ─────────────────────────────────────────────
-     Moves some of a category sub-job's SKUs into a brand-new sub-job of the
-     same type with its own installer, date, delivery and job card. Every
-     per-sub-job mechanism already handles N same-type sub-jobs generically,
-     so this only has to mint an id and move the items across. */
   const doSplit = async (sjId: string, movedSkus: string[]) => {
     const sj = (o.subjobs || []).find((s) => s.id === sjId);
     if (!sj) return;
@@ -300,7 +263,7 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     const sj = (o.subjobs || []).find((s) => s.id === sjId);
     if (!sj) return;
     if ((sj.assignments && sj.assignments.length) || sj.jobcard) { toast('Cannot merge — this sub-job already has an installer or job card'); return; }
-    // Merge into the lowest-id sibling of the same type (the base sj_fl/sj_wp/sj_wpl).
+
     const target = (o.subjobs || []).filter((s) => s.type === sj.type && s.id !== sj.id).sort((a, b) => (a.id || '').localeCompare(b.id || ''))[0];
     if (!target) { toast('No sibling sub-job to merge into'); return; }
     const nextSubjobs = (o.subjobs || [])
@@ -314,11 +277,6 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
     await persist({ status: nextStatus, subjobs: nextSubjobs, log: nextLog }, 'Merged back', true, 'Could not merge — try again');
   };
 
-  /* Per-sub-job delivery date. Split sub-jobs inherit the order's date at
-     split time; once their material moves independently the SM sets it here,
-     which is also what AssignSection uses as the earliest assignable day.
-     Clearing it re-inherits the order-level date (field removed, not nulled,
-     so `sjDeliveryDate`'s undefined-means-inherit contract still holds). */
   const saveSjDelivery = async (sjId: string, date: string) => {
     const sj = (o.subjobs || []).find((s) => s.id === sjId);
     if (!sj) return;
@@ -516,11 +474,7 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
                     <span className="text-[12.5px] text-gray-600">{skText}</span>
                     <span className="ml-auto"><Chip st={subjobDisplayStatus(sj)} /></span>
                   </div>
-                  {/* Only the PRIMARY installer writes `sj.status`; everyone else's
-                      progress lives on their own assignment row. Without this the
-                      drawer said "At Site" over a timeline full of "installation
-                      done (additional installer: …)" and the SM had no way to tell
-                      which was current. */}
+
                   <SubjobCrewProgress sj={sj} />
                   {sj.type === 'wallpaper'
                     ? <div className="flex items-center justify-between rounded-md bg-purple-50 px-3 py-2 mb-2.5 text-[12.5px] text-purple-800"><span>{totalSqft ? totalSqft + ' sq.ft → ' : ''}{rolls} roll{rolls === 1 ? '' : 's'} → <strong>{slotsN} slot{slotsN > 1 ? 's' : ''} · {slotsN * 3} hours</strong></span><span className="text-lg">🕐</span></div>
@@ -607,8 +561,6 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
   );
 }
 
-/* Tick the SKU(s) to move into a new sub-job — at least one must stay behind,
-   otherwise the "split" is just a rename of the existing sub-job. */
 function SplitPicker({ subjob: sj, onCancel, onSplit, toast }: { subjob: Subjob; onCancel: () => void; onSplit: (skus: string[]) => void; toast: (m: string) => void }) {
   const [picked, setPicked] = useState<string[]>([]);
   const toggle = (sku: string) => setPicked((p) => (p.includes(sku) ? p.filter((x) => x !== sku) : [...p, sku]));
@@ -643,10 +595,6 @@ function SplitPicker({ subjob: sj, onCancel, onSplit, toast }: { subjob: Subjob;
   );
 }
 
-/* Per-sub-job delivery date. Collapsed to a one-line summary until the SM
-   clicks Change, so the common case (every sub-job on the order's own date)
-   stays quiet. `own` distinguishes an explicitly-set date from an inherited
-   one — only the former can be reset. */
 function SjDeliveryRow({ order: o, subjob: sj, onSave }: { order: InstallOrder; subjob: Subjob; onSave: (sjId: string, date: string) => Promise<void> }) {
   const eff = sjDeliveryDate(o, sj);
   const own = sj.deliveryDate !== undefined && sj.deliveryDate !== null;
@@ -779,8 +727,6 @@ function SkuRow({
   );
 }
 
-// `partial` only changes the wording: a partially-completed sub-job's job card is downloadable
-// even though it has no client signature yet, and the label has to say so or it reads as final.
 function DownloadJobCardBtn({ order: o, sjId, installers, toast, partial }: { order: InstallOrder; sjId: string; installers: Installer[]; toast: (m: string) => void; partial?: boolean }) {
   const IDLE = partial ? '📥 Download partial Job Card PDF' : '📥 Download Job Card PDF';
   const [busy, setBusy] = useState(false);

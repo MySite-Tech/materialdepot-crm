@@ -7,13 +7,9 @@ import type { InstallOrder, Installer, SlotDef } from './types';
 const th = 'px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap';
 const td = 'px-3 py-2.5 text-[13px] border-t border-gray-100 align-top';
 
-/* The sub-job's own status as the SM should read it, with the order-level
-   `partial` shading the two Install views already applied. */
 const sjSt = (o: InstallOrder, sj: any) =>
   (o.status === 'partial' && subjobDisplayStatus(sj) !== 'completed' ? 'partial' : subjobDisplayStatus(sj));
 
-/* ── Today's installs — live table of every sub-job assignment landing on
-   today's date, with installer live status ──────────────────────────────── */
 export function ScheduleView({ orders, installers, onOpenOrder, slotsWp }: { orders: InstallOrder[]; installers: Installer[]; onOpenOrder: (pi: string) => void; slotsWp: SlotDef[] }) {
   const todayStr = dstr(today);
   const items: Array<{ o: InstallOrder; sj: any; a: any }> = [];
@@ -47,11 +43,7 @@ export function ScheduleView({ orders, installers, onOpenOrder, slotsWp }: { ord
                 <td className={td}><b>{o.name}</b><div className="text-gray-500">{o.phone}</div></td>
                 <td className={td + ' max-w-[160px]'}><span onClick={(e) => e.stopPropagation()}><MapLink addr={o.addr} /></span></td>
                 <td className={td}>{a.installer_name || <span className="text-red-600 font-bold">Unassigned</span>}</td>
-                {/* One row per assignee, so "Live status" is THIS installer's own
-                    status — reading `sj.status` here showed the primary's progress
-                    against everyone's name, which is how an installer who had
-                    already finished still appeared to be at site. The sub-job's own
-                    state is added underneath only when the two differ. */}
+
                 <td className={td}>
                   <Chip st={assigneeStatus(sj, a)} />
                   {assigneeStatus(sj, a) !== sjSt(o, sj) ? (
@@ -67,15 +59,6 @@ export function ScheduleView({ orders, installers, onOpenOrder, slotsWp }: { ord
   );
 }
 
-/* ── Calendar — T-3..T+6 day strip + detail panel for the selected day ────
-   Laid out exactly like the audit Schedule tab (audit-ops/Views.tsx CalendarView):
-   the day strip runs the full width and the selected day's bookings sit in one
-   full-width panel underneath. The previous two-column `[1fr_360px]` split gave
-   the strip about half the room, which clipped every status pill to
-   "Site Installation Comple…" and squeezed the detail list into a 360px gutter —
-   the same information, unreadable. Install-specific bits are kept: the track
-   tag, the whole crew rather than one name, and the per-installer progress that
-   the order badge alone can't show. */
 export function CalendarView({
   orders, installers, slotsFl, slotsWp, calSelDay, setCalSelDay, onOpenOrder,
 }: {
@@ -111,8 +94,7 @@ export function CalendarView({
           const list = sjsForDay(orders, installers, ds);
           const isSel = ds === calSelDay;
           return (
-            /* A <button> for the day, <span onClick> for the bookings inside it —
-               a nested button would be invalid markup. Same shape as the audit tab. */
+
             <button
               key={ds}
               onClick={() => setCalSelDay(ds)}
@@ -151,8 +133,7 @@ export function CalendarView({
             const primary: any = crew.find((a: any) => a.primary) || crew[0] || {};
             const slotStr = (primary.slots || []).map((sl: string) => slotLabel(sl, slotsFl, slotsWp)).join(' + ') || slotLabel(sj.slot, slotsFl, slotsWp) || '—';
             const st = sjSt(o, sj);
-            /* Anyone whose own row is ahead of the sub-job — the additional
-               installer who has finished while the primary is still on site. */
+
             const ahead = assigneeProgress(sj).filter((c) => c.ahead);
             return (
               <div

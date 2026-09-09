@@ -1,20 +1,5 @@
 'use client';
 
-/* Users — port of the Users view from material-depot-site's Admin.html
-   (renderUsers / openAddUser / openEditRole / resetPasscode / deleteUser).
-
-   This is the single place to manage a Site Audit person: role, installer
-   domain, city, per-installer pay-rate override, passcode reset and removal.
-
-   Two additions over the original, both about the CRM living alongside the
-   field apps rather than replacing them:
-   - `contact` is a first-class field. It's the only bridge between a field-app
-     profile (email-keyed) and a CRM login (contact-keyed), so every form here
-     collects it and the table flags anyone missing it.
-   - adding a user can also create their CRM login in one go (backend
-     UserOrganisation + the `crm.site_audit` permissions), so a new person
-     doesn't have to be entered twice in two different screens. */
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CITIES, CRM_ROLE_TO_SITE_AUDIT_ROLE, ROLES, crmPermissionsForSiteAuditRole, exitColumnsAvailable, fmtDate, initials, phoneKey, randomPasscode, sbGet, sbPatch, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from '../siteAuditShared';
 import { addUser, fetchUsers } from '@/lib/mockApi';
@@ -33,9 +18,7 @@ type ProfileRow = {
   passcode: string | null;
   pay_rates: Record<string, number | null> | null;
   created_at?: string;
-  /* migration 004. Absent (undefined) on every row until it has been run, and
-     `select=*` never 42703s, so these need no probe to READ — only writing and
-     filtering do. `deleted_at` set = former staff. */
+
   deleted_at?: string | null;
   deleted_by?: string | null;
   exit_reason?: string | null;
@@ -62,11 +45,6 @@ const PAY_FIELDS: Array<[string, string]> = [
   ['wp_custom_sqft', 'Custom WP ₹/sqft'],
   ['wpnl_sqft', 'Wall Panels ₹/sqft'],
 ];
-/* The role → CRM sub-permission map used to be hand-written here, and again in
-   audit-ops/Overlays (with two of the four field roles missing) and again in
-   install-ops/Overlays. It is now derived from SITE_AUDIT_PERMISSION_TO_ROLE,
-   which is the same table read the other way — see
-   `crmPermissionsForSiteAuditRole` in siteAuditShared. */
 
 const isInstallerRole = (r: string) => r === 'installer' || r === 'auditor_installer';
 
@@ -79,11 +57,6 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-
-/* A searchable BM picker. 87 BM accounts in a bare <select> means scrolling a
-   list to find "Jhanvi" — with a filter box the by-hand pass over the unlinked
-   names is type-three-letters-and-click. Keeps the same contract as the select
-   it replaces: it reports the chosen profile's EMAIL, never a name. */
 function BmSearchSelect({ options, disabled, suggested, onPick }: {
   options: Array<{ id: string; name: string; email: string; contact: string | null }>;
   disabled: boolean;
@@ -116,10 +89,7 @@ function BmSearchSelect({ options, disabled, suggested, onPick }: {
               className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] text-gray-800 hover:bg-gray-50"
             >
               <span className="font-semibold">{o.name}</span>
-              {/* The phone disambiguates the near-namesakes a search invites you
-                  to misclick: "harsh" offers Harsh Chaubey and Sai Sri Harsha
-                  for an order that says Harsh Singh, and two real Priyas exist.
-                  Picking the wrong one moves another BM's orders. */}
+
               <span className="ml-auto shrink-0 text-[11px] text-gray-400">{o.contact || 'no phone'}</span>
             </button>
           )) : <div className="px-2.5 py-2 text-[12px] text-gray-400">No BM matches “{q}”.</div>}
@@ -129,10 +99,6 @@ function BmSearchSelect({ options, disabled, suggested, onPick }: {
   );
 }
 
-/* `actor` is the signed-in admin, for `profiles.deleted_by`. The CRM session
-   carries a name and phone but never an email, so the identifier recorded is
-   the synthetic address that encodes their number — the same convention the
-   rest of this repo uses for a CRM-only person. */
 export default function SiteAuditUsersView({ actor }: { actor?: { name?: string; phone?: string; role?: string } | null } = {}) {
   const actorEmail = actor?.phone ? syntheticSiteAuditEmail(actor.phone) : null;
   const [rows, setRows] = useState<ProfileRow[]>([]);
@@ -146,8 +112,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
   const [toast, setToast] = useState('');
   const [retiring, setRetiring] = useState<RetireTarget | null>(null);
   const [restoring, setRestoring] = useState<(RetireTarget & { exitReason?: string | null }) | null>(null);
-  /* False until migration 004 has been run. Gates the Remove control and the
-     Former staff chip — a Remove that can only ever fail is worse than none. */
+
   const [canRetire, setCanRetire] = useState(false);
   const [crmBackfillPanel, setCrmBackfillPanel] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
@@ -168,21 +133,11 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
   useEffect(() => { load(); }, [load]);
   useEffect(() => { exitColumnsAvailable().then(setCanRetire); }, []);
 
-  /* A DEACTIVATED CRM login is not a usable login, so it must not read as
-     "linked". `_mapUserOrg` sets `active: u.status !== false` and the type
-     spells out that anything deriving access from this list has to check it —
-     `SiteAuditBranchManagerView` did, this didn't. Without the filter, someone
-     retired here still showed ✓ CRM linked and the amber "no CRM login"
-     notice under-counted by exactly the people who had left. */
   const crmPhones = useMemo(
     () => new Set(crmUsers.filter((u) => u.active !== false).map((u) => phoneKey(u.phone)).filter(Boolean)),
     [crmUsers],
   );
 
-  /* Suggest a missing phone number from the CRM roster, but ONLY when it's
-     unambiguous — exactly one CRM user with that exact name, whose number
-     isn't already on another profile. A wrong guess would hand someone else's
-     jobs, availability and payout to them. */
   const suggestFor = useCallback((p: ProfileRow): string | null => {
     const target = p.name.trim().toLowerCase().replace(/\s+/g, ' ');
     const hits = crmUsers.filter((u) => (u.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === target);
@@ -192,11 +147,6 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     return ph;
   }, [crmUsers, rows]);
 
-  /* One fetch, split here. `rows` is every profile ever created; `current` is
-     the roster and is what every count, notice and default view is computed
-     from — a former staff member must not inflate "14 people have no phone
-     number" or the Site Auditor (14) chip, and the whole point of retiring
-     someone is that they stop appearing in the numbers. */
   const former = useMemo(() => rows.filter((r) => !!r.deleted_at), [rows]);
   const current = useMemo(() => rows.filter((r) => !r.deleted_at), [rows]);
 
@@ -217,9 +167,6 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     return matchesQ(u);
   });
 
-  /* Attrition, over the rolling 90 days and all-time, broken down by the
-     reason recorded at removal. This is the number the whole soft delete
-     exists to make answerable. */
   const attrition = useMemo(() => {
     const cut = new Date(Date.now() - 90 * 86400_000).toISOString();
     const recent = former.filter((r) => (r.deleted_at || '') >= cut);
@@ -228,9 +175,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
       const key = (r.exit_reason || 'Not recorded').split(' — ')[0];
       byReason[key] = (byReason[key] || 0) + 1;
     });
-    /* Denominator is people who were on the roster during the window, i.e.
-       today's roster plus those who left inside it — not today's headcount
-       alone, which would overstate the rate for a shrinking team. */
+
     const exposed = current.length + recent.length;
     return {
       total: former.length,
@@ -242,11 +187,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
 
   const missingPhone = current.filter((u) => !phoneKey(u.contact));
   const unlinked = missingPhone.length;
-  /* The people this fixes: a profile with a real phone and no usable CRM login
-     — so `/login-otp/?contact=` has nothing to send an OTP to and they cannot
-     sign into the CRM at all, however healthy their field-app profile looks.
-     Every staff member added through the legacy PWA lands here, because all
-     three of its add-staff forms write a `profiles` row and nothing else. */
+
   const noCrmList = useMemo(
     () => current.filter((u) => phoneKey(u.contact) && !crmPhones.has(phoneKey(u.contact))),
     [current, crmPhones],
@@ -265,39 +206,19 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     flash('✓ Linked ' + ok + ' of ' + suggestable.length);
   }
 
-  /* ── Legacy BM links ────────────────────────────────────────────────────
-     `audit_orders.bm` is free text (typed by the store team, or prefilled from
-     the Kylas PO payload); `bm_email` is the real link that the BM dashboard
-     keys off. Every writer sets both now, so this is a backlog to clean up
-     rather than a growing one.
-
-     Matching a free-text name against `profiles.name` resolves almost nothing:
-     every live BM profile came from the CRM sync carrying a FIRST NAME
-     ("Anubhab", "Shaikh", "Kurugodu") while the orders carry the full one
-     ("Anubhab Sarkar", "Shaikh Mohd. Zaid"), so that route linked 0 of 196.
-     The CRM roster is the missing hop — it holds the full name AND the phone,
-     and the phone is `profiles.contact`. So: order name → exactly one roster
-     employee with that exact name → their phone → exactly one BM profile.
-     Both hops are exact; nothing here is ever a similarity guess, and a name
-     that is really a store ("Whitefield", "JP Nagar") or two people
-     ("Anubhab/Zaid") matches nothing and stays in the by-hand list. */
   const bmProfiles = useMemo(() => rows.filter((r) => r.role === 'bm' && r.email), [rows]);
   const [bmOrders, setBmOrders] = useState<Array<{ bm: string | null }> | null>(null);
   const [linkingBm, setLinkingBm] = useState(false);
   const [bmPanel, setBmPanel] = useState(false);
   useEffect(() => {
     let alive = true;
-    /* Pre-booked slots are excluded, as they are from every other audit_orders read in the app: a
-       slot held or converted at a store counter exists before any enquiry does, so it has no owner to
-       resolve and counting it as unlinked creates a to-do that can never be completed. */
+
     sbGet('audit_orders?select=bm&bm_email=is.null&status=not.in.(deleted,slot_reserved,slot_converted)')
       .then((r) => { if (alive) setBmOrders(Array.isArray(r) ? r : []); })
       .catch(() => { if (alive) setBmOrders([]); });
     return () => { alive = false; };
   }, [rows]);
 
-  /* Phone → the single BM profile carrying it. A number on two BM profiles is
-     dropped, not chosen between. */
   const bmEmailByPhone = useMemo(() => {
     const seen = new Map<string, string | null>();
     for (const p of bmProfiles) {
@@ -325,8 +246,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
       const hits = bmProfiles.filter((p) => norm(p.name) === target);
       if (hits.length === 1) { plan.push({ raw, email: hits[0].email, name: hits[0].name, count }); continue; }
       if (hits.length > 1) continue;
-      // Via the CRM roster: exact full name → phone → BM profile. `bm` is left
-      // as it is, because the roster name it matched IS what the row says.
+
       const crmHits = crmUsers.filter((u) => norm(u.name || '') === target);
       if (crmHits.length !== 1) continue;
       const email = bmEmailByPhone.get(phoneKey(crmHits[0].phone));
@@ -334,13 +254,6 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     }
     const autoBy = new Map(plan.map((p) => [p.raw, p.email]));
 
-    /* Who this name probably is, and on what number — so the row can be linked without
-       opening another tab to look the person up. Exact match first (that is the auto-link
-       case anyway), then first-name/word overlap, which is what the hard rows actually are:
-       "Dhruv" typed at a counter against the account "Dhruv Gangrade". Drawn only from the
-       BM profiles and CRM roster already in memory, so this costs no request. A name with no
-       candidate at all is the useful negative signal — "Whitefield" is a store, not a person,
-       and will never link. */
     const candidatesFor = (raw: string) => {
       const target = norm(raw);
       const words = new Set(target.split(' ').filter(Boolean));
@@ -352,10 +265,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
         seen.add(key);
         out.push({ name, contact: String(contact), role, exact });
       };
-      /* Every profile, not just the BMs, plus the CRM roster: the question this column answers
-         is "who is this", and a name that turns out to belong to an admin is exactly the sort of
-         thing worth seeing before linking. The role travels with it so a match that cannot be
-         linked as a BM is obvious rather than misleading. */
+
       const pool: Array<{ name: string; contact: string | null; role: string }> = [
         ...rows.map((p) => ({ name: p.name, contact: p.contact, role: p.role })),
         ...crmUsers.map((u) => ({ name: u.name, contact: u.phone, role: u.role || '' })),
@@ -374,9 +284,6 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     return { unlinkedOrders, plan, names, linkable: plan.reduce((s, p) => s + p.count, 0) };
   }, [bmOrders, bmProfiles, crmUsers, bmEmailByPhone, rows]);
 
-  /* Names the store team/Kylas spell differently from the BM's own account
-     ("Dhruv" vs "Dhruv Gangrade") can't be auto-linked without guessing, so
-     they're linked one name at a time by an explicit human choice here. */
   async function linkOneBmName(raw: string, email: string) {
     const prof = bmProfiles.find((p) => p.email === email);
     if (!prof) return;
@@ -410,8 +317,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     let ok = 0;
     for (const p of bmLink.plan) {
       try {
-        // Filter re-asserts bm_email=is.null so a row linked by someone else
-        // in the meantime is skipped rather than overwritten.
+
         ok += await sbPatchWhere(
           'audit_orders',
           'bm=eq.' + encodeURIComponent(p.raw) + '&bm_email=is.null&status=not.in.(deleted,slot_reserved,slot_converted)',
@@ -425,21 +331,9 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     flash('✓ Linked ' + ok + ' order(s) to a BM account');
   }
 
-  /* ── Resolve the owner from the backend ─────────────────────────────────
-     The authoritative path, and the one that needs no name at all: the enquiry
-     behind the order already has an owner, and the endpoint the auto-import
-     reads returns it (`bm: {name, contact}`). Phone → account, patch, done —
-     a typo at a store counter stops mattering. The by-name matcher below stays
-     for rows carrying no enquiry id. */
   const [resolvePlan, setResolvePlan] = useState<BmResolvePlan | null>(null);
   const [resolving, setResolving] = useState(false);
 
-  /* Accounts for the owners the BACKEND named, not for people a permission
-     label calls BMs. Whoever owns the enquiry owns the order — Harsh Singh
-     carries ~1500 clients under the label `manager`, and gating account
-     creation on that label is precisely why his orders sat unattributed. There
-     is nothing to decide here: the row exists because the backend already
-     attributed an order to them. */
   const [makingOwners, setMakingOwners] = useState(false);
 
   async function createResolvedOwners() {
@@ -506,17 +400,6 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     setResolving(false);
   }
 
-  /* ── BMs with no Site Audit account ─────────────────────────────────────
-     The root cause behind a slice of the unlinked orders: `bm_email` can only
-     point at a `profiles` row, so a BM the CRM knows about but Site Audit has
-     never heard of is unlinkable by construction — no picker lists them and no
-     backfill can resolve them.
-
-     This is deliberately narrower than the old role-sync's `noProfileYet`,
-     which was dropped for provisioning field-app logins for ~70 desk staff who
-     never do field work. A BM profile earns its row for one concrete reason:
-     it is the join target order attribution needs. Branch managers and service
-     managers still get nothing — they render from their CRM session and slug. */
   const profilePhones = useMemo(() => new Set(rows.map((r) => phoneKey(r.contact)).filter(Boolean)), [rows]);
   const missingBms = useMemo(() => crmUsers.filter((u) => (
     u.active !== false
@@ -544,8 +427,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
       try {
         await sbPost('profiles', {
           name: u.name,
-          // Same synthetic identity the CRM sync uses — access is via the CRM
-          // session (resolved by phone), never this address or the passcode.
+
           email: syntheticSiteAuditEmail(u.phone),
           role: 'bm',
           contact: phoneKey(u.phone),
@@ -581,20 +463,10 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
     }
   }
 
-  /* Removal used to be `sbDel` behind a `window.confirm` whose own text
-     admitted the gap: it deleted the field-app profile and left the CRM login
-     alive, so a person who had left could still sign in — and the row was
-     gone, so nobody could say how many had left. Both halves are now handled
-     by RetireStaffModal, which records a reason (what the attrition breakdown
-     groups by) and deactivates the CRM login by default. */
   const startRemove = useCallback((u: ProfileRow) => {
     setRetiring({ id: u.id, name: u.name, email: u.email, role: u.role, contact: u.contact, city: u.city });
   }, []);
 
-  /* Backfill the CRM logins for everyone who has a phone but no usable one.
-     Sequential on purpose: `addUser` is a Django write per person and the
-     backend rejects a duplicate contact, so a failure here is per-person
-     information worth keeping rather than one aborted batch. */
   async function backfillCrmLogins() {
     if (!noCrmList.length) return;
     setBackfilling(true);
@@ -649,10 +521,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
                 Link {suggestable.length} exact name match{suggestable.length === 1 ? '' : 'es'}
               </button>
             ) : null}
-            {/* The banner used to state the count and stop, leaving the only
-                fix buried inside one person's Edit form. This creates the
-                missing logins in bulk, with the same two permissions a fresh
-                add would grant. */}
+
             {noCrm ? (
               <>
                 <button onClick={backfillCrmLogins} disabled={backfilling} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-[12px] font-bold text-white disabled:opacity-50">
@@ -703,9 +572,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
               {bmMakePanel ? 'Hide list' : 'Review the list'}
             </button>
           </div>
-          {/* Reviewable rather than blind: the CRM roster carries placeholder
-              accounts ("User", "Random", "none") that must not become BM
-              dashboards. Untick and they are left alone. */}
+
           {bmMakePanel ? (
             <div className="mt-2.5 max-h-[280px] overflow-y-auto rounded-md border border-violet-200 bg-white">
               {missingBms.map((u) => {
@@ -836,9 +703,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
               {k === 'all' ? 'All' : ROLES[k]?.label || k} ({k === 'all' ? current.length : counts[k]})
             </button>
           ))}
-          {/* Only once there is something to show. A "Former staff (0)" chip
-              before the migration has run reads as "nobody has ever left",
-              which is a claim this screen can't make yet. */}
+
           {canRetire && former.length ? (
             <button
               onClick={() => setRoleFilter('former')}
@@ -855,9 +720,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
             <span><b className="text-[15px]">{attrition.total}</b> people have left in total</span>
             <span><b className="text-[15px]">{attrition.recent}</b> in the last 90 days</span>
-            {/* Denominator is the roster plus those who left inside the
-                window, not today's headcount — otherwise a shrinking team
-                reports a rate above its own losses. */}
+
             <span><b className="text-[15px]">{attrition.rate}%</b> 90-day attrition, against {current.length + attrition.recent} people on the roster in that window</span>
           </div>
           {attrition.byReason.length ? (
@@ -939,10 +802,7 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
                         <td className="px-3 py-2.5">
                           <div className="flex gap-1.5">
                             <button onClick={() => setEditing(u)} className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-gray-700">✏️ Edit</button>
-                            {/* Disabled rather than hidden before migration 004:
-                                a control that vanishes reads as "you may not do
-                                this", and the truth is "the DB can't record it
-                                yet" — which the tooltip says. */}
+
                             <button
                               onClick={() => startRemove(u)}
                               disabled={!canRetire}
@@ -998,7 +858,6 @@ export default function SiteAuditUsersView({ actor }: { actor?: { name?: string;
   );
 }
 
-/* ── Add ──────────────────────────────────────────────────────────────── */
 function AddUserModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -1016,17 +875,12 @@ function AddUserModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: 
     if (!nm) { setErr('Please enter a full name.'); return; }
     if (!em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setErr('Please enter a valid email address.'); return; }
     if (!role) { setErr('Please select a role.'); return; }
-    /* The phone is the identity, not a detail: it is what a CRM session is
-       resolved by, what order attribution keys off, and what payouts and
-       availability are looked up with. A profile without one is a row nothing
-       can find — 15 of them exist and every one had to be chased down by hand
-       afterwards. Required at creation rather than repaired later. */
+
     if (!/^\d{10}$/.test(ph)) { setErr('A 10-digit phone number is required — it is what links this person to their CRM login, their orders and their payouts.'); return; }
     setBusy(true);
     try {
       await sbPost('profiles', { name: nm, email: em, contact: ph || null, role, installer_type: isInstallerRole(role) ? itype : 'flooring', city, passcode: null });
-      // Best-effort and reported separately — a rejected CRM login (duplicate
-      // phone, permissions) must not lose the field-app profile we just made.
+
       let note = '';
       if (makeCrm) {
         try {
@@ -1080,7 +934,6 @@ function AddUserModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: 
   );
 }
 
-/* ── Edit ─────────────────────────────────────────────────────────────── */
 function EditUserModal({ user: u, crmLinked, onClose, onDone, onResetPasscode }: {
   user: ProfileRow; crmLinked: boolean; onClose: () => void; onDone: (msg: string) => void; onResetPasscode: () => void;
 }) {
@@ -1102,7 +955,7 @@ function EditUserModal({ user: u, crmLinked, onClose, onDone, onResetPasscode }:
     if (ph && !/^\d{10}$/.test(ph)) { setErr('Phone must be 10 digits.'); return; }
     const body: Record<string, any> = { role, installer_type: isInstallerRole(role) ? itype : 'flooring', city, contact: ph || null };
     if (isInstallerRole(role)) {
-      // A fully-blank override is stored as null so it falls back to the global rate.
+
       const pr: Record<string, number | null> = {};
       let any = false;
       PAY_FIELDS.forEach(([k]) => {
@@ -1128,12 +981,7 @@ function EditUserModal({ user: u, crmLinked, onClose, onDone, onResetPasscode }:
     if (!/^\d{10}$/.test(ph)) { setErr('Enter a 10-digit phone number first.'); return; }
     setMakingCrm(true);
     try {
-      /* The profile has to learn the number BEFORE a login is created against
-         it. This button reads the live input, so typing a new number and
-         clicking here without pressing Save made a CRM login for a phone
-         `profiles.contact` had never heard of: the two halves keyed to
-         different numbers, and the ⚠ was still on the row after the reload —
-         which reads as "the button didn't work". */
+
       if (phoneKey(ph) !== phoneKey(u.contact)) await sbPatch('profiles', u.id, { contact: ph });
       await addUser({ name: u.name, phone: ph, role: 'post_sales', individualPermissions: crmPermissionsForSiteAuditRole(role) });
       onDone(`✓ ${u.name} can sign into the CRM with ${ph} now`);
@@ -1203,7 +1051,6 @@ function EditUserModal({ user: u, crmLinked, onClose, onDone, onResetPasscode }:
   );
 }
 
-/* ── shell bits ───────────────────────────────────────────────────────── */
 const inputCls = 'w-full rounded-md border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-blue-400';
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {

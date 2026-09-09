@@ -1,7 +1,3 @@
-/* Kylas transport. NOTE: this runs in the BROWSER with the key inlined, while
-   app/api/* reaches Kylas server-side with process.env.KYLAS_API_KEY. New
-   Kylas calls belong behind app/api, not here. */
-
 export const KYLAS_API_URL = "https://api.kylas.io/v1";
 export const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
@@ -14,7 +10,7 @@ export async function kylasFetch(path: string, init?: RequestInit, maxRetries = 
       headers: { "Content-Type": "application/json", "api-key": KYLAS_API_KEY, ...init?.headers },
     });
     if (res.ok) return res.json();
-    // Retry rate-limits (429) and transient upstream errors with backoff.
+
     if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
       const retryAfter = Number(res.headers.get('Retry-After'));
       const waitMs = Number.isFinite(retryAfter) && retryAfter > 0

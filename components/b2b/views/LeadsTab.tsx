@@ -1,20 +1,5 @@
 'use client';
 
-// ── Leads tab ────────────────────────────────────────────────────────────────
-// Implements `Leads_Tab_PRD.docx` v1.0 (KK, Business Head – B2B).
-//
-// One unified view across every lead in the B2B CRM, whichever module it came
-// from: a list for scanning and filtering, and a detail panel for drilling in.
-// This tab CAPTURES NOTHING — every row originates in Inbound or Outreach, and
-// the Enquiry ID, order value and line items come from the deal tickets. The
-// only field editable here is "Assisted at EC", because the PRD puts it on this
-// screen and it belongs to neither source form.
-//
-// The row shape, the binary status, and the three-state Expected date of
-// closure are decided in `lib/b2bLeads.ts` (`fetchUnifiedLeads`) — see the
-// comment there for why Lost leads stay visible and why Inbound reports "n/a"
-// rather than "not set" for expected closure.
-
 import { useEffect, useMemo, useState } from 'react';
 import {
   fetchUnifiedLeads, lookupEnqId, upsertOutreachLead, upsertInboundLead,
@@ -43,7 +28,6 @@ const STATUS_COLORS: Record<UnifiedStatus, string> = {
   'Yet to Close': '#64748B',
 };
 
-// ── Export: the PRD's list-view columns ──────────────────────────────────────
 const EXPORT_HEADERS = [
   'Company Name', 'GST', 'Contact Number', 'Enquiry ID', 'Order Value',
   'Expected Date of Closure', 'KAM', 'Source', 'Spok', 'Status', 'Lost',
@@ -56,7 +40,7 @@ const toExportRow = (l: UnifiedLead): (string | number)[] => [
   l.phone || '',
   l.enqId || '',
   l.orderValue || '',
-  // Three states, not two — an Inbound lead has no such field at all.
+
   l.hasExpectedClosureField ? (l.expectedClosure || '') : 'n/a (inbound)',
   l.kam || '',
   l.source,
@@ -70,14 +54,6 @@ function SourceChip({ s }: { s: LeadSource }) {
   return <Pill color={SOURCE_COLORS[s]}>{s}</Pill>;
 }
 
-/**
- * The PRD's binary status, with the Lost outcome kept visible beside it.
- *
- * Open question #1 asks whether Lost leads belong here at all. Dropping them
- * hides the outcome the business most wants to count; folding them silently
- * into "Yet to Close" claims a dead lead is still being worked. So the binary
- * value renders exactly as written and the Lost mark sits next to it.
- */
 function UnifiedStatusCell({ lead }: { lead: UnifiedLead }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
@@ -87,7 +63,6 @@ function UnifiedStatusCell({ lead }: { lead: UnifiedLead }) {
   );
 }
 
-/** Expected closure: a date, "not set", or "not a field on this source". */
 function ExpectedClosureCell({ lead }: { lead: UnifiedLead }) {
   if (!lead.hasExpectedClosureField) {
     return (
@@ -104,8 +79,6 @@ function ExpectedClosureCell({ lead }: { lead: UnifiedLead }) {
     : <span className="text-gray-300" title="No expected closure date entered">—</span>;
 }
 
-// ── Detail view ──────────────────────────────────────────────────────────────
-
 function DetailDrawer({ lead, onClose, onSaved }: {
   lead: UnifiedLead;
   onClose: () => void;
@@ -114,8 +87,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
   const inbound = lead.inbound;
   const outreach = lead.outreach;
 
-  // "Assisted at EC" is the one thing this tab owns. Held locally and written
-  // back to whichever source row the lead came from.
   const [ecName, setEcName] = useState<string | undefined>(
     outreach?.ecName ?? inbound?.placedUnder?.ecName,
   );
@@ -126,7 +97,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // ── Enquiry ID and its deal ticket (§ "Enquiry ID and Details" + "Products") ──
   const [enq, setEnq] = useState<EnqLookup | null>(null);
   const [enqLoading, setEnqLoading] = useState(false);
 
@@ -194,7 +164,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
 
         <div className="p-5 flex flex-col gap-4">
 
-          {/* ── Client details ── */}
           <SectionCard title="Client details" subtitle="From the originating form">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <Field label="Company"><ReadValue v={lead.companyName} /></Field>
@@ -210,7 +179,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
             </div>
           </SectionCard>
 
-          {/* ── Source details ── */}
           <SectionCard title="Source details">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <Field label="Source"><ReadValue v={lead.source} /></Field>
@@ -224,7 +192,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
             </div>
           </SectionCard>
 
-          {/* ── Source lead details ── */}
           {inbound && (
             <SectionCard title="Inbound lead details" owner="kylas" subtitle="Presales capture, call log and priority">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -288,7 +255,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
             </SectionCard>
           )}
 
-          {/* ── Enquiry ID and details ── */}
           <SectionCard title="Enquiry ID and details" owner="deals" subtitle="From Procurement's deal ticket">
             {!lead.enqId ? (
               <p className="text-[11.5px] text-gray-500 leading-snug">
@@ -325,7 +291,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
               )}
           </SectionCard>
 
-          {/* ── Products under Enquiry ID ── */}
           <SectionCard title="Products under Enquiry ID" owner="deals" subtitle="Line items on that cart">
             {!lead.enqId ? <Empty>No Enquiry ID yet.</Empty>
               : enqLoading ? <Spinner label="Loading line items…" />
@@ -346,7 +311,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
                 )}
           </SectionCard>
 
-          {/* ── Assisted at EC — the one thing this tab owns ── */}
           <SectionCard
             title="Assisted at EC"
             owner="crm"
@@ -376,7 +340,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
             </p>
           </SectionCard>
 
-          {/* ── Comments and notes ── */}
           <SectionCard title="Comments and notes" owner="crm" subtitle="Read-only here — add them in the source module">
             {(() => {
               const notes = outreach?.notes ?? inbound?.notes ?? [];
@@ -405,8 +368,6 @@ function DetailDrawer({ lead, onClose, onSaved }: {
     </div>
   );
 }
-
-// ── Tab ──────────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 50;
 
@@ -524,7 +485,6 @@ export default function LeadsTab() {
         </div>
       </div>
 
-      {/* A half-loaded list must never look like a complete one. */}
       {failed.length > 0 && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 leading-snug">
           The <strong>{failed.join(' and ')}</strong> {failed.length === 1 ? 'side' : 'sides'} did not load, so this
@@ -538,7 +498,6 @@ export default function LeadsTab() {
         </div>
       )}
 
-      {/* ── Filters ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4">
         <div className="flex items-end gap-2.5 flex-wrap">
           <div className="flex-1 min-w-[220px]">

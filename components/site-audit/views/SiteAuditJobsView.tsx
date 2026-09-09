@@ -12,7 +12,6 @@ import { categoryFor, mdInstallTermsBlock } from '../data/auditRegistry';
 import { AuditRoomCard, InstallRoomCard } from '../ui/AuditRoomViews';
 import RoomSkuEditor, { auditRoomSkuSaver, installRoomSkuSaver } from '../ui/RoomSkuEditor';
 
-/* Who the activity log credits for edits made from this view. */
 const JOBS_ATTRIBUTION = 'Service Manager (CRM)';
 import {
   MD_INK,
@@ -24,16 +23,8 @@ import {
   mdPdfHeader,
   mdPdfInstallRoom,
 } from '../brand/pdfBrand';
-/* The audit job-card PDF lives with Audit Ops now — both views build the same document. */
+
 import { compressForPdf, genAuditPDF } from '../audit-ops/pdf';
-
-/* Read-only port of JobsView + JobDetailModal from material-depot-site's
-   Admin.jsx (app/src/pages/Admin.jsx lines 787-1063). No writes — the only
-   "action" here is client-side PDF generation (genAuditPDF/genInstallPDF),
-   ported verbatim from the same file (lines 95-200). */
-
-/* Legacy audit field dicts removed — superseded by MD_CATEGORIES in auditRegistry.ts, which drives
-   both the on-screen room cards and the PDF bodies (v2 segment audits + legacy rooms). */
 
 const STATUS_BADGE_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600',
@@ -100,7 +91,6 @@ async function genInstallPDF(order: any, sj: any, jobcard: any, installerName: s
   doc.save(('Installation_' + (order.customer_name || 'client') + '_' + (order.pi || '') + '.pdf').replace(/[^a-z0-9_\-.]/gi, '_'));
 }
 
-
 function JdLog({ log }: { log: any[] }) {
   return (
     <>
@@ -147,8 +137,7 @@ export function JobDetailModal({ pi, type, closeModal, attribution = JOBS_ATTRIB
   }, [pi, type]);
 
   const fdt = (ds: string | null) => { if (!ds) return '—'; const d = new Date(ds + 'T00:00'); return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
-  /* Stacked on a page (audit + install together) there is nothing to close back
-     to, so the caller drops the button rather than showing a dead one. */
+
   const closeBtn = hideClose ? null : <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer hover:bg-gray-50" onClick={closeModal}>Close</button>;
 
   if (state.loading) return (
@@ -165,10 +154,7 @@ export function JobDetailModal({ pi, type, closeModal, attribution = JOBS_ATTRIB
     const hasSign = at && at.sign && at.sign.img;
     const isDraft = at && !Array.isArray(at) && at.draft && !hasSign;
     const hasCard = rooms.length || hasSign;
-    /* Same SKU editor as the Audit Ops drawer — this modal is where an SM is
-       already standing when they spot a card printing "SKU: NA". Saving swaps
-       in the re-fetched audit_ticked, so the PDF button below picks it up
-       without reopening. */
+
     const setTicked = (t: any) => setState((s) => ({ ...s, ticked: t }));
     const roomsEls = rooms.map((r: any, i: number) => (
       <div key={i}>
@@ -239,8 +225,7 @@ export function JobDetailModal({ pi, type, closeModal, attribution = JOBS_ATTRIB
                     {rooms.map((r: any, i: number) => (
                       <div key={i}>
                         <InstallRoomCard room={r} index={i} />
-                        {/* Swapping the saved jobcard back into state keeps the
-                            PDF button below in sync without reopening. */}
+
                         <RoomSkuEditor
                           room={r}
                           save={installRoomSkuSaver(String(o.id), String(sj.id), i, attribution)}
@@ -264,11 +249,6 @@ export function JobDetailModal({ pi, type, closeModal, attribution = JOBS_ATTRIB
   );
 }
 
-/* Audit-side "Shadowed by" — the only writable control in this otherwise
-   read-only view. Installation shadowers are assigned in Install Ops (next to
-   the installer assignment they belong to); audits have no assignment surface
-   in this CRM, so they're edited here. Multiple shadowers of any role are
-   allowed; they persist comma-joined on audit_orders. */
 function AuditShadowers({ order: o }: { order: any }) {
   const [pool, setPool] = useState<ShadowerOption[]>([]);
   const [value, setValue] = useState<Shadower[]>(() => parseShadowers(o.shadower_email, o.shadower_name));
@@ -277,9 +257,7 @@ function AuditShadowers({ order: o }: { order: any }) {
 
   useEffect(() => {
     let alive = true;
-    /* Shadower pool — people who can be ASSIGNED to observe a job, so it
-       must exclude anyone who has left. The nameMap query further down is the
-       opposite case and deliberately keeps them. */
+
     activeStaffFilter().then((f) => sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name' + f)).then((rows) => {
       if (alive && Array.isArray(rows)) setPool(rows.map((r: any) => ({ name: r.name, email: r.email, role: r.role })));
     });
@@ -317,7 +295,6 @@ function AuditShadowers({ order: o }: { order: any }) {
   );
 }
 
-/* ---- Jobs list view (verbatim, lines 787-912) ---- */
 type Job = {
   id: string;
   type: 'audit' | 'install';
@@ -346,15 +323,13 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
       const [auditRes, installRes, profileRes] = await Promise.all([
         sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date,city&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
         sbGet('install_orders_slim?select=pi,customer_name,addr,subjobs,status,delivery_date,city&status=neq.deleted&order=created_at.desc'),
-        /* email -> name for DISPLAYING who an existing job was assigned to.
-           Deliberately includes people who have left: filter this and a
-           leaver's past jobs render with a blank assignee. */
+
         sbGet('profiles?select=name,email&role=neq.admin'),
       ]);
       if (!alive) return;
       if (Array.isArray(profileRes)) profileRes.forEach((p: any) => { nameMap[p.email] = p.name; });
       const jobs: Job[] = [];
-      // City scope — the header toggle filters both job types by their own city.
+
       if (Array.isArray(auditRes)) {
         inCity(auditRes, city).forEach((r: any) => jobs.push({
           id: r.pi || '—', type: 'audit',
@@ -386,9 +361,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
       setLoading(false);
     }
     setLoading(true);
-    /* Audit and install jobs the backend already has but nobody imported would
-       otherwise be missing from this overview entirely — see
-       autoImportAuditOrders. */
+
     autoImportSiteAuditJobs().then((added) => { if (added && alive) load(); });
     load();
     const tid = setInterval(() => { if (!document.hidden) load(); }, 30000);
@@ -417,8 +390,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
   }).filter((j) => {
     if (!jobsSearch) return true;
     const q = jobsSearch.toLowerCase();
-    // Enq ID/customer (original) plus address, assigned-to, status label, and date(s) —
-    // mirrors the same search extension shipped in material-depot-site's Admin.html.
+
     const dates = [j.date, ...(j.installDates || [])].filter(Boolean).join(' ');
     const hay = [j.id, j.customer, j.addr, j.assignee, JOB_STATUS[j.status]?.l || j.status, dates]
       .filter(Boolean).join(' ').toLowerCase();

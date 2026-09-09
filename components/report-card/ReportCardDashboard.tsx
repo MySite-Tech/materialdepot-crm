@@ -21,8 +21,6 @@ interface Props {
   currentUserPhone?: string;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 const fmtMoney = (n: number) =>
   n >= 10000000
     ? `₹${(n / 10000000).toFixed(2)} Cr`
@@ -61,8 +59,6 @@ const monthEndISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
 };
 
-// ── Section shell ───────────────────────────────────────────────────────────────
-
 function Section({ n, title, hint, children }: { n: string; title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
@@ -88,8 +84,6 @@ const stagePill: Record<ClosureStage, string> = {
   COLD: 'bg-blue-50 text-blue-600',
   DEAD: 'bg-gray-100 text-gray-500',
 };
-
-// ── Filter primitives ───────────────────────────────────────────────────────────
 
 function Dropdown({
   value, placeholder, options, onChange, searchable,
@@ -200,8 +194,6 @@ function MultiDropdown({
   );
 }
 
-// ── Section 01: Walk-in Attendance ──────────────────────────────────────────────
-
 function WalkinTable({ w }: { w: ReportCardData['walkin_analysis'] }) {
   const total = w.total;
   const rows: { key: keyof ReportCardData['walkin_analysis']; label: string; sub: string; tint: string; color: string; row: WalkinRow }[] = [
@@ -254,8 +246,6 @@ function WalkinTable({ w }: { w: ReportCardData['walkin_analysis'] }) {
   );
 }
 
-// ── Section 02: Pipeline carts ──────────────────────────────────────────────────
-
 function PipelineTable({ p }: { p: ReportCardData['pipeline_carts'] }) {
   const rows: { key: keyof ReportCardData['pipeline_carts']; label: string; sub: string; tint: string; color: string; row: PipelineCartRow }[] = [
     { key: 'total', label: 'Total Carts', sub: 'Open carts — not lost, not ordered', tint: 'bg-blue-50/30', color: 'text-blue-700', row: p.total },
@@ -291,8 +281,6 @@ function PipelineTable({ p }: { p: ReportCardData['pipeline_carts'] }) {
   );
 }
 
-// ── Section 03: Orders lost ─────────────────────────────────────────────────────
-
 function OrdersLostTable({ o }: { o: ReportCardData['orders_lost'] }) {
   return (
     <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white max-w-lg">
@@ -321,8 +309,6 @@ function OrdersLostTable({ o }: { o: ReportCardData['orders_lost'] }) {
     </div>
   );
 }
-
-// ── Section 04: CRM adherence ───────────────────────────────────────────────────
 
 function AvgWalkinCard({ label, bm, store, accent, range }: { label: string; bm: number; store: number; accent: string; range: string }) {
   return (
@@ -374,8 +360,6 @@ function CrmAdherenceSection({ c, range }: { c: ReportCardData['crm_adherence'];
     </div>
   );
 }
-
-// ── Section 05: Closure pipeline ────────────────────────────────────────────────
 
 function PhoneCell({ phone }: { phone: string }) {
   return (
@@ -490,8 +474,6 @@ function ClosurePipelineSection({
   );
 }
 
-// ── Section 06: Rankings ────────────────────────────────────────────────────────
-
 function RankBadge({ rank }: { rank: number }) {
   const color = rank === 1 ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
     : rank === 2 ? 'bg-gray-100 text-gray-600 border-gray-300'
@@ -533,8 +515,6 @@ function RankingTable({ title, rows, showStore }: { title: string; rows: Ranking
   );
 }
 
-// ── Main component ──────────────────────────────────────────────────────────────
-
 export default function ReportCardDashboard({ branches, allowedBranches, currentUserPhone }: Props) {
   const isRestricted = allowedBranches.length > 0;
   const branchOptions = (isRestricted ? allowedBranches : branches).filter(b => b !== 'HQ');
@@ -560,8 +540,6 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
     fetchAvailableBMs(eff).then(setBmList).catch(() => setBmList([]));
   }, [branchKey, isRestricted, allowedBranches]);
 
-  // Auto-select a BM once the list loads (this is a per-BM report card, so with
-  // no BM selected every section is empty). Prefer the logged-in BM, else first.
   const autoPicked = useRef(false);
   useEffect(() => {
     if (autoPicked.current || bmContact || bmList.length === 0) return;
@@ -602,7 +580,7 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
 
   return (
     <div className="px-3 sm:px-6 py-4 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
+
       <div>
         <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Material Depot · Internal Analytics</div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">BM Report Card</h1>
@@ -613,7 +591,6 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
         </p>
       </div>
 
-      {/* Filter bar */}
       <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 shadow-sm sticky top-0 z-40">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Date</span>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-[12px] text-gray-700" />
@@ -631,7 +608,6 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
         {loading && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
       </div>
 
-      {/* Content */}
       {loading && !data && <div className="py-16 text-center text-[13px] text-gray-400">Loading…</div>}
       {!loading && !data && <div className="py-16 text-center text-[13px] text-gray-400">Failed to load data. Check filters and try again.</div>}
 

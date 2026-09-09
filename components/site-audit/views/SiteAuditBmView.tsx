@@ -1,27 +1,5 @@
 'use client';
 
-/* Business Manager dashboard — port of material-depot-site's BM_Dashboard.html.
-
-   Every site audit linked to a BM, with the completed job card, a per-segment
-   material selection the BM records against it, and the manual downstream
-   "customer journey" timeline (order placed → renders → approval → printing →
-   delivery → installed) stored in audit_orders.bm_journey.
-
-   IDENTITY STARTS FROM THE CRM'S OWN USER TABLE (the Django backend's
-   UserOrganisation, via lib/mockApi's loginWithPhone / fetchUsers), so nobody
-   needs a field-app profile just to appear in the picker. Order ownership,
-   though, prefers `audit_orders.bm_email` — see `orderBelongsToBm`:
-
-   - The logged-in CRM user IS the BM; their name and phone come from the
-     session. The session carries no email, so it's looked up once from the
-     `profiles` row sharing that phone number.
-   - Rows that carry a `bm_email` are decided by it alone. Rows that don't
-     (most legacy rows) fall back to the free-text `bm` column — matched on
-     contact digits, then on the name, which originates from this same backend
-     user list (the Kylas PO payload's `bm.name`).
-   - Legacy rows get linked in bulk from Site Audit › Users ("Link N orders"),
-     which only ever links unambiguous exact name matches. */
-
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuditRoomCard } from '../ui/AuditRoomViews';
 import RoomSkuEditor, { auditRoomSkuSaver } from '../ui/RoomSkuEditor';
@@ -37,12 +15,6 @@ import {
 import type { WpRow } from '../coe-ops/wpTrack';
 import { fetchUsers } from '@/lib/mockApi';
 
-/* `bm_journey` and `coe_track` ride along so the conversion funnel can be built
-   for the whole list in one pass — a manual "order placed" tick from either the
-   BM or the COE outranks anything derived. They add ~16 KB to a ~2 MB payload
-   (`log` and `skus`, already here, are almost all of it), so unlike
-   SiteAuditBranchManagerView's deliberately narrow ROLLUP_AUDIT_COLS this list
-   can afford them. */
 export const AUDIT_COLS = 'id,pi,po,skus,bm,bm_email,customer_name,phone,addr,status,service,slot,date,auditor_name,log,created_at,bm_journey,coe_track';
 
 export const STATUS: Record<string, { l: string; c: string }> = {
@@ -60,23 +32,13 @@ export const STATUS: Record<string, { l: string; c: string }> = {
   completed: { l: 'Site Audit Completed', c: 'bg-green-100 text-green-700' },
 };
 
-/* `aliases` are ADDITIONAL exact names for the same person, never fuzzy
-   variants. They exist because the same human is recorded under two
-   authoritative names: the field-app profile's `name` and the CRM's own
-   `f_name + l_name`. The CRM sync created many profiles from a short display
-   name ("Anubhab", "Pranab") while order rows carry the CRM's full name
-   ("Anubhab Sarkar", "Pranab Das"), so matching on the profile name alone
-   loses those orders. Both names come from records already tied to this
-   person by an exact phone match, so trusting either is still exact matching
-   — nothing here compares partial or similar strings. */
 export type BmProfile = { id?: string | number; name: string; email?: string; contact?: string; role?: string; aliases?: string[] };
 
 type Order = {
   id: string; pi: string; po: string[]; bm: string; name: string; phone: string; addr: string;
   status: string; slot: string | null; date: string | null; auditorName: string | null; log: any[];
   createdAt: string | null;
-  /* Only the "order placed" ticks are read here — the drawer re-fetches both
-     blobs in full, because it can write to them. */
+
   journey: JourneyEntry[];
   coePlaced: { at: string; ref?: string } | null;
 };
@@ -85,19 +47,6 @@ function norm(s?: string | null) {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-/* THE PHONE DECIDES. Every writer records the owner's number — the auto-import
-   from the backend's `bm.contact`, the store sheet and the drawer from the
-   account they picked, the resolve pass from the enquiry's real owner — and a
-   BM's CRM session carries the same number. So attribution never waits on a
-   field-app account existing: a number matches a number.
-
-   `bm_email` is how that number is stored (a `profiles`-style address, whose
-   synthetic form encodes the digits — see bmPhoneOfOrder), so a row linked to
-   an account with a REAL email still decides on the email. Rows with neither
-   fall back to the free-text `bm` name, exact after normalisation.
-
-   Never fuzzy, at any level: two BMs sharing a first name would each see the
-   other's customers. */
 export function orderBelongsToBm(row: { bm?: string | null; bm_email?: string | null }, bm: BmProfile): boolean {
   const mine = phoneKey(bm.contact);
   const theirs = bmPhoneOfOrder(row);
@@ -108,34 +57,6 @@ export function orderBelongsToBm(row: { bm?: string | null; bm_email?: string | 
   return bmNames(bm).has(bmText);
 }
 
-/* A store pre-booking and the site audit it becomes are two separate
-   audit_orders rows, not one row changing state: the pre-booking is created by
-   the store booking app under its own `SRES-<STORE>-…` PI and carries the
-   enquiry ID it was booked against in `po`, and the Kylas service order later
-   arrives as its own row whose `pi` IS that enquiry ID. A BM's list therefore
-   showed the same customer twice — the slot that was held, and the audit that
-   actually got scheduled off it — which reads as two jobs.
-
-   The pre-booking is only the previous step of the same workflow, so it drops
-   out once the audit exists. "Exists" is either of:
-
-   - the linked order is really there — the pre-booking's enquiry ID matches a
-     non-pre-booking row's `pi` exactly. Same `po`→`pi` link the store
-     calendar's slot-availability check already absorbs bookings by, and it
-     covers pre-bookings nobody remembered to mark fulfilled;
-   - status `slot_converted` — a service manager confirmed in the drawer that
-     the service order was created, so the audit exists even when its row is
-     attributed to someone else and never reaches this list.
-
-   Matched on the enquiry ID alone, never on customer name or phone: both are
-   free text on the reservation form (the phone is often the store's own), so
-   matching on them would collapse two different customers into one. A
-   pre-booking still waiting on its service order stays visible — it is the
-   only record that the slot was ever held.
-
-   Takes the RAW fetched rows, before they are narrowed to one BM: whether the
-   audit was created is a question about the whole table, and the audit row may
-   carry a different (or missing) BM link than the pre-booking it came from. */
 export function isPreBooking(row: { status?: string | null }): boolean {
   return row.status === 'slot_reserved' || row.status === 'slot_converted';
 }
@@ -154,7 +75,6 @@ export function dropSupersededPreBookings<T extends { pi?: string | null; po?: s
   });
 }
 
-/* Every exact name this person is known by, normalised. */
 export function bmNames(bm: BmProfile): Set<string> {
   const out = new Set<string>();
   for (const n of [bm.name, ...(bm.aliases || [])]) {
@@ -164,17 +84,6 @@ export function bmNames(bm: BmProfile): Set<string> {
   return out;
 }
 
-/* ── Conversion funnel plumbing ───────────────────────────────────────────
-   Ties each audit to the downstream rows this dashboard has already loaded.
-   Everything here matches on the client's exact phone digits AND on the audit
-   day: a client can have several audits and several orders, so "this number
-   ever ordered" would mark a fresh audit converted off an unrelated older one
-   — the trap coe-ops/shared.ts's `orderPlacedFor` documents, and the reason
-   this list agrees with the COE's queue instead of contradicting it. */
-
-/* The day the audit happened: `date` is the visit date, falling back to when
-   the row was created for the legacy orders that never got one. Same rule as
-   coe-ops' `anchorDate`. */
 function auditAnchor(o: Order): string | null {
   return o.date || (o.createdAt ? String(o.createdAt).slice(0, 10) : null);
 }
@@ -207,16 +116,12 @@ function buildFunnels(
     const since = (d: string | null | undefined) => !anchor || (!!d && String(d).slice(0, 10) >= anchor);
 
     const candidates = (installByPhone.get(key) || []).filter((i) => since(i.createdAt));
-    /* A completed installation is the more informative of two candidates — it
-       carries the end of the ladder — otherwise take the earliest, which is the
-       one this audit led to. */
+
     const install = candidates.find((i) => i.status === 'completed')
       || candidates.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))[0]
       || null;
     const wpRun = (wpByPhone.get(key) || []).find((w) => since(w.order_placed_at || w.created_at)) || null;
 
-    /* A manual tick beats anything derived, and either of the two people who
-       can leave one counts. */
     const journeyPlaced = o.journey.filter((e) => e.stage === 'order_placed')
       .sort((a, b) => String(a.ts).localeCompare(String(b.ts)))[0] || null;
     const declared = o.coePlaced || (journeyPlaced ? { at: journeyPlaced.ts, ref: journeyPlaced.refId || '' } : null);
@@ -225,8 +130,7 @@ function buildFunnels(
       auditDate: anchor,
       auditCompleted: o.status === 'completed',
       auditCompletedAt: o.date,
-      /* `undefined` (a phone the cap skipped) and a failed request both mean
-         "we don't know", which is not the same as an empty deal list. */
+
       deals: key ? (deals ? deals.byPhone.get(key) ?? null : null) : null,
       install: install ? { pi: install.pi, createdAt: install.createdAt, status: install.status } : null,
       wpRun: wpRun ? { pi: wpRun.pi || wpRun.md_id || '', placedAt: wpRun.order_placed_at || wpRun.created_at || null } : null,
@@ -237,9 +141,6 @@ function buildFunnels(
   return out;
 }
 
-/* The strip above the list: how many of this BM's audits are sitting on each
-   step. Counts a stall, not a "reached" — "12 audits reached cart" hides the
-   nine that never got past it, which is the number worth acting on. */
 function stallCounts(funnels: Map<string, Funnel>): { lost: number; byStep: Record<string, number>; done: number; unknown: number } {
   const byStep: Record<string, number> = {};
   let lost = 0;
@@ -247,9 +148,7 @@ function stallCounts(funnels: Map<string, Funnel>): { lost: number; byStep: Reco
   let unknown = 0;
   for (const f of funnels.values()) {
     if (f.lost) { lost++; continue; }
-    /* Counted apart from every step: an unreadable pipeline is not a drop-off,
-       and folding it into "waiting on cart" would turn one Django outage into a
-       dashboard full of clients who look like they walked away. */
+
     if (f.unknownFrom) { unknown++; continue; }
     if (!f.stalledAt) { done++; continue; }
     byStep[f.stalledAt.k] = (byStep[f.stalledAt.k] || 0) + 1;
@@ -258,8 +157,7 @@ function stallCounts(funnels: Map<string, Funnel>): { lost: number; byStep: Reco
 }
 
 export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?: BmProfile | null }) {
-  /* The acting BM: an explicitly-passed profile (Role Viewer / own dashboard)
-     wins, otherwise it's simply the logged-in CRM user. */
+
   const [resolved, setResolved] = useState<BmProfile | null>(bm || me || null);
   const [bmList, setBmList] = useState<BmProfile[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -267,23 +165,15 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
   const [openPi, setOpenPi] = useState<string | null>(null);
-  /* A BM's order book is three tables, not one — see ownedOrders.tsx. */
+
   const [book, setBook] = useState<'audits' | 'installs' | 'wallpaper'>('audits');
-  /* Which conversion step the list is narrowed to — 'all', a step key meaning
-     "stalled here", or 'lost'. Separate from `filter` (the audit's own status):
-     "audit completed" and "client never built a cart" are different questions,
-     and the second is the one this dashboard exists to answer. */
+
   const [stall, setStall] = useState<'all' | 'lost' | 'unknown' | FunnelStepKey>('all');
   const [deals, setDeals] = useState<DealsResult | null>(null);
   const [dealsLoading, setDealsLoading] = useState(false);
-  /* Bumped to re-ask Django about one client after a BM says they've just
-     raised the cart — the deal cache is module-level and deliberately outlives
-     this component, so nothing else would pick the change up. */
+
   const [dealsNonce, setDealsNonce] = useState(0);
 
-  /* The "view another person's orders" picker is the CRM's own user roster
-     (backend UserOrganisation), so nobody needs a field-app profile to appear
-     here. Loaded lazily and best-effort — the view works without it. */
   useEffect(() => {
     if (bm) { setResolved(bm); return; }
     let alive = true;
@@ -296,10 +186,6 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     return () => { alive = false; };
   }, [bm]);
 
-  /* The CRM session gives us a name + phone but never an email, and `bm_email`
-     is now what decides ownership on linked rows — so fill the email in from
-     the field-app profile that shares this phone number, once per person. A BM
-     with no such profile simply keeps the name/phone fallback. */
   const lookedUpRef = useRef<string | null>(null);
   useEffect(() => {
     const key = phoneKey(resolved?.contact);
@@ -315,13 +201,6 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     return () => { alive = false; };
   }, [resolved]);
 
-  /* Fill in the CRM's own name for this person as an order-matching alias when
-     the caller didn't supply one. A BM's own session passes it (SiteAuditOwnDashboard
-     knows it from the CRM login), but Role Viewer's admin preview only has the
-     field-app profile — so without this the preview matched on the profile name
-     alone and showed a DIFFERENT, smaller order list than the person actually
-     sees, which defeats the point of previewing. Same exact phone match the
-     email lookup above uses; nothing here compares partial or similar strings. */
   const aliasLookedUpRef = useRef<string | null>(null);
   useEffect(() => {
     const key = phoneKey(resolved?.contact);
@@ -343,8 +222,7 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     if (!resolved) { setLoading(false); return; }
     const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');
     if (!Array.isArray(rows)) { setLoading(false); return; }
-    /* Superseded pre-bookings are dropped against the WHOLE table, before the
-       rows are narrowed to this BM — see dropSupersededPreBookings. */
+
     setOrders(dropSupersededPreBookings(rows).filter((r: any) => orderBelongsToBm(r, resolved)).map((r: any) => ({
       id: r.id, pi: r.pi || '', po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],
       bm: r.bm || '—', name: r.customer_name || '', phone: r.phone || '', addr: r.addr || '',
@@ -372,17 +250,10 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
     return c;
   }, [orders]);
 
-  /* Installations and wallpaper runs for the same person. Called before the
-     early return below so the hook order never changes between renders. */
   const people = useMemo(() => (resolved ? [resolved] : []), [resolved]);
   const extrasKey = resolved ? [resolved.email || '', phoneKey(resolved.contact), resolved.name, ...(resolved.aliases || [])].join('|') : '';
   const extras = useOwnedExtras(people, extrasKey);
 
-  /* The CRM deal pipeline for every client in this list — one request per
-     client phone, cached and capped inside loadDealsForPhones. Keyed on the set
-     of phones rather than on `orders`, so the 30s order poll doesn't re-ask
-     Django about clients whose deals are already known. Best-effort: a failure
-     leaves the funnel reporting "unknown", never "no cart". */
   const phonesKey = useMemo(
     () => [...new Set(orders.map((o) => phoneKey(o.phone)).filter(Boolean))].sort().join(','),
     [orders],
@@ -543,7 +414,6 @@ export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?
   );
 }
 
-/* ── Drawer: timeline, job card + material selection, customer journey ─── */
 function BmOrderDrawer({ order: o, bm, funnel, onRecheck, onClose }: { order: Order; bm: BmProfile; funnel?: Funnel; onRecheck: () => void; onClose: () => void }) {
   const [ticked, setTicked] = useState<any>(null);
   const [jcLoading, setJcLoading] = useState(o.status === 'completed');
@@ -604,10 +474,7 @@ function BmOrderDrawer({ order: o, bm, funnel, onRecheck, onClose }: { order: Or
                   {rooms.map((r: any, i: number) => (
                     <Fragment key={i}>
                       <AuditRoomCard room={r} index={i} />
-                      {/* The BM already writes into this same blob (material
-                          selection below), so the room SKU the auditor left
-                          blank is theirs to fill too — it's what prints on
-                          the card they send the client. */}
+
                       <RoomSkuEditor
                         room={r}
                         save={auditRoomSkuSaver(String(o.id), i, (bm.name || 'BM') + ' (BM)')}
@@ -641,9 +508,6 @@ function BmOrderDrawer({ order: o, bm, funnel, onRecheck, onClose }: { order: Or
   );
 }
 
-/* ── Material selection (v2 rooms only) ───────────────────────────────────
-   Legacy rooms have no `segments[]` to hang a per-segment material choice on,
-   and are being phased out, so this section is deliberately v2-only. */
 function MaterialSection({ room, roomIdx, orderId, bm, onSaved }: { room: any; roomIdx: number; orderId: string; bm: BmProfile; onSaved: (m: string) => void }) {
   if (!(room?.v >= 2) || !Array.isArray(room.segments) || !room.segments.length) return null;
   const cat = categoryFor(room.category);
@@ -705,9 +569,6 @@ function MaterialCard({ label, seg, roomIdx, segIdx, orderId, bm, onSaved }: {
     setFetching(false);
   }
 
-  /* Always re-fetch audit_ticked immediately before merging rather than
-     trusting the copy this drawer loaded with — the field app autosaves the
-     same blob, so a stale write here could clobber a concurrent one. */
   async function save() {
     setErr('');
     if (!sku.trim() && !name.trim() && !url.trim()) { setErr('Enter at least a SKU, product name, or URL.'); return; }
@@ -750,10 +611,6 @@ function MaterialCard({ label, seg, roomIdx, segIdx, orderId, bm, onSaved }: {
   );
 }
 
-/* ── Conversion funnel UI ─────────────────────────────────────────────────
-   Three views of the same derivation: a strip that counts where this BM's
-   audits are stuck, a chip on each row, and the full ladder in the drawer. */
-
 function ConversionStrip({ total, stalls, active, onPick, loading, deals }: {
   total: number;
   stalls: ReturnType<typeof stallCounts>;
@@ -763,9 +620,7 @@ function ConversionStrip({ total, stalls, active, onPick, loading, deals }: {
   deals: DealsResult | null;
 }) {
   if (!total) return null;
-  /* Only the steps somebody is actually stuck on, so the strip doesn't carry
-     five zeroes. `installed` is never a stall (it's the finish line) and is
-     shown as the "converted" tile instead. */
+
   const tiles = FUNNEL_STEPS.filter((st) => stalls.byStep[st.k]);
 
   return (
@@ -822,8 +677,7 @@ function ConversionStrip({ total, stalls, active, onPick, loading, deals }: {
       {loading ? (
         <div className="mt-1.5 text-[11.5px] text-gray-400">Reading the CRM pipeline for these clients…</div>
       ) : null}
-      {/* Soft-gate-and-surface: say which half is missing rather than letting a
-          dead pipeline read as "nobody built a cart". */}
+
       {deals?.allFailed ? (
         <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
           Couldn&apos;t read the CRM deal pipeline, so cart / quotation / order are unknown below — not absent. The
@@ -850,9 +704,6 @@ function FunnelRowChip({ f }: { f?: Funnel }) {
   );
 }
 
-/* The drawer's ladder. Every step says what proved it, because "cart created"
-   with no evidence behind it is the kind of claim a BM will be asked to defend
-   on a call. */
 function ConversionLadder({ f, phone, onRecheck }: { f?: Funnel; phone: string; onRecheck: () => void }) {
   if (!f) return <div className="text-[12.5px] text-gray-400">Working out where this client got to…</div>;
 
@@ -921,7 +772,6 @@ function ConversionLadder({ f, phone, onRecheck }: { f?: Funnel; phone: string; 
   );
 }
 
-/* ── Journey ───────────────────────────────────────────────────────────── */
 function JourneyTimeline({ entries }: { entries: JourneyEntry[] | null }) {
   if (entries === null) return <div className="text-[12.5px] text-gray-400">Loading…</div>;
   if (!entries.length) return <div className="text-[12.5px] text-gray-400">No journey entries logged yet.</div>;
@@ -947,8 +797,6 @@ function JourneyTimeline({ entries }: { entries: JourneyEntry[] | null }) {
   );
 }
 
-/* Appends to bm_journey. Same fresh-fetch-before-write pattern as the material
-   save — BM, SM and Admin can all append to the same array. */
 function JourneyAddForm({ entries, orderId, bm, onSaved }: { entries: JourneyEntry[]; orderId: string; bm: BmProfile; onSaved: (m: string) => void }) {
   const [stage, setStage] = useState(MD_JOURNEY_STAGES[0].k);
   const cfg = journeyStage(stage);

@@ -21,8 +21,6 @@ interface Props {
   allowedBranches: string[];
 }
 
-// ── Shared filter chip components ────────────────────────────────────────────
-
 interface FilterChipProps {
   label: string;
   options: string[];
@@ -231,8 +229,6 @@ function DateChip({ label, value, onChange, color }: DateChipProps) {
   );
 }
 
-// ── CSV helpers ──────────────────────────────────────────────────────────────
-
 function csvCell(v: unknown): string {
   if (v === null || v === undefined) return '';
   const s = String(v);
@@ -251,8 +247,6 @@ function downloadCsv(filename: string, content: string) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
-// ── Main component ───────────────────────────────────────────────────────────
 
 function fmtPct(v: number) {
   return `${v.toFixed(1)}%`;
@@ -450,7 +444,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
       .finally(() => setNcLoading2(false));
   }, []);
 
-  // Compute effective branches once so both loaders share the same value
   const getEffectiveBranches = useCallback(() =>
     isRestricted
       ? (branchFilter.length > 0 ? branchFilter.filter(b => allowedBranches.includes(b)) : allowedBranches)
@@ -484,7 +477,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [branchFilter, bmFilter, dateRange, categoryFilter, load, loadNonConverted, loadNoCart, getEffectiveBranches]);
 
-  // Re-fetch non-converted when page changes
   useEffect(() => {
     const filters: FootfallFilters = {
       branch: getEffectiveBranches(),
@@ -497,7 +489,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ncPage]);
 
-  // Re-fetch no-cart when page changes
   useEffect(() => {
     const filters: FootfallFilters = {
       branch: getEffectiveBranches(),
@@ -510,7 +501,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ncPage2]);
 
-  // Debounced re-fetch when search term changes (resets to page 1)
   useEffect(() => {
     if (ncDebounceRef.current) clearTimeout(ncDebounceRef.current);
     ncDebounceRef.current = setTimeout(() => {
@@ -528,7 +518,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ncSearch]);
 
-  // Debounced re-fetch for no-cart search
   useEffect(() => {
     if (ncDebounceRef2.current) clearTimeout(ncDebounceRef2.current);
     ncDebounceRef2.current = setTimeout(() => {
@@ -633,7 +622,7 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
 
   return (
     <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5 sm:space-y-6">
-      {/* Filter bar */}
+
       <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 sm:gap-2.5 shadow-sm">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
         <FilterChip label="Branch" options={branchOptions} selected={branchFilter}
@@ -704,7 +693,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
         </span>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {SUMMARY_CARDS.map(({ key, label, color, pctKey }) => {
           const val = data?.[key] ?? null;
@@ -745,7 +733,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
         <div className="text-center text-gray-400 text-[13px] py-10">No footfall records found for the selected filters.</div>
       )}
 
-      {/* Cart Not Converted panel */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
           <span className="text-[13px] font-bold text-gray-800 shrink-0">Cart Not Converted</span>
@@ -820,7 +807,6 @@ export default function FootfallDashboard({ branches, allowedBranches }: Props) 
         )}
       </div>
 
-      {/* No Cart Created panel */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex items-center gap-3 flex-wrap">
           <span className="text-[13px] font-bold text-gray-800 shrink-0">No Cart Created</span>

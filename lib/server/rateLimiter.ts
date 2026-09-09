@@ -1,5 +1,5 @@
 let lastRequest = 0;
-const MIN_GAP = 500; // 500ms between requests = max 2/sec
+const MIN_GAP = 500;
 
 export async function rateLimitedFetch(
   url: string,

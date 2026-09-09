@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { Deal, DealsSearchResponse } from "@/lib/types";
+import type { Deal, DealsSearchResponse } from "@/lib/types/index";
 import { syncEstimate, fetchKylasDealInfo, type SyncEstimateResult, type KylasDealInfo } from "@/lib/mockApi";
 
 const PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 10;
-// Kylas' search index lags behind deal creation, so a freshly-synced deal is
-// polled for rather than fetched once — up to ~50s before giving up.
+
 const SYNC_INDEX_DELAY_MS = 5000;
 const SYNC_INDEX_MAX_ATTEMPTS = 10;
 const SALES_PIPELINE_ID = 31661;
@@ -22,21 +21,6 @@ const SEARCH_FIELDS = [
   "id", "createdAt", "updatedAt", "customFieldValues", "associatedContacts",
 ];
 
-// Single "Raise Request" field (single-select). Every value routes through
-// cfRaiseEscalation (Escalation pipeline); `requestType` is the auto-mapped
-// Request Type written to cfRequestType on submit (system-set, per the brief).
-//
-// These values come from the redefined "Raise request" field in Kylas.
-//
-// `name` is the option's exact name in Kylas (Customizations > Deal form fields
-// > Raise Request, field 544462). Seven of these used to be paraphrases ("Return
-// Request" for `Return`, "Modify Order" for `Order Modification`, plus casing
-// drift like "Delivery Delay"/"Delivery delay"). Kylas resolves the option by ID
-// and overwrites whatever name you send — verified 2026-09-08 by patching
-// `{id:202380, name:"Return Request"}` and reading back `{id:202380,
-// name:"Return"}` — so this is NOT what broke the tab, and matching the names is
-// only so that what we send equals what comes back. `label` is what the chip
-// shows, so the sales-facing wording stays free to differ from Kylas' own.
 const RAISE_OPTIONS: { id: number; name: string; label?: string; requestType: "Support" | "Escalation" }[] = [
   { id: 202380, name: "Return", label: "Return Request", requestType: "Support" },
   { id: 184695, name: "Order Modification", label: "Modify Order", requestType: "Support" },
@@ -52,10 +36,6 @@ const RAISE_OPTIONS: { id: number; name: string; label?: string; requestType: "S
   { id: 202386, name: "Installation/Site Audit Issue", requestType: "Escalation" },
 ];
 
-// `/api/deals/[id]` passes Kylas' error body through verbatim, so a rejected
-// patch used to render in the drawer as a raw `{"timestamp":null,"code":...}`
-// blob — which tells a sales user nothing and cost a day of debugging to read.
-// Translate the codes we've actually seen and keep the raw text behind them.
 function friendlyPatchError(raw: unknown, status: number): string {
   const text = typeof raw === "string" ? raw : raw == null ? "" : JSON.stringify(raw);
   if (text.includes("invalid.patch.request")) {
@@ -134,26 +114,21 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Contact search results
   const [contacts, setContacts] = useState<ContactResult[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
-  // Expanded contact → associated deals
   const [expandedContactId, setExpandedContactId] = useState<number | null>(null);
   const [contactDeals, setContactDeals] = useState<AssociatedDeal[]>([]);
   const [loadingContactDeals, setLoadingContactDeals] = useState(false);
 
-  // Expanded deal for raise form
   const [expandedDealId, setExpandedDealId] = useState<number | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [dealContact, setDealContact] = useState<Record<number, string>>({});
 
-  // All escalation+support deals for history matching
   const [escSupportDeals, setEscSupportDeals] = useState<
     { id: number; name: string; stage: string; pipeline: string }[]
   >([]);
 
-  // Pagination (default mode only)
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -161,15 +136,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   const [defaultRange, setDefaultRange] = useState<{ from: string; to: string } | null>(null);
 
   const [submitting, setSubmitting] = useState<number | null>(null);
-  // `submitting` drives the disabled styling, but state is not a lock: two taps
-  // inside one tick both read it as null and both submit, which on the re-raise
-  // path interleaves two clear/set pairs and can leave the tag cleared. The ref
-  // is the actual guard.
+
   const submitLockRef = useRef(false);
   const [submitSuccess, setSubmitSuccess] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Find Kylas Deal modal
   const [kylasModalOpen, setKylasModalOpen] = useState(false);
   const [kylasInput, setKylasInput] = useState("");
   const [kylasLoading, setKylasLoading] = useState(false);
@@ -177,12 +148,9 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   const [kylasDealInfo, setKylasDealInfo] = useState<KylasDealInfo | null>(null);
   const [kylasError, setKylasError] = useState<string | null>(null);
 
-  // Auto-sync when a search for a lead/cart ID returns no deals
   const [autoSyncing, setAutoSyncing] = useState(false);
   const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
   const autoSyncAttempted = useRef<Set<string>>(new Set());
-
-  // Fetch sales deals
 
   const fetchDeals = useCallback(async (q: string) => {
     setLoading(true);
@@ -191,7 +159,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       let allSales: Deal[] = [];
 
       if (q.trim()) {
-        // Search mode: use multi_field to search across ALL sales deals
+
         const res = await fetch(
           `/api/deals/search?page=0&size=${PAGE_SIZE}&sort=${encodeURIComponent("updatedAt,desc")}`,
           {
@@ -216,7 +184,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         const data: DealsSearchResponse = await res.json();
         const all = data.content ?? [];
         allSales = all.filter(isSalesDeal);
-        // Client-side partial match refinement
+
         const upper = q.trim().toUpperCase();
         const exact = allSales.filter((d) => d.name.toUpperCase() === upper);
         const partial = allSales.filter((d) => d.name.toUpperCase().includes(upper));
@@ -228,7 +196,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         setCurrentPage(0);
         setDefaultRange(null);
       } else {
-        // Default: last 7 days by createdAt — fetch only first page, expose Load More
+
         const now = new Date();
         const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
         const fromIso = sevenDaysAgo.toISOString();
@@ -258,7 +226,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         const data: DealsSearchResponse = await res.json();
         const content = data.content ?? [];
         allSales = content.filter(isSalesDeal);
-        // Don't pre-extract escalation/support — loaded lazily when a deal sidebar opens
+
         setEscSupportDeals([]);
         setTotalPages(data.totalPages ?? 0);
         setTotalCount(data.totalElements ?? content.length);
@@ -269,7 +237,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       setDeals(allSales);
       setLoading(false);
 
-      // Background: contact names only
       loadBackgroundData(allSales);
       return allSales;
     } catch (err) {
@@ -317,8 +284,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
   }
 
   function loadBackgroundData(filtered: Deal[]) {
-    // Contact names come from the search response (`associatedContacts` field).
-    // No per-deal fetch — if a deal genuinely has no associated contact, just don't show one.
+
     const inline: Record<number, string> = {};
     for (const d of filtered) {
       const c = (d as Deal & { associatedContacts?: { name: string }[] }).associatedContacts?.[0];
@@ -329,7 +295,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     }
   }
 
-  // Search contacts
   async function searchContacts(q: string) {
     if (!q.trim()) { setContacts([]); return; }
     setLoadingContacts(true);
@@ -358,12 +323,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     finally { setLoadingContacts(false); }
   }
 
-  // Fetch all deals for a contact
   async function fetchContactDeals(contactId: number) {
     setLoadingContactDeals(true);
     setContactDeals([]);
     try {
-      // Fetch recent deals across all pipelines and check which ones share this contact
+
       const res = await fetch(
         `/api/deals/search?page=0&size=200&sort=${encodeURIComponent("updatedAt,desc")}`,
         {
@@ -438,7 +402,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     setSubmitSuccess(null);
     try {
       const field = "cfRaiseEscalation";
-      // Auto-mapped Request Type: Escalation wins if any selected value is an escalation.
+
       const requestType = selectedOptions.some((o) => o.requestType === "Escalation")
         ? "Escalation"
         : "Support";
@@ -455,16 +419,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         }
       }
 
-      // The deal in local state came from Kylas' SEARCH index, which lags the
-      // record itself — deal 4733183 rendered an "Escalation: Return" badge off
-      // the index while the field on the deal was already null, and computing a
-      // patch from that phantom value is what broke this tab. So the current
-      // value is re-read from the DEAL before anything is computed from it.
-      //
-      // A failed read must NOT fall back to the indexed copy: writing the whole
-      // array back means a stale entry would be re-attached to the deal, i.e. a
-      // tag someone deliberately removed silently returns. Two attempts, then
-      // stop and say so — not raising is recoverable, a wrong array is not.
       let existing: unknown;
       let read = false;
       for (let attempt = 0; attempt < 2 && !read; attempt++) {
@@ -482,8 +436,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
           "Couldn't read this deal's current request from Kylas, so nothing was changed. Check your connection and try again."
         );
       }
-      // Kylas hands a single-select back as a bare object and a multi-select as
-      // an array; normalise so neither shape reaches the payload builder.
+
       const existingArr: { id: number; name: string }[] = Array.isArray(existing)
         ? (existing as { id: number; name: string }[])
         : existing && typeof existing === "object"
@@ -498,19 +451,9 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         ...keptValue,
         ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
       ];
-      // True only when the sales user is re-raising a tag the deal already
-      // carries — the one case that needs the clear-then-set pair below.
+
       const isReRaise = existingArr.some((e) => selectedOptions.some((o) => o.id === e.id));
 
-      // Two saves when re-raising, so the repeat registers as a genuine change
-      // rather than a no-op write Kylas' automation ignores. Both saves address
-      // the WHOLE field: Kylas rejects any sub-path into a custom field value —
-      // a `/-` append against a null field, and (this is what broke the tab on
-      // 2026-09-08) an indexed `remove` such as
-      // `/customFieldValues/cfRaiseEscalation/0` when the field is null, both
-      // come back 400 `01001072 invalid.patch.request`. That killed PATCH 1, so
-      // PATCH 2 never ran and no request could be raised at all. Never name an
-      // index here; set the array.
       let cleared = false;
       if (isReRaise) {
         await patchDeal([{ op: "add", path: `/customFieldValues/${field}`, value: keptValue }]);
@@ -522,10 +465,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
           { op: "add", path: `/customFieldValues/cfRequestType`, value: requestType },
         ]);
       } catch (err) {
-        // The clear landed and the set did not, so the deal is now missing a tag
-        // it had before this submit — the raise failed AND took data with it.
-        // Put the original value back before reporting, so a failed re-raise is
-        // a no-op rather than a deletion.
+
         if (cleared) {
           try {
             await patchDeal([
@@ -541,7 +481,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       }
       setSubmitSuccess(dealId);
       setTimeout(() => setSubmitSuccess(null), 3000);
-      // Patch local state — avoid re-running the full fetch flow
+
       setDeals((prev) => prev.map((d) => d.id === dealId
         ? { ...d, customFieldValues: { ...(d.customFieldValues ?? {}), [field]: mergedValue } }
         : d
@@ -591,12 +531,11 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
 
   useEffect(() => { fetchDeals(""); }, [fetchDeals]);
 
-  // Lazy-load escalation/support for the opened deal
   useEffect(() => {
     if (!selectedDeal) return;
     const base = selectedDeal.name.match(/((?:ENQ|MD|CT)\w+)/i)?.[1];
     if (!base) return;
-    // Skip if we already have entries for this base name (e.g. from search-mode load)
+
     if (escSupportDeals.some((d) => d.name.toUpperCase().includes(base.toUpperCase()))) return;
     let cancelled = false;
     (async () => {
@@ -633,18 +572,13 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
     return () => { cancelled = true; };
   }, [selectedDeal?.id]);
 
-  // Only IDs that detectInputType() maps to cart_number or lead_id are safe to
-  // auto-sync — a name or phone would be sent to the backend as a bogus lead_id.
   function isSyncableId(q: string) {
     return /^CT\w+$/i.test(q) || /^(?:ENQ|MD)\w+$/i.test(q);
   }
 
-  // The sync-estimate endpoint looks the deal up and creates it if missing, and is
-  // idempotent — so a zero-result search on a known ID can just call it directly.
   async function autoSyncMissingDeal(q: string) {
     const key = q.toUpperCase();
-    // Marked only on success — a failed sync must stay retryable, otherwise
-    // hitting Search again would silently do nothing.
+
     autoSyncAttempted.current.delete(key);
     setAutoSyncing(true);
     setAutoSyncError(null);
@@ -652,8 +586,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
       const result = await syncEstimate(q);
       if (result.success) {
         autoSyncAttempted.current.add(key);
-        // The deal exists in Kylas now, but its search index lags behind the
-        // create by an unpredictable amount — poll until it shows up.
+
         for (let i = 0; i < SYNC_INDEX_MAX_ATTEMPTS; i++) {
           await new Promise((resolve) => setTimeout(resolve, SYNC_INDEX_DELAY_MS));
           const found = await fetchDeals(q);
@@ -706,7 +639,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
 
   return (
     <div>
-      {/* Search */}
+
       <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 mb-4">
         <input
           type="text"
@@ -737,7 +670,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Contact results */}
       {(contacts.length > 0 || loadingContacts) && (
         <div className="mb-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Contacts</p>
@@ -812,13 +744,10 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         </div>
       )}
 
-      {/* Sales deals */}
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
         Sales Deals {!loading && `(${deals.length})`}
       </p>
 
-      {/* Checked before `loading` — each poll flips loading on, which would
-          otherwise swap this spinner for the skeleton every few seconds. */}
       {autoSyncing ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
           <svg className="w-4 h-4 animate-spin text-yellow-500" fill="none" viewBox="0 0 24 24">
@@ -927,7 +856,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         </div>
       )}
 
-      {/* Find Kylas Deal modal */}
       {kylasModalOpen && (
         <div
           className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 px-4"
@@ -937,7 +865,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
             className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
+
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Find Kylas Deal</p>
@@ -953,7 +881,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
               </button>
             </div>
 
-            {/* Body */}
             <div className="px-5 py-4 space-y-4">
               <form onSubmit={handleFindKylasDeal} className="flex gap-2">
                 <input
@@ -1001,7 +928,7 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
 
               {kylasSyncResult?.success && (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
-                  {/* Success banner */}
+
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border-b border-green-100">
                     <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
@@ -1012,7 +939,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
                     )}
                   </div>
 
-                  {/* Deal info */}
                   <div className="px-4 py-3 space-y-2.5">
                     {kylasDealInfo ? (
                       <>
@@ -1060,16 +986,15 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
         </div>
       )}
 
-      {/* Detail sidebar */}
       {selectedDeal && (
         <>
           <div className="fixed inset-0 z-[999] bg-black/40 sm:bg-black/20" onClick={() => setSelectedDeal(null)} />
           <div className="fixed inset-x-0 bottom-0 z-[1000] flex flex-col bg-white shadow-2xl max-h-[88vh] rounded-t-2xl animate-[slideUp_0.2s_ease-out] sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:h-screen sm:max-h-none sm:w-[420px] sm:rounded-none sm:animate-[slideInRight_0.2s_ease-out]">
-            {/* Mobile grabber */}
+
             <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
               <div className="h-1 w-10 rounded-full bg-gray-300" />
             </div>
-            {/* Header */}
+
             <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200">
               <div className="flex-1 min-w-0 pr-3">
                 <p className="text-sm font-semibold text-gray-900 truncate">{selectedDeal.name}</p>
@@ -1092,9 +1017,8 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
               </button>
             </div>
 
-            {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-              {/* Ongoing requests */}
+
               <div>
                 <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Ongoing Escalation/Support Requests
@@ -1121,7 +1045,6 @@ export default function MobileRaiseClient({ userName, onViewDeal }: Props) {
                 )}
               </div>
 
-              {/* Raise form — single field, always routes to the Escalation pipeline */}
               <div className="space-y-3">
                 <RaiseField
                   label="Raise Request"
@@ -1156,8 +1079,7 @@ function RaiseField({
   onSubmit: (opts: { id: number; name: string; requestType?: "Support" | "Escalation" }[]) => void;
   submitting: boolean;
 }) {
-  // Single-select per the brief — one value per "Raise request". Selection is
-  // tracked by index since PENDING options share id 0.
+
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const selectedOption = selectedIdx === null ? null : options[selectedIdx];

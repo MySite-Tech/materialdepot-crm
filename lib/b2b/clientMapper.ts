@@ -2,19 +2,6 @@ import { B2BLeadRow, MetaSpec, arr, str } from './rows';
 import { Escalation } from '@/components/b2b/models/accountHealth';
 import { ClientContact, ClientEntity, ClientEntityType, ClientGst, ClientInteraction, ClientMergeRecord, ClientSource, KamAssignment, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/clientModel';
 import { Segment } from '@/components/b2b/models/inboundModel';
-// ── Client Database: one row per client entity ───────────────────────────────
-//
-// `pipeline='client'`, and three of the four columns are deliberately inert:
-//
-//   stage  — the constant 'Client'. The PRD's Client Status is system-computed
-//            from the deal tickets and "re-evaluates on every new closed order
-//            and on daily rollover", so storing it would create a second,
-//            stale answer that could disagree with the orders it is derived
-//            from. Every read computes it (see `clientStatus`).
-//   value  — 0. Total Revenue Generated is likewise derived, and a stored total
-//            has two independent ways to go wrong: a new ticket, and a merge.
-//   owner  — the assigned KAM. This one IS meaningful, and matches the
-//            convention the 'kam' pipeline already uses.
 
 const CLIENT_STAGE = 'Client';
 
@@ -41,9 +28,7 @@ export function rowToClient(r: B2BLeadRow): ClientEntity {
   for (const [key, spec] of Object.entries(CLIENT_META) as [keyof ClientEntity, { col: string; read: (v: any) => any }][]) {
     (c as unknown as Record<string, unknown>)[key] = spec.read(m[spec.col]);
   }
-  // Numbers are normalised on READ as well as on write. Rows seeded from the
-  // lead boards carry whatever a rep typed ('63668 40078' is live today), and
-  // every order link keys on the 10-digit form.
+
   c.contacts = (c.contacts || [])
     .map((x) => ({ ...x, number: normalizeContactNumber(x.number) }))
     .filter((x) => x.number);
@@ -51,8 +36,7 @@ export function rowToClient(r: B2BLeadRow): ClientEntity {
     .map((x) => ({ ...x, number: normalizeGst(x.number) }))
     .filter((x) => x.number);
   c.kam = str(r.owner);
-  // `created_at` is the row's own column; the meta copy only exists for rows
-  // seeded from a lead, where the client is as old as the lead that made it.
+
   if (!c.createdAt) c.createdAt = str(r.created_at);
   return c;
 }

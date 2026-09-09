@@ -1,9 +1,5 @@
 import { mdFetch } from './client';
 
-// ---------------------------------------------------------------------------
-// Client properties from backend (UserProperty table)
-// ---------------------------------------------------------------------------
-
 export interface ClientProperties {
   client_type?: string;
   property_type?: string;
@@ -30,7 +26,6 @@ export interface LeadPropertyUpdate {
   project_phase?: string;
   estimated_closure_date?: string;
 }
-
 
 export async function updateLeadProperties(
   contact: string,

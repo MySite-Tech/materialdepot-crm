@@ -18,10 +18,6 @@ interface Props {
   allowedBranches: string[];
 }
 
-// The lost-reason → issue bucket mapping (Category / Retail / Other / Remove)
-// and Active/Won/Lost bucketing live server-side in CRMOrderLostSummaryApi.
-// "Remove" reasons (Order Closed Already) are non-losses, excluded from every
-// count and value so Active/Won/Lost shares sum to 100%.
 const normalizeReason = (r: string): string => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const LOST_REASON_OPTIONS = [
@@ -30,7 +26,6 @@ const LOST_REASON_OPTIONS = [
   'Enquiry Cancelled', 'Availibility Issues', 'Not Responding',
 ];
 
-// ── Formatting ──────────────────────────────────────────────────────────────
 const fmtFull = (n: number): string => '₹' + Math.round(n || 0).toLocaleString('en-IN');
 const fmtShort = (n: number): string => {
   const v = n || 0;
@@ -53,7 +48,6 @@ const daysBetween = (from: string | null | undefined, to: string | null | undefi
   return Math.max(0, Math.round((b.getTime() - a.getTime()) / 864e5));
 };
 
-// ── Filter chips (self-contained, matching CRM dashboard style) ─────────────
 function FilterChip({ label, options, selected, onChange, color }: {
   label: string; options: string[]; selected: string[];
   onChange: (v: string[]) => void; color: string;
@@ -279,7 +273,6 @@ function DateRangeChip({ from, to, onChange, label, color }: {
   );
 }
 
-// ── Aggregated shapes ───────────────────────────────────────────────────────
 type Grp = 'Category' | 'Retail' | 'Other';
 type ReasonMap = Record<Grp, Record<string, number>>;
 
@@ -315,13 +308,11 @@ const triggerDownload = (rows: string[][], filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-// ── Main component ──────────────────────────────────────────────────────────
 export default function OrderLostDashboard({ branches, allowedBranches }: Props) {
   const isRestricted = allowedBranches.length > 0;
   const branchOptionsKey = (isRestricted ? allowedBranches : branches).filter(b => b !== 'HQ').join(',');
   const branchOptions = useMemo(() => (branchOptionsKey ? branchOptionsKey.split(',') : []), [branchOptionsKey]);
 
-  // Summary panel filters (independent)
   const [sBranch, setSBranch] = useState<string[]>([]);
   const [sBm, setSBm] = useState<string[]>([]);
   const [sCategory, setSCategory] = useState<string[]>([]);
@@ -330,7 +321,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
   const [createdFrom, setCreatedFrom] = useState('');
   const [createdTo, setCreatedTo] = useState('');
 
-  // Detail panel filters (independent)
   const [dBranch, setDBranch] = useState<string[]>([]);
   const [dBm, setDBm] = useState<string[]>([]);
   const [dCategory, setDCategory] = useState<string[]>([]);
@@ -367,14 +357,11 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
   }, []);
 
-  // Stable string derivations — used as primitive effect deps so the loaders
-  // never re-fire on unrelated re-renders (previously caused an infinite loop).
   const resolveBranches = (filter: string[]) => {
     if (filter.length) return isRestricted ? filter.filter(b => branchOptions.includes(b)) : filter;
     return branchOptions;
   };
 
-  // Summary params
   const sEffectiveBranches = useMemo(() => resolveBranches(sBranch), [sBranch, isRestricted, branchOptions]);
   const sBranchesParam = sEffectiveBranches.join(',');
   const sBmParam = sBm.length ? sBm.join(',') : undefined;
@@ -382,10 +369,9 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
   const sCartGtNum = sCartGt ? Number(sCartGt) : undefined;
   const sCartLtNum = sCartLt ? Number(sCartLt) : undefined;
 
-  // Detail params
   const dEffectiveBranches = useMemo(() => resolveBranches(dBranch), [dBranch, isRestricted, branchOptions]);
   const dBranchesParam = dEffectiveBranches.join(',');
-  // Only constrain by branch server-side when it's a real subset (not "all").
+
   const detailBranchParam = (dEffectiveBranches.length && dEffectiveBranches.length < branchOptions.length)
     ? dBranchesParam : '';
   const dBmParam = dBm.length ? dBm.join(',') : undefined;
@@ -393,7 +379,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
   const dCartGtNum = dCartGt ? Number(dCartGt) : undefined;
   const dCartLtNum = dCartLt ? Number(dCartLt) : undefined;
 
-  // BM options loaded once across all accessible branches; each panel selects independently.
   useEffect(() => {
     const all = branchOptions.join(',');
     fetchAvailableBMs(all ? all.split(',') : undefined)
@@ -413,7 +398,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     sortDir: 'desc' as const,
   }), [detailBranchParam, dBmParam, dCategoryParam, dCartGtNum, dCartLtNum, lostFrom, lostTo]);
 
-  // ── Summary: one server-aggregated call (per-branch buckets + reason groups)
   useEffect(() => {
     if (summaryDebounce.current) clearTimeout(summaryDebounce.current);
     summaryDebounce.current = setTimeout(() => {
@@ -434,10 +418,8 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     return () => { if (summaryDebounce.current) clearTimeout(summaryDebounce.current); };
   }, [sBranchesParam, sBmParam, sCategoryParam, createdFrom, createdTo, sCartGtNum, sCartLtNum]);
 
-  // Reset to first page whenever the query filters change.
   useEffect(() => { setDetailPage(1); }, [detailQuery]);
 
-  // ── Detail: paginated; CSV export still pulls the full set on demand ──────
   const [detailTotalPages, setDetailTotalPages] = useState(1);
   useEffect(() => {
     if (detailDebounce.current) clearTimeout(detailDebounce.current);
@@ -451,7 +433,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     return () => { if (detailDebounce.current) clearTimeout(detailDebounce.current); };
   }, [detailQuery, detailPage]);
 
-  // ── Derived totals column ─────────────────────────────────────────────────
   const totals = useMemo<BranchSummary>(() => {
     const acc: BranchSummary = {
       branch: 'TOTAL', totalCount: 0, totalValue: 0, activeCount: 0, activeValue: 0,
@@ -478,7 +459,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     return acc;
   }, [summary]);
 
-  // ── Detail client-side filtering (lost reason + days in pipeline) ─────────
   const dDaysGtNum = dDaysGt ? Number(dDaysGt) : undefined;
   const dDaysLtNum = dDaysLt ? Number(dDaysLt) : undefined;
   const matchesDetailClientFilters = (r: CRMLeadRow, wanted: Set<string> | null): boolean => {
@@ -533,7 +513,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     triggerDownload(rows, 'order-lost-summary.csv');
   };
 
-  // Detail table shows only page 1; the CSV pulls the full result set on demand.
   const downloadDetailCsv = async () => {
     setCsvBusy(true);
     try {
@@ -564,9 +543,8 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     }
   };
 
-  const cols = summary; // branch columns in load order
+  const cols = summary;
 
-  // ── Row renderers for summary ─────────────────────────────────────────────
   const CountRow = ({ label, value, share, sub, indent, danger }: {
     label: string; value: (b: BranchSummary) => number; share?: (b: BranchSummary) => string;
     sub?: (b: BranchSummary) => string; indent?: boolean; danger?: boolean;
@@ -601,7 +579,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     </tr>
   );
 
-  // Union of reason labels present for a group across all branches + total.
   const reasonKeys = (group: Grp, kind: 'count' | 'value'): string[] => {
     const set = new Set<string>();
     [...cols, totals].forEach(b => {
@@ -611,7 +588,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
     return [...set].sort();
   };
 
-  // Expandable group row: header (clickable) + per-reason sub-rows when open.
   const GroupRows = ({ group, label, kind }: { group: Grp; label: string; kind: 'count' | 'value' }) => {
     const key = `${kind}:${group}`;
     const open = expanded.has(key);
@@ -655,7 +631,7 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
 
   return (
     <div className="px-3 sm:px-6 py-4 space-y-6">
-      {/* ── Summary Table ─────────────────────────────────────────────────── */}
+
       <section>
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -668,7 +644,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
           </button>
         </div>
 
-        {/* Summary filter bar */}
         <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 shadow-sm mb-3">
           <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
           <FilterChip label="Store" options={branchOptions} selected={sBranch}
@@ -728,7 +703,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
         <p className="text-[10px] text-gray-400 mt-1.5">% shares exclude &ldquo;Order Closed Already&rdquo; (non-loss). Values in Indian number format (₹).</p>
       </section>
 
-      {/* ── Lost Clients Detail ───────────────────────────────────────────── */}
       <section>
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -742,7 +716,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
           </button>
         </div>
 
-        {/* Detail filter bar */}
         <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 shadow-sm mb-3">
           <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
           <FilterChip label="Store" options={branchOptions} selected={dBranch}
@@ -818,7 +791,6 @@ export default function OrderLostDashboard({ branches, allowedBranches }: Props)
           </div>
         </div>
 
-        {/* Pagination */}
         {!detailLoading && detailCount > 0 && (
           <div className="flex items-center justify-between mt-2 text-[12px] text-gray-500">
             <span>

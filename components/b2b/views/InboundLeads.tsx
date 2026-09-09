@@ -1,16 +1,5 @@
 'use client';
 
-// ── Inbound Leads ────────────────────────────────────────────────────────────
-// Implements the Inbound CRM Module PRD v1.0. Three views over one dataset:
-//
-//   Today  — the PRD §5.1 Daily Assigned Table. The default, because what a rep
-//            needs on opening the tab is today's call list, not a wall of cards.
-//   Board  — the five PRD §3.4 statuses. Drag to move; a status with unmet
-//            requirements opens a form instead of failing silently.
-//   List   — the whole field set, filterable and exportable.
-//
-// Field ownership, the status machine and the gates live in `inboundModel.ts`.
-
 import { useEffect, useMemo, useState } from 'react';
 import {
   fmtINR, NEW_KYLAS_STAGES, type InboundLead,
@@ -34,7 +23,6 @@ import {
   type ExportFormat, type ExportScope,
 } from '../ui/exportUtils';
 
-// ── Export: the PRD's field set, not the old six columns ─────────────────────
 const EXPORT_HEADERS = [
   'Lead date', 'Company', 'Contact name', 'Contact number', 'Assigned BM',
   'GST', 'Segment', 'Client type', 'Lead type', 'Priority', 'Location',
@@ -81,15 +69,12 @@ const gapsFor = (l: InboundLead) => enrichmentGaps({
 
 const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, '': 3 };
 
-/** IST day of an ISO instant, for comparing against `istToday()`. */
 const istDay = (iso: string | undefined): string => {
   if (!iso) return '';
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return String(iso).slice(0, 10);
   return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 };
-
-// ── Summary strip (PRD §5.2) ─────────────────────────────────────────────────
 
 function Tile({
   label, value, sub, accent, muted,
@@ -107,14 +92,6 @@ function Tile({
     </div>
   );
 }
-
-// ── Move-with-requirements modal ─────────────────────────────────────────────
-//
-// Dragging a card into `Follow up`, `PI Shared` or `Lost` needs a field the PRD
-// makes mandatory. Collecting it here is the whole point: the previous board
-// applied the drag immediately and wrote a status whose required field stayed
-// empty — which is how 81 leads ended up in "Followup Required" with no
-// follow-up date on any of them.
 
 function MoveModal({
   lead, target, onCancel, onDone,
@@ -226,8 +203,6 @@ function MoveModal({
   );
 }
 
-// ── Board card ───────────────────────────────────────────────────────────────
-
 function LeadCard({ lead, today, onClick, onDragStart }: {
   lead: InboundLead; today: string; onClick: () => void; onDragStart: () => void;
 }) {
@@ -281,8 +256,6 @@ function LeadCard({ lead, today, onClick, onDragStart }: {
     </div>
   );
 }
-
-// ── Daily assigned table (PRD §5.1) ──────────────────────────────────────────
 
 const BUCKET_ORDER: FollowUpBucket[] = ['overdue', 'today', 'upcoming', 'none'];
 const BUCKET_TITLE: Record<FollowUpBucket, string> = {
@@ -393,7 +366,6 @@ function DailyTable({
   );
 }
 
-/** Compact side list — today's arrivals and the open PI Shared leads. */
 function SidePanel({
   title, note, leads, today, onOpen, emptyText,
 }: {
@@ -433,14 +405,11 @@ function SidePanel({
   );
 }
 
-// ── Tab ──────────────────────────────────────────────────────────────────────
-
 type View = 'today' | 'board' | 'list';
 
 export default function InboundLeads() {
   const [view, setView] = useState<View>('today');
 
-  // Filters — PRD §5.3 (status, priority, assigned BM, client type, date range)
   const [owner, setOwner] = useState('all');
   const [status, setStatus] = useState<'all' | InboundStatus>('all');
   const [priority, setPriority] = useState<'all' | Priority>('all');
@@ -513,7 +482,6 @@ export default function InboundLeads() {
       .finally(() => setLoadingMore(false));
   };
 
-  // Client-side filters — these read fields Kylas has no rule for.
   const filtered = useMemo(() => leads.filter((l) => {
     if (status !== 'all' && l.stage !== status) return false;
     if (priority !== 'all' && l.priority !== priority) return false;
@@ -526,7 +494,6 @@ export default function InboundLeads() {
 
   const byStatus = (s: InboundStatus) => filtered.filter((l) => l.stage === s);
 
-  // ── Summary (PRD §5.2) ──
   const summary = useMemo(() => {
     const pi = filtered.filter((l) => l.stage === 'PI Shared');
     const closed = filtered.filter((l) => l.stage === 'Closed');
@@ -549,7 +516,6 @@ export default function InboundLeads() {
     };
   }, [filtered, today]);
 
-  // ── Writes ──
   const applyPatch = async (lead: InboundLead, patch: Partial<InboundLead>) => {
     const statusChanged = patch.stage !== undefined && patch.stage !== lead.stage;
     const updated: InboundLead = {
@@ -558,8 +524,7 @@ export default function InboundLeads() {
       statusChangedAt: statusChanged ? new Date().toISOString() : lead.statusChangedAt,
       value: Number(patch.orderValue ?? lead.orderValue) || 0,
     };
-    // Optimistic, then reconciled: a failed write rolls the card back rather
-        // than leaving the board showing a status the database never accepted.
+
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
     const err = await upsertInboundLead(updated);
     if (err) {
@@ -584,7 +549,6 @@ export default function InboundLeads() {
     applyPatch(lead, { stage: target });
   };
 
-  // ── Export ──
   const fetchAll = async (opts: Parameters<typeof fetchInboundBoard>[0]): Promise<InboundLead[]> => {
     const all: InboundLead[] = [];
     const seen = new Set<string>();
@@ -594,7 +558,7 @@ export default function InboundLeads() {
       for (const l of res.leads) if (!seen.has(l.id)) { seen.add(l.id); all.push(l); }
       if (!res.hasMore) break;
       p += 1;
-      await new Promise((r) => setTimeout(r, 250)); // stay under Kylas rate limits
+      await new Promise((r) => setTimeout(r, 250));
     }
     return all;
   };
@@ -641,8 +605,6 @@ export default function InboundLeads() {
   const selected = leads.find((l) => l.id === selectedId) || null;
   const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
-  // Follow-up work list for the Today view: anything on a status that carries a
-  // follow-up date. New leads and closed/lost ones are not call-list rows.
   const followUpLeads = useMemo(
     () => filtered.filter((l) => l.stage === 'Follow up' || l.stage === 'PI Shared'),
     [filtered],
@@ -653,7 +615,6 @@ export default function InboundLeads() {
   );
   const piLeads = useMemo(() => filtered.filter((l) => l.stage === 'PI Shared'), [filtered]);
 
-  // List view pagination over the already-loaded set.
   const [listPage, setListPage] = useState(0);
   useEffect(() => { setListPage(0); }, [serverOpts, status, priority, clientType, leadType, location, onlyGaps]);
   const listPages = Math.max(1, Math.ceil(filtered.length / B2B_INBOUND_PAGE_SIZE));
@@ -661,7 +622,7 @@ export default function InboundLeads() {
 
   return (
     <div className="p-4 sm:p-6">
-      {/* ── Header ── */}
+
       <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h1 className="text-[19px] font-bold text-gray-900">Inbound Leads</h1>
@@ -696,7 +657,6 @@ export default function InboundLeads() {
         </div>
       </div>
 
-      {/* ── Summary (PRD §5.2) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
         <Tile label="New today" value={String(summary.newToday)} sub="arrived in Kylas today" accent={INBOUND_STATUS_COLORS.New} />
         <Tile
@@ -737,7 +697,6 @@ export default function InboundLeads() {
         ].filter(Boolean).join(' ')}
       </p>
 
-      {/* ── Filters (PRD §5.3) ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4">
         <div className="flex items-end gap-2.5 flex-wrap">
           <div className="flex-1 min-w-[200px]">
@@ -835,7 +794,7 @@ export default function InboundLeads() {
 
       {loading ? <div className="bg-white rounded-lg border border-gray-200 py-16"><Spinner label="Loading leads from Kylas and the CRM…" /></div> : (
         <>
-          {/* ── Today (PRD §5.1) ── */}
+
           {view === 'today' && (
             <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-3 items-start">
               <DailyTable leads={followUpLeads} today={today} onOpen={setSelectedId} />
@@ -860,7 +819,6 @@ export default function InboundLeads() {
             </div>
           )}
 
-          {/* ── Board ── */}
           {view === 'board' && (
             <div
               ref={kanbanScroll.ref}
@@ -911,7 +869,6 @@ export default function InboundLeads() {
             </div>
           )}
 
-          {/* ── List ── */}
           {view === 'list' && (
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
@@ -977,7 +934,6 @@ export default function InboundLeads() {
             </div>
           )}
 
-          {/* ── Load more (the Kylas New pool is paged) ── */}
           {hasMore && (
             <div className="flex items-center justify-center py-4">
               {loadingMore ? <Spinner label="Loading more…" /> : (

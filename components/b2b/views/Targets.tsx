@@ -143,7 +143,6 @@ export default function Targets() {
         <p className="text-xs text-gray-400 mt-0.5">B2B target &amp; individual rep goals</p>
       </div>
 
-      {/* ── B2B Target ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
         <div className="flex items-start justify-between mb-3">
           <div className="text-xs font-bold uppercase tracking-wider text-gray-700">B2B Target</div>
@@ -172,7 +171,6 @@ export default function Targets() {
         </div>
       </div>
 
-      {/* ── Individual Targets ── */}
       <div className="text-sm font-bold text-gray-700 mb-3">Individual Targets</div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {rows.map((row) => (

@@ -1,11 +1,5 @@
 'use client';
 
-/* The nine Audit Ops screens — ports of ordersView / scheduleView /
-   followupsAuditView / reschedView / calendarView / slotsView / auditorsView /
-   deletedView / rectificationsView from SM_Audit_Dashboard.html. All read-only
-   rendering except Auditors & caps (which saves caps + availability) and Slots
-   & timings (device-local, exactly as in the source). */
-
 import { useState } from 'react';
 import { WDAYS, sbPatch, type StaffExit } from '../siteAuditShared';
 import { Chip } from './AuditOrderDrawer';
@@ -35,9 +29,7 @@ function Head({ title, sub, right }: { title: string; sub: string; right?: React
 function Customer({ o }: { o: AuditOrder }) {
   return <div><b>{o.name || '—'}</b><div className="text-gray-500">{o.phone}</div></div>;
 }
-/* What material the visit is for. Worth a column of its own on every list the SM
-   plans from: on an OMS-raised audit the only record of it is the store's own
-   pre-booking, so this is often the one place it appears. */
+
 function Cats({ o }: { o: AuditOrder }) {
   const cats = orderCategories(o);
   if (!cats.length) return <span className="text-gray-400">—</span>;
@@ -54,7 +46,6 @@ function Addr({ o }: { o: AuditOrder }) {
     : <span className="text-gray-400">—</span>;
 }
 
-/* ── Orders ───────────────────────────────────────────────────────────── */
 export function OrdersView({
   orders, auditors, filterStatus, setFilterStatus, filterDate, setFilterDate, searchQ, setSearchQ,
   onOpenOrder, onAddOrder, onOpenKylas,
@@ -72,8 +63,7 @@ export function OrdersView({
   const live = c.scheduled + c.assigned + c.onway + c.atsite;
   const mainCount = orders.filter((o) => !['slot_reserved', 'slot_converted'].includes(o.status)).length;
   const missingBm = orders.filter((o) => !o.bmEmail).length;
-  /* A date is already confirmed but no auditor is on the job — the SM's top
-     priority to call and assign, easy to miss in a plain unsorted list. */
+
   const isUnassignedScheduled = (o: AuditOrder) => !o.auditor && !!o.date && !['slot_reserved', 'slot_converted', 'completed'].includes(o.status);
   const unassignedScheduled = orders.filter(isUnassignedScheduled).length;
 
@@ -104,7 +94,7 @@ export function OrdersView({
     } else if (filterStatus === 'live') {
       if (!['scheduled', 'assigned', 'onway', 'atsite'].includes(o.status)) return false;
     } else if (filterStatus === 'slot_reserved') {
-      // The Pre-booked tab is a running record: still-open AND already-fulfilled.
+
       if (o.status !== 'slot_reserved' && o.status !== 'slot_converted') return false;
     } else if (o.status !== filterStatus) return false;
     if (filterDate && o.date !== filterDate) return false;
@@ -196,7 +186,6 @@ export function OrdersView({
   );
 }
 
-/* ── Today's schedule ─────────────────────────────────────────────────── */
 export function TodayView({ orders, auditors, slots, onOpenOrder }: { orders: AuditOrder[]; auditors: Auditor[]; slots: SlotDef[]; onOpenOrder: (pi: string) => void }) {
   const todayStr = dstr(today);
   const list = orders.filter((o) => o.date === todayStr && !['slot_reserved', 'slot_converted'].includes(o.status)).sort((a, b) => (a.slot || '').localeCompare(b.slot || ''));
@@ -225,7 +214,6 @@ export function TodayView({ orders, auditors, slots, onOpenOrder }: { orders: Au
   );
 }
 
-/* ── Follow-ups ───────────────────────────────────────────────────────── */
 export function FollowupsView({ orders, onOpenOrder }: { orders: AuditOrder[]; onOpenOrder: (pi: string) => void }) {
   const todayStr = dstr(today);
   const list = orders.filter(hasOpenFollowUp).sort((a, b) => (a.service!.follow_up_date || '').localeCompare(b.service!.follow_up_date || ''));
@@ -256,7 +244,6 @@ export function FollowupsView({ orders, onOpenOrder }: { orders: AuditOrder[]; o
   );
 }
 
-/* ── To reschedule ────────────────────────────────────────────────────── */
 export function RescheduleView({ orders, auditors, slots, onOpenOrder }: { orders: AuditOrder[]; auditors: Auditor[]; slots: SlotDef[]; onOpenOrder: (pi: string) => void }) {
   const list = orders.filter((o) => o.status === 'reschedule');
   return (
@@ -283,7 +270,6 @@ export function RescheduleView({ orders, auditors, slots, onOpenOrder }: { order
   );
 }
 
-/* ── Calendar (T−3 … T+6) ─────────────────────────────────────────────── */
 export function CalendarView({
   orders, auditors, slots, calSelDay, setCalSelDay, onOpenOrder,
 }: {
@@ -355,7 +341,6 @@ export function CalendarView({
   );
 }
 
-/* ── Slots & timings (device-local) ───────────────────────────────────── */
 export function SlotsView({
   slotsFl, slotsWp, setSlotsFl, setSlotsWp, toast,
 }: {
@@ -407,15 +392,13 @@ export function SlotsView({
   );
 }
 
-/* ── Auditors & caps ──────────────────────────────────────────────────── */
 export function AuditorsView({
   auditors, formerAuditors = [], canRetire = false, onAddStaff, onRemove, onRestore, reload, toast,
 }: {
   auditors: Auditor[];
-  /* Already city-scoped by the caller, same as `auditors`. */
+
   formerAuditors?: Array<Auditor & StaffExit>;
-  /* False until migration 004 has been run — hides the whole former-staff
-     affordance rather than offering a Remove button that can only fail. */
+
   canRetire?: boolean;
   onAddStaff: () => void;
   onRemove?: (a: Auditor) => void;
@@ -425,10 +408,7 @@ export function AuditorsView({
   const days = Array.from({ length: 7 }, (_, i) => addDays(i));
   const todayStr = dstr(today);
   const [showFormer, setShowFormer] = useState(false);
-  /* Availability, active_from AND caps are all staged locally and written on
-     Save, diffed against the loaded roster. Caps used to bypass this entirely
-     and write straight to localStorage, which is why the kiosk and the second
-     SM never saw them — they now ride the same `profiles` PATCH as the rest. */
+
   type Draft = { activeFrom: string | null; weeklyOff: number | null; leaveDates: string[]; dailyCap: number | null; capOverrides: Record<string, number> };
   const [draft, setDraft] = useState<Record<string, Draft>>({});
   const [saving, setSaving] = useState(false);
@@ -440,9 +420,6 @@ export function AuditorsView({
 
   const dirty = Object.keys(draft).length > 0;
 
-  /* A per-date cap. Setting it back to the person's own default clears the
-     override rather than storing a redundant one, so `cap_overrides` stays a
-     record of real exceptions instead of growing a key per rendered day. */
   function setCap(a: Auditor, ds: string, v: number) {
     const st = stateOf(a);
     const dflt = st.dailyCap ?? DEFAULT_CAP;
@@ -614,7 +591,6 @@ export function AuditorsView({
   );
 }
 
-/* ── Deleted ──────────────────────────────────────────────────────────── */
 export function DeletedView({ deleted, auditors, onRestore }: { deleted: AuditOrder[]; auditors: Auditor[]; onRestore: (o: AuditOrder) => Promise<void> }) {
   const [busy, setBusy] = useState<string | null>(null);
   return (
@@ -645,7 +621,6 @@ export function DeletedView({ deleted, auditors, onRestore }: { deleted: AuditOr
   );
 }
 
-/* ── Rectifications ───────────────────────────────────────────────────── */
 export function RectificationsView({ orders, onOpenOrder }: { orders: AuditOrder[]; onOpenOrder: (pi: string) => void }) {
   const list = orders.filter((o) => o.service && o.service.rectification_of);
   return (

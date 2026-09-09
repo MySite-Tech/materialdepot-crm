@@ -1,19 +1,3 @@
-// ── Account health meter ──────────────────────────────────────────────────────
-// Escalation-driven RAG score per KAM account. Pure functions over an escalation
-// list plus a reference date, so the rules are testable and the same scoring runs
-// on the KAM board and the Dashboard widget.
-//
-// Escalations live in b2b_lead.meta_data.escalations. The Django side does log
-// escalation *events* (CRMLog sync_type raise_escalation / create_escalation_deal,
-// keyed by Kylas deal id), but carries no category, tier or resolution date, so
-// the classification the health meter needs is CRM-owned.
-
-/**
- * What the aggregation needs from whatever it is scoring. Structural, not
- * `KamClient`: escalations moved to the CLIENT entity when the KAM module split
- * clients from orders (an escalation is about an account, not one order), and
- * `ClientEntity` satisfies this without either file importing the other.
- */
 export interface HealthSubject {
   id: string;
   company: string;
@@ -30,26 +14,21 @@ export const ESCALATION_CATEGORIES = [
 
 export type EscalationCategory = typeof ESCALATION_CATEGORIES[number];
 
-// Tier 1 is the most severe. An unresolved tier-1 pins the account to Red on its
-// own, no matter how few escalations there are or how old they are.
 export const ESCALATION_TIERS = [1, 2, 3] as const;
 export type EscalationTier = typeof ESCALATION_TIERS[number];
 
 export interface Escalation {
   id: string;
-  raisedAt: string;           // YYYY-MM-DD
+  raisedAt: string;
   category: EscalationCategory;
   tier: EscalationTier;
-  resolvedAt?: string;        // YYYY-MM-DD; absent means still open
+  resolvedAt?: string;
   note?: string;
   loggedBy?: string;
 }
 
 export type HealthStatus = 'green' | 'amber' | 'red';
 
-// Scoring window and decay period. The brief said "last 30–60 days" for the
-// window and "e.g. 30 days post-resolution" for the decay, so both are named
-// constants rather than inline numbers.
 export const HEALTH_WINDOW_DAYS = 60;
 export const HEALTH_DECAY_DAYS = 30;
 
@@ -58,8 +37,6 @@ export const HEALTH_META: Record<HealthStatus, { label: string; color: string; d
   amber: { label: 'At Risk',  color: '#F59E0B', description: '1–2 recent escalations — KAM should intervene' },
   red:   { label: 'Critical', color: '#EF4444', description: '3+ recent escalations, or an unresolved tier-1 issue' },
 };
-
-// ── Date helpers (plain YYYY-MM-DD, no timezone games) ────────────────────────
 
 const DAY_MS = 86_400_000;
 
@@ -77,37 +54,28 @@ export function daysBetween(from: string, to: string): number | null {
 
 export const isResolved = (e: Escalation): boolean => !!e.resolvedAt;
 
-// ── Which escalations still weigh on the score ────────────────────────────────
-
-// An escalation counts when it was raised inside the rolling window AND has not
-// decayed. Decay is what makes the score recover on its own: a resolved issue
-// stops counting HEALTH_DECAY_DAYS after it was resolved, and everything drops
-// out once it ages past the window. Nothing has to be reset by hand.
 export function countsTowardScore(e: Escalation, today: string): boolean {
   const age = daysBetween(e.raisedAt, today);
-  if (age === null || age < 0) return false;      // unparseable or dated in the future
-  if (age > HEALTH_WINDOW_DAYS) return false;     // aged out of the window
-  if (!e.resolvedAt) return true;                 // still open — always counts
+  if (age === null || age < 0) return false;
+  if (age > HEALTH_WINDOW_DAYS) return false;
+  if (!e.resolvedAt) return true;
   const sinceResolved = daysBetween(e.resolvedAt, today);
   if (sinceResolved === null) return true;
-  return sinceResolved < HEALTH_DECAY_DAYS;       // decays 30 days post-resolution
+  return sinceResolved < HEALTH_DECAY_DAYS;
 }
 
-// An unresolved tier-1 is deliberately not window-bound: an open critical issue
-// does not become acceptable just because it has been open a long time.
 export const hasOpenTier1 = (escalations: Escalation[]): boolean =>
   escalations.some((e) => e.tier === 1 && !isResolved(e));
 
 export interface AccountHealth {
   status: HealthStatus;
-  activeCount: number;          // escalations currently weighing on the score
-  escalationCount: number;      // Escalation_Count — every escalation ever logged
+  activeCount: number;
+  escalationCount: number;
   openCount: number;
   openTier1: boolean;
   byCategory: Record<EscalationCategory, number>;
   lastEscalatedAt?: string;
-  // Days until this account would drop back to green if nothing new is logged.
-  // null when already green, or when an open escalation blocks recovery.
+
   daysToRecovery: number | null;
   reason: string;
 }
@@ -147,8 +115,6 @@ export function scoreAccount(escalations: Escalation[] | undefined, today: strin
     .sort()
     .pop();
 
-  // Recovery is the soonest day every counting escalation has decayed. An open
-  // one has no decay clock, so recovery is genuinely unknown until it's closed.
   let daysToRecovery: number | null = null;
   if (status !== 'green') {
     if (counting.some((e) => !isResolved(e)) || openTier1) {
@@ -176,20 +142,18 @@ export function scoreAccount(escalations: Escalation[] | undefined, today: strin
   };
 }
 
-// ── Board / dashboard aggregation ─────────────────────────────────────────────
-
 export interface AccountHealthRow<T extends HealthSubject = HealthSubject> {
   client: T;
   health: AccountHealth;
-  activePipeline: number;    // open cart value for this account, from the deal tickets
+  activePipeline: number;
 }
 
 export interface HealthOverview<T extends HealthSubject = HealthSubject> {
-  rows: AccountHealthRow<T>[];            // every account, worst first
-  attention: AccountHealthRow<T>[];       // amber + red only, worst first
+  rows: AccountHealthRow<T>[];
+  attention: AccountHealthRow<T>[];
   counts: Record<HealthStatus, number>;
   pipelineAtRisk: Record<HealthStatus, number>;
-  escalationCount: number;                // Escalation_Count across all accounts
+  escalationCount: number;
   openCount: number;
   byCategory: Record<EscalationCategory, number>;
 }
@@ -207,8 +171,6 @@ export function buildHealthOverview<T extends HealthSubject>(
     activePipeline: activePipelineFor(client),
   }));
 
-  // Worst status first, then by the pipeline at stake — the most expensive
-  // critical account is the one a manager needs to see at the top.
   rows.sort((a, b) =>
     STATUS_RANK[a.health.status] - STATUS_RANK[b.health.status]
     || b.activePipeline - a.activePipeline

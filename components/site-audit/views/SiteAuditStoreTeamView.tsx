@@ -4,16 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CITIES, activeStaffFilter, cityOf, mapCaps, rosterQuery, sbGet, sbPost, sbPatch, staffCapOn, fmtDate } from '../siteAuditShared';
 import { DEFAULT_CAP } from '../audit-ops/shared';
 
-/* Verbatim port of material-depot-site's app/src/pages/StoreTeam.jsx (slot-
-   booking tool for in-store staff to pre-book Site Audit visit slots for
-   walk-in customers). Same business logic (SLOT_DEFS, STORES, slotsConflict,
-   getAvailability, genSlotPI, buildDateChips) and same sbGet/sbPost/sbPatch
-   queries against `audit_orders` — restyled to this CRM's Tailwind
-   conventions. The only deliberate behavior change: the original persists
-   the selected store via localStorage (shared kiosk device per store); here
-   it's plain in-component state since a CRM user's browser/session isn't a
-   fixed device. */
-
 interface SlotDef {
   id: string;
   label: string;
@@ -25,15 +15,6 @@ interface SlotDef {
 
 const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka', 'Gachibowli', 'Kompally', 'HSR Layout'];
 
-/* Which city each store books into. An auditor is assigned a city when they
-   join and works only that city, so a Bengaluru store's slots-left count must
-   be computed from Bengaluru auditors alone. Until 2026-09-02 this map did not
-   exist: the kiosk knew its STORE but had no notion of a city, so it counted
-   every auditor in the company — JP Nagar read "13 of 15 auditors available"
-   off a roster of 18 that included 7 idle Hyderabad auditors, when Bengaluru
-   actually had 9 available that day. A store missing from this map falls back
-   to CITIES[0] rather than to "everyone", so the failure mode of adding a new
-   store and forgetting this line is a wrong-but-bounded count, not a global one. */
 const STORE_CITY: Record<string, string> = {
   'JP Nagar': 'Bengaluru',
   Whitefield: 'Bengaluru',
@@ -52,19 +33,12 @@ const SLOT_DEFS: SlotDef[] = [
   { id: '16:00', label: '4:00 PM', rangeEnd: '5:00 PM', startMin: 960, endMin: 1020, group: 'Evening' },
   { id: '17:00', label: '5:00 PM', rangeEnd: '6:00 PM', startMin: 1020, endMin: 1080, group: 'Evening' },
 ];
-/* Statuses that consume an auditor's day against their cap — a real assigned
-   visit, not a store pre-booking that has no auditor yet. */
+
 const ASSIGNED_STATUSES = ['assigned', 'scheduled', 'callpending', 'onway', 'atsite', 'completed'];
 
-/* Strong evening cutoff: after this time (local) the store can no longer pre-book TOMORROW's
-   morning slots — the service manager leaves early and can't absorb a last-minute morning booking
-   made the evening before. Later slots tomorrow and all slots on later days stay open. SMs are
-   unaffected; this is Store-Team-only. */
-const MORNING_CUTOFF_MIN = 18 * 60; // 6:00 PM
+const MORNING_CUTOFF_MIN = 18 * 60;
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/* ── Local date helpers (mirrors material-depot-site's lib/dates.js; not
-   worth promoting to the shared file for a handful of lines). ────────────── */
 function dstr(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -77,8 +51,6 @@ const today = (() => {
   return t;
 })();
 
-/* True when `date` is tomorrow and the local clock is past the morning cutoff — used to hide
-   tomorrow's morning slots from the store's booking list. */
 function morningCutoffHit(date: string): boolean {
   const tmr = new Date(today);
   tmr.setDate(tmr.getDate() + 1);
@@ -87,7 +59,6 @@ function morningCutoffHit(date: string): boolean {
   return now.getHours() * 60 + now.getMinutes() >= MORNING_CUTOFF_MIN;
 }
 
-/* ── Business logic (verbatim from StoreTeam.jsx) ─────────────────────────── */
 function fmtSlotId(id: string) {
   const s = SLOT_DEFS.find((x) => x.id === id);
   return s ? s.label : '—';
@@ -100,10 +71,6 @@ function slotsConflict(slotA: SlotDef, slotB: SlotDef) {
   return (gapAB >= 0 && gapAB < 120) || (gapBA >= 0 && gapBA < 120);
 }
 
-/* `capBlocked` = auditors who have already hit the daily cap their service
-   manager set for this date, so they are unavailable in EVERY slot, not just
-   one that conflicts. Before caps moved into the DB the kiosk had no way to
-   know this — it counted raw headcount and ignored caps entirely. */
 function getAvailability(slotId: string, dayOrders: any[], auditorCount: number, capBlocked: Set<string>) {
   const slot = SLOT_DEFS.find((s) => s.id === slotId);
   if (!slot) return { available: 0, total: auditorCount, used: 0 };
@@ -155,7 +122,6 @@ function buildDateChips() {
   return chips;
 }
 
-/* ── Root component ────────────────────────────────────────────────────────── */
 export default function SiteAuditStoreTeamView() {
   const dateChips = useMemo(buildDateChips, []);
 
@@ -181,9 +147,7 @@ export default function SiteAuditStoreTeamView() {
   }, []);
 
   const selectedDateRef = useRef(selectedDate);
-  /* loadDay is a stable useCallback that the 30s poll holds onto, so it must
-     read the store through a ref — closing over `myStore` would leave the poll
-     scoping availability to whichever store was selected when it was created. */
+
   const myStoreRef = useRef(myStore);
   myStoreRef.current = myStore;
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -202,28 +166,15 @@ export default function SiteAuditStoreTeamView() {
             date +
             '&status=neq.deleted'
         ),
-        /* The kiosk's availability and slots-left count. Retired auditors
-           must be gone from BOTH or a store books a slot against somebody who
-           has left — the same class of bug as the cross-city bleed this view
-           already carries a note about. */
+
         rosterQuery('id,active_from,weekly_off,leave_dates,city').then(({ select, filter }) => sbGet('profiles?select=' + select + '&role=in.(site_auditor,auditor_installer)' + filter)),
       ]);
-      /* sbGet resolves a PostgREST ERROR OBJECT for any 4xx/5xx rather than
-         rejecting, so a non-array here is a FAILED load, not an empty roster.
-         Treating it as empty would show the store "0 auditors available" and
-         block every booking off a transient server error — the exact shape of
-         the roster incident in CLAUDE.md. Fail loudly and keep the last good
-         count instead. */
+
       if (!Array.isArray(orders) || !Array.isArray(auditors)) throw new Error('slot availability unavailable');
-      /* City scope. Filtered here rather than with `city=eq.` in the query
-         because 2 live audit_orders rows have a NULL city and `cityOf` reads
-         NULL as Bengaluru — a server-side filter would silently drop them. */
+
       const storeCity = cityOfStore(myStoreRef.current);
       const orderList = orders.filter((o: any) => cityOf(o) === storeCity);
-      // An auditor in another city, before their start date, on their weekly
-      // off, on leave, or capped to 0 for the date isn't available — so none of
-      // them may inflate this store's slots-left count (same rule, and now the
-      // same stored caps, that the SM's Auditors & caps view applies).
+
       const roster = auditors
         .filter((a: any) => cityOf(a) === storeCity)
         .map((a: any) => ({
@@ -234,7 +185,7 @@ export default function SiteAuditStoreTeamView() {
           ...mapCaps(a),
         }));
       const workingToday = roster.filter((a) => staffCapOn(a, date, DEFAULT_CAP) >= 1);
-      // Already at their cap for the day → unavailable in every slot.
+
       const blocked = new Set<string>();
       for (const a of workingToday) {
         const load = orderList.filter((o: any) => o.auditor_id === a.id && ASSIGNED_STATUSES.includes(o.status)).length;
@@ -252,8 +203,6 @@ export default function SiteAuditStoreTeamView() {
     }
   }, []);
 
-  // Boot: show the store picker until a store is chosen; once chosen, load
-  // the day and start the 30s poll + visibilitychange-triggered refresh.
   useEffect(() => {
     if (!myStore) {
       setStoreOverlay('boot');
@@ -301,7 +250,6 @@ export default function SiteAuditStoreTeamView() {
     }
   };
 
-  /* ── Derived render data ───────────────────────────────────────────────── */
   const isMyBooking = (o: any) =>
     o.status === 'slot_reserved' && ((o.log && o.log[0] && o.log[0].who === myStore) || o.bm === myStore);
   const myRes = dayOrders.filter(isMyBooking);
@@ -375,7 +323,6 @@ export default function SiteAuditStoreTeamView() {
         />
       )}
 
-      {/* Store picker overlay (boot: forced, no store yet; header: dismissible switcher) */}
       {storeOverlay && (
         <div
           className="fixed inset-0 bg-black/30 z-[900] flex items-center justify-center"
@@ -409,7 +356,6 @@ export default function SiteAuditStoreTeamView() {
         </div>
       )}
 
-      {/* Booking sheet */}
       {bookingSlot && bookingSlotDef && (
         <BookingSheet
           slot={bookingSlotDef}
@@ -424,7 +370,6 @@ export default function SiteAuditStoreTeamView() {
         />
       )}
 
-      {/* Toast */}
       <div
         className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] bg-gray-900 text-white text-[13px] font-medium px-4 py-2.5 rounded-md shadow-lg transition-opacity duration-300 ${
           toastShow ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -436,7 +381,6 @@ export default function SiteAuditStoreTeamView() {
   );
 }
 
-/* ── Slot grid + reservations ────────────────────────────────────────────────── */
 interface SlotContentProps {
   date: string;
   myStore: string | null;
@@ -496,9 +440,7 @@ function SlotContent({
 
                   let availText: string;
                   if (av.total === 0) {
-                    // A real zero for this city — everyone is on leave, capped
-                    // to 0, or hasn't started. Say so, rather than "all 0
-                    // auditors booked", which reads like a loading bug.
+
                     availText = `No ${storeCity} auditors are working this day`;
                   } else if (isFull && !hasMyBooking) {
                     availText = `Full — all ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} booked`;
@@ -655,7 +597,6 @@ function SlotContent({
   );
 }
 
-/* ── Booking sheet ───────────────────────────────────────────────────────────── */
 interface BookingSheetProps {
   slot: SlotDef;
   date: string;
@@ -664,20 +605,6 @@ interface BookingSheetProps {
   onBooked: (name: string) => void;
 }
 
-/* The BM is PICKED, not typed. Free text here is where `Janvi`/`janvi` (vs the
-   account `Jhanvi`), `Soheb`, `Beema` and — when the field was still optional
-   and fell back to `myStore` — `Whitefield`/`JP Nagar`/`Yelahanka` came from:
-   66 of the 128 rows with no BM account link were booked at a store counter.
-   The list is `profiles` rather than the CRM roster because this route is a
-   PUBLIC kiosk (app/store-booking/page.tsx) with no CRM token to call
-   fetchUsers() with — and profiles is the better source anyway: picking one
-   yields the `bm_email` that actually links the order, instead of a name
-   somebody else has to reconcile later. Only names are rendered; the anon key
-   already reads this table from this page.
-
-   A typed fallback stays, because a brand-new BM missing from the list must
-   not block a walk-in customer's slot — it is just no longer the default path,
-   and a row created that way is the exception rather than every row. */
 function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -689,8 +616,7 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
   const [bmTyped, setBmTyped] = useState(false);
   useEffect(() => {
     let alive = true;
-    /* BM picker on the kiosk's booking form — a new booking must not be
-       attributed to a BM who has left. */
+
     activeStaffFilter().then((f) => sbGet('profiles?select=name,email&role=eq.bm&order=name.asc' + f))
       .then((r) => { if (alive && Array.isArray(r)) setBmList(r.filter((p: any) => p && p.name && p.email)); })
       /* The list failing to load must not lock the counter out of booking —
@@ -758,8 +684,7 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
         customer_name: nm,
         phone: ph,
         addr: ad,
-        // Never the store name: `bm` is a person, and "Whitefield" in it is a false attribution
-        // that no later name match can resolve. Unassigned stays visibly unassigned.
+
         bm: bm || '—',
         ...(picked ? { bm_email: picked.email } : {}),
         date,
@@ -878,9 +803,7 @@ function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetPr
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
             What is the audit for? * <span className="normal-case font-medium text-gray-400">(select every material)</span>
           </label>
-          {/* This is the ONLY record of what the visit is for: the audit row the
-              service manager works from is raised later from the OMS, which at
-              that point carries nothing but the audit service line. */}
+
           <div className="text-[11.5px] text-gray-500 mb-1.5">Shown to the service manager and the auditor — pick every material the customer wants measured.</div>
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-[13px] text-gray-700">

@@ -1,24 +1,8 @@
-/* Pure business-logic helpers ported verbatim (algorithms unchanged) from
-   material-depot-site's app/src/pages/SMInstall.jsx. The source keeps
-   ORDERS/INSTALLERS/SLOTS_FL/SLOTS_WP as module-level mutable arrays that
-   every helper reads directly; here every helper takes the arrays as
-   parameters instead, so the same math works against React state without
-   reintroducing module-level mutable globals. */
-
 import { SQFT_PER_ROLL, publishSlotConfig, sbGet, staffCapOn } from '../siteAuditShared';
 import type { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
 export { SQFT_PER_ROLL };
 
-/* Auto-detects site audit type by exact phone match against audit_orders —
-   same signal Admin's "Material Depot Audit %" metric already uses read-only
-   in material-depot-site (CLAUDE.md note 56 there). Exact string match, no
-   normalization — verified against live data that normalizing phone formats
-   doesn't change the match count. Returns null (leave unset, don't guess) if
-   the lookup itself fails, rather than treating a failed request as "no
-   match found". Ported here because this CRM's install-order creation never
-   had it — every new order landed on "Not set", needing a manual pick that
-   the legacy app resolved automatically at creation. */
 export async function detectAuditBy(phone: string): Promise<'material_depot' | 'customer' | null> {
   if (!phone) return null;
   try {
@@ -34,25 +18,16 @@ export const INSTALL_SKU = 'SVC-INSTALL-001';
 export const CUSTOM_WP_SKU = 'WP-CUST';
 export const FLOOR_DAY_CAP = 1;
 export const WP_DAY_SLOTS = 3;
-export const WALLPANEL_DAY_CAP = 1;   // wall-panel jobs/installer/day — mirrors flooring's full-day cadence
+export const WALLPANEL_DAY_CAP = 1;
 
-/* The per-type default an installer's day capacity falls back to when their
-   service manager has not set one. Wallpaper is counted in 3h SLOTS, not jobs
-   (1-3 rolls = 1 slot, 4-6 = 2, 7+ = 3), so its number is not comparable with
-   the other two — a cap of 3 means three slots, which may be a single 7-roll
-   job. Keep that in mind before "normalising" these to one number. */
 export function typeDayCap(t: InstallCategory | null | undefined): number {
   return t === 'wallpaper' ? WP_DAY_SLOTS : t === 'wallpanel' ? WALLPANEL_DAY_CAP : FLOOR_DAY_CAP;
 }
 
-/* Effective day capacity for ONE installer on ONE date: the SM's per-date
-   override, else their own default, else the per-type constant; 0 when they
-   are before their start date, on a weekly off, or on leave. */
 export function installerDayCap(a: Installer | null | undefined, ds: string | null | undefined): number {
   return staffCapOn(a, ds, typeDayCap(a?.type));
 }
-/* Installers who can take at least one job on a date. Pass a CITY-SCOPED
-   list — an installer works only the city they were assigned on joining. */
+
 export function installersAvailable(installers: Installer[], ds: string): number {
   return installers.filter((a) => installerDayCap(a, ds) >= 1).length;
 }
@@ -92,8 +67,7 @@ export function saveSlots(kind: 'fl' | 'wp', slots: SlotDef[]) {
   } catch {
     /* best-effort local persistence */
   }
-  // …and share them, so people reading these ids on another device (shadowers
-  // especially) see the office's labels rather than the stock ones.
+
   void publishSlotConfig(key, slots);
 }
 
@@ -116,9 +90,6 @@ export function dateRange(from: string, to: string): string[] {
   return out;
 }
 
-/* Local-date helpers (dstr/today/addDays), matching material-depot-site's
-   lib/dates.js and the pattern already used in SiteAuditStoreTeamView.tsx /
-   SiteInstallerApp.tsx elsewhere in this CRM. */
 export function dstr(d: Date): string {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
@@ -128,13 +99,7 @@ export const today = (() => {
   t.setHours(0, 0, 0, 0);
   return t;
 })();
-// This SM dashboard realistically stays open across a full shift (60s poll
-// in SiteAuditInstallOpsView.tsx) — without this, `today` would freeze at
-// whatever date the tab was opened on and silently go stale past midnight,
-// throwing off opsCallDue/minDate/the calendar strip/installer load lookups.
-// Mutating the same Date object in place (not reassigning) means every
-// existing `today` reference — and anything built from it via addDays, which
-// re-reads `today` on each call — picks up the change automatically.
+
 if (typeof window !== 'undefined') {
   setInterval(() => {
     const now = new Date();
@@ -174,17 +139,6 @@ export function mapUrl(a: string) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a);
 }
 
-/* The stored `status` column is only as fresh as the last write to it, and a
-   crew's completion used to reach neither it nor the sub-job it belongs to — so
-   orders are sitting in the table right now saying At Site with every installer
-   finished. Healing that on the next write alone would leave the existing rows
-   wrong indefinitely, so the read reconciles too.
-
-   Deliberately narrow: it only ever moves an order that is stuck on a TRAVEL
-   status, which is the reported failure and the only case where the sub-jobs are
-   unambiguously further along than the column. `pending` / `deliv_*` / `created` /
-   `call_na` are pre-service states no sub-job speaks to, and an SM's deliberate
-   `partial` or `completed` is left exactly as they set it. */
 const TRAVEL_STATUSES = ['scheduled', 'assigned', 'callpending', 'onway', 'atsite'];
 
 export function reconciledOrderStatus(stored: string, subjobs: Subjob[] | null): string {
@@ -228,34 +182,10 @@ export function slotLabel(id: string | null | undefined, slotsFl: SlotDef[], slo
   return '—';
 }
 
-/* ── One sub-job, several installers, two places a status lives ───────────
-   `sj.status` is written by the PRIMARY installer only. An additional installer's
-   own progress lives on their `assignments[]` row and NOWHERE else — the field
-   app's markAdditionalComplete writes just that. Nothing in the SM's views used
-   to read it, which is why the dashboard showed "At Site" on ENQ2026082087114
-   while its timeline said "Flooring installation done (additional installer:
-   Ankit Sharma)" seven times over: both were true, and only one was on screen.
-
-   These three helpers are the single derivation for that. Anything in Install Ops
-   that renders a sub-job status must go through `subjobDisplayStatus`, and
-   `rollupStatus` in SiteInstallerApp keys the parent order off the same rule, so
-   the badge, the calendar, the drawer and the order row can never disagree. */
-
-/* The status one assignee is working against. An assignment created before
-   per-assignee status existed has none, so it falls back to the sub-job rather
-   than reading as blank. Mirrors statusForInstaller in SiteInstallerApp. */
 export function assigneeStatus(sj: Subjob, a: Assignment): string {
   return (a && a.status) || sj.status || '';
 }
 
-/* What the sub-job actually stands at, once every assignee is accounted for.
-   Deliberately conservative in two directions:
-   - it never invents `completed` from a SINGLE installer finishing, because the
-     customer signature is the primary's job and the OMS service leg (i.e. the
-     invoice) is gated on the rollup;
-   - `partial` and `completed` are left exactly as written. `partial` is a
-     deliberate statement that rooms are still outstanding, and an additional
-     installer marking their own part done must not erase it. */
 export function subjobDisplayStatus(sj: Subjob): string {
   const asgns: Assignment[] = Array.isArray(sj.assignments) ? sj.assignments : [];
   if (!asgns.length) return sj.status;
@@ -264,9 +194,6 @@ export function subjobDisplayStatus(sj: Subjob): string {
   return sj.status;
 }
 
-/* Per-installer progress for the SM, ordered primary first. Returned even when
-   every assignee agrees with the sub-job — the SM asking "who is where" should
-   get the same answer shape every time. */
 export function assigneeProgress(sj: Subjob): Array<{ name: string; status: string; primary: boolean; ahead: boolean }> {
   const asgns: Assignment[] = Array.isArray(sj.assignments) ? sj.assignments : [];
   const anyPrimary = asgns.some((a) => a.primary);
@@ -276,8 +203,7 @@ export function assigneeProgress(sj: Subjob): Array<{ name: string; status: stri
       name: a.installer_name || '—',
       status: st,
       primary: a.primary === true || (!anyPrimary && i === 0),
-      /* Their own row says something the sub-job does not — the case that used
-         to be invisible. */
+
       ahead: !!a.status && a.status !== sj.status,
     };
   }).sort((x, y) => Number(y.primary) - Number(x.primary));
@@ -312,7 +238,7 @@ export function flLoad(orders: InstallOrder[], id: string, date: string): number
   }));
   return n;
 }
-/* Wall panels follow flooring's full-day cadence — 1 job per installer per day. */
+
 export function wpnlLoad(orders: InstallOrder[], id: string, date: string): number {
   let n = 0;
   orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
@@ -337,10 +263,7 @@ export function wpSlotLoad(orders: InstallOrder[], id: string, date: string): nu
   }));
   return n;
 }
-/* One installer's committed load on one date, in the SAME unit as their cap:
-   3h SLOTS for wallpaper (a 7-roll job is 3 of them), whole JOBS otherwise.
-   `excludeSjId` drops the sub-job currently being assigned so re-picking an
-   installer doesn't count them against themselves. */
+
 export function installerDayLoad(
   orders: InstallOrder[], inst: Installer, ds: string, excludeSjId?: string,
 ): number {
@@ -362,9 +285,6 @@ export function installOrderHasDate(o: InstallOrder, ds: string): boolean {
   return (o.subjobs || []).some((sj) => subjobAssignList(sj).some((a) => (a.mode === 'custom' ? a.dates || [] : a.date ? [a.date] : []).includes(ds)));
 }
 
-/* All (order, subjob) pairs that have an installer assignment landing on
-   date `ds` — used by both the "Today's installs" table and the Calendar
-   day columns/detail panel. */
 export function sjsForDay(orders: InstallOrder[], installers: Installer[], ds: string): Array<{ o: InstallOrder; sj: Subjob }> {
   const res: Array<{ o: InstallOrder; sj: Subjob }> = [];
   orders.forEach((o) => (o.subjobs || []).forEach((sj) => {
@@ -391,13 +311,9 @@ export function needActionCount(orders: InstallOrder[]): number {
   return opsDue + fuDue + resched;
 }
 
-/* Pure version of the source's syncParent(o) — returns the rolled-up parent
-   status instead of mutating `o.status` in place. */
 export function syncParentStatus(subjobs: Subjob[] | null, fallback: string): string {
   if (!subjobs || !subjobs.length) return fallback;
-  /* Via subjobDisplayStatus, so a sub-job whose whole crew has finished counts as
-     completed here too. Reading raw `sj.status` left the order sitting at At Site
-     with a timeline that said the installation was done. */
+
   const sts = subjobs.map(subjobDisplayStatus);
   if (sts.every((s) => s === 'completed')) return 'completed';
   if (sts.some((s) => s === 'completed') && sts.some((s) => s !== 'completed')) return 'partial';
@@ -440,26 +356,12 @@ export function rollHintText(sqft: string | number | undefined) {
   return '= ' + r + ' roll' + (r === 1 ? '' : 's') + ' · ' + SQFT_PER_ROLL + ' sq.ft = 1 roll';
 }
 
-/* ── Per-SKU sub-job split / merge ─────────────────────────────────────────
-   A category's sub-job can be split so some of its SKUs move into their own
-   sub-job with an independent installer, date, delivery and job card (e.g. a
-   standard + a customized wallpaper delivered on different days). All of the
-   existing per-sub-job machinery already handles N same-type sub-jobs
-   generically, so splitting needs no new tracking concepts. */
-
-/* True once a CATEGORY has been split into 2+ sub-jobs. Distinct from a plain
-   mixed (1 flooring + 1 wallpaper) order — the flat SKU editor can't map back
-   onto 2+ same-type sub-jobs, so it hides itself when this is true. */
 export function isSplit(o: InstallOrder): boolean {
   if (!o.subjobs) return false;
   const n = (t: InstallCategory) => o.subjobs!.filter((sj) => sj.type === t).length;
   return n('flooring') > 1 || n('wallpaper') > 1 || n('wallpanel') > 1;
 }
 
-/* Mint a stable, collision-free sub-job id: the base (sj_fl/sj_wp/sj_wpl)
-   counts as suffix 0, new ids are max-existing-suffix + 1, so an id is never
-   re-issued even after a merge-then-resplit (a length-based id would). Never
-   keyed on SKU code — codes can repeat. */
 export function mintSubjobId(o: InstallOrder, baseType: InstallCategory): string {
   const base = baseType === 'wallpaper' ? 'sj_wp' : baseType === 'wallpanel' ? 'sj_wpl' : 'sj_fl';
   const re = new RegExp('^' + base + '(?:_(\\d+))?$');
@@ -471,9 +373,6 @@ export function mintSubjobId(o: InstallOrder, baseType: InstallCategory): string
   return base + '_' + (mx + 1);
 }
 
-/* Fallback accessors — a sub-job's own field wins once an SM has diverged it
-   (split orders), otherwise the order-level field applies, so nothing needs a
-   backfill migration. */
 export function sjDeliveryDate(o: InstallOrder, sj: Subjob): string | null {
   return sj.deliveryDate !== undefined ? sj.deliveryDate ?? null : o.deliveryDate;
 }
@@ -482,9 +381,6 @@ export function sjCustomWp(o: InstallOrder, sj: Subjob): boolean {
   return sj.type === 'wallpaper' ? !!o.customWp : false;
 }
 
-/* Short per-sub-job label distinguishing 2+ same-type sub-jobs in list and
-   calendar UIs: plain FL/WP/WPL when the category isn't split, plus
-   Custom/Std (or the first SKU) when it is. */
 export function sjShortLabel(o: InstallOrder, sj: Subjob): string {
   const tag = sj.type === 'wallpaper' ? 'WP' : sj.type === 'wallpanel' ? 'WPL' : 'FL';
   const sameType = (o.subjobs || []).filter((s) => s.type === sj.type).length;
@@ -495,8 +391,6 @@ export function sjShortLabel(o: InstallOrder, sj: Subjob): string {
   return suffix ? tag + ' · ' + suffix : tag;
 }
 
-/* Assignment list of a sub-job, with a legacy single-installer sub-job
-   normalised into the same shape. */
 export function sjEffectiveAssignments(sj: Subjob): Assignment[] {
   if (Array.isArray(sj.assignments) && sj.assignments.length) return sj.assignments;
   if (sj.installer_email || sj.installer) {

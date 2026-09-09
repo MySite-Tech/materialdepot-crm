@@ -1,20 +1,5 @@
 'use client';
 
-/* Audit Ops — the Service Manager's audit-side dashboard, port of
-   material-depot-site's SM_Audit_Dashboard.html. Counterpart to
-   SiteAuditInstallOpsView (which ports the install-side one), and the piece
-   that closes the loop in this CRM: creating an audit order, booking its date
-   and time, and assigning an auditor — the three steps that were previously
-   only possible in the legacy app, without which the auditor's own app never
-   receives a job.
-
-   Every caller that reaches this view already knows who's looking at it (the
-   CRM session's own name, resolved via SiteAuditOwnDashboard/site-audit-view/
-   Role Viewer) — the `attribution` prop carries that through so activity-log
-   entries show a real name instead of the generic fallback below. Live
-   Locations is deliberately not a tab here: it's the shared Live view in the
-   outer Site Audit rail. */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CITIES, EXIT_COLS, exitColumnsAvailable, fetchBmEmailsByPhone, inCity, mapCaps, mapExit, phoneKey, rosterQuery, sbGet, sbPatch, syntheticSiteAuditEmail, type CityFilter, type StaffExit } from '../siteAuditShared';
 import { fetchUsers } from '@/lib/mockApi';
@@ -33,8 +18,6 @@ import {
 } from '../audit-ops/shared';
 import type { ShadowerOption } from '../install-ops/ShadowerSelect';
 
-/* Fallback only for a caller that genuinely can't resolve a person (there
-   currently isn't one, but this keeps the view usable if that ever changes). */
 const DEFAULT_ATTRIBUTION = 'Service Manager (CRM)';
 
 const TABS: Array<{ view: AuditViewKey; label: string }> = [
@@ -49,9 +32,6 @@ const TABS: Array<{ view: AuditViewKey; label: string }> = [
   { view: 'rectifications', label: 'Rectifications' },
 ];
 
-/* `actorEmail` is recorded as `profiles.deleted_by` when this SM removes
-   someone, so an accidental removal has an owner to ask. Optional because the
-   oversight rail can render this view without a resolved person. */
 export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
   const ATTRIBUTION = attribution;
   const [view, setView] = useState<AuditViewKey>('orders');
@@ -93,50 +73,25 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
   const [kylasOpen, setKylasOpen] = useState(false);
   const [rectOrder, setRectOrder] = useState<AuditOrder | null>(null);
   const [addAuditorOpen, setAddAuditorOpen] = useState(false);
-  /* Retired auditors, loaded separately and only when migration 004 has been
-     run. Kept out of `rawAuditors` entirely rather than filtered downstream:
-     everything from the assignment picker to the kiosk's slots-left count
-     reads that array, and a "former" flag would have to be honoured in every
-     one of them. Absent means absent. */
+
   const [formerAuditors, setFormerAuditors] = useState<Array<Auditor & StaffExit>>([]);
   const [canRetire, setCanRetire] = useState(false);
   const [retiring, setRetiring] = useState<RetireTarget | null>(null);
   const [restoring, setRestoring] = useState<(RetireTarget & StaffExit) | null>(null);
-  /* Distinguishes "the roster failed to load" from "nobody is registered" — the
-     picker's empty state has to say which, see loadAuditors. */
+
   const [auditorsErr, setAuditorsErr] = useState(false);
   const audRetryTid = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* Mirrored into a ref so the mount-once poll effect can read the CURRENT value
-     without listing it as a dep (which would tear down and rebuild the interval
-     on every flip). */
+
   const auditorsErrRef = useRef(false);
   auditorsErrRef.current = auditorsErr;
 
-  /* City scope — every list, counter and capacity check runs on the scoped
-     slice; the drawer resolves its order from the unscoped list so an open
-     order never vanishes if the toggle changes mid-edit. */
   const orders = useMemo(() => inCity(rawOrders, city), [rawOrders, city]);
   const deleted = useMemo(() => inCity(rawDeleted, city), [rawDeleted, city]);
   const auditors = useMemo(() => inCity(rawAuditors, city), [rawAuditors, city]);
 
-  /* The roster is fetched once when this view mounts, but the assignment picker
-     reads it on every drawer open — so one failed fetch used to leave the picker
-     permanently empty, showing "No auditors in this city" for what is actually a
-     connection problem and giving the SM no way to assign anyone. (Same defect
-     shipped in material-depot-site's SM_Audit_Dashboard, note 113 there.)
-
-     `Array.isArray(rows) ? rows : []` was the sharp edge: sbGet resolves a
-     PostgREST ERROR OBJECT for any 4xx/5xx, so a server error was mapped to
-     "zero auditors registered" and wiped a roster that had been working. A
-     non-array is now a failed load, the last good roster survives it, and the
-     8s retry `loadOrders` already uses applies here too. */
   const loadAuditors = useCallback(async () => {
     try {
-      /* `rosterQuery` bundles both probe-gated concerns: the caps columns
-         (migration 003) and `deleted_at is null` (migration 004). Neither may
-         be named unconditionally — PostgREST fails the WHOLE select with 42703
-         on a missing column, and this is the query the assignment picker and
-         the kiosk's slots-left count both depend on. */
+
       const { select, filter } = await rosterQuery('id,name,email,contact,active_from,city,weekly_off,leave_dates');
       const rows = await sbGet('profiles?role=in.(site_auditor,auditor_installer)&select=' + select + filter);
       if (!Array.isArray(rows)) throw new Error('auditor roster unavailable');
@@ -152,17 +107,13 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       setAuditorsErr(false);
       if (audRetryTid.current) { clearTimeout(audRetryTid.current); audRetryTid.current = null; }
     } catch {
-      /* keep the previous roster on a transient failure */
+
       setAuditorsErr(true);
       if (!audRetryTid.current) audRetryTid.current = setTimeout(() => { audRetryTid.current = null; loadAuditors(); }, 8000);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* The attrition list. Degrades to empty (and hides the tab) when the exit
-     columns aren't there, which is also what makes this safe to ship ahead of
-     the migration. Not gated on the 8s roster retry — a missing former-staff
-     list is a missing history panel, never a blocked workflow. */
   const loadFormerAuditors = useCallback(async () => {
     if (!(await exitColumnsAvailable())) { setCanRetire(false); setFormerAuditors([]); return; }
     setCanRetire(true);
@@ -191,9 +142,6 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     await Promise.all([loadAuditors(), loadFormerAuditors()]);
   }, [loadAuditors, loadFormerAuditors]);
 
-  /* Shadower pool = everyone registered except store staff (their kiosk has no
-     login, so no personal shadow schedule). Kept separate from `auditors` so
-     it can never touch cap/conflict logic. */
   const loadShadowers = useCallback(async () => {
     try {
       const rows = await sbGet('profiles?role=neq.store_staff&select=name,email,role&order=name');
@@ -201,29 +149,14 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     } catch { /* pool is optional */ }
   }, []);
 
-  /* BM list comes from the CRM's own user table (backend UserOrganisation) —
-     the same source the BM dashboard resolves identity from.
-
-     `email` is filled in from the BM's field-app profile, matched on phone: the
-     roster has no email at all, and every writer here guards its `bm_email` on
-     `match.email`, so without this step the Add Order overlay and the drawer's
-     BM assign wrote a NAME and nothing else — the row then reached the BM's
-     dashboard only by name match, which is what left 196 rows unlinked. */
   const loadBms = useCallback(async () => {
     try {
       const [users, bmEmails] = await Promise.all([fetchUsers(), fetchBmEmailsByPhone()]);
-      /* Deactivated employees stay in the CRM roster so Admin > Users can
-         still manage them (see AppUser.active) — but offering one in the BM
-         picker attributes a new order to somebody who has left. This is the
-         same filter SiteAuditBranchManagerView already applies; it was missing
-         here, which is half of why staff who left kept "reflecting on our
-         system". */
+
       setBmOptions((users || []).filter((u: any) => u.name && u.active !== false).map((u: any) => ({
         name: u.name,
         contact: u.phone,
-        /* The account's address when they have one, otherwise the synthetic
-           address that encodes their number — attribution compares the phone,
-           so picking someone with no field-app account still links the order. */
+
         email: phoneKey(u.phone)
           ? (bmEmails.get(phoneKey(u.phone)) || syntheticSiteAuditEmail(u.phone))
           : undefined,
@@ -231,7 +164,6 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
     } catch { /* free-text BM entry still works */ }
   }, []);
 
-  /* Last good narrow category read — see loadOrders. */
   const catRowsRef = useRef<any[]>([]);
 
   const loadOrders = useCallback(async () => {
@@ -244,16 +176,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       }
       setConnErr(false);
       if (retryTid.current) { clearTimeout(retryTid.current); retryTid.current = null; }
-      /* The ticked categories come from a second, deliberately narrow query: they
-         can't ride in AUDIT_COLS because `audit_ticked` also holds the job card's
-         room photos, but for the pre-card statuses it is a few bytes a row — and
-         it is the only place "what material is this audit for" is recorded.
 
-         The last good result is kept in a ref and applied to THIS render pass, so
-         a 30s poll never repaints the table with the pills missing while the
-         second query is in flight. The fetch itself is fire-and-forget and fails
-         quietly: no category pill is worth delaying or blanking the orders table
-         for, and the previous answer stays on screen if it drops. */
       setRawOrders(applyAuditCategories(rows.map(mapAuditRow), catRowsRef.current));
       sbGet(AUDIT_CATEGORY_QUERY)
         .then((catRows) => {
@@ -280,15 +203,13 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
 
   useEffect(() => {
     Promise.all([loadAuditors(), loadShadowers(), loadBms(), loadOrders()]);
-    /* Jobs the backend already has but nobody imported are pulled in here, so
-       Pending POs is a fallback rather than the only way in. */
+
     autoImportAuditOrders().then((added) => {
       if (!added) return;
       loadOrders();
       toast(added + (added === 1 ? ' new audit order' : ' new audit orders') + ' imported from the backend');
     });
-    /* The roster only re-fetches while it is KNOWN to be broken, so the healthy
-       case still costs exactly one query per tick. */
+
     const poll = setInterval(() => { if (!document.hidden && !currentPI) { loadOrders(); if (auditorsErrRef.current) loadAuditors(); } }, 30000);
     const vis = () => { if (!document.hidden && !currentPI) { loadOrders(); if (auditorsErrRef.current) loadAuditors(); } };
     document.addEventListener('visibilitychange', vis);

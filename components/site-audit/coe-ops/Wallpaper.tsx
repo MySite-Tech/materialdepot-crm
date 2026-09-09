@@ -68,8 +68,6 @@ export default function Wallpaper({ rows, installs, who, city, onChanged }: {
     .filter((x) => !qLower || [x.r.pi, x.r.md_id, x.r.customer_name, x.r.phone, x.r.bm].join(' ').toLowerCase().includes(qLower))
     .sort((a, b) => (b.sla.hours || 0) - (a.sla.hours || 0));
 
-  // Install orders flagged custom_wp that have no production row yet.
-  // Surfaced as a suggestion strip — never auto-created.
   const known = useMemo(() => new Set(rows.map((r) => String(r.pi || '').trim()).filter(Boolean)), [rows]);
   const seeds = installs.filter((io) => io.customWp && io.pi && !known.has(io.pi.trim()));
 
@@ -288,12 +286,7 @@ function OrderDetailsForm({ row, who, onSaved }: { row: WpRow; who: string; onSa
   const [notes, setNotes] = useState(row.notes || '');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  /* Both required reasons below were window.prompt(), which is the landmine in
-     CLAUDE.md: it silently no-ops in installed PWAs and mobile webviews, and
-     desktop Chrome disables it per-origin for good once a user ticks "prevent
-     additional dialogs" — so Put on hold and Cancel PO just did nothing, with no
-     error anywhere. Same contract as before (a blank or cancelled reason
-     ABORTS), real DOM. */
+
   const note = useNoteModal();
 
   async function saveDetails() {

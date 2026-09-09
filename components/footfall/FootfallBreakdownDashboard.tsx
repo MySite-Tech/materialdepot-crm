@@ -25,8 +25,6 @@ function fmtValue(v: number, kind: FootfallBreakdownRow['kind']) {
   return (v ?? 0).toLocaleString('en-IN');
 }
 
-// ── Filter chips ───────────────────────────────────────────────────────────
-
 function MultiChip({
   label, options, selected, onChange, color, searchable,
 }: {
@@ -168,7 +166,6 @@ function DateChip({ value, onChange }: { value: DateRange; onChange: (v: DateRan
   );
 }
 
-// Visual group breaks (a divider is drawn before each of these row keys)
 const GROUP_STARTS = new Set(['total_carts', 'total_orders', 'new_conversion', 'total_sales', 'new_order_aov', 'overall_client_aov']);
 
 export default function FootfallBreakdownDashboard({ branches, allowedBranches }: Props) {
@@ -230,7 +227,7 @@ export default function FootfallBreakdownDashboard({ branches, allowedBranches }
 
   return (
     <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5">
-      {/* Filter bar */}
+
       <div className="bg-white border border-gray-200 rounded-xl px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 sm:gap-2.5 shadow-sm">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Filter</span>
         <DateChip value={dateRange} onChange={setDateRange} />
@@ -253,7 +250,6 @@ export default function FootfallBreakdownDashboard({ branches, allowedBranches }
         </span>
       </div>
 
-      {/* Breakdown grid */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">

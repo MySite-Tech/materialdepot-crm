@@ -57,7 +57,7 @@ export default function LeadershipBoard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* ── Rep Leaderboard ── */}
+
         <Panel title="Rep Leaderboard — Inbound / Outreach / Revenue">
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] min-w-[420px]">
@@ -90,7 +90,6 @@ export default function LeadershipBoard() {
           </div>
         </Panel>
 
-        {/* ── Closing Expected This Week ── */}
         <Panel title="Closing Expected This Week">
           <div className="flex flex-col gap-3">
             {data.closingThisWeek.map((c, i) => (
@@ -108,7 +107,6 @@ export default function LeadershipBoard() {
           </div>
         </Panel>
 
-        {/* ── Inbound Pipeline Funnel ── */}
         <Panel title="Inbound Pipeline Funnel">
           <div className="flex flex-col gap-3">
             {data.inboundFunnel.map((s) => (
@@ -117,7 +115,6 @@ export default function LeadershipBoard() {
           </div>
         </Panel>
 
-        {/* ── Leads → Order Won Funnel ── */}
         <Panel title="Leads → Order Won Funnel">
           <div className="flex flex-col gap-3">
             {data.orderWonFunnel.map((s) => (
@@ -126,7 +123,6 @@ export default function LeadershipBoard() {
           </div>
         </Panel>
 
-        {/* ── Top Clients by Revenue ── */}
         <Panel title="Top Clients by Revenue">
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] min-w-[360px]">
@@ -153,7 +149,6 @@ export default function LeadershipBoard() {
           </div>
         </Panel>
 
-        {/* ── Top Clients by Number of Orders ── */}
         <Panel title="Top Clients by Number of Orders">
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] min-w-[280px]">

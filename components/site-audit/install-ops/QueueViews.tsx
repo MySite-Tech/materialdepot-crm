@@ -12,8 +12,6 @@ interface BaseProps {
 const th = 'px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap';
 const td = 'px-3 py-2.5 text-[13px] border-t border-gray-100 align-top';
 
-/* ── Need Action today — combines ops-calls-due, follow-ups-overdue and
-   to-reschedule into one triage screen ──────────────────────────────────── */
 export function NeedActionView({ orders, onOpenOrder }: BaseProps) {
   const todayStr = dstr(today);
   const opsList = orders.filter(opsCallDue);
@@ -109,7 +107,6 @@ export function NeedActionView({ orders, onOpenOrder }: BaseProps) {
   );
 }
 
-/* ── Call Operations today ────────────────────────────────────────────── */
 export function CallsView({ orders, onOpenOrder }: BaseProps) {
   const list = orders.filter(opsCallDue);
   return (
@@ -143,7 +140,6 @@ export function CallsView({ orders, onOpenOrder }: BaseProps) {
   );
 }
 
-/* ── To reschedule ─────────────────────────────────────────────────────── */
 export function RescheduleView({ orders, onOpenOrder, slotsFl, slotsWp }: BaseProps & { slotsFl: SlotDef[]; slotsWp: SlotDef[] }) {
   const items: Array<{ o: InstallOrder; sj: any }> = [];
   orders.forEach((o) => (o.subjobs || []).forEach((sj) => { if (sj.status === 'reschedule') items.push({ o, sj }); }));
@@ -173,7 +169,6 @@ export function RescheduleView({ orders, onOpenOrder, slotsFl, slotsWp }: BasePr
   );
 }
 
-/* ── Follow-ups ────────────────────────────────────────────────────────── */
 export function FollowupsView({ orders, onOpenOrder }: BaseProps) {
   const todayStr = dstr(today);
   const list = orders.filter(hasOpenFollowUp).sort((a, b) => a.service!.follow_up_date!.localeCompare(b.service!.follow_up_date!));

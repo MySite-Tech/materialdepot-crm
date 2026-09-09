@@ -1,10 +1,5 @@
 import { phoneKey } from './identity';
 
-/* CRM permission_name → Site Audit role, so access here is derived from the
-   CRM rather than assigned twice by hand. Business-confirmed 2026-08. `null`
-   means "no Site Audit access" — surfaced by the sync, never auto-applied:
-   revoking is a human decision, granting isn't. `admin`/`tech` are absent on
-   purpose, see OVERSIGHT_CRM_ROLES. */
 export const CRM_ROLE_TO_SITE_AUDIT_ROLE: Record<string, string | null> = {
   accounts: null,
   retail: null,
@@ -23,16 +18,8 @@ export const CRM_ROLE_TO_SITE_AUDIT_ROLE: Record<string, string | null> = {
   store_manager: 'branch_mgr',
 };
 
-/* `field_worker` covers auditors and installers with nothing to tell them
-   apart, so it is absent above rather than null: null means "revoke", this
-   means "hands off". An unknown permission_name is skipped the same way —
-   never guess at a mapping. */
 export const FIELD_WORKER_SKIP = 'skip' as const;
 
-/* Oversight-rail roles, granted by the CRM session alone. They need no
-   field-app profile, so the sync neither creates nor revokes one: a real role
-   here would create a field-app `admin` for every CRM admin, and null would
-   flag them "no longer entitled" while the CRM grants them the widest view. */
 export const OVERSIGHT_CRM_ROLES = new Set(['admin', 'superadmin', 'tech']);
 
 export function siteAuditTargetForCrmPermission(perm: string): string | null | typeof FIELD_WORKER_SKIP {
@@ -42,21 +29,8 @@ export function siteAuditTargetForCrmPermission(perm: string): string | null | t
   return FIELD_WORKER_SKIP;
 }
 
-/* Never touched by the sync, whatever the CRM permission computes to.
-   `store_staff` has no CRM counterpart (it comes from the kiosk flow); `coe`
-   and `content_team` are hand-assigned. Overwriting them would clobber a real
-   assignment. */
 const PROTECTED_ROLES = new Set(['store_staff', 'coe', 'content_team', 'service_mgr']);
 
-/* `service_mgr` is in that set because nothing in a CRM permission can
-   disprove it — SMs routinely carry `manager`/`sales` as a cost centre, which
-   the sync read as licence to demote them to the branch rollup. Only the
-   demotion is blocked; a matching CRM role is already a no-op. */
-
-/* Roles that DO the field work. Their jobs are keyed to the profile (an
-   auditor's queue is `audit_orders.auditor_email`), so flipping one to a desk
-   role empties a real dashboard — and the CRM permission is no evidence they
-   stopped: HR records the cost centre, not the job. Surfaced for a human. */
 const FIELD_WORK_ROLES = new Set(['site_auditor', 'installer', 'auditor_installer']);
 
 export type SiteAuditRoleSyncCrmUser = { id: string | number; name: string; phone: string; role: string; allowedBranches?: string[]; active?: boolean };
@@ -69,19 +43,12 @@ export type SiteAuditRoleSyncPlan = {
   noLongerEntitled: Array<{ profileId: string; name: string; email: string; currentRole: string; crmPermission: string }>;
 };
 
-/* Pure — safe to preview before any write. Pairs CRM users to profiles by
-   phoneKey() (the CRM has no email, only phone), applying the rules above in
-   order: ambiguous match, protected role, field_worker, then the mapping.
-   Nothing here writes; the caller applies the plan after a human reviews it. */
 export function planSiteAuditRoleSync(
   allCrmUsers: SiteAuditRoleSyncCrmUser[],
   profiles: SiteAuditRoleSyncProfile[],
 ): SiteAuditRoleSyncPlan {
   const plan: SiteAuditRoleSyncPlan = { ready: [], noProfileYet: [], skipped: [], noLongerEntitled: [] };
 
-  /* Deactivated employees drop out silently — listing them as "skipped" would
-     bury the skips a human needs to see, and keeping them out of the phone
-     maps stops a recycled number making their replacement unresolvable. */
   const crmUsers = allCrmUsers.filter((u) => u.active !== false);
 
   const profilesByPhone = new Map<string, SiteAuditRoleSyncProfile[]>();
@@ -106,7 +73,6 @@ export function planSiteAuditRoleSync(
     const matchedProfiles = key ? profilesByPhone.get(key) || [] : [];
     const matchedCrmUsers = key ? crmByPhone.get(key) || [] : [];
 
-    // Ambiguous either direction (0 or 2+ matches) — never guess.
     if (matchedProfiles.length > 1 || matchedCrmUsers.length > 1) {
       plan.skipped.push({ name: crmUser.name, reason: 'ambiguous_phone' });
       continue;
@@ -131,10 +97,7 @@ export function planSiteAuditRoleSync(
     }
 
     const target = siteAuditTargetForCrmPermission(crmUser.role);
-    /* `profiles.branch` is one text column, and a stamped branch outranks the
-       CRM list when a dashboard resolves scope — so stamping
-       `allowedBranches[0]` for a two-branch person would NARROW them. null
-       means "don't write the column", never "clear it". */
+
     const branch = crmUser.allowedBranches?.length === 1 ? crmUser.allowedBranches[0] : null;
 
     if (target === FIELD_WORKER_SKIP) {
@@ -147,12 +110,12 @@ export function planSiteAuditRoleSync(
       }
       continue;
     }
-    // Real target role from here on.
+
     if (!profile) {
       plan.noProfileYet.push({ crmUserId: crmUser.id, name: crmUser.name, phone: crmUser.phone, crmPermission: crmUser.role, targetRole: target, branch });
       continue;
     }
-    if (profile.role === target) continue; // already correct, nothing to do
+    if (profile.role === target) continue;
 
     plan.ready.push({ profileId: profile.id, name: profile.name, email: profile.email, crmPermission: crmUser.role, currentRole: profile.role, targetRole: target, branch });
   }
@@ -160,18 +123,10 @@ export function planSiteAuditRoleSync(
   return plan;
 }
 
-/* Placeholder identity for a CRM user with no Site Audit profile yet. Never
-   logged into: access is the CRM session, resolved by phone. It exists so
-   profiles.email can stay the join key other code relies on (bm_email, Role
-   Viewer), and is deterministic, so re-running the sync creates no duplicate. */
 export function syntheticSiteAuditEmail(phone: string): string {
   return 'crm.' + phoneKey(phone) + '@site-audit.internal';
 }
 
-/* Random 4-digit passcode (this table's format). A sync-created profile is
-   never meant to use material-depot-site's Login.html, so an uncommunicated
-   passcode stops its "first login sets the PIN" flow claiming the account.
-   upsertSiteAuditProfile sets `passcode: null` where a PIN *is* expected. */
 export function randomPasscode(): string {
   return String(1000 + Math.floor(Math.random() * 9000));
 }

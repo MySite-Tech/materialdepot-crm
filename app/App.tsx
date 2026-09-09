@@ -21,7 +21,6 @@ import AppointmentTrackerClient from '@/components/appointment-tracker/Appointme
 import StoreDisplayTab from '@/components/store-display/StoreDisplayTab';
 import type { Lead, AppUser, Branch, Remark, Visit, CartItem } from '../types/crm';
 
-// ── Constants ───────────────────────────────────────────────────────────────
 const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
 const STATUSES = [
@@ -102,8 +101,6 @@ const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'C
 const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
 const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
-// Tabs each role is allowed to see.
-// Keys match the mainTab union; values are the tab keys visible to that role.
 type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker' | 'siteAudit' | 'storeDisplay';
 const ROLE_TABS: Record<string, Array<MainTab>> = {
   superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
@@ -136,12 +133,6 @@ const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.store_display', 'storeDisplay'],
 ];
 
-// Sub-permissions nested under crm.site_audit: they only matter once a user
-// already has the siteAudit tab, and pick which view within it they land on
-// (mirrors the roles the separate field-app profiles table used to drive).
-// Every view is a real stored slug, oversight included — '' means "granted the
-// tab but no view", which the dashboard soft-gates with a message rather than
-// falling through to the company-wide rail the way it used to.
 const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
   ['', 'None — no dashboard'],
   ['site_audit.admin', 'Admin (company-wide oversight)'],
@@ -162,17 +153,6 @@ const TAB_LABELS: Record<MainTab, string> = {
   storeDisplay: 'Store Display',
 };
 
-// Reverse of PERMISSION_TAB_ORDER — used to pre-check the permission list from
-// a role's default tabs. Delegates to defaultTabsForRole (defined below, but
-// only ever called at render time, well after module init) so this can never
-// drift from what resolveAllowedTabs actually grants an un-migrated account.
-/* Every `permission_name` the Django side actually issues, so the Role dropdowns
-   can't silently reassign someone. Only 5-6 were listed inline before, which
-   meant opening Edit on a Field Worker (or Procurement, Post Sales, Delivery,
-   B2B…) pre-selected a role they don't have and Save wrote it — the row's badge
-   renders the raw value, so the table showed roles the editor couldn't pick.
-   `superadmin` is deliberately absent: not creatable from this screen, but an
-   existing one is preserved by RoleSelect's unknown-value option. */
 const ROLE_OPTIONS: Array<string> = [
   'sales', 'manager', 'store_manager', 'retail', 'admin', 'tech',
   'b2b_sales', 'b2b_KAM', 'b2b_manager',
@@ -192,9 +172,6 @@ const roleLabel = (role?: string | null): string => {
   return ROLE_LABEL_OVERRIDES[role] ?? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
-/* Role <select> shared by Add User and the inline row editor. Keeps an
-   off-list current value (a legacy or newly-added Django role) as its own
-   option so editing an unrelated field can never reassign the person. */
 function RoleSelect({ value, onChange, className }: { value: string; onChange: (role: string) => void; className: string }) {
   const options = ROLE_OPTIONS.includes(value) || !value ? ROLE_OPTIONS : [value, ...ROLE_OPTIONS];
   return (
@@ -208,19 +185,12 @@ function RoleSelect({ value, onChange, className }: { value: string; onChange: (
 
 const defaultPermissionsForRole = (role: string): string[] => {
   const tabs = new Set(defaultTabsForRole(role));
-  /* Store Display on top of the role's own tabs, for every role, so nobody has
-     to tick it by hand — except the roles clamped to Site Audit, where the
-     ceiling in resolveAllowedTabs ignores the slug anyway and a ticked box
-     would promise access the app then withholds. Only the LEVEL varies, and it
-     comes from STORE_DISPLAY_ADMIN_ROLES rather than a second hand-written
-     list, so the pre-check can't drift from the fallback granting the same
-     sections. Seeds the form only — access is still the saved slugs. */
+
   if (!SITE_AUDIT_ONLY_ROLES.has(role)) tabs.add('storeDisplay');
   const slugs = PERMISSION_TAB_ORDER.filter(([, tab]) => tabs.has(tab)).map(([slug]) => slug);
   return STORE_DISPLAY_ADMIN_ROLES.has(role) ? [...slugs, STORE_DISPLAY_ADMIN_SLUG] : slugs;
 };
 
-// Generic "button that opens a checkbox panel" — closes on outside click.
 function CheckboxDropdown({ label, summary, children, hideLabel }: { label: string; summary: string; children: React.ReactNode; hideLabel?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -265,8 +235,7 @@ const SITE_AUDIT_SUBROLE_SLUGS = new Set(SITE_AUDIT_SUBROLES.map(([slug]) => slu
 
 function PermissionChecklist({ value, onChange, hideLabel }: { value: string[]; onChange: (next: string[]) => void; hideLabel?: boolean }) {
   const toggle = (slug: string) => onChange(value.includes(slug) ? value.filter((s) => s !== slug) : [...value, slug]);
-  // Site Audit sub-role is single-select — a person has exactly one field role, so
-  // picking one clears any other sub-role slug instead of accumulating them.
+
   const hasAnySubRole = value.some((s) => SITE_AUDIT_SUBROLE_SLUGS.has(s));
   const selectSubRole = (slug: string) => {
     const withoutSubRoles = value.filter((s) => !SITE_AUDIT_SUBROLE_SLUGS.has(s));
@@ -274,14 +243,9 @@ function PermissionChecklist({ value, onChange, hideLabel }: { value: string[]; 
   };
   const hasSiteAudit = value.includes('crm.site_audit');
   const hasStoreDisplay = value.includes('crm.store_display');
-  /* Store Display grants one of two levels, so it is a pick-one like the Site
-     Audit view rather than two independent tab slugs: two flat checkboxes
-     would let a granter tick Partial AND Full, and resolveAllowedTabs would
-     have to rank them to decide one tab. Partial is the absence of the admin
-     slug, which is also what every already-granted account has. */
+
   const hasStoreDisplayFull = value.includes(STORE_DISPLAY_ADMIN_SLUG);
-  // Unticking the tab drops the Full marker with it, so re-ticking it later
-  // can't silently restore an Admin grant nobody chose the second time.
+
   const toggleStoreDisplay = () => onChange(
     hasStoreDisplay
       ? value.filter((s) => s !== 'crm.store_display' && s !== STORE_DISPLAY_ADMIN_SLUG)
@@ -346,9 +310,6 @@ function BranchAccessDropdown({ branchList, value, onChange, hideLabel }: { bran
   );
 }
 
-// Resolve the tabs a user may see. Per-user CRM permissions win when present;
-// otherwise fall back to the role-based defaults.
-// Roles that always see the B2B Sales CRM, regardless of individual permissions.
 const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech', 'b2b_sales', 'b2b_KAM', 'b2b_manager']);
 
 const APPOINTMENT_TRACKER_ROLES = new Set([
@@ -357,47 +318,12 @@ const APPOINTMENT_TRACKER_ROLES = new Set([
   'retail',                        // → Receptionist view
 ]);
 
-/* Roles that always see the Site Audit tab, regardless of individual
-   permissions — same force-add pattern as B2B_SALES_ROLES above, and for the
-   same reason: `crm.site_audit` is a per-user checkbox almost nobody has, so
-   role defaults alone left every BM and store manager without the tab. What
-   they see INSIDE it is decided by their `site_audit.*` slug — see
-   siteAuditRoleFromPermissions.
-
-   DERIVED from CRM_ROLE_TO_SITE_AUDIT_ROLE (siteAuditShared.ts) rather than
-   hand-copied — a hand-copied version already drifted from that map once
-   (delivery_manager/post_sales/procurement got added but plain `delivery`,
-   which the map also routes to a Service Manager dashboard, did not). Add a
-   role to the map to grant it the tab; never list one here directly, or it
-   will drift again the same way. `field_worker` is the one addition that
-   can't come from the map — it's deliberately absent there because the CRM
-   can't tell an auditor from an installer from that permission name alone,
-   but that's a narrower question than "should this person see the tab," and
-   SiteAuditOwnDashboard already falls back to their field-app profile role
-   when no `site_audit.*` CRM slug is set. */
 const SITE_AUDIT_ROLES = new Set([
   ...OVERSIGHT_CRM_ROLES,
   ...Object.keys(CRM_ROLE_TO_SITE_AUDIT_ROLE).filter((k) => CRM_ROLE_TO_SITE_AUDIT_ROLE[k]),
   'field_worker',
 ]);
 
-/* Access is decided by permission, never by role. `permission_name` is an HR
-   cost-centre label — it says `tech` for a Service Manager and `admin` for
-   category, delivery and marketing staff — so anything keyed to it grants the
-   same view to everyone who happens to share a label, and cannot be withheld
-   from one of them. Every role-keyed force-add below is therefore a BOOTSTRAP
-   ONLY, applied to accounts that have no permission list recorded yet.
-
-   Once a list exists it is the whole answer: a slug that is absent means "no",
-   including for a tab the person's role used to force-add. That is the point —
-   `crm.site_audit` was deliberately left off 26 of the 30 accounts that were
-   nonetheless reaching the company-wide oversight rail.
-
-   Shared with defaultPermissionsForRole (above) so the Admin > Users
-   permission checklist can never again pre-fill a set that omits a tab this
-   role gets for free — that gap is what silently stripped Site Audit from
-   any field_worker/delivery_manager/post_sales/procurement account the
-   moment an admin opened their row and hit Save for an unrelated edit. */
 const defaultTabsForRole = (role: string): Array<MainTab> => {
   let tabs: Array<MainTab> = ROLE_TABS[role] ?? DEFAULT_ROLE_TABS;
   if (B2B_SALES_ROLES.has(role) && !tabs.includes('b2bSales')) {
@@ -415,14 +341,6 @@ const defaultTabsForRole = (role: string): Array<MainTab> => {
   return tabs;
 };
 
-/* Roles clamped to Site Audit and nothing else. Unlike every other role entry
-   here this is a CEILING, not a grant: field workers are on site all day and
-   have no business in leads, dashboards, footfall or sales, and most of them
-   already carry a permission list (from the delivery/order slug backfills)
-   whose CRM slugs would otherwise open those tabs. A slug they hold that is
-   not `crm.site_audit` is therefore ignored rather than honoured — the only
-   place in this file where role overrides permission, and only ever to take
-   access away. */
 const SITE_AUDIT_ONLY_ROLES = new Set(['field_worker']);
 
 const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
@@ -432,14 +350,10 @@ const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
     const set = new Set(perms);
     return PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
   }
-  // Un-migrated account: no list recorded, so fall back to the role defaults.
+
   return defaultTabsForRole(user?.role ?? '');
 };
 
-/* The Admin sub-tab of Store Display — the only section withheld from someone
-   who has the tab. Store Products, Discontinued List, Removed and Movement
-   Status are open to every role, so this slug is the whole Full/Partial split.
-   Role-keyed for un-migrated accounts only, like the force-adds above. */
 const STORE_DISPLAY_ADMIN_SLUG = 'crm.store_display_admin';
 const STORE_DISPLAY_ADMIN_ROLES = new Set(['superadmin', 'admin', 'tech', 'manager']);
 const canAdminStoreDisplay = (user?: AppUser | null): boolean => {
@@ -448,7 +362,6 @@ const canAdminStoreDisplay = (user?: AppUser | null): boolean => {
   return STORE_DISPLAY_ADMIN_ROLES.has(user?.role ?? '');
 };
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
 
 const MIN_LOST_AGE_DAYS = 30;
@@ -461,12 +374,9 @@ const daysSinceCreated = (createdAt?: string): number => {
 const canMarkLostByAge = (createdAt?: string, isAdmin = false): boolean =>
   isAdmin || daysSinceCreated(createdAt) >= MIN_LOST_AGE_DAYS;
 
-// Roles allowed to mark a deal lost regardless of its age (admins and managers).
-// Fallback roles for the "mark lost within 30 days" bypass, used only when a
-// user has no individual permissions set.
 const LOST_AGE_BYPASS_ROLES = new Set(['admin', 'manager']);
 const MARK_LOST_BYPASS_SLUG = 'crm.mark_lost_bypass_age';
-// Per-user permission wins when present; otherwise fall back to role.
+
 const canBypassLostAge = (user?: AppUser | null): boolean => {
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) return perms.includes(MARK_LOST_BYPASS_SLUG);
@@ -524,9 +434,6 @@ const fmtTimestamp = (ts: string): string => {
     dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
-// ── Lead export helpers ────────────────────────────────────────────────────
-// Serialize an ISO date (YYYY-MM-DD or full timestamp) back to DD/MM/YYYY so
-// exported files round-trip cleanly through the CSV importer.
 const toExportDate = (d: string | null | undefined): string => {
   if (!d) return '';
   const m = String(d).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -538,8 +445,6 @@ const csvEscape = (v: unknown): string => {
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 
-// Produce the 18 fields (in CSV_HEADERS order) for one lead, matching the
-// exact format handleCsvFile expects on import.
 const leadToExportRow = (lead: Lead): string[] => {
   const cartItems = Array.isArray(lead.cartItems)
     ? lead.cartItems.map((c) => c.name).filter(Boolean).join('; ')
@@ -579,8 +484,6 @@ const triggerDownload = (blob: Blob, filename: string) => {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
-
-// ── Components ──────────────────────────────────────────────────────────────
 
 interface AvatarProps {
   name?: string;
@@ -835,7 +738,6 @@ function DateRangePicker({ dateFrom, dateTo, onChange, label: pickerLabel, class
   );
 }
 
-// ── Follow-up Remark Prompt ─────────────────────────────────────────────────
 interface FollowUpRemarkPromptProps {
   oldDate: string;
   newDate: string;
@@ -875,7 +777,6 @@ function FollowUpRemarkPrompt({ oldDate, newDate, onConfirm, onCancel }: FollowU
   );
 }
 
-// ── Lead Drawer ─────────────────────────────────────────────────────────────
 type DrawerUser = { id: string | number; name: string };
 
 interface LeadDrawerProps {
@@ -1250,7 +1151,6 @@ function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, 
   );
 }
 
-// ── Date Edit Popup ─────────────────────────────────────────────────────────
 interface DateEditPopupProps {
   field: 'followUpDate' | 'closureDate';
   currentDate?: string;
@@ -1359,7 +1259,6 @@ function DateEditPopup({ field, currentDate, followUpDate, closureDate, assigned
   );
 }
 
-// ── Delete Confirmation ─────────────────────────────────────────────────────
 interface DeleteConfirmProps {
   leadId: string;
   onConfirm: () => void;
@@ -1385,7 +1284,6 @@ function DeleteConfirm({ leadId, onConfirm, onCancel }: DeleteConfirmProps) {
   );
 }
 
-// ── Admin Dashboard ────────────────────────────────────────────────────────
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'users' | 'branches'>('users');
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -1420,18 +1318,13 @@ function AdminDashboard() {
     if (!/^\d{10}$/.test(newPhone.trim())) { setError('Phone must be 10 digits'); return; }
     if (users.some((u) => u.phone === newPhone.trim())) { setError('Phone already exists'); return; }
     const siteAuditRole = siteAuditRoleFromPermissions(newPermissions);
-    // Oversight is a console with no field-app profile behind it — see
-    // upsertSiteAuditProfile — so it is the one sub-role needing no email.
+
     if (siteAuditRole && !isSiteAuditOversightRole(siteAuditRole) && !newEmail.trim()) { setError('Email is required for a Site Audit role (Business Manager, Site Auditor, etc.)'); return; }
     setError('');
     try {
       const user = await addUser({ name: newName.trim(), phone: newPhone.trim(), role: newRole, individualPermissions: newPermissions });
       setUsers((prev) => [...prev, user]);
-      // Best-effort: the CRM login above is the source of truth for access;
-      // this only keeps their Site Audit field-app identity (profiles row,
-      // in material-depot-site's own Supabase project) in step with it, so a
-      // Business Manager/Site Auditor/etc. added here doesn't also need
-      // entering by hand in Site Audit's own Users tab.
+
       if (siteAuditRole) {
         upsertSiteAuditProfile({ name: newName.trim(), email: newEmail.trim(), phone: newPhone.trim(), role: siteAuditRole })
           .catch((e) => console.error('[AdminDashboard] Site Audit profile sync failed', e));
@@ -1466,10 +1359,7 @@ function AdminDashboard() {
       await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole, individualPermissions: editPermissions });
       await updateUserBranches(editId!, editBranches);
       setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches, individualPermissions: editPermissions } : u));
-      // Only touches the Site Audit profile when an email was actually typed
-      // here — editing an existing account (branch access, a permission
-      // tweak) shouldn't demand an email it's never needed before. Leave it
-      // blank and this is a no-op; fill it in to (re)link or fix the role.
+
       const siteAuditRole = siteAuditRoleFromPermissions(editPermissions);
       if (siteAuditRole && editEmail.trim()) {
         upsertSiteAuditProfile({ name: editName.trim(), email: editEmail.trim(), phone: editPhone.trim(), role: siteAuditRole })
@@ -1624,10 +1514,7 @@ function AdminDashboard() {
                                 ? <span className="text-[11px] text-gray-400">Role-based</span>
                                 : <span className="text-[11px] text-gray-600">{u.individualPermissions!.length} set</span>
                               }
-                              {/* A saved (non-empty) list permanently disables the role-based
-                                  fallback in resolveAllowedTabs — this is the one shape that
-                                  code alone can't self-heal, so surface it instead of leaving
-                                  it silent. Fixed by re-opening Edit and checking Site Audit. */}
+
                               {(u.individualPermissions || []).length > 0 && SITE_AUDIT_ROLES.has(u.role ?? '') && !u.individualPermissions!.includes('crm.site_audit')
                                 ? <div className="mt-0.5 text-[10.5px] font-semibold text-amber-700">⚠ Missing Site Audit</div>
                                 : null
@@ -1898,7 +1785,6 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
   );
 }
 
-// ── App ─────────────────────────────────────────────────────────────────────
 interface CsvRow {
   leadId: string;
   clientName: string;
@@ -1932,14 +1818,9 @@ export default function App() {
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
 
-  // Derive allowed tabs — per-user CRM permissions override role defaults.
   const allowedTabs = resolveAllowedTabs(currentUser);
   const canSeeAppointmentTracker = allowedTabs.includes('appointmentTracker');
-  /* `?tab=` is a request, not an authorisation. It was validated against the
-     list of tabs that exist but never against this user's own tabs, and only
-     the Admin and Appointment Tracker panels re-checked at render — so every
-     other tab was reachable by typing its name, the header merely hid the
-     button. Clamp once, here, and render off this instead of `mainTab`. */
+
   const effectiveTab: MainTab | null = allowedTabs.includes(mainTab)
     ? mainTab
     : (allowedTabs[0] ?? null);
@@ -1953,11 +1834,7 @@ export default function App() {
       window.history.replaceState({}, '', url.toString());
     }
   }, [effectiveTab]);
-  /* Which Site Audit view this person gets, from their `site_audit.*` slug and
-     nothing else. It used to fall back to the CRM role, which is how a Service
-     Manager carrying the `tech` label reached the company-wide oversight rail;
-     the roles are backfilled into slugs instead (see the sub-role picker in
-     Admin > Users). No slug means the tab soft-gates with a message. */
+
   const siteAuditRole = siteAuditRoleFromPermissions(currentUser?.individualPermissions);
   const siteAuditIsOversight = isSiteAuditOversightRole(siteAuditRole);
 
@@ -1997,7 +1874,7 @@ export default function App() {
     setCurrentUser(userData);
     setPermsLoaded(true);
     localStorage.setItem('materialdepot_user', JSON.stringify(userData));
-    // Reset all filters so previous user's state doesn't bleed into the new session
+
     setSearch('');
     setStatusFilter([]);
     setPersonFilter([]);
@@ -2012,7 +1889,7 @@ export default function App() {
     setTaskFilter('');
     setCategoryFilter([]);
     setPage(0);
-    // Land on the first tab the user has access to
+
     const firstTab = resolveAllowedTabs(userData)[0];
     if (firstTab && firstTab !== 'sales') setMainTab(firstTab);
   };
@@ -2028,8 +1905,7 @@ export default function App() {
   const [kylasModalInput, setKylasModalInput] = useState('');
   const [kylasModalResult, setKylasModalResult] = useState<{ loading?: boolean; ok?: boolean; msg?: string; link?: string } | null>(null);
   const [branches, setBranches] = useState<string[]>(DEFAULT_BRANCHES);
-  // DEFAULT_BRANCHES is a seed, not the real list — the Appointment Tracker keeps
-  // its own branch list until this says the CRM's has actually arrived.
+
   const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [crmUsers, setCrmUsers] = useState<AppUser[]>([]);
   const [dbReady, setDbReady] = useState(false);
@@ -2124,8 +2000,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || mainTab !== 'leads') return;
-    // If the user has restricted branches, intersect with any UI branch filter.
-    // Otherwise just use the UI filter directly.
+
     const effectiveBranches = userAllowedBranches.length > 0
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
       : branchFilter;
@@ -2278,10 +2153,9 @@ export default function App() {
 
   const isAdminUser = currentUser?.role === 'admin';
   const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || []);
-  // Lowercase set for case-insensitive branch matching (Supabase vs Django naming may differ)
+
   const userAllowedBranchesLower = new Set(userAllowedBranches.map((b) => b.toLowerCase()));
 
-  // Use all org users (not just those with leads in current view) so salespeople without leads still appear
   const availableBMs = crmUsers.length > 0
     ? crmUsers.map((u) => u.name).filter(Boolean).sort()
     : [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
@@ -2346,7 +2220,7 @@ export default function App() {
 
   const totalPages = leadsTotalPages || (Math.ceil(sorted.length / pageSize) || 1);
   const safePage = Math.min(page, totalPages - 1);
-  const paginatedRows = sorted; // server already returns the correct page
+  const paginatedRows = sorted;
 
   const filteredTotal = filtered.reduce((sum, l) => sum + (l.cartValue || 0), 0);
 
@@ -2478,12 +2352,8 @@ export default function App() {
     setDateEditPopup(null);
   };
 
-  // ── CSV helpers ──────────────────────────────────────────────────────────
   const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase'];
 
-  // ── Lead export (CSV / Excel / PDF) ──────────────────────────────────────
-  // Build the same query the leads table uses, so "all leads" honours the
-  // active filters/search/sort exactly as shown on screen.
   const buildLeadsExportQuery = () => {
     const effectiveBranches = userAllowedBranches.length > 0
       ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
@@ -2508,7 +2378,6 @@ export default function App() {
     };
   };
 
-  // Page through the backend (max 100/page) to gather every matching lead.
   const fetchAllFilteredLeads = async (): Promise<Lead[]> => {
     const base = buildLeadsExportQuery();
     const all: Lead[] = [];
@@ -2784,8 +2653,7 @@ export default function App() {
 
   if (!userLoaded) return null;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
-  // Wait for fresh permissions before rendering gated UI (avoids showing stale
-  // cached permissions for a moment on reload).
+
   if (!permsLoaded) return (
     <div className="flex items-center justify-center h-screen text-sm text-gray-400">Loading…</div>
   );
@@ -2939,7 +2807,6 @@ export default function App() {
           })}
         </div>
 
-        {/* ── Mobile filter bar ── */}
         <div className="sm:hidden py-3 flex flex-col gap-2">
           <div className="flex gap-2 items-center">
             <input
@@ -2961,7 +2828,7 @@ export default function App() {
                 </span>
               )}
             </button>
-            {/* <button className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap shrink-0" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button> */}
+
           </div>
           {showMobileFilters && (
             <div className="grid grid-cols-2 gap-2">
@@ -2996,16 +2863,13 @@ export default function App() {
                 <option value="closure_pending">Closure Pending</option>
                 <option value="overdue">Overdue</option>
               </select>
-              {/* <div className="flex items-center justify-center text-[11px] text-gray-500">
-                {leadsLoading ? <span className="flex items-center gap-1"><svg className="animate-spin h-3 w-3 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg></span> : `${filtered.length} leads`}
-              </div> */}
+
             </div>
           )}
         </div>
 
-        {/* ── Desktop filter bar ── */}
         <div className="hidden sm:flex flex-col gap-2 py-3">
-          {/* Row 1: search + actions */}
+
           <div className="flex items-center gap-2">
             <input
               className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-[380px]"
@@ -3026,7 +2890,7 @@ export default function App() {
                     <div className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
                     <div className="absolute right-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-lg shadow-xl ring-1 ring-black/5 z-50 overflow-hidden">
                       <div className="px-3.5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Export leads</div>
-                      {/* Scope toggle */}
+
                       <div className="px-3 pb-2.5 pt-1">
                         <div className="flex p-0.5 bg-gray-100 rounded-md text-[12px] font-medium">
                           <button className={`flex-1 px-2 py-1.5 rounded transition-colors cursor-pointer ${exportScope === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setExportScope('all')}>
@@ -3041,7 +2905,7 @@ export default function App() {
                         </p>
                       </div>
                       <div className="border-t border-gray-100" />
-                      {/* Format rows */}
+
                       <div className="py-1">
                         {([
                           { fmt: 'csv' as const, label: 'CSV', ext: '.csv', Icon: FileText, color: 'text-sky-600', bg: 'bg-sky-50' },
@@ -3062,10 +2926,10 @@ export default function App() {
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer" onClick={() => csvFileRef.current?.click()}>Upload CSV</button>
               <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
               <button className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap" onClick={() => { setShowKylasModal(true); setKylasModalInput(''); setKylasModalResult(null); }}>Kylas Sync</button>
-              {/* <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer whitespace-nowrap" onClick={() => setShowAddDrawer(true)}>+ Add Lead</button> */}
+
             </div>
           </div>
-          {/* Row 2: all filters */}
+
           <div className="flex gap-1.5 items-center [&>*]:shrink">
             <MultiSelect options={STATUSES} selected={statusFilter} onChange={setStatusFilter} label="Status" />
             <MultiSelect options={availableBMs} selected={personFilter.filter((p) => availableBMs.includes(p))} onChange={setPersonFilter} label="Salesperson" searchable />
