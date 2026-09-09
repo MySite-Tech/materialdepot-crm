@@ -1,10 +1,10 @@
 'use client';
 
-import { OutreachLead } from '../../models/mockData';
-import { OUTREACH_ENRICHMENT_FIELD_COUNT } from '../../models/outreachModel';
-import { EnrichmentGap } from '../../models/outreachModel';
-import { FollowUpChip } from '../../ui/inboundChips';
-import { OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreachChips';
+import { OutreachLead } from '../../models/mock-data';
+import { OUTREACH_ENRICHMENT_FIELD_COUNT } from '../../models/outreach';
+import { EnrichmentGap } from '../../models/outreach';
+import { FollowUpChip } from '../../ui/inbound-chips';
+import { OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreach-chips';
 
 export function OutreachHeader({ draft, gaps, onClose, today }: {
   draft: OutreachLead;

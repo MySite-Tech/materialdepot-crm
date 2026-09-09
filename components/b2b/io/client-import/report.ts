@@ -1,6 +1,6 @@
-import { CLIENT_ENTITY_TYPES, SEGMENTS } from '../../models/clientModel';
-import { CLIENT_UPLOAD_COLUMNS, CLIENT_UPLOAD_FORMAT, CLIENT_UPLOAD_MANDATORY, TEMPLATE_EXAMPLE_ROWS } from '../../constants/client-import';
-import { ClientImportResult, ClientImportSummary, TemplateSheet } from '../../types/client-import';
+import { CLIENT_ENTITY_TYPES, SEGMENTS } from '../../models/client';
+import { CLIENT_UPLOAD_COLUMNS, CLIENT_UPLOAD_FORMAT, CLIENT_UPLOAD_MANDATORY, TEMPLATE_EXAMPLE_ROWS } from './constants';
+import { ClientImportResult, ClientImportSummary, TemplateSheet } from './types';
 export function summarizeClientImport(r: ClientImportResult): ClientImportSummary {
   return {
     rowsOk: r.rows.filter((x) => x.severity === 'ok').length,

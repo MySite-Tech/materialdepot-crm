@@ -1,5 +1,5 @@
-import { Selection } from '@/components/b2b/models/inboundModel';
-import { CRMLeadRow } from '../api/crmLeads';
+import { Selection } from '@/components/b2b/models/inbound';
+import { CRMLeadRow } from '../api/crm/leads';
 export interface KylasIdentity {
 
   phone: string;
@@ -10,7 +10,7 @@ export interface KylasIdentity {
 }
 
 export interface B2BInboundPage {
-  leads: import('../../components/b2b/models/mockData').InboundLead[];
+  leads: import('../../components/b2b/models/mock-data').InboundLead[];
   page: number;
   hasMore: boolean;
   total: number;

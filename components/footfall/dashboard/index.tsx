@@ -1,12 +1,12 @@
 'use client';
 
-import { FootfallFilterBar } from './filter-bar';
-import { FootfallNoCartTable } from './no-cart-table';
-import { FootfallNonConvertedTable } from './non-converted-table';
+import { FootfallFilterBar } from './ui/filter-bar';
+import { FootfallNoCartTable } from './tables/no-cart';
+import { FootfallNonConvertedTable } from './tables/non-converted';
 import { FunnelTable } from './tables';
-import { DateRange, Props } from '../types/footfall';
-import { csvRow, downloadCsv, fmtPct } from '../utils/footfall';
-import { CategoryOption, FootfallDashboardData, FootfallFilters, FootfallNoCartPage, FootfallNonConvertedPage, fetchAvailableBMs, fetchCategoryOptions, fetchFootfallDashboard, fetchFootfallNoCart, fetchFootfallNonConverted } from '@/lib/mockApi';
+import { DateRange, Props } from './types';
+import { csvRow, downloadCsv, fmtPct } from './utils';
+import { CategoryOption, FootfallDashboardData, FootfallFilters, FootfallNoCartPage, FootfallNonConvertedPage, fetchAvailableBMs, fetchCategoryOptions, fetchFootfallDashboard, fetchFootfallNoCart, fetchFootfallNonConverted } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function FootfallDashboard({ branches, allowedBranches }: Props) {

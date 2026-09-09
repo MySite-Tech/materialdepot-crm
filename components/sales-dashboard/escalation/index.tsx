@@ -2,17 +2,17 @@
 
 import { pacedFetch } from './net';
 
-import { EscalationDetail } from './detail';
-import { EscalationFilters } from './filters';
+import { EscalationDetail } from './ui/detail';
+import { EscalationFilters } from './ui/filters';
 import { EscalationList } from './list';
-import { EscalationPager } from './pager';
-import { EscalationSearch } from './search';
-import { EscalationStats } from './stats';
+import { EscalationPager } from './list/pager';
+import { EscalationSearch } from './ui/search';
+import { EscalationStats } from './list/stats';
 
-import { PAGE_SIZE } from '../constants/escalation';
-import { DateFilter, MobileEscalationProps, NoteEntry, StatusFilter, TimelineEntry } from '../types/escalation';
-import { buildBody, classifyStage, dateFilterLabel, dateFilterRange, endOfDay, isEscalationOrSupport, parseTimeline, startOfDay } from '../utils/escalation';
-import { getEscalationRaisedBy } from '@/lib/mockApi';
+import { PAGE_SIZE } from './constants';
+import { DateFilter, MobileEscalationProps, NoteEntry, StatusFilter, TimelineEntry } from './types';
+import { buildBody, classifyStage, dateFilterLabel, dateFilterRange, endOfDay, isEscalationOrSupport, parseTimeline, startOfDay } from './utils';
+import { getEscalationRaisedBy } from '@/lib/api';
 import { CallLog, Deal, DealsSearchResponse } from '@/lib/types/index';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

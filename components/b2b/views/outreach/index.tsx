@@ -1,17 +1,20 @@
 'use client';
 
 import OutreachDrawer from '../../drawers/outreach/index';
-import { B2B_REPS, OutreachLead, fmtINR } from '../../models/mockData';
-import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_PRD_VIEWS, OUTREACH_STATUSES, OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OutreachStatus, OutreachView, SEGMENTS, companyTypeLabel, hasMeetingOn, istToday, outreachGateErrors, outreachSummary } from '../../models/outreachModel';
-import { ExportButton, ExportFormat, ExportScope, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll } from '../../ui/exportUtils';
-import { Empty, EnrichmentBadge, Spinner, fmtDay, inputCls } from '../../ui/inboundChips';
-import { MeetingProgress, OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreachChips';
-import { EXPORT_HEADERS, PAGE_SIZE } from '../../constants/outreach-leads';
+import { B2B_REPS, OutreachLead, fmtINR } from '../../models/mock-data';
+import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_PRD_VIEWS, OUTREACH_STATUSES, OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OutreachStatus, OutreachView, SEGMENTS, companyTypeLabel, hasMeetingOn, istToday, outreachGateErrors, outreachSummary } from '../../models/outreach';
+import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
+import { ExportFormat, ExportScope } from '../../types/export';
+import { ExportButton } from '../../ui/export-button';
+import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
+import { Empty, EnrichmentBadge, Spinner, fmtDay, inputCls } from '../../ui/inbound-chips';
+import { MeetingProgress, OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreach-chips';
+import { EXPORT_HEADERS, PAGE_SIZE } from './constants';
 import { CreateLeadModal, MoveModal } from './modals';
 import { FollowUpTable, StatusTable, TodayTable } from './tables';
 import { LeadCard, Tile } from './ui';
-import { gapsFor, nowIso, toExportRow } from '../../utils/outreach-leads';
-import { fetchOutreachLeads, upsertOutreachLead } from '@/lib/b2bLeads';
+import { gapsFor, nowIso, toExportRow } from './utils';
+import { fetchOutreachLeads, upsertOutreachLead } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function OutreachLeads() {

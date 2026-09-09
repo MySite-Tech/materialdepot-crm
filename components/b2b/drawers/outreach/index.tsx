@@ -1,23 +1,23 @@
 'use client';
 
-import { OutreachClientCard } from './client-card';
-import { OutreachCompanyCard } from './company-card';
-import { OutreachDealsCard } from './deals-card';
+import { OutreachClientCard } from './cards/client';
+import { OutreachCompanyCard } from './cards/company';
+import { OutreachDealsCard } from './cards/deals';
 import { OutreachFooter } from './footer';
 import { OutreachHeader } from './header';
-import { OutreachMeetingsCard } from './meetings-card';
-import { OutreachNotesCard } from './notes-card';
-import { OutreachRequirementCard } from './requirement-card';
-import { OutreachStatusCard } from './status-card';
+import { OutreachMeetingsCard } from './cards/meetings';
+import { OutreachNotesCard } from './cards/notes';
+import { OutreachRequirementCard } from './cards/requirement';
+import { OutreachStatusCard } from './cards/status';
 
-import { Selection } from '../../models/outreachModel';
+import { Selection } from '../../models/outreach';
 
-import { KAMS, LeadDeal, LeadNote, OutreachLead } from '../../models/mockData';
-import { MAX_MEETINGS, OutreachMeeting, canScheduleMeeting, hasMet, istToday, meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors, outreachStatusPrompts } from '../../models/outreachModel';
-import { SaveState } from '../../types/outreach-drawer';
-import { nowIso } from '../../utils/outreach-drawer';
-import { EnqLookup, fetchKamLoad, lookupEnqId, upsertOutreachLead } from '@/lib/b2bLeads';
-import { fetchLeadDeals } from '@/lib/mockApi';
+import { KAMS, LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
+import { MAX_MEETINGS, OutreachMeeting, canScheduleMeeting, hasMet, istToday, meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors, outreachStatusPrompts } from '../../models/outreach';
+import { SaveState } from './types';
+import { nowIso } from './utils';
+import { EnqLookup, fetchKamLoad, lookupEnqId, upsertOutreachLead } from '@/lib/b2b';
+import { fetchLeadDeals } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function OutreachDrawer({

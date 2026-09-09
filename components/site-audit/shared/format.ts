@@ -1,4 +1,4 @@
-import { FIELD_WORKER_SKIP, siteAuditTargetForCrmPermission } from './roleSync';
+import { FIELD_WORKER_SKIP, siteAuditTargetForCrmPermission } from './identity/role-sync';
 
 export const JOB_STATUS: Record<string, { l: string; c: string }> = {
   pending: { l: 'Pending', c: 'c-pending' },

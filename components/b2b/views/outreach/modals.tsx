@@ -1,12 +1,12 @@
 'use client';
 
-import { Selection } from '../../models/outreachModel';
+import { Selection } from '../../models/outreach';
 
-import { B2B_REPS, OutreachLead } from '../../models/mockData';
-import { COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_STATUS_HINT, OutreachMeeting, OutreachStatus, SEGMENTS, SELECTIONS, Segment, outreachGateErrors } from '../../models/outreachModel';
-import { LostReasonSelect } from '../../ui/exportUtils';
-import { Field, GateErrors, errorInputCls, inputCls } from '../../ui/inboundChips';
-import { nowIso } from '../../utils/outreach-leads';
+import { B2B_REPS, OutreachLead } from '../../models/mock-data';
+import { COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_STATUS_HINT, OutreachMeeting, OutreachStatus, SEGMENTS, SELECTIONS, Segment, outreachGateErrors } from '../../models/outreach';
+import { LostReasonSelect } from '../../ui/lost-reason-select';
+import { Field, GateErrors, errorInputCls, inputCls } from '../../ui/inbound-chips';
+import { nowIso } from './utils';
 import { useState } from 'react';
 
 export function MoveModal({ lead, target, onCancel, onDone }: {

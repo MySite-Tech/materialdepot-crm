@@ -1,6 +1,6 @@
 'use client';
 
-import { OutreachMeeting } from '../../models/mockData';
+import { OutreachMeeting } from '../../models/mock-data';
 import { SaveState } from '../../types/inbound-drawer';
 
 export function OutreachFooter({ handleSave, meetings, met, onClose, save }: {

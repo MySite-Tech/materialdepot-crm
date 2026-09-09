@@ -1,12 +1,12 @@
 'use client';
 
-import { fetchMovements, initiateMovement } from '../../../lib/store-display/displayApi';
-import { getImageUrl } from '../../../lib/store-display/imageUrl';
-import { ChangeLocationDialog, RemoveFromDisplayDialog } from './dialogs';
-import { ChangeLocationStatusTracker, RemovalStatusTracker } from './trackers';
-import { ChangeLocationRequest, Props, RemovalReason, RemovalStatus } from '../types/product-detail';
-import { useToast } from './ui';
-import { changeRequestKey, loadStored, removalStateKey } from '../utils/product-detail';
+import { fetchMovements, initiateMovement } from '../../../lib/store-display/display-api';
+import { getImageUrl } from '../../../lib/store-display/image-url';
+import { ChangeLocationDialog, RemoveFromDisplayDialog } from './ui/dialogs';
+import { ChangeLocationStatusTracker, RemovalStatusTracker } from './ui/trackers';
+import { ChangeLocationRequest, Props, RemovalReason, RemovalStatus } from './types';
+import { useToast } from './hooks/use-toast';
+import { changeRequestKey, loadStored, removalStateKey } from './utils';
 import { useEffect, useState } from 'react';
 
 export function ProductDetailPanel({ item: initialItem, storeName, onBack }: Props) {

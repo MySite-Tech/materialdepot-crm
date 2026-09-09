@@ -1,5 +1,5 @@
-import { Escalation } from '../models/accountHealth';
-import { Segment } from '../models/inboundModel';
+import { Escalation } from '../models/account-health';
+import { Segment } from '../models/inbound';
 import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_BANDS } from '../constants/client';
 export type ClientEntityType = typeof CLIENT_ENTITY_TYPES[number];
 

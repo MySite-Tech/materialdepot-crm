@@ -1,5 +1,5 @@
-import { DatePresetKey, DateRange } from '../../types/coe';
-import { addDays, daysBetween, todayStr } from '../../utils/coe';
+import { DatePresetKey, DateRange } from '../types';
+import { addDays, daysBetween, todayStr } from '../utils';
 
 export function presetRange(k: DatePresetKey): DateRange {
   const today = todayStr();

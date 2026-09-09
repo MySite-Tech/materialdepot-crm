@@ -1,13 +1,13 @@
 'use client';
 
-import AdminOverview from '../AdminOverview';
-import { PresalesCalendar } from './calendar';
-import { DateRangeControl, SelectChip } from './chips';
-import { ManagerSummary, ReceptionistList } from './lists';
+import AdminOverview from '../admin-overview';
+import { PresalesCalendar } from './ui/calendar';
+import { DateRangeControl, SelectChip } from './ui/chips';
+import { ManagerSummary, ReceptionistList } from './ui/lists';
 import { RotaPlanner } from './rota';
-import { fetchFootfall, fetchPlan } from './rota-data';
+import { fetchFootfall, fetchPlan } from './rota/data';
 import { DateRange, FootfallMap, RotaPlan } from '../types/appointments';
-import { ageLabel, defaultPlan, defaultRange, shortDate } from '../utils/appointments';
+import { ageLabel, defaultPlan, defaultRange, shortDate } from './utils';
 import { Branch, EcReadyEntry, EcReadyMap, LS, ApptLead as Lead, Role, apptBranchesFor, apptBranchesFromCrm, branchFrom, fetchApptFeed, loadEcReady, resolveApptRole, saveEcReady } from '@/lib/appointments/appt-shared';
 import { AppUser } from '@/types/crm';
 import { useCallback, useEffect, useMemo, useState } from 'react';

@@ -1,15 +1,15 @@
 'use client';
 
-import { NpsOverviewTab } from './overview-tab';
-import { NpsTrackerTab } from './tracker-tab';
+import { NpsOverviewTab } from './tabs/overview';
+import { NpsTrackerTab } from './tabs/tracker';
 
-import { C, Q3_OPTIONS } from '../constants/nps';
-import { DateDropdown, MultiDropdown } from './dropdowns';
-import { SurveyModal } from './survey';
-import { CatFilter, NPSDashboardProps, SortKey, Understood } from '../types/nps';
+import { C, Q3_OPTIONS } from './constants';
+import { DateDropdown, MultiDropdown } from './ui/dropdowns';
+import { SurveyModal } from './ui/survey';
+import { CatFilter, NPSDashboardProps, SortKey, Understood } from './types';
 import { Segmented } from './ui';
-import { addDaysISO, bucketOf, catOf, computeMetrics, daysBetweenISO, daysSince, exportCSV, fmtDate, fmtPhone, npsOf, okBm, okCategory, okSearch, okUnderstood, presetRange, uniqueCustomers, uniqueReviews } from '../utils/nps';
-import { NPSRow, fetchNPSTracker, submitNPS } from '@/lib/mockApi';
+import { addDaysISO, bucketOf, catOf, computeMetrics, daysBetweenISO, daysSince, exportCSV, fmtDate, fmtPhone, npsOf, okBm, okCategory, okSearch, okUnderstood, presetRange, uniqueCustomers, uniqueReviews } from './utils';
+import { NPSRow, fetchNPSTracker, submitNPS } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function NPSDashboard({ branches = [], allowedBranches = [] }: NPSDashboardProps) {

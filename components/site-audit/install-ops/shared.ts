@@ -1,4 +1,4 @@
-import { SQFT_PER_ROLL, publishSlotConfig, sbGet, staffCapOn } from '../siteAuditShared';
+import { SQFT_PER_ROLL, publishSlotConfig, sbGet, staffCapOn } from '../shared';
 import type { Assignment, InstallCategory, InstallOrder, Installer, SlotDef, Subjob } from './types';
 
 export { SQFT_PER_ROLL };

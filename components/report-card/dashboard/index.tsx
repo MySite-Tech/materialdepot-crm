@@ -1,12 +1,12 @@
 'use client';
 
-import { ClosurePipelineSection } from './closure';
-import { Dropdown } from './dropdowns';
-import { CrmAdherenceSection, OrdersLostTable, PipelineTable, RankingTable, WalkinTable } from './tables';
-import { Props } from '../types/report-card';
+import { ClosurePipelineSection } from './ui/closure';
+import { Dropdown } from './ui/dropdowns';
+import { CrmAdherenceSection, OrdersLostTable, PipelineTable, RankingTable, WalkinTable } from './ui/tables';
+import { Props } from './types';
 import { Section } from './ui';
-import { fmtDate, monthEndISO, monthStartISO } from '../utils/report-card';
-import { CategoryOption, ReportCardBMOption, ReportCardData, fetchAvailableBMs, fetchCategoryOptions, fetchReportCard } from '@/lib/mockApi';
+import { fmtDate, monthEndISO, monthStartISO } from './utils';
+import { CategoryOption, ReportCardBMOption, ReportCardData, fetchAvailableBMs, fetchCategoryOptions, fetchReportCard } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function ReportCardDashboard({ branches, allowedBranches, currentUserPhone }: Props) {

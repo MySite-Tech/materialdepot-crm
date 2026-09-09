@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { rateLimitedFetch } from "@/lib/server/rateLimiter";
+import { rateLimitedFetch } from "@/lib/server/rate-limiter";
 
 const KYLAS_API_BASE =
   process.env.KYLAS_API_BASE_URL || "https://api.kylas.io/v1";

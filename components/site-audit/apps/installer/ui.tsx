@@ -1,6 +1,6 @@
 'use client';
 
-import { INSTALL_STATUS } from '../../constants/installer';
+import { INSTALL_STATUS } from './constants';
 import { useEffect, useState } from 'react';
 
 export function StatusPill({ status }: { status: string }) {

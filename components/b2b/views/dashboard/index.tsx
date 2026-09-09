@@ -1,16 +1,16 @@
 'use client';
 
-import { HealthOverview, buildHealthOverview } from '../../models/accountHealth';
+import { HealthOverview, buildHealthOverview } from '../../models/account-health';
 import { ClientMetricsMap, DashboardMetrics, KamDashboard, computeDashboard, computeKamDashboard } from '../../models/analytics';
-import { ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientEntity, contactNumbers } from '../../models/clientModel';
-import { INBOUND_STAGE_COLORS, fmtINR, fmtL } from '../../models/mockData';
-import { CLIENT_STATUS_ORDER, RANGE_LABELS, SOURCE_COLORS } from '../../constants/b2b-dashboard';
-import { AccountHealthPanel } from './health';
-import { KamDashboardSection } from './kam';
-import { RangeKey } from '../../types/b2b-dashboard';
+import { ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientEntity, contactNumbers } from '../../models/client';
+import { INBOUND_STAGE_COLORS, fmtINR, fmtL } from '../../models/mock-data';
+import { CLIENT_STATUS_ORDER, RANGE_LABELS, SOURCE_COLORS } from './constants';
+import { AccountHealthPanel } from './ui/health';
+import { KamDashboardSection } from './ui/kam';
+import { RangeKey } from './types';
 import { MetricCard, Panel } from './ui';
-import { rangeFor } from '../../utils/b2b-dashboard';
-import { B2BData, B2BPipelineStats, ORDER_DETAIL_PHONE_CAP, VerticalStats, clientMetricsFrom, fetchB2BData, fetchB2BPipelineStats, fetchClientOrderHistories, fetchClientOrderRows, fetchTargets, fetchVerticalStats, firstOrderValue, istToday, orderDatesFromRows, resolveKamOrders } from '@/lib/b2bLeads';
+import { rangeFor } from './utils';
+import { B2BData, B2BPipelineStats, ORDER_DETAIL_PHONE_CAP, VerticalStats, clientMetricsFrom, fetchB2BData, fetchB2BPipelineStats, fetchClientOrderHistories, fetchClientOrderRows, fetchTargets, fetchVerticalStats, firstOrderValue, istToday, orderDatesFromRows, resolveKamOrders } from '@/lib/b2b';
 import { useCallback, useEffect, useState } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 

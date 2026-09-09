@@ -1,5 +1,5 @@
-import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, InteractionType, TemperatureBand, clientStatus } from '../models/clientModel';
-import { FollowUpBucket, Segment } from '../models/inboundModel';
+import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, InteractionType, TemperatureBand, clientStatus } from '../models/client';
+import { FollowUpBucket, Segment } from '../models/inbound';
 export type KamOrderStatus =
   | 'Requirement Logged' | 'Quote Shared' | 'PI Shared' | 'Closed' | 'Lost';
 
@@ -38,7 +38,7 @@ export interface KamOrder {
   source: ClientSource;
   notes?: { ts: string; author: string; text: string }[];
 
-  legacyEscalations?: import('../models/accountHealth').Escalation[];
+  legacyEscalations?: import('../models/account-health').Escalation[];
   createdAt?: string;
 
   value: number;

@@ -1,6 +1,6 @@
 'use client';
-import { BranchSummary, Grp } from '../types/order-lost';
-import { fmtFull, fmtShort, pct } from '../utils/order-lost';
+import { BranchSummary, Grp } from './types';
+import { fmtFull, fmtShort, pct } from './utils';
 
 export function makeSummaryRows({ cols, totals, expanded, toggleExpand }: {
   cols: BranchSummary[];

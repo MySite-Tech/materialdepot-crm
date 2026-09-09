@@ -1,13 +1,13 @@
-import type { B2BData } from '@/lib/b2bLeads';
+import type { B2BData } from '@/lib/b2b';
 import {
   INBOUND_STAGES, REP_TARGETS, B2B_ADMINS,
   type InboundLead, type OutreachLead,
   type InboundStage, type RepRole, type TargetStore,
-} from './mockData';
+} from './mock-data';
 import {
   clientStatus, istToday,
   type ClientEntity, type ClientOrderMetrics, type ClientStatus,
-} from './clientModel';
+} from './client';
 import {
   KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES,
   kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit,
@@ -15,7 +15,7 @@ import {
   newVsRepeat, isAtRisk, temperatureMismatch, DAILY_CALL_TARGET,
   type KamOrder, type CallCompliance, type CohortMonth, type KamAccountSplit,
   type KamFunnel, type KamPipelineSplit, type NewVsRepeat,
-} from './kamModel';
+} from './kam';
 
 const isInboundDead = (l: InboundLead) => l.stage === 'Lost';
 

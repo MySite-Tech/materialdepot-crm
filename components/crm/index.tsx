@@ -1,33 +1,33 @@
 'use client';
 
-import { useLeadsView } from './use-leads-view';
+import { useLeadsView } from './hooks/use-leads-view';
 
-import { CrmModals } from './modals';
+import { CrmModals } from './shell/modals';
 
-import { LeadsPanel } from './leads-panel';
-import { CrmToasts } from './toasts';
+import { LeadsPanel } from './leads/panel';
+import { CrmToasts } from './shell/toasts';
 
-import { useRestoreSession } from './use-restore-session';
+import { useRestoreSession } from './hooks/use-restore-session';
 
 
-import { useLeadsData } from './use-leads-data';
+import { useLeadsData } from './hooks/use-leads-data';
 
-import { makeLeadActions } from './lead-actions';
+import { makeLeadActions } from './leads/actions';
 
-import { makeLeadsCsv } from './csv-actions';
+import { makeLeadsCsv } from './leads/csv/actions';
 
-import { CrmTabPanels } from './tab-panels';
-import { CrmHeader } from './header';
-import { CrmTabBar } from './tab-bar';
+import { CrmTabPanels } from './shell/tab-panels';
+import { CrmHeader } from './shell/header';
+import { CrmTabBar } from './shell/tab-bar';
 
-import { CRMLeadsStats, CategoryOption, fetchCategoryOptions, fetchLeadRemarks, fetchLeadVisits } from '../../lib/mockApi';
+import { CRMLeadsStats, CategoryOption, fetchCategoryOptions, fetchLeadRemarks, fetchLeadVisits } from '../../lib/api';
 import { AppUser, Lead } from '../../types/crm';
 import { DEFAULT_BRANCHES } from './constants/crm';
-import { useDebouncedValue } from './hooks';
+import { useDebouncedValue } from './hooks/use-debounced-value';
 import { LoginScreen } from './login';
 import { CsvRow, DateEditState, MainTab } from './types/crm';
 import { resolveAllowedTabs } from './utils/crm';
-import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/siteAuditShared';
+import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/shared';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 

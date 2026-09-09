@@ -1,5 +1,5 @@
-import { offDayReason, publishSlotConfig, staffCapOn } from '../siteAuditShared';
-import type { Availability, StaffCaps } from '../siteAuditShared';
+import { offDayReason, publishSlotConfig, staffCapOn } from '../shared';
+import type { Availability, StaffCaps } from '../shared';
 
 export const AUDIT_SKU = 'SVC-AUDIT-001';
 

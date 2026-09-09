@@ -1,13 +1,13 @@
 'use client';
 
-import EcPicker from '../../ui/EcPicker';
+import EcPicker from '../../ui/ec-picker';
 
-import { InboundLead, OutreachLead, fmtINR } from '../../models/mockData';
-import { companyTypeLabel } from '../../models/outreachModel';
-import { Empty, Field, LeadName, Pill, ReadValue, SectionCard, Spinner, StatusBadge, fmtDay, fmtLeadDateTime } from '../../ui/inboundChips';
-import { MeetingLine, OutreachStatusBadge } from '../../ui/outreachChips';
+import { InboundLead, OutreachLead, fmtINR } from '../../models/mock-data';
+import { companyTypeLabel } from '../../models/outreach';
+import { Empty, Field, LeadName, Pill, ReadValue, SectionCard, Spinner, StatusBadge, fmtDay, fmtLeadDateTime } from '../../ui/inbound-chips';
+import { MeetingLine, OutreachStatusBadge } from '../../ui/outreach-chips';
 import { SourceChip, UnifiedStatusCell } from './cells';
-import { EnqLookup, UnifiedLead, lookupEnqId, upsertInboundLead, upsertOutreachLead } from '@/lib/b2bLeads';
+import { EnqLookup, UnifiedLead, lookupEnqId, upsertInboundLead, upsertOutreachLead } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 
 export function DetailDrawer({ lead, onClose, onSaved }: {

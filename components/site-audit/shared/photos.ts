@@ -1,4 +1,4 @@
-import { SB_KEY, SB_URL } from './sbClient';
+import { SB_KEY, SB_URL } from './sb-client';
 
 async function uploadPhotoAttempt(blob: Blob, fname: string, mime: string): Promise<string> {
   const ac = new AbortController();

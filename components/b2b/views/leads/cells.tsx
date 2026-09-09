@@ -1,8 +1,8 @@
 'use client';
 
-import { Pill, fmtDay } from '../../ui/inboundChips';
-import { SOURCE_COLORS, STATUS_COLORS } from '../../constants/leads-tab';
-import { LeadSource, UnifiedLead } from '@/lib/b2bLeads';
+import { Pill, fmtDay } from '../../ui/inbound-chips';
+import { SOURCE_COLORS, STATUS_COLORS } from './constants';
+import { LeadSource, UnifiedLead } from '@/lib/b2b';
 
 export function SourceChip({ s }: { s: LeadSource }) {
   return <Pill color={SOURCE_COLORS[s]}>{s}</Pill>;

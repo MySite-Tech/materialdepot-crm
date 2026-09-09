@@ -1,8 +1,8 @@
 # materialdepot-crm
 
-Next.js 16 (App Router, Turbopack) + Tailwind CRM portal for Material Depot. One
-big client app (`app/App.tsx`, ~3.3k lines) renders every tab; `app/page.tsx` is
-just a `<Suspense>` wrapper around it.
+Next.js 16 (App Router, Turbopack) + Tailwind CRM portal for Material Depot.
+`app/page.tsx` is a `<Suspense>` wrapper around `components/crm`, whose
+`index.tsx` renders every tab.
 
 `README.md` is a leftover Vite template and describes nothing about this repo —
 ignore it.
@@ -20,6 +20,49 @@ for `app/` and `components/`, and `npm run lint` is dead too — it still runs
 `next lint`, which Next 16 removed ("Invalid project directory provided, no such
 directory: .../lint"). There is currently **no working lint command**; `npx tsc
 --noEmit` is the only automated check.
+
+## Folder structure — one pattern, everywhere
+
+Every module, at every depth, has the same shape:
+
+```
+<module>/
+  index.tsx        entry (the component/API the module is imported for)
+  constants.ts     module-scoped constants     -> constants/<name>.ts once there are 2+
+  types.ts         module-scoped types         -> types/<name>.ts    once there are 2+
+  utils.ts         pure helpers                -> utils/<name>.ts    once there are 2+
+  hooks/           always a folder: one use-*.ts per hook
+  <domain>/        sub-module, same shape recursively
+  ui/              leaf presentational pieces with no domain of their own
+```
+
+Rules, all of which the repo currently satisfies:
+
+- **Filenames are kebab-case.** No `PascalCase.tsx`, no `camelCase.ts`. The
+  exception is `app/`, where Next.js owns the filenames (`page.tsx`, `route.ts`).
+- **`.ts` unless the file contains JSX**, then `.tsx`.
+- **Hooks live in `hooks/`,** one per file, named `use-*`. A function containing
+  a hook call must itself be named `use*` — including the action factories
+  (`useLeadsView`, `useAuditDrawerActions`), which is why some are `use*` and
+  others `make*`.
+- **Keep a directory at 5 files or fewer.** Support files (`index`, `constants`,
+  `types`, `utils`) plus one domain folder is the usual shape. Two `cards/`
+  folders sit at 7 because one card per file is the point; don't split those
+  just to hit the number.
+- **Constants/types/utils belong to the module that uses them.** A role file
+  moves up to the feature root only when more than one sub-module imports it
+  (`components/b2b/constants/ui.ts` is shared by `drawers/` and `views/`).
+- **No re-export-only wrapper modules.** `index.ts` as a module's public API is
+  fine (`components/site-audit/shared/index.ts`, `lib/api/index.ts`); a second
+  file next to it that merely re-exports it is not — six of those were deleted
+  and their importers pointed at the real modules.
+- **No comments.** They were removed repo-wide deliberately; the archive is at
+  `/tmp/comment-archive.json`. Don't reintroduce them without being asked.
+
+`lib/` follows the same rules: `lib/api/{core,crm,dashboards,b2b,ops}/`,
+`lib/b2b/{mappers,data,leads,orders,stats}/`. **`lib/api/index.ts` is the barrel
+every Django call goes through** — it used to be `lib/mock-api.ts`, which was a
+misnomer (nothing in it is mocked).
 
 ## Git, and what actually deploys
 

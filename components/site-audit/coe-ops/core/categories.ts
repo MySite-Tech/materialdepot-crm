@@ -1,5 +1,5 @@
-import { CATEGORY_ORDER, CAT_CUSTOM_WP, CAT_FLOORING, CAT_UNSET, CAT_WALLPAPER, TICKED_LIST_LABELS, TICKED_ROOM_LABELS } from '../../constants/coe';
-import { CoeInstall, CoeOrder, CoeSubjob } from '../../types/coe';
+import { CATEGORY_ORDER, CAT_CUSTOM_WP, CAT_FLOORING, CAT_UNSET, CAT_WALLPAPER, TICKED_LIST_LABELS, TICKED_ROOM_LABELS } from '../constants';
+import { CoeInstall, CoeOrder, CoeSubjob } from '../types';
 function sortCats(list: string[]): string[] {
   return [...new Set(list)].sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b));
 }

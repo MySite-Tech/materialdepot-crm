@@ -1,11 +1,11 @@
 'use client';
 
-import { OutreachLead, fmtINR } from '../../models/mockData';
-import { FollowUpBucket, OutreachStatus, companyTypeLabel, followUpBucket, meetingLocation } from '../../models/outreachModel';
-import { Empty, EnrichmentBadge, fmtDay } from '../../ui/inboundChips';
-import { MeetingProgress, OutreachStatusBadge } from '../../ui/outreachChips';
-import { BUCKET_NOTE, BUCKET_ORDER, BUCKET_TITLE } from '../../constants/outreach-leads';
-import { gapsFor } from '../../utils/outreach-leads';
+import { OutreachLead, fmtINR } from '../../models/mock-data';
+import { FollowUpBucket, OutreachStatus, companyTypeLabel, followUpBucket, meetingLocation } from '../../models/outreach';
+import { Empty, EnrichmentBadge, fmtDay } from '../../ui/inbound-chips';
+import { MeetingProgress, OutreachStatusBadge } from '../../ui/outreach-chips';
+import { BUCKET_NOTE, BUCKET_ORDER, BUCKET_TITLE } from './constants';
+import { gapsFor } from './utils';
 import { useMemo } from 'react';
 
 export function TodayTable({ leads, today, onOpen }: {

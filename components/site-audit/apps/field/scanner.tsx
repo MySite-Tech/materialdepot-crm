@@ -1,9 +1,9 @@
 'use client';
 
-import { DS_DEFAULT_CORNERS, DS_HANDLE_INDICES, DS_MAX_OUTPUT_DIM } from '../../constants/field-app';
-import { DocScannerModalProps, SketchPoint } from '../../types/field-app';
-import { dsEnhanceCanvas, dsWarp } from '../../utils/field-app';
-import { uploadPhoto } from '@/components/site-audit/siteAuditShared';
+import { DS_DEFAULT_CORNERS, DS_HANDLE_INDICES, DS_MAX_OUTPUT_DIM } from './constants';
+import { DocScannerModalProps, SketchPoint } from '../types/field-app';
+import { dsEnhanceCanvas, dsWarp } from './utils';
+import { uploadPhoto } from '@/components/site-audit/shared';
 import { cn } from '@/lib/utils/index';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

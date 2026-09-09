@@ -3,9 +3,9 @@
 import { fmtDate } from '../../install-ops/shared';
 
 
-import { SLOT_DEFS } from '../../constants/store-team';
-import { SlotContentProps } from '../../types/store-team';
-import { fmtSlotId, getAvailability, morningCutoffHit } from '../../utils/store-team';
+import { SLOT_DEFS } from './constants';
+import { SlotContentProps } from './types';
+import { fmtSlotId, getAvailability, morningCutoffHit } from './utils';
 
 export function SlotContent({
   date,

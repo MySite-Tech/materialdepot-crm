@@ -1,10 +1,10 @@
 'use client';
 
-import { CityFilter } from '../../siteAuditShared';
-import CatAnalyticsPanel from '../../ui/CatAnalyticsPanel';
-import { CommercialTab } from '../../ui/CatAnalyticsPanel';
-import { AN_TABS, AN_TAB_KEY } from '../../constants/analytics';
-import { ExecutionAnalyticsView } from './execution';
+import { CityFilter } from '../../shared';
+import CatAnalyticsPanel from '../../ui/cat-analytics-panel';
+import { CommercialTab } from '../../ui/cat-analytics-panel';
+import { AN_TABS, AN_TAB_KEY } from './constants';
+import { ExecutionAnalyticsView } from './sections/execution';
 import { useCallback, useEffect, useState } from 'react';
 
 export default function SiteAuditAnalyticsView({ city = 'all', execOnly = false }: { city?: CityFilter; execOnly?: boolean } = {}) {

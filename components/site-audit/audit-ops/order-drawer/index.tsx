@@ -1,19 +1,19 @@
 'use client';
 
-import { useAuditDrawerActions } from './handlers';
+import { useAuditDrawerActions } from './hooks/use-audit-drawer-actions';
 
-import { AuditDrawerActions } from './actions';
-import { AuditDrawerHeader } from './header';
+import { AuditDrawerActions } from './ui/actions';
+import { AuditDrawerHeader } from './sections/header';
 
-import { AuditDrawerBody } from './body';
-import { useNoteModal } from '../../ui/NoteModal';
+import { AuditDrawerBody } from './sections/body';
+import { useNoteModal } from '../../hooks/use-note-modal';
 
-import { JourneyEntry } from '../../data/auditRegistry';
-import { Shadower, fmtLog, parseShadowers, sbGet } from '../../siteAuditShared';
+import { JourneyEntry } from '../../data/audit-registry';
+import { Shadower, fmtLog, parseShadowers, sbGet } from '../../shared';
 import { AuditSkuRow, auditorNameOf, categoriesAreFromStore, dstr, flowIndexOf, fmtDate, mapUrl, orderCategories, slotLabel, today } from '../shared';
-import { KV, Note, Section } from './fields';
-import { JourneyBlock } from './journey';
-import { Props } from '../../types/audit-drawer';
+import { KV, Note, Section } from './ui/fields';
+import { JourneyBlock } from './sections/journey';
+import { Props } from './types';
 import { useCallback, useEffect, useState } from 'react';
 
 export default function AuditOrderDrawer({

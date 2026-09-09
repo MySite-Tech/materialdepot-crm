@@ -1,11 +1,11 @@
 'use client';
 
 import { DEFAULT_CAP } from '../../audit-ops/shared';
-import { cityOf, mapCaps, rosterQuery, sbGet, sbPatch, staffCapOn } from '../../siteAuditShared';
-import { ASSIGNED_STATUSES, SLOT_DEFS, STORES } from '../../constants/store-team';
+import { cityOf, mapCaps, rosterQuery, sbGet, sbPatch, staffCapOn } from '../../shared';
+import { ASSIGNED_STATUSES, SLOT_DEFS, STORES } from './constants';
 import { BookingSheet } from './sheet';
 import { SlotContent } from './slot';
-import { buildDateChips, cityOfStore, dstr, today } from '../../utils/store-team';
+import { buildDateChips, cityOfStore, dstr, today } from './utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteAuditStoreTeamView() {

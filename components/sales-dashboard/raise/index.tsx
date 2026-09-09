@@ -2,16 +2,16 @@
 
 import { makeRaiseActions } from './handlers';
 
-import { ContactResults } from './contact-results';
-import { DealPanel } from './deal-panel';
-import { DealResults } from './deal-results';
-import { RaiseModal } from './raise-modal';
-import { SearchForm } from './search-form';
+import { ContactResults } from './search/contacts';
+import { DealPanel } from './deals/panel';
+import { DealResults } from './deals/results';
+import { RaiseModal } from './ui/modal';
+import { SearchForm } from './search/form';
 
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from '../constants/raise';
-import { AssociatedDeal, ContactResult, Props } from '../types/raise';
-import { extractEscSupport, isSalesDeal } from '../utils/raise';
-import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/mockApi';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from './constants';
+import { AssociatedDeal, ContactResult, Props } from './types';
+import { extractEscSupport, isSalesDeal } from './utils';
+import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/api';
 import { Deal, DealsSearchResponse } from '@/lib/types/index';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

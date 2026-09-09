@@ -1,4 +1,4 @@
-import { istToday } from '../inboundModel';
+import { istToday } from '../inbound';
 import { InteractionGateInput, KamOrderGateInput, KamOrderStatus } from '../../types/kam';
 export function kamOrderGateErrors(o: KamOrderGateInput): string[] {
   const errs: string[] = [];

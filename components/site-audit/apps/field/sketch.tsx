@@ -1,8 +1,8 @@
 'use client';
 
-import { SKETCH_DOT_SPACING, SKETCH_EXPORT_LINE_WIDTH, SKETCH_EXPORT_QUALITY, SKETCH_EXPORT_WIDTH, SKETCH_LINE_WIDTH, SKETCH_STROKE_COLOR } from '../../constants/field-app';
-import { SketchCanvasHandle, SketchCanvasProps, SketchPoint, SketchStroke } from '../../types/field-app';
-import { cloneStrokes } from '../../utils/field-app';
+import { SKETCH_DOT_SPACING, SKETCH_EXPORT_LINE_WIDTH, SKETCH_EXPORT_QUALITY, SKETCH_EXPORT_WIDTH, SKETCH_LINE_WIDTH, SKETCH_STROKE_COLOR } from './constants';
+import { SketchCanvasHandle, SketchCanvasProps, SketchPoint, SketchStroke } from '../types/field-app';
+import { cloneStrokes } from './utils';
 import { cn } from '@/lib/utils/index';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 

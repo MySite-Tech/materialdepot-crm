@@ -1,6 +1,6 @@
-import { sbGet, sbPatch, sbPost } from '../../siteAuditShared';
-import { WP_ROUND_KEYS, WpNext, WpRow, wpRounds, wpStageLabel } from '../wpTrack';
-import { CoeSubjob, CoeTrack, JobRatingInput, NewWpRow } from '../../types/coe';
+import { sbGet, sbPatch, sbPost } from '../../shared';
+import { WP_ROUND_KEYS, WpNext, WpRow, wpRounds, wpStageLabel } from '../wallpaper/track';
+import { CoeSubjob, CoeTrack, JobRatingInput, NewWpRow } from '../types';
 
 export async function patchCoe(orderId: string, mutate: (t: CoeTrack) => CoeTrack, logText: string | null, who: string): Promise<CoeTrack> {
   const rows = await sbGet('audit_orders?id=eq.' + orderId + '&select=coe_track,log');

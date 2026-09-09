@@ -1,7 +1,7 @@
 'use client';
 
-import { btnGhost, btnPrimary } from '../../utils/client-db';
-import { ClientSeedPlan, planClientSeed } from '@/lib/b2bLeads';
+import { btnGhost, btnPrimary } from '../../constants/ui';
+import { ClientSeedPlan, planClientSeed } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 
 export function SeedModal({ onClose, onSeed }: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { clearToken, loginWithPhone, sendOtp, verifyOtp } from '../../lib/mockApi';
+import { clearToken, loginWithPhone, sendOtp, verifyOtp } from '../../lib/api';
 import { LoginScreenProps } from './types/crm';
 import { FormEvent, useState } from 'react';
 

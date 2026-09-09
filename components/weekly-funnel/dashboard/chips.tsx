@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { fmtDateChip } from '../utils/weekly-funnel';
+import { fmtDateChip } from './utils';
 
 export function FilterChip({
   label, options, selected, onChange, color,

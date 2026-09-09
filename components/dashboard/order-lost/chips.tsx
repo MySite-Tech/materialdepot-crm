@@ -1,7 +1,7 @@
 'use client';
 
-import { fmtChipDate, fmtRangeVal } from '../utils/order-lost';
-import { AvailableBM } from '@/lib/mockApi';
+import { fmtChipDate, fmtRangeVal } from './utils';
+import { AvailableBM } from '@/lib/api';
 import { useState } from 'react';
 
 export function FilterChip({ label, options, selected, onChange, color }: {

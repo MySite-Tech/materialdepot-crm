@@ -1,5 +1,0 @@
-export type { B2BInboundPage, ClientTicketResult, CallOutcome, InboundLeadEdit, KylasWriteResult, InboundLeadDetail } from '../types/b2b-inbound';
-export { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE, CALL_OUTCOME_OPTIONS } from '../constants/b2b-inbound';
-export { getKylasRedirectUrl, getKylasDealUrl } from '../utils/b2b-inbound';
-export { fetchB2BInboundLeads, fetchLeadDeals, fetchClientTickets, updateInboundLeadKylas, fetchInboundLeadDetail } from './b2b-inbound/leads';
-export { fetchLeadNotes, fetchLeadCallLogs, fetchCallLogSummary, createInboundCallLog, createLeadNote } from './b2b-inbound/notes';

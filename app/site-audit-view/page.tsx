@@ -3,20 +3,20 @@
 import { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { CITIES, decodePerson, initials, isSiteAuditOversightRole, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/siteAuditShared';
-import SiteAuditorApp from '@/components/site-audit/apps/SiteAuditorApp';
+import { CITIES, decodePerson, initials, isSiteAuditOversightRole, loadCityFilter, saveCityFilter, sbGet, siteAuditRoleFromPermissions, type CityFilter } from '@/components/site-audit/shared';
+import SiteAuditorApp from '@/components/site-audit/apps/auditor';
 import SiteInstallerApp from '@/components/site-audit/apps/installer/index';
-import SiteAuditJobsView from '@/components/site-audit/views/SiteAuditJobsView';
-import SiteAuditPerfView from '@/components/site-audit/views/SiteAuditPerfView';
+import SiteAuditJobsView from '@/components/site-audit/views/jobs';
+import SiteAuditPerfView from '@/components/site-audit/views/perf';
 import SiteAuditAnalyticsView from '@/components/site-audit/views/analytics/index';
-import SiteAuditInstallOpsView from '@/components/site-audit/views/SiteAuditInstallOpsView';
-import SiteAuditOpsView from '@/components/site-audit/views/SiteAuditOpsView';
-import SiteShadowerApp from '@/components/site-audit/apps/SiteShadowerApp';
-import SiteAuditBmView from '@/components/site-audit/views/SiteAuditBmView';
-import SiteAuditCoeView from '@/components/site-audit/views/SiteAuditCoeView';
-import SiteAuditBranchManagerView from '@/components/site-audit/views/SiteAuditBranchManagerView';
+import SiteAuditInstallOpsView from '@/components/site-audit/views/install-ops';
+import SiteAuditOpsView from '@/components/site-audit/views/ops';
+import SiteShadowerApp from '@/components/site-audit/apps/site-shadower-app';
+import SiteAuditBmView from '@/components/site-audit/views/bm';
+import SiteAuditCoeView from '@/components/site-audit/views/coe';
+import SiteAuditBranchManagerView from '@/components/site-audit/views/branch-manager';
 
-const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/views/SiteAuditLiveView'), { ssr: false });
+const SiteAuditLiveView = dynamic(() => import('@/components/site-audit/views/live'), { ssr: false });
 
 const ROLE_LABELS: Record<string, string> = {
   service_mgr: 'Service Manager',

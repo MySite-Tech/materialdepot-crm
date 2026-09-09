@@ -1,5 +1,5 @@
-import { ClientEntity, ClientOrderMetrics, clientStatus, currentTemperature, latestInteraction, nextFollowUp, primaryContact, temperatureBand } from '../clientModel';
-import { daysUntil, followUpBucket, istToday } from '../inboundModel';
+import { ClientEntity, ClientOrderMetrics, clientStatus, currentTemperature, latestInteraction, nextFollowUp, primaryContact, temperatureBand } from '../client';
+import { daysUntil, followUpBucket, istToday } from '../inbound';
 import { AT_RISK_WINDOW_DAYS, DAILY_CALL_TARGET, TEMPERATURE_SILENCE_DAYS } from '../../constants/kam';
 import { AssignedClientRow, CadenceRow, CallCompliance, TemperatureMismatch } from '../../types/kam';
 

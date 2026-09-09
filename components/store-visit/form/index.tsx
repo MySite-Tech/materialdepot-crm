@@ -1,13 +1,13 @@
 'use client';
 
-import { FormData } from '../types/store-visit';
+import { FormData } from './types';
 
-import { useToast } from '../StoreVisitWrapper';
+import { useToast } from '../toast';
 import { mockApi } from './api';
-import { CATEGORIES_PROPERTY_ID, LOCALITY_PROPERTY_ID, USER_TYPE_PROPERTY_ID } from '../constants/store-visit';
+import { CATEGORIES_PROPERTY_ID, LOCALITY_PROPERTY_ID, USER_TYPE_PROPERTY_ID } from './constants';
 import { BMAssignmentStep, BranchSelector, PhoneStep, StepIndicator, UserProfileStep } from './steps';
-import { BranchOption } from '../types/store-visit';
-import { BMOption, CurrentSalesBM, UserInfoProperty, fetchUserInfoProperties, saveUserProperties, syncLeadToKylas, updateLeadProperties } from '@/lib/mockApi';
+import { BranchOption } from './types';
+import { BMOption, CurrentSalesBM, UserInfoProperty, fetchUserInfoProperties, saveUserProperties, syncLeadToKylas, updateLeadProperties } from '@/lib/api';
 import { useEffect, useState } from 'react';
 
 export default function StoreVisitFormSimple() {

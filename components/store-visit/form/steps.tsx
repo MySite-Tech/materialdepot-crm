@@ -1,9 +1,9 @@
 'use client';
 
-import { FormData } from '../types/store-visit';
+import { FormData } from './types';
 
-import { BranchOption } from '../types/store-visit';
-import { BMOption, CurrentSalesBM, UserInfoProperty } from '@/lib/mockApi';
+import { BranchOption } from './types';
+import { BMOption, CurrentSalesBM, UserInfoProperty } from '@/lib/api';
 import { useState } from 'react';
 
 export function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {

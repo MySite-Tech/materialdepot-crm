@@ -1,21 +1,24 @@
 'use client';
 
-import { InboundBuckets } from './buckets';
-import { InboundDailyPanel } from './daily-panel';
+import { InboundBuckets } from './ui/buckets';
+import { InboundDailyPanel } from './ui/daily-panel';
 
 import InboundDrawer from '../../drawers/inbound/index';
 
-import { INBOUND_STATUS_COLORS, InboundStatus, Priority, followUpBucket, istToday, statusGateErrors } from '../../models/inboundModel';
-import { InboundLead, fmtINR } from '../../models/mockData';
-import { ExportButton, ExportFormat, ExportScope, exportRowsCsv, exportRowsExcel, todayStr, useDragAutoScroll } from '../../ui/exportUtils';
-import { Spinner } from '../../ui/inboundChips';
-import { EXPORT_HEADERS } from '../../constants/inbound-leads';
-import { MoveModal } from './modals';
-import { View } from '../../types/inbound-leads';
+import { INBOUND_STATUS_COLORS, InboundStatus, Priority, followUpBucket, istToday, statusGateErrors } from '../../models/inbound';
+import { InboundLead, fmtINR } from '../../models/mock-data';
+import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
+import { ExportFormat, ExportScope } from '../../types/export';
+import { ExportButton } from '../../ui/export-button';
+import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
+import { Spinner } from '../../ui/inbound-chips';
+import { EXPORT_HEADERS } from './constants';
+import { MoveModal } from './ui/modals';
+import { View } from './types';
 import { Tile } from './ui';
-import { gapsFor, istDay, toExportRow } from '../../utils/inbound-leads';
-import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2bLeads';
-import { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/mockApi';
+import { gapsFor, istDay, toExportRow } from './utils';
+import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
+import { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function InboundLeads() {

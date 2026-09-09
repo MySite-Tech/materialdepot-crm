@@ -1,10 +1,10 @@
 'use client';
 
-import { OutreachLead, fmtINR } from '../../models/mockData';
-import { companyTypeLabel, meetingsExhausted, nextScheduledMeeting } from '../../models/outreachModel';
-import { FollowUpChip, fmtDay } from '../../ui/inboundChips';
-import { MeetingProgress, OutreachLeadTypeChip } from '../../ui/outreachChips';
-import { gapsFor } from '../../utils/outreach-leads';
+import { OutreachLead, fmtINR } from '../../models/mock-data';
+import { companyTypeLabel, meetingsExhausted, nextScheduledMeeting } from '../../models/outreach';
+import { FollowUpChip, fmtDay } from '../../ui/inbound-chips';
+import { MeetingProgress, OutreachLeadTypeChip } from '../../ui/outreach-chips';
+import { gapsFor } from './utils';
 
 export function Tile({ label, value, sub, accent, muted }: {
   label: string; value: string; sub?: string; accent?: string; muted?: boolean;

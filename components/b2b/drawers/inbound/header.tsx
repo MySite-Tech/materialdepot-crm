@@ -1,9 +1,9 @@
 'use client';
 
 import { ENRICHMENT_FIELD_COUNT } from '../../constants/inbound';
-import { InboundLead } from '../../models/mockData';
+import { InboundLead } from '../../models/mock-data';
 import { EnrichmentGap } from '../../types/inbound';
-import { FollowUpChip, LeadTypeChip, PriorityChip, StatusBadge } from '../../ui/inboundChips';
+import { FollowUpChip, LeadTypeChip, PriorityChip, StatusBadge } from '../../ui/inbound-chips';
 import { nameIsJustThePhone } from '../../utils/inbound';
 
 export function InboundDrawerHeader({ draft, gaps, onClose, today }: {

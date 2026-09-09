@@ -3,21 +3,21 @@
 import { InboundDrawerFooter } from './footer';
 import { InboundDrawerHeader } from './header';
 
-import { InboundCallsCard } from './calls-card';
-import { InboundClientCard } from './client-card';
-import { InboundEnrichCard } from './enrich-card';
-import { InboundNotesCard } from './notes-card';
-import { InboundPresalesCard } from './presales-card';
-import { InboundRequirementCard } from './requirement-card';
-import { InboundStatusCard } from './status-card';
+import { InboundCallsCard } from './cards/calls';
+import { InboundClientCard } from './cards/client';
+import { InboundEnrichCard } from './cards/enrich';
+import { InboundNotesCard } from './cards/notes';
+import { InboundPresalesCard } from './cards/presales';
+import { InboundRequirementCard } from './cards/requirement';
+import { InboundStatusCard } from './cards/status';
 
-import { CallAttempt, CallAttemptOutcome, InboundStatus, PLACED_UNDER_FIELDS, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inboundModel';
-import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote } from '../../models/mockData';
-import { Field, SectionCard, Spinner, inputCls } from '../../ui/inboundChips';
-import { KYLAS_OUTCOME } from '../../constants/inbound-drawer';
+import { CallAttempt, CallAttemptOutcome, InboundStatus, PLACED_UNDER_FIELDS, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inbound';
+import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote } from '../../models/mock-data';
+import { Field, SectionCard, Spinner, inputCls } from '../../ui/inbound-chips';
+import { KYLAS_OUTCOME } from './constants';
 import { SaveState } from '../../types/inbound-drawer';
-import { EnqLookup, fetchInboundKamLoad, lookupEnqId, upsertInboundLead } from '@/lib/b2bLeads';
-import { createInboundCallLog, createLeadNote, fetchCallLogSummary, fetchInboundLeadDetail, fetchLeadCallLogs, fetchLeadDeals, fetchLeadNotes, updateInboundLeadKylas } from '@/lib/mockApi';
+import { EnqLookup, fetchInboundKamLoad, lookupEnqId, upsertInboundLead } from '@/lib/b2b';
+import { createInboundCallLog, createLeadNote, fetchCallLogSummary, fetchInboundLeadDetail, fetchLeadCallLogs, fetchLeadDeals, fetchLeadNotes, updateInboundLeadKylas } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function InboundDrawer({

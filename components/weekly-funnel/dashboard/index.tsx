@@ -1,13 +1,13 @@
 'use client';
 
-import { AvailableBM, CategoryOption, MonthSplitRow, WeeklyFunnelData, WeeklyFunnelRow, fetchAvailableBMs, fetchCategoryOptions, fetchWeeklyFunnel } from '@/lib/mockApi';
+import { AvailableBM, CategoryOption, MonthSplitRow, WeeklyFunnelData, WeeklyFunnelRow, fetchAvailableBMs, fetchCategoryOptions, fetchWeeklyFunnel } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { pctCell } from './cells';
 import { BMFilterChip, DateRangeChip, FilterChip } from './chips';
-import { VALUE_BUCKETS } from '../constants/weekly-funnel';
-import { Props } from '../types/weekly-funnel';
-import { fmtINR } from '../utils/weekly-funnel';
+import { VALUE_BUCKETS } from './constants';
+import { Props } from './types';
+import { fmtINR } from './utils';
 
 export default function WeeklyFunnelDashboard({ branches, allowedBranches }: Props) {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);

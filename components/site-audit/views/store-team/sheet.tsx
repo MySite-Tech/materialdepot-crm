@@ -2,9 +2,9 @@
 
 import { fmtDate } from '../../install-ops/shared';
 
-import { activeStaffFilter, sbGet, sbPost } from '../../siteAuditShared';
-import { BookingSheetProps } from '../../types/store-team';
-import { genSlotPI } from '../../utils/store-team';
+import { activeStaffFilter, sbGet, sbPost } from '../../shared';
+import { BookingSheetProps } from './types';
+import { genSlotPI } from './utils';
 import { useEffect, useState } from 'react';
 
 export function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetProps) {

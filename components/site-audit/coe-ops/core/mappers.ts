@@ -1,4 +1,4 @@
-import { CoeInstall, CoeOrder } from '../../types/coe';
+import { CoeInstall, CoeOrder } from '../types';
 export function mapCoeAudit(r: any): CoeOrder {
   return {
     id: r.id, pi: r.pi || '', po: r.po ? String(r.po).split(',').map((s: string) => s.trim()).filter(Boolean) : [],

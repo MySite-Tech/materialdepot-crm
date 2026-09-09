@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { JobDetailModal } from '@/components/site-audit/views/SiteAuditJobsView';
-import { JOB_STATUS, fmtDateA, sbGet } from '@/components/site-audit/siteAuditShared';
-import { loadLinkedAuditPi, loadLinkedInstallPis } from '@/components/site-audit/data/jobCardLinks';
+import { JobDetailModal } from '@/components/site-audit/views/jobs';
+import { JOB_STATUS, fmtDateA, sbGet } from '@/components/site-audit/shared';
+import { loadLinkedAuditPi, loadLinkedInstallPis } from '@/components/site-audit/data/job-card-links';
 
 const LINKED_ATTRIBUTION = 'Job Card link (CRM)';
 

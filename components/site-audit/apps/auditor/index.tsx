@@ -1,15 +1,15 @@
 'use client';
 
-import { Screen } from '../../types/auditor';
+import { Screen } from '../types/auditor';
 
 import { loadJobs } from './data';
-import { JobDetailView } from './job-detail';
-import { JobListView } from './job-list';
-import { ActingAs, Order } from '../../types/auditor';
+import { JobDetailView } from './screens/job-detail';
+import { JobListView } from './screens/job-list';
+import { ActingAs, Order } from '../types/auditor';
 import { Spinner } from './ui';
-import { dstr, serializeRoom, todayMidnight } from '../../utils/auditor';
-import { JobCardWizard } from './wizard';
-import { useLocationTracking } from '@/components/site-audit/apps/fieldAppShared';
+import { dstr, serializeRoom, todayMidnight } from './utils';
+import { JobCardWizard } from './screens/wizard';
+import { useLocationTracking } from '@/components/site-audit/apps/field-app-shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteAuditorApp({ actingAs }: { actingAs: ActingAs }) {

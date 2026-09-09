@@ -1,11 +1,11 @@
 'use client';
 
-import { ClientEntity, contactLabel, currentUpcomingProject, sortedInteractions } from '../../models/clientModel';
-import { AssignedClientRow, KAM_ORDER_STATUS_COLORS, KamOrder, temperatureMismatch } from '../../models/kamModel';
-import { KAMS, fmtINR, fmtL } from '../../models/mockData';
-import { EscalationSection } from './escalations';
+import { ClientEntity, contactLabel, currentUpcomingProject, sortedInteractions } from '../../models/client';
+import { AssignedClientRow, KAM_ORDER_STATUS_COLORS, KamOrder, temperatureMismatch } from '../../models/kam';
+import { KAMS, fmtINR, fmtL } from '../../models/mock-data';
+import { EscalationSection } from './panels/escalations';
 import { StatTile, StatusPill, TemperatureChip } from './ui';
-import { btnPrimary } from '../../utils/kams';
+import { btnPrimary } from '../../constants/ui';
 import { useState } from 'react';
 
 export function ClientDrawer({ row, orders, today, onClose, onLogInteraction, onSaveClient, onOpenOrder, onAddOrder }: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientOrderMetrics, ClientStatus, temperatureColor } from '../../models/clientModel';
+import { CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientOrderMetrics, ClientStatus, temperatureColor } from '../../models/client';
 
 export function Field({ label, children, hint, className = '' }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (

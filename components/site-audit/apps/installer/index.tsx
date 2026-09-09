@@ -1,23 +1,23 @@
 'use client';
 
-import { useDetailActions } from './use-detail-actions';
-import { useJobCardState } from './use-jobcard-state';
+import { useDetailActions } from './hooks/use-detail-actions';
+import { useJobCardState } from './hooks/use-jobcard-state';
 
-import { InstallerDetailHost } from './detail-host';
-import { InstallerJobCardHost } from './jobcard-host';
-import { InstallerListHost } from './list-host';
-import { useInstallerFlow } from './use-installer-flow';
+import { InstallerDetailHost } from './hosts/detail';
+import { InstallerJobCardHost } from './hosts/jobcard';
+import { InstallerListHost } from './hosts/list';
+import { useInstallerFlow } from './hooks/use-installer-flow';
 
-import { DEFAULT_LOG_MESSAGES, INSTALL_STATUS } from '../../constants/installer';
-import { AuditReportOverlay } from './job-detail';
-import { genAuditReportPDF } from './pdf';
-import { ActingAs, Job, JobCard, LogEntry, Room } from '../../types/installer';
+import { DEFAULT_LOG_MESSAGES, INSTALL_STATUS } from './constants';
+import { AuditReportOverlay } from './screens/job-detail';
+import { genAuditReportPDF } from './utils/pdf';
+import { ActingAs, Job, JobCard, LogEntry, Room } from './types';
 import { CommentSheet } from './ui';
-import { addDays, buildSlots, dstr, itemQtyDisplay, rollupStatus, statusForInstaller, today } from '../../utils/installer';
-import { ArrivalCameraModal, DocScannerModal, SignaturePadHandle, useLocationTracking } from '@/components/site-audit/apps/fieldAppShared';
-import { typeLabel } from '@/components/site-audit/data/auditRegistry';
-import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/data/omsService';
-import { sbGet, sbPatch } from '@/components/site-audit/siteAuditShared';
+import { addDays, buildSlots, dstr, itemQtyDisplay, rollupStatus, statusForInstaller, today } from './utils';
+import { ArrivalCameraModal, DocScannerModal, SignaturePadHandle, useLocationTracking } from '@/components/site-audit/apps/field-app-shared';
+import { typeLabel } from '@/components/site-audit/data/audit-registry';
+import { confirmServicePerformed, retryQueuedServiceConfirms } from '@/components/site-audit/data/oms-service';
+import { sbGet, sbPatch } from '@/components/site-audit/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteInstallerApp({ actingAs }: { actingAs: ActingAs }) {

@@ -1,7 +1,7 @@
 'use client';
 
-import { SIGN_EXPORT_LINE_WIDTH, SIGN_EXPORT_QUALITY, SIGN_EXPORT_RATIO_FALLBACK, SIGN_EXPORT_WIDTH, SIGN_LINE_WIDTH, SIGN_STROKE_COLOR } from '../../constants/field-app';
-import { SignaturePadHandle, SignaturePadProps, SketchPoint, SketchStroke } from '../../types/field-app';
+import { SIGN_EXPORT_LINE_WIDTH, SIGN_EXPORT_QUALITY, SIGN_EXPORT_RATIO_FALLBACK, SIGN_EXPORT_WIDTH, SIGN_LINE_WIDTH, SIGN_STROKE_COLOR } from './constants';
+import { SignaturePadHandle, SignaturePadProps, SketchPoint, SketchStroke } from '../types/field-app';
 import { cn } from '@/lib/utils/index';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 

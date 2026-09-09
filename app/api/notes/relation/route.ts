@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getCached, setCache, cleanup } from "@/lib/server/cache";
-import { rateLimitedFetch } from "@/lib/server/rateLimiter";
+import { rateLimitedFetch } from "@/lib/server/rate-limiter";
 
 export const dynamic = "force-dynamic";
 

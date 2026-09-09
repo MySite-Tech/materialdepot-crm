@@ -1,9 +1,9 @@
 import { jsPDF } from 'jspdf';
-import { fmtDateA } from '../siteAuditShared';
-import { categoryFor, mdInstallTermsBlock } from '../data/auditRegistry';
+import { fmtDateA } from '../shared';
+import { categoryFor, mdInstallTermsBlock } from '../data/audit-registry';
 import {
   MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfAuditRoom, mdPdfConsent, mdPdfHeader,
-} from '../brand/pdfBrand';
+} from '../brand/pdf-brand';
 
 function renderSketchA(r: any): string | null {
   if (!r.sketchStrokes || !r.sketchStrokes.length) return null;

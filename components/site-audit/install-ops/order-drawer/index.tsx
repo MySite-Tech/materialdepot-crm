@@ -1,20 +1,20 @@
 'use client';
 
-import { useNoteModal } from '../../ui/NoteModal';
+import { useNoteModal } from '../../hooks/use-note-modal';
 
-import { typeLabel, typeTag } from '../../data/auditRegistry';
-import { sbPatch } from '../../siteAuditShared';
-import AssignSection from '../AssignSection';
+import { typeLabel, typeTag } from '../../data/audit-registry';
+import { sbPatch } from '../../shared';
+import AssignSection from '../ui/assign-section';
 import { AUTO_STATUSES, STATUS, dstr, emptySkuRow, fmtDate, fmtLogLocal, isSplit, mintSubjobId, opsCallDue, sjCustomWp, sjDeliveryDate, sjShortLabel, slotsForWp, subjobDisplayStatus, syncParentStatus, today, totalRolls } from '../shared';
 import { InstallCategory, ServiceSkuRow, Subjob } from '../types';
 import { Chip, MapLink, Note, sjTypeClass } from '../ui';
-import { SJ_ID } from '../../constants/install-ops-drawer';
-import { FieldDate, KV, ReadonlyField, Section } from './fields';
-import { DownloadJobCardBtn } from './jobcard';
-import { SkuGroup } from './skus';
-import { SjDeliveryRow, SplitPicker, SubjobCrewProgress } from './subjobs';
-import { DraftState, Props } from '../../types/install-ops-drawer';
-import { buildInitDraft } from '../../utils/install-ops-drawer';
+import { SJ_ID } from './constants';
+import { FieldDate, KV, ReadonlyField, Section } from './sections/fields';
+import { DownloadJobCardBtn } from './sections/jobcard';
+import { SkuGroup } from './sections/skus';
+import { SjDeliveryRow, SplitPicker, SubjobCrewProgress } from './sections/subjobs';
+import { DraftState, Props } from './types';
+import { buildInitDraft } from './utils';
 import { useState } from 'react';
 
 export default function OrderDrawer({ order: o, allOrders, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr, onRetryInstallers, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {

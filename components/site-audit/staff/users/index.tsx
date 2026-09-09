@@ -1,19 +1,19 @@
 'use client';
 
-import { BmLinkPanel } from './bm-link-panel';
-import { MissingBmsPanel } from './missing-bms';
-import { StaffTable } from './table';
-import { UnlinkedPanel } from './unlinked-panel';
+import { BmLinkPanel } from './panels/bm-link';
+import { MissingBmsPanel } from './panels/missing-bms';
+import { StaffTable } from './ui/table';
+import { UnlinkedPanel } from './panels/unlinked';
 
-import { useBmLinkActions } from './bm-link';
-import { makeCrmLoginActions } from './crm-logins';
-import { makeStaffActions } from './staff-actions';
-import { CRM_ROLE_TO_SITE_AUDIT_ROLE, ROLES, exitColumnsAvailable, phoneKey, sbGet, sbPatch, syntheticSiteAuditEmail } from '../../siteAuditShared';
-import { RestoreStaffModal, RetireStaffModal, RetireTarget } from '../StaffModals';
-import { ROLE_OPTIONS } from '../../constants/staff-users';
-import { AddUserModal, EditUserModal } from './modals';
-import { ProfileRow } from '../../types/staff-users';
-import { fetchUsers } from '@/lib/mockApi';
+import { useBmLinkActions } from './hooks/use-bm-link-actions';
+import { makeCrmLoginActions } from './actions/crm-logins';
+import { makeStaffActions } from './actions/staff';
+import { CRM_ROLE_TO_SITE_AUDIT_ROLE, ROLES, exitColumnsAvailable, phoneKey, sbGet, sbPatch, syntheticSiteAuditEmail } from '../../shared';
+import { RestoreStaffModal, RetireStaffModal, RetireTarget } from '../staff-modals';
+import { ROLE_OPTIONS } from './constants';
+import { AddUserModal, EditUserModal } from './ui/modals';
+import { ProfileRow } from './types';
+import { fetchUsers } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function SiteAuditUsersView({ actor }: { actor?: { name?: string; phone?: string; role?: string } | null } = {}) {

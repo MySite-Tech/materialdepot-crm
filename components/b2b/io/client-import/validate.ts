@@ -1,8 +1,8 @@
-import { CLIENT_ENTITY_TYPES, ClientContact, ClientEntity, ClientEntityType, ClientGst, Segment, contactNumbers, gstNumbers, normalizeCompanyName, normalizeGst, validateGst } from '../../models/clientModel';
-import { RowIssue, cleanCell, normalize, parsePhone } from '../kamImport';
-import { CLIENT_UPLOAD_COLUMNS } from '../../constants/client-import';
-import { ClientImportEntity, ClientImportResult, ClientParsedRow, EntityAction } from '../../types/client-import';
-import { isClientHeaderRow, matchClientType, matchSegment, normalizeGstFree } from '../../utils/client-import';
+import { CLIENT_ENTITY_TYPES, ClientContact, ClientEntity, ClientEntityType, ClientGst, Segment, contactNumbers, gstNumbers, normalizeCompanyName, normalizeGst, validateGst } from '../../models/client';
+import { RowIssue, cleanCell, normalize, parsePhone } from '../kam-import';
+import { CLIENT_UPLOAD_COLUMNS } from './constants';
+import { ClientImportEntity, ClientImportResult, ClientParsedRow, EntityAction } from './types';
+import { isClientHeaderRow, matchClientType, matchSegment, normalizeGstFree } from './utils';
 export function validateClientRows(
   rows: string[][],
   existing: ClientEntity[] = [],

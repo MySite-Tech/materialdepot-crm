@@ -1,14 +1,14 @@
 'use client';
 
-import { DealsResult, FunnelStepKey, forgetDeals, loadDealsForPhones } from '../../data/conversionFunnel';
-import { fmtDateA, phoneKey, sbGet } from '../../siteAuditShared';
-import { InstallOrdersList, WallpaperOrdersList, useOwnedExtras } from '../ownedOrders';
-import { AUDIT_COLS, STATUS } from '../../constants/bm-view';
-import { BmOrderDrawer } from './drawer';
-import { ConversionStrip, FunnelRowChip, buildFunnels, stallCounts } from './funnels';
-import { BmProfile, Order } from '../../types/bm-view';
-import { dropSupersededPreBookings, orderBelongsToBm } from '../../utils/bm-view';
-import { fetchUsers } from '@/lib/mockApi';
+import { DealsResult, FunnelStepKey, forgetDeals, loadDealsForPhones } from '../../data/conversion-funnel';
+import { fmtDateA, phoneKey, sbGet } from '../../shared';
+import { InstallOrdersList, WallpaperOrdersList, useOwnedExtras } from '../owned-orders';
+import { AUDIT_COLS, STATUS } from './constants';
+import { BmOrderDrawer } from './sections/drawer';
+import { ConversionStrip, FunnelRowChip, buildFunnels, stallCounts } from './sections/funnels';
+import { BmProfile, Order } from './types';
+import { dropSupersededPreBookings, orderBelongsToBm } from './utils';
+import { fetchUsers } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteAuditBmView({ bm, me }: { bm?: BmProfile | null; me?: BmProfile | null }) {

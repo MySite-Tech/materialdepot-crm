@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrivalCameraModalProps } from '../../types/field-app';
-import { readCapturedPhoto, uploadPhoto } from '@/components/site-audit/siteAuditShared';
+import { ArrivalCameraModalProps } from '../types/field-app';
+import { readCapturedPhoto, uploadPhoto } from '@/components/site-audit/shared';
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 export function ArrivalCameraModal({ open, onClose, onConfirm }: ArrivalCameraModalProps) {

@@ -1,8 +1,8 @@
-import { ClientEntity } from '../clientModel';
-import { istToday } from '../inboundModel';
+import { ClientEntity } from '../client';
+import { istToday } from '../inbound';
 import { KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, STATUS_RANK } from '../../constants/kam';
 import { AssignedClientRow, CohortMonth, KamAccountSplit, KamFunnel, KamOrder, KamPipelineSplit, NewVsRepeat } from '../../types/kam';
-import { sum } from '../../utils/kam';
+import { sum } from '../utils/kam';
 export function kamPipeline(orders: KamOrder[]): KamPipelineSplit {
   const live = orders.filter((o) => KAM_PIPELINE_STATUSES.includes(o.status));
   return {

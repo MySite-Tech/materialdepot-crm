@@ -2,7 +2,7 @@
 
 import { EnrichmentGap } from '../../types/inbound';
 import { SaveState } from '../../types/inbound-drawer';
-import { GateErrors } from '../../ui/inboundChips';
+import { GateErrors } from '../../ui/inbound-chips';
 
 export function InboundDrawerFooter({ gaps, gateErrors, handleSave, onClose, save, showGates }: {
   gaps: EnrichmentGap[];

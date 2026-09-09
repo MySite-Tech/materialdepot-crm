@@ -1,13 +1,15 @@
 'use client';
 
-import { KAMS, fmtINR } from '../../models/mockData';
-import { ExportButton, ExportFormat, ExportScope, exportRowsCsv, exportRowsExcel, todayStr } from '../../ui/exportUtils';
-import { Empty, LeadName, Spinner, inputCls } from '../../ui/inboundChips';
+import { KAMS, fmtINR } from '../../models/mock-data';
+import { ExportFormat, ExportScope } from '../../types/export';
+import { ExportButton } from '../../ui/export-button';
+import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
+import { Empty, LeadName, Spinner, inputCls } from '../../ui/inbound-chips';
 import { ExpectedClosureCell, SourceChip, UnifiedStatusCell } from './cells';
-import { EXPORT_HEADERS, PAGE_SIZE } from '../../constants/leads-tab';
+import { EXPORT_HEADERS, PAGE_SIZE } from './constants';
 import { DetailDrawer } from './drawer';
-import { toExportRow } from '../../utils/leads-tab';
-import { LeadSource, UnifiedLead, UnifiedStatus, fetchUnifiedLeads } from '@/lib/b2bLeads';
+import { toExportRow } from './utils';
+import { LeadSource, UnifiedLead, UnifiedStatus, fetchUnifiedLeads } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function LeadsTab() {
