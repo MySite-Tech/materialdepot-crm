@@ -33,7 +33,7 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
   return (
     <>
           {effectiveTab === 'dashboard' && (
-      <Dashboard branches={branches} allowedBranches={userAllowedBranches} orderLostOnly={currentUser?.role === 'retail'} />
+      <Dashboard branches={branches} allowedBranches={userAllowedBranches} orderLostOnly={currentUser?.role === 'retail'} canEditTargets={currentUser?.role === 'admin'} />
     )}
     
     {effectiveTab === 'footfall' && (

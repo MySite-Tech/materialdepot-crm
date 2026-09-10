@@ -3,12 +3,18 @@
 **Covers:** `components/dashboard/**` · `lib/api/dashboards/index.ts`
 
 ## Purpose
-Two dashboards under one folder:
+Three dashboards under one folder, switched by the pill row in
+`overview/index.tsx` (which owns the tab state for all three):
 
 - `overview/` — the retail overview: per-branch status pies, lost-reason
   breakdown, and a closure pipeline table.
 - `order-lost/` — the Order Lost dashboard: per-branch won/active/lost counts and
   values, bucketed by reason group, with a drill-down detail table and CSV export.
+- `category-revenue/` — Core / Non-Core / Special revenue against store targets.
+
+`ui/chips.tsx` and `utils.ts` sit at the feature root because `overview/` and
+`category-revenue/` both import them; `order-lost/` keeps its own `chips.tsx`,
+whose chips take different props (cart-value and days ranges).
 
 ## Data
 
@@ -17,6 +23,8 @@ Two dashboards under one folder:
 | `fetchDashboardData` | `GET /crm/dashboard/` |
 | `fetchOrderLostSummary` | `GET /crm/order-lost-summary/` → `data.branches` |
 | `markLeadLost` | `PATCH /crm/lead-status/` |
+| `fetchCategoryOptions` | `GET /category-list-all/` |
+| `loadSetting`/`saveSetting` (`dashboard_category_targets`) | Site Audit Supabase `app_settings` |
 
 `fetchDashboardData` returns four blocks in one call: `branchStatus` (per branch,
 with a `statuses[]` of count+value), `lostReasons` (count, value and a
@@ -66,3 +74,97 @@ it without re-reading the request budget in `CLAUDE.md`.
   grey rather than erroring.
 - Money is formatted three different ways on purpose: `fmtFull` (exact, grouped),
   `fmtShort` (Cr/L/k for chips) and `fmtRangeVal` (for filter range labels).
+
+## Category revenue
+
+### The segregation is a hand-kept registry, matched exactly
+
+`category-revenue/constants.ts` holds the three segregation sheets verbatim:
+`CORE_CATEGORIES` (7), `NON_CORE_CATEGORIES` (8), `SPECIAL_CATEGORIES` (19).
+Every entry is a CRM `category_name` from `/category-list-all/`, and
+`buildSegregationTables` matches them **exactly** — a sheet row that is not one
+of the CRM's names is flagged `unmatched`, rendered amber, and counts nothing.
+It is never mapped onto the nearest-looking name, because a wrong mapping moves
+real revenue into the wrong bucket and nothing downstream can detect it.
+
+Live as of 2026-09-10: the CRM has 41 categories, the sheets name 34, and
+**`'Profiles and Mouldings'` is unmatched** — it is not a rename of
+`'Wall Profile and Mouldings'`, which is a separate row on the same sheet. The
+remaining 7 CRM categories (Artificial Grass, Ceiling Tiles, Composite Floor,
+Engineered Wood Floor, Glass, Jaali, Particle Board, Prelam Boards) form a
+fourth **Unclassified** table rather than being folded into a bucket, so the
+four tables together account for everything the store's Total Revenue target is
+measured against. Assign one on the sheet and it leaves that table.
+
+### Five requests, and why rows are stores rather than categories
+
+`loadBuckets` issues exactly **five** `/crm/dashboard/` calls — one unfiltered,
+one per segregation with `category=` set to that bucket's whole CSV. That
+endpoint returns `branchStatus[]`, so five calls cover every store; a
+per-store loop would not.
+
+**The tab shows one row per store, not per category, because per-category rows
+would cost one request per category (41) and blow the ten-request budget in
+`CLAUDE.md`.** The fix is a backend one: `/crm/leads/stats/?category_groups=`,
+mirroring the `bm_groups=` parameter `fetchCRMLeadsStatsByBmGroup`
+(`lib/api/crm/leads.ts`) already sends for the KAM board — `label:a,b|label2:c`
+in, `{groups: {label: stats}}` out. When that ships, the per-category rows are a
+small swap inside `SegregationSection`; nothing else changes. Until then the
+category chips above each table carry the classification so it stays reviewable.
+
+**Distinct Clients renders `—`, deliberately.** No endpoint returns a distinct
+client count at any granularity, and computing it in the browser means paging
+every deal in range. An empty cell that says so beats a number that is wrong.
+
+Mount cost is **8 requests**: category list, BM list, targets, and the five
+dashboard calls. The MTD effect and the filtered effect issue the *same* five
+URLs on first render (the default range is month-to-date, no BM), and
+`mdFetch`'s 8s GET cache collapses them — so the target panel is free on mount
+and costs five only once a filter diverges from MTD.
+
+### The revenue number over-counts across segregations, and must stay labelled
+
+Django's `category=` filter selects deals whose cart **contains** one of those
+categories and values them at the **whole cart**; no line-item split is exposed
+anywhere the frontend can reach (`cartItems` is product names, no prices). So a
+₹1L tiles + wallpaper cart is ₹1L of Core *and* ₹1L of Special, and the four
+segregation totals sum higher than the unfiltered total. The footer states the
+gap in rupees from the live numbers rather than hiding it. Do not "fix" this by
+subtracting — the overlap is real revenue in both buckets, which is also why
+Total is an entered target rather than a derived one.
+
+`ORDER_STATUSES` mirrors `DEAL_ORDER_STATUSES` in `components/b2b/constants/client.ts`.
+A status added to the CRM has to be added in both, or this tab and the Client
+Database disagree about what an order is.
+
+Dates filter on **cart created date** — `created_from`/`created_to`. It is the
+only date every deal carries; `closureDate` is an *estimated* closure, not a
+booking date. A cart created in August and ordered in September counts in
+August.
+
+### Targets
+
+One `app_settings` row, key `dashboard_category_targets`, shaped
+`{ 'YYYY-MM': { STORE: { total, core, nonCore, special } } }`, in the **Site
+Audit** Supabase (`components/site-audit/shared/sb-client.ts`) — the only store
+this frontend can write to. Admin-only, gated by `canEditTargets`, which
+`crm/shell/tab-panels.tsx` passes from `currentUser.role === 'admin'`.
+
+Deliberately **not** merged into `cat_analytics_targets`: that object is keyed by
+a different category vocabulary (site_audit / installation / wallpaper /
+flooring / wallpanel / cnc) against the Metabase order book, and its numbers are
+orders, not rupees.
+
+`useCategoryTargets.save` **re-reads before writing**. The whole object is one
+jsonb row, so saving a stale copy would silently revert another month someone
+edited in the meantime. `coerceTargets` coerces every leaf because a hand-edited
+blob is not a typed object — one bad cell would otherwise render `NaN%` across a
+store card.
+
+The MTD panel is fixed to the calendar month and the Store filter, and ignores
+the Date Range and BM chips — otherwise "month to date" would not mean month to
+date. A BM selection puts a note on the panel saying so.
+
+A bucket whose request failed reads **Unknown**, not zero: `loadBuckets` uses
+`Promise.allSettled` and omits the key, `StoreActuals` values are
+`number | null`, and both the card and the table render the gap.
