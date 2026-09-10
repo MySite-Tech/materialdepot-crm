@@ -37,7 +37,7 @@ reading the module.
 | B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer`; `context.md` is the pointer table |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 13-tab permission gate |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
-| Retail overview + Order Lost | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap |
+| Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
 | Footfall | `docs/footfall/context.md` | Five endpoints, the funnel, repeat buckets, the data-driven breakdown grid |
 | NPS | `docs/nps/context.md` | Promoter/passive/detractor cutoffs, the NPS formula, per-customer dedupe |
 | Report card | `docs/report-card/context.md` | One call, six sections; `has_bm`; cart temperature vs closure stage |
