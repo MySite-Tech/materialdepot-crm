@@ -68,9 +68,18 @@ Concretely:
 - Found a doc line that is now wrong → delete or fix it. Removing a stale line
   counts as much as adding a true one.
 
-**This is enforced, not advisory.** One script, `.claude/hooks/docs-guard.sh`,
-runs from three places and fails when a module in the table above changed with
-nothing under its `docs/` path changing:
+**A doc is only useful if it is read before the edit, not after.** "Read on
+demand" failed exactly once in the obvious way: a session made a seventeen-file
+B2B change, then read `docs/b2b/` only when it came to update it — by which
+point the decisions in there had already been re-litigated from scratch.
+`.claude/hooks/docs-brief.sh` is a PreToolUse hook on `Edit|Write` that names
+the module's docs the first time a session touches a documented file. It fires
+**once per module per session** and never blocks — it puts the pointer in
+context at the moment of the edit, which is the only moment it helps.
+
+**And the parity rule is enforced, not advisory.** One script,
+`.claude/hooks/docs-guard.sh`, runs from three places and fails when a module in
+the table above changed with nothing under its `docs/` path changing:
 
 | Layer | Trigger | Scope | Bypass |
 |---|---|---|---|
