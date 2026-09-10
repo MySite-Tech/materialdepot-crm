@@ -74,24 +74,22 @@ export async function fetchInboundBoard(
   );
 
   let dbLeads: InboundLead[] = [];
-  if (page === 0 && !opts?.kylasStage) {
-    try {
+  try {
 
-      const rows = await fetchRows('inbound', {
-        createdFrom,
-        createdTo: opts?.createdTo,
-      });
-      dbLeads = rows.map(rowToInbound);
-      if (opts?.ownerId) dbLeads = dbLeads.filter((l) => l.ownerId === opts.ownerId);
-      if (search) {
-        const q = search.toLowerCase();
-        dbLeads = dbLeads.filter((l) =>
-          [l.company, l.companyName, l.contactName, l.phone].some((v) => (v || '').toLowerCase().includes(q)),
-        );
-      }
-    } catch (e) {
-      console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
+    const rows = await fetchRows('inbound', {
+      createdFrom,
+      createdTo: opts?.createdTo,
+    });
+    dbLeads = rows.map(rowToInbound);
+    if (opts?.ownerId) dbLeads = dbLeads.filter((l) => l.ownerId === opts.ownerId);
+    if (search) {
+      const q = search.toLowerCase();
+      dbLeads = dbLeads.filter((l) =>
+        [l.company, l.companyName, l.contactName, l.phone].some((v) => (v || '').toLowerCase().includes(q)),
+      );
     }
+  } catch (e) {
+    console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
   }
 
   const kylasById = new Map(kylas.leads.map((k) => [k.id, k]));
@@ -99,6 +97,18 @@ export async function fetchInboundBoard(
     const fresh = kylasById.get(l.id);
     return fresh ? mergeKylasIntoRow(l, fresh) : l;
   });
+
+  const dbById = new Map(dbLeads.map((l) => [l.id, l]));
+
+  if (page > 0 || opts?.kylasStage) {
+
+    return {
+      leads: kylas.leads.map((k) => dbById.get(k.id) ?? k),
+      page: kylas.page,
+      hasMore: kylas.hasMore,
+      total: kylas.total,
+    };
+  }
 
   const kylasIds = new Set(kylas.leads.map((k) => k.id));
   dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id));

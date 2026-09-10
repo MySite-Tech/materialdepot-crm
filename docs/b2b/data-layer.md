@@ -30,6 +30,26 @@ They live here now because the code cannot carry them.
   "Inactive" — labelling someone inactive on the strength of an answer that
   never arrived is the bug this flag exists to prevent. `orderDatesFromAggregates`
   takes `ok` through to `loaded`, which is what gates `clientStatus`.
+  **The money half of this was missing until 2026-09-10.** `zeroFill` puts a zero
+  row in the map even when `ok` is false, and `clientMetricsFrom` counted those
+  rows as real, so a dropped bulk call reported every client at ₹0 lifetime and
+  ₹0 open value while the *dates* correctly said Unknown. It now skips any phone
+  whose `dates.byPhone[p].loaded` is false, and the metrics come back `undefined`
+  ("—"). Reuses the existing `loaded` flag rather than threading `ok` through a
+  fourth signature.
+
+- **Every stats read carries an `ok`, because an empty bucket is a plausible
+  number.** `fetchB2BPipelineStats` and `fetchVerticalStats` both catch
+  internally and fall back to `EMPTY_BUCKET`/`{}`, which renders as a confident
+  ₹0 pipeline. Both now return `ok`, and the Dashboard shows a banner rather
+  than the zeros. Same trap as the Kylas `total: 0` note above — a caught error
+  behind a typed return is invisible at the call site unless the type says so.
+
+- **`fetchTargets` returns `{store, ok}`, not a bare store.** The catch path
+  returns `defaultTargetStore()` — the built-in 120L — which is indistinguishable
+  from a team that genuinely set 120L. `saveTargets` likewise returned `void`
+  and swallowed its error, so a target edit looked saved and was not; it now
+  returns the message and the Targets tab renders it.
 
 - **Enquiry-id matching is case-insensitive on both sides, but the id sent to
   the backend keeps its original case** so the indexed `__in` lookup hits
@@ -47,6 +67,41 @@ They live here now because the code cannot carry them.
   client histories) runs once and survives a range switch, while `loadRange`
   re-runs alone. One stats request carries both the per-vertical groups and the
   overall B2B pipeline via `total_branch`, so switching range costs one call.
+
+- **There are two revenue numbers in this module and they are not the same
+  number.** The Dashboard's headline revenue is Django's `fetchVerticalStats`,
+  month-scoped and grouped by rep phone. The Leaderboard and Targets sum the
+  `value` field on closed Supabase rows. They will not reconcile, and nothing
+  labels which is which on screen. Until one wins, do not "fix" a mismatch by
+  making one read the other — check which source the panel is meant to speak
+  for. Targets was compounding this by comparing an **all-time** sum against a
+  **monthly** goal, so its percentage only ever climbed; `computeTargets` now
+  takes a range and the tab passes the current month.
+
+- **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**
+  It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`
+  (full names + phone numbers, keying the Dashboard's per-vertical stats) and
+  `KAMS`/`B2B_REPS`/`REP_TARGETS` in `models/mock-data.ts` (short names, keying
+  every dropdown, filter and Targets card). `Jadhav` vs `Krishna Jadhav`,
+  `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
+  so they drove revenue on the Dashboard and appeared nowhere on Targets or the
+  Leaderboard. Everything now derives from `B2B_ROSTER`.
+  Two constraints on editing it:
+  - **`name` is a stored value, not a label.** It is what sits in
+    `meta_data.kam` and `owner` on existing `b2b_lead` rows, so renaming one
+    orphans those rows from the dropdown. `fullName` and `contact` are the
+    display/matching attributes; only `contact` may be corrected freely.
+  - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
+    Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
+    `DEFAULT_KAM`, but `repUniverse()` filters `B2B_ADMINS` off the Leaderboard
+    and he has no Targets card. That asymmetry is deliberate and predates this
+    file; it was briefly "fixed" by making him unassignable and reverted the
+    same day.
+
+- **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
+  `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people
+  creating a client in the same millisecond silently overwrote one another.
+  `models/ids.ts` appends a random suffix.
 
 ### View-level decisions worth not re-litigating
 

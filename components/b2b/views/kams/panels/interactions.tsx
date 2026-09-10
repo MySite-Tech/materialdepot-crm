@@ -2,6 +2,7 @@
 
 import { ClientEntity, ClientInteraction, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, contactLabel, currentTemperature, primaryContact, temperatureColor } from '../../../models/client';
 import { CadenceRow, interactionGateErrors, interactionPrompts, queueAgeBand } from '../../../models/kam';
+import { newB2BId } from '../../../models/ids';
 import { Field } from '../ui';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { useState } from 'react';
@@ -32,7 +33,7 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
     setSaving(true);
     setError('');
     const err = await onSave({
-      id: `INT-${Date.now()}`,
+      id: newB2BId('INT'),
       type,
       date,
       summary: summary.trim() || undefined,

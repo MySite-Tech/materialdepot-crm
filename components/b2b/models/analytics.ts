@@ -399,19 +399,37 @@ export interface RepTargetRow {
   onboardingsTarget: number;
 }
 
-export function computeTargets(data: B2BData, store: TargetStore): RepTargetRow[] {
+export function computeTargets(
+  data: B2BData,
+  store: TargetStore,
+  range?: { from: string; to: string },
+): RepTargetRow[] {
   const { inbound, outreach, kam, clients } = data;
+
+  const inRange = (day: string | undefined): boolean => {
+    if (!range) return true;
+    const d = String(day || '').slice(0, 10);
+    if (!d) return false;
+    return d >= range.from && d <= range.to;
+  };
+  const closedInbound = inbound.filter((l) =>
+    l.stage === 'Closed' && inRange(l.statusChangedAt || l.leadCreatedAt));
+  const closedOutreach = outreach.filter((l) =>
+    l.status === 'Closed' && inRange(l.statusChangedAt || l.createdAt));
+  const closedKam = kam.filter((o) =>
+    o.status === 'Closed' && inRange(o.statusChangedAt || o.createdAt));
+
   return REP_TARGETS.map((cfg) => {
     const goal = store.reps[cfg.rep] || cfg;
     const revenue =
-      sum(inbound.filter((l) => l.owner === cfg.rep && l.stage === 'Closed').map((l) => l.value)) +
-      sum(outreach.filter((l) => l.bm === cfg.rep && l.status === 'Closed').map((l) => l.value)) +
-      sum(kam.filter((o) => o.kam === cfg.rep && o.status === 'Closed').map((o) => o.value));
+      sum(closedInbound.filter((l) => l.owner === cfg.rep).map((l) => l.value)) +
+      sum(closedOutreach.filter((l) => l.bm === cfg.rep).map((l) => l.value)) +
+      sum(closedKam.filter((o) => o.kam === cfg.rep).map((o) => o.value));
 
     const activeClients = clients.filter((c) => c.kam === cfg.rep).length;
     const newOnboardings =
-      inbound.filter((l) => l.owner === cfg.rep && l.stage === 'Closed').length +
-      outreach.filter((l) => l.bm === cfg.rep && l.status === 'Closed').length;
+      closedInbound.filter((l) => l.owner === cfg.rep).length +
+      closedOutreach.filter((l) => l.bm === cfg.rep).length;
     return {
       rep: cfg.rep,
       role: cfg.role,

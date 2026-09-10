@@ -1,4 +1,4 @@
-import { KAMS } from '../models/mock-data';
+import { DEFAULT_KAM, KAMS } from '../models/mock-data';
 import {
   KAM_ORDER_STATUSES, normalizeKamOrderStatus, isLegacyKamStage,
   type KamOrder, type KamOrderStatus,
@@ -250,7 +250,7 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
 
       issues.push({ column: 'KAM', message: `"${kamRaw}" is not a known KAM`, severity: 'error' });
     } else if (!kamRaw) {
-      issues.push({ column: 'KAM', message: `blank — assigned to ${KAMS[0]}`, severity: 'warn' });
+      issues.push({ column: 'KAM', message: `blank — assigned to ${DEFAULT_KAM}`, severity: 'warn' });
     }
 
     if (cells.length > UPLOAD_COLUMNS.length) {
@@ -300,7 +300,7 @@ export function validateRows(rows: string[][], existing: KamOrder[] = []): Valid
       });
     }
 
-    const resolvedKam = kam || KAMS[0];
+    const resolvedKam = kam || DEFAULT_KAM;
     const note = cells[8] || '';
 
     const status: KamOrderStatus = stage?.status ?? 'Requirement Logged';

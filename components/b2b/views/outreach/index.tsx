@@ -1,7 +1,7 @@
 'use client';
 
 import OutreachDrawer from '../../drawers/outreach/index';
-import { B2B_REPS, OutreachLead, fmtINR } from '../../models/mock-data';
+import { B2B_REPS, DEFAULT_ASSIGNEE, OutreachLead, fmtINR } from '../../models/mock-data';
 import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_PRD_VIEWS, OUTREACH_STATUSES, OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OutreachStatus, OutreachView, SEGMENTS, companyTypeLabel, hasMeetingOn, istToday, outreachGateErrors, outreachSummary } from '../../models/outreach';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ExportFormat, ExportScope } from '../../types/export';
@@ -54,6 +54,12 @@ export default function OutreachLeads() {
   };
 
   useEffect(() => { load(); }, [createdFrom, createdTo]);
+
+  const bmOptions = useMemo(() => {
+    const seen = new Set<string>(B2B_REPS);
+    leads.forEach((l) => l.bm && seen.add(l.bm));
+    return [...seen].sort();
+  }, [leads]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -233,7 +239,7 @@ export default function OutreachLeads() {
           </div>
           {([
             ['Status', 'All statuses', status, setStatus, ['all', ...OUTREACH_STATUSES]],
-            ['BM', 'All BMs', bm, setBm, ['all', ...B2B_REPS]],
+            ['BM', 'All BMs', bm, setBm, ['all', ...bmOptions]],
             ['Company type', 'All types', companyType, setCompanyType, ['all', ...COMPANY_TYPES]],
             ['Lead type', 'All lead types', leadType, setLeadType, ['all', ...LEAD_TYPES]],
             ['Segment', 'All segments', segment, setSegment, ['all', ...SEGMENTS]],
@@ -423,7 +429,7 @@ export default function OutreachLeads() {
         <CreateLeadModal
           onClose={() => setCreating(false)}
           onCreate={createLead}
-          defaultBm={bm !== 'all' ? bm : B2B_REPS[0]}
+          defaultBm={bm !== 'all' ? bm : DEFAULT_ASSIGNEE}
         />
       )}
 

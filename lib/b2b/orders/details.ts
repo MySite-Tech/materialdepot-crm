@@ -209,6 +209,8 @@ export function clientMetricsFrom(
   for (const p of phones) {
     const a = aggregates[p];
     if (!a) continue;
+
+    if (dates && !dates.byPhone[p]?.loaded) continue;
     sawAggregate = true;
     orders += a.orders;
     totalRevenue += a.lifetimeValue;

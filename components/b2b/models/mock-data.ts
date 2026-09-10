@@ -160,39 +160,24 @@ export interface OutreachLead {
   value: number;
 }
 
-export const KAMS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
+export {
+  B2B_ROSTER, B2B_ADMINS, ASSIGNABLE_REPS, KAMS, B2B_REPS,
+  DEFAULT_ASSIGNEE, DEFAULT_KAM, B2B_VERTICALS, REP_ROLE_COLORS,
+} from './roster';
+export type { RepRole, B2BRep } from './roster';
 
-export const B2B_ADMINS = ['Krishna Bhagavatula'];
+import { TARGET_REPS } from './roster';
 
 export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATUS_COLORS;
 
-export const B2B_REPS = ['Krishna Bhagavatula', 'Tharun', 'Jadhav', 'Sidhant', 'Hardi', 'Mandeep', 'Vilok', 'Praful'];
-
-export type RepRole = 'KAM' | 'Inbound' | 'Outbound';
-
-interface RepTargetConfig {
-  rep: string;
-  role: RepRole;
-  revenueTargetL: number;
-  clientsTarget: number;
-  onboardingsTarget: number;
-}
-
-export const REP_TARGETS: RepTargetConfig[] = [
-  { rep: 'Tharun',  role: 'KAM',      revenueTargetL: 8, clientsTarget: 12, onboardingsTarget: 0 },
-  { rep: 'Jadhav',  role: 'KAM',      revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
-  { rep: 'Sidhant', role: 'KAM',      revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
-  { rep: 'Hardi',   role: 'Inbound',  revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
-  { rep: 'Mandeep', role: 'Inbound',  revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
-  { rep: 'Vilok',   role: 'Outbound', revenueTargetL: 6, clientsTarget: 0,  onboardingsTarget: 6 },
-  { rep: 'Praful',  role: 'Outbound', revenueTargetL: 6, clientsTarget: 0,  onboardingsTarget: 6 },
-];
-
-export const REP_ROLE_COLORS: Record<RepRole, string> = {
-  KAM:      '#0F766E',
-  Inbound:  '#3B82F6',
-  Outbound: '#EAB308',
-};
+export const REP_TARGETS = TARGET_REPS
+  .map((r) => ({
+    rep: r.name,
+    role: r.role,
+    revenueTargetL: r.revenueTargetL,
+    clientsTarget: r.clientsTarget,
+    onboardingsTarget: r.onboardingsTarget,
+  }));
 
 const B2B_MONTHLY_TARGET_L = 120;
 

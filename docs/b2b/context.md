@@ -11,9 +11,9 @@ This module's detail is split by topic so a question costs one part, not the who
 
 | Part | Covers | Lines |
 |---|---|---|
-| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates | 127 |
+| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge | 143 |
 | [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation | 76 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 44 |
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived | 138 |
 | [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; call dedupe | 145 |
-| [`data-layer.md`](data-layer.md) | `lib/b2b` read shapes, the Kylas `total=0` trap, chart colours, split load | 63 |
+| [`data-layer.md`](data-layer.md) | `lib/b2b` read shapes, the Kylas `total=0` trap, the `ok`-flag rule, the roster, the two revenue numbers, chart colours, split load | 120 |

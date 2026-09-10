@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Installed via core.hooksPath=.githooks (npm run prepare, or npm install).
+exec "$(git rev-parse --show-toplevel)/.claude/hooks/docs-guard.sh" precommit

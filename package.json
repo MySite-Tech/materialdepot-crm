@@ -7,7 +7,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "predev": "npm run prepare --silent",
+    "prebuild": "npm run prepare --silent",
+    "prestart": "npm run prepare --silent",
+    "prelint": "npm run prepare --silent"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

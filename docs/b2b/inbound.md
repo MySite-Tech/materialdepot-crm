@@ -77,6 +77,20 @@ every sync — a stored snapshot must never win over Presales, or a reassigned
 lead keeps showing the old BM forever. `requirement` is the exception: shared,
 and a local edit not yet pushed wins.
 
+**The overlay runs on every page and every filter; only the *prepend* is
+page-0.** `fetchInboundBoard` used to skip the Supabase read entirely unless
+`page === 0 && !kylasStage`, so page 2+ and any Kylas-stage filter showed raw
+Kylas — your team's stage, follow-up, order value and notes silently absent on a
+board that looked normal. Fixed 2026-09-10: the read and `mergeKylasIntoRow`
+always run, and those two paths return the overlaid Kylas list early.
+
+Page 0 keeps its original assembly — `[...dbLeads, ...kylasNotInDb]`, with
+db-only rows still at `New` dropped. That ordering is load-bearing: **an edited
+lead sorts above an untouched one in its column**, because "has a Supabase row"
+is doing double duty as a sort key. A rewrite that maps over `kylas.leads` to
+overlay in place is cleaner and loses that grouping — it was tried and reverted
+the same day.
+
 ### Gates: four hard, eight soft
 
 `statusGateErrors` blocks exactly the four the PRD states — follow-up date on
