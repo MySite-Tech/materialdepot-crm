@@ -9,7 +9,7 @@ This is the single most common source of confusion here.
 | What | Where | How it's reached |
 |---|---|---|
 | **Employees, permissions, auth, leads** | Django, `https://api-dev2.materialdepot.in/apiV1` | `lib/api/core/client.ts` (`mdFetch`), re-exported from the `lib/api/index.ts` barrel |
-| **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, via `lib/supabase.ts` (only `lib/b2b/**` uses it) |
+| **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | From the browser: `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` via `lib/supabase.ts` — only `lib/b2b/**`. From a route handler: `SUPABASE_SERVICE_ROLE_KEY` via `lib/appointments/rota-plan.ts` and `lib/store-checklist/checklist-store.ts`, which bypass RLS |
 | **Site Audit / field-app Supabase** | project `jqrdfnjfxqxrazfkaofm` | `components/site-audit/shared/sb-client.ts` — `sbGet`/`sbPost`/`sbPatch` |
 
 Gotchas:
@@ -19,6 +19,16 @@ Gotchas:
   dead, though: `app/api/store-display/route.ts:5` reads
   `process.env.API_BASE_URL` (falling back to the same dev URL). Don't delete
   the var — one server route depends on it.
+- **`SUPABASE_SERVICE_ROLE_KEY` and `KYLAS_API_KEY` are server-only and are NOT
+  injected by the deploy workflow** (it passes just the two `NEXT_PUBLIC_SUPABASE_*`
+  build-time secrets). A route handler that needs one reads it from the Azure
+  Static Web Apps *application settings* at runtime, which live in the portal and
+  are invisible to this repo. So a new service-role route can typecheck, build and
+  work locally and still throw `SUPABASE_SERVICE_ROLE_KEY is not set` in
+  production — confirm the setting exists rather than inferring it from the
+  workflow file. Tables reached this way (`rota_plan`, `store_checklist`) have RLS
+  on with no policy, so the anon key is not a fallback: if the key is missing the
+  feature is down, not degraded.
 - `components/site-audit/shared/sb-client.ts` hardcodes the Site Audit URL **and** anon key too.
   Nothing reads `NEXT_PUBLIC_SITE_AUDIT_*`, so those two keys were dropped from
   the env file; re-add them only if you also make that module read them.

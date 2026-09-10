@@ -3,7 +3,7 @@
 **Covers:** `components/crm/** · lib/api/core/auth.ts · types/crm.ts`
 
 ## Purpose
-The app shell: login, session restore, and the tab permission gate that decides which of the 13 main tabs a role can see.
+The app shell: login, session restore, and the tab permission gate that decides which of the 14 main tabs a role can see.
 
 ## Auth, and why a fake session won't work
 

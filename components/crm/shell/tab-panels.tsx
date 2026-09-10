@@ -11,6 +11,7 @@ import ReportCardDashboard from '../../report-card/dashboard';
 import MobileDashboard from '../../sales-dashboard/mobile-dashboard';
 import SiteAuditOwnDashboard from '../../site-audit/views/own-dashboard';
 import SiteAuditRail from '../../site-audit/views/rail';
+import StoreChecklistTab from '../../store-checklist';
 import StoreDisplayTab from '../../store-display';
 import StoreVisitWrapper from '../../store-visit/store-visit-wrapper';
 import WeeklyFunnelDashboard from '../../weekly-funnel/dashboard';
@@ -50,6 +51,14 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
     
     {effectiveTab === 'storeVisit' && (
       <StoreVisitWrapper />
+    )}
+    
+    {effectiveTab === 'storeChecklist' && (
+      <StoreChecklistTab
+        userName={currentUser?.name ?? ''}
+        role={currentUser?.role ?? ''}
+        allowedBranches={userAllowedBranches}
+      />
     )}
     
     {effectiveTab === 'nps' && (

@@ -71,6 +71,9 @@ components/report-card/|docs/report-card/|Report card
 components/weekly-funnel/|docs/weekly-funnel/|Weekly funnel
 components/appointment-tracker/|docs/appointment-tracker/|Appointment tracker
 components/store-visit/|docs/store-visit/|Store visit
+components/store-checklist/|docs/store-checklist/|Store checklist
+lib/store-checklist/|docs/store-checklist/|Store checklist
+app/api/store-checklist/|docs/store-checklist/|Store checklist
 components/store-display/|docs/store-display/|Store display
 components/sales-dashboard/|docs/sales-dashboard/|Sales dashboard
 components/dashboard/|docs/dashboard/|Retail overview

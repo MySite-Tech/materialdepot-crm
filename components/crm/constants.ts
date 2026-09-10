@@ -65,13 +65,13 @@ export const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartme
 export const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
 export const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
-  store_manager:['leads', 'dashboard', 'footfall', 'storeVisit', 'sales', 'siteAudit'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
+  store_manager:['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
   sales:        ['leads', 'sales', 'footfall', 'siteAudit'],
-  retail:       ['dashboard', 'storeVisit', 'footfall', 'nps'],
+  retail:       ['dashboard', 'storeVisit', 'storeChecklist', 'footfall', 'nps'],
   b2b_sales:    ['b2bSales', 'siteAudit'],
   b2b_KAM:      ['b2bSales', 'siteAudit'],
   b2b_manager:  ['b2bSales', 'siteAudit'],
@@ -87,6 +87,7 @@ export const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.weekly_funnel', 'weeklyFunnel'],
   ['crm.report_card', 'reportCard'],
   ['crm.store_visit', 'storeVisit'],
+  ['crm.store_checklist', 'storeChecklist'],
   ['crm.sales', 'sales'],
   ['crm.b2b_sales', 'b2bSales'],
   ['crm.admin', 'admin'],
@@ -112,6 +113,7 @@ export const TAB_LABELS: Record<MainTab, string> = {
   leads: 'Leads', dashboard: 'Dashboard', footfall: 'Footfall', weeklyFunnel: 'Weekly Funnel',
   reportCard: 'Report Card', storeVisit: 'Store Visit Form', sales: 'Escalation visibility',
   b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
+  storeChecklist: 'Store Checklist',
   appointmentTracker: 'Appointment Tracker',
   storeDisplay: 'Store Display',
 };
