@@ -1,5 +1,5 @@
 import './globals.css';
-import PwaRegister from './PwaRegister';
+import PwaRegister from './pwa-register';
 
 export const metadata = {
   title: 'MaterialDepot CRM',
@@ -8,8 +8,7 @@ export const metadata = {
     icon: '/favicon.svg',
     apple: '/apple-touch-icon.png',
   },
-  /* iOS reads none of this from the manifest — without it, "Add to Home Screen"
-     produces a bookmark that opens in Safari with full browser chrome. */
+
   appleWebApp: {
     capable: true,
     title: 'MD CRM',
@@ -21,8 +20,7 @@ export const viewport = {
   themeColor: '#1F3A5F',
   width: 'device-width',
   initialScale: 1,
-  // Standalone on a tablet should not pinch-zoom like a web page, but capping
-  // zoom outright is an accessibility regression — 5x keeps it usable.
+
   maximumScale: 5,
 };
 

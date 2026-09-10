@@ -1,17 +1,11 @@
-/* Site-audit job-card PDF (the SM/Admin variant) plus the two image helpers
-   it shares with the installation PDF. Extracted from SiteAuditJobsView so
-   both that read-only view and Audit Ops can generate the same document
-   instead of keeping two copies of it. */
-
 import { jsPDF } from 'jspdf';
-import { fmtDateA } from '../siteAuditShared';
-import { categoryFor, mdInstallTermsBlock } from '../auditRegistry';
+import { fmtDateA } from '../shared';
+import { categoryFor, mdInstallTermsBlock } from '../data/audit-registry';
 import {
   MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfAuditRoom, mdPdfConsent, mdPdfHeader,
-} from '../pdfBrand';
+} from '../brand/pdf-brand';
 
-/* ---- sketch/photo helpers for PDF generation (verbatim, lines 81-93) ---- */
-export function renderSketchA(r: any): string | null {
+function renderSketchA(r: any): string | null {
   if (!r.sketchStrokes || !r.sketchStrokes.length) return null;
   const W = 1000, H = 500;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -48,7 +42,6 @@ export async function compressForPdf(dataUrl: string | null | undefined): Promis
   });
 }
 
-/* ---- PDF generators (verbatim, lines 95-200) ---- */
 export async function genAuditPDF(order: any, ticked: any) {
   await loadBrandLogo();
   const doc: any = new jsPDF('p', 'pt', 'a4');

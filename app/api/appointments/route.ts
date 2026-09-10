@@ -1,28 +1,12 @@
 import type { NextRequest } from "next/server";
-import { getCached, setCache } from "@/lib/cache";
-import { rateLimitedFetch } from "@/lib/rateLimiter";
+import { getCached, setCache } from "@/lib/server/cache";
+import { rateLimitedFetch } from "@/lib/server/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
 const KYLAS_API_BASE =
   process.env.KYLAS_API_BASE_URL || "https://api.kylas.io/v1";
 
-// Appointment feed for the Appointment Tracker.
-//
-// Why this exists: the tracker used to page through /api/leads/search from the
-// browser — 25 requests at size=100 for ~2.5k EC leads — and every client did
-// its own sweep, re-running it on each branch/date change. This route does the
-// sweep once on the server at the largest page size Kylas accepts (1000, so 3
-// requests) and caches the assembled list, so all users and tabs share it.
-//
-// Kylas' jsonRule filter can't query values inside `customFieldValues` (custom
-// date fields silently return zero rows), so we scope by `companyBusinessType`
-// — the branch enum, which IS queryable — and drop leads with no visit date
-// here. Callers slice by branch and date window themselves.
-// Fallback only: the live list is read from the picklist itself (below), so a
-// branch added in Kylas is swept without a code change here. Adding one to the
-// CRM's branch table alone is not enough — a lead's location has to be one of
-// these enum values for the sweep to return it at all.
 const BRANCH_ENUM_VALUES = [
   "JP_NAGAR_EC",
   "YELAHANKA_EC",
@@ -32,14 +16,12 @@ const BRANCH_ENUM_VALUES = [
   "HSR_EC",
 ];
 
-// `companyBusinessType` is labelled "Appointment Location" in Kylas.
 const BRANCH_FIELD_ID = 2202881;
 const BRANCH_ENUM_CACHE_KEY = "appointments:branch-enums:v1";
-const BRANCH_ENUM_TTL_MS = 3_600_000; // 1h — the picklist changes when a store opens
+const BRANCH_ENUM_TTL_MS = 3_600_000;
 
 type PicklistValue = { name?: string; deleted?: boolean; disabled?: boolean };
 
-/** Live appointment-location enum values, falling back to the constant above. */
 async function branchEnumValues(apiKey: string): Promise<string[]> {
   const cached = getCached(BRANCH_ENUM_CACHE_KEY) as string[] | null;
   if (cached) return cached;
@@ -52,7 +34,7 @@ async function branchEnumValues(apiKey: string): Promise<string[]> {
     const values = (data.field?.picklist?.values ?? [])
       .filter((v) => !v.deleted && !v.disabled && typeof v.name === "string" && v.name)
       .map((v) => v.name as string);
-    // An empty list would silently sweep nothing — treat it as a failed read.
+
     if (values.length === 0) return BRANCH_ENUM_VALUES;
     setCache(BRANCH_ENUM_CACHE_KEY, values, BRANCH_ENUM_TTL_MS);
     return values;
@@ -61,8 +43,6 @@ async function branchEnumValues(apiKey: string): Promise<string[]> {
   }
 }
 
-// Only what the tracker actually renders. `customFieldValues` is requested for
-// cfVisitScheduled alone, and is dropped from the response after hoisting it.
 const FIELDS = [
   "id",
   "firstName",
@@ -75,12 +55,11 @@ const FIELDS = [
   "convertedAt",
 ];
 
-const PAGE_SIZE = 1000;   // Kylas' effective ceiling — 2.5k leads in 3 requests
-const MAX_PAGES = 20;     // hard stop, ~20k leads
-const TTL_MS = 300_000;   // 5 min; the Refresh button can force a re-sweep
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 20;
+const TTL_MS = 300_000;
 const CACHE_KEY = "appointments:v1";
 
-// Raw Kylas row (only the parts we touch) …
 type RawLead = {
   id: number;
   firstName?: string | null;
@@ -93,9 +72,6 @@ type RawLead = {
   customFieldValues?: Record<string, unknown> | null;
 };
 
-// … and the slim row we send to the browser. Kylas returns ~1KB per lead of
-// fields nothing renders (recordActions, other custom fields, emails, owner);
-// projecting here takes the 2.5k-lead payload from ~2.4MB to a few hundred KB.
 type Lead = {
   id: number;
   firstName?: string | null;
@@ -169,7 +145,7 @@ async function sweep(apiKey: string): Promise<Payload> {
     const content = data.content ?? [];
     scanned += content.length;
     for (const l of content) {
-      // Keep only leads that actually have a scheduled visit.
+
       const raw = l.customFieldValues?.cfVisitScheduled;
       if (typeof raw === "string" && raw) leads.push(project(l, raw));
     }
@@ -197,8 +173,7 @@ export async function GET(request: NextRequest) {
     setCache(CACHE_KEY, payload, TTL_MS);
     return Response.json({ ...payload, cached: false });
   } catch (err) {
-    // Serve the last good sweep rather than blanking the UI on a transient
-    // Kylas error — the payload carries fetchedAt so callers can see the age.
+
     if (cached) {
       return Response.json({ ...cached, cached: true, stale: true });
     }

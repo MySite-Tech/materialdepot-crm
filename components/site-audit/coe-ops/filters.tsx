@@ -1,94 +1,17 @@
 'use client';
 
-/* The filter chrome the two COE call queues share — a date-range picker, a
-   category multi-select, and the "frozen" summary bar the queues pin to the top
-   of the viewport.
-
-   These live here rather than in each tab because the Followups and Install
-   Reviews tables are structural mirrors of one another (see the header comment
-   in InstallReviews.tsx) and the whole point of putting the same two filters on
-   both is that they behave identically. A second hand-written copy of a date
-   preset list is how the two tabs end up disagreeing about what "Last 30 days"
-   means. */
-
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CATEGORY_ORDER, CATEGORY_TONE, CAT_UNSET, DATE_PRESETS, fmtRangeLabel, presetRange,
   type DatePresetKey, type DateRange,
-} from './shared';
-
-/* ── Frozen summary bar ───────────────────────────────────────────────────
-   The COE works a queue of hundreds of rows and reads the bucket counts and the
-   search box against whichever row is on screen, so both have to stay put while
-   the table scrolls (requested 2026-09-01).
-
-   `position: sticky` is measured against the nearest scrolling ancestor, which
-   here is the document — but every host that mounts this dashboard has its OWN
-   sticky header above it, at a height this component cannot know:
-   `app/App.tsx`'s is a fixed 48px, `/site-audit-view`'s wraps and so changes
-   height with the window. Hard-coding either number puts the bar under one
-   host's header or leaves a gap under the other's, so the offset is MEASURED:
-   walk up the ancestors, and for every preceding sibling that is itself pinned
-   to the top of the viewport, add its height. Nothing found (a host with no
-   sticky header) yields 0, which is the correct answer rather than a fallback. */
-function measureStickyTop(el: HTMLElement | null): number {
-  let total = 0;
-  for (let node: HTMLElement | null = el; node && node !== document.body; node = node.parentElement) {
-    for (let prev = node.previousElementSibling; prev; prev = prev.previousElementSibling) {
-      if (!(prev instanceof HTMLElement)) continue;
-      const cs = getComputedStyle(prev);
-      if (cs.position !== 'sticky' && cs.position !== 'fixed') continue;
-      const top = parseFloat(cs.top);
-      // Only headers pinned at (or above) the top edge sit in our way; a
-      // `sticky bottom-0` footer must not push us down.
-      if (!Number.isFinite(top) || top > 0) continue;
-      total += prev.offsetHeight + top;
-    }
-  }
-  return Math.max(0, Math.round(total));
-}
-
-export type FrozenBarGeometry = {
-  ref: (el: HTMLDivElement | null) => void;
-  /* Where the bar pins — the summed height of the host's own sticky headers. */
-  top: number;
-};
-
-export function useFrozenBar(): FrozenBarGeometry {
-  const [top, setTop] = useState(0);
-  const node = useRef<HTMLDivElement | null>(null);
-
-  const remeasure = () => {
-    const next = measureStickyTop(node.current);
-    setTop((cur) => (cur === next ? cur : next));
-  };
-
-  // Layout effect so the first paint already carries the right offset — a bar
-  // that jumps 65px after mount reads as a rendering bug.
-  useLayoutEffect(remeasure);
-
-  useEffect(() => {
-    /* /site-audit-view's host header WRAPS, so its height is a function of the
-       window width — this is not a one-time measurement. */
-    window.addEventListener('resize', remeasure);
-    return () => window.removeEventListener('resize', remeasure);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return {
-    ref: (el) => { node.current = el; },
-    top,
-  };
-}
+} from '.';
 
 export function FrozenBar({ top, setRef, children }: { top: number; setRef: (el: HTMLDivElement | null) => void; children: React.ReactNode }) {
   return (
     <div
       ref={setRef}
       style={{ top }}
-      /* Opaque background and a shadow, because rows scroll UNDER this rather
-         than behind a gap. z-[40] clears the table's own sticky thead (z-10)
-         and stays well below the drawers (z-[900]). */
+
       className="sticky z-[40] -mx-1 mb-3 border-b border-gray-200 bg-[#FAFAFA] px-1 pb-2 pt-1 shadow-[0_6px_10px_-8px_rgba(0,0,0,0.25)]"
     >
       {children}
@@ -96,10 +19,6 @@ export function FrozenBar({ top, setRef, children }: { top: number; setRef: (el:
   );
 }
 
-/* ── Bucket tiles ─────────────────────────────────────────────────────────
-   Deliberately shorter than the cards they replace (requested with the freeze:
-   a pinned bar that eats a third of the viewport defeats the point). Same
-   click-to-filter behaviour and the same colour coding as before. */
 export function BucketTiles<K extends string>({ buckets, counts, active, onPick }: {
   buckets: Array<{ k: K; l: string }>;
   counts: Record<string, number>;
@@ -129,10 +48,6 @@ export function BucketTiles<K extends string>({ buckets, counts, active, onPick 
 
 const PILL = 'flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12.5px] font-semibold text-gray-700 hover:border-gray-400';
 
-/* ── Date range ───────────────────────────────────────────────────────────
-   `label` names what the range is measured on, because the two queues filter
-   different dates — the audit visit vs the installation completion — and a
-   picker that just says "Last 30 days" leaves the COE guessing which. */
 export function DateRangeFilter({ label, preset, range, onChange }: {
   label: string;
   preset: DatePresetKey;
@@ -184,11 +99,6 @@ export function DateRangeFilter({ label, preset, range, onChange }: {
   );
 }
 
-/* ── Category multi-select ────────────────────────────────────────────────
-   Every canonical category is offered whether or not the loaded rows contain it:
-   an option that vanishes when its count hits zero is how somebody concludes a
-   material was never audited, when in fact they had another filter on. Counts
-   are shown instead, and they come from the caller's already-filtered rows. */
 export function CategoryFilter({ selected, counts, onChange }: {
   selected: string[];
   counts: Record<string, number>;
@@ -232,9 +142,6 @@ export function CategoryFilter({ selected, counts, onChange }: {
   );
 }
 
-/* Category pills for a table cell. `—` rather than a "Not recorded" pill: the
-   filter needs that bucket to have a name, a row does not need a label for the
-   absence of one. */
 export function CategoryPills({ cats }: { cats: string[] }) {
   if (!cats.length) return <span className="text-gray-400">—</span>;
   return (

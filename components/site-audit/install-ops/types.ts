@@ -1,17 +1,8 @@
-/* Data model for the Install Ops (Service Manager) view. Mirrors the shapes
-   read/written by material-depot-site's app/src/pages/SMInstall.jsx against
-   the `install_orders` / `install_orders_slim` tables — the same tables
-   SiteInstallerApp.tsx (installer side) reads/writes. Kept loosely typed
-   (jsonb blobs) to match that file's own pragmatic `any` usage rather than
-   over-modeling columns neither app fully constrains. */
-
-/* Wall Panels ('wallpanel') is a full third installation track alongside flooring and wallpaper. */
 export type SkuType = 'flooring' | 'wallpaper' | 'wallpanel' | 'install';
 
-/* The three schedulable installation categories (excludes the 'install' service SKU itself). */
 export type InstallCategory = 'flooring' | 'wallpaper' | 'wallpanel';
 
-export interface SkuItem {
+interface SkuItem {
   c: string;
   n: string;
   type: SkuType;
@@ -23,12 +14,12 @@ export interface ServiceSkuRow {
   name: string;
   sqft: string;
   link?: string;
-  /* legacy pre-sqft fields some old rows still carry */
+
   rolls?: string;
   qty?: string;
 }
 
-export interface ServiceData {
+interface ServiceData {
   flooring?: ServiceSkuRow[];
   wallpaper?: ServiceSkuRow[];
   wallpanel?: ServiceSkuRow[];
@@ -53,8 +44,8 @@ export interface Assignment {
   status?: string;
 }
 
-export interface RoomEntry {
-  /* v2 install rooms carry {v:2,category,fields}; older rows carry the flat qty/height/width keys. */
+interface RoomEntry {
+
   v?: number;
   category?: string;
   name?: string;
@@ -87,11 +78,10 @@ export interface Subjob {
   assignments: Assignment[];
   status: string;
   jobcard?: JobCard | null;
-  /* Comma-joined observers (any role, any number) — see parseShadowers. */
+
   shadower_email?: string | null;
   shadower_name?: string | null;
-  /* Per-sub-job overrides that fall back to the order-level field until an SM
-     diverges them (set when a category is split per-SKU). */
+
   deliveryDate?: string | null;
   originalDeliveryDate?: string | null;
   customWp?: boolean;
@@ -99,7 +89,7 @@ export interface Subjob {
   customWpMeta?: Record<string, any>;
 }
 
-export interface LogEntry {
+interface LogEntry {
   t: string;
   d: string;
   by?: 'auto' | 'manual';
@@ -107,7 +97,7 @@ export interface LogEntry {
   lat?: number;
   lng?: number;
   arrivalPhoto?: string;
-  /* Arrival recorded with no GPS fix, by either field app. */
+
   locOverride?: boolean;
 }
 
@@ -139,22 +129,14 @@ export interface Installer {
   zone: string;
   phone: string;
   city?: string;
-  /* profiles.contact — the bridge to their CRM login, needed to deactivate it
-     when they are removed. `phone` above is legacy free text the roster has
-     never filled in. */
+
   contact?: string | null;
-  /* profiles.weekly_off (0=Sun) / profiles.leave_dates — advisory at
-     assignment time (the SM can override with a logged reason). */
+
   weeklyOff?: number | null;
   leaveDates?: string[];
-  /* profiles.active_from — a future date means they start taking jobs then.
-     Auditors have always had this; installers did not, so a new hire counted
-     towards capacity from the day their profile was created. */
+
   activeFrom?: string | null;
-  /* profiles.daily_cap / profiles.cap_overrides — the SM's per-installer,
-     per-day override of the per-type constant (FLOOR_DAY_CAP / WP_DAY_SLOTS /
-     WALLPANEL_DAY_CAP). NULL/absent = keep using the constant, so nothing
-     changes until an SM sets a number. */
+
   dailyCap?: number | null;
   capOverrides?: Record<string, number>;
 }
@@ -179,9 +161,6 @@ export type ViewKey =
   | 'deleted'
   | 'rectifications';
 
-/* Rows of `foam_ledger` — every foam hand-out to a flooring installer.
-   Balance = Σ issued here − Σ consumed (derived from completed/partial
-   flooring jobs), so this table only ever grows. */
 export interface FoamLedgerRow {
   id: string;
   installer_id?: string | null;
@@ -198,9 +177,6 @@ export interface FoamConfig {
   tracking_start: string;
 }
 
-/* Per-sqft / per-roll payout rates. The global default lives in
-   `app_settings.payout_rates`; `profiles.pay_rates` overrides it per
-   installer (blank fields fall back to the global rate). */
 export interface PayRates {
   fl_sqft?: number | null;
   wp_std_roll?: number | null;
@@ -208,9 +184,4 @@ export interface PayRates {
   wpnl_sqft?: number | null;
 }
 
-/* Attribution string used for `log.who` — this CRM view has no per-person
-   session/impersonation (unlike the original's getSession()), so every
-   write is attributed to a fixed label. Same deliberate deviation already
-   made in SiteAuditStoreTeamView.tsx (`who: myStore` instead of a real
-   logged-in user). */
 export const SM_ATTRIBUTION = 'Service Manager (CRM)';

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getCached, setCache, cleanup } from "@/lib/cache";
-import { rateLimitedFetch } from "@/lib/rateLimiter";
+import { getCached, setCache, cleanup } from "@/lib/server/cache";
+import { rateLimitedFetch } from "@/lib/server/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await res.json();
-    // Only cache if content is non-empty
+
     if (data.content?.length > 0) setCache(cacheKey, data, 60_000);
     return Response.json(data);
   } catch (err) {

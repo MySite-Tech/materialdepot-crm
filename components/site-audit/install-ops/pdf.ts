@@ -1,13 +1,8 @@
-/* Verbatim port of genInstallPDFSM from SMInstall.jsx (the Service Manager's
-   "Download Job Card PDF" button on a completed sub-job). Layout/field order
-   matches the installer-side genInstallerPDF in SiteInstallerApp.tsx exactly
-   — both apps produce the same document for the same completed job. */
-
 import { jsPDF } from 'jspdf';
-import { fmtDate } from './shared';
-import { installerById } from './shared';
-import { categoryFor, mdInstallTermsBlock } from '../auditRegistry';
-import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfConsent, mdPdfHeader, mdPdfInstallRoom } from '../pdfBrand';
+import { fmtDate } from './utils';
+import { installerById } from './utils';
+import { categoryFor, mdInstallTermsBlock } from '../data/audit-registry';
+import { MD_INK, MD_MUTED, loadBrandLogo, mdBrandGrid, mdInfoTable, mdPdfConsent, mdPdfHeader, mdPdfInstallRoom } from '../brand/pdf-brand';
 import type { InstallOrder, Installer, JobCard, Subjob } from './types';
 
 async function compressForPdf(dataUrl: string | null | undefined): Promise<string | null> {

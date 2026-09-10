@@ -1,27 +1,16 @@
 import type { NextRequest } from "next/server";
-import { getCached, setCache } from "@/lib/cache";
-import { rateLimitedFetch } from "@/lib/rateLimiter";
-import { readPlan, writePlan, type RotaBranchData } from "@/lib/rotaPlan";
-import { isValidBranchName, type Branch } from "@/lib/appt-shared";
+import { getCached, setCache } from "@/lib/server/cache";
+import { rateLimitedFetch } from "@/lib/server/rate-limiter";
+import { readPlan, writePlan, type RotaBranchData } from "@/lib/appointments/rota-plan";
+import { isValidBranchName, type Branch } from "@/lib/appointments/appt-shared";
 
 export const dynamic = "force-dynamic";
 
-// ── Storage split ─────────────────────────────────────────────
-// The PLAN now lives in Supabase (`rota_plan`, one row per branch). It used to
-// share a JSON blob on a Kylas "settings lead" with the email→role ACCESS map;
-// that layout lost data, because saving PUT the author's whole snapshot of all
-// six branches and clobbered any branch someone else had edited meanwhile.
-//
-// The ACCESS half stays on Kylas and is still read here, untouched: nothing in
-// the CRM uses it (roles come from `resolveApptRole(currentUser)`), but the
-// standalone MD-Appointment-tracker app still signs users in with it and reads
-// the same lead. Moving it would break that app's login.
 const KYLAS_API_BASE = process.env.KYLAS_API_BASE_URL || "https://api.kylas.io/v1";
 const SETTINGS_LEAD_ID = "39871021";
 const CONFIG_FIELD = "cfResourceplanjson";
 const ACCESS_CACHE_KEY = `dashboard-access:${SETTINGS_LEAD_ID}`;
 
-/** Pulls just the access half out of the Kylas field, tolerating the legacy bare-plan shape. */
 function parseAccess(raw: unknown): unknown {
   if (typeof raw !== "string" || !raw.trim()) return null;
   let parsed: unknown;
@@ -31,10 +20,6 @@ function parseAccess(raw: unknown): unknown {
   return "access" in p ? p.access ?? null : null;
 }
 
-/**
- * Best-effort read of the access map. A Kylas outage must not take the rota
- * planner down with it, so failures degrade to null rather than throwing.
- */
 async function fetchAccess(): Promise<unknown> {
   const cached = getCached(ACCESS_CACHE_KEY);
   if (cached !== null) return cached;
@@ -55,7 +40,6 @@ async function fetchAccess(): Promise<unknown> {
   }
 }
 
-// ── GET: full plan (all branches) + access ────────────────────
 export async function GET() {
   try {
     const [plan, access] = await Promise.all([readPlan(), fetchAccess()]);
@@ -68,18 +52,11 @@ export async function GET() {
   }
 }
 
-// ── PUT: write only the branches the caller actually sent ─────
-// Body: { plan: { version: 2, branches: { "<branch>": {...} } } }
-//
-// Branches absent from the body are left alone, which is what stops one
-// manager's save from wiping another branch. Sending all six is still valid
-// and still writes all six — but the client no longer needs to.
 export async function PUT(request: NextRequest) {
   let body: { plan?: unknown; branches?: unknown; updatedBy?: string };
   try { body = await request.json(); }
   catch { return Response.json({ error: "Body must be JSON" }, { status: 400 }); }
 
-  // Accept either { plan: { branches } } or a bare { branches } payload.
   const planLike = (body.plan ?? body) as { branches?: unknown } | undefined;
   const rawBranches = planLike?.branches;
   if (!rawBranches || typeof rawBranches !== "object") {
@@ -89,8 +66,7 @@ export async function PUT(request: NextRequest) {
   const partial: Partial<Record<Branch, RotaBranchData>> = {};
   const unknownBranches: string[] = [];
   for (const [name, data] of Object.entries(rawBranches as Record<string, unknown>)) {
-    // Any CRM branch name is valid (the list is fetched, not hardcoded); this
-    // only keeps junk keys out of the table.
+
     if (!isValidBranchName(name)) { unknownBranches.push(name); continue; }
     if (!data || typeof data !== "object") continue;
     const d = data as Partial<RotaBranchData>;
