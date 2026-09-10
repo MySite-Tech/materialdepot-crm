@@ -6,7 +6,8 @@ import { KamOrdersView } from './orders';
 import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, istToday, primaryContact } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
 import { AssignedClientRow, DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_VIEWS, KamOrder, KamOrderStatus, KamView, assignedClientRows, callsLoggedOn, followUpQueue, isLegacyKamStage, kamPipeline, todaysCalls } from '../../models/kam';
-import { KAMS, fmtL } from '../../models/mock-data';
+import { newB2BId } from '../../models/ids';
+import { DEFAULT_KAM, KAMS, fmtL } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ExportFormat } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
@@ -181,13 +182,13 @@ export default function KAMs() {
   const blankOrder = (client?: ClientEntity): KamOrder => {
     const primary = client ? primaryContact(client.contacts) : undefined;
     return {
-      id: `KAM-${Date.now()}`,
+      id: newB2BId('KAM'),
       clientId: client?.id,
       company: client?.company || '',
       contactName: primary?.name,
       phone: primary?.number,
       status: 'Requirement Logged',
-      kam: client?.kam || (kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : KAMS[0]),
+      kam: client?.kam || (kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : DEFAULT_KAM),
       source: client?.source || 'Existing',
       value: 0,
       notes: [],
@@ -354,7 +355,7 @@ export default function KAMs() {
       {loggingClient && (
         <InteractionModal
           client={loggingClient}
-          kam={loggingClient.kam || (kamFilter !== 'all' ? kamFilter : KAMS[0])}
+          kam={loggingClient.kam || (kamFilter !== 'all' ? kamFilter : DEFAULT_KAM)}
           today={today}
           onClose={() => setLoggingFor(null)}
           onSave={(i) => saveClient({ ...loggingClient, interactions: [...(loggingClient.interactions || []), i] })}
@@ -366,7 +367,7 @@ export default function KAMs() {
           order={orderModal.order}
           isNew={orderModal.isNew}
           clients={kamFilter === 'all' ? clients : scopedClients}
-          kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : KAMS[0]}
+          kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : DEFAULT_KAM}
           onClose={() => setOrderModal(null)}
           onSave={saveOrder}
         />

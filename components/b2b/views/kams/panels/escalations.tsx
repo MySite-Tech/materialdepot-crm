@@ -2,6 +2,7 @@
 
 import { ESCALATION_CATEGORIES, ESCALATION_TIERS, Escalation, EscalationCategory, EscalationTier, HEALTH_META, scoreAccount } from '../../../models/account-health';
 import { ClientEntity } from '../../../models/client';
+import { newB2BId } from '../../../models/ids';
 import { Field } from '../ui';
 import { btnPrimary, inputCls } from '../../../constants/ui';
 import { useState } from 'react';
@@ -71,7 +72,7 @@ export function EscalationSection({ client, today, onSave }: {
             <button
               onClick={async () => {
                 await write([...escalations, {
-                  id: `ESC-${Date.now()}`, raisedAt: raisedAt || today, category, tier,
+                  id: newB2BId('ESC'), raisedAt: raisedAt || today, category, tier,
                   note: note.trim() || undefined, loggedBy: client.kam,
                 }]);
                 setAdding(false); setNote(''); setTier(2); setRaisedAt(today);

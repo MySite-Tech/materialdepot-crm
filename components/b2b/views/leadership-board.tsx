@@ -32,13 +32,16 @@ function FunnelBar({ label, count, max, color }: { label: string; count: number;
 
 export default function LeadershipBoard() {
   const [data, setData] = useState<LeadershipData | null>(null);
+  const [failed, setFailed] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     Promise.all([fetchB2BData(), fetchInboundOwnerTotals()])
       .then(([d, inboundOwnerTotals]) => {
-        if (alive) setData(computeLeadership({ ...d, inboundOwnerTotals }, new Date()));
+        if (!alive) return;
+        setFailed(d.failed);
+        setData(computeLeadership({ ...d, inboundOwnerTotals }, new Date()));
       })
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
@@ -57,6 +60,14 @@ export default function LeadershipBoard() {
         <h1 className="text-lg font-bold text-gray-800">Leadership Board</h1>
         <p className="text-xs text-gray-400 mt-0.5">Team &amp; funnel performance</p>
       </div>
+
+      {!!failed.length && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
+          <span className="font-semibold">Partly loaded.</span>{' '}
+          {failed.join(', ')}{' '}could not be read, so every count and rupee figure below is understated.
+          Reload to retry.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 

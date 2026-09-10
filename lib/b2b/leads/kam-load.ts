@@ -1,6 +1,7 @@
 
 import { B2BPipelineStats, EMPTY_BUCKET } from '../stats/pipeline';
 import { TABLE } from '../data/rows';
+import { B2B_VERTICALS } from '@/components/b2b/models/roster';
 import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStatsByBmGroup } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
@@ -26,27 +27,6 @@ export async function fetchKamLoad(): Promise<Record<string, number>> {
 
 export const fetchInboundKamLoad = fetchKamLoad;
 
-interface VerticalRep { name: string; contact: string }
-
-const B2B_VERTICALS: { label: string; reps: VerticalRep[] }[] = [
-  { label: 'Bangalore KAM', reps: [
-    { name: 'Tharun', contact: '8309230101' },
-    { name: 'Krishna Jadhav', contact: '9187200807' },
-  ] },
-  { label: 'Inbound', reps: [
-    { name: 'Mandeep Ghai', contact: '7223048042' },
-    { name: 'Hardi Patel', contact: '9187191018' },
-  ] },
-  { label: 'Outreach', reps: [
-    { name: 'Vilok Reddy', contact: '9980123308' },
-    { name: 'Prafful Bhati', contact: '8233435000' },
-  ] },
-  { label: 'HYD', reps: [
-    { name: 'Manikanta', contact: '9059903118' },
-    { name: 'Shahrukh Irshad Ali', contact: '9187200815' },
-  ] },
-];
-
 export interface VerticalStats {
   label: string;
   active: CRMLeadsStatsBucket;
@@ -57,6 +37,8 @@ export interface VerticalStatsResult {
   verticals: VerticalStats[];
 
   pipeline: B2BPipelineStats | null;
+
+  ok: boolean;
 }
 
 export async function fetchVerticalStats(
@@ -69,10 +51,10 @@ export async function fetchVerticalStats(
     totalBranch,
   ).catch((e) => {
     console.error('[b2b] vertical stats fetch failed', e);
-    return { groups: {} as Record<string, CRMLeadsStats>, branchTotal: null };
+    return { groups: null as Record<string, CRMLeadsStats> | null, branchTotal: null };
   });
 
-  const byLabel = res.groups;
+  const byLabel = res.groups ?? {};
   const t = res.branchTotal;
   return {
     verticals: B2B_VERTICALS.map((v) => ({
@@ -81,8 +63,9 @@ export async function fetchVerticalStats(
       won: byLabel[v.label]?.won ?? EMPTY_BUCKET,
     })),
     pipeline: t
-      ? { total: t.total, active: t.active, won: t.won, lost: t.lost, byStatus: t.byStatus }
+      ? { total: t.total, active: t.active, won: t.won, lost: t.lost, byStatus: t.byStatus, ok: true }
       : null,
+    ok: res.groups !== null,
   };
 }
 

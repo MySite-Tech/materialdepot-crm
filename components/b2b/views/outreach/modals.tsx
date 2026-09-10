@@ -6,6 +6,7 @@ import { B2B_REPS, OutreachLead } from '../../models/mock-data';
 import { COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_STATUS_HINT, OutreachMeeting, OutreachStatus, SEGMENTS, SELECTIONS, Segment, outreachGateErrors } from '../../models/outreach';
 import { LostReasonSelect } from '../../ui/lost-reason-select';
 import { Field, GateErrors, errorInputCls, inputCls } from '../../ui/inbound-chips';
+import { newB2BId } from '../../models/ids';
 import { nowIso } from './utils';
 import { useState } from 'react';
 
@@ -142,7 +143,7 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
       }]
       : [];
     onCreate({
-      id: `OR-${Date.now()}`,
+      id: newB2BId('OR'),
       company: company.trim(),
       contactPerson: contactPerson.trim(),
       designation: designation.trim() || undefined,

@@ -31,6 +31,8 @@ export default function B2BDashboard() {
   const [failed, setFailed] = useState<B2BData['failed']>([]);
   const [clientCount, setClientCount] = useState(0);
   const [unresolvedOrders, setUnresolvedOrders] = useState(0);
+  const [targetsOk, setTargetsOk] = useState(true);
+  const [statsOk, setStatsOk] = useState(true);
 
   const loadBase = useCallback(async () => {
     setBaseBusy(true);
@@ -38,6 +40,7 @@ export default function B2BDashboard() {
       const now = new Date();
 
       const [fetched, targets] = await Promise.all([fetchB2BData(), fetchTargets()]);
+      setTargetsOk(targets.ok);
       let data = fetched;
       const today = istToday(now);
 
@@ -75,7 +78,7 @@ export default function B2BDashboard() {
           .reduce((t, p) => t + (aggregates[p]?.openValue ?? 0), 0),
       ));
       setD(m);
-      setMonthlyTarget(targets.monthlyTargetL * 100000);
+      setMonthlyTarget(targets.store.monthlyTargetL * 100000);
       setUpdatedAt(now);
     } finally {
       setBaseBusy(false);
@@ -96,7 +99,9 @@ export default function B2BDashboard() {
       const dayOfMonth = now.getDate();
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       const revenue = (monthStats?.verticals ?? byVertical).reduce((s, v) => s + v.won.value, 0);
-      setStats(selectedStats.pipeline ?? await fetchB2BPipelineStats(selected));
+      const pipeline = selectedStats.pipeline ?? await fetchB2BPipelineStats(selected);
+      setStats(pipeline);
+      setStatsOk(selectedStats.ok && pipeline.ok && (monthStats?.ok ?? true));
       setVerticals(byVertical);
       setMonthRevenue(revenue);
       setRunRate(Math.round((revenue / dayOfMonth) * daysInMonth));
@@ -169,6 +174,19 @@ export default function B2BDashboard() {
           Refresh to retry.
         </div>
       )}
+      {!statsOk && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
+          <span className="font-semibold">Pipeline stats could not be read.</span>{' '}
+          Every rupee figure on this page is showing zero because the request failed — that is not the same as
+          no pipeline. Refresh to retry.
+        </div>
+      )}
+      {!targetsOk && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
+          <span className="font-semibold">Targets could not be read.</span>{' '}
+          The target and every percentage against it are the built-in default, not your team&rsquo;s saved figure.
+        </div>
+      )}
       {!failed.length && clientCount === 0 && (
         <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-[12px] text-blue-900">
           <span className="font-semibold">The Client Database is empty.</span>{' '}
@@ -238,8 +256,8 @@ export default function B2BDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Revenue Generated" value={fmtL(monthRevenue)} sub={`of ${fmtL(monthlyTarget)} target`} />
         <MetricCard label="Target Achieved" value={`${achievedPct}%`} />
-        <MetricCard label="Run Rate" value={fmtL(runRate)} sub={runRate < monthlyTarget ? 'Below required' : 'On track'} subTone={runRate < monthlyTarget ? 'warn' : 'muted'} />
-        <MetricCard label="Month Projection" value={fmtL(runRate)} />
+        <MetricCard label="Month Projection" value={fmtL(runRate)} sub={runRate < monthlyTarget ? 'Below target' : 'On track'} subTone={runRate < monthlyTarget ? 'warn' : 'muted'} />
+        <MetricCard label="Open Pipeline" value={fmtL(overallPipeline)} sub={`${verticals.reduce((s, v) => s + v.active.count, 0)} open`} />
       </div>
 
       {health && <AccountHealthPanel overview={health} />}

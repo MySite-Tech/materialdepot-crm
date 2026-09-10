@@ -4,11 +4,17 @@ import { invalidateB2BCache, withB2BCache } from '../data/cache';
 const TARGET_TABLE = 'b2b_target';
 const TARGET_ROW_ID = 'default';
 
-export async function fetchTargets(): Promise<TargetStore> {
+export interface TargetsResult {
+  store: TargetStore;
+
+  ok: boolean;
+}
+
+export async function fetchTargets(): Promise<TargetsResult> {
   return withB2BCache('targets', fetchTargetsUncached);
 }
 
-async function fetchTargetsUncached(): Promise<TargetStore> {
+async function fetchTargetsUncached(): Promise<TargetsResult> {
   const base = defaultTargetStore();
   try {
     const { data, error } = await supabase
@@ -17,18 +23,21 @@ async function fetchTargetsUncached(): Promise<TargetStore> {
       .eq('id', TARGET_ROW_ID)
       .maybeSingle();
     if (error) throw error;
-    if (!data) return base;
+    if (!data) return { store: base, ok: true };
     return {
-      monthlyTargetL: Number(data.monthly_target_l) || base.monthlyTargetL,
-      reps: { ...base.reps, ...((data.reps as TargetStore['reps']) || {}) },
+      store: {
+        monthlyTargetL: Number(data.monthly_target_l) || base.monthlyTargetL,
+        reps: { ...base.reps, ...((data.reps as TargetStore['reps']) || {}) },
+      },
+      ok: true,
     };
   } catch (e) {
     console.error('[b2b] fetch targets failed (pre-migration?)', e);
-    return base;
+    return { store: base, ok: false };
   }
 }
 
-export async function saveTargets(store: TargetStore): Promise<void> {
+export async function saveTargets(store: TargetStore): Promise<string | null> {
   try {
     const { error } = await supabase.from(TARGET_TABLE).upsert(
       { id: TARGET_ROW_ID, monthly_target_l: store.monthlyTargetL, reps: store.reps, updated_at: new Date().toISOString() },
@@ -36,8 +45,10 @@ export async function saveTargets(store: TargetStore): Promise<void> {
     );
     if (error) throw error;
     invalidateB2BCache();
+    return null;
   } catch (e) {
     console.error('[b2b] save targets failed', e);
+    return e instanceof Error && e.message ? e.message : String(e);
   }
 }
 

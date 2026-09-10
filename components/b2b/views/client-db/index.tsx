@@ -1,6 +1,7 @@
 'use client';
 
 import { ACTIVE_WINDOW_MONTHS, CLIENT_ENTITY_TYPES, ClientEntity, ClientOrderMetrics, ClientStatus, EVIDENCE_IS_EXACT, MergeChoices, SEGMENTS, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact, temperatureColor, validateGst } from '../../models/client';
+import { newB2BId } from '../../models/ids';
 import { KAMS, fmtL } from '../../models/mock-data';
 import { ExportFormat } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
@@ -189,7 +190,7 @@ export default function ClientDatabase() {
   };
 
   const blank = (): ClientEntity => ({
-    id: `CLI-${Date.now()}`,
+    id: newB2BId('CLI'),
     company: '',
     contacts: [{ number: '', primary: true }],
     gsts: [],

@@ -8,6 +8,8 @@ export interface B2BPipelineStats {
   won: CRMLeadsStatsBucket;
   lost: CRMLeadsStatsBucket;
   byStatus: CRMLeadsStats['byStatus'];
+
+  ok: boolean;
 }
 
 export const EMPTY_BUCKET: CRMLeadsStatsBucket = { count: 0, value: 0 };
@@ -28,6 +30,7 @@ export async function fetchB2BPipelineStats(
     won: stats?.won ?? EMPTY_BUCKET,
     lost: stats?.lost ?? EMPTY_BUCKET,
     byStatus: stats?.byStatus ?? [],
+    ok: stats !== null,
   };
 }
 

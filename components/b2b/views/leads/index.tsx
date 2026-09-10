@@ -49,6 +49,12 @@ export default function LeadsTab() {
 
   useEffect(() => { load(); }, [createdFrom, createdTo]);
 
+  const kamOptions = useMemo(() => {
+    const seen = new Set<string>(KAMS);
+    leads.forEach((l) => l.kam && seen.add(l.kam));
+    return [...seen].sort();
+  }, [leads]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return leads.filter((l) => {
@@ -153,7 +159,7 @@ export default function LeadsTab() {
           {([
             ['Source', 'Both sources', source, setSource, ['all', 'Inbound', 'Outreach']],
             ['Status', 'All statuses', status, setStatus, ['all', 'Closed', 'Yet to Close']],
-            ['KAM', 'All KAMs', kam, setKam, ['all', ...KAMS]],
+            ['KAM', 'All KAMs', kam, setKam, ['all', ...kamOptions]],
           ] as const).map(([label, allLabel, val, setter, opts]) => (
             <div key={label}>
               <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</label>
