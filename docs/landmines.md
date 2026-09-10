@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-43 entries. They live in one file because they cross-reference each other —
+46 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
@@ -554,3 +554,39 @@ grep for a term, then read around the line you hit rather than opening all of it
   into `auditTicked`, because the two were ticked by different people and
   `categoriesAreFromStore` labels which one is on screen. **Do not "simplify"
   this by adding `audit_ticked` to `AUDIT_COLS`.**
+- **A caught error behind a typed return is invisible at the call site, and the
+  B2B module had five of them at once.** Fixed 2026-09-10. Each wrapper caught
+  internally and returned a plausible-looking value, so a failed request
+  rendered as a confident number: `fetchB2BPipelineStats` and
+  `fetchVerticalStats` returned `EMPTY_BUCKET` (a ₹0 pipeline on the Dashboard),
+  `fetchTargets` returned the built-in 120L default (indistinguishable from a
+  team that set 120L), `saveTargets` returned `void` so a target edit looked
+  saved and was not, and `clientMetricsFrom` counted `zeroFill`'s placeholder
+  rows as real so every client read ₹0 lifetime revenue. From the user's side
+  none of these looked broken — the Dashboard just showed a bad month. The fix
+  is the same shape each time: the return type carries `ok` (or the error
+  string), and the view renders a banner instead of the number. Note the near
+  miss in the last one: `B2BBulk.ok` already existed and already gated the
+  *dates* correctly via `orderDatesFromAggregates` — the money simply never read
+  it. **When you add an `ok` flag, grep every field derived from that response,
+  not just the one that prompted the flag.** Related: the Kylas `total: 0` trap
+  in `docs/b2b/data-layer.md`, and `Array.isArray(rows) ? rows : []`.
+- **A merge that is conditional on `page === 0` silently drops local edits on
+  every other page.** `fetchInboundBoard` skipped the Supabase read unless
+  `page === 0 && !kylasStage`, so paging past the first page of the inbound
+  board — or selecting any Kylas stage filter — showed raw Kylas with the
+  team's stage, follow-up, order value and notes missing. Nothing errored and
+  the board looked normal. Fixed 2026-09-10 by always running the read and the
+  overlay, and returning early on those paths. The reason it was written that
+  way is real and worth preserving: page 0 assembles
+  `[...dbLeads, ...kylasNotInDb]`, so **"has a Supabase row" doubles as a sort
+  key** and edited leads sit above untouched ones. Rewriting the whole function
+  to overlay in Kylas order is cleaner, loses that grouping, and was reverted
+  the same day — do the early-return instead.
+- **`` `PREFIX-${Date.now()}` `` is a primary key, not a display string.**
+  `CLI-` (client) and `KAM-` (order) ids are Supabase upsert conflict targets,
+  so two people creating a record in the same millisecond silently overwrote one
+  another — no error, one record simply gone. `OR-`, `INT-` and `ESC-` had the
+  same generator. Replaced 2026-09-10 with `newB2BId(prefix)` in
+  `components/b2b/models/ids.ts`, which appends a random suffix. Grep for
+  `Date.now()}\`` before adding any new record type.

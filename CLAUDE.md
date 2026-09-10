@@ -68,6 +68,35 @@ Concretely:
 - Found a doc line that is now wrong → delete or fix it. Removing a stale line
   counts as much as adding a true one.
 
+**This is enforced, not advisory.** One script, `.claude/hooks/docs-guard.sh`,
+runs from three places and fails when a module in the table above changed with
+nothing under its `docs/` path changing:
+
+| Layer | Trigger | Scope | Bypass |
+|---|---|---|---|
+| Claude Stop hook (`.claude/settings.json`) | Claude tries to end a turn | working tree + commits ahead of upstream | say the change is doc-neutral |
+| `.githooks/pre-commit` | any `git commit`, human included | staged files | `git commit --no-verify` |
+| `.github/workflows/docs-guard.yml` | PR to `main` | `origin/<base>...HEAD` | `docs-neutral` PR label |
+
+Only the CI layer can actually block a merge; the other two are fast feedback.
+The pre-commit hook needs `core.hooksPath` set — `npm install` does it via the
+`prepare` script, or run `npm run prepare` once.
+
+It also greps changed sources for two request-budget violations that are cheap to
+detect: `axios`/`XHR`/`WebSocket` egress, and `` `PREFIX-${Date.now()}` `` record
+ids. The rest of `request-budget` (the ten-request budget, no-requests-in-loops,
+failures rendering "unknown") is printed as a reminder and still needs a human.
+
+Two design points worth not undoing. The Claude layer reads **commits as well as
+the working tree**, because the rule is "same commit" and code committed
+mid-session still needs its doc — a working-tree-only check passes a clean tree
+that just committed undocumented code. And the script **checks its own MODULES
+table against the filesystem**, because renaming a `docs/` directory would
+otherwise un-match a row and silently disable that module's guard.
+
+Added 2026-09-10, after a session read this rule, shipped a seventeen-file B2B
+change, and updated no doc at all. Text in this file was not enough on its own.
+
 What **not** to write: anything derivable by reading the code. Prose that
 restates the file tree, describes what a component renders, or lists props makes
 these docs worse — it costs context on every read and buries the parts that are

@@ -1,0 +1,20 @@
+name: Docs parity
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  docs-guard:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'docs-neutral') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need history back to the merge base for BASE...HEAD to resolve.
+          fetch-depth: 0
+
+      - name: Check docs parity and request-budget rules
+        run: |
+          chmod +x .claude/hooks/docs-guard.sh
+          .claude/hooks/docs-guard.sh ci "origin/${{ github.base_ref }}"
