@@ -153,7 +153,7 @@ export const SITE_AUDIT_ONLY_ROLES = new Set(['field_worker']);
 
 export const STORE_DISPLAY_ADMIN_SLUG = 'crm.store_display_admin';
 
-export const STORE_DISPLAY_ADMIN_ROLES = new Set(['superadmin', 'admin', 'tech', 'manager']);
+export const STORE_DISPLAY_ADMIN_ROLES = new Set(['superadmin', 'admin', 'manager']);
 
 export const MIN_LOST_AGE_DAYS = 30;
 
