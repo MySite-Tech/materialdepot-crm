@@ -289,9 +289,11 @@ for it.
   chain recomputed on every render is the usual cause of a sluggish tab. Equally:
   never depend on an array whose identity changes each render — key on a stable
   string instead, or the effect re-fetches in a loop.
-- **No file over 500 lines.** The repo currently satisfies this at every path.
-  Split by domain per the folder-structure rules above, not by arbitrary line
-  count.
+- **No file over 500 lines.** Split by domain per the folder-structure rules
+  above, not by arbitrary line count. One path is over and should come down the
+  next time someone is in it: `components/site-audit/views/jobs/index.tsx` at
+  517, which crossed the line when client-side paging was added. Do not treat it
+  as permission for a second one.
 - **Delete rather than keep.** No dead exports, no commented-out blocks, no
   re-export shims, no `_unused` parameters. `git` is the archive.
 - Concision is about what the reader must hold in their head, not character
