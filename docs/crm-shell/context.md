@@ -3,7 +3,7 @@
 **Covers:** `components/crm/** · lib/api/core/auth.ts · types/crm.ts`
 
 ## Purpose
-The app shell: login, session restore, and the tab permission gate that decides which of the 13 main tabs a role can see.
+The app shell: login, session restore, and the tab permission gate that decides which of the 14 main tabs a role can see.
 
 ## Auth, and why a fake session won't work
 
@@ -54,6 +54,15 @@ backfill wrote the slugs for every force-add set (see below).
 tabs into `effectiveTab`; every render block keys off `effectiveTab`, never
 `mainTab`. Before that, only Admin and Appointment Tracker re-checked at render,
 so every other tab was reachable by typing its name.
+
+**One slug is now also checked outside the browser.** `crm.store_checklist` is
+re-evaluated server-side in `app/api/store-checklist/route.ts`, so revoking it
+takes the data away and not just the tab — every other slug here still gates the
+UI only, and hiding a tab hides nothing on the wire. The slug is exported as
+`CHECKLIST_PERMISSION_SLUG` from `lib/store-checklist/constants.ts` and imported
+into `PERMISSION_TAB_ORDER` rather than written twice, because a rename in one
+place would leave the route denying everyone. A tab whose backend must enforce
+the same rule should follow that shape; see `docs/api-layer/context.md`.
 
 `siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
 which is fetched async — so that tab can appear a beat after the others. That is

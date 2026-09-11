@@ -39,6 +39,12 @@ auth failure) triggers `refreshAccessToken` through a single module-level
 all ten retry once. If the refresh fails, `forceReLogin()` clears both tokens,
 removes `materialdepot_user` from localStorage and **reloads the page**.
 
+That single-flight refresh is exported as `refreshSession()` for callers that do
+not go through `mdFetch` — a plain `fetch` to one of this app's own `app/api/*`
+routes gets no refresh otherwise, so a tab open past token expiry would fail
+every write until reloaded. `lib/store-checklist/api.ts` is the caller to copy:
+send the bearer token, and on a 401 `await refreshSession()` and retry **once**.
+
 **5. A 403 that is *not* an auth failure is a different error.** It throws
 "You do not have access to this resource." and never triggers a refresh —
 distinguishing "your session expired" from "your role can't see this". The
@@ -65,6 +71,39 @@ Both are per-process. On Azure Static Web Apps that means per instance, so
 neither is a shared cache or a global rate limit — two instances will happily
 issue two requests inside the same 500 ms. Treat them as best-effort politeness
 toward Kylas, not as guarantees.
+
+### `requireCaller` — the only way a route handler learns who is calling
+
+`lib/server/session.ts`. A route handler has no session of its own: auth in this
+app is a Django JWT in `localStorage`, so anything under `app/api/*` is reachable
+by whoever can reach the app unless it checks. `requireCaller(request)` is that
+check, and `/api/store-checklist` is the route built on it.
+
+It reads `Authorization: Bearer <jwt>`, takes `user_id` and `exp` out of the
+payload, then calls Django `/user-organisation/` **with that same token** and
+finds the row whose `user.id` matches the claim. That second step is what makes
+it trustworthy: the payload is base64, not verified locally, so a forged token
+gets past the decode and is then rejected by Django. It returns the caller's
+`role`, `allowedBranches` and `individualPermissions` — everything the tab
+permission gate runs on.
+
+Four things worth knowing before reusing it:
+
+- **`/crm/user-profile/?phone=` cannot do this job.** It resolves whatever phone
+  you pass, not the token's owner, so a caller could hand it somebody else's
+  number. The roster is keyed by `user.id`, which is the one field the token
+  actually asserts.
+- **Role comes from `roleFromPermission`** in `lib/api/crm/roles.ts`, shared with
+  `fetchUsers`. If the server derived the role differently from the browser, the
+  UI would offer actions the route then refuses. `permission_name` is an HR
+  label (see `docs/crm-shell/context.md`) — it is used here only because it is
+  what `ROLE_TABS` and `BACKDATE_DAYS` are already keyed on.
+- **The resolved caller is cached 30 s, keyed by user id + the token's tail.** So
+  a revoked or logged-out session keeps working for at most 30 s on a route that
+  is already open. Failures are never cached, and the key includes the token, so
+  one user's entry can't serve another's request.
+- **It fails closed.** Unreachable backend → `SessionError` at 502, not "allow".
+  Pair it with `sessionErrorResponse(err)` to turn that into the response.
 
 ## Constraints
 

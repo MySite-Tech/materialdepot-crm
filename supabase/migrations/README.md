@@ -37,6 +37,7 @@ Probe the column before trusting a DB-backed feature.
 | `supabase-setup-b2b_lead.sql` | CRM | yes — recreates `b2b_lead` |
 | `supabase-setup-b2b_target.sql` | CRM | yes — `b2b_target` |
 | `rota_plan.sql` | CRM | yes — one row per branch |
+| `supabase-store-checklist.sql` | CRM | **NO** — written 2026-09-10, never pasted. Until it runs, `/api/store-checklist` 502s with `Could not find the table 'public.store_checklist'` and the Store Checklist tab shows that instead of a checklist. Creates the table **and** the `store_checklist_mark()` merge function — the tab needs both |
 | `b2b-migration-inbound-status.sql` | CRM | **optional** — `normalizeStatus`/`decomposeLegacyStage` run on every read, so the board is correct whether or not this is ever run |
 | `site-audit-migration-001-branch-column.sql` | Site Audit | yes — `profiles.branch` |
 | `site-audit-migration-002-branch-mgr-role.sql` | Site Audit | yes — branch-manager role |

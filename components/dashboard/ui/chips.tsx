@@ -112,7 +112,7 @@ export function BMFilterChip({
   );
 }
 
-export function DateChip({ label, value, onChange, color }: DateChipProps) {
+export function DateChip({ label, value, onChange, color, presets }: DateChipProps) {
   const active = value.from || value.to;
   const display = active
     ? `${value.from ? fmtDate(value.from) : '…'} – ${value.to ? fmtDate(value.to) : '…'}`
@@ -144,6 +144,16 @@ export function DateChip({ label, value, onChange, color }: DateChipProps) {
               <input type="date" value={value.to} onChange={e => onChange({ ...value, to: e.target.value })}
                 className="border border-gray-200 bg-white text-gray-700 rounded px-2 py-1 text-[11px] outline-none" />
             </div>
+            {presets && presets.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {presets.map(p => (
+                  <button key={p.label} onClick={() => { onChange(p.range()); setOpen(false); }}
+                    className="px-2 py-1 rounded border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50 cursor-pointer bg-white">
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {(value.from || value.to) && (
               <button onClick={() => { onChange({ from: '', to: '' }); setOpen(false); }}
                 className="text-[11px] text-red-500 hover:text-red-600 cursor-pointer bg-transparent border-none p-0">

@@ -35,15 +35,16 @@ reading the module.
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
 | B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer`; `context.md` is the pointer table |
-| App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 13-tab permission gate |
+| App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 14-tab permission gate |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
-| Retail overview + Order Lost | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap |
+| Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
 | Footfall | `docs/footfall/context.md` | Five endpoints, the funnel, repeat buckets, the data-driven breakdown grid |
 | NPS | `docs/nps/context.md` | Promoter/passive/detractor cutoffs, the NPS formula, per-customer dedupe |
 | Report card | `docs/report-card/context.md` | One call, six sections; `has_bm`; cart temperature vs closure stage |
 | Weekly funnel | `docs/weekly-funnel/context.md` | Fixed value buckets, column-dynamic category tables, the shared filter-option calls |
 | Appointment tracker | `docs/appointment-tracker/context.md` | Kylas feed via a route handler, the rota table, EC-ready being per-browser, fuzzy branch matching |
 | Store visit | `docs/store-visit/context.md` | One endpoint doing lookup and write, the whole-body Kylas lead update |
+| Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
 | Shipped-and-fixed bugs | `docs/landmines.md` | 43 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
@@ -195,6 +196,12 @@ change pushes a page over ten, the change is wrong, not the budget.
 (both Supabase projects), and a direct `fetch()` to this app's own `app/api/*`
 route handlers. No axios, no XHR, no sockets.
 
+**A route handler has no session unless it asks for one.** Auth is a Django JWT
+in `localStorage`, so anything under `app/api/*` is reachable by whoever can
+reach the app. A route that holds a privileged key must call `requireCaller`
+(`lib/server/session.ts`) and enforce scope with the same helpers the UI uses —
+a check that lives only in the React component is not a check.
+
 **Never put a request inside a loop over rows.** Reach for a bulk endpoint, or
 check whether the field is already in the response you have.
 
@@ -237,6 +244,14 @@ Two things about that workflow are worth knowing before you touch config:
   backends* below). "Move the Site Audit credentials into env vars" is
   therefore a two-repo change that also needs a GitHub secret added, not a
   tidy-up — do it and the field apps break on the next deploy.
+- **Those two are the only env vars the repo can account for.** The server-only
+  keys the `app/api/*` route handlers need — `SUPABASE_SERVICE_ROLE_KEY`,
+  `KYLAS_API_KEY`, `API_BASE_URL` — are in `.env.local` here and in the Azure
+  application settings there, and nothing in the repo shows whether a given one
+  is actually set in the portal. A route that needs one builds and passes
+  `tsc` either way, so a new service-role route can work locally and throw
+  `… is not set` in production. Check the portal instead of the workflow file;
+  see `docs/backends.md`.
 - `vercel.json` is tracked and `.vercel/` sits locally (gitignored), so the
   repo looks Vercel-deployed. The workflow above is the deploy path visible in
   the repo. Don't infer the hosting from those files.
@@ -274,9 +289,11 @@ for it.
   chain recomputed on every render is the usual cause of a sluggish tab. Equally:
   never depend on an array whose identity changes each render — key on a stable
   string instead, or the effect re-fetches in a loop.
-- **No file over 500 lines.** The repo currently satisfies this at every path.
-  Split by domain per the folder-structure rules above, not by arbitrary line
-  count.
+- **No file over 500 lines.** Split by domain per the folder-structure rules
+  above, not by arbitrary line count. One path is over and should come down the
+  next time someone is in it: `components/site-audit/views/jobs/index.tsx` at
+  517, which crossed the line when client-side paging was added. Do not treat it
+  as permission for a second one.
 - **Delete rather than keep.** No dead exports, no commented-out blocks, no
   re-export shims, no `_unused` parameters. `git` is the archive.
 - Concision is about what the reader must hold in their head, not character

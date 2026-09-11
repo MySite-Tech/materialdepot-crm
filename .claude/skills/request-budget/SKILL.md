@@ -19,14 +19,40 @@ incidents behind each rule.
 **A page may issue at most ten requests on mount.** That is a budget, not an
 aspiration — the B2B Dashboard was at ~181 and the Kylas proxy was answering
 429s. Where the tabs stand now, counted by hand: B2B Dashboard 7 (8 on Last
-Month / All Time), KAM 3, Client Database 2, Leads 2, Inbound 2, Outreach 1.
-If a change pushes a page over ten, the change is wrong, not the budget.
+Month / All Time), KAM 3, Client Database 2, Leads 2, Inbound 2, Outreach 1,
+Category Revenue 8 (5 once the surrounding tab has already fetched the shared
+lists). If a change pushes a page over ten, the change is wrong, not the budget.
+
+Category Revenue is the worked example of the budget deciding a *feature*, not
+just an implementation: per-category rows would have cost one request per
+category (41), so the tab ships with rows per store and waits on a
+`category_groups=` bulk parameter. See `docs/dashboard/context.md`.
 
 **There are four ways out of this app and there must never be a fifth.**
 `mdFetch` (Django), `kylasFetch` (Kylas), `sbGet`/`sbGetPaged`/`supabase.from`
 (both Supabase projects), and a direct `fetch()` to this app's own
 `app/api/*` route handlers. No axios, no XHR, no sockets. Route every new call
 through the wrapper for its backend so the caching and auth-refresh below apply.
+
+**That fourth way out is the one with no wrapper, so it carries two obligations
+the other three handle for you.** A plain `fetch` to your own route sends no
+credentials and gets no token refresh, and the route gets no session:
+
+- **Send the bearer token and retry once on 401**, using `refreshSession()` from
+  `lib/api/core/client.ts` so you share `mdFetch`'s single-flight refresh.
+  Without it a tab left open past token expiry fails every call until reloaded.
+- **Resolve who is calling inside the route**, with `requireCaller` from
+  `lib/server/session.ts`, and re-run the same authorization helpers the UI uses
+  instead of writing a second copy of the rules. A route handler that holds a
+  privileged key (the Supabase service role, `KYLAS_API_KEY`,
+  `MD_BACKEND_TOKEN`) and checks no token is open to anyone who can reach the
+  app. `app/api/store-checklist/route.ts` is the worked example;
+  `docs/api-layer/context.md` has the contract and the 30 s cache, and
+  `docs/landmines.md` has what shipping without it looked like.
+
+Neither is free: `requireCaller` costs one Django call per request, cached 30 s
+per token. That is server-side, so it does not count against the ten — but it is
+a reason to keep route-handler calls per interaction low, not just per mount.
 
 **`mdFetch` de-duplicates identical GETs for 8s** and any non-GET clears that
 cache (`lib/api/core/client.ts`). Kylas and the `app/api/*` routes have no such
@@ -44,6 +70,10 @@ is cheaper than 200 round trips. Before you write the loop, check whether the
 field is *already in the response you have* — the Raise screen fetched
 `/api/deals/{id}` once per deal for an `associatedContacts` value that
 `SEARCH_FIELDS` had already asked Kylas for, up to 200 times per contact tap.
+
+A fifth is **wanted and does not exist yet**:
+`/crm/leads/stats/?category_groups=`, the same `label:a,b|label2:c` shape as
+`bm_groups=`. It is all that blocks per-category rows on Category Revenue.
 
 The loops that are legitimate: paging a source that has no bulk form
 (`fetchAllRows`, `for (let page = 0; ; page++)`), batching a bulk call to its
@@ -121,6 +151,11 @@ old call when `branchTotal` is absent.
 - **Check the failure path**, not just the happy one. Break the call (offline, or
   a bad URL) and confirm the UI says "unknown" rather than showing a confident
   zero.
+- **For a route handler, curl the rejections** — no token, a garbage token, an
+  expired one, and a caller asking for someone else's scope. `tsc` and `build`
+  pass a route that authorises nobody. Pointing `API_BASE_URL` at a small local
+  stub that returns a roster row lets you exercise each role's limits without a
+  real login.
 - **Diff against `origin/main`, not your branch**, before claiming parity —
   `main` has run ahead twice, and a restructured file that `main` also edited
   merges as a delete/modify conflict that silently drops `main`'s fix.

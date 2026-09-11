@@ -7,6 +7,29 @@ Store product display management: what is physically on display in each store,
 the add/move/remove movement workflow, discontinued and removed lists, movement
 status tracking, an admin view and a per-product detail page.
 
+## Who sees the Admin section
+
+Two levels, rendered from one prop: `tab-panels.tsx` passes
+`isAdmin={canAdminStoreDisplay(currentUser)}` — Full includes the Admin section,
+Partial does not. The editor in Admin > Users shows them as the
+"STORE DISPLAY ACCESS (PICK ONE)" radio.
+
+`canAdminStoreDisplay` reads the **slug** `crm.store_display_admin` when the user
+has any individual permissions, and only falls back to
+`STORE_DISPLAY_ADMIN_ROLES` (`superadmin` · `admin` · `manager`) when that list
+is empty. `tech` was in that set until 2026-09-11 and was removed: it is the
+`permission_name` of a **Service Manager**, not an administrator (see
+`docs/crm-shell/context.md` on `permission_name` being an HR label).
+
+**The consequence that catches people: the role set is only a fallback.** An
+`admin` whose permission list is non-empty and does not contain the slug gets
+Partial, and widening the role set does not reach them — at the time of the
+`tech` removal five admins/managers were in exactly that state, and five `tech`
+accounts still carried the slug and kept Full. Changing the set fixes new users,
+role re-picks and empty-list accounts only; anyone else has to be re-saved in
+Admin > Users. This is the same force-add-vs-slug drift recorded in
+`docs/landmines.md`.
+
 ## Data
 
 All Django, via `lib/store-display/display-api.ts`:

@@ -1,19 +1,22 @@
 'use client';
 
+import CategoryRevenueDashboard from '@/components/dashboard/category-revenue';
 import OrderLostDashboard from '@/components/dashboard/order-lost/index';
 
-import { BMFilterChip, DateChip, FilterChip } from './ui/chips';
+import { BMFilterChip, DateChip, FilterChip } from '../ui/chips';
 import { DEFAULT_STATUS_COLOR, LOST_COLORS, STATUS_COLORS } from './constants';
 import { SectionHeader } from './ui/layout';
 import { BranchPieTooltip, LostPieTooltip } from './ui/tooltips';
-import { DashboardProps, DateRange, WeekDay } from './types';
-import { fmtDate, fmtINR } from './utils';
+import { DashboardProps, DashboardView, WeekDay } from './types';
+import { DateRange } from '../types';
+import { fmtINR } from './utils';
+import { fmtDate } from '../utils';
 import { CategoryOption, DashboardBranchStatus, DashboardClosureLead, DashboardData, DashboardLostReason, fetchAvailableBMs, fetchCategoryOptions, fetchDashboardData } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-export default function Dashboard({ branches, allowedBranches = [], orderLostOnly = false }: DashboardProps) {
-  const [view, setView] = useState<'overview' | 'orderLost'>(orderLostOnly ? 'orderLost' : 'overview');
+export default function Dashboard({ branches, allowedBranches = [], orderLostOnly = false, canEditTargets = false }: DashboardProps) {
+  const [view, setView] = useState<DashboardView>(orderLostOnly ? 'orderLost' : 'overview');
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [bmFilter, setBmFilter] = useState<string[]>([]);
   const [closureDate, setClosureDate] = useState<DateRange>({ from: '', to: '' });
@@ -114,7 +117,11 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
       <div className="px-3 sm:px-6 pt-4 flex items-center gap-1.5">
         {(orderLostOnly
           ? ([{ key: 'orderLost', label: 'Order Lost' }] as const)
-          : ([{ key: 'overview', label: 'Overview' }, { key: 'orderLost', label: 'Order Lost' }] as const)
+          : ([
+              { key: 'overview', label: 'Overview' },
+              { key: 'orderLost', label: 'Order Lost' },
+              { key: 'categoryRevenue', label: 'Category Revenue' },
+            ] as const)
         ).map(t => (
           <button
             key={t.key}
@@ -126,7 +133,9 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
         ))}
       </div>
 
-      {view === 'orderLost' ? (
+      {view === 'categoryRevenue' ? (
+        <CategoryRevenueDashboard branches={branches} allowedBranches={allowedBranches} canEditTargets={canEditTargets} />
+      ) : view === 'orderLost' ? (
         <OrderLostDashboard branches={branches} allowedBranches={allowedBranches} />
       ) : (
     <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-5 sm:space-y-6">

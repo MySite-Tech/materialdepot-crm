@@ -58,6 +58,13 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+export async function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+  const ok = await refreshPromise;
+  if (!ok) forceReLogin();
+  return ok;
+}
+
 function isAuthFailureBody(bodyText: string): boolean {
   if (!bodyText) return false;
   let detail = '';
@@ -134,10 +141,7 @@ async function mdFetchRaw(path: string, init?: RequestInit, retried = false): Pr
   if ((res.status === 401 || res.status === 403) && !retried) {
     const body = await res.text();
     if (res.status === 401 || isAuthFailureBody(body)) {
-      if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
-      const ok = await refreshPromise;
-      if (ok) return mdFetchRaw(path, init, true);
-      forceReLogin();
+      if (await refreshSession()) return mdFetchRaw(path, init, true);
       throw new Error('Session expired');
     }
     throw new Error('You do not have access to this resource.');

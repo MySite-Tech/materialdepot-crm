@@ -63,6 +63,9 @@ MODULES="
 components/b2b/|docs/b2b/|B2B sales CRM
 lib/b2b/|docs/b2b/|B2B sales CRM
 lib/api/b2b/|docs/b2b/|B2B sales CRM
+lib/api/core/|docs/api-layer/|Django/Kylas client layer
+lib/api/crm/|docs/api-layer/|Django/Kylas client layer
+lib/server/|docs/api-layer/|Django/Kylas client layer
 components/site-audit/|docs/site-audit/|Site audit
 components/crm/shell/|docs/crm-shell/|App shell / auth / tabs
 components/footfall/|docs/footfall/|Footfall
@@ -71,6 +74,9 @@ components/report-card/|docs/report-card/|Report card
 components/weekly-funnel/|docs/weekly-funnel/|Weekly funnel
 components/appointment-tracker/|docs/appointment-tracker/|Appointment tracker
 components/store-visit/|docs/store-visit/|Store visit
+components/store-checklist/|docs/store-checklist/|Store checklist
+lib/store-checklist/|docs/store-checklist/|Store checklist
+app/api/store-checklist/|docs/store-checklist/|Store checklist
 components/store-display/|docs/store-display/|Store display
 components/sales-dashboard/|docs/sales-dashboard/|Sales dashboard
 components/dashboard/|docs/dashboard/|Retail overview
