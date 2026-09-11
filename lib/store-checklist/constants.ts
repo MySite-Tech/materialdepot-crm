@@ -74,6 +74,8 @@ export const CHECKLIST_VALUES: Array<{ value: ChecklistValue; label: string }> =
   { value: 'na', label: 'NA' },
 ];
 
+export const CHECKLIST_PERMISSION_SLUG = 'crm.store_checklist';
+
 export const MARKER_ROLES = new Set(['retail', 'store_manager', 'manager', 'admin', 'tech', 'superadmin']);
 
 export const OVERSIGHT_ROLES = new Set(['store_manager', 'manager', 'admin', 'tech', 'superadmin']);

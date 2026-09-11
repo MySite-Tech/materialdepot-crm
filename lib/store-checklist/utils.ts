@@ -1,4 +1,4 @@
-import { ALL_STORE_ROLES, BACKDATE_DAYS, BRANCH_NAME_TO_STORE_CODE, CHECKLIST_SECTIONS, DEFAULT_BACKDATE_DAYS } from './constants';
+import { ALL_STORE_ROLES, BACKDATE_DAYS, BRANCH_NAME_TO_STORE_CODE, CHECKLIST_PERMISSION_SLUG, CHECKLIST_SECTIONS, DEFAULT_BACKDATE_DAYS, MARKER_ROLES } from './constants';
 import type { ChecklistDay, ChecklistIssue, ChecklistMarks, ChecklistSectionKey, DayProgress, SectionProgress } from './types';
 import { STORES, STORE_NAMES } from '../store-display/display-supabase';
 
@@ -26,10 +26,6 @@ export function recentDates(days: number, endDate = istToday()): string[] {
 
 export function isValidDate(date: unknown): date is string {
   return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date);
-}
-
-export function isKnownStoreCode(code: unknown): code is string {
-  return typeof code === 'string' && STORES.some((s) => s.code === code);
 }
 
 export function storeLabel(code: string): string {
@@ -68,6 +64,22 @@ export function backdateDaysFor(role: string | undefined): number {
 export function canMarkDate(role: string | undefined, date: string, today = istToday()): boolean {
   if (!isValidDate(date) || date > today) return false;
   return date >= shiftDate(today, -backdateDaysFor(role));
+}
+
+export interface ChecklistActor {
+  role: string;
+  allowedBranches: string[];
+  individualPermissions: string[];
+}
+
+export function canUseChecklist(actor: ChecklistActor): boolean {
+  const perms = actor.individualPermissions;
+  if (Array.isArray(perms) && perms.length > 0) return perms.includes(CHECKLIST_PERMISSION_SLUG);
+  return MARKER_ROLES.has(actor.role);
+}
+
+export function storesForActor(actor: ChecklistActor): string[] {
+  return storesForUser(actor.role, actor.allowedBranches).codes;
 }
 
 export function dayProgress(marks: ChecklistMarks | null | undefined): DayProgress {

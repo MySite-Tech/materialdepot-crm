@@ -1,6 +1,7 @@
 'use client';
 
 import { MainTab } from './types';
+import { CHECKLIST_PERMISSION_SLUG } from '@/lib/store-checklist/constants';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/site-audit/shared';
 
 export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
@@ -87,7 +88,7 @@ export const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.weekly_funnel', 'weeklyFunnel'],
   ['crm.report_card', 'reportCard'],
   ['crm.store_visit', 'storeVisit'],
-  ['crm.store_checklist', 'storeChecklist'],
+  [CHECKLIST_PERMISSION_SLUG, 'storeChecklist'],
   ['crm.sales', 'sales'],
   ['crm.b2b_sales', 'b2bSales'],
   ['crm.admin', 'admin'],

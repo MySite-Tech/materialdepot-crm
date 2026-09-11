@@ -7,9 +7,10 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-46 entries. They live in one file because they cross-reference each other —
+47 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
+- A route handler holding the service-role key is the access check — RLS is not
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
 - A booking's date must come from the sub-job, not from its assignment
 - A tab's badge must count the rows that tab lists — derive both from one function
@@ -590,3 +591,22 @@ grep for a term, then read around the line you hit rather than opening all of it
   same generator. Replaced 2026-09-10 with `newB2BId(prefix)` in
   `components/b2b/models/ids.ts`, which appends a random suffix. Grep for
   `Date.now()}\`` before adding any new record type.
+- **RLS on the table does nothing for a route handler holding the service-role
+  key — the route itself is the access check.** `/api/store-checklist` shipped
+  with `enable row level security`, no policy, execute revoked from `anon`, and
+  a comment explaining that the browser therefore could not forge a mark. All
+  true, and all irrelevant: the route *bypasses* RLS by design, took `store`,
+  `date` and `by` from the request body, and required no token — so anyone who
+  could reach the app could read every store's compliance history, write marks
+  for any store up to 30 days back, and sign them as any name. The per-role
+  backdating (`BACKDATE_DAYS`) existed only in the React component. Fixed
+  2026-09-11 with `requireCaller` (`lib/server/session.ts`), which resolves the
+  caller from the JWT's `user_id` against the Django org roster, after which the
+  route re-runs the **same** `canUseChecklist` / `storesForActor` / `canMarkDate`
+  helpers the UI uses and stamps `by` from the session. Two general shapes:
+  **a UI-side permission check is not a permission check**, and a route handler
+  that holds a privileged key must answer "who is asking" before "what do they
+  want". The other 16 `app/api/*` routes still take no token; they proxy to
+  Kylas/Django with a server-held key rather than driving a service-role DB
+  client, so the blast radius differs, but do not read their existence as a
+  precedent for a new one.

@@ -11,8 +11,7 @@ import { DatePicker, StorePicker } from './ui/store-picker';
 
 type SubTab = 'day' | 'compliance';
 
-export default function StoreChecklistTab({ userName, role, allowedBranches }: {
-  userName: string;
+export default function StoreChecklistTab({ role, allowedBranches }: {
   role: string;
   allowedBranches: string[];
 }) {
@@ -96,7 +95,6 @@ export default function StoreChecklistTab({ userName, role, allowedBranches }: {
             date={date}
             readOnly={!markable}
             readOnlyReason={readOnlyReason}
-            userName={userName}
           />
         </>
       )}

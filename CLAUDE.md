@@ -196,6 +196,12 @@ change pushes a page over ten, the change is wrong, not the budget.
 (both Supabase projects), and a direct `fetch()` to this app's own `app/api/*`
 route handlers. No axios, no XHR, no sockets.
 
+**A route handler has no session unless it asks for one.** Auth is a Django JWT
+in `localStorage`, so anything under `app/api/*` is reachable by whoever can
+reach the app. A route that holds a privileged key must call `requireCaller`
+(`lib/server/session.ts`) and enforce scope with the same helpers the UI uses —
+a check that lives only in the React component is not a check.
+
 **Never put a request inside a loop over rows.** Reach for a bulk endpoint, or
 check whether the field is already in the response you have.
 

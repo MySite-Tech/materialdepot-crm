@@ -13,7 +13,7 @@ export type SaveState =
   | { status: 'saved'; at: string }
   | { status: 'error'; message: string };
 
-export function useChecklistDay(storeCode: string | null, date: string, by: string) {
+export function useChecklistDay(storeCode: string | null, date: string) {
   const [day, setDay] = useState<ChecklistDay | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function useChecklistDay(storeCode: string | null, date: string, by: stri
 
     setSaveState({ status: 'saving' });
     try {
-      const saved = await saveChecklistMarks(target.store, target.date, batch, by);
+      const saved = await saveChecklistMarks(target.store, target.date, batch);
       if (targetRef.current?.store !== target.store || targetRef.current?.date !== target.date) return;
       setDay(saved);
       const remaining: ChecklistMarks = {};
@@ -77,7 +77,7 @@ export function useChecklistDay(storeCode: string | null, date: string, by: stri
     } catch (err) {
       setSaveState({ status: 'error', message: err instanceof Error ? err.message : 'Save failed' });
     }
-  }, [by]);
+  }, []);
 
   useEffect(() => { flushRef.current = flush; }, [flush]);
 

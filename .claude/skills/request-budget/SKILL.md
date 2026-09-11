@@ -34,6 +34,26 @@ category (41), so the tab ships with rows per store and waits on a
 `app/api/*` route handlers. No axios, no XHR, no sockets. Route every new call
 through the wrapper for its backend so the caching and auth-refresh below apply.
 
+**That fourth way out is the one with no wrapper, so it carries two obligations
+the other three handle for you.** A plain `fetch` to your own route sends no
+credentials and gets no token refresh, and the route gets no session:
+
+- **Send the bearer token and retry once on 401**, using `refreshSession()` from
+  `lib/api/core/client.ts` so you share `mdFetch`'s single-flight refresh.
+  Without it a tab left open past token expiry fails every call until reloaded.
+- **Resolve who is calling inside the route**, with `requireCaller` from
+  `lib/server/session.ts`, and re-run the same authorization helpers the UI uses
+  instead of writing a second copy of the rules. A route handler that holds a
+  privileged key (the Supabase service role, `KYLAS_API_KEY`,
+  `MD_BACKEND_TOKEN`) and checks no token is open to anyone who can reach the
+  app. `app/api/store-checklist/route.ts` is the worked example;
+  `docs/api-layer/context.md` has the contract and the 30 s cache, and
+  `docs/landmines.md` has what shipping without it looked like.
+
+Neither is free: `requireCaller` costs one Django call per request, cached 30 s
+per token. That is server-side, so it does not count against the ten — but it is
+a reason to keep route-handler calls per interaction low, not just per mount.
+
 **`mdFetch` de-duplicates identical GETs for 8s** and any non-GET clears that
 cache (`lib/api/core/client.ts`). Kylas and the `app/api/*` routes have no such
 cache, so a repeated Kylas call is a repeated network request — which is why
@@ -131,6 +151,11 @@ old call when `branchTotal` is absent.
 - **Check the failure path**, not just the happy one. Break the call (offline, or
   a bad URL) and confirm the UI says "unknown" rather than showing a confident
   zero.
+- **For a route handler, curl the rejections** — no token, a garbage token, an
+  expired one, and a caller asking for someone else's scope. `tsc` and `build`
+  pass a route that authorises nobody. Pointing `API_BASE_URL` at a small local
+  stub that returns a roster row lets you exercise each role's limits without a
+  real login.
 - **Diff against `origin/main`, not your branch**, before claiming parity —
   `main` has run ahead twice, and a restructured file that `main` also edited
   merges as a delete/modify conflict that silently drops `main`'s fix.

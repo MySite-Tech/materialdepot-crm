@@ -55,7 +55,6 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
     
     {effectiveTab === 'storeChecklist' && (
       <StoreChecklistTab
-        userName={currentUser?.name ?? ''}
         role={currentUser?.role ?? ''}
         allowedBranches={userAllowedBranches}
       />

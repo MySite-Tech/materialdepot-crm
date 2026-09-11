@@ -8,15 +8,14 @@ import { useChecklistDay } from '../hooks/use-checklist-day';
 import { markedByLine, Notice, ProgressBar, SavePill } from '../ui/bits';
 import { SectionCard } from './section';
 
-export function ChecklistMarker({ storeCode, date, readOnly, readOnlyReason, userName }: {
+export function ChecklistMarker({ storeCode, date, readOnly, readOnlyReason }: {
   storeCode: string | null;
   date: string;
   readOnly: boolean;
   readOnlyReason: string | null;
-  userName: string;
 }) {
   const { day, loading, loadError, saveState, pending, setValue, setComment, setMany, retry, reload, unsavedCount } =
-    useChecklistDay(storeCode, date, userName);
+    useChecklistDay(storeCode, date);
 
   const merged = useMemo(() => ({ ...(day?.items ?? {}), ...pending }), [day, pending]);
   const progress = useMemo(() => dayProgress(merged), [merged]);

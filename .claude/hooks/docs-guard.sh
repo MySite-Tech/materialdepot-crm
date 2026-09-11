@@ -63,6 +63,9 @@ MODULES="
 components/b2b/|docs/b2b/|B2B sales CRM
 lib/b2b/|docs/b2b/|B2B sales CRM
 lib/api/b2b/|docs/b2b/|B2B sales CRM
+lib/api/core/|docs/api-layer/|Django/Kylas client layer
+lib/api/crm/|docs/api-layer/|Django/Kylas client layer
+lib/server/|docs/api-layer/|Django/Kylas client layer
 components/site-audit/|docs/site-audit/|Site audit
 components/crm/shell/|docs/crm-shell/|App shell / auth / tabs
 components/footfall/|docs/footfall/|Footfall

@@ -13,11 +13,23 @@ for whoever has to chase the stores that did not fill it.
 |---|---|---|
 | A day's marks, and any range of days | CRM Supabase table `store_checklist` | `fetchChecklistDays` → `GET /api/store-checklist?stores=&from=&to=` |
 | Saving marks | same table, via `store_checklist_mark()` | `saveChecklistMarks` → `PATCH /api/store-checklist` |
+| Who the caller is | Django `/user-organisation/`, **server-side only** | `requireCaller` in the route, 30 s cache per token |
 
 Two requests per tab visit at most: the marker view issues one GET for
 (store, date), the compliance view one GET for every store the user can see over
 `HISTORY_DAYS` (14). Neither view polls. Saves are debounced 900 ms and batch
 every item touched in that window into one PATCH.
+
+The session lookup is **not** a third browser request — it happens inside the
+route handler, so the tab still costs 1–2 against the ten-request budget. It does
+cost one Django call per checklist request, which is why `requireCaller` caches
+the resolved caller for 30 s per token; `/user-organisation/` is itself cached
+server-side by Django when unfiltered.
+
+Both calls send `Authorization: Bearer <jwt>` and retry once through
+`refreshSession()` on a 401, because a plain `fetch` to an `app/api/*` route
+does not get `mdFetch`'s token refresh. Without that a tab left open past token
+expiry would fail every save until a reload.
 
 **The `store_checklist` table and its `store_checklist_mark()` function must be
 pasted into the CRM Supabase project** (`supabase-store-checklist.sql`) — nothing
@@ -60,14 +72,33 @@ with a line saying why rather than hiding it. There is no assistant-store-manage
 role in this CRM — an ASM is carried as `store_manager` or `retail`, so both can
 stand in for the receptionist.
 
-The route enforces its own 30-day floor and rejects future dates, because it
-cannot verify a role: **there is no server-side session here.** Auth is a Django
-JWT in localStorage, so `/api/store-checklist` — like `/api/resource-plan` — is
-reachable by anyone who can reach the app, and `by` is whatever the client sent.
-What the service-role key buys is that the **anon key cannot touch this table
-at all** (RLS on, no policy, execute revoked), so nobody can rewrite another
-store's history from the browser console. Role windows are a UI guardrail, not a
-security boundary.
+**Those windows are enforced in the route, not only in the UI.** Every request
+resolves the caller from its own JWT (`requireCaller`, see
+`docs/api-layer/context.md`) and then re-runs the *same* `canUseChecklist` /
+`storesForActor` / `canMarkDate` functions the UI uses, so the browser and the
+server cannot drift apart:
+
+| Rejected | Status |
+|---|---|
+| No / malformed / expired `Authorization: Bearer` | 401 |
+| Token Django will not accept | 401 |
+| `user_id` not on the org roster, or the account inactive | 403 |
+| A permission list that lacks `crm.store_checklist` | 403 |
+| Reading or marking a store outside the caller's branches | 403 |
+| A date past the caller's own `BACKDATE_DAYS`, or in the future | 403 |
+
+`by` is **stamped from the resolved session**, never from the body — a client
+that sends `by` is ignored, so attribution cannot be forged by the person
+marking. The 30-day cap the route used to apply to everyone is gone; the
+per-role window is the only limit, and it is the same table above.
+
+The service-role key still matters for the layer underneath: RLS is on with no
+policy and execute is revoked, so the **anon key cannot touch this table at all**
+and nobody can rewrite a store's history from the browser console.
+
+Both checks fail closed. If Django cannot be reached to verify a session the
+route answers 502 and the UI says so — it never falls through to "unverified, so
+allow".
 
 ## Store identity is a code, never a branch name
 
