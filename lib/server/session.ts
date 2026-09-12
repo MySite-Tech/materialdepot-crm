@@ -16,7 +16,7 @@ export class SessionError extends Error {
 
 export interface Caller {
   userOrgId: number | string;
-  userId: number;
+  userId: string;
   name: string;
   phone: string;
   role: string;
@@ -39,7 +39,7 @@ function bearerToken(request: Request): string {
   return token;
 }
 
-function userIdFromToken(token: string): number {
+function userIdFromToken(token: string): string {
   const segment = token.split('.')[1];
   if (!segment) throw new SessionError('Malformed token');
 
@@ -55,8 +55,8 @@ function userIdFromToken(token: string): number {
     throw new SessionError('Session expired');
   }
 
-  const userId = Number(claims.user_id);
-  if (!Number.isInteger(userId)) throw new SessionError('Token carries no user_id');
+  const userId = String(claims.user_id ?? '').trim();
+  if (!userId) throw new SessionError('Token carries no user_id');
   return userId;
 }
 
@@ -84,7 +84,7 @@ async function fetchRoster(token: string): Promise<OrgRow[]> {
   return rows as OrgRow[];
 }
 
-function toCaller(row: OrgRow, userId: number): Caller {
+function toCaller(row: OrgRow, userId: string): Caller {
   const first = String(row.user?.f_name ?? '').trim();
   const last = String(row.user?.l_name ?? '').trim();
   const contact = String(row.user?.contact ?? '');
@@ -112,7 +112,7 @@ export async function requireCaller(request: Request): Promise<Caller> {
   const cached = getCached(key) as Caller | null;
   if (cached) return cached;
 
-  const row = (await fetchRoster(token)).find((r) => Number(r.user?.id) === userId);
+  const row = (await fetchRoster(token)).find((r) => String(r.user?.id ?? '') === userId);
   if (!row) throw new SessionError('This account is not on the organisation roster', 403);
   if (row.status === false) throw new SessionError('This account is inactive', 403);
 

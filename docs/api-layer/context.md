@@ -102,6 +102,9 @@ Four things worth knowing before reusing it:
   a revoked or logged-out session keeps working for at most 30 s on a route that
   is already open. Failures are never cached, and the key includes the token, so
   one user's entry can't serve another's request.
+- **`user_id` is a UUID string, not a number.** Django's `User.id` is a
+  `UUIDField`, so the claim and `user.id` on the roster row are both compared as
+  strings. Coercing either with `Number()` yields `NaN` and 401s every caller.
 - **It fails closed.** Unreachable backend → `SessionError` at 502, not "allow".
   Pair it with `sessionErrorResponse(err)` to turn that into the response.
 

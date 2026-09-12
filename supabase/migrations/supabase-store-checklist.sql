@@ -1,3 +1,7 @@
+-- Run in the CRM's own project (olkkioacgccgsjjlmbhc) > SQL Editor.
+-- NOT the Site Audit project (jqrdfnjfxqxrazfkaofm) — this table is read through
+-- NEXT_PUBLIC_SUPABASE_URL, and the two projects share several table names.
+--
 -- Daily store (EC) opening / housekeeping / working-hours / closing checklist.
 -- Replaces the paper sheet each store's receptionist filled every morning.
 --
