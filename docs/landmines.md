@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-47 entries. They live in one file because they cross-reference each other —
+49 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -54,6 +54,35 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A re-assignment must only reset the assignees whose work actually changed
 - Only the PRIMARY installer writes `sj.status`
 - `audit_ticked` is excluded from `AUDIT_COLS` for good reason
+- The Report Card tab was hidden from the two roles whose SOP names the report card
+- The store ladder is seven deep and the CRM only ever had three of the rungs
+
+- **The Report Card tab was hidden from the two roles whose SOP names the
+  report card.** `ROLE_TABS.sales` and `ROLE_TABS.store_manager` had no
+  `reportCard`, so a BM could not see their own card and a Store Manager could
+  not see their team's — while `admin`, `manager` and `tech`, who are not
+  reviewed on it at all, always could. It went unnoticed because the tab *did*
+  work for whoever built and demoed it. Fixed 2026-09-12 alongside the hierarchy
+  revamp. The shape to watch for: a tab that exists is not a tab the intended
+  user can reach, and `ROLE_TABS` is only the bootstrap — accounts with a
+  populated `individualPermissions` need the slug granted in Admin > Users, so
+  a constants change alone reaches almost nobody. See
+  `docs/crm-shell/context.md`.
+- **The store ladder is seven deep and the CRM only ever had three of the
+  rungs.** The business ladder is Admin/Central → Area Manager → Cluster Head →
+  Store Manager → Assistant Store Manager → Team Leader → BM, but
+  `PERMISSION_ID_TO_ROLE` goes straight from `sales` to `store_manager` to
+  `manager` and `ROLE_OPTIONS` offered nothing in between — so a BM's declared
+  checker, the TL, was a role nobody could hold. The four missing names were
+  added to `ROLE_OPTIONS` and `ROLE_TABS` on 2026-09-12, but **adding a role
+  name to this repo does not create it in Django**: `roleFromPermission` passes
+  `permission_name` through verbatim, so it round-trips only once the backend
+  knows it, and nothing in the repo can tell you whether it does. The shape to
+  watch: a role list here is a *view* of Django's permission table, never the
+  source. Visibility is resolved by `depth` rather than by walking `reportsTo`
+  precisely so that a vacant rung cannot strand anyone — with no TL in the
+  roster the SM is still the first person above a BM who resolves. See
+  `docs/org-hierarchy/context.md`.
 
 - **A Supabase write error is not an `Error`, so `String(e)` said
   "[object Object]".** `upsert`/`deleteB2BRow` in `lib/b2b/` reported failures

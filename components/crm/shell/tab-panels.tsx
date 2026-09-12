@@ -46,7 +46,7 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
     )}
     
     {effectiveTab === 'reportCard' && (
-      <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} currentUserPhone={currentUser?.phone ?? ''} />
+      <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} currentUser={currentUser} />
     )}
     
     {effectiveTab === 'storeVisit' && (

@@ -70,8 +70,12 @@ export const ROLE_TABS: Record<string, Array<MainTab>> = {
   admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
   tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
   manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
-  store_manager:['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
-  sales:        ['leads', 'sales', 'footfall', 'siteAudit'],
+  store_manager:['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
+  cluster_head: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
+  area_manager: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
+  asst_store_manager: ['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
+  team_leader:  ['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'sales', 'siteAudit'],
+  sales:        ['leads', 'sales', 'footfall', 'reportCard', 'siteAudit'],
   retail:       ['dashboard', 'storeVisit', 'storeChecklist', 'footfall', 'nps'],
   b2b_sales:    ['b2bSales', 'siteAudit'],
   b2b_KAM:      ['b2bSales', 'siteAudit'],
@@ -120,13 +124,15 @@ export const TAB_LABELS: Record<MainTab, string> = {
 };
 
 export const ROLE_OPTIONS: Array<string> = [
-  'sales', 'manager', 'store_manager', 'retail', 'admin', 'tech',
+  'sales', 'team_leader', 'asst_store_manager', 'store_manager', 'cluster_head',
+  'area_manager', 'manager', 'retail', 'admin', 'tech',
   'b2b_sales', 'b2b_KAM', 'b2b_manager',
   'field_worker', 'delivery', 'delivery_manager', 'post_sales', 'procurement',
   'pre_sales', 'customer_success', 'accounts', 'data',
 ];
 
 export const ROLE_LABEL_OVERRIDES: Record<string, string> = {
+  asst_store_manager: 'Assistant Store Manager',
   b2b_sales: 'B2B Sales',
   b2b_KAM: 'B2B KAM',
   b2b_manager: 'B2B Manager',
@@ -139,7 +145,7 @@ export const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech'
 
 export const APPOINTMENT_TRACKER_ROLES = new Set([
   'superadmin', 'admin', 'tech',   // → Admin view
-  'manager', 'store_manager',      // → Store Manager view
+  'manager', 'area_manager', 'cluster_head', 'store_manager', 'asst_store_manager', // → Store Manager view
   'retail',                        // → Receptionist view
 ]);
 

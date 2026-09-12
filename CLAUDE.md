@@ -40,7 +40,8 @@ reading the module.
 | Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
 | Footfall | `docs/footfall/context.md` | Five endpoints, the funnel, repeat buckets, the data-driven breakdown grid |
 | NPS | `docs/nps/context.md` | Promoter/passive/detractor cutoffs, the NPS formula, per-customer dedupe |
-| Report card | `docs/report-card/context.md` | One call, six sections; `has_bm`; cart temperature vs closure stage |
+| Store hierarchy | `docs/org-hierarchy/context.md` | The seven-rung ladder and who may see whose numbers. **Reuse this rather than re-deriving "who is under me"** — visibility is `depth` + branch overlap, `reportsTo` is display-only, and four of the rungs may not exist in Django yet |
+| Report card | `docs/report-card/context.md` | Your own card plus a team performance table scoped to the hierarchy; the two bulk calls that replace one-request-per-person; `has_bm`; cart temperature vs closure stage |
 | Weekly funnel | `docs/weekly-funnel/context.md` | Fixed value buckets, column-dynamic category tables, the shared filter-option calls |
 | Appointment tracker | `docs/appointment-tracker/context.md` | Kylas feed via a route handler, the rota table, EC-ready being per-browser, fuzzy branch matching |
 | Store visit | `docs/store-visit/context.md` | One endpoint doing lookup and write, the whole-body Kylas lead update |

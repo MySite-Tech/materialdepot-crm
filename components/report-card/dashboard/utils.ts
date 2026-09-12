@@ -37,3 +37,4 @@ export const monthEndISO = () => {
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
 };
+

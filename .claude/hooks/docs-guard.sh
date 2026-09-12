@@ -71,6 +71,7 @@ components/crm/shell/|docs/crm-shell/|App shell / auth / tabs
 components/footfall/|docs/footfall/|Footfall
 components/nps/|docs/nps/|NPS
 components/report-card/|docs/report-card/|Report card
+lib/org/|docs/org-hierarchy/|Store hierarchy
 components/weekly-funnel/|docs/weekly-funnel/|Weekly funnel
 components/appointment-tracker/|docs/appointment-tracker/|Appointment tracker
 components/store-visit/|docs/store-visit/|Store visit
