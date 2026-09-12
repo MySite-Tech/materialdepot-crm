@@ -122,16 +122,26 @@ URLs on first render (the default range is month-to-date, no BM), and
 `mdFetch`'s 8s GET cache collapses them — so the target panel is free on mount
 and costs five only once a filter diverges from MTD.
 
-### The revenue number over-counts across segregations, and must stay labelled
+### A mixed cart is split across segregations, in Django
 
-Django's `category=` filter selects deals whose cart **contains** one of those
-categories and values them at the **whole cart**; no line-item split is exposed
-anywhere the frontend can reach (`cartItems` is product names, no prices). So a
-₹1L tiles + wallpaper cart is ₹1L of Core *and* ₹1L of Special, and the four
-segregation totals sum higher than the unfiltered total. The footer states the
-gap in rupees from the live numbers rather than hiding it. Do not "fix" this by
-subtracting — the overlap is real revenue in both buckets, which is also why
-Total is an entered target rather than a derived one.
+Django's `category=` filter still selects deals whose cart **contains** one of
+those categories, but since 2026-09-12 it values such a deal at the *share* of
+its line items in those categories, not the whole cart. `_fetch_category_portions`
+(`order/crm/leads/repository/leads_query.py`) divides the cart's matching
+`EstimateItem.total_price` by its total and `to_dashboard_payload` scales
+`cartValue` by that ratio into every aggregate. So a ₹1L cart of ₹60k tiles and
+₹40k wallpaper is ₹60k of Core and ₹40k of Special, and the four segregation
+totals reconcile to the unfiltered total instead of summing ~32% above it
+(Sept 2026: ₹4.41 Cr of buckets against a ₹3.34 Cr total, before the fix).
+
+It is a **proportion**, not the line sum itself — scaling the cart value keeps
+tax and additional charges inside the buckets, so they still add back up.
+
+Two residues remain, both small and deliberate. A cart-stage deal matched on its
+live `Cart` rows has no estimate to split and keeps its whole value. And a line
+whose variant carries no category falls out of every bucket, so the four totals
+can land a little *under* the real total — which is what the footer's gap figure
+now measures. Do not close that gap by inflating a bucket.
 
 `ORDER_STATUSES` mirrors `DEAL_ORDER_STATUSES` in `components/b2b/constants/client.ts`.
 A status added to the CRM has to be added in both, or this tab and the Client

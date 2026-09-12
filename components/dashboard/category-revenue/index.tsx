@@ -308,13 +308,14 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
           paging every deal in range.
         </div>
         <div>
-          <span className="font-semibold">A cart counts in every segregation it contains.</span>{' '}
-          Django filters deals by the categories in the cart and values them at the whole cart, and
-          no line-item split is exposed. So the four segregation totals sum higher than the real
+          <span className="font-semibold">A mixed cart is split across segregations.</span>{' '}
+          Django values a category-filtered deal at the share of its line items in those categories,
+          so a cart of tiles and plywood lands partly in Core and partly in Non-Core instead of
+          counting in full under each. The four segregation totals therefore reconcile to the real
           total:{' '}
           {filteredLoading || !total ? '—' : (
             <>{fmtFull(bucketSumRevenue)} against {fmtFull(total.overall.revenue)}
-            {overlap > 0 ? `, ${fmtFull(overlap)} of it multi-segregation carts counted twice` : ''}.</>
+            {Math.abs(overlap) > 1 ? `, ${fmtFull(Math.abs(overlap))} apart — carts whose lines carry no category` : ''}.</>
           )}
         </div>
         <div>
