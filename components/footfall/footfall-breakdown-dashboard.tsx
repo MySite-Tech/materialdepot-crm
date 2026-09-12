@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   fetchFootfallBreakdown, FootfallBreakdownData, FootfallBreakdownRow,
   fetchAvailableBMs, fetchCategoryOptions, CategoryOption,
@@ -23,6 +24,47 @@ function fmtValue(v: number, kind: FootfallBreakdownRow['kind']) {
   if (kind === 'money') return `₹${Math.round(v ?? 0).toLocaleString('en-IN')}`;
   if (kind === 'pct') return `${(v ?? 0).toFixed(1)}%`;
   return (v ?? 0).toLocaleString('en-IN');
+}
+
+const TIP_WIDTH = 240;
+
+function InfoTip({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const half = TIP_WIDTH / 2;
+    const left = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8);
+    setPos({ top: r.bottom + 6, left });
+  };
+  const hide = () => setPos(null);
+
+  if (!text) return null;
+  return (
+    <span
+      ref={ref}
+      tabIndex={0}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      aria-label={text}
+      className="inline-flex items-center justify-center shrink-0 w-[13px] h-[13px] ml-1 align-middle rounded-full border border-gray-300 text-gray-400 text-[9px] font-bold leading-none cursor-help outline-none hover:border-gray-500 hover:text-gray-600 focus:border-gray-500 focus:text-gray-600"
+    >
+      i
+      {pos && createPortal(
+        <div
+          style={{ top: pos.top, left: pos.left, width: TIP_WIDTH }}
+          className="fixed z-[200] -translate-x-1/2 bg-gray-900 text-white text-[11px] font-normal normal-case tracking-normal leading-snug text-left rounded-lg px-3 py-2 shadow-xl pointer-events-none"
+        >
+          {text}
+        </div>,
+        document.body,
+      )}
+    </span>
+  );
 }
 
 function MultiChip({
@@ -257,9 +299,12 @@ export default function FootfallBreakdownDashboard({ branches, allowedBranches }
               <tr className="bg-gray-50">
                 <th className="text-left px-4 sm:px-5 py-2.5 font-semibold text-gray-400 text-[10px] uppercase tracking-wider sticky left-0 bg-gray-50 z-10 min-w-[140px]">Store</th>
                 {rows.map(m => (
-                  <th key={m.key} title={m.comment}
+                  <th key={m.key}
                     className={`text-right px-3 py-2.5 font-semibold text-gray-400 text-[10px] uppercase tracking-wider align-bottom ${GROUP_STARTS.has(m.key) ? 'border-l-2 border-gray-200' : ''}`}>
-                    <div className="whitespace-normal leading-tight max-w-[110px] ml-auto">{m.label}</div>
+                    <div className="whitespace-normal leading-tight max-w-[122px] ml-auto">
+                      {m.label}
+                      <InfoTip text={m.comment} />
+                    </div>
                   </th>
                 ))}
               </tr>

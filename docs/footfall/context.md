@@ -44,11 +44,16 @@ row of the same shape, supplied by the server, not summed client-side.
 
 ## Breakdown view
 
-Each row is one metric: `key`, `label`, a `comment` (rendered as the row's
-explanatory note), a `kind` of `int` | `money` | `pct` that selects the
-formatter, `values` keyed by store name, and a `total`. Columns come from
-`stores[]`, so **the column set is data-driven** — a new store appears with no
-frontend change, and a store with no rows still gets a column.
+Each row is one metric: `key`, `label`, a `comment` (rendered as the column's
+hover tooltip), a `kind` of `int` | `money` | `pct` that selects the formatter,
+`values` keyed by store name, and a `total`. Columns come from `stores[]`, so
+**the column set is data-driven** — a new store appears with no frontend
+change, and a store with no rows still gets a column.
+
+`comment` is the only explanation of what a column means and how it is derived,
+and it is **authored server-side** in `breakdown_service.py`'s `row()` calls —
+the frontend never writes metric copy. `InfoTip` renders it as the ⓘ after each
+heading, so a wording fix ships with the backend and needs no CRM deploy.
 
 ## Gotchas
 
@@ -59,3 +64,8 @@ frontend change, and a store with no rows still gets a column.
 - `fmtDate` here splits the ISO string by hand into `dd/mm/yyyy` and never
   constructs a `Date`, which is deliberate: it cannot shift a date across the IST
   boundary.
+- `InfoTip` portals its tooltip to `document.body` and positions it from
+  `getBoundingClientRect`. It cannot be a plain absolutely-positioned child: the
+  table sits in an `overflow-x-auto` wrapper, which computes `overflow-y` to
+  `auto` and would clip the bubble. The same rect maths clamps it into the
+  viewport, so the right-hand AOV columns do not open a tooltip off-screen.
