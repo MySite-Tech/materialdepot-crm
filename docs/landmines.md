@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-47 entries. They live in one file because they cross-reference each other —
+49 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -54,6 +54,31 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A re-assignment must only reset the assignees whose work actually changed
 - Only the PRIMARY installer writes `sj.status`
 - `audit_ticked` is excluded from `AUDIT_COLS` for good reason
+- The Report Card tab was hidden from the two roles whose SOP names the report card
+- The store hierarchy has two rungs no CRM role maps to
+
+- **The Report Card tab was hidden from the two roles whose SOP names the
+  report card.** `ROLE_TABS.sales` and `ROLE_TABS.store_manager` had no
+  `reportCard`, so a BM could not see their own card and a Store Manager could
+  not see their team's — while `admin`, `manager` and `tech`, who are not
+  reviewed on it at all, always could. It went unnoticed because the tab *did*
+  work for whoever built and demoed it. Fixed 2026-09-12 alongside the hierarchy
+  revamp. The shape to watch for: a tab that exists is not a tab the intended
+  user can reach, and `ROLE_TABS` is only the bootstrap — accounts with a
+  populated `individualPermissions` need the slug granted in Admin > Users, so
+  a constants change alone reaches almost nobody. See
+  `docs/crm-shell/context.md`.
+- **The store hierarchy has two rungs no CRM role maps to.** The SOP decks
+  define five stakeholders, but Django's permission table has no Team Leader and
+  no Assistant Store Manager — `PERMISSION_ID_TO_ROLE` goes straight from
+  `sales` to `store_manager`, and `ROLE_OPTIONS` offers neither. So a BM's
+  declared checker (the TL) is a role nobody holds. `lib/org` keeps both rungs
+  in the registry with an empty `crmRoles` and resolves visibility through the
+  whole chain, which means the SM still sees the BM with the TL rung vacant.
+  Do **not** "simplify" this by re-pointing `bm.reportsTo` at `sm`: the day a
+  `team_leader` permission is added, the only correct change is a slug in
+  `crmRoles`, and a flattened chain would silently keep TLs out of their own
+  team's cards. See `docs/org-hierarchy/context.md`.
 
 - **A Supabase write error is not an `Error`, so `String(e)` said
   "[object Object]".** `upsert`/`deleteB2BRow` in `lib/b2b/` reported failures

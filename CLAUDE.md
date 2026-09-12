@@ -40,7 +40,8 @@ reading the module.
 | Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
 | Footfall | `docs/footfall/context.md` | Five endpoints, the funnel, repeat buckets, the data-driven breakdown grid |
 | NPS | `docs/nps/context.md` | Promoter/passive/detractor cutoffs, the NPS formula, per-customer dedupe |
-| Report card | `docs/report-card/context.md` | One call, six sections; `has_bm`; cart temperature vs closure stage |
+| Store hierarchy | `docs/org-hierarchy/context.md` | The five EC stakeholders, the maker–checker chain, and who may see whose numbers; the two rungs no CRM role maps to |
+| Report card | `docs/report-card/context.md` | Your card plus everyone reporting into you; `has_bm`; cart temperature vs closure stage; the zero-cost team ranking join |
 | Weekly funnel | `docs/weekly-funnel/context.md` | Fixed value buckets, column-dynamic category tables, the shared filter-option calls |
 | Appointment tracker | `docs/appointment-tracker/context.md` | Kylas feed via a route handler, the rota table, EC-ready being per-browser, fuzzy branch matching |
 | Store visit | `docs/store-visit/context.md` | One endpoint doing lookup and write, the whole-body Kylas lead update |

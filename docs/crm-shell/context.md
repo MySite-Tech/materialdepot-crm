@@ -43,6 +43,16 @@ React inputs here ignore synthetic `type` events; set values via the native
    `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
    is a **bootstrap for un-migrated accounts only**.
 
+`reportCard` was added to `ROLE_TABS.sales` and `ROLE_TABS.store_manager` on
+2026-09-12. Both were missing it, so the two roles whose SOP names the report
+card by name — "BM performance review" (checker TL) and "TL/AM performance
+review" (checker SM) — were the two roles that could not open the tab. **That
+only reaches accounts with an empty `individualPermissions`**, i.e. the
+bootstrap branch below; everyone already migrated needs `crm.report_card`
+granted under Admin > Users, which is an admin action and not a code change.
+`defaultPermissionsForRole` derives from the same table, so new accounts get the
+slug automatically.
+
 `permission_name` is an HR cost-centre label, not an access level — it says
 `tech` for a Service Manager and `admin` for Category/Delivery/Marketing staff —
 so nothing may be gated on it. Anything a role must guarantee has to exist as a
