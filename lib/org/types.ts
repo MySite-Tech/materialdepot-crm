@@ -1,6 +1,7 @@
-export type StakeholderRole = 'bm' | 'receptionist' | 'tl' | 'asm' | 'sm' | 'central';
+export type StakeholderRole =
+  | 'bm' | 'receptionist' | 'tl' | 'asm' | 'sm' | 'cluster_head' | 'area_manager' | 'central';
 
-export type StakeholderTier = 'Frontline' | 'Store leadership' | 'Central';
+export type StakeholderTier = 'Frontline' | 'Store leadership' | 'Above store';
 
 export interface Stakeholder {
   code: string;
@@ -8,7 +9,6 @@ export interface Stakeholder {
   tier: StakeholderTier;
   depth: number;
   reportsTo: StakeholderRole | null;
-  alsoVisibleTo: StakeholderRole[];
   crmRoles: string[];
   owns: string;
   reviewedOn: string;

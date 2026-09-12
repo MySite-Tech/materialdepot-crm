@@ -12,18 +12,11 @@ export const stakeholderForCrmRole = (crmRole?: string | null): StakeholderRole 
 export const stakeholderLabel = (role: StakeholderRole | null): string =>
   role ? STAKEHOLDERS[role].label : 'Not on the store hierarchy';
 
+export const depthOf = (role: StakeholderRole | null): number =>
+  role ? STAKEHOLDERS[role].depth : -1;
+
 export const checkerOf = (role: StakeholderRole | null): StakeholderRole | null =>
   role ? STAKEHOLDERS[role].reportsTo : null;
-
-export const viewersOf = (role: StakeholderRole): Set<StakeholderRole> => {
-  const seen = new Set<StakeholderRole>(STAKEHOLDERS[role].alsoVisibleTo);
-  let cursor = STAKEHOLDERS[role].reportsTo;
-  while (cursor && !seen.has(cursor)) {
-    seen.add(cursor);
-    cursor = STAKEHOLDERS[cursor].reportsTo;
-  }
-  return seen;
-};
 
 export const normalisePhone = (phone?: string | null): string => {
   const digits = String(phone ?? '').replace(/\D/g, '');
@@ -49,7 +42,7 @@ export const canViewReportCardOf = (viewer: AppUser, subject: AppUser): boolean 
   const viewerRole = stakeholderForCrmRole(viewer.role);
   const subjectRole = stakeholderForCrmRole(subject.role);
   if (!viewerRole || !subjectRole) return false;
-  if (!viewersOf(subjectRole).has(viewerRole)) return false;
+  if (depthOf(viewerRole) <= depthOf(subjectRole)) return false;
   return branchesOverlap(viewer.allowedBranches ?? [], subject.allowedBranches ?? []);
 };
 
@@ -62,7 +55,7 @@ export const toOrgPerson = (user: AppUser): OrgPerson => ({
   branches: user.allowedBranches ?? [],
 });
 
-const seniorityOf = (role: StakeholderRole | null): number =>
+const seniority = (role: StakeholderRole | null): number =>
   role ? STAKEHOLDER_ORDER.indexOf(role) : STAKEHOLDER_ORDER.length;
 
 export const buildTeam = (roster: AppUser[], viewer: AppUser): OrgTeam => {
@@ -70,7 +63,7 @@ export const buildTeam = (roster: AppUser[], viewer: AppUser): OrgTeam => {
   const reports = roster
     .filter((u) => u.active !== false && !samePerson(u.phone, viewer.phone) && canViewReportCardOf(viewer, u))
     .map(toOrgPerson)
-    .sort((a, b) => seniorityOf(a.stakeholder) - seniorityOf(b.stakeholder) || a.name.localeCompare(b.name));
+    .sort((a, b) => seniority(a.stakeholder) - seniority(b.stakeholder) || a.name.localeCompare(b.name));
   return {
     me: toOrgPerson(mine ?? viewer),
     reports,
@@ -78,12 +71,13 @@ export const buildTeam = (roster: AppUser[], viewer: AppUser): OrgTeam => {
   };
 };
 
-export const groupByStakeholder = (people: OrgPerson[]): Array<[StakeholderRole | null, OrgPerson[]]> => {
-  const buckets = new Map<StakeholderRole | null, OrgPerson[]>();
-  for (const person of people) {
-    const bucket = buckets.get(person.stakeholder);
-    if (bucket) bucket.push(person);
-    else buckets.set(person.stakeholder, [person]);
-  }
-  return [...buckets.entries()].sort((a, b) => seniorityOf(a[0]) - seniorityOf(b[0]));
+export const positionsPresent = (people: OrgPerson[]): StakeholderRole[] => {
+  const seen = new Set(people.map((p) => p.stakeholder).filter((r): r is StakeholderRole => r !== null));
+  return STAKEHOLDER_ORDER.filter((role) => seen.has(role));
+};
+
+export const chunk = <T,>(items: T[], size: number): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 };

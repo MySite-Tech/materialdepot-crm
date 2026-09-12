@@ -3,27 +3,40 @@
 **Covers:** `components/report-card/**` · `lib/api/dashboards/report-card.ts`
 
 ## Purpose
-Your own monthly report card, and the card of everyone who reports into you.
-Walk-in analysis, pipeline carts, orders lost, CRM adherence, closure pipeline
-and rankings — seven numbered sections, one page.
+Your own monthly report card, plus a performance table for everyone under you in
+the store hierarchy, filterable by store, position and date range. Section 01 is
+the team; sections 02–07 are the selected person's own card — walk-in analysis,
+pipeline carts, orders lost, CRM adherence, closure pipeline and rankings.
 
 Revamped 2026-09-12: before that it was "BM Report Card", a flat BM dropdown
 listing **every** BM in the company to anyone who had the tab, with no notion of
 who the viewer was beyond auto-selecting their own row. It now resolves the
-viewer's place in the store hierarchy first and scopes everything to that.
+viewer's place in the ladder first and scopes everything to that.
 
-## Data — two calls
+## Data — five calls, none of them per-person
 
 | Call | Endpoint | What it decides |
 |---|---|---|
-| `fetchUsers` | `GET /user-organisation/` | who reports into the viewer (§ hierarchy) |
-| `fetchReportCard` | `GET /crm/report-card/` | every number on the page |
+| `fetchUsers` | `GET /user-organisation/` | who is under the viewer (§ hierarchy) |
+| `fetchCRMLeadsStatsByBmGroup` | `GET /crm/leads/stats/?bm_groups=` | orders, sales value, AOV, pipeline, lost — **per person, keyed on contact** |
+| `fetchFootfallDashboard` | `GET /crm/footfall-dashboard/` | footfall, carts, cart %, conv % — **per person, keyed on name** |
+| `fetchReportCard` | `GET /crm/report-card/` | every number in sections 02–07 |
 | `fetchCategoryOptions` | `GET /category-list-all/` | the category filter |
 | `fetchAvailableBMs` | `GET /crm/available-bms/` | **only on the roster-failure fallback** |
 
-Four on mount at worst, and normally three — `/user-organisation/` is usually
-already inside `mdFetch`'s 8 s GET cache because the Leads tab fetched it, and
-`/crm/available-bms/` is not called at all unless the roster failed.
+Five on mount, six for a team over 50 (see `STATS_BATCH`). `/user-organisation/`
+is usually already inside `mdFetch`'s 8 s GET cache because the Leads tab
+fetched it, and `/crm/available-bms/` is not called at all unless the roster
+failed.
+
+**The team table deliberately does not call `/crm/report-card/` per person.**
+That endpoint takes one `bm` at a time, so a ten-person team would have been ten
+requests and a fifty-person team fifty — the budget decided the feature, the
+same way it decided Category Revenue's rows. The two bulk endpoints above
+already carry everything the SOP's own review checklist asks for (footfall
+attended, cart creation %, order conversion %, pipeline, sales value closed,
+AOV); only first-time-vs-repeat footfall is missing, and that needs
+`/crm/footfall-repeat/`, which accepts no `bm` filter at all.
 
 Filters differ from every other dashboard here: **`bm` and `category` are single
 values, not arrays** (`branch` is still CSV). Default range is the current
@@ -57,11 +70,15 @@ What the scoping changes, concretely:
 
 - The BM dropdown became a **person picker** built from the team, not from
   `/crm/available-bms/`. A BM now sees exactly one option: themselves.
-- Section 01 **My Team** lists the reports with a per-row *View* button. It
-  pages at 25 per the table rule and is searchable by name, phone or store.
+- Section 01 **Team Performance** is a metrics table over everyone under the
+  viewer, with a **Position** multi-select, a text search and a per-row *Open*
+  button. It pages at 25 per the table rule.
 - The store filter narrows the team as well as the numbers. Someone whose
   `branches` is empty stays visible under every store, because empty means all.
 - The old section numbering shifted: what was 01–06 is now 02–07.
+
+**The stat tiles count the filtered set, not the page.** Paging never changes
+them; the Position and search filters do, which is the point of having them.
 
 **If `/user-organisation/` fails the tab falls back to the old unrestricted
 list** — every BM from `/crm/available-bms/`, with an amber notice saying the
@@ -70,33 +87,45 @@ same reasoning as the `siteAudit` force-add in `docs/crm-shell/context.md`. It
 does mean a roster outage is permissive, not restrictive: that is the deliberate
 trade, because the alternative is an empty tab for everyone.
 
-## The team ranking table, and why it is matched by name
+## Two sources per row, and only one of them has an id
 
-Section 07 gains a **My Team** table above the existing two. It is filtered out
-of `rankings.company_wide`, which already carries every BM's walk-ins, conv %,
-cart %, sale value and FU % — so the whole team scoreboard costs **zero extra
-requests**. Per-person `fetchReportCard` calls would have cost one request per
-teammate and blown the ten-request budget on any real team.
+**Lead stats are keyed on contact and are therefore exact.**
+`fetchCRMLeadsStatsByBmGroup` takes `label:contacts` groups, so the team table
+sends one group per person using their phone as the label and reads the answer
+straight back out of `groups[person.phone]`. No matching involved.
 
-The join is roster name → `rankings[].bm_name`, and it is **exact on
-`normaliseName` (trim, collapse whitespace, lowercase) or it is not made at
-all**. A name that appears more than once *on either side* is counted as
-`ambiguous` and no row is guessed for it. The footnote under the table prints
-all three outcomes — matched, not ranked in this range, could not be matched —
-because collapsing "couldn't tell" into "no data" is exactly the failure the
-identity rule exists to prevent.
+**Footfall is keyed on name and is therefore not.** `FootfallBMRow` carries
+`bm_name` and nothing else — the `bm` *filter* accepts contacts, but the rows
+that come back do not echo one. So `indexFootfallByName` joins on
+`normaliseName` (trim, collapse whitespace, lowercase) and **only where the name
+is unique on both sides**; a name that repeats in the roster or in the response
+goes into `ambiguous` and no row is guessed for it.
 
-Both sides come from the same Django user table, so the names agree in practice.
-If that ever stops being true, the fix is a `contact` field on `RankingRow`, not
-a looser matcher.
+That split is why the table can show a row where the money columns are populated
+and the funnel columns read `—`, and why the note under it separates the three
+outcomes: matched, no footfall row in this range, and could-not-be-matched.
+Collapsing "couldn't tell" into "no data" is exactly the failure the identity
+rule exists to prevent.
+
+If the footfall join ever stops being good enough, the fix is a `contact` field
+on `FootfallBMRow` in Django, not a looser matcher.
+
+**Each source fails independently and says so.** A failed lead-stats call leaves
+every money column reading "Unknown — the stats call failed" and the tiles
+reading Unknown; a failed footfall call leaves the funnel columns Unknown. Never
+a confident zero.
 
 ## Things worth knowing before answering a question about this page
 
 - **`meta.has_bm` is the empty-state switch.** False means the filters resolved
   to no BM. It now renders a named panel — "No report-card data for <person> ·
   <their stakeholder role>" — rather than a generic prompt, because with the
-  team list in front of you the common way to hit it is clicking a Receptionist
-  or a Store Manager, neither of whom owns leads.
+  team table in front of you the common way to hit it is clicking a Receptionist
+  or a Store Manager, neither of whom owns leads. Their row in section 01 still
+  carries real lead-stat numbers, which is the point of having both.
+- **`useTeamPerformance` keys its effect on `contactKey`, a joined string**, not
+  on the `people` array — that array is rebuilt on every render and depending on
+  it re-fetches in a loop. Same reason `useTeam` takes `branchKey` as a string.
 - **Nothing is fetched until a person is selected.** `personPhone === ''` skips
   the load effect entirely; *Reset Filters* clears it and re-arms the auto-pick
   by setting `autoPicked.current = false`.

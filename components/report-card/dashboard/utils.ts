@@ -1,9 +1,6 @@
 'use client';
 
 import { MONTH_SHORT } from './constants';
-import { OrgPerson, normaliseName } from '@/lib/org';
-import { RankingRow } from '@/lib/api';
-import { TeamRankingMatch } from './types';
 
 export const fmtMoney = (n: number) =>
   n >= 10000000
@@ -41,20 +38,3 @@ export const monthEndISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
 };
 
-export const countByName = (names: string[]): Map<string, number> => {
-  const counts = new Map<string, number>();
-  for (const raw of names) {
-    const key = normaliseName(raw);
-    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return counts;
-};
-
-export const matchTeamRankings = (rows: RankingRow[], team: OrgPerson[]): TeamRankingMatch => {
-  const inTeam = countByName(team.map((p) => p.name));
-  const inRows = countByName(rows.map((r) => r.bm_name));
-  const resolvable = new Set([...inTeam].filter(([name, n]) => n === 1 && inRows.get(name) === 1).map(([name]) => name));
-  const matched = rows.filter((r) => resolvable.has(normaliseName(r.bm_name)));
-  const ambiguous = [...inTeam].filter(([name, n]) => n > 1 || (inRows.get(name) ?? 0) > 1).length;
-  return { matched, ambiguous, unranked: inTeam.size - resolvable.size - ambiguous };
-};

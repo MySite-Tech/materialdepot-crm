@@ -43,11 +43,22 @@ React inputs here ignore synthetic `type` events; set values via the native
    `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
    is a **bootstrap for un-migrated accounts only**.
 
-`reportCard` was added to `ROLE_TABS.sales` and `ROLE_TABS.store_manager` on
-2026-09-12. Both were missing it, so the two roles whose SOP names the report
+**Four roles were added on 2026-09-12** — `team_leader`,
+`asst_store_manager`, `cluster_head` and `area_manager` — to `ROLE_OPTIONS`
+(so `RoleSelect` in Admin > Users offers them) and to `ROLE_TABS`. They are the
+middle of the store ladder in `docs/org-hierarchy/context.md`, and until then
+the CRM jumped straight from `sales` to `store_manager` to `manager`.
+**Whether the Django permission table accepts them is not verifiable from this
+repo.** `roleFromPermission` returns `permission_name` verbatim when it is a
+string, so the round trip works the moment Django knows the name, but
+`PERMISSION_ID_TO_ROLE` — the numeric fallback — stops at 15 and has none of
+them. Assigning one to a real account is the test; nothing here proves it.
+
+`reportCard` was added to `ROLE_TABS.sales` and `ROLE_TABS.store_manager` at the
+same time. Both were missing it, so the two roles whose SOP names the report
 card by name — "BM performance review" (checker TL) and "TL/AM performance
-review" (checker SM) — were the two roles that could not open the tab. **That
-only reaches accounts with an empty `individualPermissions`**, i.e. the
+review" (checker SM) — were the two roles that could not open the tab. **All of
+this only reaches accounts with an empty `individualPermissions`**, i.e. the
 bootstrap branch below; everyone already migrated needs `crm.report_card`
 granted under Admin > Users, which is an admin action and not a code change.
 `defaultPermissionsForRole` derives from the same table, so new accounts get the

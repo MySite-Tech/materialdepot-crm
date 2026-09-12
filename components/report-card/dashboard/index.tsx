@@ -4,13 +4,15 @@ import { ClosurePipelineSection } from './ui/closure';
 import { Dropdown } from './ui/dropdowns';
 import { CrmAdherenceSection, OrdersLostTable, PipelineTable, RankingTable, WalkinTable } from './ui/tables';
 import { Props } from './types';
-import { ReportingLine, TeamRankingTable, TeamRoster } from './ui/team';
+import { ReportingLine } from './team/reporting-line';
 import { STAKEHOLDERS, OrgPerson, samePerson, stakeholderLabel } from '@/lib/org';
 import { Section } from './ui';
-import { fmtDate, matchTeamRankings, monthEndISO, monthStartISO } from './utils';
+import { TeamPerformanceSection } from './team';
+import { fmtDate, monthEndISO, monthStartISO } from './utils';
 import { CategoryOption, ReportCardBMOption, ReportCardData, fetchAvailableBMs, fetchCategoryOptions, fetchReportCard } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTeam } from './hooks/use-team';
+import { useTeam } from './team/hooks/use-team';
+import { useTeamPerformance } from './team/hooks/use-team-performance';
 
 export default function ReportCardDashboard({ branches, allowedBranches, currentUser }: Props) {
   const isRestricted = allowedBranches.length > 0;
@@ -39,12 +41,11 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
 
   useEffect(() => { fetchCategoryOptions().then(setCatList).catch(() => setCatList([])); }, []);
 
-  const branchKey = store || '';
   useEffect(() => {
     if (!teamFailed) return;
-    const eff = branchKey ? [branchKey] : (isRestricted ? allowedBranches : undefined);
+    const eff = store ? [store] : (isRestricted ? allowedBranches : undefined);
     fetchAvailableBMs(eff).then(setBmList).catch(() => setBmList([]));
-  }, [teamFailed, branchKey, isRestricted, allowedBranches]);
+  }, [teamFailed, store, isRestricted, allowedBranches]);
 
   const visiblePeople: OrgPerson[] | null = useMemo(() => {
     if (!team) return null;
@@ -54,10 +55,12 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
     return withPhone.filter(p => p.branches.length === 0 || p.branches.some(b => b.toLowerCase() === store.toLowerCase()));
   }, [team, store]);
 
-  const teamRoster = useMemo(
+  const teamPeople = useMemo(
     () => (visiblePeople ?? []).filter(p => !samePerson(p.phone, currentUserPhone)),
     [visiblePeople, currentUserPhone],
   );
+
+  const performance = useTeamPerformance(teamPeople, { dateFrom, dateTo, branch: store });
 
   const autoPicked = useRef(false);
   useEffect(() => {
@@ -117,7 +120,6 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
       }))
     : bmList.map(b => ({ label: `${b.name}${b.contact ? ` · ${b.contact}` : ''}`, value: b.contact }));
 
-  const teamMatch = data && teamRoster.length > 0 ? matchTeamRankings(data.rankings.company_wide, teamRoster) : null;
   const subjectName = selectedPerson?.name || data?.meta?.bm_name || '';
 
   return (
@@ -127,7 +129,7 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
         <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Material Depot · Internal Analytics</div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Report Card</h1>
         <p className="text-[13px] text-gray-500 mt-0.5">
-          Your own card, and the card of everyone who reports into you · {rangeLabel}
+          Your own card, and the performance of everyone under you · {rangeLabel}
         </p>
       </div>
 
@@ -144,15 +146,15 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
       {teamFailed && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
           The organisation roster did not load, so this tab cannot work out who reports into you. Every BM is listed
-          below instead of just your team. Reload to try again.
+          below instead of just your team, and the team performance table is unavailable. Reload to try again.
         </div>
       )}
 
       {team && team.unmappedRole && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
-          Your CRM role <span className="font-semibold">{currentUser.role || '—'}</span> is not one of the five store
-          stakeholders (BM, Receptionist, Team Leader, Assistant Store Manager, Store Manager), so no team report cards
-          are available. Ask an admin to correct the role under Admin &gt; Users.
+          Your CRM role <span className="font-semibold">{currentUser.role || '—'}</span> is not on the store hierarchy
+          (BM, Receptionist, Team Leader, Assistant Store Manager, Store Manager, Cluster Head, Area Manager,
+          Admin/Central), so nobody resolves under you. Ask an admin to correct the role under Admin &gt; Users.
         </div>
       )}
 
@@ -173,9 +175,15 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
         {(loading || teamLoading) && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
       </div>
 
-      {teamRoster.length > 0 && (
-        <Section n="01" title="My Team" hint={`${teamRoster.length} ${teamRoster.length === 1 ? 'person reports' : 'people report'} into you · open any card`}>
-          <TeamRoster people={teamRoster} selectedPhone={personPhone} onSelect={p => setPersonPhone(p.phone)} />
+      {teamPeople.length > 0 && (
+        <Section n="01" title="Team Performance"
+          hint={`${teamPeople.length} ${teamPeople.length === 1 ? 'person' : 'people'} under you · filter by position or store · open any card`}>
+          <TeamPerformanceSection
+            people={teamPeople}
+            performance={performance}
+            selectedPhone={personPhone}
+            onSelect={p => setPersonPhone(p.phone)}
+          />
         </Section>
       )}
 
@@ -215,12 +223,9 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
             <ClosurePipelineSection clients={data.closure_pipeline.clients} catOptions={catNames} />
           </Section>
           <Section n="07" title="Rankings" hint="How the selected person compares to peers · highlighted row = selected person">
-            <div className="space-y-6">
-              {teamMatch && <TeamRankingTable match={teamMatch} teamSize={teamRoster.length} />}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <RankingTable title="Company-Wide" rows={data.rankings.company_wide} showStore />
-                <RankingTable title={data.meta.store ? `Within ${data.meta.store}` : 'Within Store'} rows={data.rankings.within_store} />
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RankingTable title="Company-Wide" rows={data.rankings.company_wide} showStore />
+              <RankingTable title={data.meta.store ? `Within ${data.meta.store}` : 'Within Store'} rows={data.rankings.within_store} />
             </div>
           </Section>
         </div>
