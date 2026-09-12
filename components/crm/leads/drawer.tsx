@@ -179,6 +179,9 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.propertyType || ''} onChange={(e) => set('propertyType', e.target.value)}>
                   <option value="">Select...</option>
                   {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+                  {!!form.propertyType && !PROPERTY_TYPES.includes(form.propertyType) && (
+                    <option value={form.propertyType}>{form.propertyType}</option>
+                  )}
                 </select>
               </Field>
               <Field label="ARCHITECT/DESIGNER INVOLVED">

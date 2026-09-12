@@ -3,7 +3,7 @@
 import { fetchCRMLeads } from '../../../../lib/api/crm/leads';
 import { upsertLeads } from '../../../../lib/api/crm/lead-details';
 import { AppUser, CartItem, Lead, Remark, Visit } from '../../../../types/crm';
-import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, LEAD_PRIORITIES, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../../constants';
+import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, LEAD_PRIORITIES, LEGACY_PROPERTY_TYPES, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../../constants';
 import { CsvRow } from '../../types';
 import { csvEscape, leadToExportRow, mergeLead, todayStr, triggerDownload } from '../../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
@@ -222,7 +222,7 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
       const leadPriority = (leadPriorityStr || '').trim().toLowerCase();
       const architectInvolvedRaw = (architectInvolvedStr || '').trim().toLowerCase();
       if (clientType && !CLIENT_TYPES.includes(clientType)) errors.push('Row ' + rowNum + ': Client Type "' + clientType + '" is not valid. Must be one of: ' + CLIENT_TYPES.join(', '));
-      if (propertyType && !PROPERTY_TYPES.includes(propertyType)) errors.push('Row ' + rowNum + ': Property Type "' + propertyType + '" is not valid. Must be one of: ' + PROPERTY_TYPES.join(', '));
+      if (propertyType && !PROPERTY_TYPES.includes(propertyType) && !LEGACY_PROPERTY_TYPES.includes(propertyType)) errors.push('Row ' + rowNum + ': Property Type "' + propertyType + '" is not valid. Must be one of: ' + PROPERTY_TYPES.join(', '));
       if (projectPhase && !PROJECT_PHASES.includes(projectPhase)) errors.push('Row ' + rowNum + ': Project Phase "' + projectPhase + '" is not valid. Must be one of: ' + PROJECT_PHASES.join(', '));
       if (leadPriority && !LEAD_PRIORITIES.includes(leadPriority as typeof LEAD_PRIORITIES[number])) errors.push('Row ' + rowNum + ': Priority "' + leadPriorityStr + '" is not valid. Must be one of: ' + LEAD_PRIORITIES.join(', '));
       if (architectInvolvedRaw && !['true', 'false', 'yes', 'no'].includes(architectInvolvedRaw)) errors.push('Row ' + rowNum + ': Architect/Designer Involved "' + architectInvolvedStr + '" must be true/false/yes/no or empty');

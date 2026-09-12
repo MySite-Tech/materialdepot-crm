@@ -61,7 +61,16 @@ export const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre'
 
 export const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'Carpenter', 'Builder'];
 
-export const PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
+export const PROPERTY_TYPES = [
+  'Apartment - Complete Interior/ Renovation',
+  'Apartment - Part Interior/ Renovation',
+  'Villa - Complete Interior/ Renovation',
+  'Villa - Part Interior/ Renovation',
+  'Independent House - Complete Interior/ Renovation',
+  'Independent House - Part Interior/ Renovation',
+];
+
+export const LEGACY_PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
 
 export const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
