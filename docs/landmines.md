@@ -7,10 +7,11 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-49 entries. They live in one file because they cross-reference each other —
+50 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
+- A grid item's `min-width: auto` defeats `overflow-x-auto` inside it
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
 - A booking's date must come from the sub-job, not from its assignment
 - A tab's badge must count the rows that tab lists — derive both from one function
@@ -639,3 +640,19 @@ grep for a term, then read around the line you hit rather than opening all of it
   Kylas/Django with a server-held key rather than driving a service-role DB
   client, so the blast radius differs, but do not read their existence as a
   precedent for a new one.
+
+- **A grid or flex item will not shrink below its content, so an `overflow-x-auto`
+  inside one never engages.** The B2B Inbound "Today" view is
+  `grid-cols-[1fr_320px]` with the call table in the first track. Each bucket
+  card already wrapped its table in `overflow-x-auto`, which worked until two
+  columns (Enq / Cart ID, Assisted at EC) were added — then the track's default
+  `min-width: auto` grew to fit the table instead of letting it scroll, the page
+  became wider than `<main>`, and the whole tab scrolled sideways *under* the
+  B2B sidebar. It reads as "the layout is broken", not as "a table is too wide",
+  which is why it costs time to find. Fixed 2026-09-14 with
+  `minmax(0,1fr)` on the track plus `min-w-0` on both children. The general
+  shape: **any grid/flex child that contains something scrollable needs
+  `min-w-0` (or `minmax(0,…)` on its track)** — `overflow-x-auto` on the inner
+  element is necessary and not sufficient. `<main>` in
+  `views/b2-b-sales-crm.tsx` already carries `min-w-0` for the same reason; that
+  is what stopped this reaching the outer page chrome.

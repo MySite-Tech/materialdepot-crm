@@ -30,7 +30,7 @@ export function Tile({
         {accent && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accent }} />}
         <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400 truncate">{label}</div>
       </div>
-      <div className={`text-[22px] font-bold leading-tight mt-1 ${muted ? 'text-gray-300' : 'text-gray-900'}`}>{value}</div>
+      <div className={`text-[22px] font-bold leading-tight mt-1 truncate ${muted ? 'text-gray-300' : 'text-gray-900'}`} title={value}>{value}</div>
       {sub && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{sub}</div>}
     </div>
   );

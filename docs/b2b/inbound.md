@@ -112,6 +112,18 @@ comparing empty strings the other way round would have done. The Today table is
 deliberately **not** date-ordered — it is a call list, sorted by priority then
 follow-up date.
 
+**The Today grid's `minmax(0,1fr)` and `min-w-0` are load-bearing, not tidying.**
+Its left track holds the call table, which is wide enough to need the
+`overflow-x-auto` each bucket card already had — and that wrapper does nothing on
+its own here, because a grid item's default `min-width: auto` will not shrink
+below its content. Adding the Enq / Cart ID and Assisted at EC columns was enough
+to grow the track past `<main>` and scroll the **whole tab** sideways under the
+B2B sidebar, which reads as a broken layout rather than a wide table. Anything
+scrollable added to either column needs the same treatment; see
+`docs/landmines.md`. For the same reason a tile's value is `truncate`d and the
+seven-tile row only goes seven-across at `2xl` — at `xl` each tile was ~146px,
+and a long rupee figure has no space to wrap at.
+
 ### Search deliberately reaches outside the board
 
 `b2bInboundRule` pins the board to two owners and two pipeline stages, which is

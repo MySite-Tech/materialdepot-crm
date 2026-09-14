@@ -11,7 +11,7 @@ This module's detail is split by topic so a question costs one part, not the who
 
 | Part | Covers | Lines |
 |---|---|---|
-| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the widened search, the Enq-ID resolve | 226 |
+| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the widened search, the Enq-ID resolve | 238 |
 | [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation | 76 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 44 |
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived | 147 |

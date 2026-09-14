@@ -41,9 +41,16 @@ export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpL
     <>
     
       {view === 'today' && (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-3 items-start">
-          <DailyTable leads={followUpLeads} today={today} onOpen={setSelectedId} />
-          <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
+          {/* `min-w-0` is load-bearing on both columns. A grid item's default
+              `min-width: auto` refuses to shrink below its content, so the wide
+              call table inside would stretch the track, ignore its own
+              `overflow-x-auto`, and scroll the whole page sideways under the
+              sidebar instead of scrolling the table. */}
+          <div className="min-w-0">
+            <DailyTable leads={followUpLeads} today={today} onOpen={setSelectedId} />
+          </div>
+          <div className="flex flex-col gap-3 min-w-0">
             <SidePanel
               title="New — not yet actioned"
               note="Straight from Kylas. Log the first call to start the attempt cycle."
