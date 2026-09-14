@@ -66,6 +66,16 @@ export function mapInboundLead(raw: Record<string, any>): import('../../../../co
   };
 }
 
+/** The board's default view is deliberately narrow — two owners, two stages.
+ *
+ * That is right for a call list and wrong for a search: a lead that Presales
+ * parked on another stage, or that still sits with its Presales owner, is
+ * exactly what someone reaches for the search box to find, and the old rule
+ * filtered it out before the query ran ("15 leads in Kylas, only some here").
+ * So while a search term is present the rule keeps only the pipeline, dropping
+ * the stage restriction, and the owner restriction too unless one owner was
+ * explicitly picked from the filter.
+ */
 export function b2bInboundRule(
   ownerIds: number[],
   search?: string,
@@ -73,19 +83,24 @@ export function b2bInboundRule(
   createdBefore?: string,
   kylasStage?: number,
 ) {
-  const ownerRule = ownerIds.length === 1
+  const q = (search || '').trim();
+  const oneOwnerPicked = ownerIds.length === 1;
+  const wideOwner = !!q && !oneOwnerPicked;
+  const wideStage = !!q && !kylasStage;
+
+  const ownerRule = oneOwnerPicked
     ? { operator: 'equal', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerIds[0], relatedFieldIds: null }
     : { operator: 'in', id: 'ownerId', field: 'ownerId', type: 'long', value: ownerIds, relatedFieldIds: null };
 
   const stageRule = kylasStage
     ? { operator: 'equal', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: kylasStage, relatedFieldIds: ['pipeline'] }
     : { operator: 'in', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGES, relatedFieldIds: ['pipeline'] };
+
   const rules: Record<string, any>[] = [
-    ownerRule,
     { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE, dependentFieldIds: ['pipelineStage', 'pipelineStageReason'] },
-    stageRule,
   ];
-  const q = (search || '').trim();
+  if (!wideOwner) rules.unshift(ownerRule);
+  if (!wideStage) rules.push(stageRule);
   if (q) {
     rules.push({ id: 'multi_field', field: 'multi_field', type: 'multi_field', input: 'multi_field', operator: 'multi_field', value: q });
   }

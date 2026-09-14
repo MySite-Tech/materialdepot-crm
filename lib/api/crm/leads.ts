@@ -38,6 +38,8 @@ export interface CRMLeadsQuery {
   branch?: string;
   bm?: string;
   q?: string;
+
+  enquiryIds?: string[];
   status?: string;
   createdFrom?: string;
   createdTo?: string;
@@ -190,6 +192,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.branch) params.set('branch', query.branch);
   if (query.bm) params.set('bm', query.bm);
   if (query.q) params.set('q', query.q);
+  if (query.enquiryIds?.length) params.set('enquiry_ids', query.enquiryIds.join(','));
   if (query.status) params.set('status', query.status);
   if (query.createdFrom) params.set('created_from', query.createdFrom);
   if (query.createdTo) params.set('created_to', query.createdTo);

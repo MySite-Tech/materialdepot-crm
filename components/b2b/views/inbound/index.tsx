@@ -5,7 +5,7 @@ import { InboundDailyPanel } from './ui/daily-panel';
 
 import InboundDrawer from '../../drawers/inbound/index';
 
-import { INBOUND_STATUS_COLORS, InboundStatus, Priority, followUpBucket, istToday, statusGateErrors } from '../../models/inbound';
+import { INBOUND_STATUS_COLORS, InboundStatus, Priority, followUpBucket, isFollowUpStatus, isOpenStatus, istToday, statusGateErrors } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ExportFormat, ExportScope } from '../../types/export';
@@ -16,7 +16,7 @@ import { EXPORT_HEADERS } from './constants';
 import { MoveModal } from './ui/modals';
 import { View } from './types';
 import { Tile } from './ui';
-import { gapsFor, istDay, toExportRow } from './utils';
+import { byNewestLeadFirst, gapsFor, istDay, toExportRow } from './utils';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
@@ -104,7 +104,7 @@ export default function InboundLeads() {
     if (location !== 'all' && l.location !== location) return false;
     if (onlyGaps && gapsFor(l).length === 0) return false;
     return true;
-  }), [leads, status, priority, clientType, leadType, location, onlyGaps]);
+  }).sort(byNewestLeadFirst), [leads, status, priority, clientType, leadType, location, onlyGaps]);
 
   const byStatus = (s: InboundStatus) => filtered.filter((l) => l.stage === s);
 
@@ -117,12 +117,25 @@ export default function InboundLeads() {
     const closedToday = closed.filter((l) => istDay(l.statusChangedAt) === today).length;
     const piToday = pi.filter((l) => istDay(l.statusChangedAt) === today).length;
     const overdue = filtered.filter((l) =>
-      (l.stage === 'Follow up' || l.stage === 'PI Shared') && followUpBucket(l.followUpDate, today) === 'overdue').length;
+      isFollowUpStatus(l.stage) && followUpBucket(l.followUpDate, today) === 'overdue').length;
     const dueToday = filtered.filter((l) =>
-      (l.stage === 'Follow up' || l.stage === 'PI Shared') && followUpBucket(l.followUpDate, today) === 'today').length;
+      isFollowUpStatus(l.stage) && followUpBucket(l.followUpDate, today) === 'today').length;
     const untimed = [...pi, ...closed].filter((l) => !l.statusChangedAt).length;
+
+    // Pipeline value: every lead still open, at the best figure it has. A PI
+    // Shared lead carries the deal ticket's `orderValue`; anything earlier has
+    // only the BM's `expectedOrderValue`, so the two are counted separately and
+    // named separately — summing an estimate into a realised figure is the one
+    // thing `expectedOrderValue` must never do.
+    const open = filtered.filter((l) => isOpenStatus(l.stage));
+    const quoted = sum(open);
+    const estimated = open
+      .filter((l) => !Number(l.orderValue))
+      .reduce((a, l) => a + (Number(l.expectedOrderValue) || 0), 0);
+
     return {
       newToday, overdue, dueToday, untimed,
+      pipeline: { n: open.length, quoted, estimated, total: quoted + estimated },
       pi: { n: pi.length, value: sum(pi), today: piToday },
       closed: { n: closed.length, value: sum(closed), today: closedToday },
       lost: { n: lost.length },
@@ -193,7 +206,7 @@ export default function InboundLeads() {
       }
       if (!list.length) { setError('No leads matched — nothing to export.'); return; }
       const name = `b2b_inbound_leads_${scope}_${todayStr()}`;
-      const rows = list.map(toExportRow);
+      const rows = list.sort(byNewestLeadFirst).map(toExportRow);
       if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, rows, name);
       else await exportRowsExcel(EXPORT_HEADERS, rows, name, 'Inbound Leads');
     } catch (e) {
@@ -220,13 +233,10 @@ export default function InboundLeads() {
   const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
   const followUpLeads = useMemo(
-    () => filtered.filter((l) => l.stage === 'Follow up' || l.stage === 'PI Shared'),
+    () => filtered.filter((l) => isFollowUpStatus(l.stage)),
     [filtered],
   );
-  const newToday = useMemo(
-    () => filtered.filter((l) => l.stage === 'New').sort((a, b) => (b.leadCreatedAt || '').localeCompare(a.leadCreatedAt || '')),
-    [filtered],
-  );
+  const newToday = useMemo(() => filtered.filter((l) => l.stage === 'New'), [filtered]);
   const piLeads = useMemo(() => filtered.filter((l) => l.stage === 'PI Shared'), [filtered]);
 
   const [listPage, setListPage] = useState(0);
@@ -271,8 +281,17 @@ export default function InboundLeads() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 mb-3">
         <Tile label="New today" value={String(summary.newToday)} sub="arrived in Kylas today" accent={INBOUND_STATUS_COLORS.New} />
+        <Tile
+          label="Pipeline value"
+          value={summary.pipeline.total ? fmtINR(summary.pipeline.total) : '—'}
+          sub={summary.pipeline.total
+            ? `${summary.pipeline.n} open · ${fmtINR(summary.pipeline.quoted)} quoted${summary.pipeline.estimated ? ` + ${fmtINR(summary.pipeline.estimated)} est.` : ''}`
+            : `${summary.pipeline.n} open · no value on any of them yet`}
+          accent="#0F766E"
+          muted={summary.pipeline.total === 0}
+        />
         <Tile
           label="PI Shared"
           value={String(summary.pi.n)}
@@ -305,6 +324,7 @@ export default function InboundLeads() {
         {[
           `Counts cover the ${activeFilters ? 'current filter' : 'loaded window'}.`,
           'Order value always comes from the matched deal ticket, never a typed estimate.',
+          'Pipeline value adds the BM’s estimate only for open leads that have no ticket value yet, and says so in the tile.',
           summary.untimed > 0
             ? `${summary.untimed} PI/closed ${summary.untimed === 1 ? 'lead pre-dates' : 'leads pre-date'} status timestamps, so ${summary.untimed === 1 ? 'it is' : 'they are'} not counted into today's figures.`
             : '',
@@ -313,6 +333,7 @@ export default function InboundLeads() {
 
       <InboundDailyPanel
         activeFilters={activeFilters}
+        appliedSearch={appliedSearch}
         clearFilters={clearFilters}
         clientType={clientType}
         createdAfter={createdAfter}

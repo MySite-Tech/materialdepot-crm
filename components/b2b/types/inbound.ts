@@ -7,7 +7,8 @@ export type FieldOwner =
   | 'deals'
   | 'derived';
 
-export type InboundStatus = 'New' | 'Follow up' | 'PI Shared' | 'Closed' | 'Lost';
+export type InboundStatus =
+  | 'New' | 'Connected - Need nurturing' | 'Follow up' | 'PI Shared' | 'Closed' | 'Lost';
 
 export type LegacyStage =
   | 'New' | 'Hyderabad' | 'RNR' | 'Followup Required' | 'Quote'

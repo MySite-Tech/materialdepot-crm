@@ -1,9 +1,23 @@
 'use client';
 
-import { lastAttempt } from '../../../models/inbound';
+import { isFollowUpStatus, lastAttempt } from '../../../models/inbound';
 import { InboundLead, fmtINR } from '../../../models/mock-data';
 import { Empty, FollowUpChip, LeadName, LeadTypeChip, PriorityChip } from '../../../ui/inbound-chips';
 import { gapsFor } from '../utils';
+
+/** The Enq ID is the handle Procurement answers to — a rep reading a card needs
+ *  it there, not two clicks away in the drawer. An empty one is called out
+ *  rather than hidden, because a PI Shared lead without one is a gap. */
+export function EnqIdChip({ id }: { id?: string }) {
+  if (!String(id || '').trim()) {
+    return <span className="text-[10px] font-semibold text-amber-600">No Enq ID</span>;
+  }
+  return (
+    <span className="text-[10px] font-mono font-semibold text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">
+      {id}
+    </span>
+  );
+}
 
 export function Tile({
   label, value, sub, accent, muted,
@@ -46,11 +60,19 @@ export function LeadCard({ lead, today, onClick, onDragStart }: {
         {lead.clientType && <span className="text-[10px] text-gray-500">{lead.clientType}</span>}
         <LeadTypeChip t={lead.leadType} />
       </div>
-      {(lead.stage === 'Follow up' || lead.stage === 'PI Shared') && (
+      {isFollowUpStatus(lead.stage) && (
         <div className="mt-1.5"><FollowUpChip date={lead.followUpDate} today={today} /></div>
       )}
-      {(lead.stage === 'PI Shared' || lead.stage === 'Closed') && !!lead.orderValue && (
-        <div className="text-[11px] font-mono font-semibold text-gray-700 mt-1.5">{fmtINR(lead.orderValue)}</div>
+      {(lead.stage === 'PI Shared' || lead.stage === 'Closed') && (
+        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+          <EnqIdChip id={lead.enqId} />
+          {!!lead.orderValue && (
+            <span className="text-[11px] font-mono font-semibold text-gray-700">{fmtINR(lead.orderValue)}</span>
+          )}
+        </div>
+      )}
+      {(lead.stage === 'PI Shared' || lead.stage === 'Closed') && lead.placedUnder?.ecName && (
+        <div className="text-[10px] text-gray-500 mt-1 truncate">EC: {lead.placedUnder.ecName}</div>
       )}
       {lead.stage === 'Lost' && (
         <div className="text-[10.5px] text-red-500 mt-1.5 leading-snug">
@@ -105,9 +127,16 @@ export function SidePanel({
             <div className="text-[10px] text-gray-400 font-mono mt-0.5">{l.phone || '—'}</div>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               <span className="text-[10px] text-gray-500">{l.owner}</span>
+              {l.stage === 'PI Shared' && <EnqIdChip id={l.enqId} />}
               {!!l.orderValue && <span className="text-[10px] font-mono font-semibold text-gray-700">{fmtINR(l.orderValue)}</span>}
               {l.stage === 'PI Shared' && <FollowUpChip date={l.followUpDate} today={today} />}
             </div>
+            {l.stage === 'PI Shared' && (l.placedUnder?.ecName || l.placedUnder?.spok) && (
+              <div className="text-[10px] text-gray-500 mt-1 truncate">
+                {[l.placedUnder?.ecName && `EC: ${l.placedUnder.ecName}`, l.placedUnder?.spok && `Assisted by ${l.placedUnder.spok}`]
+                  .filter(Boolean).join(' · ')}
+              </div>
+            )}
           </button>
         ))}
       </div>

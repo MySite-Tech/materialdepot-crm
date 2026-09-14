@@ -7,7 +7,7 @@ export const EXPORT_HEADERS = [
   'GST', 'Segment', 'Client type', 'Lead type', 'Priority', 'Location',
   'Selection', 'Requirement', 'Expected value', 'Status', 'Next follow-up',
   'Attempts', 'Last outcome', 'Enq ID', 'Order value', 'Lost reason',
-  'Spok', 'KAM', 'Qualified by',
+  'Spok', 'BM (placed under)', 'Assisted at EC', 'EC BM', 'KAM', 'Qualified by',
 ];
 
 export const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, '': 3 };

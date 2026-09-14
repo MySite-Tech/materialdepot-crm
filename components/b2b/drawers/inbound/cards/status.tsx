@@ -1,7 +1,7 @@
 'use client';
 
 import { EnqLookup } from '../../../../../lib/b2b';
-import { INBOUND_LOST_REASONS, INBOUND_STATUSES, INBOUND_STATUS_HINT } from '../../../constants/inbound';
+import { INBOUND_LOST_REASONS, INBOUND_NURTURE_STATUS, INBOUND_STATUSES, INBOUND_STATUS_HINT, isFollowUpStatus } from '../../../constants/inbound';
 import { InboundLead } from '../../../models/mock-data';
 import { InboundStatus } from '../../../types/inbound';
 import { Field, SectionCard, errorInputCls, inputCls } from '../../../ui/inbound-chips';
@@ -30,9 +30,16 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
           </select>
         </Field>
     
-        {(draft.stage === 'Follow up' || draft.stage === 'PI Shared') && (
+        {isFollowUpStatus(draft.stage) && (
           <>
-            <Field label="Next follow-up date" required error={gateFor('followUpDate')}>
+            <Field
+              label="Next follow-up date"
+              required={draft.stage !== INBOUND_NURTURE_STATUS}
+              error={gateFor('followUpDate')}
+              hint={draft.stage === INBOUND_NURTURE_STATUS
+                ? 'Not required to save, but a nurture lead with no date never reaches anyone’s call list.'
+                : undefined}
+            >
               <input
                 type="date"
                 value={draft.followUpDate || ''}
@@ -81,7 +88,7 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
                   : enq?.status === 'unavailable'
                     ? 'Could not reach the deal system — this is not a wrong Enq ID.'
                     : enq?.status === 'no-match'
-                      ? 'No deal ticket on this phone matches that Enq ID — enter the value yourself.'
+                      ? 'No deal ticket carries that Enq ID — enter the value yourself.'
                       : 'Press Fetch to pull it from the matching deal ticket.'
               }
             >
@@ -95,6 +102,13 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
               />
             </Field>
     
+            {enq?.status === 'matched' && enq.otherPhone && (
+              <p className="sm:col-span-2 text-[10.5px] text-amber-700 leading-snug -mt-1">
+                That ticket is raised on <span className="font-mono">{enq.otherPhone}</span>, not this lead&apos;s number.
+                The value was still pulled — check it is the same client before saving.
+              </p>
+            )}
+
             {enq?.status === 'no-match' && !!enq.available?.length && (
               <div className="sm:col-span-2">
                 <p className="text-[10px] text-gray-500 mb-1">Enq IDs that do exist on {draft.phone}:</p>

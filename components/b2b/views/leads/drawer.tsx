@@ -33,7 +33,7 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
 
   useEffect(() => {
     let alive = true;
-    if (!lead.enqId || !lead.phone) { setEnq(null); return; }
+    if (!lead.enqId) { setEnq(null); return; }
     setEnqLoading(true);
     lookupEnqId(lead.phone, lead.enqId)
       .then((r) => { if (alive) setEnq(r); })
@@ -205,12 +205,17 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
                   <Field label="Follow-up"><ReadValue v={enq.deal?.followUpDate ? fmtDay(enq.deal.followUpDate) : ''} /></Field>
                   <Field label="Closure"><ReadValue v={enq.deal?.closureDate ? fmtDay(enq.deal.closureDate) : ''} /></Field>
                   <Field label="Lost reason"><ReadValue v={enq.deal?.lostReason} /></Field>
+                  {enq.otherPhone && (
+                    <p className="col-span-2 sm:col-span-3 text-[10.5px] text-amber-700 leading-snug">
+                      That ticket is raised on <span className="font-mono">{enq.otherPhone}</span>, not this lead&apos;s
+                      number — check it is the same client before treating this value as theirs.
+                    </p>
+                  )}
                 </div>
               ) : enq?.status === 'no-match' ? (
                 <div className="text-[11.5px] text-amber-800 leading-snug">
-                  <strong className="font-mono">{lead.enqId}</strong> does not match any deal ticket on
-                  {lead.phone ? <span className="font-mono"> {lead.phone} </span> : ' this lead '}
-                  exactly, so nothing was fetched. Matching is exact on purpose — resolving a near-miss would attach another
+                  <strong className="font-mono">{lead.enqId}</strong> does not match any deal ticket exactly, so nothing
+                  was fetched. Matching is exact on purpose — resolving a near-miss would attach another
                   client&apos;s money to this lead.
                   {enq.available?.length ? <> Tickets on this number: <span className="font-mono">{enq.available.join(', ')}</span>.</> : null}
                 </div>

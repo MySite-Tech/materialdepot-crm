@@ -1,6 +1,6 @@
 'use client';
 
-import { ENRICHMENT_FIELD_COUNT } from '../../constants/inbound';
+import { ENRICHMENT_FIELD_COUNT, isFollowUpStatus } from '../../constants/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { EnrichmentGap } from '../../types/inbound';
 import { FollowUpChip, LeadTypeChip, PriorityChip, StatusBadge } from '../../ui/inbound-chips';
@@ -28,8 +28,13 @@ export function InboundDrawerHeader({ draft, gaps, onClose, today }: {
             <StatusBadge s={draft.stage} />
             <PriorityChip p={draft.priority} />
             <LeadTypeChip t={draft.leadType} />
-            {(draft.stage === 'Follow up' || draft.stage === 'PI Shared') && (
+            {isFollowUpStatus(draft.stage) && (
               <FollowUpChip date={draft.followUpDate} today={today} />
+            )}
+            {draft.enqId && (
+              <span className="text-[11px] font-mono font-semibold text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">
+                {draft.enqId}
+              </span>
             )}
           </div>
           {nameIsJustThePhone(draft) && (

@@ -108,6 +108,33 @@ export async function fetchLeadDeals(phone: string | number): Promise<import('..
   }
 }
 
+const enqLeadCache = new Map<string, Promise<CRMLeadRow[]>>();
+
+/** Resolve deal tickets by enquiry/cart id, with no phone involved.
+ *
+ * `/crm/leads/?enquiry_ids=` filters on the indexed `estimate.lead_id` (and the
+ * `extra_data.cart_number` fallback) and tolerates case variants server-side, so
+ * this answers even when the ticket sits on a different number from the one
+ * Kylas holds for the lead — which is why the phone-scoped lookup below used to
+ * report perfectly good Enq IDs as invalid. Throws on failure; the caller must
+ * keep "could not reach the deal system" distinct from "no such Enq ID".
+ */
+export function fetchLeadsByEnquiryId(enqId: string): Promise<CRMLeadRow[]> {
+  const want = String(enqId || '').trim();
+  if (!want) return Promise.resolve([]);
+  const hit = enqLeadCache.get(want.toUpperCase());
+  if (hit) return hit;
+
+  const promise = fetchCRMLeads({ enquiryIds: [want], page: 1, pageSize: 25 })
+    .then(({ results }) => {
+      if (!Array.isArray(results)) throw new Error('enquiry id search returned a non-array');
+      return results;
+    });
+  enqLeadCache.set(want.toUpperCase(), promise);
+  promise.catch(() => enqLeadCache.delete(want.toUpperCase()));
+  return promise;
+}
+
 const phoneLeadCache = new Map<string, Promise<CRMLeadRow[]>>();
 
 export function fetchLeadsByPhone(phone: string): Promise<CRMLeadRow[]> {

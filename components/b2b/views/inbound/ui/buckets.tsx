@@ -120,7 +120,7 @@ export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpL
             <table className="w-full text-[12.5px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
-                  {['Company', 'Contact', 'Client type', 'Seg', 'Lead', 'Pri', 'Status', 'Calls', 'Follow-up', 'BM', 'Location', 'Value', ''].map((h, i) => (
+                  {['Company', 'Contact', 'Client type', 'Seg', 'Lead', 'Pri', 'Status', 'Calls', 'Follow-up', 'BM', 'Enq / Cart ID', 'Assisted at EC', 'Location', 'Value', ''].map((h, i) => (
                     <th key={i} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -145,6 +145,10 @@ export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpL
                         {l.followUpDate ? fmtDay(l.followUpDate) : '—'}
                       </td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.owner}</td>
+                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{l.enqId || '—'}</td>
+                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap max-w-[160px] truncate">
+                        {l.placedUnder?.ecName || '—'}
+                      </td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.location || '—'}</td>
                       <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">
                         {l.orderValue ? fmtINR(l.orderValue)

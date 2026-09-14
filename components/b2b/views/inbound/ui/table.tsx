@@ -54,7 +54,7 @@ export function DailyTable({
               <table className="w-full text-[12.5px]">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
-                    {['Pri', 'Company', 'Contact', 'Client type', 'Status', 'Calls', 'Follow-up', 'BM', 'Value', ''].map((h, i) => (
+                    {['Pri', 'Company', 'Contact', 'Client type', 'Status', 'Calls', 'Follow-up', 'BM', 'Enq / Cart ID', 'Assisted at EC', 'Value', ''].map((h, i) => (
                       <th key={i} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -83,6 +83,12 @@ export function DailyTable({
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.owner}</td>
+                        <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">
+                          {l.enqId || (l.stage === 'PI Shared' ? <span className="text-amber-600 font-sans">No Enq ID</span> : <span className="text-gray-300">—</span>)}
+                        </td>
+                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap max-w-[160px] truncate">
+                          {l.placedUnder?.ecName || <span className="text-gray-300">—</span>}
+                        </td>
                         <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">
                           {l.orderValue ? fmtINR(l.orderValue)
                             : l.expectedOrderValue ? <span className="text-gray-400">~{fmtINR(l.expectedOrderValue)}</span>

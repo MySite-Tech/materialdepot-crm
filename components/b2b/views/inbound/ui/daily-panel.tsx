@@ -8,8 +8,9 @@ import { InboundStatus } from '../../../types/inbound';
 import { inputCls } from '../../../constants/ui';
 import { Dispatch, SetStateAction } from 'react';
 
-export function InboundDailyPanel({ activeFilters, clearFilters, clientType, createdAfter, createdBefore, leadType, location, newKylasStage, onlyGaps, owner, priority, search, setAppliedSearch, setClientType, setCreatedAfter, setCreatedBefore, setLeadType, setLocation, setNewKylasStage, setOnlyGaps, setOwner, setPriority, setSearch, setStatus, status }: {
+export function InboundDailyPanel({ activeFilters, appliedSearch, clearFilters, clientType, createdAfter, createdBefore, leadType, location, newKylasStage, onlyGaps, owner, priority, search, setAppliedSearch, setClientType, setCreatedAfter, setCreatedBefore, setLeadType, setLocation, setNewKylasStage, setOnlyGaps, setOwner, setPriority, setSearch, setStatus, status }: {
   activeFilters: number;
+  appliedSearch: string;
   clearFilters: () => void;
   clientType: string;
   createdAfter: string;
@@ -61,6 +62,11 @@ export function InboundDailyPanel({ activeFilters, clearFilters, clientType, cre
               className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
             >Search</button>
           </div>
+          <p className="text-[9.5px] text-gray-400 mt-1 leading-snug">
+            {appliedSearch
+              ? `Searching every stage${owner === 'all' ? ' and every owner' : ''} in the Kylas B2B pipeline — wider than the board's own view.`
+              : 'A search reaches leads the board does not show: any stage, any owner in the B2B pipeline.'}
+          </p>
         </div>
         {([
           ['Status', 'All statuses', status, setStatus, ['all', ...INBOUND_STATUSES]],

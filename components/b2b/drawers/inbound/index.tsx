@@ -7,13 +7,14 @@ import { InboundCallsCard } from './cards/calls';
 import { InboundClientCard } from './cards/client';
 import { InboundEnrichCard } from './cards/enrich';
 import { InboundNotesCard } from './cards/notes';
+import { InboundPlacedUnderCard } from './cards/placed-under';
 import { InboundPresalesCard } from './cards/presales';
 import { InboundRequirementCard } from './cards/requirement';
 import { InboundStatusCard } from './cards/status';
 
-import { CallAttempt, CallAttemptOutcome, InboundStatus, PLACED_UNDER_FIELDS, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inbound';
+import { CallAttempt, CallAttemptOutcome, InboundStatus, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inbound';
 import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote } from '../../models/mock-data';
-import { Field, SectionCard, Spinner, inputCls } from '../../ui/inbound-chips';
+import { Spinner } from '../../ui/inbound-chips';
 import { KYLAS_OUTCOME } from './constants';
 import { SaveState } from '../../types/inbound-drawer';
 import { EnqLookup, fetchInboundKamLoad, lookupEnqId, upsertInboundLead } from '@/lib/b2b';
@@ -251,8 +252,8 @@ export default function InboundDrawer({
     if (pick) set('kam', pick);
   };
 
-  const setPlaced = (k: keyof PlacedUnder, v: string) =>
-    setDraft((d) => ({ ...d, placedUnder: { ...(d.placedUnder || {}), [k]: v } }));
+  const setPlaced = (patch: Partial<PlacedUnder>) =>
+    setDraft((d) => ({ ...d, placedUnder: { ...(d.placedUnder || {}), ...patch } }));
 
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
@@ -400,50 +401,14 @@ export default function InboundDrawer({
         setShowGates={setShowGates}
       />
 
-          {draft.stage === 'Closed' && (
-            <SectionCard title="Placed under" owner="crm" subtitle="§3.5 — captured on order won">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {PLACED_UNDER_FIELDS.map((f) => (
-                  <Field key={f.key} label={f.label} owner={f.owner} hint={f.hint}>
-                    <input
-                      value={draft.placedUnder?.[f.key] || ''}
-                      onChange={(e) => setPlaced(f.key, e.target.value)}
-                      className={inputCls}
-                      placeholder={f.owner === 'deals' ? 'From the deal ticket' : ''}
-                    />
-                  </Field>
-                ))}
-              </div>
-              <div className="mt-3 rounded-md border border-gray-200 bg-gray-50/60 px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div>
-                    <div className="text-[11px] font-bold text-gray-700">KAM handoff</div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      {draft.kam
-                        ? <>Assigned to <strong>{draft.kam}</strong>.</>
-                        : 'Round-robin over the KAM roster, balanced by how many closed inbound leads each already holds.'}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <select
-                      value={draft.kam || ''}
-                      onChange={(e) => set('kam', e.target.value || undefined)}
-                      className={inputCls + ' w-auto min-w-[150px]'}
-                    >
-                      <option value="">Unassigned</option>
-                      {KAMS.map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                    <button
-                      onClick={assignKam}
-                      disabled={kamAssigning}
-                      className="shrink-0 bg-[#1A1A1A] text-white px-2.5 py-1.5 rounded-md text-[11px] font-semibold disabled:opacity-50 whitespace-nowrap"
-                    >
-                      {kamAssigning ? '…' : 'Auto-assign'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
+          {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
+            <InboundPlacedUnderCard
+              assignKam={assignKam}
+              draft={draft}
+              kamAssigning={kamAssigning}
+              setKam={(kam) => set('kam', kam)}
+              setPlaced={setPlaced}
+            />
           )}
 
           <InboundEnrichCard

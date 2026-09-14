@@ -51,6 +51,13 @@ contact does not normalise to the number asked for, and **counts the drops** in
 the UI footnote. `fetchLeadDeals` gets away without this only because
 `lookupEnqId` then matches the Enq ID exactly.
 
+Since Sept 2026 `lookupEnqId` resolves by enquiry id rather than by phone (see
+`docs/b2b/inbound.md`), so it is no longer the phone filter it was incidentally
+acting as. Where a match must belong to *this* client — `resolveClientOrders` in
+`lib/b2b/orders/details.ts` and the KAM order modal — the caller rejects a result
+carrying `otherPhone`. Anywhere that check is dropped, a ticket raised on another
+number attaches its money to this account.
+
 ### Two columns §3.2 asks for do not exist
 
 `CRMLeadRow` carries a client's PERSON name and **no GST at all**, so §3.2's

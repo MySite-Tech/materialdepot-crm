@@ -58,6 +58,17 @@ were never statuses: `Hyderabad` (40 rows) was a **location**, confirmed against
 row was 56xxxx Karnataka), and `RNR` (13 rows) was a **call outcome**.
 `Enquiry Invalid` became a lost reason. Nothing was deleted.
 
+**`Connected - Need nurturing` is a fifth, added after the PRD** (Business Head
+request, Sept 2026) for the lead that answered but has nothing live yet — before
+it existed those sat in `Follow up` and were indistinguishable from a lead
+working towards a quote. It sits between `New` and `Follow up`, and **it is not a
+hard gate**: `statusGateErrors` still blocks exactly the four the PRD states, so
+a rep can park a lead there without inventing a date. It counts as a follow-up
+status everywhere else — `INBOUND_FOLLOW_UP_STATUSES` is what the Today view, the
+overdue tiles and `analytics.ts`'s in-progress and live pipeline all read, so use
+that constant rather than spelling the statuses out again. `b2b_lead.stage` is a plain `text` column with no check constraint, so no
+migration was needed and old rows are untouched.
+
 ### `meta_data` is one field table, in both directions
 
 `INBOUND_META` + `INBOUND_KYLAS_SNAPSHOT` in `lib/b2b/` drive read and write
@@ -91,6 +102,28 @@ is doing double duty as a sort key. A rewrite that maps over `kylas.leads` to
 overlay in place is cleaner and loses that grouping — it was tried and reverted
 the same day.
 
+**Newest-first is applied in the view, not in that assembly.** The board, the
+list and the export all want the latest lead at the top, and the obvious place to
+sort is the fetch — which is exactly the rewrite above that was reverted. So
+`byNewestLeadFirst` runs on `filtered` in `views/inbound/index.tsx` instead: the
+data layer's grouping stays intact and every rendered list is still date-ordered.
+Leads with no `leadCreatedAt` sort last rather than to the top, which is what
+comparing empty strings the other way round would have done. The Today table is
+deliberately **not** date-ordered — it is a call list, sorted by priority then
+follow-up date.
+
+### Search deliberately reaches outside the board
+
+`b2bInboundRule` pins the board to two owners and two pipeline stages, which is
+right for a call list and wrong for a search: a lead Presales parked elsewhere,
+or one still sitting with its Presales owner, is invisible — "15 leads in Kylas,
+only some of them here". So **while a search term is present the rule keeps only
+`pipeline`**, dropping the stage restriction, and the owner restriction too
+unless one owner was explicitly picked in the filter. An explicit Kylas-tag
+filter still wins over the widening. A lead owned outside the inbound pair maps
+to `owner: 'Unassigned'` — that is `B2B_INBOUND_OWNERS` having no name for that
+id, not a claim that Kylas left it unassigned.
+
 ### Gates: four hard, eight soft
 
 `statusGateErrors` blocks exactly the four the PRD states — follow-up date on
@@ -107,24 +140,74 @@ sent.
 ### Enq ID → order value
 
 The PRD says the order value is "auto-fetched from Procurement using the Enq
-ID". **There is no Procurement API here.** `lookupEnqId` matches the Enq ID
-against the deal tickets already on the client's phone (a ticket's `id` *is* the
-cart/ENQ number) and takes `cartValue` plus `assignedTo` for §3.5's "BM Name
-(from Procurement)". Matching is EXACT — a near-miss reports `no-match` and the
-rep types the figure, flagged `manual`, because resolving `ENQ-2488` to
-`ENQ-24881` would attach one client's money to another's lead. A Django outage
-returns `unavailable`, kept distinct from `no-match` so the UI never tells a rep
-their correct Enq ID is invalid.
+ID". **There is no Procurement API here.** `lookupEnqId` resolves the id against
+the deal tickets (a ticket's `id` *is* the cart/ENQ number) and takes `cartValue`
+plus `assignedTo` for §3.5's "BM Name (from Procurement)".
 
-**That last sentence was false for the first three weeks it was written here**,
-and it is worth knowing why. `lookupEnqId` fetched through `fetchLeadDeals`,
-which catches its own errors into `[]` — so an outage produced an empty deal
-list, which reads as "no ticket has that Enq ID", and `unavailable` was
-unreachable code. Every rep would have been told their perfectly good Enquiry ID
-was invalid for as long as Django was down. Fixed 2026-09-08 by calling
-`fetchCRMLeads` directly with an `Array.isArray` guard, which is what the Site
-Audit funnel module already did for exactly this reason. See the `Array.isArray`
-section — a wrapper that swallows makes the error branch above it dead.
+**It resolves by enquiry id, not by phone — and that is the whole fix.** Until
+Sept 2026 the lookup pulled every deal on the lead's *phone* and searched that
+list, so a lead whose Kylas number differs from the number on the cart — a PA
+raising the enquiry, a second line, a number corrected on one side only —
+reported a perfectly valid Enq ID as invalid, and the rep typed the figure by
+hand. `fetchLeadsByEnquiryId` now calls `/crm/leads/?enquiry_ids=`, which filters
+on the indexed `estimate.lead_id` (with an `extra_data.cart_number` fallback) and
+tolerates case variants server-side. The phone is used for one thing only: when
+the matched ticket sits on a *different* number, `otherPhone` comes back and both
+drawers say so, rather than binding another client's money silently.
+
+Matching is still EXACT — `enquiry_ids=` is an `__in` lookup, never a prefix, so
+`ENQ-2488` cannot resolve to `ENQ-24881`. A miss reports `no-match` with the Enq
+IDs that *do* exist on the lead's number as "did you mean" chips; that suggestion
+list is the only thing still keyed on the phone, it degrades to no suggestions
+rather than to an error, and `fetchLeadsByPhone` has already memoised it for the
+drawer's deal-ticket card, so it costs no extra request.
+
+A Django outage returns `unavailable`, kept distinct from `no-match` so the UI
+never tells a rep their correct Enq ID is invalid. **That was false for the first
+three weeks it was written here**, and it is worth knowing why: `lookupEnqId`
+fetched through `fetchLeadDeals`, which catches its own errors into `[]` — an
+outage produced an empty list, which reads as "no ticket has that Enq ID", and
+`unavailable` was unreachable code. Fixed 2026-09-08; `fetchLeadsByEnquiryId`
+keeps the same shape, throwing rather than swallowing so the branch stays live.
+
+### §3.5 is asked at PI Shared, not only at Closed
+
+`InboundPlacedUnderCard` renders for **both** `PI Shared` and `Closed`. The same
+four fields are behind one title per status — "Assisted by" while the PI is out,
+"Placed under" once it is won (`PLACED_UNDER_TITLE`) — because they are the same
+claim about who worked the lead, and asking for it only at Closed meant nobody
+could see who was on a live PI. The KAM handoff block stays `Closed`-only: there
+is nothing to hand over until there is an order.
+
+All four are **dropdowns now, not free text**:
+
+- `bmName` and `ecBmName` come from Django. `EcPicker` already loaded the EC list
+  and the BMs at the chosen EC; `bmName` is the unscoped `fetchAvailableBMs()`,
+  the same unbranched call the footfall and dashboard tabs already make.
+- `spok` is `ASSIGNABLE_REPS` from `models/roster.ts`, not a fetch.
+- **Every one of them keeps a stored value that the roster no longer lists.**
+  These were free text for months, so live rows hold names and spellings no
+  roster contains, and dropping one from the options would blank the field on the
+  next save without anyone choosing to clear it. That is what `withStored` is
+  for, in both the card and `EcPicker`.
+- A roster that fails to load says so in the field hint and keeps the last list
+  it had. It never renders as an empty dropdown — that reads as "no BMs exist".
+
+Still true, and worth restating here because these are now pickers: **"Assisted
+at EC" is never auto-filled** from the ticket's branch or assignee. A cart's
+branch is where it was raised; "assisted at" is a claim about who helped close
+it. `bmName` is the one exception, and only because `checkEnq` fills it from the
+matched deal's own `assignedTo`.
+
+### What the tiles count
+
+`Pipeline value` is the sum over **open** leads (`INBOUND_OPEN_STATUSES` — every
+status but `Closed` and `Lost`) and it keeps the two figures apart: the deal
+ticket's `orderValue` where there is one, plus `expectedOrderValue` **only for
+leads that have no ticket value yet**. The tile's subtitle names both. This is
+the one place `expectedOrderValue` is added to a rupee total anywhere in the
+module, and it is allowed here because the tile is explicitly a forecast — it is
+still never summed as revenue, which is the rule the rest of this doc states.
 
 ### Two vocabularies that deliberately do not fully map
 

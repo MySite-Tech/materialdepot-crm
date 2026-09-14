@@ -8,6 +8,7 @@ import {
   clientStatus, istToday,
   type ClientEntity, type ClientOrderMetrics, type ClientStatus,
 } from './client';
+import { INBOUND_FOLLOW_UP_STATUSES, INBOUND_NURTURE_STATUS, isFollowUpStatus } from './inbound';
 import {
   KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES,
   kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit,
@@ -75,7 +76,7 @@ export function computeDashboard(
     data.inboundTotal +
     outreach.filter((l) => l.status === 'Yet to Meet').length;
   const inProgressCount =
-    inbound.filter((l) => l.stage === 'Follow up').length +
+    inbound.filter((l) => l.stage === 'Follow up' || l.stage === INBOUND_NURTURE_STATUS).length +
     outreach.filter((l) => l.status === 'Follow up' || l.status === 'Quote Share').length +
     kam.filter((o) => o.status === 'Requirement Logged' || o.status === 'Quote Shared').length;
   const piCount =
@@ -171,7 +172,7 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
 
   const rows = assignedClientRows(clients, (c) => clientMetrics[c.id] || { dateState: 'pending' }, today);
 
-  const inboundLive = inbound.filter((l) => l.stage === 'Follow up' || l.stage === 'PI Shared');
+  const inboundLive = inbound.filter((l) => isFollowUpStatus(l.stage));
   const outreachLive = outreach.filter((l) => l.status === 'Quote Share' || l.status === 'PI Shared');
   const kamLive = kamPipeline(kam);
 
@@ -181,7 +182,7 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
       pipeline: sum(inboundLive.map((l) => l.orderValue)),
       estimatedPipeline: sum(inboundLive.map((l) => l.expectedOrderValue)),
       count: inboundLive.length,
-      statuses: ['Follow up', 'PI Shared'],
+      statuses: [...INBOUND_FOLLOW_UP_STATUSES],
     },
     {
       label: 'Outreach',
@@ -354,7 +355,7 @@ export function computeLeadership(data: B2BData, now: Date): LeadershipData {
   const nonNewLoaded = inbound.filter((l) => l.stage !== 'New').length;
   const orderWonFunnel = [
     { label: 'Total Leads', count: data.inboundTotal + nonNewLoaded },
-    { label: 'Follow-up', count: inbound.filter((l) => l.stage === 'Follow up').length },
+    { label: 'Follow-up', count: inbound.filter((l) => l.stage === 'Follow up' || l.stage === INBOUND_NURTURE_STATUS).length },
     { label: 'PI Shared', count: inbound.filter((l) => l.stage === 'PI Shared').length },
     { label: 'Order Won', count: inbound.filter((l) => l.stage === 'Closed').length },
   ];

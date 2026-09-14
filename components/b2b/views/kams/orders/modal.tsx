@@ -51,7 +51,15 @@ export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
     }
     setLookup({ state: 'busy' });
     const r = await lookupEnqId(draft.phone, enq);
-    if (r.status === 'matched') {
+    if (r.status === 'matched' && r.otherPhone) {
+      // The enquiry-id resolve is phone-independent, but a KAM order is a claim
+      // about *this* client's money — binding a ticket raised on another number
+      // is what the old phone-scoped lookup ruled out, and that stays ruled out.
+      setLookup({
+        state: 'no-match',
+        note: `${enq} exists, but on ${r.otherPhone} — not this client's number. Enter the value yourself if it is genuinely theirs.`,
+      });
+    } else if (r.status === 'matched') {
       setDraft((d) => ({
         ...d,
         orderValue: r.orderValue,

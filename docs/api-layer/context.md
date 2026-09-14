@@ -108,6 +108,20 @@ Four things worth knowing before reusing it:
 - **It fails closed.** Unreachable backend → `SessionError` at 502, not "allow".
   Pair it with `sessionErrorResponse(err)` to turn that into the response.
 
+### There is no scheduled route in this app, and no platform cron to run one
+
+Worth knowing before someone adds one: this app deploys to **Azure Static Web
+Apps**, which has no cron. `vercel.json` in the repo root is a leftover that
+Azure never reads, so a `crons` block added there is silently dead — the kind of
+change that looks shipped and never runs. A schedule has to come from outside:
+a `schedule:` GitHub Actions workflow that curls the route, or an Azure Logic App
+on a Recurrence trigger.
+
+Either way the route itself has no caller to resolve, so `requireCaller` cannot
+help it. It would have to authorise on a shared secret in the `Authorization`
+header and **refuse when that secret is unset**, rather than defaulting to open —
+doubly so for anything holding the service-role key.
+
 ## Constraints
 
 - Add a new backend call to the module for its domain and let the barrel export

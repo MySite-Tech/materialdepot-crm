@@ -126,8 +126,11 @@ export async function resolveKamOrders(
         },
       };
     }
+    // `otherPhone` set means the ticket carries this enquiry id but belongs to a
+    // different number. The bulk path above verifies the phone deliberately, so
+    // the fallback holds to the same rule rather than widening it.
     const r = await lookupEnqId(o.phone, o.enqId);
-    if (r.status === 'matched') {
+    if (r.status === 'matched' && !r.otherPhone) {
       return {
         order: o,
         outcome: 'matched',
@@ -140,7 +143,7 @@ export async function resolveKamOrders(
         },
       };
     }
-    return { order: o, outcome: r.status };
+    return { order: o, outcome: r.status === 'matched' ? 'no-match' : r.status };
   });
 
   return { resolutions, overflow: Math.max(0, needing.length - head.length) };

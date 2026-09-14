@@ -16,23 +16,43 @@ export const OWNER_CHIP: Record<FieldOwner, string> = {
   'derived':     'Auto',
 };
 
-export const INBOUND_STATUSES: InboundStatus[] = ['New', 'Follow up', 'PI Shared', 'Closed', 'Lost'];
+export const INBOUND_NURTURE_STATUS: InboundStatus = 'Connected - Need nurturing';
+
+export const INBOUND_STATUSES: InboundStatus[] = [
+  'New', INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared', 'Closed', 'Lost',
+];
 
 export const INBOUND_STATUS_COLORS: Record<InboundStatus, string> = {
-  'New':       '#3B82F6',
-  'Follow up': '#F59E0B',
-  'PI Shared': '#8B5CF6',
-  'Closed':    '#22C55E',
-  'Lost':      '#EF4444',
+  'New':                        '#3B82F6',
+  'Connected - Need nurturing': '#0EA5E9',
+  'Follow up':                  '#F59E0B',
+  'PI Shared':                  '#8B5CF6',
+  'Closed':                     '#22C55E',
+  'Lost':                       '#EF4444',
 };
 
 export const INBOUND_STATUS_HINT: Record<InboundStatus, string> = {
-  'New':       'Synced from Kylas, not yet actioned',
-  'Follow up': 'Needs a next follow-up date',
-  'PI Shared': 'Enq ID raised; order value comes from the deal ticket',
-  'Closed':    'Order placed — handed to a KAM',
-  'Lost':      'Needs a lost reason',
+  'New':                        'Synced from Kylas, not yet actioned',
+  'Connected - Need nurturing': 'Spoke to them, no live requirement yet — keep warming',
+  'Follow up':                  'Needs a next follow-up date',
+  'PI Shared':                  'Enq ID raised; order value comes from the deal ticket',
+  'Closed':                     'Order placed — handed to a KAM',
+  'Lost':                       'Needs a lost reason',
 };
+
+export const INBOUND_FOLLOW_UP_STATUSES: InboundStatus[] = [
+  INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared',
+];
+
+export const INBOUND_OPEN_STATUSES: InboundStatus[] = [
+  'New', INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared',
+];
+
+export const isFollowUpStatus = (s: InboundStatus): boolean =>
+  INBOUND_FOLLOW_UP_STATUSES.includes(s);
+
+export const isOpenStatus = (s: InboundStatus): boolean =>
+  INBOUND_OPEN_STATUSES.includes(s);
 
 const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
 
@@ -99,6 +119,16 @@ export const PLACED_UNDER_FIELDS: { key: keyof PlacedUnder; label: string; owner
   { key: 'ecName',   label: 'EC name',    owner: 'crm',   hint: 'Only if the order closed at an End Consumer' },
   { key: 'ecBmName', label: 'EC BM name', owner: 'deals', hint: 'Only if the order closed at an End Consumer' },
 ];
+
+export const PLACED_UNDER_TITLE: Partial<Record<InboundStatus, string>> = {
+  'PI Shared': 'Assisted by',
+  'Closed':    'Placed under',
+};
+
+export const PLACED_UNDER_SUBTITLE: Partial<Record<InboundStatus, string>> = {
+  'PI Shared': '§3.5 — who is working the PI; carried forward when it closes',
+  'Closed':    '§3.5 — captured on order won',
+};
 
 export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; filled: (l: EnrichmentInput) => boolean }[] = [
   { key: 'companyName',        label: 'Company name',   filled: (l) => !!String(l.companyName || '').trim() },
