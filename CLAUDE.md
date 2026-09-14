@@ -21,6 +21,28 @@ for `app/` and `components/`, and `npm run lint` is dead too — it still runs
 directory: .../lint"). There is currently **no working lint command**; `npx tsc
 --noEmit` is the only automated check.
 
+### Running a pure module against real data
+
+There is no test runner either, so a module whose logic matters gets exercised
+by hand. `node --experimental-strip-types` does **not** work on this repo's
+sources — relative imports here carry no file extension and Node's ESM resolver
+refuses them. Compile first, add the extensions, then run:
+
+```bash
+T=$(mktemp -d)
+npx tsc <entry>.ts --ignoreConfig --outDir "$T" \
+  --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+find "$T" -name '*.js' -exec sed -i '' -E "s|from '(\.\.?/[^']*)'|from '\1.js'|g" {} \;
+node -e "import('$T/<entry>.js').then(m => …)"   # or a small .mjs harness
+```
+
+`--ignoreConfig` is required: naming files on the command line makes tsc refuse
+to load `tsconfig.json` (TS5112). This only suits modules with no React and no
+network — which is what `models/` and `lib/b2b/` mostly are. It is how
+`models/client/parents/` was checked against a real 941-row export before
+shipping, and it caught nothing `tsc` would ever have caught, because `tsc` has
+no opinion about whether the grouping is correct.
+
 ## Docs, and why this file is short
 
 This file is loaded into **every** session, so it holds only what applies
