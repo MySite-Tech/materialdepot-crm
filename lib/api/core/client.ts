@@ -1,4 +1,6 @@
-export const API_BASE_URL = "https://api-dev2.materialdepot.in/apiV1";
+import { MD_API_BASE_URL } from './config';
+
+export const API_BASE_URL = MD_API_BASE_URL;
 
 const TOKEN_KEY = 'jwt_token';
 const REFRESH_KEY = 'refresh_token';

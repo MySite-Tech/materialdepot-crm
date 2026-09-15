@@ -1,4 +1,6 @@
-export const KYLAS_API_URL = "https://api.kylas.io/v1";
+import { KYLAS_API_BASE_URL } from './config';
+
+export const KYLAS_API_URL = KYLAS_API_BASE_URL;
 export const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

@@ -3,10 +3,11 @@ import { getCached, setCache } from "@/lib/server/cache";
 import { rateLimitedFetch } from "@/lib/server/rate-limiter";
 import { readPlan, writePlan, type RotaBranchData } from "@/lib/appointments/rota-plan";
 import { isValidBranchName, type Branch } from "@/lib/appointments/appt-shared";
+import { KYLAS_API_BASE_URL } from "@/lib/api/core/config";
 
 export const dynamic = "force-dynamic";
 
-const KYLAS_API_BASE = process.env.KYLAS_API_BASE_URL || "https://api.kylas.io/v1";
+const KYLAS_API_BASE = KYLAS_API_BASE_URL;
 const SETTINGS_LEAD_ID = "39871021";
 const CONFIG_FIELD = "cfResourceplanjson";
 const ACCESS_CACHE_KEY = `dashboard-access:${SETTINGS_LEAD_ID}`;

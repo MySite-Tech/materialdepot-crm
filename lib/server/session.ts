@@ -1,7 +1,8 @@
 import { cleanup, getCached, setCache } from './cache';
+import { MD_API_BASE_URL } from '../api/core/config';
 import { roleFromPermission } from '../api/crm/roles';
 
-const API_BASE = process.env.API_BASE_URL || 'https://api-dev2.materialdepot.in/apiV1';
+const API_BASE = MD_API_BASE_URL;
 
 const SESSION_TTL_MS = 30_000;
 

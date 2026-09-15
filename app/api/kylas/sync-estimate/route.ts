@@ -1,10 +1,10 @@
 import type { NextRequest } from "next/server";
+import { MD_API_BASE_URL } from "@/lib/api/core/config";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   const token = process.env.MD_BACKEND_TOKEN;
-  const baseUrl = process.env.MD_BACKEND_URL || "https://api-dev.materialdepot.in";
 
   if (!token) {
     return Response.json({ error: "MD_BACKEND_TOKEN is not configured" }, { status: 500 });
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
 
   try {
-    const res = await fetch(`${baseUrl}/apiV1/kylas/sync-estimate/`, {
+    const res = await fetch(`${MD_API_BASE_URL}/kylas/sync-estimate/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

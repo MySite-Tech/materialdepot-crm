@@ -14,11 +14,22 @@ This is the single most common source of confusion here.
 
 Gotchas:
 
-- `API_BASE_URL` in `lib/api/core/client.ts:1` is **hardcoded**, so editing
-  `API_BASE_URL` in the env file changes nothing *for browser calls*. It is not
-  dead, though: `app/api/store-display/route.ts:5` reads
-  `process.env.API_BASE_URL` (falling back to the same dev URL). Don't delete
-  the var — one server route depends on it.
+- **Both base URLs live in `lib/api/core/config.ts` and nowhere else.**
+  `MD_API_BASE_URL` resolves `NEXT_PUBLIC_API_BASE_URL` → `API_BASE_URL` →
+  the dev2 default; `KYLAS_API_BASE_URL` resolves `KYLAS_API_BASE_URL` → the
+  Kylas default. They were previously copy-pasted across seven and fifteen call
+  sites respectively, and one route (`app/api/kylas/sync-estimate`) had drifted
+  onto a *different* host (`api-dev`, not `api-dev2`) via its own
+  `MD_BACKEND_URL` var, which is why nobody could answer "which backend does the
+  CRM talk to" from one place. Point a new environment by setting the env vars,
+  not by editing a call site.
+- The precedence order is deliberate: only `NEXT_PUBLIC_`-prefixed vars are
+  inlined into the browser bundle, so **`API_BASE_URL` alone still cannot move
+  browser calls** — it is read by route handlers (server side) only. To move the
+  whole app you must set `NEXT_PUBLIC_API_BASE_URL` *at build time* in the deploy
+  workflow, which today injects only the two `NEXT_PUBLIC_SUPABASE_*` secrets.
+  Setting it in Azure application settings is too late: the browser value is
+  baked at build, not read at runtime.
 - **`SUPABASE_SERVICE_ROLE_KEY` and `KYLAS_API_KEY` are server-only and are NOT
   injected by the deploy workflow** (it passes just the two `NEXT_PUBLIC_SUPABASE_*`
   build-time secrets). A route handler that needs one reads it from the Azure

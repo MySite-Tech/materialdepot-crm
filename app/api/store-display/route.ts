@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MD_API_BASE_URL } from '@/lib/api/core/config';
 
 export const dynamic = 'force-dynamic';
 
-const API_BASE = process.env.API_BASE_URL || 'https://api-dev2.materialdepot.in/apiV1';
+const API_BASE = MD_API_BASE_URL;
 
 class AuthError extends Error {}
 

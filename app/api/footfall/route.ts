@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
+import { MD_API_BASE_URL } from "@/lib/api/core/config";
 
 export const dynamic = "force-dynamic";
 
-const MD_API_BASE = "https://api-dev2.materialdepot.in/apiV1";
+const MD_API_BASE = MD_API_BASE_URL;
 
 const SLOTS: { key: string; startH: number; endH: number }[] = [
   { key: "s1", startH: 10, endH: 12 },

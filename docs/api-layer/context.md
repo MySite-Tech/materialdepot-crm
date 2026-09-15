@@ -58,7 +58,8 @@ Error text for a non-OK response is taken in order:
 `API error: <status>`.
 
 Tokens live in `localStorage` under `jwt_token` and `refresh_token`. `API_BASE_URL`
-is **hardcoded** at line 1 — see `docs/backends.md`.
+is re-exported from `lib/api/core/config.ts`, which is the only place either
+backend's base URL is written — see `docs/backends.md`.
 
 ## Server-side helpers (route handlers only)
 

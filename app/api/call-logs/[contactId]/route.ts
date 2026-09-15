@@ -1,10 +1,11 @@
 import type { NextRequest } from "next/server";
 import { rateLimitedFetch } from "@/lib/server/rate-limiter";
+import { KYLAS_API_BASE_URL } from "@/lib/api/core/config";
 
 export const dynamic = "force-dynamic";
 
 const KYLAS_API_BASE =
-  process.env.KYLAS_API_BASE_URL || "https://api.kylas.io/v1";
+  KYLAS_API_BASE_URL;
 
 export async function GET(
   request: NextRequest,
