@@ -2,20 +2,6 @@
 
 import { Deal } from '@/lib/types';
 
-export function friendlyPatchError(raw: unknown, status: number): string {
-  const text = typeof raw === "string" ? raw : raw == null ? "" : JSON.stringify(raw);
-  if (text.includes("invalid.patch.request")) {
-    return `Kylas rejected the update (invalid patch). Nothing was saved. ${text}`;
-  }
-  if (status === 401 || status === 403) {
-    return `Kylas refused the update — the API key may be expired. ${text}`;
-  }
-  if (status === 429) {
-    return "Kylas is rate-limiting us. Wait a moment and submit again.";
-  }
-  return text || `Failed: ${status}`;
-}
-
 export function isSalesDeal(deal: Deal) {
   return (deal.pipeline?.name ?? "").toLowerCase().includes("sales");
 }

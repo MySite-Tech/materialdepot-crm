@@ -1,10 +1,11 @@
 'use client';
 
 import { KylasDealInfo, SyncEstimateResult, fetchKylasDealInfo, syncEstimate } from '../../../lib/api/ops/kylas-sync';
+import { getRaiseEscalationStatus, raiseEscalationDirect } from '../../../lib/api/ops/escalation';
 import { Deal, DealsSearchResponse } from '../../../lib/types';
-import { DEFAULT_PAGE_SIZE, RAISE_OPTIONS, SALES_PIPELINE_RULE, SEARCH_FIELDS } from './constants';
+import { DEFAULT_PAGE_SIZE, POST_ORDER_STAGE_RULE, RAISE_POLL_INTERVAL_MS, RAISE_POLL_MAX_ATTEMPTS, SALES_PIPELINE_RULE, SEARCH_FIELDS } from './constants';
 import { AssociatedDeal, ContactResult } from './types';
-import { formatCurrency, friendlyPatchError, isSalesDeal } from './utils';
+import { formatCurrency, isSalesDeal } from './utils';
 import { Dispatch, RefObject, SetStateAction } from 'react';
 
 export function makeRaiseActions({ defaultRange, escSupportDeals, kylasInput, pageLoading, setContactDeals, setContacts, setCurrentPage, setDealContact, setDeals, setKylasDealInfo, setKylasError, setKylasInput, setKylasLoading, setKylasModalOpen, setKylasSyncResult, setLoadingContactDeals, setLoadingContacts, setPageLoading, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, setTotalCount, setTotalPages, submitLockRef, totalCount, totalPages }: {
@@ -53,6 +54,7 @@ async function goToPage(page: number) {
               { id: "createdAt", field: "createdAt", type: "date", input: "date",
                 operator: "between", value: [defaultRange.from, defaultRange.to] },
               SALES_PIPELINE_RULE,
+              POST_ORDER_STAGE_RULE,
             ],
             valid: true,
           },
@@ -207,87 +209,60 @@ async function handleSubmit(
       ? "Escalation"
       : "Support";
 
-    async function patchDeal(ops: unknown[]) {
-      const res = await fetch(`/api/deals/${dealId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ops),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(friendlyPatchError(j.error, res.status));
+    // The backend writes cfRaiseEscalation AND clones the escalation ticket in
+    // one call, so success no longer depends on Kylas delivering the
+    // DEAL_UPDATED webhook back to us. We poll until it confirms a ticket id —
+    // never report a raise we have not seen land.
+    // Ids, not names: two options are labelled differently here from the Kylas
+    // option they point at, so the id is the only key that always resolves.
+    const { request_id } = await raiseEscalationDirect(
+      dealId,
+      selectedOptions.map((o) => String(o.id)),
+      requestType,
+    );
+
+    let escalationDealId: string | null = null;
+    for (let attempt = 0; attempt < RAISE_POLL_MAX_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, RAISE_POLL_INTERVAL_MS));
+      let status;
+      try {
+        status = await getRaiseEscalationStatus(request_id);
+      } catch {
+        continue; // a dropped poll is not a failed raise — keep watching
+      }
+      if (status.status === "success") {
+        escalationDealId = status.escalation_deal_id;
+        break;
+      }
+      if (status.status === "failed") {
+        throw new Error(
+          `${status.error || "Kylas rejected the request"} — nothing was raised. Please try again.`
+        );
       }
     }
 
-    let existing: unknown;
-    let read = false;
-    for (let attempt = 0; attempt < 2 && !read; attempt++) {
-      try {
-        const res = await fetch(`/api/deals/${dealId}?fresh=1`, { cache: "no-store" });
-        if (!res.ok) throw new Error(String(res.status));
-        existing = ((await res.json())?.customFieldValues ?? {})[field];
-        read = true;
-      } catch {
-        if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
-      }
-    }
-    if (!read) {
+    if (!escalationDealId) {
       throw new Error(
-        "Couldn't read this deal's current request from Kylas, so nothing was changed. Check your connection and try again."
+        "The escalation is still being created and we could not confirm it. Check the Status tab in a minute — if it is not there, raise it again."
       );
     }
 
-    const existingArr: { id: number; name: string }[] = Array.isArray(existing)
-      ? (existing as { id: number; name: string }[])
-      : existing && typeof existing === "object"
-        ? [existing as { id: number; name: string }]
-        : [];
+    const chosen = selectedOptions.map((o) => ({ id: o.id, name: o.name }));
+    const mergeCf = (deal: Deal) => {
+      const prev = (deal.customFieldValues ?? {})[field];
+      const prevArr = Array.isArray(prev) ? (prev as { id: number; name: string }[]) : [];
+      return [...prevArr.filter((e) => !chosen.some((c) => c.id === e.id)), ...chosen];
+    };
 
-    const activeIds = new Set(RAISE_OPTIONS.map((o) => o.id));
-    const keptValue = existingArr.filter(
-      (e) => activeIds.has(e.id) && !selectedOptions.some((o) => o.id === e.id)
-    );
-    const mergedValue = [
-      ...keptValue,
-      ...selectedOptions.map((o) => ({ id: o.id, name: o.name })),
-    ];
-
-    const isReRaise = existingArr.some((e) => selectedOptions.some((o) => o.id === e.id));
-
-    let cleared = false;
-    if (isReRaise) {
-      await patchDeal([{ op: "add", path: `/customFieldValues/${field}`, value: keptValue }]);
-      cleared = true;
-    }
-    try {
-      await patchDeal([
-        { op: "add", path: `/customFieldValues/${field}`, value: mergedValue },
-        { op: "add", path: `/customFieldValues/cfRequestType`, value: requestType },
-      ]);
-    } catch (err) {
-
-      if (cleared) {
-        try {
-          await patchDeal([
-            { op: "add", path: `/customFieldValues/${field}`, value: existingArr },
-          ]);
-        } catch {
-          throw new Error(
-            `${err instanceof Error ? err.message : "Update failed"} — and the previous value could not be restored. Check this deal's Raise Request field in Kylas.`
-          );
-        }
-      }
-      throw err;
-    }
     setSubmitSuccess(dealId);
     setTimeout(() => setSubmitSuccess(null), 3000);
 
     setDeals((prev) => prev.map((d) => d.id === dealId
-      ? { ...d, customFieldValues: { ...(d.customFieldValues ?? {}), [field]: mergedValue } }
+      ? { ...d, customFieldValues: { ...(d.customFieldValues ?? {}), [field]: mergeCf(d) } }
       : d
     ));
     setSelectedDeal((prev) => prev && prev.id === dealId
-      ? { ...prev, customFieldValues: { ...(prev.customFieldValues ?? {}), [field]: mergedValue } }
+      ? { ...prev, customFieldValues: { ...(prev.customFieldValues ?? {}), [field]: mergeCf(prev) } }
       : prev
     );
   } catch (err) {

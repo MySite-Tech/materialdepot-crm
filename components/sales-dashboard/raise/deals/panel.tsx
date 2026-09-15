@@ -85,10 +85,10 @@ export function DealPanel({ expandedDealId, getOngoing, handleSubmit, onViewDeal
           </div>
     
           {submitSuccess === selectedDeal.id && (
-            <p className="text-xs text-green-600 font-medium">Updated in CRM</p>
+            <p className="text-xs text-green-600 font-medium">Escalation ticket created in Kylas</p>
           )}
           {submitError && submitting === null && expandedDealId === selectedDeal.id && (
-            <p className="text-xs text-red-600">{submitError}</p>
+            <p className="text-xs text-red-600">{submitError} <span className="font-medium">Press Submit again to retry.</span></p>
           )}
         </div>
       </div>

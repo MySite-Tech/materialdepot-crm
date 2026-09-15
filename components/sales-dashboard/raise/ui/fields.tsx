@@ -45,7 +45,7 @@ export function RaiseField({
           disabled={submitting || isPending}
           className="w-full py-2 rounded-lg bg-yellow-400 text-gray-950 text-sm font-bold disabled:opacity-50"
         >
-          {isPending ? "Pending Kylas ID" : submitting ? "Submitting…" : "Submit"}
+          {isPending ? "Pending Kylas ID" : submitting ? "Raising… confirming with Kylas" : "Submit"}
         </button>
       )}
     </div>

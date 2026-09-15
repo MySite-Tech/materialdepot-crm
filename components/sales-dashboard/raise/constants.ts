@@ -6,6 +6,13 @@ export const DEFAULT_PAGE_SIZE = 10;
 
 export const SYNC_INDEX_DELAY_MS = 5000;
 
+// Raise confirmation poll: 2s x 30 = up to a minute. The clone itself is one
+// Kylas create, but the task queues behind the integration's rate limiter, so
+// give it room before telling the user to check the Status tab.
+export const RAISE_POLL_INTERVAL_MS = 2000;
+
+export const RAISE_POLL_MAX_ATTEMPTS = 30;
+
 export const SYNC_INDEX_MAX_ATTEMPTS = 10;
 
 const SALES_PIPELINE_ID = 31661;
@@ -19,6 +26,22 @@ export const SEARCH_FIELDS = [
   "name", "ownedBy", "estimatedValue", "pipeline", "pipelineStage",
   "id", "createdAt", "updatedAt", "customFieldValues", "associatedContacts",
 ];
+
+// Escalations are about an order that exists, so the list asks Kylas for
+// post-order deals only — filtering server-side keeps the page size and the
+// pager honest, which a client-side filter cannot do.
+//
+// Expressed as the three PRE-order stages to exclude (New Deal, Availability
+// Confirmed, Followup) rather than as an allowlist: that is how the same filter
+// is written in Kylas's own UI, and it means a stage added to the pipeline
+// later shows up here instead of silently disappearing.
+const PRE_ORDER_STAGE_IDS = [220516, 227603, 220520];
+
+export const POST_ORDER_STAGE_RULE = {
+  id: "pipelineStage", field: "pipelineStage", type: "long",
+  operator: "not_in", value: PRE_ORDER_STAGE_IDS,
+  relatedFieldIds: ["pipeline"], relatedFieldValue: SALES_PIPELINE_ID,
+};
 
 export const RAISE_OPTIONS: { id: number; name: string; label?: string; requestType: "Support" | "Escalation" }[] = [
   { id: 202380, name: "Return", label: "Return Request", requestType: "Support" },

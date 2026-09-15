@@ -8,7 +8,7 @@ import { DealResults } from './deals/results';
 import { RaiseModal } from './ui/modal';
 import { SearchForm } from './search/form';
 
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from './constants';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE, POST_ORDER_STAGE_RULE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from './constants';
 import { AssociatedDeal, ContactResult, Props } from './types';
 import { extractEscSupport, isSalesDeal } from './utils';
 import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/api';
@@ -123,6 +123,7 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
                   { id: "createdAt", field: "createdAt", type: "date", input: "date",
                     operator: "between", value: [fromIso, toIso] },
                   SALES_PIPELINE_RULE,
+                  POST_ORDER_STAGE_RULE,
                 ],
                 valid: true,
               },
@@ -264,6 +265,17 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
   return (
     <div>
 
+      <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-[12px] leading-relaxed text-blue-900">
+        <div className="font-semibold mb-1">Can&apos;t find the deal you want to raise an escalation on?</div>
+        <div>There are 3 ways you can sync it from your end:</div>
+        <ol className="list-decimal ml-4 mt-1 space-y-0.5">
+          <li>If you have access to the <span className="font-semibold">Escalation Visibility</span> tab &rarr; use the <span className="font-semibold">Create Kylas Deal</span> button to sync.</li>
+          <li>If you have access to the <span className="font-semibold">Leads</span> tab &rarr; use the <span className="font-semibold">Kylas Sync</span> button.</li>
+          <li>If you do not have CRM access &rarr; use the <span className="font-semibold">Kylas Sync</span> button available on the <span className="font-semibold">Procurement PI / Order</span> page.</li>
+          <li>Also confirm that the lead id is for post order placement deals.</li>
+        </ol>
+      </div>
+
       <SearchForm
         handleOpenKylasModal={handleOpenKylasModal}
         handleSearch={handleSearch}
@@ -291,7 +303,7 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
       )}
 
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-        Sales Deals {!loading && `(${deals.length})`}
+        Ordered Deals {!loading && `(${deals.length})`}
       </p>
 
       {autoSyncing ? (
@@ -310,7 +322,10 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
         </div>
       ) : deals.length === 0 ? (
         <div className="py-10 space-y-2">
-          <p className="text-center text-sm text-gray-400">No sales deals found.</p>
+          <p className="text-center text-sm text-gray-400">
+            No ordered deals in the last 7 days. Deals before Order Placed are not listed —
+            search by ENQ / CT / deal name to find one.
+          </p>
           {autoSyncError && (
             <p className="text-center text-sm text-red-600 px-4">{autoSyncError}</p>
           )}

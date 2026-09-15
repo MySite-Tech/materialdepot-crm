@@ -656,3 +656,29 @@ grep for a term, then read around the line you hit rather than opening all of it
   element is necessary and not sufficient. `<main>` in
   `views/b2-b-sales-crm.tsx` already carries `min-w-0` for the same reason; that
   is what stopped this reaching the outer page chrome.
+
+- **Success reported off an HTTP 200 is not success when the deliverable is a
+  record in another system.** The Raise Escalation tab PATCHed
+  `cfRaiseEscalation` on a Kylas sales deal and showed "Updated in CRM" as soon
+  as that PATCH returned; the escalation ticket itself was cloned by a
+  `DEAL_UPDATED` webhook Kylas was expected to send back. Whenever that webhook
+  did not arrive, the field was set, no ticket existed, and the person who
+  raised it had been told it worked — so nobody chased it. A re-raise was worse:
+  it cleared the field in one PATCH and re-set it in a second, and closing the
+  tab in between left the field empty with no error, silently destroying an
+  escalation that had previously existed. Fixed 2026-09-15 by moving the whole
+  operation behind `order/crm/escalation/raise/`, which writes the field and
+  clones the ticket, and by polling until a child deal id comes back. Two
+  general shapes: **when the thing you are creating lives in another system,
+  confirm the thing, not the request**, and **a destructive first step needs a
+  recovery path that survives the tab closing**, not just a try/catch.
+
+- **Two systems reacting to the same write will both act on it.** Our PATCH on
+  the deal makes Kylas fire `DEAL_UPDATED` straight back at us, so the direct
+  raise and the webhook handler both reach the cloning code for one click. A
+  guard that only checks "did a clone already succeed" is not enough — the
+  webhook can arrive while the first clone is still in flight. The backend
+  therefore writes a claim row *before* the PATCH and treats pending as
+  blocking. Confirmed live on 2026-09-15: a raise run against production Kylas
+  produced two tickets, one from the direct call and one from the production
+  webhook handler, which did not yet have the guard.
