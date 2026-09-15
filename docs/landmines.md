@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-50 entries. They live in one file because they cross-reference each other —
+51 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -53,6 +53,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Never disable a field app's only forward control on a permission or device probe
 - `if (busy) return` where `busy` is state is not a lock
 - A re-assignment must only reset the assignees whose work actually changed
+- A revisit re-opens a finished sub-job, and the rollup read the old visit's `completed`
 - Only the PRIMARY installer writes `sj.status`
 - `audit_ticked` is excluded from `AUDIT_COLS` for good reason
 - The Report Card tab was hidden from the two roles whose SOP names the report card
@@ -682,3 +683,27 @@ grep for a term, then read around the line you hit rather than opening all of it
   blocking. Confirmed live on 2026-09-15: a raise run against production Kylas
   produced two tickets, one from the direct call and one from the production
   webhook handler, which did not yet have the guard.
+
+- **A revisit re-opens a finished sub-job, and the rollup kept reading the old
+  visit's `completed`.** Ops have no revisit action — they re-book the slot and
+  re-assign the installer on the sub-job that was already done. `completed` was
+  terminal on an assignment row, so the one left over from the previous visit
+  made `subjobDisplayStatus` roll the sub-job up to `completed` again, and the
+  order flipped to *Site Installation Completed* the moment the new slot was
+  booked (before the assignment was even saved). It then left every live list,
+  filter and need-action count, and the field app — which reads the installer's
+  own `assignments[]` row — showed tomorrow's revisit as "Done · Download PDF".
+  `ENQ2026090590356`, reported 2026-09-15: installed 11 Sept, SM set the order
+  Partially Completed ("shortage of 3 panels"), re-booked for the 16th,
+  re-assigned the same installer twice with the note "Revisit assigned", badge
+  read Completed throughout. Six live orders were in that shape, all
+  re-assignments after completion. `bookSlot` and `saveAssign` now clear the
+  assignee statuses when `allAssigneesDone` — **every** saved assignee reads
+  `completed` — which is the only combination that can flip the rollup and is
+  what "they are all going back" looks like in the data; one finished assignee
+  beside an unfinished one stays terminal, so the entry above still holds. The
+  same save also stops a `completed` being terminal on a row whose installer was
+  **swapped**: `pickInstaller` overwrites the installer on the existing row, so
+  the incoming person was inheriting the outgoing person's completion. The two
+  rules this leaves standing are in the `subjobDisplayStatus` entry above; the
+  code change repairs nothing already written, but re-saving the assignment does.

@@ -5,7 +5,7 @@ import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch,
 import { useNoteModal } from '../../hooks/use-note-modal';
 import ShadowerSelect, { type ShadowerOption } from './shadower-select';
 import { STATUS, today } from '../constants';
-import { dateRange, dstr, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls } from '../utils';
+import { allAssigneesDone, dateRange, dstr, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls } from '../utils';
 import type { Assignment, InstallOrder, Installer, SlotDef, Subjob } from '../types';
 
 interface Props {
@@ -149,16 +149,18 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
       delivOverride = ' · ⚠ booked before delivery (' + fmtDate(delivFloor) + ') — SM override';
     }
     const wasResched = sj.status === 'reschedule';
+    const revisit = allAssigneesDone(sj.assignments);
     const remark = remarkRef.current ? (remarkRef.current.value || '').trim() : '';
     if (wasResched && !remark) { toast('Please enter a reason for the reschedule'); return; }
     const nextSj: Subjob = { ...sj, date: d, slot: t, status: 'scheduled' };
     if (wasResched) { nextSj.assignments = []; assignsRef.current = []; nextSj.shadower_email = null; nextSj.shadower_name = null; setShadowers([]); }
     else if (nextSj.assignments && nextSj.assignments.length) {
-      nextSj.assignments = nextSj.assignments.map((a) => ({ ...a, date: d, slots: [t] }));
+      nextSj.assignments = nextSj.assignments.map((a) => ({ ...a, date: d, slots: [t], status: revisit ? 'assigned' : a.status }));
+      assignsRef.current = nextSj.assignments.map((a) => ({ ...a }));
     }
     const nextSubjobs = replaceSubjob(nextSj);
     const nextStatus = syncParentStatus(nextSubjobs, o.status);
-    const logLabel = wasResched ? sj.type + ' slot rescheduled' + (remark ? ' — ' + remark : '') : sj.type + ' slot booked';
+    const logLabel = wasResched ? sj.type + ' slot rescheduled' + (remark ? ' — ' + remark : '') : sj.type + (revisit ? ' revisit slot booked' : ' slot booked');
     const nextLog = [...o.log, { t: logLabel + ': ' + fmtDate(d) + ' · ' + slotLabel(t, slotsFl, slotsWp) + delivOverride, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
     if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
@@ -239,11 +241,12 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     };
     const sameSlots = (x: Assignment, y: Assignment) =>
       (x.slots || []).length === (y.slots || []).length && (x.slots || []).every((sl, i) => sl === (y.slots || [])[i]);
+    const revisit = allAssigneesDone(valid);
     valid.forEach((a) => {
-      if (a.status === 'completed') return;
       const prev = prevByKey.get((a.installer_email || a.installer_id || '').toString());
+      if (a.status === 'completed' && prev && !revisit) return;
       const bookingMoved = !prev || a.mode !== prev.mode || !sameDates(a, prev) || !sameSlots(a, prev);
-      if (bookingMoved || a.status === 'reschedule' || !a.status) a.status = 'assigned';
+      if (revisit || bookingMoved || a.status === 'reschedule' || !a.status) a.status = 'assigned';
     });
     const nextSj: Subjob = {
       ...sj,
@@ -258,7 +261,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     };
     const nextSubjobs = replaceSubjob(nextSj);
     const nextStatus = syncParentStatus(nextSubjobs, o.status);
-    const logLabel = wasResched ? sj.type + ' rescheduled' + (remark ? ' — ' + remark : '') : sj.type + ' assigned';
+    const logLabel = wasResched ? sj.type + ' rescheduled' + (remark ? ' — ' + remark : '') : sj.type + (revisit ? ' revisit assigned' : ' assigned');
     const prevSet = new Set(prevSh.map((s) => s.email)), newSet = new Set(shadowers.map((s) => s.email));
     const addedSh = shadowers.filter((s) => !prevSet.has(s.email)), removedSh = prevSh.filter((s) => !newSet.has(s.email));
     const shLogs = [

@@ -26,13 +26,20 @@ directory: .../lint"). There is currently **no working lint command**; `npx tsc
 There is no test runner either, so a module whose logic matters gets exercised
 by hand. `node --experimental-strip-types` does **not** work on this repo's
 sources — relative imports here carry no file extension and Node's ESM resolver
-refuses them. Compile first, add the extensions, then run:
+refuses them. Compile first, resolve the relative imports, then run:
 
 ```bash
 T=$(mktemp -d)
 npx tsc <entry>.ts --ignoreConfig --outDir "$T" \
   --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
-find "$T" -name '*.js' -exec sed -i '' -E "s|from '(\.\.?/[^']*)'|from '\1.js'|g" {} \;
+node -e '
+const fs=require("fs"), path=require("path"), T=process.argv[1];
+const walk=(d)=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
+for (const f of walk(T).filter(f=>f.endsWith(".js"))) {
+  const here=(s)=>fs.existsSync(path.resolve(path.dirname(f),s));
+  fs.writeFileSync(f, fs.readFileSync(f,"utf8").replace(/(from\s*["\x27])(\.[^"\x27]*)(["\x27])/g,
+    (m,q,p,q2)=>q+(here(p+".js")?p+".js":here(path.join(p,"index.js"))?p.replace(/\/$/,"")+"/index.js":p)+q2));
+}' "$T"
 node -e "import('$T/<entry>.js').then(m => …)"   # or a small .mjs harness
 ```
 
@@ -42,6 +49,23 @@ network — which is what `models/` and `lib/b2b/` mostly are. It is how
 `models/client/parents/` was checked against a real 941-row export before
 shipping, and it caught nothing `tsc` would ever have caught, because `tsc` has
 no opinion about whether the grouping is correct.
+
+Two things about that middle step, which used to be a one-line `sed` appending
+`.js` to every relative import and could not run this repo's own modules:
+
+- **A relative import here is as often a directory as a file.** `from '../shared'`
+  and `from '.'` need `/index.js`, not `.js`, and Node fails them differently
+  (`ERR_MODULE_NOT_FOUND` for the first, `ERR_UNSUPPORTED_DIR_IMPORT` for the
+  second) — neither of which names the import that caused it. The rewriter above
+  asks the filesystem which one each import is instead of guessing, so it handles
+  a barrel, a directory self-import and a plain file in one pass.
+- **tsc will report errors and emit anyway.** Anything importing the `@/` alias
+  raises TS2307 because `--ignoreConfig` dropped `paths` — the JS is still
+  written, so don't stop at the error. Piping the compile through `|| true` is
+  fine; reading the error and concluding the recipe is broken is not.
+
+Verified on `components/site-audit/install-ops/utils.ts` (imports `../shared`,
+which imports `.`) on 2026-09-15.
 
 ## Docs, and why this file is short
 
