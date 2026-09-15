@@ -48,3 +48,15 @@ only post-order deals come back. Filtering server-side is what keeps
 `totalElements` and the pager honest — a client-side filter on a fetched page
 makes both lie, and a page of 10 can render as 2 rows. An explicit search is
 deliberately unfiltered: searching a name is the user asking for that deal.
+
+## "retrying" is not "failed" — do not invite a re-submit
+
+`raise-status/` returns `pending | retrying | success | failed`. **retrying**
+means Kylas rate-limited us (429) and the backend is waiting out the window
+before trying again on its own; the raise is still going to happen. Pressing
+Submit again at that point only spends another call against the same limit, so
+the timeout message distinguishes the two and tells the operator to wait.
+
+Only **failed** is terminal and only it should ever say "try again". Before
+2026-09-15 a 429 was reported as failed, which is what turned one rate-limited
+raise into a run of manual retries into the same limit.

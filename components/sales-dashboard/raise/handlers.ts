@@ -222,6 +222,7 @@ async function handleSubmit(
     );
 
     let escalationDealId: string | null = null;
+    let retrying = false;
     for (let attempt = 0; attempt < RAISE_POLL_MAX_ATTEMPTS; attempt++) {
       await new Promise((r) => setTimeout(r, RAISE_POLL_INTERVAL_MS));
       let status;
@@ -230,6 +231,7 @@ async function handleSubmit(
       } catch {
         continue; // a dropped poll is not a failed raise — keep watching
       }
+      retrying = status.status === "retrying";
       if (status.status === "success") {
         escalationDealId = status.escalation_deal_id;
         break;
@@ -242,8 +244,13 @@ async function handleSubmit(
     }
 
     if (!escalationDealId) {
+      // "retrying" means Kylas rate-limited us and the backend is waiting out
+      // the window. Submitting again does not help and costs another call
+      // against the same limit, so say so rather than inviting a retry.
       throw new Error(
-        "The escalation is still being created and we could not confirm it. Check the Status tab in a minute — if it is not there, raise it again."
+        retrying
+          ? "Kylas is rate-limiting us right now, so this is queued and will be raised automatically. Do not submit again — check the Status tab in a few minutes."
+          : "The escalation is still being created and we could not confirm it. Check the Status tab in a minute — if it is not there, raise it again."
       );
     }
 
