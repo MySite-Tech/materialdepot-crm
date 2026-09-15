@@ -92,6 +92,72 @@ A failed SHAPE is refused. A failed CHECK DIGIT is stored with a warning
 against a corpus of real GSTINs and refusing a client's genuine GST would block
 the upload this module exists to serve.
 
+### Parent companies: transitive grouping, and why name is never a merge key
+
+`components/b2b/models/client/parents/` groups subjects into one PARENT COMPANY
+per real-world business. It is not a second `findDuplicates`: that one is
+**pairwise** and returns suggestions, this one is **transitive** — if A shares a
+phone with B and B shares a GST with C, all three are one parent. A parent is
+what you hang several orders, contacts and GSTINs off; a suggestion is not.
+
+It takes a `ParentSubject` (`id`, `company`, `contactPerson`, `phones`, `gsts`)
+rather than a `ClientEntity`, so an order export can be grouped before any
+client record exists. `parentSubjectFromClient` adapts the Client Database rows.
+Both reuse `contactNumbers` / `gstNumbers` / `normalizeCompanyName` / the GST
+helpers — nothing about matching is re-implemented here.
+
+**It merges on exact phone, exact GSTIN, and the PAN inside the GSTIN** (chars
+2–12), which is what links one legal entity registered in several states.
+It **never merges on company name**, and that is the load-bearing decision.
+
+Measured against a 941-order export on 2026-09-14, which is why the rule is
+written this way rather than assumed:
+
+| | |
+|---|---|
+| 941 orders | → **355 parents**; 198 hold one order, 13 hold ten or more |
+| Phone | on all 941 rows; GST on 367 |
+| **4 parents span two phone numbers** | found ONLY because they share a GST |
+| Largest | 65 orders |
+
+The case that justifies the whole module: one parent holds 44 orders — 39 placed
+under an individual's personal name on one handset and 5 under the firm's
+registered name on another — tied together by one shared GSTIN. No name rule
+finds that, and a phone-only rule splits it in two.
+
+And the case against name matching: 21 normalised names span more than one
+parent, and merging on them would have collapsed 33 parents into other parents.
+Most are **common Indian first names on different handsets** — the worst spans 4
+parents carrying **three different GSTINs**, and two more span 4 and 3 — plus
+`none`, a placeholder that appears on 9 rows. Auto-merging by name would invent
+parent companies out of unrelated customers.
+
+So those land in `nameOnly` as a review queue with the evidence attached, and
+every one carries a verdict:
+
+| Verdict | Means |
+|---|---|
+| `different-gsts` | the rows carry DIFFERENT GSTINs — positive evidence they are separate entities, not a reason to merge |
+| `person-like` | one bare personal name across several phones |
+| `placeholder` | `none` / `na` / `test` |
+| `undecidable` | organisation-shaped, nothing proves it — a human decides |
+
+**A shared GST can never appear in that queue**, by construction: two rows
+sharing a GSTIN are already in the same parent. An early version reported
+"shares a GST?" as merge evidence and mislabelled 15 of the 21 rows.
+
+`readsAs` separates an organisation from an individual using a signal already in
+the data — how many DIFFERENT contact people appear under one company name. The
+75-order candidate has four and reads as an organisation; a 60-order one is his
+own contact on 46 of those rows and reads as an individual. Without that signal
+the biggest genuine merge candidate in the set was being dismissed as a bare
+first name, because it is one word with no firm suffix.
+
+`pickName` prefers a firm-suffixed name over the most frequent one — which is
+why the 44-order parent above carries the firm's name rather than the individual's,
+despite the individual's appearing on 39 of the rows — and reports which rule
+chose it in `nameFrom`.
+
 ### Merge: the system never merges
 
 §4 is a manual action and stays one. `findDuplicates` ranks pairs by evidence

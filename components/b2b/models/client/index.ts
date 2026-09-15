@@ -6,6 +6,8 @@ export { dealIsOrder, dealIsOpen, averageOrderValue } from './derived/deals';
 export { sortedInteractions, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './derived/interactions';
 export { clientStatus, daysToInactive } from './rules/status';
 export { findDuplicates } from './rules/duplicates';
+export { groupIntoParents, parentSubjectFromClient } from './parents';
+export type { ParentSubject, ParentCompany, ParentGrouping, NameOnlyCandidate } from './parents';
 export { mergeConflicts, mergeClients } from './rules/merge';
 export { clientGateErrors, clientEnrichmentGaps } from './rules/gates';
 export type { Segment } from '../inbound';
