@@ -16,4 +16,4 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`orders.md`](orders.md) | Order attribution (exact matching only), the BM order book, and conversion | 188 |
 | [`analytics.md`](analytics.md) | Analytics (two halves, two sources) and the review-score → NPS pipeline | 165 |
 | [`coe.md`](coe.md) | The COE dashboard's six tabs and the three things they share | 107 |
-| [`gotchas.md`](gotchas.md) | Pre-booking vs audit rows, empty-data-on-error, and two render-loop guards | 77 |
+| [`gotchas.md`](gotchas.md) | Pre-booking vs audit rows, empty-data-on-error, two render-loop guards, and what a revisit does to a finished sub-job | 112 |

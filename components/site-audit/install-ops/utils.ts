@@ -123,11 +123,16 @@ export function assigneeStatus(sj: Subjob, a: Assignment): string {
   return (a && a.status) || sj.status || '';
 }
 
+export function allAssigneesDone(asgns: Assignment[] | null | undefined): boolean {
+  const list = Array.isArray(asgns) ? asgns : [];
+  return list.length > 0 && list.every((a) => a.status === 'completed');
+}
+
 export function subjobDisplayStatus(sj: Subjob): string {
   const asgns: Assignment[] = Array.isArray(sj.assignments) ? sj.assignments : [];
   if (!asgns.length) return sj.status;
   if (sj.status === 'partial' || sj.status === 'completed') return sj.status;
-  if (asgns.every((a) => a.status === 'completed')) return 'completed';
+  if (allAssigneesDone(asgns)) return 'completed';
   return sj.status;
 }
 
