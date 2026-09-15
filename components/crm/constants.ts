@@ -8,6 +8,17 @@ export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
 
 export const LEAD_PRIORITIES = ['hot', 'warm', 'cold'] as const;
 
+export const PRIORITY_FILTER_OPTIONS: { value: string; label: string }[] = [
+  ...LEAD_PRIORITIES.map((lp) => ({ value: lp, label: lp.charAt(0).toUpperCase() + lp.slice(1) })),
+  { value: 'none', label: 'Not Set' },
+];
+
+export const priorityLabelsToValues = (labels: string[]) =>
+  labels.map((l) => PRIORITY_FILTER_OPTIONS.find((o) => o.label === l)?.value ?? l.toLowerCase());
+
+export const priorityValuesToLabels = (values: string[]) =>
+  values.map((v) => PRIORITY_FILTER_OPTIONS.find((o) => o.value === v)?.label ?? v);
+
 export const STATUSES = [
   'In Cart',
   'Quote Approval Pending',

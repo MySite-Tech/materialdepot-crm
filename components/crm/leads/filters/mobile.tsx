@@ -1,7 +1,7 @@
 'use client';
 
 import { CategoryOption } from '../../../../lib/api/dashboards/weekly-funnel';
-import { LEAD_PRIORITIES, STATUSES } from '../../constants';
+import { PRIORITY_FILTER_OPTIONS, STATUSES, priorityLabelsToValues, priorityValuesToLabels } from '../../constants';
 import { DateRangePicker, MultiSelect } from '../../ui/inputs';
 import { Dispatch, SetStateAction } from 'react';
 
@@ -80,7 +80,7 @@ export function LeadsFiltersMobile({ availableBMs, branchFilter, branches, cartV
           <DateRangePicker className="w-full" label="Follow-up" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
           <DateRangePicker className="w-full" label="Closure" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
           <MultiSelect className="w-full" options={categoryOptions.map((c) => c.name)} selected={categoryFilter} onChange={setCategoryFilter} label="Category" searchable />
-          <MultiSelect className="w-full" options={LEAD_PRIORITIES.map((lp) => lp.charAt(0).toUpperCase() + lp.slice(1))} selected={priorityFilter.map((lp) => lp.charAt(0).toUpperCase() + lp.slice(1))} onChange={(labels) => setPriorityFilter(labels.map((l) => l.toLowerCase()))} label="Priority" />
+          <MultiSelect className="w-full" options={PRIORITY_FILTER_OPTIONS.map((o) => o.label)} selected={priorityValuesToLabels(priorityFilter)} onChange={(labels) => setPriorityFilter(priorityLabelsToValues(labels))} label="Priority" />
           <input
             className="px-2 py-2 text-[12px] border border-gray-200 rounded-md outline-none font-mono w-full"
             type="text"
