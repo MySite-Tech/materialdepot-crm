@@ -22,6 +22,17 @@ export const SLOT_DEFS: SlotDef[] = [
   { id: '17:00', label: '5:00 PM', rangeEnd: '6:00 PM', startMin: 1020, endMin: 1080, group: 'Evening' },
 ];
 
+// One-off days the audit team cannot staff, beyond the standing Sunday rule. Keyed by the
+// "YYYY-MM-DD" date; the value is the slot ids withdrawn on that day, or BLACKOUT_WHOLE_DAY
+// for all six. MUST STAY IN STEP WITH SITE_AUDIT_SLOT_BLACKOUTS in the Django backend's
+// order/site_audit_slots.py — that one governs the customer app and website, this one the
+// store-team picker, and the two are spending the same auditors' day.
+export const BLACKOUT_WHOLE_DAY = '*';
+
+export const SLOT_BLACKOUTS: Record<string, string[] | typeof BLACKOUT_WHOLE_DAY> = {
+  '2026-09-17': ['10:00', '11:00', '13:00'],
+};
+
 export const ASSIGNED_STATUSES = ['assigned', 'scheduled', 'callpending', 'onway', 'atsite', 'completed'];
 
 export const MORNING_CUTOFF_MIN = 18 * 60;

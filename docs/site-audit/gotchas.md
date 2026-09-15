@@ -116,3 +116,21 @@ the stage the order is actually in. What was outstanding stays in the log and in
 alongside a rectification order. The code change does not repair them: re-saving
 the assignment from the drawer does, because the same `allAssigneesDone` test
 fires on that save.
+
+## The slot blackout list lives in two repos and must move in both
+
+`SLOT_BLACKOUTS` (`views/store-team/constants.ts`) withdraws named slots on a
+named date — the lever for "no visits at 10, 11 or 1 on the 17th". It is a
+mirror, not the source: the customer app and website book through Django's
+`/site-audit-slots/`, which filters on its own `SITE_AUDIT_SLOT_BLACKOUTS`
+(`order/site_audit_slots.py`). Neither map reaches the other repo.
+
+**Blacking out a slot in only one of them leaves it bookable from the other**,
+and both are spending the same auditors' day — which is exactly how a "blocked"
+slot still took a CRM booking. Change the pair together, in the same breath as
+`SLOT_DEFS` / `SITE_AUDIT_SLOT_DEFS` if the windows themselves ever move.
+
+Blackouts are deliberately *not* modelled as capacity. Zeroing a roster
+(`leave_dates`) blanks the whole day, and fake `audit_orders` rows cannot block
+1 PM without also taking 2 PM down with them — `slotsConflict`'s 120-minute rule
+spills onto neighbours, and the rows show up as phantom jobs on the SM's board.

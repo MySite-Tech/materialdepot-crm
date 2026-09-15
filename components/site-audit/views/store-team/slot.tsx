@@ -5,7 +5,7 @@ import { fmtDate } from '../../install-ops/utils';
 
 import { SLOT_DEFS } from './constants';
 import { SlotContentProps } from './types';
-import { fmtSlotId, getAvailability, morningCutoffHit } from './utils';
+import { blockedSlotIds, fmtSlotId, getAvailability, morningCutoffHit } from './utils';
 
 export function SlotContent({
   date,
@@ -23,11 +23,14 @@ export function SlotContent({
   onCancel,
 }: SlotContentProps) {
   const anyContent = myRes.length || allBooked.length;
+  const blocked = blockedSlotIds(date);
   return (
     <div className="flex flex-col gap-6">
       {(['Morning', 'Afternoon', 'Evening'] as const).map((grp) => {
         const cutMorning = grp === 'Morning' && morningCutoffHit(date);
-        const slots = cutMorning ? [] : SLOT_DEFS.filter((s) => s.group === grp && (nowMin === null || s.startMin > nowMin));
+        const slots = cutMorning
+          ? []
+          : SLOT_DEFS.filter((s) => s.group === grp && (nowMin === null || s.startMin > nowMin) && !blocked.has(s.id));
         return (
           <div key={grp}>
             <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
