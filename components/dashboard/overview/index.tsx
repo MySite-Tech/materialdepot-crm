@@ -4,6 +4,7 @@ import CategoryRevenueDashboard from '@/components/dashboard/category-revenue';
 import OrderLostDashboard from '@/components/dashboard/order-lost/index';
 
 import { BMFilterChip, DateChip, FilterChip } from '../ui/chips';
+import { PRIORITY_FILTER_OPTIONS, priorityLabelsToValues, priorityValuesToLabels } from '@/components/crm/constants';
 import { DEFAULT_STATUS_COLOR, LOST_COLORS, STATUS_COLORS } from './constants';
 import { SectionHeader } from './ui/layout';
 import { BranchPieTooltip, LostPieTooltip } from './ui/tooltips';
@@ -23,7 +24,8 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
   const [createdDate, setCreatedDate] = useState<DateRange>({ from: '', to: '' });
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
-  const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || closureDate.from || closureDate.to || createdDate.from || createdDate.to || categoryFilter.length > 0;
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  const hasFilters = branchFilter.length > 0 || bmFilter.length > 0 || closureDate.from || closureDate.to || createdDate.from || createdDate.to || categoryFilter.length > 0 || priorityFilter.length > 0;
 
   useEffect(() => {
     fetchCategoryOptions().then(setCategoryOptions).catch(() => setCategoryOptions([]));
@@ -61,10 +63,11 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
         createdFrom: createdDate.from || undefined,
         createdTo: createdDate.to || undefined,
         category: categoryFilter.length ? categoryFilter : undefined,
+        priority: priorityFilter.length ? priorityFilter : undefined,
       });
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [branchFilter, bmFilter, closureDate, createdDate, categoryFilter, load, isRestricted, allowedBranches]);
+  }, [branchFilter, bmFilter, closureDate, createdDate, categoryFilter, priorityFilter, load, isRestricted, allowedBranches]);
 
   const [bmRows, setBmRows] = useState<{ name: string; contact: string }[]>([]);
   const branchKey = (isRestricted
@@ -146,8 +149,15 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
         <DateChip label="Closure Date" value={closureDate} onChange={setClosureDate} color={{ active: '#F59E0B' }} />
         <DateChip label="Created Date" value={createdDate} onChange={setCreatedDate} color={{ active: '#22C55E' }} />
         <FilterChip label="Category" options={categoryOptions.map(c => c.name)} selected={categoryFilter} onChange={setCategoryFilter} color={{ active: '#10B981' }} />
+        <FilterChip
+          label="Priority"
+          options={PRIORITY_FILTER_OPTIONS.map(o => o.label)}
+          selected={priorityValuesToLabels(priorityFilter)}
+          onChange={labels => setPriorityFilter(priorityLabelsToValues(labels))}
+          color={{ active: '#EF4444' }}
+        />
         {hasFilters && (
-          <button onClick={() => { setBranchFilter([]); setBmFilter([]); setClosureDate({ from:'', to:'' }); setCreatedDate({ from:'', to:'' }); setCategoryFilter([]); }}
+          <button onClick={() => { setBranchFilter([]); setBmFilter([]); setClosureDate({ from:'', to:'' }); setCreatedDate({ from:'', to:'' }); setCategoryFilter([]); setPriorityFilter([]); }}
             className="px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer border border-red-200 text-red-500 hover:bg-red-50 bg-transparent transition-all">
             ✕ Clear
           </button>
@@ -290,16 +300,17 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Branch</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">BM</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Closure Date</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Priority</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
                   <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && closureLeads.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-[12px] text-gray-400">Loading…</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px] text-gray-400">Loading…</td></tr>
                 )}
                 {!loading && closureLeads.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-[12px] text-gray-400">No overdue or due-today leads</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-[12px] text-gray-400">No overdue or due-today leads</td></tr>
                 )}
                 {closurePagedRows.map((l, i) => {
                   const isToday = l.closureDate === today;
@@ -315,6 +326,17 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
                           {fmtDate(l.closureDate)}{isToday ? ' · Today' : ' · Overdue'}
                         </span>
                       </td>
+                      <td className="px-3 py-2 text-[11px]">
+                        {l.leadPriority ? (
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                            l.leadPriority === 'hot' ? 'bg-red-100 text-red-700' :
+                            l.leadPriority === 'warm' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {l.leadPriority.charAt(0).toUpperCase() + l.leadPriority.slice(1)}
+                          </span>
+                        ) : <span className="text-gray-400">—</span>}
+                      </td>
                       <td className="px-3 py-2 text-[11px] text-gray-500">{l.status || '—'}</td>
                       <td className="px-3 py-2 text-right font-mono font-semibold text-[#EAB308] text-[11px]">{fmtINR(l.cartValue)}</td>
                     </tr>
@@ -324,7 +346,7 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
               {closureLeads.length > 0 && (
                 <tfoot>
                   <tr className="bg-[#F9F9F9] border-t border-gray-200">
-                    <td colSpan={7} className="px-3 py-2 text-[10px] font-semibold text-gray-500">Total · {closureLeads.length} leads</td>
+                    <td colSpan={8} className="px-3 py-2 text-[10px] font-semibold text-gray-500">Total · {closureLeads.length} leads</td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-[#EAB308] text-[12px]">{fmtINR(closureTotalAmount)}</td>
                   </tr>
                 </tfoot>

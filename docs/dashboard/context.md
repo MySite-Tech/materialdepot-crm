@@ -33,8 +33,15 @@ plus today/week closure counts and the `weekFrom`/`weekTo`/`today` the server
 used — **the week boundary is the server's, not the browser's**).
 
 Both endpoints take `branch`, `bm`, `category`, `created_from/to` as CSV params.
-The overview additionally takes `closure_from/to`; order-lost additionally takes
-`cart_value_gt`/`cart_value_lt`.
+The overview additionally takes `closure_from/to` and `priority`; order-lost
+additionally takes `cart_value_gt`/`cart_value_lt`.
+
+`priority` filters the **whole** payload, not just the pipeline table — the pies
+and lost reasons narrow with it too, the same way `category` and `bm` do. Its
+options come from `components/crm/constants` (`PRIORITY_FILTER_OPTIONS` and the
+label↔value helpers) rather than a local list, so Hot/Warm/Cold/Not Set keep one
+meaning across the leads table and the dashboard; `lead_priority` is stored on a
+ticket's `extra_data`, so "Not Set" is a real, filterable state.
 
 ## Reason buckets
 

@@ -16,6 +16,7 @@ export interface DashboardClosureLead {
   branch: string;
   closureDate: string;
   status: string;
+  leadPriority?: string;
   cartValue: number;
 }
 export interface DashboardSummary {
@@ -43,6 +44,7 @@ export interface DashboardFilters {
   createdFrom?: string;
   createdTo?: string;
   category?: string[];
+  priority?: string[];
 }
 
 export interface FootfallFunnelStats {
@@ -246,6 +248,7 @@ export async function fetchDashboardData(filters: DashboardFilters = {}): Promis
   if (filters.createdFrom) params.set('created_from', filters.createdFrom);
   if (filters.createdTo) params.set('created_to', filters.createdTo);
   if (filters.category?.length) params.set('category', filters.category.join(','));
+  if (filters.priority?.length) params.set('priority', filters.priority.join(','));
   const qs = params.toString();
   return mdFetch(`/crm/dashboard/${qs ? `?${qs}` : ''}`);
 }
