@@ -21,6 +21,28 @@ for `app/` and `components/`, and `npm run lint` is dead too — it still runs
 directory: .../lint"). There is currently **no working lint command**; `npx tsc
 --noEmit` is the only automated check.
 
+### Running a pure module against real data
+
+There is no test runner either, so a module whose logic matters gets exercised
+by hand. `node --experimental-strip-types` does **not** work on this repo's
+sources — relative imports here carry no file extension and Node's ESM resolver
+refuses them. Compile first, add the extensions, then run:
+
+```bash
+T=$(mktemp -d)
+npx tsc <entry>.ts --ignoreConfig --outDir "$T" \
+  --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+find "$T" -name '*.js' -exec sed -i '' -E "s|from '(\.\.?/[^']*)'|from '\1.js'|g" {} \;
+node -e "import('$T/<entry>.js').then(m => …)"   # or a small .mjs harness
+```
+
+`--ignoreConfig` is required: naming files on the command line makes tsc refuse
+to load `tsconfig.json` (TS5112). This only suits modules with no React and no
+network — which is what `models/` and `lib/b2b/` mostly are. It is how
+`models/client/parents/` was checked against a real 941-row export before
+shipping, and it caught nothing `tsc` would ever have caught, because `tsc` has
+no opinion about whether the grouping is correct.
+
 ## Docs, and why this file is short
 
 This file is loaded into **every** session, so it holds only what applies
@@ -34,7 +56,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer`; `context.md` is the pointer table |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-bridge` (design only); `context.md` is the pointer table |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 14-tab permission gate |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
 | Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
@@ -220,6 +242,15 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 `origin` = `MySite-Tech/materialdepot-crm` (a fork), `upstream` =
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
+
+**`origin` is a PUBLIC repository** (verified 2026-09-14 via `gh repo view`), as
+are `daaku-daddy/material-depot-site` and `daaku-daddy/B2B-Client-Dashboard`.
+Everything committed here is world-readable: no customer names, phone numbers,
+order values, GSTINs or tokens in code, fixtures, test data, commit messages or
+docs. This is also why `components/site-audit/shared/sb-client.ts` hardcoding the
+field-ops Supabase anon key is a deliberate, already-public exposure rather than
+a leak (that project runs with RLS off and its apps have no auth) — but it means
+"it's only the anon key" is not a privacy argument for adding more.
 
 **`main` is the deployed branch, and it can be AHEAD of `Installation-Changes`.**
 Pulling the feature branch is not enough: the teammate merges to `main` and
