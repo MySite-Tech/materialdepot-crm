@@ -2,7 +2,7 @@ export { B2B_FRESH_START } from './data/rows';
 export { fetchB2BData, fetchInboundOwnerTotals, fetchClients, fetchInboundBoard, fetchKamOrders, fetchOutreachLeads } from './data/reads';
 export type { B2BData } from './data/reads';
 export { B2B_STATS_BRANCH, fetchB2BPipelineStats, istToday } from './stats/pipeline';
-export type { B2BPipelineStats } from './stats/pipeline';
+export type { B2BPipelineStats, StatsBasis } from './stats/pipeline';
 export { fetchB2BBulk } from './orders/history';
 export type { ClientOrderHistory } from './orders/history';
 export { lookupEnqId } from './leads/enq-lookup';

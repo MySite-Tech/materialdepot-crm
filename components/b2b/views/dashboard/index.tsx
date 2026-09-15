@@ -4,13 +4,14 @@ import { HealthOverview, buildHealthOverview } from '../../models/account-health
 import { ClientMetricsMap, DashboardMetrics, KamDashboard, computeDashboard, computeKamDashboard } from '../../models/analytics';
 import { ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientEntity, contactNumbers } from '../../models/client';
 import { INBOUND_STAGE_COLORS, fmtINR, fmtL } from '../../models/mock-data';
-import { CLIENT_STATUS_ORDER, RANGE_LABELS, SOURCE_COLORS } from './constants';
+import { BASIS_HINT, BASIS_LABELS, CLIENT_STATUS_ORDER, RANGE_LABELS, UNATTRIBUTED_SOURCE } from './constants';
 import { AccountHealthPanel } from './ui/health';
 import { KamDashboardSection } from './ui/kam';
+import { OpenPipelineDrawer } from './ui/open-pipeline';
 import { RangeKey } from './types';
 import { MetricCard, Panel } from './ui';
-import { rangeFor } from './utils';
-import { B2BData, B2BPipelineStats, B2B_STATS_BRANCH, VerticalStats, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
+import { rangeFor, revenueSources } from './utils';
+import { B2BData, B2BPipelineStats, B2B_STATS_BRANCH, StatsBasis, VerticalStats, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
 import { useCallback, useEffect, useState } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -18,8 +19,11 @@ export default function B2BDashboard() {
   const [d, setD] = useState<DashboardMetrics | null>(null);
   const [stats, setStats] = useState<B2BPipelineStats | null>(null);
   const [verticals, setVerticals] = useState<VerticalStats[]>([]);
+  const [wonVerticals, setWonVerticals] = useState<VerticalStats[]>([]);
+  const [wonBranch, setWonBranch] = useState(0);
   const [monthRevenue, setMonthRevenue] = useState(0);
   const [range, setRange] = useState<RangeKey>('month');
+  const [basis, setBasis] = useState<StatsBasis>('order');
   const [monthlyTarget, setMonthlyTarget] = useState(0);
   const [runRate, setRunRate] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -33,6 +37,9 @@ export default function B2BDashboard() {
   const [unresolvedOrders, setUnresolvedOrders] = useState(0);
   const [targetsOk, setTargetsOk] = useState(true);
   const [statsOk, setStatsOk] = useState(true);
+  const [basisApplied, setBasisApplied] = useState(true);
+  const [openBucket, setOpenBucket] = useState({ count: 0, value: 0 });
+  const [openDrawer, setOpenDrawer] = useState(false);
 
   const loadBase = useCallback(async () => {
     setBaseBusy(true);
@@ -91,25 +98,35 @@ export default function B2BDashboard() {
     try {
       const now = new Date();
       const selected = rangeFor(range, now);
-      const [selectedStats, monthStats] = await Promise.all([
+      const month = rangeFor('month', now);
+      const onOrder = basis === 'order';
+
+      const [createdStats, orderStats, revenueMonthStats] = await Promise.all([
         fetchVerticalStats(selected, B2B_STATS_BRANCH),
-        range === 'month' ? Promise.resolve(null) : fetchVerticalStats(rangeFor('month', now)),
+        onOrder ? fetchVerticalStats(selected, B2B_STATS_BRANCH, 'order') : Promise.resolve(null),
+        range === 'month' ? Promise.resolve(null) : fetchVerticalStats(month, B2B_STATS_BRANCH, basis),
       ]);
-      const byVertical = selectedStats.verticals;
+      const revenueSelected = orderStats ?? createdStats;
+      const revenueMonth = revenueMonthStats ?? revenueSelected;
+
       const dayOfMonth = now.getDate();
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const revenue = (monthStats?.verticals ?? byVertical).reduce((s, v) => s + v.won.value, 0);
-      const pipeline = selectedStats.pipeline ?? await fetchB2BPipelineStats(selected);
+      const revenue = revenueMonth.pipeline?.won.value ?? 0;
+      const pipeline = revenueSelected.pipeline ?? await fetchB2BPipelineStats(selected, basis);
       setStats(pipeline);
-      setStatsOk(selectedStats.ok && pipeline.ok && (monthStats?.ok ?? true));
-      setVerticals(byVertical);
+      setStatsOk(createdStats.ok && pipeline.ok && revenueSelected.ok && revenueMonth.ok);
+      setBasisApplied(revenueSelected.basisApplied && revenueMonth.basisApplied);
+      setVerticals(createdStats.verticals);
+      setOpenBucket(createdStats.pipeline?.active ?? { count: 0, value: 0 });
+      setWonVerticals(revenueSelected.verticals);
+      setWonBranch(revenueSelected.pipeline?.won.value ?? 0);
       setMonthRevenue(revenue);
       setRunRate(Math.round((revenue / dayOfMonth) * daysInMonth));
       setUpdatedAt(now);
     } finally {
       setRangeBusy(false);
     }
-  }, [range]);
+  }, [range, basis]);
 
   const load = useCallback(
     () => Promise.all([loadBase(), loadRange()]).then(() => undefined),
@@ -132,12 +149,9 @@ export default function B2BDashboard() {
 
   const achievedPct = monthlyTarget > 0 ? Math.round((monthRevenue / monthlyTarget) * 100) : 0;
   const overallPipeline = verticals.reduce((s, v) => s + v.active.value, 0);
-  const revenueBySource = verticals.map((v, i) => ({
-    source: v.label,
-    value: v.won.value,
-    color: SOURCE_COLORS[i % SOURCE_COLORS.length],
-  }));
+  const revenueBySource = revenueSources(wonVerticals, wonBranch);
   const gap = runRate - monthlyTarget;
+  const selectedRange = rangeFor(range, new Date());
 
   const maxStage = Math.max(...d.pipelineByStage.map((s) => s.count), 1);
   const clientData = CLIENT_STATUS_ORDER.map((name) => ({ name, value: d.clients[name] }));
@@ -181,6 +195,13 @@ export default function B2BDashboard() {
           no pipeline. Refresh to retry.
         </div>
       )}
+      {!basisApplied && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
+          <span className="font-semibold">This backend cannot count by order-placed date yet.</span>{' '}
+          Every revenue figure below is still counted by cart-created date, so it is the old number
+          under the new label — treat it as such until the backend change ships.
+        </div>
+      )}
       {!targetsOk && (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
           <span className="font-semibold">Targets could not be read.</span>{' '}
@@ -196,11 +217,26 @@ export default function B2BDashboard() {
       )}
 
       <div className="bg-white rounded-lg px-4 sm:px-6 py-4 border border-gray-200 mb-3">
-        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-            Pipeline · carts created {range === 'all' ? 'all time' : RANGE_LABELS[range].toLowerCase()}
+            {basis === 'order' ? 'Orders · placed' : 'Pipeline · carts created'}{' '}
+            {range === 'all' ? 'all time' : RANGE_LABELS[range].toLowerCase()}
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
+            {(Object.keys(BASIS_LABELS) as StatsBasis[]).map((k) => (
+              <button
+                key={k}
+                onClick={() => setBasis(k)}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border cursor-pointer ${
+                  basis === k
+                    ? 'bg-[#0F766E] border-[#0F766E] text-white'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {BASIS_LABELS[k]}
+              </button>
+            ))}
+            <span className="w-2" />
             {(Object.keys(RANGE_LABELS) as RangeKey[]).map((k) => (
               <button
                 key={k}
@@ -216,10 +252,16 @@ export default function B2BDashboard() {
             ))}
           </div>
         </div>
+        <div className="text-[11px] text-gray-400 mb-3">
+          Revenue, orders and the status split below all count {BASIS_HINT[basis]}. Open pipeline stays
+          on cart created either way — a cart still open has no order date to count by.
+        </div>
         <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:flex sm:justify-between sm:gap-4">
           {[
-            { label: 'Total Pipeline', sub: ' Value', b: stats?.total, tone: 'text-black', big: true },
-            { label: 'Active Pipeline', b: stats?.active, tone: 'text-[#EAB308]' },
+            basis === 'order'
+              ? { label: 'Orders Booked', sub: ' Value', b: stats?.total, tone: 'text-black', big: true }
+              : { label: 'Total Pipeline', sub: ' Value', b: stats?.total, tone: 'text-black', big: true },
+            ...(basis === 'order' ? [] : [{ label: 'Active Pipeline', b: stats?.active, tone: 'text-[#EAB308]' }]),
             { label: 'Order Won', b: stats?.won, tone: 'text-green-700' },
             { label: 'Order Lost', sub: ' / Refunded', b: stats?.lost, tone: 'text-gray-400' },
           ].map((k) => (
@@ -230,7 +272,7 @@ export default function B2BDashboard() {
               <div className={`font-mono font-bold break-all sm:break-normal ${k.big ? 'text-[13px] sm:text-[22px]' : 'text-[13px] sm:text-lg'} ${k.tone}`}>
                 {fmtINR(Math.round(k.b?.value ?? 0))}
               </div>
-              <div className="text-[11px] text-gray-400">{k.b?.count ?? 0} carts</div>
+              <div className="text-[11px] text-gray-400">{k.b?.count ?? 0} {basis === 'order' ? 'orders' : 'carts'}</div>
             </div>
           ))}
         </div>
@@ -257,7 +299,13 @@ export default function B2BDashboard() {
         <MetricCard label="Revenue Generated" value={fmtL(monthRevenue)} sub={`of ${fmtL(monthlyTarget)} target`} />
         <MetricCard label="Target Achieved" value={`${achievedPct}%`} />
         <MetricCard label="Month Projection" value={fmtL(runRate)} sub={runRate < monthlyTarget ? 'Below target' : 'On track'} subTone={runRate < monthlyTarget ? 'warn' : 'muted'} />
-        <MetricCard label="Open Pipeline" value={fmtL(overallPipeline)} sub={`${verticals.reduce((s, v) => s + v.active.count, 0)} open`} />
+        <MetricCard
+          label="Open Pipeline"
+          value={fmtL(openBucket.value)}
+          sub={`${openBucket.count} open, carts created`}
+          onClick={() => setOpenDrawer(true)}
+          actionLabel="See the carts"
+        />
       </div>
 
       {health && <AccountHealthPanel overview={health} />}
@@ -290,11 +338,11 @@ export default function B2BDashboard() {
         </div>
       </Panel>
 
-      <Panel title="Pipeline by Vertical — Overall Pipeline" className="mt-3">
+      <Panel title="Pipeline by Vertical — open carts, by cart created" className="mt-3">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
             ...verticals.map((v) => ({ label: v.label, value: v.active.value, count: v.active.count, accent: false })),
-            { label: 'Overall Pipeline', value: overallPipeline, count: verticals.reduce((s, v) => s + v.active.count, 0), accent: true },
+            { label: 'All verticals', value: overallPipeline, count: verticals.reduce((s, v) => s + v.active.count, 0), accent: true },
           ].map((v) => (
             <div key={v.label} className={`rounded-lg px-4 py-3 border ${v.accent ? 'border-[#0F766E]/30 bg-[#0F766E]/5' : 'border-gray-200'}`}>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{v.label}</div>
@@ -366,6 +414,12 @@ export default function B2BDashboard() {
               ))}
             </div>
           </div>
+          {revenueBySource.some((s) => s.source === UNATTRIBUTED_SOURCE) && (
+            <p className="text-[10px] text-gray-400 mt-2">
+              The branch total is billed to B2B; the grey slice is the part whose cart is held by someone
+              outside the B2B rep roster, so it belongs to no vertical.
+            </p>
+          )}
         </Panel>
       </div>
 
@@ -387,6 +441,17 @@ export default function B2BDashboard() {
           </div>
         </div>
       </Panel>
+
+      {openDrawer && (
+        <OpenPipelineDrawer
+          from={selectedRange.from}
+          to={selectedRange.to}
+          rangeLabel={range === 'all' ? 'all time' : RANGE_LABELS[range]}
+          value={openBucket.value}
+          count={openBucket.count}
+          onClose={() => setOpenDrawer(false)}
+        />
+      )}
     </div>
   );
 }

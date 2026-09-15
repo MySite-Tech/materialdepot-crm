@@ -43,6 +43,9 @@ export interface CRMLeadsQuery {
   status?: string;
   createdFrom?: string;
   createdTo?: string;
+  orderFrom?: string;
+  orderTo?: string;
+  branchBasis?: 'owner' | 'estimate';
   followupFrom?: string;
   followupTo?: string;
   closureFrom?: string;
@@ -98,6 +101,9 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   if (query.status) params.set('status', query.status);
   if (query.createdFrom) params.set('created_from', query.createdFrom);
   if (query.createdTo) params.set('created_to', query.createdTo);
+  if (query.orderFrom) params.set('order_from', query.orderFrom);
+  if (query.orderTo) params.set('order_to', query.orderTo);
+  if (query.branchBasis) params.set('branch_basis', query.branchBasis);
   if (query.followupFrom) params.set('followup_from', query.followupFrom);
   if (query.followupTo) params.set('followup_to', query.followupTo);
   if (query.closureFrom) params.set('closure_from', query.closureFrom);
@@ -141,6 +147,8 @@ export interface CRMLeadsStatsGroups {
   groups: Record<string, CRMLeadsStats>;
 
   branchTotal: CRMLeadsStats | null;
+
+  basis: string | null;
 }
 
 export async function fetchCRMLeadsStatsByBmGroup(
@@ -149,10 +157,13 @@ export async function fetchCRMLeadsStatsByBmGroup(
   totalBranch?: string,
 ): Promise<CRMLeadsStatsGroups> {
   const usable = groups.filter((g) => g.label && g.contacts.length);
-  if (!usable.length) return { groups: {}, branchTotal: null };
+  if (!usable.length) return { groups: {}, branchTotal: null, basis: null };
   const params = new URLSearchParams();
   if (query.createdFrom) params.set('created_from', query.createdFrom);
   if (query.createdTo) params.set('created_to', query.createdTo);
+  if (query.orderFrom) params.set('order_from', query.orderFrom);
+  if (query.orderTo) params.set('order_to', query.orderTo);
+  if (query.branchBasis) params.set('branch_basis', query.branchBasis);
   if (query.branch) params.set('branch', query.branch);
   if (totalBranch) params.set('total_branch', totalBranch);
   params.set('bm_groups', usable.map((g) => `${g.label}:${g.contacts.join(',')}`).join('|'));
@@ -161,7 +172,11 @@ export async function fetchCRMLeadsStatsByBmGroup(
   for (const [label, raw] of Object.entries((data?.groups || {}) as Record<string, unknown>)) {
     out[label] = toStats(raw);
   }
-  return { groups: out, branchTotal: data?.branchTotal ? toStats(data.branchTotal) : null };
+  return {
+    groups: out,
+    branchTotal: data?.branchTotal ? toStats(data.branchTotal) : null,
+    basis: typeof data?.basis === 'string' ? data.basis : null,
+  };
 }
 
 export interface B2BBulkResult {
@@ -196,6 +211,9 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.status) params.set('status', query.status);
   if (query.createdFrom) params.set('created_from', query.createdFrom);
   if (query.createdTo) params.set('created_to', query.createdTo);
+  if (query.orderFrom) params.set('order_from', query.orderFrom);
+  if (query.orderTo) params.set('order_to', query.orderTo);
+  if (query.branchBasis) params.set('branch_basis', query.branchBasis);
   if (query.followupFrom) params.set('followup_from', query.followupFrom);
   if (query.followupTo) params.set('followup_to', query.followupTo);
   if (query.closureFrom) params.set('closure_from', query.closureFrom);

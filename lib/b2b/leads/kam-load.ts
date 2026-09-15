@@ -1,5 +1,5 @@
 
-import { B2BPipelineStats, EMPTY_BUCKET } from '../stats/pipeline';
+import { B2BPipelineStats, EMPTY_BUCKET, StatsBasis, basisQuery } from '../stats/pipeline';
 import { TABLE } from '../data/rows';
 import { B2B_VERTICALS } from '@/components/b2b/models/roster';
 import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStatsByBmGroup } from '@/lib/api';
@@ -39,19 +39,22 @@ export interface VerticalStatsResult {
   pipeline: B2BPipelineStats | null;
 
   ok: boolean;
+
+  basisApplied: boolean;
 }
 
 export async function fetchVerticalStats(
   range?: { from?: string; to?: string },
   totalBranch?: string,
+  basis: StatsBasis = 'created',
 ): Promise<VerticalStatsResult> {
   const res = await fetchCRMLeadsStatsByBmGroup(
     B2B_VERTICALS.map((v) => ({ label: v.label, contacts: v.reps.map((r) => r.contact) })),
-    { createdFrom: range?.from, createdTo: range?.to },
+    basisQuery(basis, range),
     totalBranch,
   ).catch((e) => {
     console.error('[b2b] vertical stats fetch failed', e);
-    return { groups: null as Record<string, CRMLeadsStats> | null, branchTotal: null };
+    return { groups: null as Record<string, CRMLeadsStats> | null, branchTotal: null, basis: null };
   });
 
   const byLabel = res.groups ?? {};
@@ -66,6 +69,7 @@ export async function fetchVerticalStats(
       ? { total: t.total, active: t.active, won: t.won, lost: t.lost, byStatus: t.byStatus, ok: true }
       : null,
     ok: res.groups !== null,
+    basisApplied: res.groups === null || res.basis === basis,
   };
 }
 

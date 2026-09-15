@@ -1,12 +1,31 @@
 'use client';
 
-export function MetricCard({ label, value, sub, subTone }: { label: string; value: string; sub?: string; subTone?: 'muted' | 'warn' }) {
-  return (
-    <div className="bg-white rounded-lg px-5 py-4 border border-gray-200">
+export function MetricCard({ label, value, sub, subTone, onClick, actionLabel }: {
+  label: string;
+  value: string;
+  sub?: string;
+  subTone?: 'muted' | 'warn';
+  onClick?: () => void;
+  actionLabel?: string;
+}) {
+  const body = (
+    <>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
       <div className="font-mono text-[26px] leading-tight font-bold text-black mt-1">{value}</div>
       {sub && <div className={`text-[11px] mt-1 ${subTone === 'warn' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{sub}</div>}
-    </div>
+    </>
+  );
+  if (!onClick) {
+    return <div className="bg-white rounded-lg px-5 py-4 border border-gray-200">{body}</div>;
+  }
+  return (
+    <button
+      onClick={onClick}
+      className="bg-white rounded-lg px-5 py-4 border border-gray-200 text-left w-full cursor-pointer hover:border-[#0F766E] focus:border-[#0F766E] outline-none"
+    >
+      {body}
+      <div className="text-[11px] font-semibold text-[#0F766E] mt-1.5">{actionLabel || 'View'} →</div>
+    </button>
   );
 }
 
