@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-51 entries. They live in one file because they cross-reference each other —
+52 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -58,6 +58,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - `audit_ticked` is excluded from `AUDIT_COLS` for good reason
 - The Report Card tab was hidden from the two roles whose SOP names the report card
 - The store ladder is seven deep and the CRM only ever had three of the rungs
+- A poll that gives up is not a failure, and telling the operator to retry turned one issue into three tickets
 
 - **The Report Card tab was hidden from the two roles whose SOP names the
   report card.** `ROLE_TABS.sales` and `ROLE_TABS.store_manager` had no
@@ -707,3 +708,26 @@ grep for a term, then read around the line you hit rather than opening all of it
   the incoming person was inheriting the outgoing person's completion. The two
   rules this leaves standing are in the `subjobDisplayStatus` entry above; the
   code change repairs nothing already written, but re-saving the assignment does.
+
+- **A poll that gives up is not a failure, and telling the operator to retry
+  turned one issue into three tickets.** The Raise Escalation screen polled
+  `raise-status/` for 60s (2s x 30), then said it could not confirm the ticket,
+  and `DealPanel` appended a fixed **"Press Submit again to retry"** to every
+  error. On 2026-09-16 a Kylas 429 backlog left raises queued for up to seven
+  minutes — they all succeeded, the screen just stopped watching first. Deal
+  4755735 collected three real tickets (4774571 at 06:13:28, 4774572 at
+  06:13:31, 4774575 at 06:13:54) from three Submits at 06:06, 06:07 and 06:10;
+  deal 4710936 collected three more. Every duplicate was a separate request row
+  that the backend's webhook-echo guard could not see, because that guard only
+  refuses Kylas re-announcing a raise we already made. Three shapes to watch
+  for: (1) a timeout and a rejection need **opposite** advice, so a retry prompt
+  appended to all errors alike is wrong for one of them by construction — put
+  the guidance inside each message; (2) a confirmation poll must be sized for
+  the queued case, not the healthy one, and trading interval for attempts buys
+  that for free (5s x 36 is three minutes for fewer requests than 2s x 30 spent
+  on one); (3) a dedupe guard written for one duplicate source does not cover
+  another — the POST now attaches a repeat Submit to an in-flight request, and
+  deliberately does **not** match a raise that already produced a ticket, since
+  a genuine second escalation must still get through. The same incident hid
+  three backend bugs; see `md/integration/kylas/` and the
+  `crm_raise_escalation` rows in `crm_log`.

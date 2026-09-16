@@ -250,7 +250,7 @@ async function handleSubmit(
       throw new Error(
         retrying
           ? "Kylas is rate-limiting us right now, so this is queued and will be raised automatically. Do not submit again — check the Status tab in a few minutes."
-          : "The escalation is still being created and we could not confirm it. Check the Status tab in a minute — if it is not there, raise it again."
+          : "Kylas is slow right now, so this is still being created and we could not confirm it. Do not submit again — it will appear in the Status tab."
       );
     }
 
@@ -273,7 +273,11 @@ async function handleSubmit(
       : prev
     );
   } catch (err) {
-    setSubmitError(err instanceof Error ? err.message : "Failed to update");
+    setSubmitError(
+      err instanceof Error
+        ? err.message
+        : "Failed to raise — nothing was created. Please try again."
+    );
   } finally {
     submitLockRef.current = false;
     setSubmitting(null);

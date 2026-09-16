@@ -36,9 +36,18 @@ from the Kylas option they point at — "Return" is Kylas's "Return Request",
 "Order Modification" is "Modify Order" — so a name-keyed lookup refuses exactly
 those two and no others, which is the kind of gap that survives a smoke test.
 
-Duplicate suppression lives in Django: our own PATCH makes Kylas fire the
-webhook, and the backend claim row is what stops it cloning a second ticket.
-Nothing here needs to (or can) prevent that.
+Duplicate suppression lives in Django, and now covers two different duplicates.
+Our own PATCH makes Kylas fire the webhook, and the backend claim row stops it
+cloning a second ticket. Since 2026-09-16 the raise POST also dedupes *us*: a
+repeat Submit while the first raise is still `pending`/`retrying` attaches to
+that request instead of starting a second one, so the same `request_id` comes
+back and the screen goes on polling the raise already running.
+
+That guard matches only an **unfinished** raise. Once a ticket exists, the next
+Submit creates another one — a second delivery delay on the same order is a
+second problem, and the screen must not quietly refuse it. So nothing here
+needs to (or can) block a repeat Submit, but equally nothing here should
+*encourage* one; see below.
 
 ## The deal list is filtered by Kylas, not by us
 
@@ -60,3 +69,18 @@ the timeout message distinguishes the two and tells the operator to wait.
 Only **failed** is terminal and only it should ever say "try again". Before
 2026-09-15 a 429 was reported as failed, which is what turned one rate-limited
 raise into a run of manual retries into the same limit.
+
+**Running out of poll attempts is not "failed" either.** The poll is 5s x 36,
+three minutes — raised from one minute on 2026-09-16, when a Kylas backlog took
+seven minutes to drain. Every raise submitted during it did land; the screen
+simply stopped watching first, said it could not confirm the ticket, and the
+error line then added "Press Submit again to retry" underneath. Operators did,
+and one deal collected three real tickets (4774571, 4774572, 4774575) minutes
+apart.
+
+Two rules came out of that. The window is sized for a queued raise, not a
+healthy one — three minutes of 5s polls costs fewer requests than the minute of
+2s polls it replaced, so widening it was free. And the error line carries **no
+blanket retry prompt**: each message says for itself whether anything was
+created, because a timeout and a rejection need opposite advice and a fixed
+suffix can only be right for one of them.

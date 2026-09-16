@@ -87,8 +87,11 @@ export function DealPanel({ expandedDealId, getOngoing, handleSubmit, onViewDeal
           {submitSuccess === selectedDeal.id && (
             <p className="text-xs text-green-600 font-medium">Escalation ticket created in Kylas</p>
           )}
+          {/* No blanket "submit again" alongside this: a timed-out raise is
+              usually still in flight, and inviting a resubmit is what raised
+              duplicate tickets. Each message carries its own retry guidance. */}
           {submitError && submitting === null && expandedDealId === selectedDeal.id && (
-            <p className="text-xs text-red-600">{submitError} <span className="font-medium">Press Submit again to retry.</span></p>
+            <p className="text-xs text-red-600">{submitError}</p>
           )}
         </div>
       </div>
