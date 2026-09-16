@@ -1,7 +1,24 @@
 'use client';
 
+import { SOURCE_COLORS, UNATTRIBUTED_SOURCE } from './constants';
 import { RangeKey } from './types';
-import { istToday } from '@/lib/b2b';
+import { VerticalStats, istToday } from '@/lib/b2b';
+
+const UNATTRIBUTED_COLOR = '#9CA3AF';
+
+export function revenueSources(
+  verticals: VerticalStats[],
+  branchTotal: number,
+): { source: string; value: number; color: string }[] {
+  const rows = verticals.map((v, i) => ({
+    source: v.label,
+    value: v.won.value,
+    color: SOURCE_COLORS[i % SOURCE_COLORS.length],
+  }));
+  const unattributed = branchTotal - rows.reduce((s, r) => s + r.value, 0);
+  if (unattributed <= 0) return rows;
+  return [...rows, { source: UNATTRIBUTED_SOURCE, value: unattributed, color: UNATTRIBUTED_COLOR }];
+}
 
 export function rangeFor(key: RangeKey, now: Date): { from?: string; to?: string } {
   if (key === 'all') return {};

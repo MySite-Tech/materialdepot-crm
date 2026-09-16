@@ -67,16 +67,95 @@ They live here now because the code cannot carry them.
   client histories) runs once and survives a range switch, while `loadRange`
   re-runs alone. One stats request carries both the per-vertical groups and the
   overall B2B pipeline via `total_branch`, so switching range costs one call.
+  `loadRange` keys on `[range, basis]` and costs **two** calls on mount, because
+  the default basis is `order` and the created-basis call is still needed for
+  open pipeline. A non-month range adds a third for the month-scoped revenue.
+  Three is the ceiling.
 
-- **There are two revenue numbers in this module and they are not the same
-  number.** The Dashboard's headline revenue is Django's `fetchVerticalStats`,
-  month-scoped and grouped by rep phone. The Leaderboard and Targets sum the
-  `value` field on closed Supabase rows. They will not reconcile, and nothing
-  labels which is which on screen. Until one wins, do not "fix" a mismatch by
-  making one read the other — check which source the panel is meant to speak
-  for. Targets was compounding this by comparing an **all-time** sum against a
-  **monthly** goal, so its percentage only ever climbed; `computeTargets` now
-  takes a range and the tab passes the current month.
+- **The Dashboard has a date basis and a branch basis, and they are not
+  independent.** `StatsBasis` (`lib/b2b/stats/pipeline.ts`) is `created` or
+  `order`; `basisQuery` turns it into either `created_from/to` on the ticket, or
+  `order_from/to` on `estimate.order_placed_time` **plus**
+  `branch_basis=estimate`. The two always travel together, because Django's
+  `branch` filter otherwise keys on the **cart owner's** branch, and that is a
+  different population from the branch the order was booked at: in Sept 2026, 49
+  of the 82 orders booked at B2B sat on carts owned by Gachibowli, HQ, JP Nagar,
+  Whitefield or HSR staff. Filtering by order date alone moved the month from
+  ₹13.44L to only ₹14.10L; adding the estimate branch moved it to ₹47.36L. Do
+  not offer one without the other.
+
+- **The Dashboard checks that Django honoured the basis.** `/crm/leads/stats/`
+  echoes `basis`, `fetchVerticalStats` compares it to what it asked for and
+  returns `basisApplied`, and the tab shows an amber notice when it is false.
+  This is deliberately not cosmetic: the backend half deploys separately, and an
+  older Django ignores `order_from` and answers with cart-created figures that
+  look exactly like real ones. `basisApplied` is `true` when the request *failed*
+  outright — that case is already `ok: false`, and two banners for one problem
+  reads as two problems.
+
+- **The basis toggle governs the whole page except open pipeline, and defaults
+  to `order`.** The top panel, its status tiles, Order Won, Order Lost, Revenue
+  Generated, Target Achieved, Month Projection and Revenue by Source all follow
+  it. Two things do not and cannot: the **Open Pipeline** card and the
+  **Pipeline by Vertical** panel, both of which read `active` off the
+  created-basis call — a cart that is still open has no `order_placed_time` to
+  be counted by, so under an order filter `active` comes back structurally 0.
+  That zero is arithmetic, not a dropped call, which is why the Active Pipeline
+  card is dropped from the panel on the order basis rather than rendered as ₹0,
+  and why the panel relabels itself "Orders · placed" with counts in *orders*
+  instead of *carts*. Both surviving cart-created figures say so in their own
+  labels.
+
+- **The Open Pipeline card reads `branchTotal.active`, and that is what makes it
+  tappable.** It used to sum `verticals[].active`, which is keyed on the rep
+  roster's phone numbers and carries **no branch filter** — so it quietly
+  excluded B2B-branch carts owned by anyone not in `B2B_ROSTER` (45 carts /
+  ₹48,12,240 branch-wide against 43 / ₹48,07,xxx for the roster in Sept 2026).
+  A drill-down has to list the rows the card counted, and there is no clean
+  `fetchCRMLeads` query for "owned by one of eight roster phones"; `branch=B2B`
+  plus the four open statuses reproduces the branch total **exactly**, verified
+  at 45 rows against 45. If you move the card back to the verticals sum, the
+  drawer stops matching it — the badge landmine, one panel over.
+
+  The "Pipeline by Vertical" accent tile still sums the verticals, because it
+  must equal the tiles beside it. It is labelled **"All verticals"** rather than
+  "Overall Pipeline" for exactly that reason: it is not the branch figure and
+  must not read as though it were.
+
+- **The open-pipeline drawer fetches on open, never on mount.** One
+  `fetchCRMLeads` at `pageSize: OPEN_ROWS_CAP` (500), sorted by cart value
+  descending, then paged **client-side** at 25. It is outside the mount budget
+  because it costs nothing until someone taps the card. The cap is surfaced, not
+  swallowed: when `count > results.length` the drawer says it is showing the N
+  largest of M and that the headline total still counts all M — unlike the retail
+  dashboard's 3,000-row cap, which truncates silently (see
+  `docs/dashboard/context.md`). A failed fetch says the list is missing and that
+  the total above came from a different call, rather than rendering as "no open
+  carts".
+
+  Order Won was briefly left on the created basis while Revenue Generated moved,
+  which put ₹13.58L and ₹47.5L on one screen as two different answers to "what
+  did we win". Do not reintroduce that split: if a number in this panel moves
+  basis, the whole panel moves, or the stacked bar underneath stops summing to
+  its own total.
+
+- **Revenue Generated reads the branch total, not the sum of the verticals.**
+  Those are different numbers and the screen showed both: `branchTotal.won` was
+  ₹13,44,897 ("Order Won") while the verticals summed to ₹10,08,823 ("Revenue
+  Generated"), because `bm_groups` keys on rep phone and the branch total does
+  not. Both now read `pipeline.won.value`. The difference has to go somewhere,
+  so `revenueSources` (`views/dashboard/utils.ts`) appends a grey
+  `No B2B rep on cart` slice for the remainder — on the order basis that slice
+  is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
+  data, not a bug to tune away.
+
+- **The Leaderboard and Targets are still a third number** — they sum the
+  `value` field on closed Supabase rows, and will not reconcile with either
+  Django figure. Do not "fix" a mismatch by making one read the other; check
+  which source the panel is meant to speak for. Targets was compounding this by
+  comparing an **all-time** sum against a **monthly** goal, so its percentage
+  only ever climbed; `computeTargets` now takes a range and the tab passes the
+  current month.
 
 - **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**
   It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`

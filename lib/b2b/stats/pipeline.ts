@@ -2,6 +2,14 @@ import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStats } from '@/lib/ap
 
 export const B2B_STATS_BRANCH = 'B2B';
 
+export type StatsBasis = 'created' | 'order';
+
+export function basisQuery(basis: StatsBasis, range?: { from?: string; to?: string }) {
+  return basis === 'order'
+    ? { orderFrom: range?.from, orderTo: range?.to, branchBasis: 'estimate' as const }
+    : { createdFrom: range?.from, createdTo: range?.to };
+}
+
 export interface B2BPipelineStats {
   total: CRMLeadsStatsBucket;
   active: CRMLeadsStatsBucket;
@@ -20,9 +28,10 @@ export function istToday(now: Date = new Date()): string {
 
 export async function fetchB2BPipelineStats(
   range?: { from?: string; to?: string },
+  basis: StatsBasis = 'created',
 ): Promise<B2BPipelineStats> {
   const stats = await fetchCRMLeadsStats({
-    branch: B2B_STATS_BRANCH, createdFrom: range?.from, createdTo: range?.to,
+    branch: B2B_STATS_BRANCH, ...basisQuery(basis, range),
   }).catch((e) => { console.error('[b2b] leads stats fetch failed', e); return null; });
   return {
     total: stats?.total ?? EMPTY_BUCKET,

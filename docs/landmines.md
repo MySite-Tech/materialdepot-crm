@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-52 entries. They live in one file because they cross-reference each other —
+53 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -58,6 +58,9 @@ grep for a term, then read around the line you hit rather than opening all of it
 - `audit_ticked` is excluded from `AUDIT_COLS` for good reason
 - The Report Card tab was hidden from the two roles whose SOP names the report card
 - The store ladder is seven deep and the CRM only ever had three of the rungs
+- Success reported off an HTTP 200 is not success when the deliverable is a record in another system
+- Two systems reacting to the same write will both act on it
+- A branch filter keyed on the cart owner dropped ₹33L of orders booked at that branch
 - A poll that gives up is not a failure, and telling the operator to retry turned one issue into three tickets
 
 - **The Report Card tab was hidden from the two roles whose SOP names the
@@ -684,6 +687,48 @@ grep for a term, then read around the line you hit rather than opening all of it
   blocking. Confirmed live on 2026-09-15: a raise run against production Kylas
   produced two tickets, one from the direct call and one from the production
   webhook handler, which did not yet have the guard.
+
+- **A branch filter keyed on the cart owner dropped ₹33L of orders booked at
+  that branch.** The B2B Dashboard asked Django for `branch=B2B`, which
+  `_filter_by_branch` resolved as `owner__user_organisations__branch__branch_name`
+  — the branch of whoever *holds the cart*. But an order's branch is
+  `estimate.branch_id`, set where it is *booked*, and the two disagree
+  constantly: of the 82 orders booked at B2B in September 2026, 49 (₹33.3L) sat
+  on carts owned by Gachibowli, HQ, JP Nagar, Whitefield or HSR staff. 84% of
+  those carried a GST number, so they were real B2B business. From the user's
+  side the tab read ₹13.44L won and 8% of a ₹1.2Cr target for a month that had
+  actually booked ₹47.4L — a number nobody could reconcile against Metabase and
+  which made the team look like it had missed by 5×.
+
+  Two separate bugs were hiding behind one symptom, and the obvious one was the
+  smaller: the panel also scoped by **cart created date**, so an August cart
+  ordered in September counted in August. Fixing only that moved the month from
+  ₹13.44L to ₹14.10L. The branch basis was the other 96% of the gap. **When a
+  figure is wrong by a multiple, measure each candidate cause separately before
+  fixing either** — the first plausible explanation here was worth ₹0.66L.
+
+  Fixed 2026-09-15 by adding `order_from`/`order_to` (on
+  `estimate.order_placed_time`) and `branch_basis=estimate` to
+  `/crm/leads/stats/`, behind a Cart created / Order placed toggle. Three things
+  fall out of it that are not obvious:
+
+  - **The two params must travel together.** Filtering by order date while still
+    keying the branch on the owner reproduces the ₹14.1L answer, which looks
+    plausible and is wrong. `basisQuery` in `lib/b2b/stats/pipeline.ts` emits
+    both or neither for exactly this reason.
+  - **The pipeline half cannot follow.** 42 of September's 77 carts had no
+    estimate at all, so they have neither an order date nor an estimate branch.
+    Total Pipeline, Active, In Cart and the status tiles stay on the created
+    basis permanently; `active` comes back 0 under an order filter, which is
+    arithmetic rather than a dropped call. Same family as the `ok`-flag rule in
+    `docs/b2b/data-layer.md` — know which zeros are real.
+  - **It exposed a second pair of disagreeing numbers on the same screen.**
+    "Order Won" read the branch total (₹13,44,897) while "Revenue Generated"
+    directly below it summed the per-rep verticals (₹10,08,823), because
+    `bm_groups` keys on rep phone and the branch total does not. Nothing on
+    screen said so. Both now read the branch total, and the remainder is drawn
+    as an explicit `No B2B rep on cart` slice rather than being quietly
+    dropped — the same "one number, one function" rule as the badge landmine.
 
 - **A revisit re-opens a finished sub-job, and the rollup kept reading the old
   visit's `completed`.** Ops have no revisit action — they re-book the slot and

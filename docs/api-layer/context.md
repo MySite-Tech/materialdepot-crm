@@ -123,6 +123,35 @@ help it. It would have to authorise on a shared secret in the `Authorization`
 header and **refuse when that secret is unset**, rather than defaulting to open —
 doubly so for anything holding the service-role key.
 
+## `/crm/leads/stats/` — the date and branch a figure is counted by
+
+`fetchCRMLeadsStats` and `fetchCRMLeadsStatsByBmGroup` (`lib/api/crm/leads.ts`)
+take **two** date windows that mean different things, and picking the wrong one
+is silent:
+
+| Param | Django filters on | Matches |
+|---|---|---|
+| `created_from`/`created_to` | `Ticket.created_at` | every deal, cart-stage included |
+| `order_from`/`order_to` | `estimate.order_placed_time` | only deals that reached an order |
+
+`branch_basis` decides what `branch` means: unset (or `owner`) keys on the cart
+**owner's** branch, `estimate` on the branch the order was **booked** at. These
+are genuinely different populations — see `docs/b2b/data-layer.md` for the month
+where they differed by ₹33L — so `order_from`/`order_to` is only meaningful with
+`branch_basis=estimate`, and a cart with no estimate matches neither.
+
+The response **echoes back the basis it actually applied** (`basis: 'created' |
+'order'`), because a deployment that predates `order_from` ignores the param and
+answers with cart-created figures that are indistinguishable from the real
+thing. `fetchVerticalStats` turns the mismatch into `basisApplied: false` and the
+B2B Dashboard renders an amber notice rather than the wrong number under the
+right label. **Anything added here that Django might not understand needs the
+same echo** — a silently ignored query param is the frontend half of "never
+present a failed request as data".
+
+Because the 8s GET dedupe keys on the full path, the two bases are separate
+cache entries and never collide.
+
 ## Constraints
 
 - Add a new backend call to the module for its domain and let the barrel export
