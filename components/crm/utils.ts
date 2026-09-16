@@ -71,7 +71,7 @@ export const canBypassLostAge = (user?: AppUser | null): boolean => {
 
 export const mergeLead = (existing: Lead, incoming: Lead): Lead => {
   const merged: Lead = { ...existing };
-  const fields: (keyof Lead)[] = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType', 'projectPhase'];
+  const fields: (keyof Lead)[] = ['clientName', 'clientPhone', 'createdAt', 'assignedTo', 'branch', 'status', 'lostReason', 'cartItems', 'followUpDate', 'closureDate', 'clientType', 'propertyType', 'projectPhase', 'leadPriority'];
   for (const f of fields) {
     const val = incoming[f];
     if (val !== undefined && val !== null && val !== '') (merged as any)[f] = val;
