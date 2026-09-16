@@ -1,7 +1,7 @@
 'use client';
 
 import { CITIES } from '../../shared';
-import { DAYS_SHORT, MORNING_CUTOFF_MIN, SLOT_DEFS, STORE_CITY } from './constants';
+import { BLACKOUT_WHOLE_DAY, DAYS_SHORT, MORNING_CUTOFF_MIN, SLOT_BLACKOUTS, SLOT_DEFS, STORE_CITY } from './constants';
 import { SlotDef } from './types';
 
 export const cityOfStore = (store: string | null) => (store && STORE_CITY[store]) || CITIES[0];
@@ -25,6 +25,19 @@ export function morningCutoffHit(date: string): boolean {
   if (date !== dstr(tmr)) return false;
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes() >= MORNING_CUTOFF_MIN;
+}
+
+/** The slot ids withdrawn on a "YYYY-MM-DD" date — empty for an ordinary day, all six for a
+ *  whole-day blackout. */
+export function blockedSlotIds(date: string): Set<string> {
+  const entry = SLOT_BLACKOUTS[date];
+  if (!entry) return new Set();
+  if (entry === BLACKOUT_WHOLE_DAY) return new Set(SLOT_DEFS.map((s) => s.id));
+  return new Set(entry);
+}
+
+export function isSlotBlocked(date: string, slotId: string): boolean {
+  return blockedSlotIds(date).has(slotId);
 }
 
 export function fmtSlotId(id: string) {

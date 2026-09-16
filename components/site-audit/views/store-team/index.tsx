@@ -5,7 +5,7 @@ import { cityOf, mapCaps, rosterQuery, sbGet, sbPatch, staffCapOn } from '../../
 import { ASSIGNED_STATUSES, SLOT_DEFS, STORES } from './constants';
 import { BookingSheet } from './sheet';
 import { SlotContent } from './slot';
-import { buildDateChips, cityOfStore, dstr, today } from './utils';
+import { buildDateChips, cityOfStore, dstr, isSlotBlocked, today } from './utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteAuditStoreTeamView() {
@@ -149,7 +149,10 @@ export default function SiteAuditStoreTeamView() {
       })()
     : null;
 
-  const bookingSlotDef = bookingSlot ? SLOT_DEFS.find((s) => s.id === bookingSlot) : null;
+  // A blacked-out slot never renders a Book button, but the sheet is gated on the blackout too so
+  // a stale tab left open across a deploy cannot open it.
+  const bookingSlotDef =
+    bookingSlot && !isSlotBlocked(selectedDate, bookingSlot) ? SLOT_DEFS.find((s) => s.id === bookingSlot) : null;
 
   return (
     <div>

@@ -77,3 +77,60 @@ inert). Leave them; they are not gates.
 - **`cat-analytics-panel`'s `nonce` is the redraw trigger** for in-place target
   edits, working alongside `targetsRef`. Editing a target mutates the ref and
   bumps the nonce rather than replacing state.
+
+## A revisit is a re-assignment, so the assignees' `completed` has to be cleared with it
+
+There is no revisit action: ops re-book the slot and re-assign the installer on
+the sub-job that was already finished. `subjobDisplayStatus` rolls a sub-job up
+to `completed` when **every** assignee is, so the `completed` left on the
+previous visit's assignment flipped the whole order back to *Site Installation
+Completed* the moment the new slot was booked — the revisit disappeared from
+every live list and need-action count, and the installer's own app, which reads
+his `assignments[]` row, filed the new job under "Done · Download PDF" with
+nothing to tap. `ENQ2026090590356`: wall panels installed 11 Sept 2026, SM set
+the order to Partially Completed, slot re-booked for the 16th and the same
+installer re-assigned on the 15th — badge read Completed, installer saw nothing.
+
+`bookSlot` and `saveAssign` now clear the assignee statuses when **all** of them
+read `completed` (`allAssigneesDone`). That combination is the only one that can
+flip the rollup, and it is what "everyone is being sent back" looks like in the
+data; a sub-job where one assignee finished and another is being added keeps the
+finished one terminal, which is the rule the 32-arrivals landmine bought. A
+`completed` is also no longer terminal on a row whose **installer was swapped** —
+`pickInstaller` overwrites the installer on the existing assignment row, so the
+incoming person inherited the outgoing person's completion and the sub-job stayed
+rolled up as done.
+
+Both paths log `revisit slot booked` / `revisit assigned`, so the timeline says
+which visit a line belongs to.
+
+The parent then reads *Site Installer Assigned* rather than *Partially
+Completed*. That is deliberate: the SM's `partial` describes the visit that
+happened, and once a new visit is booked the badge that helps is the one naming
+the stage the order is actually in. What was outstanding stays in the log and in
+`sj.jobcard.rooms`.
+
+**Six live orders were already in this shape on 2026-09-15** (`ENQ2026090590356`,
+`ENQ2026083189452`, `ENQ2026081886657`, `ENQ2026062075657-R`, `ENQ2026061274030`,
+`ENQ2026071279303`) — every one a re-assignment after completion, three of them
+alongside a rectification order. The code change does not repair them: re-saving
+the assignment from the drawer does, because the same `allAssigneesDone` test
+fires on that save.
+
+## The slot blackout list lives in two repos and must move in both
+
+`SLOT_BLACKOUTS` (`views/store-team/constants.ts`) withdraws named slots on a
+named date — the lever for "no visits at 10, 11 or 1 on the 17th". It is a
+mirror, not the source: the customer app and website book through Django's
+`/site-audit-slots/`, which filters on its own `SITE_AUDIT_SLOT_BLACKOUTS`
+(`order/site_audit_slots.py`). Neither map reaches the other repo.
+
+**Blacking out a slot in only one of them leaves it bookable from the other**,
+and both are spending the same auditors' day — which is exactly how a "blocked"
+slot still took a CRM booking. Change the pair together, in the same breath as
+`SLOT_DEFS` / `SITE_AUDIT_SLOT_DEFS` if the windows themselves ever move.
+
+Blackouts are deliberately *not* modelled as capacity. Zeroing a roster
+(`leave_dates`) blanks the whole day, and fake `audit_orders` rows cannot block
+1 PM without also taking 2 PM down with them — `slotsConflict`'s 120-minute rule
+spills onto neighbours, and the rows show up as phantom jobs on the SM's board.

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-51 entries. They live in one file because they cross-reference each other —
+53 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -53,6 +53,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Never disable a field app's only forward control on a permission or device probe
 - `if (busy) return` where `busy` is state is not a lock
 - A re-assignment must only reset the assignees whose work actually changed
+- A revisit re-opens a finished sub-job, and the rollup read the old visit's `completed`
 - Only the PRIMARY installer writes `sj.status`
 - `audit_ticked` is excluded from `AUDIT_COLS` for good reason
 - The Report Card tab was hidden from the two roles whose SOP names the report card
@@ -60,6 +61,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Success reported off an HTTP 200 is not success when the deliverable is a record in another system
 - Two systems reacting to the same write will both act on it
 - A branch filter keyed on the cart owner dropped ₹33L of orders booked at that branch
+- A poll that gives up is not a failure, and telling the operator to retry turned one issue into three tickets
 
 - **The Report Card tab was hidden from the two roles whose SOP names the
   report card.** `ROLE_TABS.sales` and `ROLE_TABS.store_manager` had no
@@ -727,3 +729,50 @@ grep for a term, then read around the line you hit rather than opening all of it
     screen said so. Both now read the branch total, and the remainder is drawn
     as an explicit `No B2B rep on cart` slice rather than being quietly
     dropped — the same "one number, one function" rule as the badge landmine.
+
+- **A revisit re-opens a finished sub-job, and the rollup kept reading the old
+  visit's `completed`.** Ops have no revisit action — they re-book the slot and
+  re-assign the installer on the sub-job that was already done. `completed` was
+  terminal on an assignment row, so the one left over from the previous visit
+  made `subjobDisplayStatus` roll the sub-job up to `completed` again, and the
+  order flipped to *Site Installation Completed* the moment the new slot was
+  booked (before the assignment was even saved). It then left every live list,
+  filter and need-action count, and the field app — which reads the installer's
+  own `assignments[]` row — showed tomorrow's revisit as "Done · Download PDF".
+  `ENQ2026090590356`, reported 2026-09-15: installed 11 Sept, SM set the order
+  Partially Completed ("shortage of 3 panels"), re-booked for the 16th,
+  re-assigned the same installer twice with the note "Revisit assigned", badge
+  read Completed throughout. Six live orders were in that shape, all
+  re-assignments after completion. `bookSlot` and `saveAssign` now clear the
+  assignee statuses when `allAssigneesDone` — **every** saved assignee reads
+  `completed` — which is the only combination that can flip the rollup and is
+  what "they are all going back" looks like in the data; one finished assignee
+  beside an unfinished one stays terminal, so the entry above still holds. The
+  same save also stops a `completed` being terminal on a row whose installer was
+  **swapped**: `pickInstaller` overwrites the installer on the existing row, so
+  the incoming person was inheriting the outgoing person's completion. The two
+  rules this leaves standing are in the `subjobDisplayStatus` entry above; the
+  code change repairs nothing already written, but re-saving the assignment does.
+
+- **A poll that gives up is not a failure, and telling the operator to retry
+  turned one issue into three tickets.** The Raise Escalation screen polled
+  `raise-status/` for 60s (2s x 30), then said it could not confirm the ticket,
+  and `DealPanel` appended a fixed **"Press Submit again to retry"** to every
+  error. On 2026-09-16 a Kylas 429 backlog left raises queued for up to seven
+  minutes — they all succeeded, the screen just stopped watching first. Deal
+  4755735 collected three real tickets (4774571 at 06:13:28, 4774572 at
+  06:13:31, 4774575 at 06:13:54) from three Submits at 06:06, 06:07 and 06:10;
+  deal 4710936 collected three more. Every duplicate was a separate request row
+  that the backend's webhook-echo guard could not see, because that guard only
+  refuses Kylas re-announcing a raise we already made. Three shapes to watch
+  for: (1) a timeout and a rejection need **opposite** advice, so a retry prompt
+  appended to all errors alike is wrong for one of them by construction — put
+  the guidance inside each message; (2) a confirmation poll must be sized for
+  the queued case, not the healthy one, and trading interval for attempts buys
+  that for free (5s x 36 is three minutes for fewer requests than 2s x 30 spent
+  on one); (3) a dedupe guard written for one duplicate source does not cover
+  another — the POST now attaches a repeat Submit to an in-flight request, and
+  deliberately does **not** match a raise that already produced a ticket, since
+  a genuine second escalation must still get through. The same incident hid
+  three backend bugs; see `md/integration/kylas/` and the
+  `crm_raise_escalation` rows in `crm_log`.

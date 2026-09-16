@@ -6,12 +6,14 @@ export const DEFAULT_PAGE_SIZE = 10;
 
 export const SYNC_INDEX_DELAY_MS = 5000;
 
-// Raise confirmation poll: 2s x 30 = up to a minute. The clone itself is one
-// Kylas create, but the task queues behind the integration's rate limiter, so
-// give it room before telling the user to check the Status tab.
-export const RAISE_POLL_INTERVAL_MS = 2000;
+// Raise confirmation poll: 5s x 36 = up to three minutes, for half the requests
+// the old 2s x 30 spent. The clone is one Kylas create, but the task queues
+// behind the integration's rate limiter: on 2026-09-16 a backlog took seven
+// minutes to drain, the one-minute window expired, and operators resubmitted
+// into three tickets for one issue.
+export const RAISE_POLL_INTERVAL_MS = 5000;
 
-export const RAISE_POLL_MAX_ATTEMPTS = 30;
+export const RAISE_POLL_MAX_ATTEMPTS = 36;
 
 export const SYNC_INDEX_MAX_ATTEMPTS = 10;
 
