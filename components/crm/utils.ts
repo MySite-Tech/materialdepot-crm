@@ -168,6 +168,8 @@ export const leadToExportRow = (lead: Lead): string[] => {
     lead.propertyType || '',
     lead.architectInvolved ? 'yes' : 'no',
     lead.projectPhase || '',
+    lead.leadPriority || '',
+    lead.ticketId != null ? String(lead.ticketId) : '',
   ];
 };
 

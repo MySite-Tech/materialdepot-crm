@@ -241,7 +241,7 @@ export default function App() {
 
   const { addRemark, filteredTotal, handleDateEditSave, handleKylasModalSync, handleKylasSync, saveLead } = makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDeleteLeadState, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast });
 
-  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase','Priority'];
+  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase','Priority','Ticket ID'];
 
   const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 

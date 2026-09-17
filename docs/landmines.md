@@ -833,9 +833,16 @@ grep for a term, then read around the line you hit rather than opening all of it
   `clientPhone` — both identical across siblings, so switching between two rows on
   one cart never refetched. **A save fixed in isolation is only half of it: the
   values the operator is editing against come from a separate lookup, and that one
-  can still be reading a different row.** One knowingly left: CSV import
-  (`leads/csv/actions.ts`) can only match on `id + clientPhone`, because a CSV row
-  carries no ticket id. `lib/b2b/mappers/inbound.ts` builds `id` the same derived
+  can still be reading a different row.** CSV import looked inherent — a CSV row carries no ticket
+  id — but the importer only accepts this app's own export (it demands an exact
+  header match), so the column was simply missing: `Ticket ID` now rides along as
+  an optional **trailing** column, which keeps files exported before it importable.
+  Two things it fixed beyond the merge target: the dedupe key was
+  `leadId + '|' + clientPhone`, so re-importing an export of one client's seven
+  deal tickets collapsed them into one row and dropped six; and `leadToExportRow`
+  had been writing 18 values under 19 headers ever since `Priority` was added, so
+  every exported Priority cell was blank and any new trailing column would have
+  landed one place to the left. `lib/b2b/mappers/inbound.ts` builds `id` the same derived
   way (`kylas_lead_id || r.id`) and was checked — it is **safe**, because
   `b2b_lead.kylas_lead_id` is `unique` and `upsertInboundLead` conflicts on it, so
   the constraint is load-bearing rather than incidental. That is the line between

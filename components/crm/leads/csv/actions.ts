@@ -5,7 +5,7 @@ import { upsertLeads } from '../../../../lib/api/crm/lead-details';
 import { AppUser, CartItem, Lead, Remark, Visit } from '../../../../types/crm';
 import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, LEAD_PRIORITIES, LEGACY_PROPERTY_TYPES, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../../constants';
 import { CsvRow } from '../../types';
-import { csvEscape, leadToExportRow, mergeLead, todayStr, triggerDownload } from '../../utils';
+import { csvEscape, isSameLeadRow, leadToExportRow, mergeLead, todayStr, triggerDownload } from '../../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
 export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
@@ -180,7 +180,12 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
     const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
     if (lines.length === 0) { setCsvErrors(['File is empty.']); return; }
     const headerFields = parseCsvLine(lines[0]);
-    const headerMatch = CSV_HEADERS.every((h, i) => (headerFields[i] || '').trim().toLowerCase() === h.toLowerCase());
+    // `Ticket ID` is the optional trailing column: a file exported before it
+    // existed is one short and must still import, so compare only the columns
+    // the file actually has and require everything before that one.
+    const headerMatch = headerFields.length >= CSV_HEADERS.length - 1
+      && CSV_HEADERS.slice(0, headerFields.length)
+        .every((h, i) => (headerFields[i] || '').trim().toLowerCase() === h.toLowerCase());
     if (!headerMatch) { setCsvErrors(['Header row does not match expected format. Expected: ' + CSV_HEADERS.join(', ')]); return; }
     if (lines.length < 2) { setCsvErrors(['File contains only headers and no data rows.']); return; }
 
@@ -192,7 +197,10 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
       const fields = parseCsvLine(lines[r]);
       if (fields.length < 14) { errors.push('Row ' + rowNum + ': Expected at least 14 columns, got ' + fields.length); continue; }
 
-      const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr, projectPhaseStr, leadPriorityStr] = fields;
+      const [leadId, clientName, clientPhone, createdDate, assignedTo, branch, status, lostReason, cartItemsStr, cartValueStr, followUpDate, closureDate, remarksStr, visitsStr, clientTypeStr, propertyTypeStr, architectInvolvedStr, projectPhaseStr, leadPriorityStr, ticketIdStr] = fields;
+      // Only a digits-only cell is a ticket: a hand-typed note here must not
+      // become a row identity and silently retarget the merge.
+      const ticketId = /^\d+$/.test((ticketIdStr || '').trim()) ? Number(ticketIdStr.trim()) : undefined;
 
       if (!leadId) errors.push('Row ' + rowNum + ': Lead ID is required');
       if (!/^\d{10}$/.test(clientPhone)) errors.push('Row ' + rowNum + ': Client Phone must be exactly 10 digits');
@@ -265,14 +273,16 @@ const handleCsvFile = (e: ChangeEvent<HTMLInputElement>) => {
         }
       }
 
-      parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved, projectPhase, leadPriority: (leadPriority as 'hot' | 'warm' | 'cold' | undefined) || undefined });
+      parsed.push({ leadId: leadId.trim(), clientName: clientName || '', clientPhone, createdAt: (createdDate ? parseDDMMYYYY(createdDate) : null) || todayStr(), assignedTo: assignedTo || '', branch: branch || (branches[0] || ''), status: status || STATUSES[0], lostReason: lostReason || '', cartItems, cartValue, followUpDate: followUpDate ? (parseDDMMYYYY(followUpDate) || '') : '', closureDate: closureDate ? (parseDDMMYYYY(closureDate) || '') : '', remarks, visits, clientType, propertyType, architectInvolved, projectPhase, leadPriority: (leadPriority as 'hot' | 'warm' | 'cold' | undefined) || undefined, ticketId });
     }
 
     if (errors.length > 0) { setCsvErrors(errors); setCsvPreview(null); }
     else {
       const dedupeMap = new Map<string, CsvRow>();
       parsed.forEach((p) => {
-        const key = p.leadId + '|' + p.clientPhone;
+        // Lead ID repeats across a client's deal tickets, so keying on it alone
+        // collapsed every sibling row into one and dropped the rest.
+        const key = p.ticketId != null ? 't' + p.ticketId : p.leadId + '|' + p.clientPhone;
         dedupeMap.set(key, p);
       });
       const deduped = [...dedupeMap.values()];
@@ -291,6 +301,7 @@ const importCsvLeads = () => {
   if (!csvPreview) return;
   const newLeads: Lead[] = csvPreview.filter((_, i) => csvSelected.has(i)).map((row) => ({
     id: row.leadId,
+    ticketId: row.ticketId,
     createdAt: row.createdAt,
     assignedTo: row.assignedTo,
     branch: row.branch,
@@ -314,9 +325,7 @@ const importCsvLeads = () => {
     const updated = [...prev];
     const toUpsert: Lead[] = [];
     for (const incoming of newLeads) {
-      const existIdx = updated.findIndex((l) => l.id === incoming.id && l.clientPhone === incoming.clientPhone) >= 0
-        ? updated.findIndex((l) => l.id === incoming.id && l.clientPhone === incoming.clientPhone)
-        : updated.findIndex((l) => l.id === incoming.id);
+      const existIdx = updated.findIndex((l) => isSameLeadRow(l, incoming));
       if (existIdx >= 0) {
         updated[existIdx] = mergeLead(updated[existIdx], incoming);
         toUpsert.push(updated[existIdx]);

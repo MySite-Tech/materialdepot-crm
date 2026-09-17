@@ -93,6 +93,7 @@ export interface CsvRow {
   architectInvolved: boolean;
   projectPhase: string;
   leadPriority?: 'hot' | 'warm' | 'cold';
+  ticketId?: number;
 }
 
 export type DateEditState = { leadId: string; ticketId?: number; field: 'followUpDate' | 'closureDate' };
