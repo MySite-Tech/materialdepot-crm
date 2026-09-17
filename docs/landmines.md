@@ -825,5 +825,15 @@ grep for a term, then read around the line you hit rather than opening all of it
   the endpoints expect; (3) a resolver that re-derives its target from the client
   ignores the target the caller named — pass the row and forbid creating one
   (`deal_ticket=` + `allow_create=False`), or a miss silently becomes a new row.
-  Fixed 2026-09-17 in `components/crm/{shell/modals,leads/actions,utils}.ts` and
-  `order/crm/leads/services/{lead_actions,ticket}_service.py`.
+  Fixed 2026-09-17 in `components/crm/{shell/modals,leads/actions,utils,index}.tsx`
+  and `order/crm/leads/services/{lead_actions,ticket}_service.py`. A sweep for the
+  same shape found three more sites in the first pass' blind spot: the
+  `DateEditPopup` pre-filled its dates from `leads.find(l => l.id === leadId)`, the
+  visits fetch wrote onto every sibling, and that effect's deps were `id` +
+  `clientPhone` — both identical across siblings, so switching between two rows on
+  one cart never refetched. **A save fixed in isolation is only half of it: the
+  values the operator is editing against come from a separate lookup, and that one
+  can still be reading a different row.** Two knowingly left: CSV import
+  (`leads/csv/actions.ts`) can only match on `id + clientPhone` because a CSV row
+  carries no ticket id, and `lib/b2b/mappers/inbound.ts` builds `id` as
+  `kylas_lead_id || r.id` — the same derived-key shape, unverified on that tab.

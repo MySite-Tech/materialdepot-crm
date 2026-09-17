@@ -73,7 +73,7 @@ export function CrmModals({ addRemark, availableBMs, branches, csvErrors, csvPre
     )}
     
     {dateEditPopup && (() => {
-      const lead = leads.find((l) => l.id === dateEditPopup.leadId);
+      const lead = findLeadRow(leads, { id: dateEditPopup.leadId, ticketId: dateEditPopup.ticketId } as Lead);
       if (!lead) return null;
       return (
         <DateEditPopup

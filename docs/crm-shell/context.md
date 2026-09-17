@@ -107,3 +107,12 @@ back to `id + clientPhone` only for a lead being created, which has no ticket
 yet. The two `setLeads` maps in `onImmediateSave` use the same helper — matching
 those on `id + clientPhone` wrote one date edit to every sibling row.
 
+The same rule binds the `DateEditPopup` beside it: the save handler resolves its
+row by ticket, but the popup's *pre-filled* dates come from a separate
+`findLeadRow` in `CrmModals`, and while that one matched on `id` the operator was
+editing against a sibling's values and saving them onto the right row. The
+drawer's remarks/visits effect in `components/crm/index.tsx` carries `ticketId`
+in its dependency array for the same reason — sibling rows share `id` **and**
+`clientPhone`, so without it, switching between two deal tickets on one cart
+never refetches and the drawer keeps the first row's remarks.
+

@@ -26,7 +26,7 @@ import { DEFAULT_BRANCHES } from './constants';
 import { useDebouncedValue } from './hooks/use-debounced-value';
 import { LoginScreen } from './login';
 import { CsvRow, DateEditState, MainTab } from './types';
-import { resolveAllowedTabs } from './utils';
+import { isSameLeadRow, resolveAllowedTabs } from './utils';
 import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/shared';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -149,11 +149,11 @@ export default function App() {
     }).catch(() => {});
     setVisitsLoading(true);
     fetchLeadVisits(drawerLead.clientPhone).then(visits => {
-      setLeads(prev => prev.map(l =>
-        l.id === drawerLead.id && l.clientPhone === drawerLead.clientPhone ? { ...l, visits } : l
-      ));
+      setLeads(prev => prev.map(l => isSameLeadRow(l, drawerLead) ? { ...l, visits } : l));
     }).catch(() => {}).finally(() => setVisitsLoading(false));
-  }, [drawerLead?.id, drawerLead?.clientPhone]);
+    // `ticketId` is in the deps because sibling rows share id AND phone — without
+    // it, switching between two deal tickets on one cart never refetches.
+  }, [drawerLead?.id, drawerLead?.clientPhone, drawerLead?.ticketId]);
 
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [, setDeleteLeadState] = useState<Lead | null>(null);
