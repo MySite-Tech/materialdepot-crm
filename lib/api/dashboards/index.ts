@@ -43,6 +43,9 @@ export interface DashboardFilters {
   closureTo?: string;
   createdFrom?: string;
   createdTo?: string;
+  orderFrom?: string;
+  orderTo?: string;
+  branchBasis?: 'owner' | 'estimate';
   category?: string[];
   priority?: string[];
 }
@@ -247,6 +250,9 @@ export async function fetchDashboardData(filters: DashboardFilters = {}): Promis
   if (filters.closureTo) params.set('closure_to', filters.closureTo);
   if (filters.createdFrom) params.set('created_from', filters.createdFrom);
   if (filters.createdTo) params.set('created_to', filters.createdTo);
+  if (filters.orderFrom) params.set('order_from', filters.orderFrom);
+  if (filters.orderTo) params.set('order_to', filters.orderTo);
+  if (filters.branchBasis) params.set('branch_basis', filters.branchBasis);
   if (filters.category?.length) params.set('category', filters.category.join(','));
   if (filters.priority?.length) params.set('priority', filters.priority.join(','));
   const qs = params.toString();

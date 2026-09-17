@@ -31,14 +31,14 @@ type BucketMap = Partial<Record<'total' | Segregation, BucketResult>>;
 
 async function loadBuckets(
   tables: SegregationTable[],
-  filters: { branch?: string[]; bm?: string[]; createdFrom?: string; createdTo?: string },
+  filters: { branch?: string[]; bm?: string[]; orderFrom?: string; orderTo?: string },
 ): Promise<BucketMap> {
   const calls: { key: 'total' | Segregation; category?: string[] }[] = [
     { key: 'total' },
     ...tables.filter(t => t.queryNames.length).map(t => ({ key: t.segregation, category: t.queryNames })),
   ];
   const settled = await Promise.allSettled(
-    calls.map(c => fetchDashboardData({ ...filters, category: c.category })),
+    calls.map(c => fetchDashboardData({ ...filters, branchBasis: 'estimate', category: c.category })),
   );
   const out: BucketMap = {};
   settled.forEach((r, i) => {
@@ -102,8 +102,8 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
       loadBuckets(tables, {
         branch: branchCsv ? branchCsv.split(',') : undefined,
         bm: bmCsv ? bmCsv.split(',') : undefined,
-        createdFrom: range.from || undefined,
-        createdTo: range.to || undefined,
+        orderFrom: range.from || undefined,
+        orderTo: range.to || undefined,
       }).then(res => {
         if (cancelled) return;
         setFiltered(res);
@@ -125,8 +125,8 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
     const mtdRange = monthToDateRange(new Date());
     loadBuckets(tables, {
       branch: branchCsv ? branchCsv.split(',') : undefined,
-      createdFrom: mtdRange.from,
-      createdTo: mtdRange.to,
+      orderFrom: mtdRange.from,
+      orderTo: mtdRange.to,
     }).then(res => {
       if (cancelled) return;
       setMtd(res);
@@ -252,7 +252,7 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
           <h2 className="text-[15px] font-bold text-gray-900">Category-wise Revenue</h2>
           <span className="text-[11px] text-gray-400">
             {range.from || range.to
-              ? `carts created ${range.from ? fmtChipDate(range.from) : '…'} – ${range.to ? fmtChipDate(range.to) : '…'}`
+              ? `orders placed ${range.from ? fmtChipDate(range.from) : '…'} – ${range.to ? fmtChipDate(range.to) : '…'}`
               : 'all time'}
           </span>
         </div>

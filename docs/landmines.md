@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-53 entries. They live in one file because they cross-reference each other —
+54 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -62,7 +62,28 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Two systems reacting to the same write will both act on it
 - A branch filter keyed on the cart owner dropped ₹33L of orders booked at that branch
 - A poll that gives up is not a failure, and telling the operator to retry turned one issue into three tickets
+- A revenue figure compared against Metabase must share Metabase's date basis, and one date param needs a second to mean anything
 
+- **The Category Revenue tab was compared against Metabase for months while
+  filtering on a different date.** It sent `created_from`/`created_to` — the
+  deal's *cart-created* date — while Metabase reports on order-placed date, so
+  every store read low and the store target cards were judged against inflated
+  shortfalls. Kompally Sept 2026 read ₹47.48L against ₹57.18L; the missing
+  ₹9.71L was September orders on deals created in August or earlier, and B2B was
+  far worse at ₹15.25L against ₹50.07L. It hid for so long because the number
+  was plausible and the gap looked like unloading and other charges. Fixed
+  2026-09-17 by sending `order_from`/`order_to` with `branch_basis=estimate`.
+  Two shapes to watch. First, **a figure that is reconciled against another tool
+  has to share that tool's basis** — the discrepancy will not announce itself,
+  it just looks like a smaller number. Second, **`order_from`/`order_to` are
+  inert without `branch_basis=estimate`**: the default `owner` basis keys the
+  branch off the cart holder, not off where the order was booked, so the two
+  params are a pair and sending one alone silently measures something else.
+  `lib/b2b/stats/pipeline.ts` was the only caller that had them paired. The
+  backend half is additive — `parse_dashboard_query` ignored all three params
+  before it shipped — so **the Django change must deploy first**; the frontend
+  landing alone drops every date filter and the tab shows all-time figures. See
+  `docs/dashboard/context.md`.
 - **The Report Card tab was hidden from the two roles whose SOP names the
   report card.** `ROLE_TABS.sales` and `ROLE_TABS.store_manager` had no
   `reportCard`, so a BM could not see their own card and a Store Manager could

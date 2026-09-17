@@ -34,7 +34,9 @@ used — **the week boundary is the server's, not the browser's**).
 
 Both endpoints take `branch`, `bm`, `category`, `created_from/to` as CSV params.
 The overview additionally takes `closure_from/to` and `priority`; order-lost
-additionally takes `cart_value_gt`/`cart_value_lt`.
+additionally takes `cart_value_gt`/`cart_value_lt`. `/crm/dashboard/` also takes
+`order_from/to` and `branch_basis`, which only the category-revenue tab sends —
+see **Dates filter on ORDER-PLACED date** below.
 
 `priority` filters the **whole** payload, not just the pipeline table — the pies
 and lost reasons narrow with it too, the same way `category` and `bm` do. Its
@@ -154,10 +156,32 @@ now measures. Do not close that gap by inflating a bucket.
 A status added to the CRM has to be added in both, or this tab and the Client
 Database disagree about what an order is.
 
-Dates filter on **cart created date** — `created_from`/`created_to`. It is the
-only date every deal carries; `closureDate` is an *estimated* closure, not a
-booking date. A cart created in August and ordered in September counts in
-August.
+### Dates filter on ORDER-PLACED date, and that requires the estimate basis
+
+`loadBuckets` sends `order_from`/`order_to` **with `branch_basis=estimate`**.
+Both are required together: per `_filter_by_branch`
+(`order/crm/leads/repository/leads_query.py`) the default `owner` basis keys a
+branch off whoever holds the cart, and only the `estimate` basis keys it off
+where the order was actually booked, which is what an order-placed date means.
+
+This tab is read against Metabase's order book, so it has to share Metabase's
+date basis. Until 2026-09-17 it filtered on **cart created date** instead, and
+every store read low — Kompally Sept 2026 showed ₹47.48L against ₹57.18L,
+the missing ₹9.71L being September orders on deals created in August or
+earlier. B2B was the worst hit, ₹15.25L against ₹50.07L.
+
+The order date is `order_placed_time` **coalesced to the estimate's
+`created_at`**; a confirmed order that never got a placed-time stamped counts on
+the day it was raised rather than vanishing. Two residues are not date-related
+and cannot be closed here: an estimate with no deal ticket is invisible to the
+CRM entirely (three exist across Jul–Aug 2026, ₹2.05L), and contacts in
+`_CRM_EXCLUDED_CONTACTS` are deliberately dropped from the CRM while Metabase
+still counts them — so a small permanent gap against Metabase is expected.
+
+The **overview** tab still filters on `created_from`/`created_to` with the
+default owner basis, which is right for a pipeline view. The two tabs therefore
+disagree about the same month on purpose; they are answering different
+questions.
 
 ### Targets
 
