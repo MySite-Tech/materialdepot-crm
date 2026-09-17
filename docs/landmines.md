@@ -833,7 +833,11 @@ grep for a term, then read around the line you hit rather than opening all of it
   `clientPhone` — both identical across siblings, so switching between two rows on
   one cart never refetched. **A save fixed in isolation is only half of it: the
   values the operator is editing against come from a separate lookup, and that one
-  can still be reading a different row.** Two knowingly left: CSV import
-  (`leads/csv/actions.ts`) can only match on `id + clientPhone` because a CSV row
-  carries no ticket id, and `lib/b2b/mappers/inbound.ts` builds `id` as
-  `kylas_lead_id || r.id` — the same derived-key shape, unverified on that tab.
+  can still be reading a different row.** One knowingly left: CSV import
+  (`leads/csv/actions.ts`) can only match on `id + clientPhone`, because a CSV row
+  carries no ticket id. `lib/b2b/mappers/inbound.ts` builds `id` the same derived
+  way (`kylas_lead_id || r.id`) and was checked — it is **safe**, because
+  `b2b_lead.kylas_lead_id` is `unique` and `upsertInboundLead` conflicts on it, so
+  the constraint is load-bearing rather than incidental. That is the line between
+  the two: a derived key backed by a constraint is an id, a derived key computed
+  per response — as Django does for a lead's `id` — is not, and cannot become one.
