@@ -52,7 +52,7 @@ export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync
           <tbody className={leadsLoading ? 'opacity-40 pointer-events-none' : ''}>
             {paginatedRows.map((l, i) => (
               <tr
-                key={l.id + i}
+                key={l.ticketId ?? l.id + i}
                 className="border-t border-gray-200 hover:bg-[#FFFAF7]"
               >
                 {isColVisible('id') && <td className="px-3 py-2.5 text-[13px] align-middle w-[200px] min-w-[200px]">
@@ -93,14 +93,14 @@ export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync
                     {typeof l.cartItems === 'string' ? (l.cartItems || '—') : Array.isArray(l.cartItems) ? (l.cartItems.map(i => typeof i === 'string' ? i : i.name).join(', ') || '—') : '—'}
                   </span>
                 </td>}
-                {isColVisible('followUpDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'followUpDate' })}>
+                {isColVisible('followUpDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, ticketId: l.ticketId, field: 'followUpDate' })}>
                   {l.followUpDate ? (
                     <span className={`text-xs border-b border-dashed border-gray-300 ${isOverdue(l) ? 'font-bold text-red-500' : 'font-normal text-gray-700'}`}>
                       {isOverdue(l) && '⚠ '}{fmtDate(l.followUpDate)}
                     </span>
                   ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
                 </td>}
-                {isColVisible('closureDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, field: 'closureDate' })}>
+                {isColVisible('closureDate') && <td className="px-3 py-2.5 text-[13px] align-middle cursor-pointer" onClick={() => setDateEditPopup({ leadId: l.id, ticketId: l.ticketId, field: 'closureDate' })}>
                   {l.closureDate ? (
                     <span className={`text-xs border-b border-dashed border-gray-300 ${isClosureOverdue(l) ? 'font-bold text-red-500' : 'text-gray-500'}`}>
                       {isClosureOverdue(l) && '⚠ '}{fmtDate(l.closureDate)}

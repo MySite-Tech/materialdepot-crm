@@ -8,6 +8,7 @@ import { KylasSyncModal } from '../leads/kylas-modal';
 import { LeadDrawer } from '../leads/drawer';
 import { DateEditPopup } from '../ui/prompts';
 import { CsvRow, DateEditState } from '../types';
+import { findLeadRow, isSameLeadRow } from '../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function CrmModals({ addRemark, availableBMs, branches, csvErrors, csvPreview, csvSelected, currentUser, dateEditPopup, drawerLead, handleDateEditSave, handleKylasModalSync, importCsvLeads, kylasModalInput, kylasModalResult, leads, saveLead, setCsvErrors, setCsvPreview, setCsvSelected, setDateEditPopup, setDrawerLead, setKylasModalInput, setKylasModalResult, setLeads, setShowAddDrawer, setShowKylasModal, showAddDrawer, showKylasModal, showSaveError, visitsLoading }: {
@@ -46,7 +47,7 @@ export function CrmModals({ addRemark, availableBMs, branches, csvErrors, csvPre
     <>
           {(showAddDrawer || drawerLead) && (
       <LeadDrawer
-        lead={drawerLead ? (leads.find((l) => l.id === drawerLead.id) || drawerLead) : null}
+        lead={drawerLead ? (findLeadRow(leads, drawerLead) || drawerLead) : null}
         currentUser={currentUser}
         branches={branches}
         users={availableBMs.map(name => ({ id: name, name }))}
@@ -55,15 +56,15 @@ export function CrmModals({ addRemark, availableBMs, branches, csvErrors, csvPre
         onAddRemark={drawerLead ? (remark: Remark) => addRemark(drawerLead.id, drawerLead.ticketId!, remark) : undefined}
         visitsLoading={visitsLoading}
         onImmediateSave={(updatedLead: Lead) => {
-          setLeads((prev) => prev.map((l) => (l.id === updatedLead.id && l.clientPhone === updatedLead.clientPhone) ? updatedLead : l));
-          fetchLead(updatedLead.id, updatedLead.clientPhone || '').then((dbLead: Lead) => {
+          setLeads((prev) => prev.map((l) => isSameLeadRow(l, updatedLead) ? updatedLead : l));
+          fetchLead(updatedLead.id, updatedLead.clientPhone || '', updatedLead.ticketId).then((dbLead: Lead) => {
             const mergedRemarks = [...(dbLead.remarks || [])];
             (updatedLead.remarks || []).forEach((r) => {
               if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
             });
             const merged: Lead = { ...updatedLead, remarks: mergedRemarks };
             upsertLead(merged).catch((e) => { console.error('Drawer date save failed:', e); showSaveError(); });
-            setLeads((p) => p.map((l) => (l.id === merged.id && l.clientPhone === merged.clientPhone) ? merged : l));
+            setLeads((p) => p.map((l) => isSameLeadRow(l, merged) ? merged : l));
           }).catch(() => {
             upsertLead(updatedLead).catch((e) => { console.error('Drawer date save failed:', e); showSaveError(); });
           });

@@ -8,7 +8,7 @@ import { assignBMToClient } from '../../../lib/api/ops/store-visit';
 import { AppUser, Lead, Remark } from '../../../types/crm';
 import { MIN_LOST_AGE_DAYS } from '../constants';
 import { DateEditState } from '../types';
-import { canBypassLostAge, canMarkLostByAge, fmtDate, mergeLead } from '../utils';
+import { canBypassLostAge, canMarkLostByAge, findLeadRow, fmtDate, isSameLeadRow, mergeLead } from '../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast }: {
@@ -31,7 +31,7 @@ export function makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, fil
 const filteredTotal = filtered.reduce((sum, l) => sum + (l.cartValue || 0), 0);
 
 const saveLead = (formData: Lead) => {
-  const existing = leads.find((l) => l.id === formData.id && l.clientPhone === formData.clientPhone) || leads.find((l) => l.id === formData.id);
+  const existing = findLeadRow(leads, formData);
   const isNew = !existing;
   if (formData.status === 'Order Lost' && existing?.status !== 'Order Lost' && !canMarkLostByAge(existing?.createdAt ?? formData.createdAt, canBypassLostAge(currentUser))) {
     alert(`Only admins and managers can mark a lead as lost within ${MIN_LOST_AGE_DAYS} days of cart creation.`);
@@ -39,7 +39,7 @@ const saveLead = (formData: Lead) => {
   }
   const finalData = existing ? mergeLead(existing, formData) : formData;
   setLeads((prev) => {
-    const idx = prev.findIndex((l) => l.id === finalData.id && l.clientPhone === finalData.clientPhone);
+    const idx = prev.findIndex((l) => isSameLeadRow(l, finalData));
     if (idx >= 0) { const next = [...prev]; next[idx] = finalData; return next; }
     return [...prev, finalData];
   });
@@ -106,12 +106,13 @@ const addRemark = (leadId: string, ticketId: number, remark: Remark) => {
 
 const handleDateEditSave = (newDate: string, remarkText: string) => {
   if (!dateEditPopup) return;
-  const { leadId, field } = dateEditPopup;
-  const leadPhone = (leads.find((l) => l.id === leadId) || {} as Lead).clientPhone || '';
+  const { leadId, ticketId, field } = dateEditPopup;
+  const targetRow = { id: leadId, ticketId } as Lead;
+  const leadPhone = (findLeadRow(leads, targetRow) || {} as Lead).clientPhone || '';
   const userName = currentUser ? currentUser.name : '';
   setLeads((prev) => {
     const updated = prev.map((l) => {
-      if (!(l.id === leadId && l.clientPhone === leadPhone)) return l;
+      if (!isSameLeadRow(l, { ...targetRow, clientPhone: leadPhone } as Lead)) return l;
       const u: Lead = { ...l, [field]: newDate };
       if (field === 'followUpDate' && newDate && l.closureDate && newDate > l.closureDate) {
         u.closureDate = newDate;
@@ -132,16 +133,16 @@ const handleDateEditSave = (newDate: string, remarkText: string) => {
       u.remarks = remarks;
       return u;
     });
-    const lead = updated.find((l) => l.id === leadId && l.clientPhone === leadPhone);
+    const lead = findLeadRow(updated, { ...targetRow, clientPhone: leadPhone } as Lead);
     if (lead) {
-      fetchLead(leadId, leadPhone).then((dbLead: Lead) => {
+      fetchLead(leadId, leadPhone, ticketId).then((dbLead: Lead) => {
         const mergedRemarks = [...(dbLead.remarks || [])];
         (lead.remarks || []).forEach((r) => {
           if (!mergedRemarks.some((mr) => mr.ts === r.ts && mr.text === r.text)) mergedRemarks.push(r);
         });
         const merged: Lead = { ...lead, remarks: mergedRemarks };
         upsertLead(merged).catch((e) => { console.error('Date edit save failed:', e); showSaveError(); });
-        setLeads((p) => p.map((l) => (l.id === leadId && l.clientPhone === leadPhone) ? merged : l));
+        setLeads((p) => p.map((l) => isSameLeadRow(l, merged) ? merged : l));
       }).catch(() => {
         upsertLead(lead).catch((e) => { console.error('Date edit save failed:', e); showSaveError(); });
       });

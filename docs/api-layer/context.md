@@ -152,6 +152,19 @@ present a failed request as data".
 Because the 8s GET dedupe keys on the full path, the two bases are separate
 cache entries and never collide.
 
+## `fetchLead` selects on `ticketId`, not on the lead id
+
+`lib/api/crm/lead-details.ts` re-reads a single row after a save. It cannot match
+on `id`: Django builds that from the cart number (or the estimate's ENQ id), so a
+client with several deal tickets on one cart returns the **same** `id` on every
+row and `find` takes whichever came back first — the caller then merges another
+lead's remarks into the one it just saved. `ticketId` is the deal ticket's own
+pk and the only per-row identity, so it is passed through and matched on; `id`
+stays the argument the endpoints actually take. The `q=<phone>` page size is 50
+rather than 5 for the same reason — a sibling outside the page is unfindable,
+and a miss now throws so the caller falls back to a blind `upsertLead` instead of
+writing to the wrong row.
+
 ## Constraints
 
 - Add a new backend call to the module for its domain and let the barrel export

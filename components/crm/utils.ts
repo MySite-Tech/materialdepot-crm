@@ -4,6 +4,21 @@ import { AppUser, Lead } from '../../types/crm';
 import { APPOINTMENT_TRACKER_ROLES, B2B_SALES_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
 import { MainTab } from './types';
 
+// `id` is the lead's business key (cart number, or the estimate's ENQ id) and the
+// APIs take it as such — but it is NOT unique per row: a client with several deal
+// tickets on one cart gets the same `id` on every row, so matching on it picks the
+// first one and edits land on a sibling. `ticketId` is the deal ticket's own pk and
+// is the only per-row identity. Fall back to id+phone only for a row that has no
+// ticket yet (a lead being created in the drawer).
+export const isSameLeadRow = (a: Lead, b: Lead): boolean => (
+  a.ticketId != null && b.ticketId != null
+    ? a.ticketId === b.ticketId
+    : a.id === b.id && a.clientPhone === b.clientPhone
+);
+
+export const findLeadRow = (leads: Lead[], target: Lead): Lead | undefined =>
+  leads.find((l) => isSameLeadRow(l, target));
+
 export const roleLabel = (role?: string | null): string => {
   if (!role) return '\u2014';
   return ROLE_LABEL_OVERRIDES[role] ?? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

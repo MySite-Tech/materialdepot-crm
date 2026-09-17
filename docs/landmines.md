@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-54 entries. They live in one file because they cross-reference each other —
+55 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -15,6 +15,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
 - A booking's date must come from the sub-job, not from its assignment
 - A tab's badge must count the rows that tab lists — derive both from one function
+- A lead's displayed id is not unique — only `ticketId` identifies a row
 - Availability is per CITY, and the Store Team kiosk was the one surface that did not know it
 - `AddStaffOverlay` never wrote a city
 - Daily caps live on `profiles`, not in localStorage — and the columns are probe-gated
@@ -797,3 +798,32 @@ grep for a term, then read around the line you hit rather than opening all of it
   a genuine second escalation must still get through. The same incident hid
   three backend bugs; see `md/integration/kylas/` and the
   `crm_raise_escalation` rows in `crm_log`.
+
+- **A lead's displayed id is not unique, so matching rows on it edited a
+  sibling.** The Sales CRM leads list keys each row by `id`, which the backend
+  builds as the cart number (or the estimate's ENQ id) in
+  `_build_lead_result_rows` — one client with several deal tickets on one cart
+  gets the **same** `id` on every row. Everything that looked a row up by it
+  therefore found whichever came back first: `CrmModals` re-resolved the drawer's
+  lead with `leads.find(l => l.id === drawerLead.id)`, so opening the "In Cart"
+  row showed a lost sibling's status; `saveLead`, the date-edit handler and
+  `fetchLead` did the same. Cart `CT710700278394` had 7 deal tickets and the
+  20-Jun one (40784) could not be reached from the UI at all — it kept no
+  `extra_data.status`, and the list has no "unset" state, so it fell through to
+  the `'In Cart'` default and held its ₹180 in the stage tile indefinitely. The
+  backend half compounded it: `mark_lead_lost` used the posted `ticket_id` only
+  to fetch an estimate, then let `resolve_deal_ticket_for_user` re-derive the
+  target from `deal_holding_lead` / `active_deal_for_client` — and since
+  `active_deal_for_client` only matches `open`/`in_progress`, a client whose
+  deals were all `resolved` matched neither and fell into the create branch,
+  minting *another* resolved ticket each time. Six of those seven rows are
+  lost-marks that landed nowhere. Three shapes: (1) a list row needs an identity
+  of its own — a business key that repeats is not one, and `key={l.id + i}`
+  padding with the index is the tell that somebody already knew; (2) an id used
+  as an API argument and an id used to match a row are different jobs, so fixing
+  this meant routing matches through `ticketId` while `id` stayed the cart number
+  the endpoints expect; (3) a resolver that re-derives its target from the client
+  ignores the target the caller named — pass the row and forbid creating one
+  (`deal_ticket=` + `allow_create=False`), or a miss silently becomes a new row.
+  Fixed 2026-09-17 in `components/crm/{shell/modals,leads/actions,utils}.ts` and
+  `order/crm/leads/services/{lead_actions,ticket}_service.py`.

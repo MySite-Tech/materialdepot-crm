@@ -52,12 +52,22 @@ export async function upsertLeads(leads: import('../../../types/crm').Lead[]): P
   await Promise.all(leads.map(l => upsertLead(l).catch(() => {})));
 }
 
-export async function fetchLead(id: string, clientPhone?: string): Promise<import('../../../types/crm').Lead> {
+export async function fetchLead(
+  id: string,
+  clientPhone?: string,
+  ticketId?: number,
+): Promise<import('../../../types/crm').Lead> {
   const phone = clientPhone || id;
-  const data = await mdFetch(`/crm/leads/?q=${phone}&page_size=5`);
+  // A client with several deal tickets on one cart gets the same `id` on every
+  // row, so matching on id/phone returns whichever came back first. `ticketId`
+  // is the only per-row identity — page_size must cover every sibling for it to
+  // be findable at all.
+  const data = await mdFetch(`/crm/leads/?q=${phone}&page_size=50`);
   const results: import('../../../types/crm').Lead[] = data?.results || [];
-  const found = results.find(r => r.id === id || r.clientPhone === phone);
-  if (!found) throw new Error(`Lead not found: ${id}`);
+  const found = ticketId != null
+    ? results.find(r => r.ticketId === ticketId)
+    : results.find(r => r.id === id || r.clientPhone === phone);
+  if (!found) throw new Error(`Lead not found: ${ticketId ?? id}`);
   return found;
 }
 

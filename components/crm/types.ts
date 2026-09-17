@@ -95,4 +95,4 @@ export interface CsvRow {
   leadPriority?: 'hot' | 'warm' | 'cold';
 }
 
-export type DateEditState = { leadId: string; field: 'followUpDate' | 'closureDate' };
+export type DateEditState = { leadId: string; ticketId?: number; field: 'followUpDate' | 'closureDate' };

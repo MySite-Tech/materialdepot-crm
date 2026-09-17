@@ -94,3 +94,16 @@ user off a disallowed `?tab=`, so the late arrival can't bounce anyone.
 
 Tab render order is fixed by the literal array in the header JSX, not by the
 order tabs were resolved in.
+
+## The lead drawer re-resolves its row, and must do it by ticket
+
+`CrmModals` (`components/crm/shell/modals.tsx`) does not render `drawerLead`
+directly — it re-reads the row out of `leads` so the drawer follows later
+refreshes. That lookup used `l.id === drawerLead.id`, and a lead's `id` is the
+cart number, which every deal ticket on that cart shares: clicking the "In Cart"
+row opened a lost sibling instead. It now goes through `findLeadRow`/
+`isSameLeadRow` (`components/crm/utils.ts`), which match on `ticketId` and fall
+back to `id + clientPhone` only for a lead being created, which has no ticket
+yet. The two `setLeads` maps in `onImmediateSave` use the same helper — matching
+those on `id + clientPhone` wrote one date edit to every sibling row.
+
