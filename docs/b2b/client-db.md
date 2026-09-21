@@ -242,6 +242,13 @@ The **Studio Sales** column reads the link back — four states, never three:
 | Not on Studio Sales | No firm is linked to this client |
 | Unknown | The roster could not be read — **not** the same as "no" |
 
+**The button is all-or-nothing.** `planPartnerPush` reads the whole client list,
+not the filtered rows, so the first press provisions every eligible client at
+once — 27 of 41 today — and typing in the search box does not narrow it. That is
+a deliberate v1 simplification, not an oversight, but it means the first press
+in production is a bigger action than it looks. Anyone adding a "push only
+these" control should change the modal's plan, not the route.
+
 The push and the column are both scoped to `admin` and `b2b_sales` by the route
 handler, not by hiding the button. Which Django permission the B2B admin
 actually carries is **unconfirmed** — both roles are allowed today so the

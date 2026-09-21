@@ -96,6 +96,35 @@ and both roster states before this shipped — 23 assertions, including that a
 shared number never reaches the wire and that an unread roster yields
 `known: false` rather than a confident zero. `tsc` has no opinion on any of it.
 
+### Exercised against live data, 2026-09-21
+
+Both apps run locally against their real Supabase projects (`CLAUDE.md` has the
+port and stub setup; `scripts/bridge-demo.mjs` seeds and removes the dummy
+rows). What was confirmed, in that order:
+
+| Checked | Result |
+|---|---|
+| Missing / wrong `x-sync-key` | 401 both times |
+| No token, malformed token, expired token | 401 each; a `retail` caller and an off-roster user 403 |
+| Seven POST validations | All reject before relaying — the roster was re-read to prove nothing arrived |
+| First push of two dummy firms | `created: 2`, `credentials_issued: 0` |
+| Identical re-push | `updated: 2`, still two rows — idempotent |
+| Re-push with a changed `firm_name` | **Name unchanged on the partner side.** The firm owns its profile |
+| A different client on a linked number | `linked_elsewhere`, skipped |
+| A linked id arriving on a new number | `phone_conflict`, skipped |
+| `promote` (login + referral + approved order) | Column flips to **Power user**, tiles read 2 and ₹5.00 L |
+| Partner app unreachable | Tiles read **Unknown**; all 41 rows read **Unknown**, none read "not on Studio Sales" |
+
+The last row is the one worth re-running after any change here. An outage that
+renders as "no firm is linked" is a sentence somebody acts on.
+
+Against the real 41 clients the modal offers **27 of 41**, and every exclusion
+reason fires on real rows — including two clients that share one contact
+number, which is exactly the pair that would otherwise pay the wrong firm.
+
+**Nothing has been pushed to production.** The dummy rows above were created
+and removed; the 27 real firms are still unprovisioned.
+
 ### What still has to be built
 
 1. **The nightly trigger.** Azure Static Web Apps has no scheduler, so the

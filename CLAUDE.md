@@ -67,6 +67,58 @@ Two things about that middle step, which used to be a one-line `sed` appending
 Verified on `components/site-audit/install-ops/utils.ts` (imports `../shared`,
 which imports `.`) on 2026-09-15.
 
+### Running this app and Studio Sales against each other
+
+The partner bridge is two apps and three processes. `scripts/bridge-demo.mjs`
+seeds dummy data through it and cleans up after itself; the setup around it:
+
+```bash
+# 1. pin the ports — whichever starts first takes 3000, and the CRM pointing
+#    at itself is a confusing five minutes
+cd ../b2b-client-dashboard && npm run dev -- -p 3001 &
+cd ../materialdepot-crm    && NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/apiV1 \
+                              API_BASE_URL=http://localhost:4000/apiV1 \
+                              npm run dev -- -p 3000 &
+
+# 2. .env.local here needs both, and the secret must EQUAL Studio Sales'
+#    SYNC_SHARED_SECRET or every call is a 401 that looks like a code bug
+PARTNER_APP_BASE_URL=http://localhost:3001
+PARTNER_SYNC_SECRET=<that app's SYNC_SHARED_SECRET>
+
+# 3. dummy data
+node scripts/bridge-demo.mjs seed       # six clients, one per push outcome
+#    ...press "Push to partner dashboards", then:
+node scripts/bridge-demo.mjs promote    # logins + a referral + an approved order
+node scripts/bridge-demo.mjs status
+node scripts/bridge-demo.mjs clean      # removes all of it, both sides
+```
+
+**Login needs a stubbed Django, and only Django may be stubbed.** Signing in is
+phone + OTP against `api-dev2.materialdepot.in`, which nobody has on a dev
+machine. A ~40-line Node server on `:4000` answering `/login-otp/`,
+`/verify-otp/`, `/crm/user-profile/` and `/user-organisation/` lets any phone
+and any four-digit code in. Three things it must get right, each of which cost
+a debugging round:
+
+- **The envelope is `{ success: true, status, data }`** and `unwrapEnvelope`
+  checks all three keys. Returning a bare `{ data }` unwraps to nothing, and
+  the app then reads a user with no `role` and renders the four default tabs
+  with no B2B in sight — no error anywhere.
+- **`verifyOtp` does NOT go through `mdFetch`.** It reads `token` and `refresh`
+  off the raw body, so that one response is unwrapped and differently named.
+- **Never answer 401**, or `forceReLogin()` wipes the session mid-load. `200 []`
+  for everything unrecognised.
+
+So a local B2B dashboard shows **real Supabase data and empty Django data** —
+41 real clients and ₹0 of revenue. Say which half was stubbed when reporting
+anything from it.
+
+**The push button is all-or-nothing.** `planPartnerPush` reads the whole client
+list, not the filtered rows, so the first press provisions every eligible
+client at once — 27 of them today. The search box does not narrow it. That is
+why the demo script pushes its own rows through the route rather than the
+button.
+
 ## Docs, and why this file is short
 
 This file is loaded into **every** session, so it holds only what applies
