@@ -67,6 +67,43 @@ Two things about that middle step, which used to be a one-line `sed` appending
 Verified on `components/site-audit/install-ops/utils.ts` (imports `../shared`,
 which imports `.`) on 2026-09-15.
 
+## The B2B ↔ Studio Sales bridge: where it stands
+
+Two apps hold one relationship. This CRM is the B2B **team's** surface; Studio
+Sales (`dhruv-md/Studio-Sales`, `b2b-client-dashboard-eight.vercel.app`) is the
+**partner's**. The whole design — five tabs, four roles, six linkage surfaces —
+is in `docs/b2b/partner-bridge.md`; read it before extending any of this.
+
+**Status 2026-09-21: P1 is built on branch `b2b-partner-bridge` in both repos,
+unmerged, so none of it is deployed and nothing has been pushed to production.**
+
+| | State |
+|---|---|
+| The link (`partner.md_client_id`), provisioning, the link roster | **Built.** `app/api/b2b/partner-push` here, `/api/sync/partners` there |
+| Power users, the Studio Sales column, the three Dashboard tiles | **Built** |
+| Round-robin inbound allocation, role-gated sub-tabs | Not built |
+| The §7 handoff record and checklist, the onboarding/gift ceremony | Not built — the core of KK's PRD |
+| Referral / order / portfolio / team approvals moving off the Studio Sales console | Not built; needs a decisions endpoint there first |
+| The visits queue and BM assignment (`/api/sync/visit-assignment`) | Not built here; the endpoint exists there and has never been called |
+| The order + event producer into `/api/sync/referrals` | Not built — which is why a provisioned firm would see no order history |
+
+Four things that are easy to get wrong and expensive to undo:
+
+- **Power user is derived, never stored** — linked AND has a login. Four states,
+  and a roster that could not be read is `unknown`, never "not on Studio Sales".
+- **Provisioning is not a login.** One press can create 27 firms and issues zero
+  credentials. Keep those two acts apart.
+- **The partner app must never call Django** — Cloudflare sits in front of it,
+  ahead of Django's CSRF check. Everything crosses through the sync routes.
+- **Staff see the relationship, never the work.** Nine tables on the partner side
+  have no staff read policy and must never get one. The CRM route holds a
+  service-role secret and is therefore outside those policies, so it stays a
+  named list of operations and never becomes a query proxy.
+
+Before it can run at all: `PARTNER_APP_BASE_URL` and `PARTNER_SYNC_SECRET` are
+set in no Azure portal yet, the partner side must deploy before the CRM code
+that calls it, and the push button is all-or-nothing (see below).
+
 ### Running this app and Studio Sales against each other
 
 The partner bridge is two apps and three processes. `scripts/bridge-demo.mjs`

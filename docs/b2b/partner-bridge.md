@@ -127,16 +127,61 @@ and removed; the 27 real firms are still unprovisioned.
 
 ### What still has to be built
 
-1. **The nightly trigger.** Azure Static Web Apps has no scheduler, so the
+Ordered by what unblocks what, not by size. The first two are small and the
+bridge is half-useless without them.
+
+**Next — finish P1 so it is actually usable**
+
+1. **Set the two env vars.** `PARTNER_APP_BASE_URL` and `PARTNER_SYNC_SECRET`
+   are in no Azure portal. The route 503s naming the missing one, which is how
+   to check a deploy picked them up.
+2. **Deploy the partner side first**, then this one. The other order is a CRM
+   button calling a 404 in production, and in both repos a merge to `main` is
+   the deploy — there is no staging step to catch it.
+3. **A way to push a subset.** `planPartnerPush` reads the whole client list, so
+   the first press provisions all 27 eligible clients at once and the search box
+   does not narrow it. Change the modal's plan, not the route.
+4. **The nightly trigger.** Azure Static Web Apps has no scheduler, so the
    manual button shipped first, as planned. A GitHub Actions workflow calling
    the same route replaces it. Do not build a cron on Azure for this. Pressing
    the button twice is safe — every write is keyed on the client id.
-2. **The order and event producer.** `POST /api/sync/referrals` on the partner
-   app is still fed by nothing, so a provisioned firm sees no order history and
-   the incentive columns stay null. The payload rules below are for that route,
-   not for the provisioning one.
-3. **Everything in §7 and §10** — the handoff record, the onboarding form and
-   the credential chain.
+
+**Then — the order and event producer**
+
+5. `POST /api/sync/referrals` on the partner app is written, idempotent and
+   **fed by nothing**. Until something pushes to it a provisioned firm signs in
+   to an empty dashboard, `delivered_on` and `discount_availed` stay null, and
+   the whole incentive programme has no input. The payload rules below are for
+   that route, not for the provisioning one. This is the single highest-value
+   piece left.
+
+**Then — the five remaining linkage surfaces**
+
+6. **A decisions endpoint on the partner side.** Referral, order, portfolio and
+   team approvals are console UI actions today, not an API, so none of them can
+   move here until they are exposed. It must be a named list of operations —
+   approve this order, approve this referral, assign this BM — and never a
+   general query proxy, or the trust boundary above is gone with nothing on
+   screen to show it.
+7. **The visits queue.** `GET /api/sync/outbox` and
+   `POST /api/sync/visit-assignment` are both built and live on the partner side
+   and have never been called. `VisitLog` there already renders the assigned BM
+   the moment the endpoint sets them, so this side is the only work.
+8. **A KAM's link to a firm's own dashboard.** `/console/partners/[id]/dashboard`
+   exists and adds no policy — deep-link it rather than rebuilding it, so the
+   figure an admin reads down the phone is the figure the architect is looking at.
+
+**Then — the team's own tabs**
+
+9. Round-robin allocation of inbound leads, with three states: allocated by us,
+   already owned in Kylas, unallocated. Never quietly give an unallocated lead
+   to the first name in the list.
+10. Role-gated sub-tabs for the four kinds of people, keyed on the Django user id
+    or work email — **never the display name**, which is what `B2B_ROSTER` is
+    keyed on today. A gated tab must name the role that opens it; a structural
+    difference nobody can see is what got the partner-side workspace retired.
+11. **§7's handoff record and checklist** — the one hard gate in the whole
+    design — and §10's onboarding form and credential chain.
 
 Constraints the payload must carry over, each one already paid for elsewhere in
 this repo:
