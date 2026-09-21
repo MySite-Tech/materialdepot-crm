@@ -17,3 +17,5 @@ export { deleteB2BRow, upsertClient, upsertInboundLead, upsertKamOrder, upsertOu
 export { fetchTargets, saveTargets } from './stats/targets';
 export { fetchUnifiedLeads } from './leads/unified';
 export type { LeadSource, UnifiedLead, UnifiedStatus } from './leads/unified';
+export { fetchPartnerFirms, pushPartners } from './partners';
+export type { PartnerPushResult } from './partners';

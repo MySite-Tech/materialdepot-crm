@@ -197,3 +197,38 @@ They live here now because the code cannot carry them.
   A cart's branch is where it was raised; "assisted at" is a claim about who
   helped close it, and inferring one from the other puts a name in a field
   nobody attested to.
+
+## The partner dashboards are a fifth read, and they go through this app
+
+`lib/b2b/partners/` is the only place that talks to Studio Sales, and it does
+not talk to it directly: both calls go to `app/api/b2b/partner-push`, which
+holds `PARTNER_SYNC_SECRET` server-side and relays. The browser never sees the
+secret and never learns the partner app's URL.
+
+| Call | Route | Endpoint behind it |
+|---|---|---|
+| `fetchPartnerFirms()` | `GET /api/b2b/partner-push` | `GET /api/sync/partners` on Studio Sales |
+| `pushPartners(rows)` | `POST /api/b2b/partner-push` | `POST /api/sync/partners` |
+
+Three things about this read in particular:
+
+- **It is one request, not one per client.** The roster comes back for every
+  linked firm in a single call, and the Client Database and the Dashboard each
+  spend exactly one on it. Anything that needs per-client partner data reads it
+  out of that map.
+- **Its failure is a fourth state, not an empty map.** `PartnerRoster.loaded`
+  is false when the call failed, `linkState` returns `unknown`, and the
+  Dashboard tiles read `Unknown`. A partner app that is down must never make
+  every client read "not on Studio Sales", which is a sentence somebody would
+  act on.
+- **It is fire-and-forget beside the main load, deliberately.** The roster is
+  fetched after `setClients`/`setClientCount` rather than inside the
+  `Promise.all`, so an outage on the partner side cannot take out the tab that
+  merely mentions it. The `.catch` logs and sets the unknown state — this is a
+  read whose failure IS visible on screen, which is why it is allowed to be
+  detached where a write would not be.
+
+Both env vars are server-only and neither is in the Azure workflow file:
+`PARTNER_APP_BASE_URL` and `PARTNER_SYNC_SECRET`. The route answers **503
+naming the missing one** rather than failing quietly, which is also how you
+check from outside whether a deploy picked them up.

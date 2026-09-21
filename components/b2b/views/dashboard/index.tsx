@@ -5,13 +5,15 @@ import { ClientMetricsMap, DashboardMetrics, KamDashboard, computeDashboard, com
 import { ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientEntity, contactNumbers } from '../../models/client';
 import { INBOUND_STAGE_COLORS, fmtINR, fmtL } from '../../models/mock-data';
 import { BASIS_HINT, BASIS_LABELS, CLIENT_STATUS_ORDER, RANGE_LABELS, UNATTRIBUTED_SOURCE } from './constants';
+import { PartnerTotals, partnerTotals, rosterFrom } from '../../models/client/partner';
+import { PartnerTiles } from './ui/partners';
 import { AccountHealthPanel } from './ui/health';
 import { KamDashboardSection } from './ui/kam';
 import { OpenPipelineDrawer } from './ui/open-pipeline';
 import { RangeKey } from './types';
 import { MetricCard, Panel } from './ui';
 import { rangeFor, revenueSources } from './utils';
-import { B2BData, B2BPipelineStats, B2B_STATS_BRANCH, StatsBasis, VerticalStats, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
+import { B2BData, B2BPipelineStats, B2B_STATS_BRANCH, StatsBasis, VerticalStats, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchPartnerFirms, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
 import { useCallback, useEffect, useState } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -34,6 +36,7 @@ export default function B2BDashboard() {
   const [kamDash, setKamDash] = useState<KamDashboard | null>(null);
   const [failed, setFailed] = useState<B2BData['failed']>([]);
   const [clientCount, setClientCount] = useState(0);
+  const [partners, setPartners] = useState<PartnerTotals | null>(null);
   const [unresolvedOrders, setUnresolvedOrders] = useState(0);
   const [targetsOk, setTargetsOk] = useState(true);
   const [statsOk, setStatsOk] = useState(true);
@@ -77,6 +80,10 @@ export default function B2BDashboard() {
       }));
       setFailed(data.failed);
       setClientCount(data.clients.length);
+
+      fetchPartnerFirms()
+        .then((firms) => setPartners(partnerTotals(data.clients, rosterFrom(firms))))
+        .catch((e) => { console.error('[b2b] partner roster failed', e); setPartners(null); });
 
       setHealth(buildHealthOverview(
         data.clients,
@@ -307,6 +314,8 @@ export default function B2BDashboard() {
           actionLabel="See the carts"
         />
       </div>
+
+      <PartnerTiles clientCount={clientCount} totals={partners} />
 
       {health && <AccountHealthPanel overview={health} />}
 

@@ -211,3 +211,39 @@ Inbound leads, closed Outreach leads and the `pipeline='kam'` rows (24 distinct
 phones live today). It never runs automatically, matches EXACTLY on the
 normalised phone, and a candidate with no usable 10-digit number is reported as
 unusable rather than created — nothing could ever link an order to it.
+
+## Pushing a client to the partner dashboards
+
+**Push to partner dashboards** provisions the Studio Sales firm for a client.
+It creates the firm and never a login; `docs/b2b/partner-bridge.md` holds the
+contract and the four rules the ingest route keeps.
+
+What this tab owns is deciding *who is pushable*, in
+`models/client/partner/`, and it leaves out more than it sends:
+
+| Left out | Why |
+|---|---|
+| End Consumer | A homeowner is not a partner firm |
+| No client type | Not the same as "not a firm" — we were not told, and it is reported as its own reason |
+| No valid ten-digit primary number | The phone is the only key the partner side matches on |
+| Two clients sharing one number | Which firm it is needs a person. **Both** are left out, before anything reaches the wire |
+| No contact person on the primary number | `partner.contact_name` is NOT NULL, and filling it with the company name would create a firm whose contact is itself |
+
+That last one is a soft gap on purpose: the modal names the clients it affects
+so somebody can fill the field in, rather than inventing a value that would
+then look deliberate on the partner's own screen.
+
+The **Studio Sales** column reads the link back — four states, never three:
+
+| State | Means |
+|---|---|
+| Power user | Linked, and the firm can sign in |
+| Provisioned | Linked, no login issued yet |
+| Not on Studio Sales | No firm is linked to this client |
+| Unknown | The roster could not be read — **not** the same as "no" |
+
+The push and the column are both scoped to `admin` and `b2b_sales` by the route
+handler, not by hiding the button. Which Django permission the B2B admin
+actually carries is **unconfirmed** — both roles are allowed today so the
+feature is not dead for whoever holds the other one, and it should be narrowed
+once somebody checks.

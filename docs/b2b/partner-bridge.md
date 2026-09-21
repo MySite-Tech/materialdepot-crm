@@ -1,8 +1,11 @@
 *Part of `docs/b2b/context.md` — see that file for the module overview.*
 
-## The partner bridge: DESIGN ONLY, nothing here is built yet
+## The partner bridge: P1 is built, P2-P4 are still design
 
-**Status 2026-09-14: none of this exists in code.** It is the agreed shape for
+**Status 2026-09-21: P1 below is built and merged on `b2b-partner-bridge`.**
+The link between a Client Database row and a Studio Sales firm exists, the
+Client Database can push it, and the Dashboard reads power users back. P2-P4
+are still design and the rest of this file still reads as one. It is the agreed shape for
 `Outreach_KAM_Handoff_PRD.docx` v0.1 (KK) and for connecting this CRM to the
 partner-facing app in `daaku-daddy/B2B-Client-Dashboard`. Read it before
 designing any of §3–§11 so the decisions below are not re-litigated; do not read
@@ -34,7 +37,7 @@ plus the §7/§10 handoff that should create its users.
 | §7 | Mandatory handoff meeting + four-item resource checklist | **Missing — this is the core of the PRD.** Today "handoff" is a KAM dropdown and the round-robin button in `drawers/outreach/cards/meetings.tsx` |
 | §8 | Meeting every 12 days, green/amber/red, satisfaction + inputs | Partial — `ClientInteraction` carries date/summary/temperature; the meter is a new derivation, satisfaction and free-text inputs are new fields |
 | §9 | Order-volume tiers, inactive on missed cadence | Partial — `clientStatus` is three-month recency with three states |
-| §10 | Onboarding form → Admin → MD → dashboard provisioned | **Missing. This is the bridge to the second app** |
+| §10 | Onboarding form → Admin → MD → dashboard provisioned | **Half built.** The row is provisioned from the Client Database (P1); the form and the credential chain are not |
 | §11 | The client dashboard | **Built.** See above |
 
 ### Direction of trust: this CRM writes, the partner app reads
@@ -50,22 +53,61 @@ documented wall in that repo, not a guess. §3–§10 therefore live here; §11 
 separate because it is the only surface an outsider signs into, and the only one
 running with RLS **on**.
 
-### What has to be built, exactly
+### What is built, as of 2026-09-21
 
-1. **`POST /api/sync/partners`** on the partner app — a mirror of the referrals
-   route: same `x-sync-key`, same service role, same `defined()` partial-write
-   rule. Plus migration `003`: `alter table partner add column md_client_id text
-   unique`, so a CRM row and a partner row are **linked**, never name-matched.
-2. **`app/api/b2b/partner-push/route.ts`** here — the producer. Must call
-   `requireCaller` and be admin-scoped: it holds the partner project's shared
-   secret and anything under `app/api/*` is reachable by whoever can reach the
-   app. It reads the two calls the Client Database tab already makes and
-   reshapes them.
-3. A **"Push to partner dashboards" button** on the Client Database tab. Azure
-   Static Web Apps has no scheduler, so the manual button ships first and a
-   nightly GitHub Actions workflow calling the same route replaces it. Do not
-   build a cron on Azure for this. Pressing it twice is safe — every write is an
-   upsert.
+Two routes and one button, across the two repos:
+
+| Piece | Where | What it does |
+|---|---|---|
+| `POST /api/sync/partners` | Studio Sales | Creates or links a `partner` row by `md_client_id`. Creates **no login** |
+| `GET /api/sync/partners` | Studio Sales | The link roster: `has_login`, referred clients, approved orders and value, orders pending |
+| `app/api/b2b/partner-push/route.ts` | here | The producer. `requireCaller`, `admin`/`b2b_sales` only, holds the shared secret and relays both verbs |
+| `models/client/partner/` | here | Pure: who is pushable, the four link states, the totals |
+| Push to partner dashboards | here | A button on the Client Database, with the plan and what came back |
+| Studio Sales column | here | Per client: Power user / Provisioned / Not on Studio Sales / Unknown |
+| Three Dashboard tiles | here | B2B Clients, Power Users, Referral Orders |
+
+Migration `003` was **not** needed: `partner.md_client_id` and its unique
+constraint have existed since `003_roles.sql` on the partner side. Nothing was
+pasted into Supabase for any of this, and nothing needs to be.
+
+Four decisions inside the ingest route that are easy to undo by tidying up, and
+should not be:
+
+- **Provisioning is not a login.** A pushed firm has no `partner_user`. One
+  press can create twenty-six firms and hands out zero credentials.
+- **The firm owns its own profile.** On an existing row the sync fills blanks
+  only; a firm that renamed itself keeps the new name through every re-push.
+  Only `md_client_id`, `market`, `onboarding_source` and `internal_note` are
+  written over, which is exactly the set `partner_guard_md_fields()` already
+  refuses a firm.
+- **A phone carrying a different `md_client_id` is reported, never merged**, and
+  a linked id arriving on a new number is a reported conflict rather than an
+  applied change.
+- **Two CRM clients sharing one number are both left out**, on this side, before
+  anything reaches the wire. `planPartnerPush` reports them as `shared-phone`.
+
+The link state has **four** values, not three: `unknown` is what a client reads
+when the roster could not be fetched, and it is never rendered as "not on Studio
+Sales". Same for the Dashboard tiles, which read `Unknown` rather than `0`.
+
+`models/client/partner/` was run against a fixture covering every skip reason
+and both roster states before this shipped — 23 assertions, including that a
+shared number never reaches the wire and that an unread roster yields
+`known: false` rather than a confident zero. `tsc` has no opinion on any of it.
+
+### What still has to be built
+
+1. **The nightly trigger.** Azure Static Web Apps has no scheduler, so the
+   manual button shipped first, as planned. A GitHub Actions workflow calling
+   the same route replaces it. Do not build a cron on Azure for this. Pressing
+   the button twice is safe — every write is keyed on the client id.
+2. **The order and event producer.** `POST /api/sync/referrals` on the partner
+   app is still fed by nothing, so a provisioned firm sees no order history and
+   the incentive columns stay null. The payload rules below are for that route,
+   not for the provisioning one.
+3. **Everything in §7 and §10** — the handoff record, the onboarding form and
+   the credential chain.
 
 Constraints the payload must carry over, each one already paid for elsewhere in
 this repo:
@@ -123,11 +165,11 @@ All overrulable; none is expensive to change.
 
 ### Build order
 
-**P1 the bridge** — `/api/sync/partners` + migration 003, the producer route and
-its button, provision the 26 firms (logins stay off), and the Material Depot
-columns on the partner app's Clients tab. Nothing in P1 waits on §7 or §10:
-those 26 firms have valid phones today. **Provision the rows, gate the
-credentials.**
+**P1 the bridge — DONE 2026-09-21**, except for running it: the routes, the
+button and the read-back are built, and nobody has pressed it against
+production yet. Migration 003 turned out to be unnecessary (`md_client_id` was
+already there). **Provision the rows, gate the credentials** held: the push
+creates firms and no logins.
 
 **P2 the handoff gate** — §7's handoff record and checklist, the §8 meter, §9's
 tiers.

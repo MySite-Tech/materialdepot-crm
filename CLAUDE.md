@@ -80,7 +80,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-bridge` (design only); `context.md` is the pointer table |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-bridge` (P1 of the Studio Sales link is built; P2–P4 are design); `context.md` is the pointer table |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 14-tab permission gate |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
 | Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
@@ -302,7 +302,8 @@ Two things about that workflow are worth knowing before you touch config:
   tidy-up — do it and the field apps break on the next deploy.
 - **Those two are the only env vars the repo can account for.** The server-only
   keys the `app/api/*` route handlers need — `SUPABASE_SERVICE_ROLE_KEY`,
-  `KYLAS_API_KEY`, `API_BASE_URL` — are in `.env.local` here and in the Azure
+  `KYLAS_API_KEY`, `API_BASE_URL`, and now `PARTNER_APP_BASE_URL` /
+  `PARTNER_SYNC_SECRET` for the Studio Sales link — are in `.env.local` here and in the Azure
   application settings there, and nothing in the repo shows whether a given one
   is actually set in the portal. A route that needs one builds and passes
   `tsc` either way, so a new service-role route can work locally and throw

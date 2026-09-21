@@ -6,6 +6,8 @@ import { KAMS, fmtL } from '../../models/mock-data';
 import { ExportFormat } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
+import { EMPTY_ROSTER, PartnerRoster, linkState, rosterFrom } from '../../models/client/partner';
+import { PartnerLinkPill, PartnerPushModal } from './ui/partner-push';
 import { ClientModal } from './ui/client-modal';
 import { MergeModal } from './ui/merge';
 import { OrderDetailsTable } from './ui/rows';
@@ -13,7 +15,7 @@ import { SeedModal } from './seed';
 import { Metric, StatusPill } from './ui';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
-import { ClientOrderDetails, ClientOrderHistory, clientFromSeed, clientMetricsFrom, deleteB2BRow, fetchB2BBulk, fetchClientOrderRows, fetchClients, invalidateClientTickets, orderDatesFromAggregates, upsertClient } from '@/lib/b2b';
+import { ClientOrderDetails, ClientOrderHistory, clientFromSeed, clientMetricsFrom, deleteB2BRow, fetchB2BBulk, fetchClientOrderRows, fetchClients, fetchPartnerFirms, invalidateClientTickets, orderDatesFromAggregates, upsertClient } from '@/lib/b2b';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function ClientDatabase() {
@@ -30,6 +32,8 @@ export default function ClientDatabase() {
   const [merging, setMerging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [roster, setRoster] = useState<PartnerRoster>(EMPTY_ROSTER);
   const [exporting, setExporting] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -46,6 +50,10 @@ export default function ClientDatabase() {
     try {
       const list = await fetchClients();
       setClients(list);
+
+      fetchPartnerFirms()
+        .then((firms) => setRoster(rosterFrom(firms)))
+        .catch((e) => { console.error('[b2b] partner roster failed', e); setRoster(EMPTY_ROSTER); });
 
       const phones = list.flatMap((c) => contactNumbers(c.contacts));
       const { histories: agg, ok: aggOk } = await fetchB2BBulk(phones, []);
@@ -219,6 +227,7 @@ export default function ClientDatabase() {
             Merge
             {!!exactSuggestions.length && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">{exactSuggestions.length}</span>}
           </button>
+          <button onClick={() => setPushing(true)} className={btnGhost}>Push to partner dashboards</button>
           <button onClick={() => setAddingNew(true)} className={btnPrimary}>+ Add Client</button>
         </div>
       </div>
@@ -275,7 +284,7 @@ export default function ClientDatabase() {
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-[12px] min-w-[1040px]">
+            <table className="w-full text-[12px] min-w-[1180px]">
               <thead>
                 <tr className="bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider">
                   <th className="text-left font-semibold px-3 py-2">Company</th>
@@ -288,6 +297,7 @@ export default function ClientDatabase() {
                   <th className="text-left font-semibold px-3 py-2">Status</th>
                   <th className="text-left font-semibold px-3 py-2">Seg</th>
                   <th className="text-left font-semibold px-3 py-2">KAM</th>
+                  <th className="text-left font-semibold px-3 py-2">Studio Sales</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -334,6 +344,7 @@ export default function ClientDatabase() {
                         <td className="px-3 py-2"><StatusPill status={status} days={days} /></td>
                         <td className="px-3 py-2 text-gray-600">{client.segment || <span className="text-gray-300">—</span>}</td>
                         <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{client.kam || <span className="text-gray-300">unassigned</span>}</td>
+                        <td className="px-3 py-2"><PartnerLinkPill state={linkState(client, roster)} /></td>
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditing(client); }}
@@ -346,7 +357,7 @@ export default function ClientDatabase() {
 
                       {isOpen && (
                         <tr className="bg-gray-50/60">
-                          <td colSpan={11} className="px-3 pb-4 pt-1">
+                          <td colSpan={12} className="px-3 pb-4 pt-1">
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
                               <div className="bg-white rounded-md border border-gray-200 p-3">
@@ -454,6 +465,9 @@ export default function ClientDatabase() {
             return errors;
           }}
         />
+      )}
+      {pushing && (
+        <PartnerPushModal clients={clients} onClose={() => setPushing(false)} onDone={load} />
       )}
       {seeding && (
         <SeedModal
