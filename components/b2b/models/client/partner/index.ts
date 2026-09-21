@@ -51,7 +51,7 @@ export const PUSH_SKIP_LABEL: Record<PushSkipReason, string> = {
   'not-a-firm': 'End consumers are not partner firms',
   'unknown-type': 'Client type is not set, so we cannot say whether this is a firm',
   'no-phone': 'No valid ten-digit contact number',
-  'shared-phone': 'Two clients share this number — a person decides which firm it is',
+  'shared-phone': 'This number is on more than one client record — a person decides which firm it is',
   'no-contact-person': 'No contact person named on the primary number',
 };
 

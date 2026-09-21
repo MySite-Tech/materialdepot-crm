@@ -226,7 +226,7 @@ What this tab owns is deciding *who is pushable*, in
 | End Consumer | A homeowner is not a partner firm |
 | No client type | Not the same as "not a firm" — we were not told, and it is reported as its own reason |
 | No valid ten-digit primary number | The phone is the only key the partner side matches on |
-| Two clients sharing one number | Which firm it is needs a person. **Both** are left out, before anything reaches the wire |
+| Two or more clients sharing one number | Which firm it is needs a person. **All of them** are left out, before anything reaches the wire. The label does not hardcode "two": it is a group heading printed beside its own count, so a number on three records would otherwise read "Two clients … · 3" |
 | No contact person on the primary number | `partner.contact_name` is NOT NULL, and filling it with the company name would create a firm whose contact is itself |
 
 That last one is a soft gap on purpose: the modal names the clients it affects
