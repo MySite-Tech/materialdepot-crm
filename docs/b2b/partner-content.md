@@ -95,12 +95,21 @@ inside its dates. `is_published` false is a real value that is written, not a
 dropped field: unpublishing and pushing is how something comes down without
 being deleted.
 
-## It will not work until the partner app's 012 is pasted
+## The partner app's 012 is applied; the env vars here are not set
 
 `supabase/migrations/012_partner_content.sql` in `Studio-Sales` creates the two
-tables. Until it runs, every call here comes back with the partner app's own
-sentence — *"This Material Depot workspace is missing a recent database update
-— supabase/migrations/012_partner_content.sql has not been applied yet"* —
-shown verbatim in the red panel, with the line that nothing was changed and a
-push is safe to repeat. Verified end to end on 2026-09-22 against a local
-partner app, which is how that message was read rather than assumed.
+tables, and it was **pasted on 2026-09-22** — the partner side of this is live,
+the tables are empty, and the RLS gate was probed with real attempted writes.
+
+What still stops this tab working in production is nearer home:
+`PARTNER_APP_BASE_URL` and `PARTNER_SYNC_SECRET` are set in no Azure portal, so
+it answers *"PARTNER_APP_BASE_URL is not set on this deployment"* until
+somebody sets them. They are the same pair the partner bridge has been waiting
+on (`partner-bridge.md`), and the secret must **equal** the partner app's
+`SYNC_SHARED_SECRET` or every call is a 401 that reads like a code bug.
+
+Before 012 was pasted, every call came back with the partner app's own sentence
+naming that file, shown verbatim in the red panel with the line that nothing
+was changed and a push is safe to repeat. That was read on screen on
+2026-09-22 rather than assumed, and the branch is still live: a preview
+deployment can point at a project without 012.
