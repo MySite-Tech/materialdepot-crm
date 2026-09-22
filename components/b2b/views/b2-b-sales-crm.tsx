@@ -9,8 +9,11 @@ import ClientDatabase from './client-db/index';
 import KAMs from './kams/index';
 import LeadershipBoard from './leadership-board';
 import Targets from './targets';
+import PartnerContent from './partner-content/index';
 
-type B2BView = 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'leadership' | 'targets';
+type B2BView =
+  | 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
+  | 'leadership' | 'targets' | 'content';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
   { key: 'dashboard',  label: 'Dashboard',        ready: true },
@@ -22,6 +25,8 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
   { key: 'kams',       label: 'KAM',              ready: true },
   { key: 'leadership', label: 'Leadership Board', ready: true },
   { key: 'targets',    label: 'Targets',          ready: true },
+
+  { key: 'content',    label: 'Partner Content',  ready: true },
 ];
 
 export default function B2BSalesCRM() {
@@ -81,6 +86,7 @@ export default function B2BSalesCRM() {
         {view === 'kams' && <KAMs />}
         {view === 'leadership' && <LeadershipBoard />}
         {view === 'targets' && <Targets />}
+        {view === 'content' && <PartnerContent />}
       </main>
     </div>
   );

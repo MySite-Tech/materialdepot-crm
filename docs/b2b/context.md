@@ -3,7 +3,7 @@
 **Covers:** `components/b2b/** · lib/b2b/** · lib/api/b2b/**`
 
 ## Purpose
-B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, leadership board and dashboard (~13.6k lines of components + 1.6k of domain/data).
+B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, leadership board, dashboard and the partner-content composer (~13.6k lines of components + 1.6k of domain/data).
 
 ## Sub-documents
 
@@ -17,4 +17,5 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived; parent-company grouping and why name is never a merge key | 213 |
 | [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; call dedupe | 145 |
 | [`data-layer.md`](data-layer.md) | `lib/b2b` read shapes, the Kylas `total=0` trap, the `ok`-flag rule, the roster, the two revenue numbers, chart colours, split load | 120 |
+| [`partner-content.md`](partner-content.md) | The Partner Content sub-tab: banners and New Launches pushed onto partner dashboards. No CRM-side store, the push is a diff, images travel as bytes | 95 |
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
