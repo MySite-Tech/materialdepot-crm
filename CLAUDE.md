@@ -10,7 +10,11 @@ ignore it.
 ```bash
 npm run dev        # next dev  (a dev server is often ALREADY running on :3000 —
                    #  check before starting; a second one exits with "Another
-                   #  next dev server is already running")
+                   #  next dev server is already running". Check WHOSE: on
+                   #  2026-09-23 :3000 was b2b-client-dashboard, a different
+                   #  repo. `ps aux | grep "next dev"` prints the path. Driving
+                   #  it in a browser and reporting what you saw is the failure
+                   #  mode; take a free port instead, `npx next dev -p 3100`)
 npm run build      # next build
 npx tsc --noEmit   # typecheck — fast, run this before claiming a change compiles
 ```
@@ -111,6 +115,16 @@ Chrome, `chromium.launch({ channel: 'chrome' })`. Listen on
 geometry (`getBoundingClientRect`) and computed style as well as on text — a
 status chip can be present, correct and still be making a false claim, which is
 how "On partner dashboards now" was caught sitting beside "Not pushed".
+
+**Supabase is real in that browser, so never exercise a SAVE path to see a
+feature work.** There is no staging Supabase — clicking through an editor writes
+production rows, and "it was only test data" is not recoverable. To see a screen
+in a state the data is not in, intercept the READ instead:
+`ctx.route(/app_settings/, r => r.request().method() === 'GET' ? r.fulfill({…}) : r.continue())`
+renders the page against whatever state you need and writes nothing. That is how
+the category-revenue `% of Target` column was checked on 2026-09-23 without ever
+saving a target. Say which reads were stubbed when reporting what you saw, the
+same as for the Django stub above.
 
 ## Docs, and why this file is short
 
@@ -329,6 +343,15 @@ up to date while `main` was 5 commits ahead carrying a 498-line rewrite of
 `components/site-audit/staff/users/index.tsx` — building on the branch as-is would have re-reverted
 it, which is precisely the drift this file records happening twice already.
 Merge `origin/main` in first; the conflicts are usually just import lines.
+
+**Pushing to `origin` needs the `daaku-daddy` GitHub account, not `dhruv-md`.**
+Both are logged in to `gh` on this machine and `dhruv-md` is usually the active
+one, but it has pull-only on `MySite-Tech/materialdepot-crm` — a push fails with
+`403 … Permission to MySite-Tech/materialdepot-crm.git denied to dhruv-md`, after
+the commit has already been made. `gh auth switch --user daaku-daddy` first, or
+check with
+`gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`. Verified
+2026-09-23.
 
 Deployment is **Azure Static Web Apps CI/CD**
 (`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which

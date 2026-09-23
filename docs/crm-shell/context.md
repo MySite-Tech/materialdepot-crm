@@ -18,9 +18,13 @@ mount, that 401s without a real JWT, and you're bounced to the login screen.
 
 Two ways to see a real dashboard without an OTP:
 
-1. **`/site-audit-view?person=<profile-email>`** — checks only that
-   `materialdepot_user` exists, never calls the Django backend. The cheapest way
-   to preview any Site Audit dashboard against real data.
+1. **`/site-audit-view?person=<profile-email>`** — never calls the Django
+   backend. The cheapest way to preview any Site Audit dashboard against real
+   data. It needs more than a `materialdepot_user` key existing, though: viewing
+   *someone else's* dashboard is gated on `isSiteAuditOversightRole`, which
+   accepts **only** `site_audit.admin` in `individualPermissions` — any other
+   `site_audit.*` slug renders "This preview is limited to Site Audit oversight
+   accounts." (hit 2026-09-23 with `site_audit.service_mgr`).
 2. **Stub the Django host only.** Monkey-patch `window.fetch` to intercept
    `api-dev2.materialdepot.in` (return a token from `/verify-otp/`, a record
    from `/crm/user-profile/`, a roster from `/user-organisation/`, and `200 []`
