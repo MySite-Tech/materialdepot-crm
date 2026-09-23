@@ -1,9 +1,9 @@
 import { JOB_STATUS, NPS_HOUSE_NOTE, avgScore, npsFrom } from '../../../shared/format';
 import { AnalyticsData, Drill, DrillRow } from '../types';
 import { _anAuditSigned, _anDateIST, _anDstr, _anInstallSigned, npsSummary } from '../utils';
-import { _anArrivalStats, _anAttachAuditRatings, _anAttachInstallRatings, _anAuditorMap, _anInstallAttempts, _anInstallerMap } from './aggregate';
+import { _anArrivalStats, _anAttachAuditRatings, _anAttachInstallRatings, _anAuditConversion, _anAuditorMap, _anInstallAttempts, _anInstallerMap } from './aggregate';
 export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: string) {
-  const { installs, audits, ratings, auditSignOk } = data;
+  const { installs, audits, ratings, auditLinks, auditSignOk } = data;
   const todayStr = _anDstr(new Date());
   const TRACK_FROM = '2026-07-02';
 
@@ -37,6 +37,8 @@ export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: s
 
   const aCompleted = aFiltered.filter((o) => o.status === 'completed').length;
   const aJobCard = aFiltered.filter((o) => o.status === 'completed' && _anAuditSigned(o)).length;
+
+  const aConv = _anAuditConversion(aFiltered.filter((o) => o.status === 'completed'), installs, auditLinks);
 
   const aSignKnown = auditSignOk;
   const aRescheduled = aFiltered.filter((o) => o.status === 'reschedule').length;
@@ -293,6 +295,30 @@ export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: s
       hit: o.status === 'reschedule' ? 'yes' : 'no',
       result: o.status === 'reschedule' ? '✓ In reschedule status' : '✗ Not in reschedule (' + label(o.status) + ')',
     }))),
+    aConversion: mk(
+      'Site Audit — Audit → Installation Conversion %',
+      'One row per COMPLETED audit in range — an audit that never happened cannot convert, so the denominator is completions, not bookings. An installation counts when the audit declares it in the drawer (Link installation), or when the client\u2019s exact 10-digit phone carries an install order raised ON OR AFTER the audit date. Scoping to the audit date is deliberate: an installation from before the visit is not what this audit produced. Conversion also lags the range — the median gap between a completed audit and the order it produced is 4 days and the 90th percentile is 18, so the last fortnight of any range reads low and will keep rising.'
+        + (auditLinks ? '' : ' The declared-link read failed for this range, so these rows fall back to phone matching alone.'),
+      aConv.tagged.map((t) => ({
+        pi: t.audit.pi,
+        ...oRow(t.audit),
+        person: t.audit.auditor_name || '',
+        slot: t.audit.slot || '',
+        date: t.audit.date,
+        hit: t.via === 'nophone' ? 'na' : t.install ? 'yes' : 'no',
+        result:
+          t.via === 'declared'
+            ? '\u2713 Installation ' + t.install.pi + ' — declared link'
+            : t.via === 'phone'
+              ? '\u2713 Installation ' + t.install.pi + ' raised ' + t.installDate + ' — phone match'
+              : t.via === 'nophone'
+                ? '\u2014 No phone on the audit, so no installation can be matched'
+                : '\u2717 No installation on this client\u2019s number on or after the audit',
+      })) as DrillRow[],
+      aConv.noPhone
+        ? aConv.noPhone + ' of ' + aConv.tagged.length + ' completed audits carry no phone number and are outside the percentage'
+        : undefined
+    ),
     aRatings: mk(
       'Site Audit — Client Ratings, NPS and Q1–Q3',
       'Every audit in range that has a client rating attached — the set behind the NPS and Q1/Q2/Q3 tiles. ' + NPS_HOUSE_NOTE,
@@ -355,6 +381,10 @@ export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: s
     IR_det,
     IR_nps,
     aCompleted,
+    aConverted: aConv.converted,
+    aConvMeasurable: aConv.measurable,
+    aConvNoPhone: aConv.noPhone,
+    aConvLinksOk: auditLinks !== null,
     aJobCard,
     aRescheduled,
     aSignKnown,

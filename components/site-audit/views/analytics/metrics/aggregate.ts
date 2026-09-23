@@ -1,8 +1,51 @@
 'use client';
 
 import { typeLabel } from '../../../data/audit-registry';
-import { SQFT_PER_ROLL } from '../../../shared';
+import { SQFT_PER_ROLL, phoneKey } from '../../../shared';
 import { _anDateIST, _anHhMmIST, _anMinsIST } from '../utils';
+
+export type AuditConversionRow = {
+  audit: any;
+  install: any | null;
+  installDate: string | null;
+  via: 'declared' | 'phone' | 'none' | 'nophone';
+};
+
+export function _anAuditConversion(audits: any[], installs: any[], declaredLinks: Record<string, string[]> | null) {
+  const byPi = new Map<string, any>();
+  const byPhone = new Map<string, any[]>();
+  for (const o of installs) {
+    if (o.pi) byPi.set(String(o.pi), o);
+    const k = phoneKey(o.phone);
+    if (!k) continue;
+    const list = byPhone.get(k);
+    if (list) list.push(o);
+    else byPhone.set(k, [o]);
+  }
+
+  const tagged = audits.map<AuditConversionRow>((a) => {
+    const declared = ((declaredLinks && declaredLinks[a.pi]) || []).map((pi) => byPi.get(String(pi))).filter(Boolean);
+    if (declared.length) return { audit: a, install: declared[0], installDate: _anDateIST(declared[0].created_at), via: 'declared' };
+
+    const key = phoneKey(a.phone);
+    if (!key) return { audit: a, install: null, installDate: null, via: 'nophone' };
+
+    const after = (byPhone.get(key) || [])
+      .map((o) => ({ o, d: _anDateIST(o.created_at) }))
+      .filter((x) => x.d && a.date && (x.d as string) >= a.date)
+      .sort((x, y) => (x.d as string).localeCompare(y.d as string));
+    if (after.length) return { audit: a, install: after[0].o, installDate: after[0].d, via: 'phone' };
+
+    return { audit: a, install: null, installDate: null, via: 'none' };
+  });
+
+  return {
+    tagged,
+    converted: tagged.filter((t) => t.install).length,
+    measurable: tagged.filter((t) => t.via !== 'nophone').length,
+    noPhone: tagged.filter((t) => t.via === 'nophone').length,
+  };
+}
 
 export function _anInstallAttempts(installs: any[], from: string, to: string) {
   const out: any[] = [];

@@ -2,6 +2,7 @@
 
 import { CatAnalyticsApi, catAnalyticsIfLoaded, loadCatAnalytics } from '../../../data/cat-analytics';
 import { CityFilter, inCity, sbGetLong } from '../../../shared';
+import { loadDeclaredAuditLinks } from '../../../data/job-card-links';
 import { AnalyticsBody } from './body';
 import { AnalyticsData, AnalyticsState } from '../types';
 import { _anDstr } from '../utils';
@@ -59,7 +60,7 @@ export function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) 
       if (Array.isArray(installRes)) installRes = inCity(installRes, city);
       if (Array.isArray(auditRes)) auditRes = inCity(auditRes, city);
 
-      const [ratingsFallback, delivMeta, installLogRes, signMeta] = await Promise.all([
+      const [ratingsFallback, delivMeta, installLogRes, signMeta, auditLinks] = await Promise.all([
         Array.isArray(ratingsRes)
           ? Promise.resolve(ratingsRes)
           : sbGetLong('ratings?select=order_type,order_id,pi,q1_score,q2_score,created_at,staff_name,staff_email').catch(() => []),
@@ -67,6 +68,7 @@ export function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) 
         sbGetLong('install_orders?select=pi,phone,log&status=neq.deleted&created_at=gte.2026-07-01').catch(() => []),
 
         sbGetLong('audit_orders?select=id,signedName:audit_ticked->sign->>name&status=eq.completed').catch(() => null),
+        loadDeclaredAuditLinks().catch(() => null),
       ]);
       ratingsRes = ratingsFallback;
 
@@ -112,6 +114,7 @@ export function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) 
           installs: Array.isArray(installRes) ? installRes : [],
           audits: Array.isArray(auditRes) ? auditRes : [],
           ratings: Array.isArray(ratingsRes) ? ratingsRes : [],
+          auditLinks,
           auditSignOk: signOk,
         },
       });

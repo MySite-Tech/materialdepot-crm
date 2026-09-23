@@ -53,6 +53,39 @@ Because the renderers return **HTML strings**, three things follow:
   written until Save, and abandoning the tab abandons the edits. Save writes the whole object to
   `app_settings.cat_analytics_targets`, shared with the Admin console.
 
+**Audit → Installation conversion is measured forward, from completed audits** (added 2026-09-23).
+The Site Audit section's `Audit → Installation Conversion %` tile is NOT the mirror of the Site
+Installation section's `Material Depot Audit %` and the two will never agree: that one asks "of the
+installs we did, how many had an audit", denominator installs; this one asks "of the audits we did,
+how many produced an install", denominator **completed** audits. A booked-but-never-executed audit
+cannot convert, so it is out of the denominator rather than counted as a failure.
+
+`_anAuditConversion` (`metrics/aggregate.ts`) resolves the install the same way `LinkAuditSection`
+does, in the same precedence: a **declared** `jobcard.link.audit.<pi>` link first, then an exact
+10-digit `phoneKey` match on an install order created **on or after the audit date**. The date scope
+is load-bearing — dropping it moved 268 conversions to 278 on live data (2026-09-23), i.e. ten
+audits credited with an installation raised before the visit happened. Never loosen either match;
+the rule is the one in `orders.md`, exact matching only.
+
+Two things the tile says out loud because they would otherwise be read as performance:
+
+- **It lags the range.** Median gap from a completed audit to the order it produced is 4 days, p90
+  is 18, max 68 (n=268, live, 2026-09-23). So the last fortnight of any range reads low and keeps
+  rising: 26% for 18–24 Sep against 57% for Jun–Sep on the same data.
+- **A completed audit with no phone is `na`, not `no`** — it cannot be matched either way, so it
+  leaves the denominator and the count of such rows rides on the tile. Live today that count is
+  zero: all 480 audit and 608 install rows carry a phone.
+
+Reference numbers for anyone changing this, measured 2026-09-23: Jun–Sep 268/471 = 57%,
+Aug 86/153 = 56%, Sep-to-date 66/149 = 44%.
+
+The declared links cost the tab **one extra request** (`loadDeclaredAuditLinks`, one
+`app_settings?key=like.jobcard.link.audit.*` read — the Execution tab is at 8 of its ten). That
+table is currently **empty**, so every conversion resolves by phone today; the read is there so the
+tile cannot contradict a link a BM has declared in the drawer the moment anyone uses that button. A
+failed read degrades to phone-only and **says so on the tile** (`aConvLinksOk`), the same way
+`aSignKnown` does for signatures.
+
 **Every tile on the Execution tab is clickable and opens the rows behind it** (added 2026-08-26):
 which orders met the criterion, which did not, who they were assigned to, the booked slot vs the
 actual arrival time, and a CSV. `M.drills` in `components/site-audit/views/analytics/index.tsx` is the registry; `DrillRow.hit`
