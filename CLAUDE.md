@@ -67,6 +67,51 @@ Two things about that middle step, which used to be a one-line `sed` appending
 Verified on `components/site-audit/install-ops/utils.ts` (imports `../shared`,
 which imports `.`) on 2026-09-15.
 
+### Looking at a screen, which needs a stubbed Django
+
+There is no way to sign in on a dev machine: login is phone + OTP against
+`api-dev2.materialdepot.in`, which nobody here can reach. A ~40-line Node
+server on `:4000` answering `/login-otp/`, `/verify-otp/`, `/crm/user-profile/`
+and `/user-organisation/` lets any phone and any four-digit code in, and
+**only Django may be stubbed** — Supabase stays real.
+
+Run the app against it:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/apiV1 API_BASE_URL=http://localhost:4000/apiV1 npm run dev
+```
+
+Four things the stub must get right, each of which has cost a debugging round:
+
+- **The envelope is `{ success: true, status, data }`** and `unwrapEnvelope`
+  checks all three keys. A bare `{ data }` unwraps to nothing, and the app then
+  renders a user with no role — no error anywhere.
+- **`verifyOtp` does NOT go through `mdFetch`.** It reads `token` and `refresh`
+  off the raw body, so that one response is unwrapped and differently named.
+  The token must be a real three-segment JWT: `userIdFromToken()` base64-decodes
+  the middle segment and wants `user_id` and an unexpired `exp`.
+- **Never answer 401**, or `forceReLogin()` wipes the session mid-load. Answer
+  `200 []` for everything unrecognised.
+- **The tab gate's role comes from `/crm/user-profile/?phone=`, not from the
+  roster.** `loginWithPhone()` reads `role`, `allowedBranches` and
+  `individualPermissions` straight off that response;
+  `/user-organisation/` is what the **server-side** `requireCaller` reads, for
+  `app/api/*`. Stub only the roster and you log in successfully with the five
+  default tabs and no B2B Sales, which looks like a permissions bug in the app
+  and is a hole in the stub. Both need filling, and they need to agree.
+
+So a local CRM shows **real Supabase data and empty Django data** — say which
+half was stubbed when reporting anything from it.
+
+**Driving it with a browser.** Playwright is not a dependency here and should
+not become one; install it in a scratch directory with
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i playwright` and launch the system
+Chrome, `chromium.launch({ channel: 'chrome' })`. Listen on
+`page.on('pageerror')` and `page.on('console')` while you do it. Assert on
+geometry (`getBoundingClientRect`) and computed style as well as on text — a
+status chip can be present, correct and still be making a false claim, which is
+how "On partner dashboards now" was caught sitting beside "Not pushed".
+
 ## Docs, and why this file is short
 
 This file is loaded into **every** session, so it holds only what applies
@@ -80,7 +125,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-bridge` (design only); `context.md` is the pointer table |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 14-tab permission gate |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
 | Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |

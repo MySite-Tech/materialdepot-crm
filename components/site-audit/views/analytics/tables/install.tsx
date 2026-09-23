@@ -42,6 +42,20 @@ export function AnalyticsInstallTable({ M, aArrNote, chartApi, from, to, tilePro
           drill="aJobCard"
         />
         <PctCard tileProps={tileProps} label="Completion Rate %" n={M.aCompleted} d={M.aTotal} sub="Audits that reached completed status" note="" drill="aCompletion" />
+        <PctCard tileProps={tileProps}
+          label="Audit → Installation Conversion %"
+          n={M.aConverted}
+          d={M.aConvMeasurable}
+          sub="Completed audits whose client then raised an install order"
+          note={
+            !M.aConvLinksOk
+              ? "Declared links couldn't be read — phone match only"
+              : M.aConvNoPhone
+                ? M.aConvNoPhone + ' completed audit' + (M.aConvNoPhone === 1 ? '' : 's') + ' carry no phone and sit outside this'
+                : '(declared link, else exact phone match on/after the audit date)'
+          }
+          drill="aConversion"
+        />
         <PctCard tileProps={tileProps} label="Auditor Arrival On Time %" n={M.aArrTot.onTime} d={M.aArrTot.onTime + M.aArrTot.late} sub="> 3 min past slot = delayed" note={aArrNote} drill="aArrival" />
         <PctCard tileProps={tileProps} label="Reschedule Rate %" n={M.aRescheduled} d={M.aTotal} sub="Audits currently in reschedule status" note="" drill="aReschedule" />
         <NpsCard tileProps={tileProps} label="NPS Score" nps={M.AR_nps} prom={M.AR_prom} det={M.AR_det} total={M.AR.length} drill="aRatings" />
@@ -51,7 +65,8 @@ export function AnalyticsInstallTable({ M, aArrNote, chartApi, from, to, tilePro
       </div>
     
       <div className="px-4 sm:px-6 py-2.5 text-[11.5px] text-gray-400 border-b border-gray-100">
-        Note: Rescheduled audits originally scheduled in range but moved to a future date appear under the original date AND the new date. Reschedule Rate
+        Note: Conversion lags the range — half of the installations that follow an audit are raised within 4 days and a tenth take more than 18, so the
+        last fortnight of any range reads low and keeps rising. Rescheduled audits originally scheduled in range but moved to a future date appear under the original date AND the new date. Reschedule Rate
         counts audits currently in reschedule status within the selected range.
       </div>
     

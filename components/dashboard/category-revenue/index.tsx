@@ -6,7 +6,7 @@ import { DateRange } from '../types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { BUCKET_SEGREGATION, SEGREGATION_ORDER } from './constants';
-import { BucketResult, CategoryRevenueProps, Segregation, SegregationTable, StoreActuals } from './types';
+import { BucketResult, CategoryRevenueProps, Segregation, SegregationTable, StoreActuals, StoreTarget } from './types';
 import { SegregationSection } from './ui/segregation-table';
 import { StoreTargetCard } from './ui/store-targets';
 import { TargetEditor } from './ui/target-editor';
@@ -20,9 +20,11 @@ import {
   monthKey,
   monthLabel,
   monthToDateRange,
+  pctOfTarget,
   pctStr,
   previousMonthRange,
   targetFor,
+  unclassifiedCrmCategories,
   unmatchedSheetCategories,
   buildSegregationTables,
 } from './utils';
@@ -86,6 +88,10 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
   );
   const unmatched = useMemo(
     () => (liveCategories.length ? unmatchedSheetCategories(liveCategories) : []),
+    [liveCategories],
+  );
+  const unclassified = useMemo(
+    () => (liveCategories.length ? unclassifiedCrmCategories(liveCategories) : []),
     [liveCategories],
   );
 
@@ -167,6 +173,30 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
   );
   const overlap = bucketSumRevenue - (total?.overall.revenue ?? 0);
 
+  const targetMonth = useMemo(() => {
+    if (bmFilter.length > 0) return null;
+    if (!range.from || !range.to) return null;
+    return range.from.slice(0, 7) === range.to.slice(0, 7) ? range.from.slice(0, 7) : null;
+  }, [bmFilter.length, range.from, range.to]);
+
+  const rangeTargetFor = useMemo<((store: string) => StoreTarget) | null>(
+    () => (targetMonth ? (store: string) => targetFor(targets, targetMonth, store) : null),
+    [targetMonth, targets],
+  );
+
+  const targetNote = targetMonth
+    ? `Against the ${monthLabel(targetMonth)} store targets. A range covering part of the month is compared against the whole month's target.`
+    : '';
+
+  const totalTarget = useMemo(
+    () => (rangeTargetFor ? visibleStores.reduce((s, store) => s + (rangeTargetFor(store).total || 0), 0) : 0),
+    [rangeTargetFor, visibleStores],
+  );
+  const totalStoresRevenue = useMemo(
+    () => (total ? visibleStores.reduce((s, store) => s + (total.byStore[store]?.revenue ?? 0), 0) : null),
+    [total, visibleStores],
+  );
+
   const hasFilters = branchFilter.length > 0 || bmFilter.length > 0
     || range.from !== defaultRange.from || range.to !== defaultRange.to;
 
@@ -207,6 +237,15 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
           {unmatched.length === 1 ? 'it carries' : 'they carry'} no figures:{' '}
           <span className="font-semibold">{unmatched.join(', ')}</span>. Resolve it on the sheet, or
           add the category in the CRM.
+        </div>
+      )}
+      {unclassified.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-[12px] text-amber-800">
+          ⚠ A CRM category on none of the three segregation sheets, so its revenue counts in the
+          total below but in no segregation:{' '}
+          <span className="font-semibold">{unclassified.join(', ')}</span>. Assign{' '}
+          {unclassified.length === 1 ? 'it' : 'them'} to Core, Non-Core or Special in{' '}
+          <span className="font-mono">category-revenue/constants.ts</span>.
         </div>
       )}
 
@@ -257,7 +296,7 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
           </span>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className={`bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-2 gap-3 ${rangeTargetFor ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Distinct Clients</div>
             <div className="text-[15px] font-bold text-gray-300 font-mono mt-0.5">—</div>
@@ -278,6 +317,19 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
             <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Order Conversion</div>
             <div className="text-[15px] font-bold text-gray-900 font-mono mt-0.5">{total ? pctStr(total.overall.orders, total.overall.carts) : '—'}</div>
           </div>
+          {rangeTargetFor && (
+            <div title={targetNote}>
+              <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">% of Target</div>
+              <div className={`text-[15px] font-bold font-mono mt-0.5 ${
+                totalStoresRevenue != null && totalTarget > 0 && totalStoresRevenue >= totalTarget ? 'text-green-600' : 'text-gray-900'
+              }`}>
+                {pctOfTarget(totalStoresRevenue, totalTarget) ?? '—'}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                {totalTarget > 0 ? `of ${fmtShort(totalTarget)} · ${monthLabel(targetMonth as string)}` : 'No target set'}
+              </div>
+            </div>
+          )}
         </div>
 
         {tables.map(table => (
@@ -287,6 +339,8 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
             result={filtered[table.segregation]}
             stores={visibleStores}
             loading={filteredLoading}
+            targetFor={rangeTargetFor}
+            targetNote={targetNote}
           />
         ))}
       </section>
@@ -311,11 +365,13 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
           <span className="font-semibold">A mixed cart is split across segregations.</span>{' '}
           Django values a category-filtered deal at the share of its line items in those categories,
           so a cart of tiles and plywood lands partly in Core and partly in Non-Core instead of
-          counting in full under each. The four segregation totals therefore reconcile to the real
+          counting in full under each. The three segregation totals therefore reconcile to the real
           total:{' '}
           {filteredLoading || !total ? '—' : (
             <>{fmtFull(bucketSumRevenue)} against {fmtFull(total.overall.revenue)}
-            {Math.abs(overlap) > 1 ? `, ${fmtFull(Math.abs(overlap))} apart — carts whose lines carry no category` : ''}.</>
+            {Math.abs(overlap) > 1
+              ? `, ${fmtFull(Math.abs(overlap))} apart — carts whose lines carry no category${unclassified.length ? ', plus the unassigned categories named above' : ''}`
+              : ''}.</>
           )}
         </div>
         <div>
@@ -326,8 +382,16 @@ export default function CategoryRevenueDashboard({ branches, allowedBranches, ca
           <span className="font-semibold">Order Conversion %</span> is orders ÷ carts.
         </div>
         <div>
-          <span className="font-semibold">Dates filter on cart created date</span>, the only date
-          every deal carries. A cart created last month and ordered this month counts in last month.
+          <span className="font-semibold">Dates filter on the ORDER-PLACED date</span>, with the
+          estimate branch basis — the same basis Metabase&apos;s order book uses, so a cart created
+          last month and ordered this month counts in this month, against the store the order was
+          booked at.
+        </div>
+        <div>
+          <span className="font-semibold">% of Target compares the range against a monthly target.</span>{' '}
+          It shows only while the range sits inside one calendar month and no BM is selected — a
+          BM&apos;s share of a store cannot be read against a store target. Targets are set from
+          Edit targets above, and a store with none reads —.
         </div>
       </div>
 

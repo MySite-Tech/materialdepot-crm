@@ -1,8 +1,23 @@
 'use client';
 
-import { SEGREGATION_ACCENT, SEGREGATION_NOTE } from '../constants';
-import { BucketResult, Metrics, SegregationTable } from '../types';
-import { fmtFull, pctStr, ZERO_METRICS } from '../utils';
+import { SEGREGATION_ACCENT, SEGREGATION_BUCKET, SEGREGATION_NOTE } from '../constants';
+import { BucketResult, Metrics, SegregationTable, StoreTarget } from '../types';
+import { fmtFull, fmtShort, pctOfTarget, pctStr, ZERO_METRICS } from '../utils';
+
+function TargetCell({ actual, target }: { actual: number | null; target: number }) {
+  const pct = pctOfTarget(actual, target);
+  if (!pct) {
+    return (
+      <td className="px-3 py-2 text-right font-mono text-gray-300" title={target > 0 ? undefined : 'No target set for this month'}>—</td>
+    );
+  }
+  return (
+    <td className={`px-3 py-2 text-right font-mono font-semibold ${(actual as number) >= target ? 'text-green-600' : 'text-gray-600'}`}>
+      {pct}
+      <span className="text-gray-400 font-normal">{' '}of {fmtShort(target)}</span>
+    </td>
+  );
+}
 
 function MetricCells({ m }: { m: Metrics }) {
   return (
@@ -16,13 +31,19 @@ function MetricCells({ m }: { m: Metrics }) {
   );
 }
 
-export function SegregationSection({ table, result, stores, loading }: {
+export function SegregationSection({ table, result, stores, loading, targetFor, targetNote }: {
   table: SegregationTable;
   result: BucketResult | undefined;
   stores: string[];
   loading: boolean;
+  targetFor: ((store: string) => StoreTarget) | null;
+  targetNote: string;
 }) {
   const unmatched = table.rows.filter(r => r.unmatched);
+  const bucket = SEGREGATION_BUCKET[table.segregation];
+  const cols = targetFor ? 7 : 6;
+  const targetTotal = targetFor ? stores.reduce((s, store) => s + (targetFor(store)[bucket] || 0), 0) : 0;
+  const storesRevenue = result ? stores.reduce((s, store) => s + (result.byStore[store]?.revenue ?? 0), 0) : 0;
   return (
     <div>
       <div className="flex items-baseline gap-2 mb-2 flex-wrap">
@@ -58,19 +79,28 @@ export function SegregationSection({ table, result, stores, loading }: {
                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Orders</th>
                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Revenue</th>
                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Order Conv %</th>
+                {targetFor && (
+                  <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400" title={targetNote}>% of Target</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} className="px-4 py-5 text-center text-[12px] text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={cols} className="px-4 py-5 text-center text-[12px] text-gray-400">Loading…</td></tr>
               )}
               {!loading && !result && (
-                <tr><td colSpan={6} className="px-4 py-5 text-center text-[12px] text-gray-400">Unknown — the request for this segregation did not return</td></tr>
+                <tr><td colSpan={cols} className="px-4 py-5 text-center text-[12px] text-gray-400">Unknown — the request for this segregation did not return</td></tr>
               )}
               {!loading && result && stores.map(store => (
                 <tr key={store} className="border-b border-gray-50 hover:bg-gray-50/60">
                   <td className="px-4 py-2 text-gray-800">{store}</td>
                   <MetricCells m={result.byStore[store] ?? ZERO_METRICS} />
+                  {targetFor && (
+                    <TargetCell
+                      actual={(result.byStore[store] ?? ZERO_METRICS).revenue}
+                      target={targetFor(store)[bucket] || 0}
+                    />
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -83,6 +113,7 @@ export function SegregationSection({ table, result, stores, loading }: {
                   <td className="px-3 py-2 text-right font-mono">{result.overall.orders.toLocaleString('en-IN')}</td>
                   <td className="px-3 py-2 text-right font-mono">{fmtFull(result.overall.revenue)}</td>
                   <td className="px-3 py-2 text-right font-mono">{pctStr(result.overall.orders, result.overall.carts)}</td>
+                  {targetFor && <TargetCell actual={storesRevenue} target={targetTotal} />}
                 </tr>
               </tfoot>
             )}

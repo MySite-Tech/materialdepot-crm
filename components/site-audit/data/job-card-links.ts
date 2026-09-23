@@ -1,6 +1,6 @@
 'use client';
 
-import { loadSetting, saveSetting } from '../shared';
+import { loadSetting, saveSetting, sbGetLong } from '../shared';
 
 const AUDIT_KEY = 'jobcard.link.audit.';
 const INSTALL_KEY = 'jobcard.link.install.';
@@ -9,6 +9,19 @@ export async function loadLinkedInstallPis(auditPi: string): Promise<string[]> {
   const { value } = await loadSetting(AUDIT_KEY + auditPi);
   const list = value && Array.isArray(value.installPis) ? value.installPis : [];
   return list.map((v: any) => String(v || '').trim()).filter(Boolean);
+}
+
+export async function loadDeclaredAuditLinks(): Promise<Record<string, string[]> | null> {
+  const rows = await sbGetLong('app_settings?key=like.' + encodeURIComponent(AUDIT_KEY) + '*&select=key,value');
+  if (!Array.isArray(rows)) return null;
+  const out: Record<string, string[]> = {};
+  for (const r of rows) {
+    const auditPi = String(r.key || '').slice(AUDIT_KEY.length).trim();
+    if (!auditPi) continue;
+    const list = r.value && Array.isArray(r.value.installPis) ? r.value.installPis : [];
+    out[auditPi] = list.map((v: any) => String(v || '').trim()).filter(Boolean);
+  }
+  return out;
 }
 
 export async function loadLinkedAuditPi(installPi: string): Promise<string> {

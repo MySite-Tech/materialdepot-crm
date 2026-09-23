@@ -11,6 +11,12 @@ export function AnalyticsFootnote({  }: {
       <code>subjobs[].jobcard.sign</code>). It used to infer this from &quot;a rating exists&quot;, which held only while the field app wrote the rating at
       the moment of signing — that stopped on 24 Aug 2026, when review scores moved to a Category Ops call made the day after.
       <br />
+      <b>Audit &rarr; Installation Conversion %:</b> Of the audits <i>completed</i> in range, the share whose client went on to raise an install order — the
+      declared link from the BM drawer first, then an exact 10-digit phone match on an install order created on or after the audit date. A completed audit
+      with no phone number cannot be matched either way, so it sits outside the percentage rather than counting as a failure. Scoped to the audit date on
+      purpose: an installation raised before the visit is not what that visit produced. Expect the tail of any range to read low — the median audit-to-order
+      gap is 4 days and the 90th percentile is 18.
+      <br />
       <b>Arrival on time:</b> Filtered by selected date range, floor 2 Jul 2026 (when tracking began). &gt;3 min late = delayed. N/T = no tracked data in
       range.
       <br />

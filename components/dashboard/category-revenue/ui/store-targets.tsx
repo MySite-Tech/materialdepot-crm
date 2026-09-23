@@ -2,7 +2,7 @@
 
 import { BUCKET_COLOR, BUCKET_KEYS, BUCKET_LABEL } from '../constants';
 import { StoreActuals, StoreTarget } from '../types';
-import { fmtShort, hasAnyTarget } from '../utils';
+import { fmtShort, hasAnyTarget, pctOfTarget } from '../utils';
 
 function ProgressBar({ actual, target, color, pace }: {
   actual: number; target: number; color: string; pace: number;
@@ -48,7 +48,7 @@ export function StoreTargetCard({ store, actuals, target, pace }: {
                   <span className="text-gray-400">{' '}/ {t > 0 ? fmtShort(t) : '—'}</span>
                   {known && t > 0 && (
                     <span className={`ml-1.5 font-semibold ${a >= t ? 'text-green-600' : 'text-gray-500'}`}>
-                      {((a / t) * 100).toFixed(0)}%
+                      {pctOfTarget(a, t)}
                     </span>
                   )}
                 </span>

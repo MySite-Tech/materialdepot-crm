@@ -20,6 +20,7 @@ export interface AnalyticsData {
   installs: any[];
   audits: any[];
   ratings: any[];
+  auditLinks: Record<string, string[]> | null;
 
   auditSignOk: boolean;
 }
