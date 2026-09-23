@@ -1,4 +1,4 @@
-export type Segregation = 'Core' | 'Non-Core' | 'Special' | 'Unclassified';
+export type Segregation = 'Core' | 'Non-Core' | 'Special';
 
 export type BucketKey = 'total' | 'core' | 'nonCore' | 'special';
 

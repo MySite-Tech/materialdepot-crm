@@ -17,6 +17,9 @@ export const NON_CORE_CATEGORIES = [
   'HDF',
   'Corian',
   'MDF',
+  'Liner Laminates',
+  'Particle Board',
+  'Prelam Boards',
 ];
 
 export const SPECIAL_CATEGORIES = [
@@ -39,6 +42,13 @@ export const SPECIAL_CATEGORIES = [
   'Profiles and Mouldings',
   'Marbles',
   'Films',
+  'Artificial Grass',
+  'Ceiling Tiles',
+  'Composite Floor',
+  'Customized Panels',
+  'Engineered Wood Floor',
+  'Glass',
+  'Jaali',
 ];
 
 export const ORDER_STATUSES = new Set([
@@ -48,20 +58,18 @@ export const ORDER_STATUSES = new Set([
 
 export const TARGETS_KEY = 'dashboard_category_targets';
 
-export const SEGREGATION_ORDER = ['Core', 'Non-Core', 'Special', 'Unclassified'] as const;
+export const SEGREGATION_ORDER = ['Core', 'Non-Core', 'Special'] as const;
 
 export const SEGREGATION_ACCENT: Record<string, string> = {
   'Core': '#22C55E',
   'Non-Core': '#0EA5E9',
   'Special': '#8B5CF6',
-  'Unclassified': '#94A3B8',
 };
 
 export const SEGREGATION_NOTE: Record<string, string> = {
   'Core': 'High-volume categories the stores are held to first.',
   'Non-Core': 'Thin-margin categories — watched, not pushed.',
   'Special': 'High-margin categories the segregation exists to grow.',
-  'Unclassified': 'In the CRM but on none of the three segregation sheets.',
 };
 
 export const BUCKET_KEYS = ['total', 'core', 'nonCore', 'special'] as const;
@@ -76,4 +84,8 @@ export const BUCKET_COLOR: Record<string, string> = {
 
 export const BUCKET_SEGREGATION: Record<string, string> = {
   core: 'Core', nonCore: 'Non-Core', special: 'Special',
+};
+
+export const SEGREGATION_BUCKET: Record<string, 'core' | 'nonCore' | 'special'> = {
+  'Core': 'core', 'Non-Core': 'nonCore', 'Special': 'special',
 };

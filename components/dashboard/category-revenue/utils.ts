@@ -3,7 +3,7 @@ import { DashboardBranchStatus } from '@/lib/api';
 import { CORE_CATEGORIES, NON_CORE_CATEGORIES, ORDER_STATUSES, SPECIAL_CATEGORIES } from './constants';
 import { BucketResult, CategoryRow, CategoryTargets, Metrics, Segregation, SegregationTable, StoreTarget } from './types';
 
-const SHEETS: { segregation: Exclude<Segregation, 'Unclassified'>; names: string[] }[] = [
+const SHEETS: { segregation: Segregation; names: string[] }[] = [
   { segregation: 'Core', names: CORE_CATEGORIES },
   { segregation: 'Non-Core', names: NON_CORE_CATEGORIES },
   { segregation: 'Special', names: SPECIAL_CATEGORIES },
@@ -14,23 +14,19 @@ const SHEET_SET = new Set(SHEET_CATEGORIES);
 
 export function buildSegregationTables(liveCategories: string[]): SegregationTable[] {
   const live = new Set(liveCategories);
-  const sheetTables = SHEETS.map<SegregationTable>(({ segregation, names }) => {
+  return SHEETS.map<SegregationTable>(({ segregation, names }) => {
     const rows = names.map<CategoryRow>(name => ({ name, segregation, unmatched: !live.has(name) }));
     return { segregation, rows, queryNames: rows.filter(r => !r.unmatched).map(r => r.name) };
   });
-  const unclassified = liveCategories
-    .filter(name => !SHEET_SET.has(name))
-    .sort((a, b) => a.localeCompare(b))
-    .map<CategoryRow>(name => ({ name, segregation: 'Unclassified', unmatched: false }));
-  return [
-    ...sheetTables,
-    { segregation: 'Unclassified', rows: unclassified, queryNames: unclassified.map(r => r.name) },
-  ];
 }
 
 export function unmatchedSheetCategories(liveCategories: string[]): string[] {
   const live = new Set(liveCategories);
   return SHEET_CATEGORIES.filter(n => !live.has(n));
+}
+
+export function unclassifiedCrmCategories(liveCategories: string[]): string[] {
+  return liveCategories.filter(n => !SHEET_SET.has(n)).sort((a, b) => a.localeCompare(b));
 }
 
 export const ZERO_METRICS: Metrics = { carts: 0, orders: 0, revenue: 0 };
@@ -67,6 +63,9 @@ export const fmtShort = (n: number): string => {
 
 export const pctStr = (part: number, whole: number): string =>
   whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : '—';
+
+export const pctOfTarget = (actual: number | null, target: number): string | null =>
+  actual != null && target > 0 ? `${Math.round((actual / target) * 100)}%` : null;
 
 export const fmtChipDate = (d: string): string => {
   const [y, m, day] = d.split('-');
