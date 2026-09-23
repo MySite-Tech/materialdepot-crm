@@ -26,10 +26,10 @@ import { DEFAULT_BRANCHES } from './constants';
 import { useDebouncedValue } from './hooks/use-debounced-value';
 import { LoginScreen } from './login';
 import { CsvRow, DateEditState, MainTab } from './types';
-import { isSameLeadRow, resolveAllowedTabs } from './utils';
+import { effectiveLeadBranches, isSameLeadRow, offScopeLeadBranches, resolveAllowedTabs } from './utils';
 import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/shared';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function App() {
   const searchParams = useSearchParams();
@@ -243,7 +243,7 @@ export default function App() {
 
   const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase','Priority','Ticket ID'];
 
-  const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, scopedBMs: availableBMs, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   const isOverdue = (l: Lead): boolean => !!(l.followUpDate && l.followUpDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
   const isClosureOverdue = (l: Lead): boolean => !!(l.closureDate && l.closureDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
@@ -251,7 +251,17 @@ export default function App() {
 
   const COL_COUNT = visibleCols.length + 1;
 
-  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  const requestedBranchKey = [branchFilter.join('|'), userAllowedBranches.join('|')].join('::');
+  const requestedBranches = useMemo(
+    () => effectiveLeadBranches({ branchFilter, userAllowedBranches, userAllowedBranchesLower }),
+    [requestedBranchKey],
+  );
+  const offScopeBranches = useMemo(
+    () => offScopeLeadBranches(leads, requestedBranches),
+    [leads, requestedBranches],
+  );
+
+  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, scopedBMs: availableBMs, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   if (!userLoaded) return null;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
@@ -288,6 +298,8 @@ export default function App() {
       {effectiveTab === 'leads' && <LeadsPanel
         ALL_COLUMNS={ALL_COLUMNS}
         COL_COUNT={COL_COUNT}
+        offScopeBranches={offScopeBranches}
+        requestedBranches={requestedBranches}
         activeCount={activeCount}
         availableBMs={availableBMs}
         branchFilter={branchFilter}

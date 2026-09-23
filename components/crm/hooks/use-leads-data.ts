@@ -9,7 +9,7 @@ import { MainTab } from '../types';
 import { buildLeadsQuery } from '../utils';
 import { Dispatch, SetStateAction, useEffect } from 'react';
 
-export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
+export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, scopedBMs, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
   bmNameToPhone: Record<string, string>;
   branchFilter: string[];
   categoryFilter: string[];
@@ -28,6 +28,7 @@ export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, prio
   page: number;
   pageSize: number;
   personFilter: string[];
+  scopedBMs: string[];
   setBranches: Dispatch<SetStateAction<string[]>>;
   setBranchesLoaded: Dispatch<SetStateAction<boolean>>;
   setCrmUsers: Dispatch<SetStateAction<AppUser[]>>;
@@ -71,7 +72,7 @@ useEffect(() => {
   setLeadsLoading(true);
   let cancelled = false;
   fetchCRMLeads({
-    ...buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
+    ...buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
     page: page + 1,
     pageSize,
     sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt') as any,
@@ -107,7 +108,7 @@ useEffect(() => {
   let cancelled = false;
   setStatsLoading(true);
   fetchCRMLeadsStats(
-    buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
+    buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
   ).then((stats) => {
     if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
   }).catch(() => { if (!cancelled) setStatsLoading(false); });

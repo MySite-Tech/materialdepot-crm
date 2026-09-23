@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-55 entries. They live in one file because they cross-reference each other —
+56 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -64,6 +64,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A branch filter keyed on the cart owner dropped ₹33L of orders booked at that branch
 - A poll that gives up is not a failure, and telling the operator to retry turned one issue into three tickets
 - A revenue figure compared against Metabase must share Metabase's date basis, and one date param needs a second to mean anything
+- The Leads tab offered every salesperson in the org, so B2B reps' carts read as a retail branch's leads
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -848,3 +849,47 @@ grep for a term, then read around the line you hit rather than opening all of it
   the constraint is load-bearing rather than incidental. That is the line between
   the two: a derived key backed by a constraint is an id, a derived key computed
   per response — as Django does for a lead's `id` — is not, and cannot become one.
+
+- **The Leads tab offered every salesperson in the org, so B2B reps' carts read
+  as a retail branch's leads.** Reported 2026-09-23: "Hardi and Vilok's B2B
+  leads are reflecting in Basav. Nagar", with the Admin tab's permissions
+  checked and correct. Two independent causes, and the Admin tab showed the
+  first one all along under a heading nobody reads as a permission:
+
+  - **`user_organisation_branch` had Vilok Reddy attached to nine branches** —
+    B2B plus BASAVESHWARA NAGAR, GACHIBOWLI, HQ, HSR LAYOUT, JP NAGAR, KOMPALLY,
+    WHITEFIELD and YELAHANKA (verified against `materialdepot_azure` the same
+    day). Django's default branch basis keys on the **cart owner's** branch, so
+    every cart Vilok owns legitimately matches all nine stores. That is Admin >
+    Users > **Branch Access**, not CRM Permissions — a data fix, not a code one.
+    Mandeep Ghai carries the same shape at B2B + WHITEFIELD.
+  - **Hardi Patel is attached to B2B only**, yet his carts came back under a
+    BASAVESHWARA NAGAR selection. There is no column in that schema that ties
+    them to a retail store, so `/crm/leads/` did not apply `branch` on that
+    request — the reproduction also carried `bm=`, which is the likeliest thing
+    it is losing to. **Django-side; not fixable from this repo.**
+
+  What this repo did wrong is that `availableBMs` was
+  `crmUsers.map(u => u.name)` — the whole `/user-organisation/` roster, with no
+  branch scoping — so every B2B rep was pickable from a store manager's
+  Salesperson filter in the first place. It now goes through `bmsInBranchScope`
+  (`components/crm/utils.ts`), which keeps a user whose own `allowedBranches` is
+  empty (see the "all branches" entry above) or overlaps the caller's, and
+  `buildLeadsQuery` clamps `personFilter` to that same list so the dropdown and
+  the wire cannot disagree — the badge landmine's rule applied to a filter.
+
+  Two smaller holes went with it. `branch: branchCsv || undefined` **widened to
+  every branch** whenever the requested branches and the caller's scope did not
+  intersect — an empty CSV drops the param, and a dropped `branch` is "all of
+  them"; `effectiveLeadBranches` now falls back to the caller's own branches
+  instead. And the CSV/Excel/PDF export carried its own copy of that derivation
+  in `leads/csv/actions.ts`, so it had the same hole and had to be fixed twice;
+  it calls `buildLeadsQuery` now.
+
+  Because the backend half cannot be fixed here, the tab **says so** rather than
+  rendering the rows as if they were the branch's: `offScopeLeadBranches`
+  compares each returned row's `branch` against what was asked for and the panel
+  renders an amber notice naming the branches that leaked. Same rule as the
+  `basisApplied` echo in `docs/api-layer/context.md` — a filter the backend
+  quietly ignores is the frontend half of "never present a failed request as
+  data", and it was invisible here for as long as the tab has existed.

@@ -120,3 +120,35 @@ in its dependency array for the same reason — sibling rows share `id` **and**
 `clientPhone`, so without it, switching between two deal tickets on one cart
 never refetches and the drawer keeps the first row's remarks.
 
+
+## The Leads tab's Salesperson filter is branch-scoped, and the branch filter never widens
+
+`availableBMs` (`hooks/use-leads-view.ts`) used to be the entire
+`/user-organisation/` roster, so a store manager could pick a B2B rep — or
+anyone from another store — and get their carts under their own branch. It goes
+through `bmsInBranchScope` (`utils.ts`) now: a user is offered when the caller
+has no branch scope at all (admin, or the empty `allowedBranches` that means
+"all branches"), when the *user's* own `allowedBranches` is empty, or when the
+two lists overlap. `buildLeadsQuery` clamps `personFilter` to that same list
+before building `bm=`, so the dropdown and the request cannot disagree.
+
+`effectiveLeadBranches` is the one place that decides what `branch=` carries.
+**An empty result must never reach the wire** — `branch: '' || undefined` drops
+the param and Django then answers for every branch, which is the opposite of
+what a scoped user asked for. When the caller has allowed branches and their
+selection does not intersect them, it falls back to the caller's own branches;
+only a genuinely unscoped caller with nothing selected sends no `branch` at all.
+
+`leads/csv/actions.ts` builds its export query from `buildLeadsQuery` rather
+than repeating the derivation — it used to carry a second copy, which meant the
+export kept both holes after the tab was fixed.
+
+**`/crm/leads/` does not always honour `branch`.** Confirmed 2026-09-23 against
+production: carts owned by a B2B-only rep came back under a BASAVESHWARA NAGAR
+selection, and nothing in the Django schema links them to that store. Until the
+backend is fixed, `offScopeLeadBranches` compares each returned row's `branch`
+against the requested set and `LeadsPanel` renders an amber notice naming what
+leaked — the rows are still shown, because the stat cards above them are the
+backend's counts and silently dropping rows would make the two disagree. See
+`docs/landmines.md` for the full account and the Branch Access data fix that
+goes with it.
