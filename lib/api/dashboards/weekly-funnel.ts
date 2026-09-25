@@ -1,4 +1,5 @@
 import { mdFetch } from '../core/client';
+import { normalisePhone } from '../../org/utils';
 
 export interface WeeklyFunnelRow {
   week: string;
@@ -75,11 +76,38 @@ export async function fetchCategoryOptions(): Promise<CategoryOption[]> {
 
 export interface AvailableBM { name: string; contact: string }
 
+export function bmsHomedInBranches(
+  bms: AvailableBM[],
+  roster: { user?: { contact?: unknown } | null; branch?: { branch_name?: string }[] | null }[],
+  branch: string[],
+): AvailableBM[] {
+  const wanted = new Set(branch.map((b) => b.trim().toLowerCase()).filter(Boolean));
+  if (wanted.size === 0) return bms;
+  const homes = new Map<string, string[]>();
+  for (const row of roster) {
+    const key = normalisePhone(String(row.user?.contact ?? ''));
+    if (!key) continue;
+    const own = (row.branch ?? []).map((b) => (b.branch_name ?? '').trim().toLowerCase()).filter(Boolean);
+    homes.set(key, [...(homes.get(key) ?? []), ...(own.length ? own : ['*'])]);
+  }
+  return bms.filter((bm) => {
+    const own = homes.get(normalisePhone(bm.contact));
+    if (!own) return true;
+    return own.includes('*') || own.some((b) => wanted.has(b));
+  });
+}
+
 export async function fetchAvailableBMs(branch?: string[]): Promise<AvailableBM[]> {
   const params = new URLSearchParams();
   if (branch?.length) params.set('branch', branch.join(','));
   const qs = params.toString();
-  const data = await mdFetch(`/crm/available-bms/${qs ? `?${qs}` : ''}`);
-  return data?.available_bms ?? [];
+  const [data, roster] = await Promise.all([
+    mdFetch(`/crm/available-bms/${qs ? `?${qs}` : ''}`),
+    branch?.length ? mdFetch('/user-organisation/') : Promise.resolve(null),
+  ]);
+  const bms: AvailableBM[] = data?.available_bms ?? [];
+  if (!branch?.length) return bms;
+  if (!Array.isArray(roster)) throw new Error('user-organisation roster did not return rows');
+  return bmsHomedInBranches(bms, roster, branch);
 }
 

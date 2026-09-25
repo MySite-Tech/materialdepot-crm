@@ -38,6 +38,20 @@ the other dashboards too. `fetchCategoryOptions` trims each `category_name` and
 **drops any category whose name is empty after trimming**, so the option count
 can be lower than the row count the backend reports.
 
+**`/crm/available-bms/?branch=X` is not "the people at X".** It lists everyone
+Django links to that branch through any record, so on 2026-09-25 BASAVESHWARA
+NAGAR returned 30 names of whom 5 were attached to it. With a `branch`,
+`fetchAvailableBMs` also reads `/user-organisation/` and `bmsHomedInBranches`
+drops anyone whose roster branches (matched on `normalisePhone`) don't include
+one of the requested branches. An empty branch list means all branches, so those
+people stay. So does anyone the roster does not list (usually an ex-employee
+who still owns leads), because the roster can't place them.
+A roster that doesn't come back as an array throws, and the callers' existing
+`.catch` shows an empty picker. It never falls back to the leaky list. With no
+`branch`, the roster isn't fetched and Django's list passes through unchanged.
+Django only matches its own upper-case branch names, so a prettified name like
+"Basaveshwar Nagar" gets 0 rows back.
+
 ## Gotchas
 
 - Percentages (`cart_pct`, `pi_pct`, `order_pct`) arrive precomputed per row.

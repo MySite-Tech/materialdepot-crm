@@ -3,6 +3,7 @@
 import { CRMLeadsStats } from '../../../lib/api/crm/leads';
 import { AppUser, Lead } from '../../../types/crm';
 import { STATUSES } from '../constants';
+import { bmsInBranchScope } from '../utils';
 import { useMemo } from 'react';
 
 export function useLeadsView({ crmUsers, currentUser, leads, leadsStats, sortCol, sortDir }: {
@@ -20,7 +21,7 @@ const userAllowedBranches = isAdminUser ? [] : (currentUser?.allowedBranches || 
 const userAllowedBranchesLower = new Set(userAllowedBranches.map((b) => b.toLowerCase()));
 
 const availableBMs = crmUsers.length > 0
-  ? crmUsers.map((u) => u.name).filter(Boolean).sort()
+  ? bmsInBranchScope(crmUsers, userAllowedBranchesLower)
   : [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))].sort();
 const bmNameToPhone = useMemo(() => {
   const map: Record<string, string> = {};

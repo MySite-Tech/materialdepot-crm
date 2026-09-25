@@ -12,7 +12,10 @@ to whichever source row the lead came from (`outreach.ecName` /
 **EC is an Experience Centre, not an End Consumer.** The PRD asks for two
 dropdowns; `EcPicker` binds them to `fetchBranchList()` (through
 `apptBranchesFromCrm`, which drops HQ/warehouse and normalises the CRM's
-"Yelankha") and `fetchAvailableBMs([ec])`. It follows this file's roster rules:
+"Yelankha") and `fetchAvailableBMs` called with the **Django names** that EC
+came from, not the EC label. Until 2026-09-25 it sent the label, and Django only
+matches its own upper-case names, so every EC listed no BMs at all. It follows
+this file's roster rules:
 a non-array response throws, the last good roster survives a later failure, a
 stored value not in the roster is kept as an extra option, and a failed load is
 reported as *unreadable* rather than rendered as an empty dropdown.

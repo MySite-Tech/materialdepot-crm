@@ -5,10 +5,10 @@ import { upsertLeads } from '../../../../lib/api/crm/lead-details';
 import { AppUser, CartItem, Lead, Remark, Visit } from '../../../../types/crm';
 import { BACKEND_SORTABLE_COLS, CLIENT_TYPES, LEAD_PRIORITIES, LEGACY_PROPERTY_TYPES, ORDER_LOST_REASONS, PROJECT_PHASES, PROPERTY_TYPES, STATUSES, VISIT_CHANNELS } from '../../constants';
 import { CsvRow } from '../../types';
-import { csvEscape, isSameLeadRow, leadToExportRow, mergeLead, todayStr, triggerDownload } from '../../utils';
+import { buildLeadsQuery, csvEscape, isSameLeadRow, leadToExportRow, mergeLead, todayStr, triggerDownload } from '../../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
-export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
+export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, scopedBMs, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
   CSV_HEADERS: string[];
   bmNameToPhone: Record<string, string>;
   branchFilter: string[];
@@ -30,6 +30,7 @@ export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branche
   followUpDateTo: string;
   leads: Lead[];
   personFilter: string[];
+  scopedBMs: string[];
   setCsvErrors: Dispatch<SetStateAction<string[] | null>>;
   setCsvImportCount: Dispatch<SetStateAction<number | null>>;
   setCsvPreview: Dispatch<SetStateAction<CsvRow[] | null>>;
@@ -44,30 +45,11 @@ export function makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branche
   userAllowedBranches: string[];
   userAllowedBranchesLower: Set<string>;
 }) {
-const buildLeadsExportQuery = () => {
-  const effectiveBranches = userAllowedBranches.length > 0
-    ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
-    : branchFilter;
-  return {
-    branch: effectiveBranches.join(',') || undefined,
-    bm: personFilter.map((name) => bmNameToPhone[name] || name).join(',') || undefined,
-    q: debouncedSearch || undefined,
-    status: statusFilter.join(',') || undefined,
-    createdFrom: createdDateFrom || undefined,
-    createdTo: createdDateTo || undefined,
-    followupFrom: followUpDateFrom || undefined,
-    followupTo: followUpDateTo || undefined,
-    closureFrom: closureDateFrom || undefined,
-    closureTo: closureDateTo || undefined,
-    cartValueGt: debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined,
-    ownerUserOrgId: currentUser && currentUser.role === 'sales' ? currentUser.id : undefined,
-    sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt'),
-    sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
-    taskFilter: taskFilter || undefined,
-    category: categoryFilter.length ? categoryFilter.join(',') : undefined,
-    priority: priorityFilter.length ? priorityFilter.join(',') : undefined,
-  };
-};
+const buildLeadsExportQuery = () => ({
+  ...buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
+  sortBy: (BACKEND_SORTABLE_COLS.has(sortCol) ? sortCol : 'createdAt'),
+  sortDir: BACKEND_SORTABLE_COLS.has(sortCol) ? sortDir : 'desc',
+});
 
 const fetchAllFilteredLeads = async (): Promise<Lead[]> => {
   const base = buildLeadsExportQuery();

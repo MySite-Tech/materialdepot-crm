@@ -12,11 +12,13 @@ import { DateEditState } from '../types';
 import { fmtINR } from '../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
-export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalPages, userAllowedBranches, wonCount }: {
+export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, offScopeBranches, requestedBranches, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalPages, userAllowedBranches, wonCount }: {
   ALL_COLUMNS: { key: string; label: string; }[];
   COL_COUNT: number;
   activeCount: number;
   availableBMs: string[];
+  offScopeBranches: string[];
+  requestedBranches: string[];
   branchFilter: string[];
   branches: string[];
   cartValueGt: string;
@@ -113,6 +115,14 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
       wonCount={wonCount}
     />
     
+      {offScopeBranches.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+          <span className="font-semibold">Branch filter not honoured by the backend.</span>{' '}
+          You asked for {requestedBranches.join(', ')}, but rows owned by{' '}
+          {offScopeBranches.join(', ')} came back. Counts and cart values above include them.
+        </div>
+      )}
+
       <div className="flex gap-3 mt-3 overflow-x-auto pb-1">
         {stageSummary.map((ss) => {
           return (

@@ -20,6 +20,7 @@ export default function EcPicker({
 }) {
   const [ecs, setEcs] = useState<RosterState<string>>({ kind: 'loading' });
   const [bms, setBms] = useState<RosterState<string>>({ kind: 'ready', items: [] });
+  const [crmNames, setCrmNames] = useState<Record<string, string[]> | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -28,10 +29,18 @@ export default function EcPicker({
         if (!alive) return;
 
         if (!Array.isArray(rows)) throw new Error('branch list did not return rows');
-        setEcs({ kind: 'ready', items: apptBranchesFromCrm(rows.map((b) => b.name)) });
+        const names = rows.map((b) => b.name).filter(Boolean);
+        const byEc: Record<string, string[]> = {};
+        for (const name of names) {
+          const ecs = apptBranchesFromCrm([name]);
+          if (ecs.length === 1) (byEc[ecs[0]] ??= []).push(name);
+        }
+        setCrmNames(byEc);
+        setEcs({ kind: 'ready', items: apptBranchesFromCrm(names) });
       })
       .catch((e) => {
         console.error('[b2b] EC roster load failed', e);
+        if (alive) setCrmNames({});
         if (alive) setEcs((prev) => ({ kind: 'failed', items: prev.kind === 'loading' ? [] : prev.items }));
       });
     return () => { alive = false; };
@@ -41,7 +50,8 @@ export default function EcPicker({
     let alive = true;
     if (!ecName) { setBms({ kind: 'ready', items: [] }); return; }
     setBms({ kind: 'loading' });
-    fetchAvailableBMs([ecName])
+    if (!crmNames) return;
+    fetchAvailableBMs(crmNames[ecName] ?? [ecName])
       .then((rows) => {
         if (!alive) return;
         if (!Array.isArray(rows)) throw new Error('BM list did not return rows');
@@ -52,7 +62,7 @@ export default function EcPicker({
         if (alive) setBms((prev) => ({ kind: 'failed', items: prev.kind === 'loading' ? [] : prev.items }));
       });
     return () => { alive = false; };
-  }, [ecName]);
+  }, [ecName, crmNames]);
 
   const withStored = (items: string[], stored?: string) =>
     (stored && !items.includes(stored) ? [...items, stored] : items);

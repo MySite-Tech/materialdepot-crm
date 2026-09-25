@@ -181,7 +181,36 @@ export const triggerDownload = (blob: Blob, filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
+export function effectiveLeadBranches({ branchFilter, userAllowedBranches, userAllowedBranchesLower }: {
+  branchFilter: string[];
+  userAllowedBranches: string[];
+  userAllowedBranchesLower: Set<string>;
+}): string[] {
+  const scoped = userAllowedBranches.length > 0;
+  const picked = scoped ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : branchFilter;
+  if (picked.length > 0) return picked;
+  return scoped ? userAllowedBranches : [];
+}
+
+export function bmsInBranchScope(crmUsers: AppUser[], userAllowedBranchesLower: Set<string>): string[] {
+  const inScope = userAllowedBranchesLower.size === 0
+    ? crmUsers
+    : crmUsers.filter((u) => {
+        const own = u.allowedBranches || [];
+        return own.length === 0 || own.some((b) => userAllowedBranchesLower.has(b.toLowerCase()));
+      });
+  return [...new Set(inScope.map((u) => u.name).filter(Boolean))].sort();
+}
+
+export function offScopeLeadBranches(leads: Lead[], effectiveBranches: string[]): string[] {
+  if (effectiveBranches.length === 0) return [];
+  const wanted = new Set(effectiveBranches.map((b) => b.toLowerCase()));
+  return [...new Set(
+    leads.map((l) => (l.branch || '').trim()).filter((b) => b && !wanted.has(b.toLowerCase())),
+  )].sort();
+}
+
+export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
   bmNameToPhone: Record<string, string>;
   branchFilter: string[];
   categoryFilter: string[];
@@ -190,22 +219,21 @@ export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, p
   closureDateTo: string;
   createdDateFrom: string;
   createdDateTo: string;
-  currentUser: AppUser;
+  currentUser: AppUser | null;
   debouncedCartValueGt: string;
   debouncedSearch: string;
   followUpDateFrom: string;
   followUpDateTo: string;
   personFilter: string[];
+  scopedBMs: string[];
   statusFilter: string[];
   taskFilter: string;
   userAllowedBranches: string[];
   userAllowedBranchesLower: Set<string>;
 }) {
-  const effectiveBranches = userAllowedBranches.length > 0
-    ? (branchFilter.length > 0 ? branchFilter.filter((b) => userAllowedBranchesLower.has(b.toLowerCase())) : userAllowedBranches)
-    : branchFilter;
-  const branchCsv = effectiveBranches.join(',');
-  const bmCsv = personFilter.map((name) => bmNameToPhone[name] || name).join(',');
+  const branchCsv = effectiveLeadBranches({ branchFilter, userAllowedBranches, userAllowedBranchesLower }).join(',');
+  const people = scopedBMs.length > 0 ? personFilter.filter((name) => scopedBMs.includes(name)) : personFilter;
+  const bmCsv = people.map((name) => bmNameToPhone[name] || name).join(',');
   const statusCsv = statusFilter.join(',');
 
   return {
@@ -220,7 +248,7 @@ export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, p
     closureFrom: closureDateFrom || undefined,
     closureTo: closureDateTo || undefined,
     cartValueGt: debouncedCartValueGt ? Number(debouncedCartValueGt) : undefined,
-    ownerUserOrgId: currentUser.role === 'sales' ? currentUser.id : undefined,
+    ownerUserOrgId: currentUser?.role === 'sales' ? currentUser.id : undefined,
     taskFilter: taskFilter || undefined,
     category: categoryFilter.length ? categoryFilter.join(',') : undefined,
     priority: priorityFilter.length ? priorityFilter.join(',') : undefined,
