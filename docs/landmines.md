@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-56 entries. They live in one file because they cross-reference each other —
+57 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -65,6 +65,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A poll that gives up is not a failure, and telling the operator to retry turned one issue into three tickets
 - A revenue figure compared against Metabase must share Metabase's date basis, and one date param needs a second to mean anything
 - The Leads tab offered every salesperson in the org, so B2B reps' carts read as a retail branch's leads
+- `/crm/available-bms/?branch=` listed JP Nagar and HQ staff as Basaveshwara Nagar's BMs
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -893,3 +894,30 @@ grep for a term, then read around the line you hit rather than opening all of it
   `basisApplied` echo in `docs/api-layer/context.md` — a filter the backend
   quietly ignores is the frontend half of "never present a failed request as
   data", and it was invisible here for as long as the tab has existed.
+
+- **`/crm/available-bms/?branch=` listed JP Nagar and HQ staff as
+  Basaveshwara Nagar's BMs.** Reported 2026-09-25: eight people (seven attached
+  to JP NAGAR only, one to HQ only in `user_organisation_branch`) showed up as
+  Basaveshwar Nagar in the dashboard. It wasn't a data problem. Their branch
+  rows were correct, none of the 1,042 leads returned for that branch was
+  assigned to any of them, and none of their estimates was booked there. The
+  endpoint answered BASAVESHWARA NAGAR with 30 names, and the roster attached
+  only 5 of them to it. Those five own every lead in that branch. The rule
+  Django uses was not fully pinned down (some of the extras share a client or
+  cart with a Basaveshwara Nagar rep, three share nothing visible), but the
+  endpoint is plainly "anyone linked to this branch", not "people homed here":
+  on the same day YELAHANKA returned 132 names and 92 of them were homed
+  elsewhere.
+
+  Nine places took that list as the branch's people: the Overview, Order Lost
+  and Category Revenue BM filters, Weekly Funnel, both Footfall views, the
+  Report Card's roster-failure fallback and the B2B EC picker.
+  `fetchAvailableBMs` now reconciles the list against `/user-organisation/`
+  whenever it is given a branch, so all nine are fixed in one place. See
+  `docs/weekly-funnel/context.md` for the keep/drop rules. The Django endpoint
+  itself is unchanged and still worth fixing on the backend.
+
+  The same session found the EC picker had never listed a BM for any EC. It
+  sent `apptBranchesFromCrm`'s label ("Basaveshwar Nagar") and Django matches
+  only its own upper-case names, so every EC answered with an empty list. It
+  now sends the Django names each EC label came from.
