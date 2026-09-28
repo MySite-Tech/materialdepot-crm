@@ -79,6 +79,8 @@ export const PROPERTY_TYPES = [
   'Villa - Part Interior/ Renovation',
   'Independent House - Complete Interior/ Renovation',
   'Independent House - Part Interior/ Renovation',
+  'Commercial - Complete Interior/ Renovation',
+  'Commercial - Part Interior/ Renovation',
 ];
 
 export const LEGACY_PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', 'Apartment'];
