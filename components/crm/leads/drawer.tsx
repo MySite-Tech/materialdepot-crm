@@ -8,6 +8,7 @@ import { DateEditPopup } from '../ui/prompts';
 import { LeadDrawerProps } from '../types';
 import { Avatar, Field } from '../ui';
 import { canBypassLostAge, canMarkLostByAge, fmtDate, fmtTimestamp, todayStr } from '../utils';
+import { useSpeechToText } from '../hooks/use-speech-to-text';
 
 export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, onClose, onAddRemark, onImmediateSave, visitsLoading = false }: LeadDrawerProps) {
   const isEdit = !!lead;
@@ -37,6 +38,7 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
   const [remarkText, setRemarkText] = useState('');
   const [visitChannel, setVisitChannel] = useState(VISIT_CHANNELS[0]);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const speech = useSpeechToText(setRemarkText);
 
   useEffect(() => {
     if (lead) {
@@ -104,7 +106,7 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
   };
 
   const submitRemark = () => {
-    if (!remarkText.trim()) return;
+    if (!remarkText.trim() || speech.listening) return;
     const remark: Remark = { ts: new Date().toISOString(), author: remarkAuthor, text: remarkText.trim() };
     setForm((f) => ({ ...f, remarks: [...(f.remarks || []), remark] }));
     if (isEdit && onAddRemark) onAddRemark(remark);
@@ -315,14 +317,31 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
               </div>
               <div className="px-5 pb-5">
                 <input className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full mb-2" value={remarkAuthor} placeholder="Author name" onChange={(e) => setRemarkAuthor(e.target.value)} />
-                <textarea
-                  className="px-2.5 py-2 text-xs border border-gray-200 rounded-md outline-none font-sans w-full min-h-[60px] resize-y"
-                  value={remarkText}
-                  onChange={(e) => setRemarkText(e.target.value)}
-                  onKeyDown={handleRemarkKeyDown}
-                  placeholder="Add a remark... (Ctrl+Enter to submit)"
-                />
-                <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer w-full mt-2" disabled={!remarkText.trim()} onClick={submitRemark}>Add Remark</button>
+                <div className="relative">
+                  <textarea
+                    className={`px-2.5 py-2 text-xs border rounded-md outline-none font-sans w-full min-h-[60px] resize-y ${speech.supported ? 'pr-10' : ''} ${speech.listening ? 'border-red-400' : 'border-gray-200'}`}
+                    value={remarkText}
+                    onChange={(e) => { if (speech.listening) speech.cancel(); setRemarkText(e.target.value); }}
+                    onKeyDown={handleRemarkKeyDown}
+                    placeholder={speech.listening ? 'Listening... speak now' : 'Add a remark... (Ctrl+Enter to submit)'}
+                  />
+                  {speech.supported && (
+                    <button
+                      type="button"
+                      title={speech.listening ? 'Stop recording' : 'Speak remark'}
+                      className={`absolute top-2 right-2 w-7 h-7 rounded-full border-none cursor-pointer flex items-center justify-center ${speech.listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      onClick={() => (speech.listening ? speech.stop() : speech.start(remarkText))}
+                    >
+                      {speech.listening ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0" /><line x1="12" y1="17" x2="12" y2="22" /></svg>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {speech.error && <div className="text-[11px] text-red-500 mt-1">{speech.error}</div>}
+                <button className="bg-[#EAB308] text-white border-none px-5 py-2 rounded-md text-[13px] font-semibold cursor-pointer w-full mt-2" disabled={!remarkText.trim() || speech.listening} onClick={submitRemark}>Add Remark</button>
               </div>
             </div>
           )}
