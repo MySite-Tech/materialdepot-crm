@@ -20,11 +20,12 @@ export async function raiseEscalationDirect(
   dealId: number | string,
   reasons: string[],
   requestType?: string,
+  notes?: string,
 ): Promise<{ request_id: number }> {
   return mdFetch('/crm/escalation/raise/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deal_id: String(dealId), reasons, request_type: requestType }),
+    body: JSON.stringify({ deal_id: String(dealId), reasons, request_type: requestType, notes: notes || undefined }),
   });
 }
 

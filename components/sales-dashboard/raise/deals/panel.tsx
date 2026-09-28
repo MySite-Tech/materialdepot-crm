@@ -2,13 +2,16 @@
 
 import { Deal } from '../../../../lib/types';
 import { RAISE_OPTIONS } from '../constants';
+import { EscSupportDeal } from '../types';
 import { RaiseField } from '../ui/fields';
 import { Dispatch, SetStateAction } from 'react';
 
-export function DealPanel({ expandedDealId, getOngoing, handleSubmit, onViewDeal, selectedDeal, setSelectedDeal, submitError, submitSuccess, submitting }: {
+export function DealPanel({ addNoteToTicket, expandedDealId, findSameIssue, getOngoing, handleSubmit, onViewDeal, selectedDeal, setSelectedDeal, submitError, submitSuccess, submitting }: {
+  addNoteToTicket: (ticketId: number, text: string) => Promise<void>;
   expandedDealId: number | null;
-  getOngoing: (dealName: string) => { id: number; name: string; stage: string; pipeline: string; }[];
-  handleSubmit: (dealId: number, selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" | undefined; }[]) => Promise<void>;
+  findSameIssue: (dealName: string, reasonId: number) => EscSupportDeal | undefined;
+  getOngoing: (dealName: string) => EscSupportDeal[];
+  handleSubmit: (dealId: number, selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" | undefined; }[], notes?: string) => Promise<void>;
   onViewDeal: (dealName: string) => void;
   selectedDeal: Deal;
   setSelectedDeal: Dispatch<SetStateAction<Deal | null>>;
@@ -63,10 +66,16 @@ export function DealPanel({ expandedDealId, getOngoing, handleSubmit, onViewDeal
                       ed.pipeline === "escalation" ? "border-rose-100 bg-rose-50/50" : "border-teal-100 bg-teal-50/50"
                     }`}
                   >
-                    <p className="text-xs font-medium text-gray-900 truncate flex-1">{ed.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-900 truncate">{ed.name}</p>
+                      <p className="text-[10px] text-gray-500 truncate">
+                        RCA: {ed.rca || "—"} · Resolution: {ed.resolution || "—"}
+                      </p>
+                    </div>
                     <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
-                      ed.pipeline === "escalation" ? "bg-rose-100 text-rose-700" : "bg-teal-100 text-teal-700"
-                    }`}>{ed.stage}</span>
+                      ed.closed ? "bg-gray-100 text-gray-600"
+                        : ed.pipeline === "escalation" ? "bg-rose-100 text-rose-700" : "bg-teal-100 text-teal-700"
+                    }`}>{ed.closed ? `Closed · ${ed.stage}` : ed.stage}</span>
                   </li>
                 ))}
               </ul>
@@ -79,7 +88,11 @@ export function DealPanel({ expandedDealId, getOngoing, handleSubmit, onViewDeal
             <RaiseField
               label="Raise Request"
               options={RAISE_OPTIONS}
-              onSubmit={(opts) => handleSubmit(selectedDeal.id, opts)}
+              onSubmit={(opts, notes) => handleSubmit(selectedDeal.id, opts, notes)}
+              findExisting={(reasonId) => findSameIssue(selectedDeal.name, reasonId)}
+              onOpenExisting={(ticket) => { onViewDeal(ticket.name); setSelectedDeal(null); }}
+              onAddNote={addNoteToTicket}
+              succeeded={submitSuccess === selectedDeal.id}
               submitting={submitting === selectedDeal.id}
             />
           </div>

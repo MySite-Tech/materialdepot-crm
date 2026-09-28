@@ -4,13 +4,13 @@ import { KylasDealInfo, SyncEstimateResult, fetchKylasDealInfo, syncEstimate } f
 import { getRaiseEscalationStatus, raiseEscalationDirect } from '../../../lib/api/ops/escalation';
 import { Deal, DealsSearchResponse } from '../../../lib/types';
 import { DEFAULT_PAGE_SIZE, POST_ORDER_STAGE_RULE, RAISE_POLL_INTERVAL_MS, RAISE_POLL_MAX_ATTEMPTS, SALES_PIPELINE_RULE, SEARCH_FIELDS } from './constants';
-import { AssociatedDeal, ContactResult } from './types';
+import { AssociatedDeal, ContactResult, EscSupportDeal } from './types';
 import { formatCurrency, isSalesDeal } from './utils';
 import { Dispatch, RefObject, SetStateAction } from 'react';
 
 export function makeRaiseActions({ defaultRange, escSupportDeals, kylasInput, pageLoading, setContactDeals, setContacts, setCurrentPage, setDealContact, setDeals, setKylasDealInfo, setKylasError, setKylasInput, setKylasLoading, setKylasModalOpen, setKylasSyncResult, setLoadingContactDeals, setLoadingContacts, setPageLoading, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, setTotalCount, setTotalPages, submitLockRef, totalCount, totalPages }: {
   defaultRange: { from: string; to: string; } | null;
-  escSupportDeals: { id: number; name: string; stage: string; pipeline: string; }[];
+  escSupportDeals: EscSupportDeal[];
   kylasInput: string;
   pageLoading: boolean;
   setContactDeals: Dispatch<SetStateAction<AssociatedDeal[]>>;
@@ -190,12 +190,37 @@ async function fetchContactDeals(contactId: number) {
 function getOngoing(dealName: string) {
   const base = dealName.match(/((?:ENQ|MD|CT)\w+)/i)?.[1]?.toUpperCase();
   if (!base) return [];
-  return escSupportDeals.filter((d) => d.name.toUpperCase().includes(base));
+  const onOrder = escSupportDeals.filter((d) => d.name.toUpperCase().includes(base));
+  const lastClosed = onOrder
+    .filter((d) => d.closed)
+    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))[0];
+  return [...onOrder.filter((d) => !d.closed), ...(lastClosed ? [lastClosed] : [])];
+}
+
+function findSameIssue(dealName: string, reasonId: number): EscSupportDeal | undefined {
+  return getOngoing(dealName).find((d) => d.reasonIds.includes(reasonId));
+}
+
+async function addNoteToTicket(ticketId: number, text: string, author?: string) {
+  const res = await fetch("/api/notes/relation/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sourceEntity: { description: `<div><b>[${author ?? "Unknown"}]</b> ${text.trim()}</div>` },
+      targetEntityId: String(ticketId),
+      targetEntityType: "DEAL",
+    }),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.error ?? `Failed: ${res.status}`);
+  }
 }
 
 async function handleSubmit(
   dealId: number,
-  selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" }[]
+  selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" }[],
+  notes?: string,
 ) {
   if (submitLockRef.current) return;
   submitLockRef.current = true;
@@ -219,6 +244,7 @@ async function handleSubmit(
       dealId,
       selectedOptions.map((o) => String(o.id)),
       requestType,
+      notes?.trim(),
     );
 
     let escalationDealId: string | null = null;
@@ -315,5 +341,5 @@ function handleOpenKylasModal() {
   setKylasDealInfo(null);
 }
 
-  return { fetchContactDeals, getOngoing, goToPage, handleFindKylasDeal, handleOpenKylasModal, handleSubmit, loadBackgroundData, searchContacts };
+  return { addNoteToTicket, fetchContactDeals, findSameIssue, getOngoing, goToPage, handleFindKylasDeal, handleOpenKylasModal, handleSubmit, loadBackgroundData, searchContacts };
 }

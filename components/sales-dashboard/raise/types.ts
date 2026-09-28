@@ -15,6 +15,18 @@ export interface AssociatedDeal {
   estimatedValue: string;
 }
 
+export interface EscSupportDeal {
+  id: number;
+  name: string;
+  stage: string;
+  pipeline: string;
+  rca: string;
+  resolution: string;
+  closed: boolean;
+  updatedAt: string | null;
+  reasonIds: number[];
+}
+
 export interface Props {
   userName?: string;
   onViewDeal: (dealName: string) => void;
