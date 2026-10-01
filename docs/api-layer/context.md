@@ -165,6 +165,22 @@ rather than 5 for the same reason — a sibling outside the page is unfindable,
 and a miss now throws so the caller falls back to a blind `upsertLead` instead of
 writing to the wrong row.
 
+## Branch detail is read on Edit, and saved as a diff
+
+`lib/api/crm/branches.ts` lists branches from `/orgainsation-branch/`, but that
+list serializer is shared with the PO/PDF flows and carries no `city` or
+`map_link`, so Admin > Branches reads the four editable fields (`branch_name`,
+`city`, `address`, `map_link`) from `GET /orgainsation-branch/<id>/` only when
+Edit is clicked — one request per click, nothing on mount. The rest of the
+model (numbering prefixes and counters, bank details, logos) is the same for
+every store and is deliberately not editable here: changing a counter re-numbers
+POs. `saveBranchDetail` `PUT`s only the fields that changed (the backend
+update is `partial=True`), so a save never rewrites what the form did not show.
+`map_link` is a Django `URLField`, so the form rejects anything that is not a
+full `http(s)` URL before sending — otherwise the 400 surfaces as the bare
+"API error: 400". `city` needs the backend `OrganisationBranch.city` field;
+against an older API it is silently dropped, not an error.
+
 ## Constraints
 
 - Add a new backend call to the module for its domain and let the barrel export
