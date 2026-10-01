@@ -78,8 +78,8 @@ function presetRange(p: Preset): { from: string; to: string } {
 }
 
 export function isEscalationOrSupport(deal: Deal) {
-  const p = (deal.pipeline?.name ?? "").toLowerCase();
-  return p.includes("escalation") || p.includes("support");
+  const pipelineId = deal.pipeline?.id;
+  return pipelineId === 32620 || pipelineId === 32616;
 }
 
 export function cfDisplayValue(val: unknown): string {

@@ -58,6 +58,12 @@ only post-order deals come back. Filtering server-side is what keeps
 makes both lie, and a page of 10 can render as 2 rows. An explicit search is
 deliberately unfiltered: searching a name is the user asking for that deal.
 
+The escalation status tab's server-side search filters by pipeline IDs (32620 for
+Escalation, 32616 for Support), but the client-side `isEscalationOrSupport`
+filter used to check pipeline names for substring matches. This mismatch caused
+deals with correct pipeline IDs but non-matching names to be silently dropped.
+Always filter by the same identifier type used in the search query.
+
 ## "retrying" is not "failed" — do not invite a re-submit
 
 `raise-status/` returns `pending | retrying | success | failed`. **retrying**
