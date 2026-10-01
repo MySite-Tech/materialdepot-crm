@@ -31,10 +31,10 @@ arrive there was no ticket, and nothing on the screen could tell: success was
 inferred from Kylas returning 200 to the PATCH. **Never report a raise as
 done off the PATCH alone** — the ticket is the deliverable, so wait for its id.
 
-Send option **ids**, not names. `RAISE_OPTIONS` labels two options differently
-from the Kylas option they point at — "Return" is Kylas's "Return Request",
-"Order Modification" is "Modify Order" — so a name-keyed lookup refuses exactly
-those two and no others, which is the kind of gap that survives a smoke test.
+Send option **ids**, not names. `RAISE_OPTIONS` labels are kept in sync with the
+backend escalation reasons — as of 2026-10-01, the names and IDs match the
+Django/Kylas option set. A name-keyed lookup would fail on any mismatch between
+our labels and the upstream data, so the id is the only reliable key.
 
 Duplicate suppression lives in Django, and now covers two different duplicates.
 Our own PATCH makes Kylas fire the webhook, and the backend claim row stops it

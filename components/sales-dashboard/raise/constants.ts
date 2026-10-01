@@ -53,18 +53,18 @@ export const POST_ORDER_STAGE_RULE = {
 };
 
 export const RAISE_OPTIONS: { id: number; name: string; label?: string; requestType: "Support" | "Escalation" }[] = [
-  { id: 202380, name: "Return", label: "Return Request", requestType: "Support" },
-  { id: 184695, name: "Order Modification", label: "Order modification/cancellation", requestType: "Support" },
-  { id: 202382, name: "Order Status Update", label: "Order status update", requestType: "Support" },
-  { id: 202383, name: "Delivery Attempted", label: "Delivery attempted", requestType: "Support" },
-  { id: 184504, name: "Delivery delay", label: "Delivery Delay", requestType: "Escalation" },
+  { id: 202380, name: "Return", label: "Return", requestType: "Support" },
+  { id: 184695, name: "Order Modification/Cancellation", label: "Order Modification/Cancellation", requestType: "Support" },
+  { id: 202382, name: "Order Status Update(Delivery/Refund/Invoice)", label: "Order Status Update(Delivery/Refund/Invoice)", requestType: "Support" },
+  { id: 202383, name: "Delivery Attempted", label: "Delivery Attempted", requestType: "Support" },
+  { id: 184504, name: "Delivery delay", label: "Delivery delay", requestType: "Escalation" },
   { id: 212551, name: "Material not ready", requestType: "Escalation" },
-  { id: 212558, name: "Batch/Shade Variation", label: "Batch/Shade variation", requestType: "Escalation" },
+  { id: 212558, name: "Batch/Shade Variation", label: "Batch/Shade Variation", requestType: "Escalation" },
   { id: 184508, name: "Item missing", requestType: "Escalation" },
   { id: 202384, name: "Incorrect quantity received", requestType: "Escalation" },
   { id: 184507, name: "Wrong material", requestType: "Escalation" },
-  { id: 184505, name: "Damaged material", label: "Damaged Material", requestType: "Escalation" },
+  { id: 184505, name: "Damaged Material", label: "Damaged Material", requestType: "Escalation" },
   { id: 202385, name: "Unloading not done", requestType: "Escalation" },
-  { id: 184506, name: "Quality Issue", label: "Quality issue", requestType: "Escalation" },
+  { id: 184506, name: "Quality Issue", label: "Quality Issue", requestType: "Escalation" },
   { id: 202386, name: "Installation/Site Audit Issue", requestType: "Escalation" },
 ];
