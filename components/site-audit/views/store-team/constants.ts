@@ -31,6 +31,7 @@ export const BLACKOUT_WHOLE_DAY = '*';
 
 export const SLOT_BLACKOUTS: Record<string, string[] | typeof BLACKOUT_WHOLE_DAY> = {
   '2026-09-17': ['10:00', '11:00', '13:00'],
+  '2026-10-02': BLACKOUT_WHOLE_DAY,
 };
 
 export const ASSIGNED_STATUSES = ['assigned', 'scheduled', 'callpending', 'onway', 'atsite', 'completed'];
