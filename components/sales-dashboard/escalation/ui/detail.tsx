@@ -66,7 +66,15 @@ export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded,
                 <div className="space-y-1.5">
                   <div className="flex items-start gap-2 text-xs">
                     <span className="text-gray-500 w-20 shrink-0">Raised by</span>
-                    <span className="font-medium text-gray-800">{raisedBy || "—"}</span>
+                    <span className="font-medium text-gray-800">{(typeof selectedDeal.customFieldValues?.["cfProjectPhase"] === "string" && selectedDeal.customFieldValues["cfProjectPhase"]) || raisedBy || "—"}</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-xs">
+                    <span className="text-gray-500 w-20 shrink-0">Request type</span>
+                    <span className="font-medium text-gray-800">{cfDisplayValue(selectedDeal.customFieldValues?.["cfRequestType"]) || "—"}</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-xs">
+                    <span className="text-gray-500 w-20 shrink-0">RCA</span>
+                    <span className="font-medium text-gray-800">{cfDisplayValue(selectedDeal.customFieldValues?.["cfRcaEscalationReason"]) || "—"}</span>
                   </div>
                   <div className="flex items-start gap-2 text-xs">
                     <span className="text-gray-500 w-20 shrink-0">Resolution</span>
@@ -80,6 +88,12 @@ export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded,
                     <span className="text-gray-500 w-20 shrink-0">Attribution</span>
                     <span className="font-medium text-gray-800">{cfDisplayValue(selectedDeal.customFieldValues?.["cfEscalationClassification"]) || "—"}</span>
                   </div>
+                  {typeof selectedDeal.customFieldValues?.["cfNotes"] === "string" && selectedDeal.customFieldValues["cfNotes"] && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <span className="text-gray-500 w-20 shrink-0">Ticket notes</span>
+                      <span className="font-medium text-gray-800 whitespace-pre-wrap break-words min-w-0">{selectedDeal.customFieldValues["cfNotes"] as string}</span>
+                    </div>
+                  )}
                 </div>
               </div>
     

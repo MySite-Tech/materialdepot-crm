@@ -49,6 +49,38 @@ second problem, and the screen must not quietly refuse it. So nothing here
 needs to (or can) block a repeat Submit, but equally nothing here should
 *encourage* one; see below.
 
+## Request Type and Raised by are the backend's, not the screen's
+
+The raise POST still sends `request_type`, but Django ignores it and derives
+Support/Escalation from the chosen option ids. Routing in Kylas depends on
+`cfRequestType`, and OMS, procurement and hand-made Kylas tickets never pass
+through this screen, so the rule lives in one place (CS Ops 2.3, 2026-09).
+
+"Raised by" is `cfProjectPhase`, written by the backend as "Name (contact)".
+It is **not** `paymentName`, although the requirement named that field: in
+Kylas `paymentName` is the name column of Part Payments, and a bare value is
+silently dropped. On sales deals `cfProjectPhase` still holds the customer's
+project phase, so read it as "Raised by" only on escalation/support tickets.
+
+## Notes go to cfNotes, and a failed raise keeps them
+
+The optional note is sent as `notes` and stored verbatim as the ticket's
+`cfNotes`. The backend also copies it to the ticket's Notes panel in the
+background. The form clears only after a **successful** raise: a failure keeps
+the chosen reason and the note, so the operator can retry without retyping.
+Clearing on success matters too, or the last note rides into the next ticket.
+
+## "Is it one of these?" warns, it never blocks
+
+Ongoing requests list open tickets on the order plus the **latest closed** one,
+with no date window (CS Ops 2.6). When the chosen reason matches one of them,
+the form shows a banner with Open ticket and Add note, and Submit reads
+"Create a new ticket anyway". It is information only, for the same reason the
+raise guard never refuses a second ticket: a repeat issue can be a new problem.
+Closed means `actualClosureDate` set, stage Ticket Cancelled / Escalation
+Resolved, or installation status "Resolution Completed", the same rule the
+backend auto-resolve uses.
+
 ## The deal list is filtered by Kylas, not by us
 
 The default list carries a `pipelineStage not_in [220516, 227603, 220520]` rule

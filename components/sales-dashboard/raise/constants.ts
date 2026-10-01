@@ -27,6 +27,7 @@ export const SALES_PIPELINE_RULE = {
 export const SEARCH_FIELDS = [
   "name", "ownedBy", "estimatedValue", "pipeline", "pipelineStage",
   "id", "createdAt", "updatedAt", "customFieldValues", "associatedContacts",
+  "actualClosureDate",
 ];
 
 // Escalations are about an order that exists, so the list asks Kylas for
@@ -47,10 +48,12 @@ export const POST_ORDER_STAGE_RULE = {
 
 export const RAISE_OPTIONS: { id: number; name: string; label?: string; requestType: "Support" | "Escalation" }[] = [
   { id: 202380, name: "Return", label: "Return Request", requestType: "Support" },
-  { id: 184695, name: "Order Modification", label: "Modify Order", requestType: "Support" },
+  { id: 184695, name: "Order Modification", label: "Order modification/cancellation", requestType: "Support" },
   { id: 202382, name: "Order Status Update", label: "Order status update", requestType: "Support" },
-  { id: 184512, name: "Other disputes", label: "Others", requestType: "Support" },
+  { id: 202383, name: "Delivery Attempted", label: "Delivery attempted", requestType: "Support" },
   { id: 184504, name: "Delivery delay", label: "Delivery Delay", requestType: "Escalation" },
+  { id: 212551, name: "Material not ready", requestType: "Escalation" },
+  { id: 212558, name: "Batch/Shade Variation", label: "Batch/Shade variation", requestType: "Escalation" },
   { id: 184508, name: "Item missing", requestType: "Escalation" },
   { id: 202384, name: "Incorrect quantity received", requestType: "Escalation" },
   { id: 184507, name: "Wrong material", requestType: "Escalation" },

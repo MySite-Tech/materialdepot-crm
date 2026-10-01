@@ -9,13 +9,13 @@ import { RaiseModal } from './ui/modal';
 import { SearchForm } from './search/form';
 
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE, POST_ORDER_STAGE_RULE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from './constants';
-import { AssociatedDeal, ContactResult, Props } from './types';
+import { AssociatedDeal, ContactResult, EscSupportDeal, Props } from './types';
 import { extractEscSupport, isSalesDeal } from './utils';
 import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/api';
 import { Deal, DealsSearchResponse } from '@/lib/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export default function MobileRaiseClient({ onViewDeal }: Props) {
+export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
   const [, setQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -33,9 +33,7 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [dealContact, setDealContact] = useState<Record<number, string>>({});
 
-  const [escSupportDeals, setEscSupportDeals] = useState<
-    { id: number; name: string; stage: string; pipeline: string }[]
-  >([]);
+  const [escSupportDeals, setEscSupportDeals] = useState<EscSupportDeal[]>([]);
 
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -155,7 +153,7 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
     }
   }, []);
 
-  const { fetchContactDeals, getOngoing, goToPage, handleFindKylasDeal, handleOpenKylasModal, handleSubmit, loadBackgroundData, searchContacts } = makeRaiseActions({ defaultRange, escSupportDeals, kylasInput, pageLoading, setContactDeals, setContacts, setCurrentPage, setDealContact, setDeals, setKylasDealInfo, setKylasError, setKylasInput, setKylasLoading, setKylasModalOpen, setKylasSyncResult, setLoadingContactDeals, setLoadingContacts, setPageLoading, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, setTotalCount, setTotalPages, submitLockRef, totalCount, totalPages });
+  const { addNoteToTicket, fetchContactDeals, findSameIssue, getOngoing, goToPage, handleFindKylasDeal, handleOpenKylasModal, handleSubmit, loadBackgroundData, searchContacts } = makeRaiseActions({ defaultRange, escSupportDeals, kylasInput, pageLoading, setContactDeals, setContacts, setCurrentPage, setDealContact, setDeals, setKylasDealInfo, setKylasError, setKylasInput, setKylasLoading, setKylasModalOpen, setKylasSyncResult, setLoadingContactDeals, setLoadingContacts, setPageLoading, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, setTotalCount, setTotalPages, submitLockRef, totalCount, totalPages });
 
 
   useEffect(() => { fetchDeals(""); }, [fetchDeals]);
@@ -175,7 +173,7 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              fields: ["name", "pipeline", "pipelineStage", "id"],
+              fields: ["name", "pipeline", "pipelineStage", "id", "customFieldValues", "actualClosureDate", "createdAt", "updatedAt"],
               jsonRule: {
                 condition: "AND",
                 rules: [{
@@ -362,6 +360,8 @@ export default function MobileRaiseClient({ onViewDeal }: Props) {
       {selectedDeal && (
         <DealPanel
         expandedDealId={expandedDealId}
+        addNoteToTicket={(ticketId, text) => addNoteToTicket(ticketId, text, userName)}
+        findSameIssue={findSameIssue}
         getOngoing={getOngoing}
         handleSubmit={handleSubmit}
         onViewDeal={onViewDeal}
