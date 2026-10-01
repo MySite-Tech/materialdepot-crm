@@ -19,6 +19,12 @@ export const SYNC_INDEX_MAX_ATTEMPTS = 10;
 
 const SALES_PIPELINE_ID = 31661;
 
+const ESCALATION_PIPELINE_ID = 32620;
+
+const SUPPORT_PIPELINE_ID = 32616;
+
+export const ESCALATION_PIPELINE_IDS = [ESCALATION_PIPELINE_ID, SUPPORT_PIPELINE_ID];
+
 export const SALES_PIPELINE_RULE = {
   id: "pipeline", field: "pipeline", type: "string", input: "select",
   operator: "equal", value: SALES_PIPELINE_ID,

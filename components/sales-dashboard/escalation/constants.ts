@@ -17,9 +17,9 @@ export const SEARCH_FIELDS = [
   "associatedContacts",
 ];
 
-const ESCALATION_PIPELINE_ID = 32620;
+export const ESCALATION_PIPELINE_ID = 32620;
 
-const SUPPORT_PIPELINE_ID = 32616;
+export const SUPPORT_PIPELINE_ID = 32616;
 
 export const ESC_SUPPORT_PIPELINE_RULE = {
   id: "pipeline", field: "pipeline", type: "string", input: "select",

@@ -2,8 +2,8 @@
 
 import { KylasDealInfo, SyncEstimateResult, fetchKylasDealInfo, syncEstimate } from '../../../lib/api/ops/kylas-sync';
 import { getRaiseEscalationStatus, raiseEscalationDirect } from '../../../lib/api/ops/escalation';
-import { Deal, DealsSearchResponse } from '../../../lib/types';
-import { DEFAULT_PAGE_SIZE, POST_ORDER_STAGE_RULE, RAISE_POLL_INTERVAL_MS, RAISE_POLL_MAX_ATTEMPTS, SALES_PIPELINE_RULE, SEARCH_FIELDS } from './constants';
+import { Deal, DealsSearchResponse } from '@/lib/types';
+import { DEFAULT_PAGE_SIZE, ESCALATION_PIPELINE_IDS, POST_ORDER_STAGE_RULE, RAISE_POLL_INTERVAL_MS, RAISE_POLL_MAX_ATTEMPTS, SALES_PIPELINE_RULE, SEARCH_FIELDS } from './constants';
 import { AssociatedDeal, ContactResult, EscSupportDeal } from './types';
 import { formatCurrency, isSalesDeal } from './utils';
 import { Dispatch, RefObject, SetStateAction } from 'react';
@@ -147,11 +147,14 @@ async function fetchContactDeals(contactId: number) {
     const data: DealsSearchResponse = await res.json();
     const all = data.content ?? [];
     const toAssociated = (d: Deal): AssociatedDeal => {
-      const pName = (d.pipeline?.name ?? "").toLowerCase();
+      const pipelineId = d.pipeline?.id;
+      const pipeline = ESCALATION_PIPELINE_IDS.includes(pipelineId as number)
+        ? (pipelineId === 32620 ? "escalation" : "support")
+        : "sales";
       return {
         id: d.id,
         name: d.name,
-        pipeline: pName.includes("escalation") ? "escalation" : pName.includes("support") ? "support" : "sales",
+        pipeline,
         pipelineName: d.pipeline?.name ?? "—",
         stage: d.pipelineStage?.name ?? "—",
         estimatedValue: formatCurrency(d.estimatedValue),

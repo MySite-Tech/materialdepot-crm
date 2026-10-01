@@ -96,6 +96,10 @@ filter used to check pipeline names for substring matches. This mismatch caused
 deals with correct pipeline IDs but non-matching names to be silently dropped.
 Always filter by the same identifier type used in the search query.
 
+The same issue existed in the raise tab's `extractEscSupport` and the
+`toAssociated` mapper in `handlers.ts` — both filtered by pipeline name when
+the search uses pipeline IDs. Fixed all three to check pipeline IDs directly.
+
 ## "retrying" is not "failed" — do not invite a re-submit
 
 `raise-status/` returns `pending | retrying | success | failed`. **retrying**

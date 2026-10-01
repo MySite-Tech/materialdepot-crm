@@ -1,6 +1,6 @@
 'use client';
 
-import { ESC_SUPPORT_PIPELINE_RULE, SEARCH_FIELDS, TRACKED_FIELDS } from './constants';
+import { ESC_SUPPORT_PIPELINE_RULE, ESCALATION_PIPELINE_ID, SUPPORT_PIPELINE_ID, SEARCH_FIELDS, TRACKED_FIELDS } from './constants';
 import { DateFilter, Preset, StatusFilter, TimelineEntry } from './types';
 import { Deal } from '@/lib/types';
 
@@ -79,7 +79,7 @@ function presetRange(p: Preset): { from: string; to: string } {
 
 export function isEscalationOrSupport(deal: Deal) {
   const pipelineId = deal.pipeline?.id;
-  return pipelineId === 32620 || pipelineId === 32616;
+  return pipelineId === ESCALATION_PIPELINE_ID || pipelineId === SUPPORT_PIPELINE_ID;
 }
 
 export function cfDisplayValue(val: unknown): string {

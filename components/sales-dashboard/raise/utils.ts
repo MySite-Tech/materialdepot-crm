@@ -1,6 +1,7 @@
 'use client';
 
 import { Deal } from '@/lib/types';
+import { ESCALATION_PIPELINE_IDS } from './constants';
 import { EscSupportDeal } from './types';
 
 export function isSalesDeal(deal: Deal) {
@@ -13,17 +14,18 @@ export function extractEscSupport(deals: Deal[]): EscSupportDeal[] {
   const seen = new Set<number>();
   const out: EscSupportDeal[] = [];
   for (const d of deals) {
-    const p = (d.pipeline?.name ?? "").toLowerCase();
-    if (!p.includes("escalation") && !p.includes("support")) continue;
+    const pipelineId = d.pipeline?.id;
+    if (!ESCALATION_PIPELINE_IDS.includes(pipelineId as number)) continue;
     if (seen.has(d.id)) continue;
     seen.add(d.id);
     const cf = d.customFieldValues ?? {};
     const stage = d.pipelineStage?.name ?? "—";
+    const pipeline = pipelineId === 32620 ? "escalation" : "support";
     out.push({
       id: d.id,
       name: d.name,
       stage,
-      pipeline: p.includes("escalation") ? "escalation" : "support",
+      pipeline,
       rca: cfDisplayValue(cf["cfRcaEscalationReason"]),
       resolution: cfDisplayValue(cf["cfResolution"]),
       closed: !!d.actualClosureDate
