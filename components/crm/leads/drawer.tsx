@@ -7,6 +7,7 @@ import { CLIENT_TYPES, MARK_LOST_ELIGIBLE, MIN_LOST_AGE_DAYS, ORDER_LOST_REASONS
 import { DateEditPopup } from '../ui/prompts';
 import { LeadDrawerProps } from '../types';
 import { Avatar, Field } from '../ui';
+import { SearchSelect } from '../ui/inputs';
 import { canBypassLostAge, canMarkLostByAge, fmtDate, fmtTimestamp, todayStr } from '../utils';
 import { useSpeechToText } from '../hooks/use-speech-to-text';
 
@@ -159,12 +160,14 @@ export function LeadDrawer({ lead, currentUser, branches, users = [], onSave, on
                 <input className={`px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full font-mono ${isEdit ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} value={form.clientPhone || ''} placeholder="10-digit phone" maxLength={10} inputMode="numeric" readOnly={isEdit} onChange={isEdit ? undefined : (e) => set('clientPhone', e.target.value.replace(/[^0-9]/g, ''))} />
               </Field>
               <Field label="ASSIGNED TO">
-                <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.assignedTo} onChange={(e) => set('assignedTo', e.target.value)}>
-                  {form.assignedTo && !users.some((u) => u.name === form.assignedTo) && (
-                    <option value={form.assignedTo}>{form.assignedTo}</option>
-                  )}
-                  {users.map((u, i) => <option key={i} value={u.name}>{u.name}</option>)}
-                </select>
+                <SearchSelect
+                  value={form.assignedTo}
+                  onChange={(v) => set('assignedTo', v)}
+                  options={[
+                    ...(form.assignedTo && !users.some((u) => u.name === form.assignedTo) ? [form.assignedTo] : []),
+                    ...users.map((u) => u.name),
+                  ]}
+                />
               </Field>
               <Field label="BRANCH">
                 <select className="px-2.5 py-2 text-[13px] border border-gray-200 rounded-md outline-none font-sans w-full" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
