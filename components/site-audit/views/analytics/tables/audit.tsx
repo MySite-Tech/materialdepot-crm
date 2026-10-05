@@ -118,7 +118,12 @@ export function AnalyticsAuditTable({ M, chartApi, from, iArrNote, statusDefs, t
         tatNote="Bookings are counted once per install ORDER on its created_at; executions are counted per SUB-JOB on its completion date, so an order with a wallpaper and a flooring sub-job books once and executes twice. TAT is measured from the parent order&rsquo;s created_at to each sub-job&rsquo;s completion date. Orders created before 1 Jul 2026 carry no log in this tab&rsquo;s payload, so their completion date falls back to the scheduled date — the same documented limitation as the metrics above."
       />
     
-      <div className="px-4 sm:px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">Per-Installer Breakdown</div>
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-gray-100">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Per-Installer Breakdown</span>
+        {M.installers.length ? (
+          <button {...tileProps('iInstallerAll', 'rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700')}>⬇ All installer jobs</button>
+        ) : null}
+      </div>
       {M.installers.length ? (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -139,7 +144,9 @@ export function AnalyticsAuditTable({ M, chartApi, from, iArrNote, statusDefs, t
             <tbody>
               {M.installers.map((inst: any, i: number) => (
                 <tr key={i}>
-                  <td className="px-3 py-2.5 text-[13px] border-t border-gray-100 font-bold">{inst.name}</td>
+                  <td className="px-3 py-2.5 text-[13px] border-t border-gray-100 font-bold">
+                    <span {...tileProps('iInstaller:' + inst.key, 'text-blue-700 underline decoration-dotted underline-offset-2')}>{inst.name}</span>
+                  </td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100">{inst.orders}</td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100">{inst.completed}</td>
                   <ArrCell onTime={inst.arrOnTime} late={inst.arrLate} />

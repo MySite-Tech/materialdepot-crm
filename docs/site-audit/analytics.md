@@ -76,6 +76,11 @@ Two things the tile says out loud because they would otherwise be read as perfor
   leaves the denominator and the count of such rows rides on the tile. Live today that count is
   zero: all 480 audit and 608 install rows carry a phone.
 
+**D+1 / D+3 / D+7 tiles** (added 2026-10-05, `windows` in `_anAuditConversion`): same matched install,
+counted only when it was raised within N days of the audit date. Their denominators keep only measurable
+audits at least N days old (IST), so a recent audit isn't counted as a miss before its window has closed.
+That means each D+N tile's denominator can be smaller than the main tile's.
+
 Reference numbers for anyone changing this, measured 2026-09-23: Jun–Sep 268/471 = 57%,
 Aug 86/153 = 56%, Sep-to-date 66/149 = 44%.
 
@@ -198,3 +203,9 @@ borrowing its components.
 exists". That proxy was only ever true while the field app wrote the rating at
 signing time. Audit reads `audit_ticked->sign->>name`, install reads
 `subjobs[].jobcard.sign`.
+
+**Per-installer job lists** (added 2026-10-05): each installer name in the Per-Installer Breakdown opens
+`drills['iInstaller:<email|name>']`, and "All installer jobs" opens `drills.iInstallerAll`. Both are built from
+`iAttempts`, with one row per installer per attempt, the same set the Orders column counts. The Result column
+shows wallpaper as rolls (ceil per item, `SQFT_PER_ROLL`), and custom wallpaper (`sj.customWp`, else the order's)
+and wooden flooring as sq.ft. CSV export uses the drill modal's own button.

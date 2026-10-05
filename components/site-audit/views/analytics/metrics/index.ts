@@ -1,5 +1,7 @@
 import { JOB_STATUS, NPS_HOUSE_NOTE, avgScore, npsFrom } from '../../../shared/format';
 import { AnalyticsData, Drill, DrillRow } from '../types';
+import { SQFT_PER_ROLL } from '../../../shared';
+import { categoryFor } from '../../../data/audit-registry';
 import { _anAuditSigned, _anDateIST, _anDstr, _anInstallSigned, npsSummary } from '../utils';
 import { _anArrivalStats, _anAttachAuditRatings, _anAttachInstallRatings, _anAuditConversion, _anAuditorMap, _anInstallAttempts, _anInstallerMap } from './aggregate';
 export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: string) {
@@ -335,6 +337,38 @@ export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: s
     ),
   };
 
+  const workDone = (a: any) => {
+    const sqft = (a.items || []).reduce((s: number, it: any) => s + (parseFloat(it.sqft) || 0), 0);
+    if (a.type === 'flooring') return 'Wooden Flooring — ' + Math.round(sqft) + ' sq.ft';
+    if (a.customWp) return 'Custom Wallpaper — ' + Math.round(sqft) + ' sq.ft';
+    if (a.type === 'wallpaper') {
+      const rolls = (a.items || []).reduce((s: number, it: any) => s + ((parseFloat(it.sqft) || 0) ? Math.ceil((parseFloat(it.sqft) || 0) / SQFT_PER_ROLL) : 0), 0);
+      return 'Wallpaper — ' + rolls + ' roll' + (rolls === 1 ? '' : 's') + ' (' + Math.round(sqft) + ' sq.ft)';
+    }
+    return categoryFor(a.type).label + (sqft ? ' — ' + Math.round(sqft) + ' sq.ft' : '');
+  };
+  const instKey = (x: any) => x.installer_email || x.installer_name;
+  const installerJobRows = (only?: string): DrillRow[] =>
+    iAttempts.flatMap((a) => (a.installers || [])
+      .filter((x: any) => instKey(x) && (!only || instKey(x) === only))
+      .map((x: any) => {
+        const done = ['completed', 'partial'].includes(a.status);
+        return {
+          pi: a.pi,
+          ...oRow(a.order),
+          person: x.installer_name || instKey(x),
+          slot: a.slot || '',
+          date: a.date,
+          hit: done ? 'yes' : 'no',
+          result: (done ? '\u2713 ' : '\u2717 ') + workDone(a) + ' · ' + label(a.status),
+        } as DrillRow;
+      }));
+  const instNote = 'One row per installer per attempt in range (a sub-job on one scheduled date). Rolls are the wallpaper area divided by the roll coverage, rounded up per item — the same rule as the Area / Rolls column. Custom wallpaper and wooden flooring show sq.ft. Green = completed or partial.';
+  drills.iInstallerAll = mk('Site Installation — All installers, job by job', instNote, installerJobRows());
+  for (const inst of installers) {
+    drills['iInstaller:' + inst.key] = mk('Site Installation — ' + inst.name + ' — jobs', instNote, installerJobRows(inst.key));
+  }
+
   for (const st of Object.keys(iByStatus)) {
     drills['iStatus:' + st] = mk(
       'Site Installation — ' + label(st),
@@ -383,6 +417,7 @@ export function computeAnalyticsMetrics(data: AnalyticsData, from: string, to: s
     aCompleted,
     aConverted: aConv.converted,
     aConvMeasurable: aConv.measurable,
+    aConvWindows: aConv.windows,
     aConvNoPhone: aConv.noPhone,
     aConvLinksOk: auditLinks !== null,
     aJobCard,

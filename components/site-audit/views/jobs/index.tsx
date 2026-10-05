@@ -8,7 +8,7 @@ import {
 } from '../../shared';
 import { autoImportSiteAuditJobs } from '../../data/auto-import-audit-orders';
 import ShadowerSelect, { type ShadowerOption } from '../../install-ops/ui/shadower-select';
-import { categoryFor, mdInstallTermsBlock } from '../../data/audit-registry';
+import { MD_CATEGORIES, categoryFor, mdInstallTermsBlock } from '../../data/audit-registry';
 import { AuditRoomCard, InstallRoomCard } from '../../ui/audit-room-views';
 import RoomSkuEditor, { auditRoomSkuSaver, installRoomSkuSaver } from '../../ui/room-sku-editor';
 
@@ -305,7 +305,28 @@ type Job = {
   date: string | null;
   installDates?: string[];
   city?: string | null;
+  cats: { label: string; installer: string | null }[];
 };
+
+const catLabel = (t?: string | null) => categoryFor(t).label;
+
+function downloadJobsCsv(rows: Job[], from: string, to: string) {
+  const head = ['Job ID', 'Type', 'Customer', 'Location', 'Categories', 'Category — Installer', 'Assigned To', 'Status', 'Date', 'Install Dates', 'City'];
+  const cell = (v: any) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const body = rows.map((j) => [
+    j.id, j.type === 'audit' ? 'Audit' : 'Install', j.customer, j.addr,
+    [...new Set(j.cats.map((c) => c.label))].join(' + '),
+    j.cats.filter((c) => c.installer).map((c) => c.label + ' — ' + c.installer).join('; '),
+    j.assignee || 'Unassigned', JOB_STATUS[j.status]?.l || j.status, j.date || '',
+    (j.installDates || []).join(' '), j.city || '',
+  ].map(cell).join(','));
+  const blob = new Blob([[head.map(cell).join(',')].concat(body).join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'jobs' + (from || to ? '_' + (from || 'start') + '_to_' + (to || 'today') : '') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 const JOBS_PAGE_SIZE = 25;
 
@@ -315,7 +336,8 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
   const [loading, setLoading] = useState(true);
   const [realJobs, setRealJobs] = useState<Job[]>([]);
   const [jobsFilter, setJobsFilter] = useState('all');
-  const [jobsDateFilter, setJobsDateFilter] = useState('');
+  const [jobsDateFrom, setJobsDateFrom] = useState('');
+  const [jobsDateTo, setJobsDateTo] = useState('');
   const [jobsSearch, setJobsSearch] = useState('');
   const [selectedJob, setSelectedJob] = useState<{ pi: string; type: 'audit' | 'install' } | null>(null);
   const [page, setPage] = useState(1);
@@ -325,7 +347,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
     const nameMap: Record<string, string> = {};
     async function load() {
       const [auditRes, installRes, profileRes] = await Promise.all([
-        sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date,city&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
+        sbGet('audit_orders?select=pi,customer_name,addr,auditor_name,auditor_email,status,date,city,service&status=not.in.(deleted,slot_reserved,slot_converted)&order=created_at.desc'),
         sbGet('install_orders_slim?select=pi,customer_name,addr,subjobs,status,delivery_date,city&status=neq.deleted&order=created_at.desc'),
 
         sbGet('profiles?select=name,email&role=neq.admin'),
@@ -340,6 +362,8 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
           customer: r.customer_name || '—', addr: r.addr || '—',
           assignee: r.auditor_name || (r.auditor_email ? nameMap[r.auditor_email] : null),
           status: r.status || 'pending', date: r.date || null, city: r.city ?? null,
+          cats: Object.entries(r.service || {}).filter(([k, v]) => MD_CATEGORIES[k] && Array.isArray(v) && v.length)
+            .map(([k]) => ({ label: catLabel(k), installer: null })),
         }));
       }
       if (Array.isArray(installRes)) {
@@ -358,6 +382,13 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
             assignee: emails.length ? emails.map((e) => nameMap[e] || e.split('@')[0]).join(', ') : null,
             status: r.status || 'pending', date: r.delivery_date || null,
             installDates, city: r.city ?? null,
+            cats: (r.subjobs || []).flatMap((sj: any) => {
+              const label = catLabel(sj.type);
+              const em = sj.assignments && sj.assignments.length
+                ? [...new Set(sj.assignments.map((a: any) => a.installer_email).filter(Boolean))] as string[]
+                : (sj.installer_email ? [sj.installer_email] : []);
+              return em.length ? em.map((e) => ({ label, installer: nameMap[e] || e.split('@')[0] })) : [{ label, installer: null }];
+            }),
           });
         });
       }
@@ -390,24 +421,25 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
     if (JOB_STATUS[jobsFilter]) return j.status === jobsFilter;
     return true;
   }).filter((j) => {
-    if (!jobsDateFilter) return true;
-    if (j.type === 'audit') return j.date === jobsDateFilter;
-    return (j.installDates || []).includes(jobsDateFilter);
+    if (!jobsDateFrom && !jobsDateTo) return true;
+    const inRange = (d: string | null) => !!d && (!jobsDateFrom || d >= jobsDateFrom) && (!jobsDateTo || d <= jobsDateTo);
+    if (j.type === 'audit') return inRange(j.date);
+    return (j.installDates || []).some(inRange);
   }).filter((j) => {
     if (!jobsSearch) return true;
     const q = jobsSearch.toLowerCase();
 
     const dates = [j.date, ...(j.installDates || [])].filter(Boolean).join(' ');
-    const hay = [j.id, j.customer, j.addr, j.assignee, JOB_STATUS[j.status]?.l || j.status, dates]
+    const hay = [j.id, j.customer, j.addr, j.assignee, ...j.cats.map((c) => c.label), JOB_STATUS[j.status]?.l || j.status, dates]
       .filter(Boolean).join(' ').toLowerCase();
     return hay.includes(q);
-  }), [cityJobs, jobsFilter, jobsDateFilter, jobsSearch]);
+  }), [cityJobs, jobsFilter, jobsDateFrom, jobsDateTo, jobsSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / JOBS_PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
   const pageRows = filtered.slice((curPage - 1) * JOBS_PAGE_SIZE, curPage * JOBS_PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [jobsFilter, jobsDateFilter, jobsSearch]);
+  useEffect(() => { setPage(1); }, [jobsFilter, jobsDateFrom, jobsDateTo, jobsSearch]);
 
   if (loading) {
     return (
@@ -459,12 +491,23 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
             <div className="flex items-center gap-1.5 ml-auto shrink-0">
               <input
                 type="date"
-                value={jobsDateFilter}
-                title="Filter by scheduled date"
-                onChange={(e) => setJobsDateFilter(e.target.value)}
-                className={`border rounded-md px-2.5 py-1.5 text-[13px] font-semibold outline-none cursor-pointer bg-white ${jobsDateFilter ? 'border-yellow-400 text-gray-900' : 'border-gray-200 text-gray-400'}`}
+                value={jobsDateFrom}
+                max={jobsDateTo || undefined}
+                title="From scheduled date"
+                onChange={(e) => setJobsDateFrom(e.target.value)}
+                className={`border rounded-md px-2.5 py-1.5 text-[13px] font-semibold outline-none cursor-pointer bg-white ${jobsDateFrom ? 'border-yellow-400 text-gray-900' : 'border-gray-200 text-gray-400'}`}
               />
-              {jobsDateFilter && <button onClick={() => setJobsDateFilter('')} className="border-0 bg-red-100 text-red-600 rounded-md px-2.5 py-1.5 font-bold text-xs cursor-pointer whitespace-nowrap">✕ Clear date</button>}
+              <span className="text-[12px] text-gray-400">to</span>
+              <input
+                type="date"
+                value={jobsDateTo}
+                min={jobsDateFrom || undefined}
+                title="To scheduled date"
+                onChange={(e) => setJobsDateTo(e.target.value)}
+                className={`border rounded-md px-2.5 py-1.5 text-[13px] font-semibold outline-none cursor-pointer bg-white ${jobsDateTo ? 'border-yellow-400 text-gray-900' : 'border-gray-200 text-gray-400'}`}
+              />
+              <button onClick={() => downloadJobsCsv(filtered, jobsDateFrom, jobsDateTo)} disabled={!filtered.length} className="border border-gray-200 bg-white text-gray-700 rounded-md px-2.5 py-1.5 font-semibold text-xs cursor-pointer whitespace-nowrap disabled:opacity-40">⬇ Download CSV ({filtered.length})</button>
+              {(jobsDateFrom || jobsDateTo) && <button onClick={() => { setJobsDateFrom(''); setJobsDateTo(''); }} className="border-0 bg-red-100 text-red-600 rounded-md px-2.5 py-1.5 font-bold text-xs cursor-pointer whitespace-nowrap">✕ Clear date</button>}
             </div>
           </div>
           <table className="w-full">
@@ -474,6 +517,7 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
                 <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Type</th>
                 <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Customer</th>
                 <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Location</th>
+                <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Category</th>
                 <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Assigned To</th>
                 <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Status</th>
                 <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">Date</th>
@@ -486,11 +530,20 @@ export default function SiteAuditJobsView({ city = 'all' }: { city?: CityFilter 
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100"><span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${j.type === 'audit' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{j.type === 'audit' ? 'Audit' : 'Install'}</span></td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100"><b>{j.customer}</b></td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100 text-gray-400">{j.addr}</td>
+                  <td className="px-3 py-2.5 text-[13px] border-t border-gray-100">
+                    <div className="flex flex-col gap-1">
+                      {j.cats.length ? j.cats.map((c, k) => (
+                        <span key={k} className="inline-block w-fit px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 whitespace-nowrap">
+                          {c.label}{c.installer ? <span className="text-gray-500 font-normal"> · {c.installer}</span> : null}
+                        </span>
+                      )) : <span className="text-gray-300">—</span>}
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100">{j.assignee || <span className="text-red-600 font-semibold">Unassigned</span>}</td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100"><JobChip s={j.status} /></td>
                   <td className="px-3 py-2.5 text-[13px] border-t border-gray-100 text-gray-400">{j.date || '—'}</td>
                 </tr>
-              )) : <tr><td colSpan={7} className="border-t border-gray-100"><div className="text-center py-8"><div className="text-2xl mb-2">🔍</div><div className="text-[13px] text-gray-400">No jobs match this filter</div></div></td></tr>}
+              )) : <tr><td colSpan={8} className="border-t border-gray-100"><div className="text-center py-8"><div className="text-2xl mb-2">🔍</div><div className="text-[13px] text-gray-400">No jobs match this filter</div></div></td></tr>}
             </tbody>
           </table>
           {filtered.length > JOBS_PAGE_SIZE ? (

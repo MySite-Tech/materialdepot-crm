@@ -39,8 +39,18 @@ export function _anAuditConversion(audits: any[], installs: any[], declaredLinks
     return { audit: a, install: null, installDate: null, via: 'none' };
   });
 
+  const dayMs = 86400000;
+  const today = _anDateIST(new Date().toISOString());
+  const gap = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / dayMs);
+  const windows = [1, 3, 7].map((days) => {
+    const eligible = tagged.filter((t) => t.via !== 'nophone' && t.audit.date && gap(t.audit.date, today) >= days);
+    const hit = eligible.filter((t) => t.installDate && gap(t.audit.date, t.installDate) <= days);
+    return { days, n: hit.length, d: eligible.length };
+  });
+
   return {
     tagged,
+    windows,
     converted: tagged.filter((t) => t.install).length,
     measurable: tagged.filter((t) => t.via !== 'nophone').length,
     noPhone: tagged.filter((t) => t.via === 'nophone').length,
@@ -87,6 +97,7 @@ export function _anInstallAttempts(installs: any[], from: string, to: string) {
 
           sign: (sj.jobcard && sj.jobcard.sign) || null,
           type: sj.type,
+          customWp: sj.type === 'wallpaper' && (sj.customWp != null ? !!sj.customWp : !!o.customWp),
           status: sj.status,
           date: d,
           slot: primary ? (primary.slots && primary.slots[0]) || '' : sj.slot || '',
@@ -226,6 +237,7 @@ export function _anInstallerMap(attempts: any[], iRatingMap: Map<any, any>, arrM
       if (!k) continue;
       if (!map[k])
         map[k] = {
+          key: k,
           name: inst.installer_name || k,
           email: inst.installer_email || '',
           orders: 0,

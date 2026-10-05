@@ -56,6 +56,16 @@ export function AnalyticsInstallTable({ M, aArrNote, chartApi, from, to, tilePro
           }
           drill="aConversion"
         />
+        {M.aConvWindows.map((w: any) => (
+          <PctCard tileProps={tileProps}
+            key={w.days}
+            label={'D+' + w.days + ' Audit → Install Conversion %'}
+            n={w.n}
+            d={w.d}
+            sub={'Install order raised within ' + w.days + ' day' + (w.days === 1 ? '' : 's') + ' of the audit date'}
+            note={'Only audits at least ' + w.days + ' day' + (w.days === 1 ? '' : 's') + ' old count, so recent ones don’t read as misses'}
+          />
+        ))}
         <PctCard tileProps={tileProps} label="Auditor Arrival On Time %" n={M.aArrTot.onTime} d={M.aArrTot.onTime + M.aArrTot.late} sub="> 3 min past slot = delayed" note={aArrNote} drill="aArrival" />
         <PctCard tileProps={tileProps} label="Reschedule Rate %" n={M.aRescheduled} d={M.aTotal} sub="Audits currently in reschedule status" note="" drill="aReschedule" />
         <NpsCard tileProps={tileProps} label="NPS Score" nps={M.AR_nps} prom={M.AR_prom} det={M.AR_det} total={M.AR.length} drill="aRatings" />
