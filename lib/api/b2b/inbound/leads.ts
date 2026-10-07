@@ -73,12 +73,16 @@ export async function updateInboundLeadKylas(
   const dropped = (edit.selections || []).filter(
     (s) => !selectionsToKylasLabels([s]).length,
   );
-  const body: Record<string, unknown> = {
-    requirementName: edit.requirement || '',
-    cfCategoriesOfInterest: categoryIdsFromLabels(kylasLabels),
-  };
+  const patches = [
+    { op: 'replace', path: '/requirementName', value: edit.requirement || '' },
+    { op: 'add', path: '/customFieldValues/cfCategoriesOfInterest', value: categoryIdsFromLabels(kylasLabels) },
+  ];
   try {
-    await kylasFetch(`/leads/${leadId}`, { method: 'PATCH', body: JSON.stringify(body) });
+    await kylasFetch(`/leads/${leadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json-patch+json' },
+      body: JSON.stringify(patches),
+    });
     return { ok: true, dropped: dropped.length ? dropped : undefined };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

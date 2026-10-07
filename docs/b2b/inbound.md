@@ -236,3 +236,7 @@ still never summed as revenue, which is the rule the rest of this doc states.
 `updateInboundLeadKylas` returns a result, not a boolean. The old drawer
 discarded it, so a rejected PATCH rendered as a successful save and Kylas and the
 CRM diverged with nothing on screen to say so.
+
+The PATCH itself must be JSON Patch (`application/json-patch+json`, an array of
+ops; custom fields under `/customFieldValues/<key>`). Kylas answers a plain JSON
+object with 415, which is what every inbound save got until 2026-10-07.
