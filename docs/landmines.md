@@ -921,3 +921,8 @@ grep for a term, then read around the line you hit rather than opening all of it
   sent `apptBranchesFromCrm`'s label ("Basaveshwar Nagar") and Django matches
   only its own upper-case names, so every EC answered with an empty list. It
   now sends the Django names each EC label came from.
+
+- **Kylas PATCH needs JSON Patch.** `PATCH /leads|deals|contacts/{id}` only
+  accepts `application/json-patch+json` with an array of ops. `kylasFetch`
+  defaults to `application/json`, so a plain-object PATCH fails with 415. The
+  inbound drawer shipped that way and every Requirement/Selection push failed.
