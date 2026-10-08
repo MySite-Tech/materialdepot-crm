@@ -63,7 +63,7 @@ export default function SiteAuditAnalyticsView({ city = 'all', execOnly = false 
       </div>
 
       {tab === 'execution' ? (
-        <ExecutionAnalyticsView city={city} />
+        <ExecutionAnalyticsView city={city} execOnly={execOnly} />
       ) : (
         <CatAnalyticsPanel tab={tab as CommercialTab} city={city} onTabChange={pick} />
       )}
