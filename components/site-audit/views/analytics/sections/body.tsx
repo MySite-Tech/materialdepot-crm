@@ -10,6 +10,8 @@ import { AnalyticsInstallTable } from '../tables/install';
 import { CatAnalyticsApi } from '../../../data/cat-analytics';
 import { _anArrivalStats, _anAttachAuditRatings, _anAttachInstallRatings, _anAuditorMap, _anInstallAttempts, _anInstallerMap } from '../metrics/aggregate';
 import { DrillModal } from './drill';
+import { OrderBookReconcile } from './order-book';
+import { CityFilter } from '../../../shared';
 import { AnalyticsData } from '../types';
 import { _anAuditSigned, _anDateIST, _anDstr, _anInstallSigned } from '../utils';
 import { useMemo, useState } from 'react';
@@ -25,6 +27,8 @@ export function AnalyticsBody({
   setTempTo,
   setAnalyticsFrom,
   setAnalyticsTo,
+  city = 'all',
+  showOrderBook = false,
 }: {
   data: AnalyticsData;
   chartApi: CatAnalyticsApi | null;
@@ -36,6 +40,9 @@ export function AnalyticsBody({
   setTempTo: (v: string) => void;
   setAnalyticsFrom: (v: string) => void;
   setAnalyticsTo: (v: string) => void;
+  city?: CityFilter;
+  /* Off for service managers: the order-book payload carries revenue, which execOnly sessions must never receive. */
+  showOrderBook?: boolean;
 }) {
   const M = useMemo(() => computeAnalyticsMetrics(data, from, to), [data, from, to]);
 
@@ -125,6 +132,8 @@ export function AnalyticsBody({
         from={from}
         to={to}
       />
+
+      {showOrderBook ? <OrderBookReconcile from={from} to={to} city={city} crmAudits={M.aTotal} crmAttempts={M.iTotal} /> : null}
 
       <AnalyticsFootnote
 

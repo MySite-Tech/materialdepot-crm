@@ -8,7 +8,7 @@ import { AnalyticsData, AnalyticsState } from '../types';
 import { _anDstr } from '../utils';
 import { useEffect, useState } from 'react';
 
-export function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) {
+export function ExecutionAnalyticsView({ city = 'all', execOnly = false }: { city?: CityFilter; execOnly?: boolean }) {
   const [analyticsFrom, setAnalyticsFrom] = useState(() => {
     const t = new Date();
     t.setDate(t.getDate() - 6);
@@ -145,6 +145,8 @@ export function ExecutionAnalyticsView({ city = 'all' }: { city?: CityFilter }) 
       setTempTo={setTempTo}
       setAnalyticsFrom={setAnalyticsFrom}
       setAnalyticsTo={setAnalyticsTo}
+      city={city}
+      showOrderBook={!execOnly}
     />
   );
 }

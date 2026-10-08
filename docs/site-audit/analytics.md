@@ -136,6 +136,17 @@ selector (the `city` prop) instead of the filter row's own buttons, so there is 
 page; and the filter row is real React rather than an HTML string, because it is this app's chrome
 rather than part of the shared dashboard. See also the `service_mgr` gate under Known landmines.
 
+**"Reconcile with order book" card** (added 2026-10-08, `sections/order-book.tsx`): answers "why doesn't
+Execution match Metabase". It is collapsed by default and fetches only when opened: `/crm/cat-analytics/` for the
+range, plus `audit_orders`/`install_orders` **including deleted rows**. It lists the order book's confirmed
+Site Audit / Installation orders placed in range and tags each one as in CRM / deleted in CRM / not in CRM, matched
+on the bare enquiry id (`-R` suffixes stripped). The per-order match needs `pi` on each order row, which the
+backend added the same day. Against an older backend it shows totals only and says so. Measured 2026-10-08 (Aug–Oct):
+the two order sets agree about 97%. Most "missing" orders were deliberately deleted in the CRM or cancelled
+in the order book; only a handful were never imported (carpet / uninstall-only jobs, which the install app doesn't
+handle, plus one past the 30-day auto-import window). **It is never rendered for `execOnly` (service manager)
+sessions**: the order-book payload carries revenue (`showOrderBook` on `AnalyticsBody`, default off).
+
 ## Review scores → NPS: one pipeline, and where it leaks
 
 Q1/Q2/Q3 (overall experience / staff / site cleanliness, 1–10) used to be
