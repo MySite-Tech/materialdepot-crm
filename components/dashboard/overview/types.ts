@@ -15,7 +15,7 @@ export interface LostPieTooltipProps {
   payload?: { payload: DashboardLostReason }[];
 }
 
-export type DashboardView = 'overview' | 'orderLost' | 'categoryRevenue';
+export type DashboardView = 'overview' | 'orderLost' | 'categoryRevenue' | 'storeRevenue' | 'bmRevenue';
 
 export interface DashboardProps {
   branches: string[];

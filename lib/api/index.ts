@@ -14,4 +14,5 @@ export * from './crm/users';
 export * from './ops/kylas-sync';
 export * from './dashboards/weekly-funnel';
 export * from './dashboards/report-card';
+export * from './dashboards/metabase';
 export * from './dashboards/nps';

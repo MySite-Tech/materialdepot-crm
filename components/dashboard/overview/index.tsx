@@ -2,6 +2,7 @@
 
 import CategoryRevenueDashboard from '@/components/dashboard/category-revenue';
 import OrderLostDashboard from '@/components/dashboard/order-lost/index';
+import MetabaseReport, { METABASE_REPORTS } from '@/components/dashboard/metabase';
 
 import { BMFilterChip, DateChip, FilterChip } from '../ui/chips';
 import { PRIORITY_FILTER_OPTIONS, priorityLabelsToValues, priorityValuesToLabels } from '@/components/crm/constants';
@@ -124,6 +125,8 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
               { key: 'overview', label: 'Overview' },
               { key: 'orderLost', label: 'Order Lost' },
               { key: 'categoryRevenue', label: 'Category Revenue' },
+              { key: 'storeRevenue', label: METABASE_REPORTS.storeRevenue.label },
+              { key: 'bmRevenue', label: METABASE_REPORTS.bmRevenue.label },
             ] as const)
         ).map(t => (
           <button
@@ -136,7 +139,9 @@ export default function Dashboard({ branches, allowedBranches = [], orderLostOnl
         ))}
       </div>
 
-      {view === 'categoryRevenue' ? (
+      {view === 'storeRevenue' || view === 'bmRevenue' ? (
+        <MetabaseReport report={view} />
+      ) : view === 'categoryRevenue' ? (
         <CategoryRevenueDashboard branches={branches} allowedBranches={allowedBranches} canEditTargets={canEditTargets} />
       ) : view === 'orderLost' ? (
         <OrderLostDashboard branches={branches} allowedBranches={allowedBranches} />

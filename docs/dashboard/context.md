@@ -4,7 +4,15 @@
 
 ## Purpose
 Three dashboards under one folder, switched by the pill row in
-`overview/index.tsx` (which owns the tab state for all three):
+`overview/index.tsx` (which owns the tab state for all of them). The **Store Revenue** and **BM Revenue** tabs
+(`metabase/index.tsx`) embed Metabase questions 2978 and 2977 via Metabase guest
+embedding (`embed.js` + `<metabase-question>`). The signed JWT comes from Django
+`crm/metabase-embed-token/?question=<id>` (internal users only, whitelisted ids,
+10-min expiry) — never sign it in a Next `/api` route, those are unauthenticated.
+A plain iframe of `/question/…` is refused by Metabase. Config lives in `METABASE_REPORTS`. The Light/Dark toggle
+is saved per browser (`localStorage`) and applied live by re-assigning
+`window.metabaseConfig = { theme }` — `embed.js` merges it into every mounted embed;
+`instanceUrl`/`isGuest` must not be re-sent (it throws on changing them). The other tabs:
 
 - `overview/` — the retail overview: per-branch status pies, lost-reason
   breakdown, and a closure pipeline table.
