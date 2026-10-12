@@ -320,16 +320,17 @@ export default function InboundLeads() {
           muted={summary.gaps === 0}
         />
       </div>
-      <p className="text-[10px] text-gray-400 mb-4 leading-snug">
-        {[
+      <details className="mb-4 text-[10px] text-gray-400 leading-snug">
+        <summary className="cursor-pointer select-none hover:text-gray-600 w-fit">How these numbers are counted</summary>
+        <p className="mt-1">{[
           `Counts cover the ${activeFilters ? 'current filter' : 'loaded window'}.`,
           'Order value always comes from the matched deal ticket, never a typed estimate.',
           'Pipeline value adds the BM’s estimate only for open leads that have no ticket value yet, and says so in the tile.',
           summary.untimed > 0
             ? `${summary.untimed} PI/closed ${summary.untimed === 1 ? 'lead pre-dates' : 'leads pre-date'} status timestamps, so ${summary.untimed === 1 ? 'it is' : 'they are'} not counted into today's figures.`
             : '',
-        ].filter(Boolean).join(' ')}
-      </p>
+        ].filter(Boolean).join(' ')}</p>
+      </details>
 
       <InboundDailyPanel
         activeFilters={activeFilters}
@@ -390,10 +391,12 @@ export default function InboundLeads() {
         newToday={newToday}
         piLeads={piLeads}
         requestMove={requestMove}
+        searchQuery={appliedSearch}
         setDragId={setDragId}
         setDragOver={setDragOver}
         setListPage={setListPage}
         setSelectedId={setSelectedId}
+        setView={setView}
         today={today}
         total={total}
         view={view}

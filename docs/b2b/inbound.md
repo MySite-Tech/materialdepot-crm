@@ -112,6 +112,19 @@ comparing empty strings the other way round would have done. The Today table is
 deliberately **not** date-ordered — it is a call list, sorted by priority then
 follow-up date.
 
+**A search on Today shows every stage, not just follow-ups.** The call list only
+holds follow-up statuses; `New` and `PI Shared` live in the side panels. A rep
+who searched a phone number for a `New` lead got "No leads on follow-up" in the
+main pane and read it as "lead missing" while the lead sat in the side panel. So
+with `appliedSearch` set, `DailyTable` swaps the buckets for one "Search results"
+card over all of `filtered`, and the no-search empty state names how many leads
+are in the side panels and links to List view.
+
+**Today is kept short on purpose.** Each bucket card shows 8 rows then "Show all
+N"; Upcoming and No-follow-up-date start collapsed (Overdue and Due today never
+do — they are the day's calls). The side column is `xl:sticky` with its own
+viewport-height scroll, and the tile footnote sits in a closed `<details>`.
+
 **The Today grid's `minmax(0,1fr)` and `min-w-0` are load-bearing, not tidying.**
 Its left track holds the call table, which is wide enough to need the
 `overflow-x-auto` each bucket card already had — and that wrapper does nothing on

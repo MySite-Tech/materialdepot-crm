@@ -113,7 +113,7 @@ export function SidePanel({
         </div>
         <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{note}</p>
       </div>
-      <div className="max-h-[420px] overflow-y-auto divide-y divide-gray-50">
+      <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-50">
         {leads.length === 0 ? <Empty>{emptyText}</Empty> : leads.map((l) => (
           <button
             key={l.id}

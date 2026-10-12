@@ -13,7 +13,7 @@ import { DailyTable } from './table';
 import { LeadCard, SidePanel } from '.';
 import { Dispatch, RefObject, SetStateAction } from 'react';
 
-export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpLeads, hasMore, kanbanScroll, listPage, listPages, listRows, loadMore, loadingMore, newToday, piLeads, requestMove, setDragId, setDragOver, setListPage, setSelectedId, today, total, view }: {
+export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpLeads, hasMore, kanbanScroll, listPage, listPages, listRows, loadMore, loadingMore, newToday, piLeads, requestMove, searchQuery, setDragId, setDragOver, setListPage, setSelectedId, setView, today, total, view }: {
   byStatus: (s: InboundStatus) => InboundLead[];
   dragId: string | null;
   dragOver: InboundStatus | null;
@@ -29,10 +29,12 @@ export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpL
   newToday: InboundLead[];
   piLeads: InboundLead[];
   requestMove: (id: string, target: InboundStatus) => void;
+  searchQuery: string;
   setDragId: Dispatch<SetStateAction<string | null>>;
   setDragOver: Dispatch<SetStateAction<InboundStatus | null>>;
   setListPage: Dispatch<SetStateAction<number>>;
   setSelectedId: Dispatch<SetStateAction<string | null>>;
+  setView: Dispatch<SetStateAction<View>>;
   today: string;
   total: number;
   view: View;
@@ -48,9 +50,18 @@ export function InboundBuckets({ byStatus, dragId, dragOver, filtered, followUpL
               `overflow-x-auto`, and scroll the whole page sideways under the
               sidebar instead of scrolling the table. */}
           <div className="min-w-0">
-            <DailyTable leads={followUpLeads} today={today} onOpen={setSelectedId} />
+            <DailyTable
+              leads={followUpLeads}
+              searchLeads={filtered}
+              searchQuery={searchQuery}
+              newCount={newToday.length}
+              piCount={piLeads.length}
+              today={today}
+              onOpen={setSelectedId}
+              onShowList={() => setView('list')}
+            />
           </div>
-          <div className="flex flex-col gap-3 min-w-0">
+          <div className="flex flex-col gap-3 min-w-0 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
             <SidePanel
               title="New — not yet actioned"
               note="Straight from Kylas. Log the first call to start the attempt cycle."
