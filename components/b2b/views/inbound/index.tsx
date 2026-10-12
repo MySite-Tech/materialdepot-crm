@@ -251,7 +251,7 @@ export default function InboundLeads() {
         <div>
           <h1 className="text-[19px] font-bold text-gray-900">Inbound Leads</h1>
           <p className="text-[11.5px] text-gray-500 mt-0.5">
-            Qualified by Presales in Kylas · {B2B_INBOUND_OWNER_LIST.map((o) => o.name).join(' & ')}
+            Qualified by Presales in Kylas · {B2B_INBOUND_OWNER_LIST.map((o) => o.name).join(', ').replace(/, ([^,]*)$/, ' & $1')}
             {loading ? ' · loading…' : ` · ${filtered.length} shown`}
             {!loading && total > 0 && (
               <span className="text-gray-400"> · {total} unactioned in Kylas</span>
