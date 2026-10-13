@@ -176,6 +176,11 @@ They live here now because the code cannot carry them.
     and he has no Targets card. That asymmetry is deliberate and predates this
     file; it was briefly "fixed" by making him unassignable and reverted the
     same day.
+  - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
+    only grants the tab; every KAM list, dropdown and Targets card reads this
+    file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
+    nowhere until he was added here (Oct 2026). A new B2B hire needs a roster
+    row as well as the role.
 
 - **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
   `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people

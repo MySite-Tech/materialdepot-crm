@@ -22,6 +22,7 @@ export const B2B_ROSTER: B2BRep[] = [
   { name: 'Tharun',    fullName: 'Tharun',              contact: '8309230101', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true, revenueTargetL: 8, clientsTarget: 12, onboardingsTarget: 0 },
   { name: 'Jadhav',    fullName: 'Krishna Jadhav',      contact: '9187200807', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true, revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
   { name: 'Sidhant',   fullName: 'Sidhant',                                    role: 'KAM',                                 assignable: true, revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
+  { name: 'Sai Suresh', fullName: 'Sai Suresh',         contact: '9187953228', role: 'KAM',                                 assignable: true, revenueTargetL: 0, clientsTarget: 0,  onboardingsTarget: 0 },
 
   { name: 'Hardi',     fullName: 'Hardi Patel',         contact: '9187191018', role: 'Inbound',  vertical: 'Inbound',       assignable: true, revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
   { name: 'Mandeep',   fullName: 'Mandeep Ghai',        contact: '7223048042', role: 'Inbound',  vertical: 'Inbound',       assignable: true, revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
