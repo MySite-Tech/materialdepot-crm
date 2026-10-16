@@ -66,8 +66,8 @@ export async function fetchInboundBoard(
   const page = opts?.page ?? 0;
   const ownerIds = opts?.ownerId ? [opts.ownerId] : undefined;
   const search = (opts?.search || '').trim();
-  const createdFrom = floorToFreshStart(opts?.createdFrom);
-  const createdAfter = new Date(`${createdFrom}T00:00:00+05:30`).toISOString();
+  const createdFrom = search ? (opts?.createdFrom || undefined) : floorToFreshStart(opts?.createdFrom);
+  const createdAfter = createdFrom ? new Date(`${createdFrom}T00:00:00+05:30`).toISOString() : '';
   const createdBefore = opts?.createdTo ? new Date(`${opts.createdTo}T23:59:59.999+05:30`).toISOString() : '';
   const kylas = await fetchB2BInboundLeads(
     page, ownerIds, search, createdAfter, createdBefore, opts?.kylasStage,

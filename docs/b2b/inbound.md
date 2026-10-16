@@ -145,7 +145,10 @@ or one still sitting with its Presales owner, is invisible — "15 leads in Kyla
 only some of them here". So **while a search term is present the rule keeps only
 `pipeline`**, dropping the stage restriction, and the owner restriction too
 unless one owner was explicitly picked in the filter. An explicit Kylas-tag
-filter still wins over the widening. Inbound owners are Hardi, Mandeep and
+filter still wins over the widening. A search also drops the `B2B_FRESH_START`
+created-date floor (`fetchInboundBoard`), for Kylas and the DB rows alike — a
+B2B lead created in March was unfindable by its own phone number (2026-10-16).
+A user-picked "Lead date from" still applies. Inbound owners are Hardi, Mandeep and
 Praful (`76459`, added 2026-10-12; his B2B leads all pre-date `B2B_FRESH_START`,
 so he shows 0 until new ones land). A lead owned outside them maps
 to `owner: 'Unassigned'` — that is `B2B_INBOUND_OWNERS` having no name for that
