@@ -32,7 +32,12 @@ export const BLACKOUT_WHOLE_DAY = '*';
 export const SLOT_BLACKOUTS: Record<string, string[] | typeof BLACKOUT_WHOLE_DAY> = {
   '2026-09-17': ['10:00', '11:00', '13:00'],
   '2026-10-02': BLACKOUT_WHOLE_DAY,
+  '2026-10-20': BLACKOUT_WHOLE_DAY,
 };
+
+// Sundays the audit team does work, overriding the standing Sunday rule. MUST STAY IN STEP WITH
+// SITE_AUDIT_OPEN_SUNDAYS in the Django backend's order/site_audit_slots.py.
+export const OPEN_SUNDAYS = new Set<string>(['2026-10-18']);
 
 export const ASSIGNED_STATUSES = ['assigned', 'scheduled', 'callpending', 'onway', 'atsite', 'completed'];
 

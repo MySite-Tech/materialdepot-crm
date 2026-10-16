@@ -134,3 +134,8 @@ Blackouts are deliberately *not* modelled as capacity. Zeroing a roster
 (`leave_dates`) blanks the whole day, and fake `audit_orders` rows cannot block
 1 PM without also taking 2 PM down with them — `slotsConflict`'s 120-minute rule
 spills onto neighbours, and the rows show up as phantom jobs on the SM's board.
+
+The reverse lever — a Sunday the team *does* work — is `OPEN_SUNDAYS`, mirrored
+by Django's `SITE_AUDIT_OPEN_SUNDAYS`; same two-repo rule. Opening the date only
+puts it on the picker: an auditor whose `weekly_off` is Sunday still reads as
+unrostered, so the day shows 0 free until the roster is changed too.

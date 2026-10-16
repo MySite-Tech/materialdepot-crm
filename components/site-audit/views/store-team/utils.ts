@@ -1,7 +1,7 @@
 'use client';
 
 import { CITIES } from '../../shared';
-import { BLACKOUT_WHOLE_DAY, DAYS_SHORT, MORNING_CUTOFF_MIN, SLOT_BLACKOUTS, SLOT_DEFS, STORE_CITY } from './constants';
+import { BLACKOUT_WHOLE_DAY, DAYS_SHORT, MORNING_CUTOFF_MIN, OPEN_SUNDAYS, SLOT_BLACKOUTS, SLOT_DEFS, STORE_CITY } from './constants';
 import { SlotDef } from './types';
 
 export const cityOfStore = (store: string | null) => (store && STORE_CITY[store]) || CITIES[0];
@@ -95,8 +95,8 @@ export function buildDateChips() {
   for (let i = 0; chips.length < 14 && i < 30; i++) {
     const d = new Date(t);
     d.setDate(t.getDate() + i);
-    if (d.getDay() === 0) continue;
     const ds = dstr(d);
+    if (d.getDay() === 0 && !OPEN_SUNDAYS.has(ds)) continue;
     const lbl = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : DAYS_SHORT[d.getDay()];
     chips.push({ ds, lbl, num: d.getDate() });
   }
