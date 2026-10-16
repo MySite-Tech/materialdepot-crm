@@ -36,12 +36,12 @@ pasted into the CRM Supabase project** (`supabase-store-checklist.sql`) — noth
 in this repo runs migrations. Until they exist, every read 502s with
 `Could not find the table 'public.store_checklist'`, and both views render that
 message instead of a checklist. That is deliberate: a markable checklist whose
-saves all fail would have receptionists ticking 37 boxes into nothing.
+saves all fail would have receptionists ticking 38 boxes into nothing.
 
-## The 37 items are stored data, not just labels
+## The 38 items are stored data, not just labels
 
 `CHECKLIST_SECTIONS` in `lib/store-checklist/constants.ts` is the registry: four
-sections (`opening` 18, `hk` 10, `working` 4, `closing` 5) and one stable id per
+sections (`opening` 19, `hk` 10, `working` 4, `closing` 5) and one stable id per
 item. Those ids are the **jsonb keys in every historical row**, so renaming
 `op_music` orphans every mark ever made under it — add and deprecate, never
 rename. Adding an item makes older days read as incomplete against the new
@@ -123,7 +123,7 @@ writing to. Consequences, all deliberate:
 
 ## Deliberate calls worth not re-litigating
 
-- **"Rest Yes" per section.** Marking 37 items on a phone every morning is the
+- **"Rest Yes" per section.** Marking 38 items on a phone every morning is the
   reason the paper sheet survived; a per-section bulk-Yes keeps it fast and every
   item still gets its own `at`/`by`. There is deliberately **no** one-tap
   all-sections button.

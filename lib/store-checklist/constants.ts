@@ -24,6 +24,7 @@ export const CHECKLIST_SECTIONS: ChecklistSection[] = [
       { id: 'op_ply_liner', label: 'PLY & Liner laminates Sample arranged' },
       { id: 'op_quartz', label: 'Quartz Display arranged' },
       { id: 'op_chairs', label: 'All Chairs Organised' },
+      { id: 'op_footfall_tally', label: "Yesterday's CRM footfall & Whatsapp Reported footfall tallied?" },
     ],
   },
   {
