@@ -17,6 +17,7 @@ const EC_BRANCHES = [
   { id: '104', name: 'HSR LAYOUT', branch_name: 'HSR LAYOUT' },
   { id: '69', name: 'GACHIBOWLI', branch_name: 'GACHIBOWLI' },
   { id: '137', name: 'BASAVESHWARA NAGAR', branch_name: 'BASAVESHWARA NAGAR' },
+  { id: '171', name: 'ELECTRONIC CITY', branch_name: 'ELECTRONIC CITY' },
 ];
 
 const REFERENCE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1KoOuZ1MikOtrkfVIf849CnBUD4zAoJ5QrtJn2H9KIio/edit?gid=995116475#gid=995116475';

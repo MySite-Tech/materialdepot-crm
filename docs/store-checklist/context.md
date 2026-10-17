@@ -114,10 +114,10 @@ used by the appointment tracker. A write surface must not guess which store it i
 writing to. Consequences, all deliberate:
 
 - One matched store → auto-selected. Several → no default, the user picks.
-- A branch name that matches nothing → the store list falls back to all seven
+- A branch name that matches nothing → the store list falls back to all stores
   **with no default selected**, plus an amber notice naming the unmatched branch.
   A silent all-stores default would have someone marking the wrong store's sheet.
-- `manager` / `admin` / `tech` / `superadmin` get all seven regardless of
+- `manager` / `admin` / `tech` / `superadmin` get all stores regardless of
   `allowedBranches`, and an empty `allowedBranches` still means all (the repo-wide
   convention — see `docs/landmines.md`).
 
@@ -134,6 +134,6 @@ writing to. Consequences, all deliberate:
   with a Retry, the touched rows keep an amber dot, and the pending marks stay
   queued in the hook; a re-edit during an in-flight save is kept (the flush
   compares mark identity, not just ids, before clearing the queue).
-- The compliance grid is 7 stores × 14 days, so it is not paginated; the
+- The compliance grid is one row per active store × 14 days, so it is not paginated; the
   "Marked No" table is, at `PAGE_SIZE = 25`, and its stat cards count the whole
   window rather than the page.

@@ -112,4 +112,6 @@ export const BRANCH_NAME_TO_STORE_CODE: Record<string, string> = {
   basaveshwarnagar: 'BN_ec',
   basaveshwaranagar: 'BN_ec',
   basaveshwaranagara: 'BN_ec',
+  electroniccity: 'ELC_ec',
+  electronic: 'ELC_ec',
 };

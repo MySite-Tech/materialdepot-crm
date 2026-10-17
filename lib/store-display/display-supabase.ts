@@ -6,6 +6,7 @@ export const STORE_CODE_TO_BRANCH_ID: Record<string, string> = {
   HSR_ec: '104',
   GB_ec: '69',
   BN_ec: '137',
+  ELC_ec: '171',
 };
 
 export const BRANCH_ID_TO_STORE: Record<string, { code: string; name: string }> = {
@@ -16,6 +17,7 @@ export const BRANCH_ID_TO_STORE: Record<string, { code: string; name: string }> 
   '104': { code: 'HSR_ec', name: 'HSR Layout' },
   '69': { code: 'GB_ec', name: 'Gachibowli' },
   '137': { code: 'BN_ec', name: 'Basaveshwara Nagar' },
+  '171': { code: 'ELC_ec', name: 'Electronic City' },
 };
 
 export const STORES = [
@@ -26,6 +28,7 @@ export const STORES = [
   { code: 'HSR_ec', name: 'HSR Layout' },
   { code: 'GB_ec', name: 'Gachibowli' },
   { code: 'BN_ec', name: 'Basaveshwara Nagar' },
+  { code: 'ELC_ec', name: 'Electronic City' },
 ];
 
 export const STORE_NAMES: Record<string, string> = {
@@ -36,4 +39,5 @@ export const STORE_NAMES: Record<string, string> = {
   HSR_ec: 'HSR Layout',
   GB_ec: 'Gachibowli',
   BN_ec: 'Basaveshwara Nagar',
+  ELC_ec: 'Electronic City',
 };

@@ -2,13 +2,14 @@
 
 import { SlotDef } from './types';
 
-export const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka', 'Gachibowli', 'Kompally', 'HSR Layout'];
+export const STORES = ['JP Nagar', 'Whitefield', 'Yelahanka', 'Gachibowli', 'Kompally', 'HSR Layout', 'Electronic City'];
 
 export const STORE_CITY: Record<string, string> = {
   'JP Nagar': 'Bengaluru',
   Whitefield: 'Bengaluru',
   Yelahanka: 'Bengaluru',
   'HSR Layout': 'Bengaluru',
+  'Electronic City': 'Bengaluru',
   Gachibowli: 'Hyderabad',
   Kompally: 'Hyderabad',
 };

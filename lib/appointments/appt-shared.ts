@@ -1,6 +1,6 @@
 import type { AppUser } from '../../types/crm';
 
-export const BRANCHES = ["JP Nagar", "Yelahanka", "Whitefield", "Gachibowli", "Kompally", "HSR", "Basaveshwar Nagar"] as const;
+export const BRANCHES = ["JP Nagar", "Yelahanka", "Whitefield", "Gachibowli", "Kompally", "HSR", "Basaveshwar Nagar", "Electronic City"] as const;
 
 export type Branch = string;
 

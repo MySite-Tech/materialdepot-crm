@@ -79,7 +79,7 @@ carries `removal_reason` of `discontinued_permanently` or
 Supabase client, only constants) holds `STORE_CODE_TO_BRANCH_ID` and its inverse:
 
 `JP_ec`→1, `YE_ec`→2, `WF_ec`→36, `KP_ec`→71, `HSR_ec`→104, `GB_ec`→69,
-`BN_ec`→137.
+`BN_ec`→137, `ELC_ec`→171 (Electronic City).
 
 Those numeric branch ids are Django's and are not sequential. A new store needs
 this map edited by hand.

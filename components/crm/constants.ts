@@ -4,7 +4,7 @@ import { MainTab } from './types';
 import { CHECKLIST_PERMISSION_SLUG } from '@/lib/store-checklist/constants';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/site-audit/shared';
 
-export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'HQ'];
+export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'Electronic City', 'HQ'];
 
 export const LEAD_PRIORITIES = ['hot', 'warm', 'cold'] as const;
 
@@ -68,7 +68,7 @@ export const BACKEND_SORTABLE_COLS = new Set([
   'createdAt', 'clientName', 'clientPhone', 'assignedTo', 'branch', 'cartValue',
 ]);
 
-export const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre', 'Yelankha Centre', 'HQ Showroom', 'Phone Call'];
+export const VISIT_CHANNELS = ['Website', 'JP Nagar Centre', 'Whitefield Centre', 'Yelankha Centre', 'Electronic City Centre', 'HQ Showroom', 'Phone Call'];
 
 export const CLIENT_TYPES = ['Home Owner', 'Architect/Designer', 'Commercial Owner', 'Carpenter', 'Builder'];
 

@@ -117,6 +117,14 @@ alongside a rectification order. The code change does not repair them: re-saving
 the assignment from the drawer does, because the same `allAssigneesDone` test
 fires on that save.
 
+## The store-team store list is hardcoded and must carry a city
+
+`STORES` and `STORE_CITY` (`views/store-team/constants.ts`) are a hand-kept list,
+not a DB read. A new branch (e.g. Electronic City) has to be added to both: a
+store absent from `STORE_CITY` has no city, and a store absent from `STORES`
+never appears in the picker at all. Keep the names in step with the branch's
+`OrganisationBranch.branch_name` — matching here is by display name, not id.
+
 ## The slot blackout list lives in two repos and must move in both
 
 `SLOT_BLACKOUTS` (`views/store-team/constants.ts`) withdraws named slots on a
