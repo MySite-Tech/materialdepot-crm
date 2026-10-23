@@ -7,6 +7,7 @@ import B2BSalesCRM from '../../b2b/views/b2-b-sales-crm';
 import Dashboard from '../../dashboard/overview';
 import FootfallTab from '../../footfall/footfall-tab';
 import NPSDashboard from '../../nps/dashboard';
+import RemarksQualityTab from '../../remarks-quality';
 import ReportCardDashboard from '../../report-card/dashboard';
 import MobileDashboard from '../../sales-dashboard/mobile-dashboard';
 import SiteAuditOwnDashboard from '../../site-audit/views/own-dashboard';
@@ -45,6 +46,10 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
       <WeeklyFunnelDashboard branches={branches} allowedBranches={userAllowedBranches} />
     )}
     
+    {effectiveTab === 'remarksQuality' && (
+      <RemarksQualityTab allowedBranches={userAllowedBranches} seeAll={currentUser?.role === 'admin'} />
+    )}
+
     {effectiveTab === 'reportCard' && (
       <ReportCardDashboard branches={branches} allowedBranches={userAllowedBranches} currentUser={currentUser} />
     )}

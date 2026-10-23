@@ -16,3 +16,4 @@ export * from './dashboards/weekly-funnel';
 export * from './dashboards/report-card';
 export * from './dashboards/metabase';
 export * from './dashboards/nps';
+export * from './dashboards/remarks-quality';

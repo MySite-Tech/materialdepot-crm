@@ -3,7 +3,12 @@
 **Covers:** `components/crm/** · lib/api/core/auth.ts · types/crm.ts`
 
 ## Purpose
-The app shell: login, session restore, and the tab permission gate that decides which of the 14 main tabs a role can see.
+The app shell: login, session restore, and the tab permission gate that decides which of the 15 main tabs a role can see.
+
+`remarksQuality` (2026-10-23) is the second tab whose slug is also enforced
+outside the browser — Django checks `crm.remarks_quality` on its endpoints and
+mirrors its `ROLE_TABS` entries for empty-list accounts; see
+`docs/remarks-quality/context.md`.
 
 ## Auth, and why a fake session won't work
 
