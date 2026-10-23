@@ -88,13 +88,13 @@ export const LEGACY_PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', '
 export const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
 export const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales','reportCard', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
-  store_manager:['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
-  cluster_head: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
-  area_manager: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales','reportCard', 'remarksQuality', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
+  store_manager:['leads', 'dashboard', 'footfall', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
+  cluster_head: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
+  area_manager: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
   asst_store_manager: ['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
   team_leader:  ['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'sales', 'siteAudit'],
   sales:        ['leads', 'sales', 'footfall', 'reportCard', 'siteAudit'],
@@ -113,6 +113,7 @@ export const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.footfall', 'footfall'],
   ['crm.weekly_funnel', 'weeklyFunnel'],
   ['crm.report_card', 'reportCard'],
+  ['crm.remarks_quality', 'remarksQuality'],
   ['crm.store_visit', 'storeVisit'],
   [CHECKLIST_PERMISSION_SLUG, 'storeChecklist'],
   ['crm.sales', 'sales'],
@@ -138,11 +139,9 @@ export const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
 
 export const TAB_LABELS: Record<MainTab, string> = {
   leads: 'Leads', dashboard: 'Dashboard', footfall: 'Footfall', weeklyFunnel: 'Weekly Funnel',
-  reportCard: 'Report Card', storeVisit: 'Store Visit Form', sales: 'Escalation visibility',
-  b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
-  storeChecklist: 'Store Checklist',
-  appointmentTracker: 'Appointment Tracker',
-  storeDisplay: 'Store Display',
+  reportCard: 'Report Card', remarksQuality: 'Remarks Quality', storeVisit: 'Store Visit Form', storeChecklist: 'Store Checklist',
+  sales: 'Escalation visibility', b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
+  appointmentTracker: 'Appointment Tracker', storeDisplay: 'Store Display',
 };
 
 export const ROLE_OPTIONS: Array<string> = [
