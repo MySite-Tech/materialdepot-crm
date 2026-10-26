@@ -150,8 +150,8 @@ created-date floor (`fetchInboundBoard`), for Kylas and the DB rows alike — a
 B2B lead created in March was unfindable by its own phone number (2026-10-16).
 A user-picked "Lead date from" still applies. Inbound owners are Hardi, Mandeep,
 Praful (`76459`, added 2026-10-12; his B2B leads all pre-date `B2B_FRESH_START`,
-so he shows 0 until new ones land), Vikas (`87068`) and Krishna (`80618`), both
-added 2026-10-26. A lead owned outside them maps
+so he shows 0 until new ones land), Vikas (`87068`), Krishna (`80618`) and
+Vilok (`78539`), the last three added 2026-10-26. A lead owned outside them maps
 to `owner: 'Unassigned'` — that is `B2B_INBOUND_OWNERS` having no name for that
 id, not a claim that Kylas left it unassigned.
 
