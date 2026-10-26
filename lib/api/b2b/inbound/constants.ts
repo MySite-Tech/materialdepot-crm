@@ -9,6 +9,7 @@ export const B2B_INBOUND_OWNERS: Record<number, string> = {
   76459: 'Praful',
   87068: 'Vikas',
   80618: 'Krishna',
+  78539: 'Vilok',
 };
 
 export const B2B_INBOUND_OWNER_LIST: { id: number; name: string }[] =
