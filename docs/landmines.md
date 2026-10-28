@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-57 entries. They live in one file because they cross-reference each other —
+58 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -66,6 +66,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A revenue figure compared against Metabase must share Metabase's date basis, and one date param needs a second to mean anything
 - The Leads tab offered every salesperson in the org, so B2B reps' carts read as a retail branch's leads
 - `/crm/available-bms/?branch=` listed JP Nagar and HQ staff as Basaveshwara Nagar's BMs
+- A logged call recorded the lead's owner as the caller
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -926,3 +927,15 @@ grep for a term, then read around the line you hit rather than opening all of it
   accepts `application/json-patch+json` with an array of ops. `kylasFetch`
   defaults to `application/json`, so a plain-object PATCH fails with 415. The
   inbound drawer shipped that way and every Requirement/Selection push failed.
+
+- **A logged call recorded the lead's owner as the caller** (fixed
+  2026-10-28). The inbound drawer stamped `CallAttempt.by = draft.owner`. That
+  was harmless while each lead had one owner for life, and silently wrong the
+  moment leads could be reassigned: every call already on a lead would read as
+  the new owner's. "Calls per rep" (an Inbound Effort KPI) would then credit
+  calls to someone who never made them. The figure would look plausible from
+  the user's side, which is why nobody would catch it. `by` is now the
+  logged-in user's name. The general shape: **an actor field must be filled
+  from the session, never from the record being acted on.** Effort is
+  credited to the actor, output to the owner at the time of the outcome.
+

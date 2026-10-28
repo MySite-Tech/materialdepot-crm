@@ -7,6 +7,8 @@ import { InboundCallsCard } from './cards/calls';
 import { InboundClientCard } from './cards/client';
 import { InboundEnrichCard } from './cards/enrich';
 import { InboundNotesCard } from './cards/notes';
+import { InboundOwnerCard } from './cards/owner';
+import type { TeamMember } from '@/lib/b2b/team/types';
 import { InboundPlacedUnderCard } from './cards/placed-under';
 import { InboundPresalesCard } from './cards/presales';
 import { InboundRequirementCard } from './cards/requirement';
@@ -22,10 +24,13 @@ import { createInboundCallLog, createLeadNote, fetchCallLogSummary, fetchInbound
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function InboundDrawer({
-  lead, onClose, onSaved,
+  lead, onClose, onSaved, actorName, members, canReassign,
 }: {
   lead: InboundLead;
   onClose: () => void;
+  actorName: string;
+  members: TeamMember[];
+  canReassign: boolean;
 
   onSaved: (updated: InboundLead) => void;
 }) {
@@ -196,7 +201,7 @@ export default function InboundDrawer({
       n: attemptNo,
       outcome: logOutcome,
       at: new Date().toISOString(),
-      by: draft.owner,
+      by: actorName || draft.owner,
       note: logNote.trim() || undefined,
     };
     const nextAttempts = [...attempts, attempt];
@@ -342,6 +347,17 @@ export default function InboundDrawer({
       />
 
         <div className="p-5 flex flex-col gap-4">
+
+          <InboundOwnerCard
+        draft={draft}
+        members={members}
+        canReassign={canReassign}
+        onReassigned={(to) => {
+          const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
+          setDraft((d) => ({ ...d, ...owned }));
+          onSaved({ ...lead, ...owned });
+        }}
+      />
 
           <InboundPresalesCard
         detailFailed={detailFailed}

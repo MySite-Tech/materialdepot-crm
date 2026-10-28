@@ -48,7 +48,9 @@ React inputs here ignore synthetic `type` events; set values via the native
 1. If `user.individualPermissions` is **non-empty** it is the WHOLE answer —
    tabs come from `PERMISSION_TAB_ORDER`, and an absent slug means "no".
 2. Only if the list is empty/NULL: `ROLE_TABS[role]` (falling back to
-   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES`,
+   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES` — which
+   lives in `lib/b2b/team/constants.ts`, because `app/api/b2b/*` gates on the
+   same set and cannot import this module's `'use client'` files,
    `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
    is a **bootstrap for un-migrated accounts only**.
 
@@ -157,3 +159,11 @@ leaked — the rows are still shown, because the stat cards above them are the
 backend's counts and silently dropping rows would make the two disagree. See
 `docs/landmines.md` for the full account and the Branch Access data fix that
 goes with it.
+
+**`b2b.manager`** (2026-10-28) is a sub-slug shown under B2B Sales in the Admin
+permission checklist, the same way Store Display's full-access slug is. It is
+additive to role: `isB2BManager` is true for `superadmin`/`admin`/`b2b_manager`
+**or** the slug, so an admin never has to tick it. It unlocks B2B Sales → Team
+and every rep's rows. `B2BSalesCRM` now receives `currentUser` from
+`tab-panels.tsx`; before that, nothing under `components/b2b/` knew who was
+logged in.

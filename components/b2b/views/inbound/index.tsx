@@ -20,9 +20,14 @@ import { byNewestLeadFirst, gapsFor, istDay, toExportRow } from './utils';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
+import { runInboundRotation } from '@/lib/b2b/team';
+import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
+import { rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
-export default function InboundLeads() {
+export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [view, setView] = useState<View>('today');
+  const [scopeChoice, setScopeChoice] = useState<'mine' | 'all' | null>(null);
+  const [rotationNote, setRotationNote] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
   const [owner, setOwner] = useState('all');
   const [status, setStatus] = useState<'all' | InboundStatus>('all');
@@ -54,15 +59,29 @@ export default function InboundLeads() {
 
   const today = istToday();
 
+  const inboundOwners = useMemo(() => {
+    const members = teamMembers(team.members, 'inbound').map((m) => ({ id: m.kylasUserId as number, name: m.name }));
+    return members.length ? members : B2B_INBOUND_OWNER_LIST;
+  }, [team.members]);
+  const boardOwnerKey = [...new Set([...B2B_INBOUND_OWNER_LIST, ...inboundOwners].map((o) => o.id))].join(',');
+  const boardOwnerIds = useMemo(() => boardOwnerKey.split(',').map(Number), [boardOwnerKey]);
+  const ownerName = useMemo(() => new Map(inboundOwners.map((o) => [o.id, o.name])), [inboundOwners]);
+
+  const me = viewer.member?.team === 'inbound' && viewer.member.active ? viewer.member : null;
+  const myKylasId = me?.kylasUserId ?? undefined;
+  const scope = scopeChoice ?? (myKylasId ? 'mine' : 'all');
+
   const ownerId = useMemo(
-    () => (owner === 'all' ? undefined : B2B_INBOUND_OWNER_LIST.find((o) => o.name === owner)?.id),
-    [owner],
+    () => (scope === 'mine'
+      ? myKylasId
+      : owner === 'all' ? undefined : inboundOwners.find((o) => o.name === owner)?.id),
+    [scope, myKylasId, owner, inboundOwners],
   );
   const kylasStageFilter = newKylasStage === 'all' ? undefined : newKylasStage;
   const serverOpts = useMemo(() => ({
-    ownerId, search: appliedSearch, createdFrom: createdAfter,
+    ownerId, ownerIds: boardOwnerIds, search: appliedSearch, createdFrom: createdAfter,
     createdTo: createdBefore, kylasStage: kylasStageFilter,
-  }), [ownerId, appliedSearch, createdAfter, createdBefore, kylasStageFilter]);
+  }), [ownerId, boardOwnerIds, appliedSearch, createdAfter, createdBefore, kylasStageFilter]);
 
   const load = () => {
     setLoading(true);
@@ -78,7 +97,27 @@ export default function InboundLeads() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [serverOpts]);
+  useEffect(() => { if (!team.loading) load(); }, [serverOpts, team.loading]);
+
+  const rotationReady = !team.loading && rotationOrder(team.members).length > 0;
+  useEffect(() => {
+    if (!rotationReady) return;
+    runInboundRotation()
+      .then((r) => {
+        if (r.failed.length) {
+          setRotationNote({ tone: 'warn', text: `Round robin could not assign ${r.failed.length} lead${r.failed.length === 1 ? '' : 's'}: ${r.failed[0].error}` });
+        } else if (r.assigned.length) {
+          setRotationNote({ tone: 'ok', text: `${r.assigned.length} new lead${r.assigned.length === 1 ? '' : 's'} shared out round robin just now.` });
+        }
+        if (r.assigned.length) load();
+      })
+      .catch((e) => setRotationNote({ tone: 'warn', text: `Round robin did not run: ${e instanceof Error ? e.message : String(e)}` }));
+  }, [rotationReady]);
+
+  const named = useMemo(() => leads.map((l) => {
+    const n = l.ownerId != null ? ownerName.get(l.ownerId) : undefined;
+    return n && n !== l.owner ? { ...l, owner: n } : l;
+  }), [leads, ownerName]);
 
   const loadMore = () => {
     if (loadingMore || loading || !hasMore) return;
@@ -96,7 +135,7 @@ export default function InboundLeads() {
       .finally(() => setLoadingMore(false));
   };
 
-  const filtered = useMemo(() => leads.filter((l) => {
+  const filtered = useMemo(() => named.filter((l) => {
     if (status !== 'all' && l.stage !== status) return false;
     if (priority !== 'all' && l.priority !== priority) return false;
     if (clientType !== 'all' && l.clientType !== clientType) return false;
@@ -104,7 +143,7 @@ export default function InboundLeads() {
     if (location !== 'all' && l.location !== location) return false;
     if (onlyGaps && gapsFor(l).length === 0) return false;
     return true;
-  }).sort(byNewestLeadFirst), [leads, status, priority, clientType, leadType, location, onlyGaps]);
+  }).sort(byNewestLeadFirst), [named, status, priority, clientType, leadType, location, onlyGaps]);
 
   const byStatus = (s: InboundStatus) => filtered.filter((l) => l.stage === s);
 
@@ -190,12 +229,12 @@ export default function InboundLeads() {
     return all;
   };
 
-  const handleExport = async (format: ExportFormat, scope: ExportScope) => {
+  const handleExport = async (format: ExportFormat, exportScope: ExportScope) => {
     if (exporting) return;
     setExporting(true);
     try {
-      let list = await fetchAll(scope === 'all' ? {} : serverOpts);
-      if (scope !== 'all') {
+      let list = await fetchAll(exportScope === 'all' ? { ownerIds: boardOwnerIds } : serverOpts);
+      if (exportScope !== 'all') {
         list = list.filter((l) =>
           (status === 'all' || l.stage === status)
           && (priority === 'all' || l.priority === priority)
@@ -205,7 +244,7 @@ export default function InboundLeads() {
           && (!onlyGaps || gapsFor(l).length > 0));
       }
       if (!list.length) { setError('No leads matched — nothing to export.'); return; }
-      const name = `b2b_inbound_leads_${scope}_${todayStr()}`;
+      const name = `b2b_inbound_leads_${exportScope}_${todayStr()}`;
       const rows = list.sort(byNewestLeadFirst).map(toExportRow);
       if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, rows, name);
       else await exportRowsExcel(EXPORT_HEADERS, rows, name, 'Inbound Leads');
@@ -229,7 +268,7 @@ export default function InboundLeads() {
     !!createdAfter, !!createdBefore, onlyGaps, !!appliedSearch,
   ].filter(Boolean).length;
 
-  const selected = leads.find((l) => l.id === selectedId) || null;
+  const selected = named.find((l) => l.id === selectedId) || null;
   const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
   const followUpLeads = useMemo(
@@ -251,14 +290,29 @@ export default function InboundLeads() {
         <div>
           <h1 className="text-[19px] font-bold text-gray-900">Inbound Leads</h1>
           <p className="text-[11.5px] text-gray-500 mt-0.5">
-            Qualified by Presales in Kylas · {B2B_INBOUND_OWNER_LIST.map((o) => o.name).join(', ').replace(/, ([^,]*)$/, ' & $1')}
+            {scope === 'mine'
+              ? `Your leads, ${me?.name ?? ''}`
+              : `Qualified by Presales in Kylas · ${inboundOwners.map((o) => o.name).join(', ').replace(/, ([^,]*)$/, ' & $1')}`}
             {loading ? ' · loading…' : ` · ${filtered.length} shown`}
             {!loading && total > 0 && (
               <span className="text-gray-400"> · {total} unactioned in Kylas</span>
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {myKylasId && (
+            <div className="flex rounded-md border border-gray-200 overflow-hidden">
+              {([['mine', 'Mine'], ['all', 'All inbound']] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => { setScopeChoice(k); setOwner('all'); }}
+                  className={`px-3 py-1.5 text-[12px] font-semibold ${scope === k ? 'bg-[#EAB308] text-[#1A1A1A]' : 'bg-white text-gray-500 hover:text-gray-800'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex rounded-md border border-gray-200 overflow-hidden">
             {(['today', 'board', 'list'] as const).map((v) => (
               <button
@@ -280,6 +334,18 @@ export default function InboundLeads() {
           </button>
         </div>
       </div>
+
+      {viewer.member?.team === 'inbound' && !myKylasId && (
+        <p className="text-[12px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-3">
+          You are on the inbound team but your Kylas user is not linked, so no lead can be yours yet. A B2B manager
+          links it under <strong>Team</strong>.
+        </p>
+      )}
+      {rotationNote && (
+        <p className={`text-[12px] rounded px-3 py-2 mb-3 border ${rotationNote.tone === 'ok' ? 'bg-teal-50 border-teal-200 text-teal-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+          {rotationNote.text}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-2 mb-3">
         <Tile label="New today" value={String(summary.newToday)} sub="arrived in Kylas today" accent={INBOUND_STATUS_COLORS.New} />
@@ -332,7 +398,7 @@ export default function InboundLeads() {
         ].filter(Boolean).join(' ')}</p>
       </details>
 
-      <InboundDailyPanel
+      <InboundDailyPanel ownerOptions={scope === 'mine' ? null : inboundOwners.map((o) => o.name)}
         activeFilters={activeFilters}
         appliedSearch={appliedSearch}
         clearFilters={clearFilters}
@@ -416,6 +482,9 @@ export default function InboundLeads() {
         <InboundDrawer
           lead={selected}
           onClose={() => setSelectedId(null)}
+          actorName={viewer.name}
+          members={teamMembers(team.members, 'inbound')}
+          canReassign={viewer.isManager || !!me}
           onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}
         />
       )}

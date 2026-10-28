@@ -181,6 +181,10 @@ They live here now because the code cannot carry them.
     file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
     nowhere until he was added here (Oct 2026). A new B2B hire needs a roster
     row as well as the role.
+  - **Inbound ownership no longer reads this file** (2026-10-28). It reads the
+    `b2b_team_member` table, which managers edit under B2B Sales → Team; see
+    `inbound.md` §Who owns a lead. KAM lists, Targets and the Leaderboard still
+    read `B2B_ROSTER` until the redesign retires it.
 
 - **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
   `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people

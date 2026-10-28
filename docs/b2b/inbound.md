@@ -148,12 +148,57 @@ unless one owner was explicitly picked in the filter. An explicit Kylas-tag
 filter still wins over the widening. A search also drops the `B2B_FRESH_START`
 created-date floor (`fetchInboundBoard`), for Kylas and the DB rows alike — a
 B2B lead created in March was unfindable by its own phone number (2026-10-16).
-A user-picked "Lead date from" still applies. Inbound owners are Hardi, Mandeep,
-Praful (`76459`, added 2026-10-12; his B2B leads all pre-date `B2B_FRESH_START`,
-so he shows 0 until new ones land), Vikas (`87068`), Krishna (`80618`) and
-Vilok (`78539`), the last three added 2026-10-26. A lead owned outside them maps
-to `owner: 'Unassigned'` — that is `B2B_INBOUND_OWNERS` having no name for that
-id, not a claim that Kylas left it unassigned.
+A user-picked "Lead date from" still applies. A lead owned by nobody the board
+knows maps to `owner: 'Unassigned'`. That means no team member or legacy owner
+has that Kylas id, not that Kylas left the lead unassigned.
+
+### Who owns a lead: the team table, round robin, and Mine vs All
+
+Built 2026-10-28; the design is in `sales-tab-redesign.md` §Inbound. **Inbound
+ownership is the Kylas `ownerId`, and the people who can hold it are the
+`inbound` rows of `b2b_team_member`**, which a B2B manager edits under the
+**Team** sub-tab. Nothing about who is on the team is hardcoded any more.
+
+- **`B2B_INBOUND_OWNERS` is now only a fallback**, for display and for the
+  board's owner set until managers have added everyone. The board's owner set
+  is the legacy six **plus** every inbound member, so a lead held by someone not
+  yet added (Mandeep, Praful…) does not vanish. Once the Team tab lists
+  everyone, delete the constant.
+- **Kylas delivers every Presales-qualified lead to Hardi (`81181`).** Verified
+  2026-10-28: 245 of 245 leads in the two inbound stages over the previous two
+  weeks, at 10–32 a day. Fixing that in Kylas was tried and did not work. The
+  CRM therefore re-owns them: `POST /api/b2b/inbound/assign {mode:'rotate'}`.
+- **The pool** = owner `81181`, the two inbound stages, created after
+  `INBOUND_ROTATION_START` and within the last `INBOUND_ROTATION_WINDOW_DAYS`
+  (7). From that it drops leads with any `b2b_lead_assignment` row, and leads
+  Hardi already worked (a `b2b_lead` row past `New`). **Hardi is also a
+  rotation member**, so "owned by Hardi" cannot mean "unassigned". The
+  assignment row is what tells the two apart.
+- **The race guard is the partial unique index** on `lead_id` where
+  `kind = 'round_robin'`. Every Inbound tab open runs the rotation, so two reps
+  opening it together both plan the same leads; the second insert gets `23505`
+  and skips that lead. The claim row is written before the Kylas PATCH, and
+  deleted again if Kylas refuses, so a failed lead is retried on the next run.
+- **Order** = active, in-rotation, Kylas-linked inbound members, sorted by name,
+  continuing after whoever got the last `round_robin` row (`planRotation`).
+  "Paused" is how a manager takes someone out for the day. A paused person can
+  still *receive* a manual reassign.
+- **The owner change is a JSON Patch on `/ownerId`**, and `setLeadOwner` then
+  reads `ownerId` back. Not every API applies a write it accepts with a 200
+  (see the "Success reported off an HTTP 200" landmine), so a mismatch counts as
+  a failure. **This had not been exercised against a real lead as of
+  2026-10-28**: the first real run is the verification.
+- **Mine vs All is in the fetch.** A rep linked to Kylas gets `ownerId` = their
+  own id, and the owner filter is hidden. "All inbound" is one click away for
+  every inbound rep, deliberately, because a rep covering for an absent
+  colleague needs it. Outreach and KAM will be hard-scoped instead. This is a
+  focus aid, not confidentiality: the Kylas key is in the browser.
+- **Reassign** (the drawer's Owner card) is open to any active inbound member or
+  manager. The route re-checks that rule, refuses any lead outside the
+  inbound pipeline, and logs `kind = 'reassign'` with a reason.
+- **`CallAttempt.by` is the logged-in user, not the lead's owner.** It was
+  `draft.owner`, which would have credited every call on a reassigned lead to
+  its new owner. Calls are an Effort KPI and belong to whoever dialled.
 
 ### Gates: four hard, eight soft
 

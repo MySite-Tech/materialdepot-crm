@@ -1,6 +1,5 @@
 'use client';
 
-import { B2B_INBOUND_OWNER_LIST } from '../../../../../lib/api/b2b/inbound';
 import { B2B_FRESH_START } from '../../../../../lib/b2b';
 import { CLIENT_TYPES, INBOUND_LOCATIONS, INBOUND_STATUSES, LEAD_TYPES, PRIORITIES } from '../../../constants/inbound';
 import { NEW_KYLAS_STAGES } from '../../../models/mock-data';
@@ -8,7 +7,8 @@ import { InboundStatus } from '../../../types/inbound';
 import { inputCls } from '../../../constants/ui';
 import { Dispatch, SetStateAction } from 'react';
 
-export function InboundDailyPanel({ activeFilters, appliedSearch, clearFilters, clientType, createdAfter, createdBefore, leadType, location, newKylasStage, onlyGaps, owner, priority, search, setAppliedSearch, setClientType, setCreatedAfter, setCreatedBefore, setLeadType, setLocation, setNewKylasStage, setOnlyGaps, setOwner, setPriority, setSearch, setStatus, status }: {
+export function InboundDailyPanel({ ownerOptions, activeFilters, appliedSearch, clearFilters, clientType, createdAfter, createdBefore, leadType, location, newKylasStage, onlyGaps, owner, priority, search, setAppliedSearch, setClientType, setCreatedAfter, setCreatedBefore, setLeadType, setLocation, setNewKylasStage, setOnlyGaps, setOwner, setPriority, setSearch, setStatus, status }: {
+  ownerOptions: string[] | null;
   activeFilters: number;
   appliedSearch: string;
   clearFilters: () => void;
@@ -71,11 +71,11 @@ export function InboundDailyPanel({ activeFilters, appliedSearch, clearFilters, 
         {([
           ['Status', 'All statuses', status, setStatus, ['all', ...INBOUND_STATUSES]],
           ['Priority', 'All priorities', priority, setPriority, ['all', ...PRIORITIES]],
-          ['Assigned BM', 'All BMs', owner, setOwner, ['all', ...B2B_INBOUND_OWNER_LIST.map((o) => o.name)]],
+          ['Assigned BM', 'All BMs', owner, setOwner, ['all', ...(ownerOptions ?? [])]],
           ['Client type', 'All client types', clientType, setClientType, ['all', ...CLIENT_TYPES]],
           ['Lead type', 'All lead types', leadType, setLeadType, ['all', ...LEAD_TYPES]],
           ['Location', 'All locations', location, setLocation, ['all', ...INBOUND_LOCATIONS]],
-        ] as const).map(([label, allLabel, val, setter, opts]) => (
+        ] as const).filter(([label]) => label !== 'Assigned BM' || ownerOptions).map(([label, allLabel, val, setter, opts]) => (
           <div key={label}>
             <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</label>
             <select

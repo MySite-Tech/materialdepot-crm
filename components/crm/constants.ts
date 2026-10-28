@@ -162,8 +162,6 @@ export const ROLE_LABEL_OVERRIDES: Record<string, string> = {
 
 export const SITE_AUDIT_SUBROLE_SLUGS = new Set(SITE_AUDIT_SUBROLES.map(([slug]) => slug));
 
-export const B2B_SALES_ROLES = new Set(['superadmin', 'admin', 'manager', 'tech', 'b2b_sales', 'b2b_KAM', 'b2b_manager']);
-
 export const APPOINTMENT_TRACKER_ROLES = new Set([
   'superadmin', 'admin', 'tech',   // → Admin view
   'manager', 'area_manager', 'cluster_head', 'store_manager', 'asst_store_manager', // → Store Manager view

@@ -123,6 +123,31 @@ help it. It would have to authorise on a shared secret in the `Authorization`
 header and **refuse when that secret is unset**, rather than defaulting to open —
 doubly so for anything holding the service-role key.
 
+This is why the B2B inbound round robin (`/api/b2b/inbound/assign`, 2026-10-28)
+runs **when someone opens Inbound Leads**, not on a timer. A lead that arrives
+overnight is assigned by the first rep to open the tab. It is idempotent, so
+being triggered from many browsers is safe. See `docs/b2b/inbound.md` §Who owns
+a lead.
+
+### `lib/server/b2b-team` talks to Kylas without `kylasFetch`
+
+Added 2026-10-28 for the B2B team routes. `kylasFetch` lives in a browser
+module that carries the Kylas key as a literal. This server-only module reads
+`process.env.KYLAS_API_KEY` and has its own small `fetch` wrapper instead, so
+the route works only where the env var is set. **Check the Azure application
+settings before deploying it**, along with `SUPABASE_SERVICE_ROLE_KEY`, which
+its Supabase half needs.
+
+Two things it does that `kylasFetch` callers do not:
+
+- **A PATCH is checked by reading the field back.** `setLeadOwner` compares the
+  returned `ownerId` with the one it asked for, and re-reads the lead if the
+  body has none. Kylas's API reference is not public, so a 200 alone was not
+  trusted.
+- **Kylas errors throw.** They are not swallowed into an empty list (the
+  `total: 0` trap in the request-budget skill). The route turns them into a
+  502 naming Kylas.
+
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 
 `fetchCRMLeadsStats` and `fetchCRMLeadsStatsByBmGroup` (`lib/api/crm/leads.ts`)

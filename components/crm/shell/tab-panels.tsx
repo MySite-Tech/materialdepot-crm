@@ -88,7 +88,7 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
     
     {effectiveTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} jumpTo={searchParams.get('ticket')} />}
     
-    {effectiveTab === 'b2bSales' && <B2BSalesCRM />}
+    {effectiveTab === 'b2bSales' && <B2BSalesCRM currentUser={currentUser} />}
     
     {effectiveTab === 'appointmentTracker' && (
       <AppointmentTrackerClient currentUser={currentUser} branches={branchesLoaded ? branches : undefined} />

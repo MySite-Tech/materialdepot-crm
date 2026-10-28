@@ -59,12 +59,12 @@ interface InboundBoardPage {
 
 export async function fetchInboundBoard(
   opts?: {
-    page?: number; ownerId?: number; search?: string;
+    page?: number; ownerId?: number; ownerIds?: number[]; search?: string;
     createdFrom?: string; createdTo?: string; kylasStage?: number;
   },
 ): Promise<InboundBoardPage> {
   const page = opts?.page ?? 0;
-  const ownerIds = opts?.ownerId ? [opts.ownerId] : undefined;
+  const ownerIds = opts?.ownerId ? [opts.ownerId] : opts?.ownerIds;
   const search = (opts?.search || '').trim();
   const createdFrom = search ? (opts?.createdFrom || undefined) : floorToFreshStart(opts?.createdFrom);
   const createdAfter = createdFrom ? new Date(`${createdFrom}T00:00:00+05:30`).toISOString() : '';
