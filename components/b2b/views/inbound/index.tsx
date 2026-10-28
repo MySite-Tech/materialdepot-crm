@@ -15,8 +15,8 @@ import { InboundBoard } from './ui/board';
 import { InboundFilterBar } from './ui/filters';
 import { LeadTable } from './ui/table';
 import { InboundFilters, Lens, View } from './types';
-import { LensPills, LensTiles, TileFigure } from './ui';
-import { activeFilterCount, byNewestLeadFirst, lensMatches, matchesFilters, sortForLens, toExportRow } from './utils';
+import { LensPills, LensTiles } from '../../ui/lens-tiles';
+import { TileFigure, activeFilterCount, byNewestLeadFirst, lensMatches, matchesFilters, sidePills, sortForLens, tileGroups, toExportRow } from './utils';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
@@ -343,7 +343,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </p>
       )}
 
-      <LensTiles counts={counts} figures={figures} unknown={loading ? 'pending' : loadFailed ? 'failed' : null} active={view === 'list' ? lens : null} onPick={pickLens} />
+      <LensTiles groups={tileGroups(counts, figures, loading ? 'pending' : loadFailed ? 'failed' : null)} active={view === 'list' ? lens : null} onPick={pickLens} />
 
       <InboundFilterBar
         f={f}
@@ -353,7 +353,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         search={search}
         setSearch={setSearch}
         onSearch={runSearch}
-        aside={<LensPills counts={counts} hideCounts={loading || loadFailed} active={view === 'list' ? lens : null} onPick={pickLens} />}
+        aside={<LensPills pills={sidePills(counts, loading || loadFailed)} active={view === 'list' ? lens : null} onPick={pickLens} />}
       />
 
       {error && (

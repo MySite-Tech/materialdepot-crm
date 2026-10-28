@@ -92,12 +92,55 @@ visit ending in "we'll call when the drawings land" has no honest date to give.
 A follow-up is actioned when a LATER interaction is logged, because
 `nextFollowUp` reads the account's follow-up date off the **latest** entry
 (deliberately not the earliest across the log — a follow-up set in March and
-superseded in April is not still pending). So a queue row clears the moment the
-KAM logs the call, and nothing is ticked off by hand. Verified live.
+superseded in April is not still pending). So a firm leaves the Overdue tile the
+moment the KAM logs the call, and nothing is ticked off by hand. Verified live.
 
 Open question #3 (a floor on the queue) is answered no — an old unactioned
 follow-up sits there indefinitely, because dropping it is how an account goes
 quiet with nobody deciding to let it. `queueAgeBand` marks the age instead.
+
+### The tiles are the navigation (2026-10-28)
+
+Same design as Inbound (`inbound.md` §The tiles are the navigation), on the
+shared `components/b2b/ui/lens-tiles.tsx`. Each tile is a lens. `firmLensMatches`
+and `orderLensMatches` in `models/kam/cadence.ts` give both its count and its
+list. On 2026-10-28 every tile matched its rows in a browser on real Supabase
+data, with Django stubbed.
+
+- **Follow-ups:** Overdue · Due today · No follow-up · Called today.
+  **Accounts:** Assigned · Active · At risk. **Orders:** Open orders · Pipeline.
+  Upcoming, Inactive and Order board are pills. The four follow-up buckets
+  partition the book: 9 + 2 + 44 + 11 = 66 firms on that day.
+- **They replaced the `KAM_VIEWS` chips**, which listed the same four things as
+  the tiles under different names and counts. The Assigned Clients chip counted
+  `filteredRows` (after search) while its tile counted `rows`, so the two
+  disagreed as soon as anyone searched (see the badge entry in
+  `docs/landmines.md`). `todaysCalls`, `followUpQueue`, `CadenceList`,
+  `CadenceRow` and `KamView` are deleted. The follow-up rule now lives in one
+  helper, `firmFollowUp`, which `assignedClientRows` and `callCompliance` (and
+  so the KAM dashboard) also read. `calledOn` does the same for calls.
+- **Open orders and Pipeline are different sets on purpose.** Open is
+  `KAM_OPEN_STATUSES`, which includes Requirement Logged. Pipeline is
+  `KAM_PIPELINE_STATUSES` (Quote Shared and PI Shared), the §6.1 definition.
+  Pipeline's tile shows the ticket value with the estimate beside it, never
+  summed.
+- **Overdue stays oldest-first** (§4.3 FIFO). Its age chip counts days past the
+  follow-up date, the same number the old queue's `agedDays` showed, banded by
+  `queueAgeBand`. It is not days since contact. At risk sorts by
+  `daysToInactive`, and No follow-up puts the longest silence first. Assigned
+  keeps the old order: overdue, then due, then the rest by silence.
+- **Called today counts firms in scope**, so on "All KAMs" it now includes an
+  unassigned firm someone called. `callsLoggedOn` itself is unchanged (one per
+  firm per day, for that KAM).
+- **Search reaches orders too**, by company, Enq ID and requirement, so the
+  order tiles narrow with the firm tiles.
+- **A failed read shows Unknown, never 0.** The client master failing blanks the
+  firm tiles, and the order list failing blanks the order tiles, independently,
+  each with a retry panel. Firms whose order metrics were not read reach neither
+  Active nor Inactive (`clientStatus` gives Unknown), and the Assigned and
+  Active tiles say how many.
+- **Against the Django stub every firm reads Inactive with ₹0.** The stub
+  answers `200 []` for `b2b-bulk`, so this says nothing about real accounts.
 
 ### Calls are deduped per client per day
 

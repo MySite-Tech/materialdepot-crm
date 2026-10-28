@@ -427,6 +427,10 @@ Same caveat as `client-db.md` §3.2, and it must be shown on screen.
 3. **KAM tab list:** one paginated firm table with filter chips (Status, Tier,
    Studio Space, Due today, Overdue, plus KAM for managers). Today/Queue become
    chips, not separate views.
+   **Mostly built 2026-10-28** as clickable tiles (see `kam.md` §The tiles are
+   the navigation). Status, Due today and Overdue are tiles, and the KAM picker
+   stays. Tier and Studio Space wait on slice 6 and the Studio Space field, and
+   the KAM picker is still a free choice until slice 2 scopes it.
 4. **Log meeting/call modal:** attendees, purpose, notes and next follow-up all
    mandatory; `loggedBy` comes from the session.
 5. **Manager performance view:** per-KAM KPI table with a month picker,
@@ -527,6 +531,12 @@ separate "My Dashboard". Steps 4–6 have not started.
   table, and the side panels are gone. Verified against real Kylas/Supabase with
   Django stubbed and every write blocked. Every tile's count matched its rows.
   No data change. Found 130 follow-up leads with no date.
+- **2026-10-28 (KAM, tiles)**: The user asked for clickable KAM tiles. Waited for
+  the parallel KAM session to commit the Firm page (`7eb283e`) before editing.
+  Built slice 3's list as nine lens tiles over one paged firm table and one paged
+  order table. The tile component moved to `components/b2b/ui/lens-tiles.tsx`,
+  shared with Inbound. The Outreach session has its own `LensStrip` in
+  `views/outreach/lenses/`, uncommitted at the time, which should move onto it.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

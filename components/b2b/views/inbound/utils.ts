@@ -4,7 +4,8 @@ import { enrichmentGaps, followUpBucket, isFollowUpStatus, isOpenStatus, lastAtt
 import { FollowUpBucket } from '../../types/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { fmtLeadDateTime } from '../../ui/inbound-chips';
-import { NO_FILTERS, PRIORITY_RANK } from './constants';
+import { LENS, LENS_GROUPS, NO_FILTERS, PRIORITY_RANK, SIDE_LENSES } from './constants';
+import type { LensPill, LensTileGroup } from '../../ui/lens-tiles';
 import { InboundFilters, Lens } from './types';
 
 export const toExportRow = (l: InboundLead): (string | number)[] => {
@@ -113,3 +114,29 @@ export function sortForLens(lens: Lens, leads: InboundLead[], today: string): In
     return (a.followUpTime || '').localeCompare(b.followUpTime || '');
   });
 }
+
+export interface TileFigure {
+  value: string;
+  sub: string;
+  warn?: boolean;
+}
+
+export function tileGroups(
+  counts: Record<Lens, number>,
+  figures: Partial<Record<Lens, TileFigure>>,
+  unknown: 'pending' | 'failed' | null,
+): LensTileGroup<Lens>[] {
+  return LENS_GROUPS.map((g) => ({
+    title: g.title,
+    head: g.head && { key: g.head, label: unknown ? g.title : `${g.title} · ${counts[g.head]}`, rule: LENS[g.head].rule },
+    tiles: g.lenses.map((k) => {
+      const fig = unknown === 'pending' ? { value: '…', sub: 'loading' }
+        : unknown === 'failed' ? { value: 'Unknown', sub: 'leads did not load' }
+          : figures[k] ?? { value: String(counts[k]), sub: '' };
+      return { key: k, title: LENS[k].title, rule: LENS[k].rule, accent: LENS[k].accent, ...fig, muted: !unknown && counts[k] === 0 };
+    }),
+  }));
+}
+
+export const sidePills = (counts: Record<Lens, number>, hideCounts: boolean): LensPill<Lens>[] =>
+  SIDE_LENSES.map((k) => ({ key: k, title: LENS[k].title, rule: LENS[k].rule, count: hideCounts ? undefined : counts[k] }));

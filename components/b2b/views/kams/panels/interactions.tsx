@@ -1,7 +1,7 @@
 'use client';
 
-import { ClientEntity, ClientInteraction, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, contactLabel, currentTemperature, primaryContact, temperatureColor } from '../../../models/client';
-import { CadenceRow, interactionGateErrors, interactionPrompts, queueAgeBand } from '../../../models/kam';
+import { ClientEntity, ClientInteraction, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, currentTemperature, temperatureColor } from '../../../models/client';
+import { interactionGateErrors, interactionPrompts } from '../../../models/kam';
 import { newB2BId } from '../../../models/ids';
 import { Field } from '../ui';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
@@ -141,68 +141,6 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
           <button onClick={onClose} className={btnGhost}>Cancel</button>
           <button onClick={save} disabled={saving || !!errors.length} className={btnPrimary}>{saving ? 'Saving…' : 'Log interaction'}</button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-export function CadenceList({ rows, kind, onOpen, emptyNote }: {
-  rows: CadenceRow[];
-  kind: 'today' | 'queue';
-  onOpen: (clientId: string) => void;
-  emptyNote: string;
-}) {
-  if (!rows.length) return <p className="text-[12px] text-gray-400 py-8 text-center">{emptyNote}</p>;
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-[12px] min-w-[640px]">
-          <thead>
-            <tr className="bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider">
-              <th className="text-left font-semibold px-3 py-2">Company</th>
-              <th className="text-left font-semibold px-3 py-2">Contact</th>
-              <th className="text-left font-semibold px-3 py-2">Follow-up due</th>
-              {kind === 'queue' && <th className="text-left font-semibold px-3 py-2">Overdue by</th>}
-              <th className="text-left font-semibold px-3 py-2">Last logged</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const primary = primaryContact(r.client.contacts);
-              const band = queueAgeBand(r.agedDays);
-              return (
-                <tr key={r.client.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-3 py-2">
-                    <span className="font-semibold text-gray-800">{r.client.company}</span>
-                    <div className="text-[10px] text-gray-400">{r.client.kam || 'unassigned'}</div>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
-                    <span className="font-mono">{primary?.number || '—'}</span>
-                    {contactLabel(primary) && <span className="text-gray-400"> · {contactLabel(primary)}</span>}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-gray-600">{r.date}</td>
-                  {kind === 'queue' && (
-                    <td className="px-3 py-2">
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: band.color + '18', color: band.color }}>
-                        {r.agedDays}d
-                      </span>
-                    </td>
-                  )}
-                  <td className="px-3 py-2 text-gray-500">
-                    {r.from.type} {r.from.date}
-                    {r.from.summary && <span className="text-gray-400"> · {r.from.summary.slice(0, 48)}{r.from.summary.length > 48 ? '…' : ''}</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button onClick={() => onOpen(r.client.id)} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">
-                      Open
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
       </div>
     </div>
   );

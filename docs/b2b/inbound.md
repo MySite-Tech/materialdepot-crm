@@ -114,7 +114,8 @@ date-ordered: `sortForLens` sorts them by priority, then follow-up date.
 
 ### The tiles are the navigation (2026-10-28)
 
-Each tile is a *lens*. One predicate, `lensMatches` in `views/inbound/utils.ts`,
+Each tile is a *lens*, rendered by the shared `components/b2b/ui/lens-tiles.tsx`
+(KAM uses it too). One predicate, `lensMatches` in `views/inbound/utils.ts`,
 decides both the tile's number and the rows listed under it, so a tile can never
 count leads its list does not show (see the badge entry in `docs/landmines.md`).
 On real data on 2026-10-28, all 13 lenses showed the same number on the tile as

@@ -1,11 +1,12 @@
 'use client';
 
-import { KamClientsView } from './panels/clients';
+import { KamFirmTable } from './panels/clients';
 import { KamOrdersView } from './orders';
+import { KamOrderTable } from './orders/table';
 
-import { ClientEntity, ClientStatus, contactNumbers, istToday, primaryContact } from '../../models/client';
+import { CLIENT_SOURCES, ClientEntity, contactNumbers, istToday, primaryContact } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_VIEWS, KamOrder, KamOrderStatus, KamView, assignedClientRows, callsLoggedOn, followUpQueue, isLegacyKamStage, kamPipeline, todaysCalls } from '../../models/kam';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
 import { DEFAULT_KAM, KAMS, fmtL } from '../../models/mock-data';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
@@ -14,9 +15,9 @@ import { ExportFormat } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { ClientDrawer } from './drawer';
-import { CadenceList, InteractionModal } from './panels/interactions';
+import { InteractionModal } from './panels/interactions';
 import { OrderModal } from './orders/modal';
-import { StatTile } from '../../ui/client-chips';
+import { LensPills, LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
@@ -32,10 +33,12 @@ export default function KAMs() {
     advanced: number; writeErrors: string[];
   } | null>(null);
 
-  const [view, setView] = useState<KamView>('clients');
+  const [lens, setLens] = useState<KamLens>('assigned');
+  const [listPage, setListPage] = useState(0);
   const [kamFilter, setKamFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all');
+  const [segment, setSegment] = useState('all');
+  const [source, setSource] = useState('all');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | KamOrderStatus>('all');
 
   const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -119,38 +122,81 @@ export default function KAMs() {
 
   const rows = useMemo(() => assignedClientRows(scopedClients, metricsFor, today), [scopedClients, metricsFor, today]);
 
+  const q = search.trim().toLowerCase();
   const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const digits = q.replace(/\D/g, '');
-    return rows
-      .filter((r) => {
-        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-        if (!q) return true;
-        return r.company.toLowerCase().includes(q)
-          || r.contactPerson.toLowerCase().includes(q)
-          || (digits.length >= 4 && contactNumbers(r.client.contacts).some((p) => p.includes(digits)));
-      })
-      .sort((a, b) => {
+    return rows.filter((r) => {
+      if (segment !== 'all' && r.segment !== segment) return false;
+      if (source !== 'all' && r.source !== source) return false;
+      if (!q) return true;
+      return r.company.toLowerCase().includes(q)
+        || r.contactPerson.toLowerCase().includes(q)
+        || (digits.length >= 4 && contactNumbers(r.client.contacts).some((p) => p.includes(digits)));
+    });
+  }, [rows, q, segment, source]);
 
-        const rank = (x: AssignedClientRow) => (x.followUp === 'overdue' ? 0 : x.followUp === 'today' ? 1 : 2);
-        return rank(a) - rank(b) || (b.daysSinceContact ?? -1) - (a.daysSinceContact ?? -1) || a.company.localeCompare(b.company);
-      });
-  }, [rows, search, statusFilter]);
+  const filteredOrders = useMemo(
+    () => (q ? scopedOrders.filter((o) => [o.company, o.enqId, o.requirement].some((v) => String(v || '').toLowerCase().includes(q))) : scopedOrders),
+    [scopedOrders, q],
+  );
 
-  const today_ = useMemo(() => todaysCalls(scopedClients, today), [scopedClients, today]);
-  const queue = useMemo(() => followUpQueue(scopedClients, today), [scopedClients, today]);
-  const pipeline = useMemo(() => kamPipeline(scopedOrders), [scopedOrders]);
+  const firmsBy = useMemo(() => {
+    const out = Object.fromEntries(KAM_FIRM_LENSES.map((k) => [k, [] as AssignedClientRow[]])) as Record<KamFirmLens, AssignedClientRow[]>;
+    for (const r of filteredRows) for (const k of KAM_FIRM_LENSES) if (firmLensMatches(k, r, today)) out[k].push(r);
+    return out;
+  }, [filteredRows, today]);
 
-  const callsToday = useMemo(() => {
-    if (kamFilter === 'all') {
-      const kams = [...new Set(clients.map((c) => c.kam).filter((k): k is string => !!k))];
-      return kams.reduce((t, k) => t + callsLoggedOn(clients, k, today), 0);
-    }
-    return callsLoggedOn(clients, kamFilter, today);
-  }, [clients, kamFilter, today]);
+  const ordersBy = useMemo(() => ({
+    open: filteredOrders.filter((o) => orderLensMatches('open', o)),
+    pipeline: filteredOrders.filter((o) => orderLensMatches('pipeline', o)),
+    orders: filteredOrders,
+  }), [filteredOrders]);
+
+  const pipeline = useMemo(() => kamPipeline(ordersBy.pipeline), [ordersBy.pipeline]);
+  const isOrderLens = (k: KamLens): k is KamOrderLens => k in ordersBy;
+  const countOf = (k: KamLens) => (isOrderLens(k) ? ordersBy[k].length : firmsBy[k].length);
+
   const callTarget = kamFilter === 'all'
     ? [...new Set(clients.map((c) => c.kam).filter(Boolean))].length * DAILY_CALL_TARGET
     : DAILY_CALL_TARGET;
+
+  const firmRows = useMemo(
+    () => (isOrderLens(lens) ? [] : sortFirmsForLens(lens, firmsBy[lens], today)),
+    [lens, firmsBy, today],
+  );
+
+  useEffect(() => { setListPage(0); }, [lens, kamFilter, q, segment, source]);
+
+  const clientsFailed = failed.includes('the client master');
+  const ordersFailed = failed.includes('the order list');
+  const unread = firmsBy.assigned.filter((r) => r.status === 'Unknown').length;
+
+  const tileValue = (k: KamLens): { value: string; sub?: string; warn?: boolean } => {
+    if (loading) return { value: '…', sub: 'loading' };
+    if (isOrderLens(k) ? ordersFailed : clientsFailed) return { value: 'Unknown', sub: 'did not load', warn: true };
+    const n = countOf(k);
+    switch (k) {
+      case 'called':   return { value: `${n}/${callTarget}`, sub: n >= callTarget ? 'target met' : `${callTarget - n} to go` };
+      case 'overdue':  return { value: String(n), sub: 'date passed' };
+      case 'due':      return { value: String(n), sub: 'for today' };
+      case 'nofollow': return { value: String(n), sub: 'none booked' };
+      case 'assigned': return { value: String(n), sub: unread ? `${unread} orders unread` : 'firms in scope', warn: !!unread };
+      case 'active':   return { value: String(n), sub: unread ? `${unread} not read yet` : 'last 3 months', warn: !!unread };
+      case 'atrisk':   return { value: String(n), sub: 'lapsing soon' };
+      case 'pipeline': return { value: fmtL(pipeline.pipeline), sub: pipeline.estimatedPipeline ? `${fmtL(pipeline.estimatedPipeline)} est.` : `${n} at Quote/PI` };
+      default:         return { value: String(n), sub: 'not closed' };
+    }
+  };
+
+  const tileGroups: LensTileGroup<KamLens>[] = KAM_LENS_GROUPS.map((g) => ({
+    title: g.title,
+    tiles: g.lenses.map((k) => ({
+      key: k, title: KAM_LENS[k].title, rule: KAM_LENS[k].rule, accent: KAM_LENS[k].accent,
+      ...tileValue(k), muted: !loading && countOf(k) === 0 && k !== 'pipeline',
+    })),
+  }));
+
+  const pickLens = (k: KamLens) => setLens(k);
 
   const legacyCount = useMemo(() => orders.filter((o) => isLegacyKamStage(o.legacyStage)).length, [orders]);
   const unlinkedOrders = useMemo(() => orders.filter((o) => !o.clientId).length, [orders]);
@@ -191,11 +237,22 @@ export default function KAMs() {
     };
   };
 
-  const exportClients = (format: ExportFormat) => {
+  const exportView = (format: ExportFormat) => {
+    if (isOrderLens(lens)) {
+      const oh = ['Company', 'KAM', 'Status', 'Enq ID', 'Ticket value', 'Estimate', 'Expected closure', 'Requirement'];
+      const ob = ordersBy[lens].map((o) => [o.company, o.kam, o.status, o.enqId || '', o.orderValue ?? '', o.estimatedValue ?? '', o.expectedClosure || '', o.requirement || '']);
+      const name = `kam-${lens}-${todayStr()}`;
+      setExporting(true);
+      try {
+        if (format === 'csv') exportRowsCsv(oh, ob, name);
+        else exportRowsExcel(oh, ob, name, KAM_LENS[lens].title);
+      } finally { setExporting(false); }
+      return;
+    }
     const headers = ['Company', 'Source', 'Contact Person', 'Contact Number', 'Last Order Placed', 'Average Order Value',
       'Number of Orders', 'Total Revenue Generated', 'Client Status', 'Segment', 'Temperature', 'Upcoming Project',
       'Next Follow-up', 'Days Since Contact', 'KAM'];
-    const body = filteredRows.map((r) => [
+    const body = firmRows.map((r) => [
       r.company, r.source, r.contactPerson, r.contactNumber,
       r.metrics.lastOrderPlaced || (r.metrics.dateState === 'unavailable' ? 'unread' : ''),
       r.metrics.averageOrderValue !== undefined ? Math.round(r.metrics.averageOrderValue) : '',
@@ -204,12 +261,10 @@ export default function KAMs() {
     ]);
     setExporting(true);
     try {
-      if (format === 'csv') exportRowsCsv(headers, body, `kam-clients-${todayStr()}`);
-      else exportRowsExcel(headers, body, `kam-clients-${todayStr()}`, 'Assigned Clients');
+      if (format === 'csv') exportRowsCsv(headers, body, `kam-${lens}-${todayStr()}`);
+      else exportRowsExcel(headers, body, `kam-${lens}-${todayStr()}`, KAM_LENS[lens].title);
     } finally { setExporting(false); }
   };
-
-  const currentView = KAM_VIEWS.find((v) => v.key === view)!;
 
   return (
     <div className="p-4 sm:p-6">
@@ -221,7 +276,7 @@ export default function KAMs() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ExportButton onExport={(f) => exportClients(f)} disabled={exporting} />
+          <ExportButton onExport={(f) => exportView(f)} disabled={exporting} />
           <button onClick={() => setUploading(true)} className={btnGhost}>Upload Orders</button>
           <button onClick={() => setOrderModal({ order: blankOrder(), isNew: true })} className={btnPrimary} disabled={!clients.length}>+ Add Order</button>
         </div>
@@ -239,99 +294,79 @@ export default function KAMs() {
           <span className="font-semibold">No clients are assigned yet.</span> §7 says this module shares its client
           universe with the Client Database — seed that tab and assigned clients, the call cadence and the temperature
           readings all appear here.
-          {!!orders.length && ` ${orders.length} order${orders.length === 1 ? '' : 's'} already exist and are on the Active Orders view — ${openOrderCount} still open, which is the number that view's own chip counts.`}
+          {!!orders.length && ` ${orders.length} order${orders.length === 1 ? '' : 's'} already exist and are under Order board — ${openOrderCount} still open, which is the Open orders tile.`}
         </div>
       )}
 
+      <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />
+
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">KAM</span>
-        <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)}
-          className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All KAMs ({clients.length} clients)</option>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search firm, contact, number or Enq ID…"
+          className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white outline-none focus:border-[#0F766E] w-full sm:w-[280px]" />
+        <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
+          <option value="all">All KAMs ({clients.length} firms)</option>
           <option value="unassigned">Unassigned</option>
           {kamOptions.map((k) => <option key={k} value={k}>{k} ({clients.filter((c) => c.kam === k).length})</option>)}
         </select>
-        {kamFilter !== 'all' && (
-          <span className="text-[11px] text-gray-500">
-            Calls today <span className="font-mono font-bold" style={{ color: callsToday >= callTarget ? '#15803D' : '#B45309' }}>{callsToday}</span>
-            <span className="text-gray-400">/{callTarget}</span>
-          </span>
-        )}
-        <div className="flex gap-1 ml-auto flex-wrap">
-          {KAM_VIEWS.filter((v) => v.key !== 'dashboard').map((v) => {
-            const count = v.key === 'clients' ? filteredRows.length
-              : v.key === 'today' ? today_.length
-              : v.key === 'queue' ? queue.length
-              : scopedOrders.filter((o) => KAM_OPEN_STATUSES.includes(o.status)).length;
-            return (
-              <button key={v.key} onClick={() => setView(v.key)}
-                className={`px-2.5 py-1.5 text-[12px] font-semibold rounded-md border cursor-pointer whitespace-nowrap ${view === v.key ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-600 border-gray-200'}`}
-                title={v.note}>
-                {v.label}
-                <span className={`ml-1.5 font-mono ${view === v.key ? 'text-gray-300' : 'text-gray-400'}`}>{count}</span>
-              </button>
-            );
-          })}
+        <select value={segment} onChange={(e) => setSegment(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
+          <option value="all">All segments</option>
+          {SEGMENTS.map((x) => <option key={x} value={x}>Segment {x}</option>)}
+        </select>
+        <select value={source} onChange={(e) => setSource(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
+          <option value="all">All sources</option>
+          {CLIENT_SOURCES.map((x) => <option key={x} value={x}>{x}</option>)}
+        </select>
+        <div className="ml-auto">
+          <LensPills
+            pills={KAM_SIDE_LENSES.map((k) => ({ key: k, title: KAM_LENS[k].title, rule: KAM_LENS[k].rule, count: loading ? undefined : countOf(k) }))}
+            active={lens}
+            onPick={pickLens}
+          />
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 mb-3">
-        <span className="font-semibold text-gray-500">{currentView.section}</span> · {currentView.note}
-      </p>
-
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 mb-4">
-        <StatTile label="Assigned clients" value={rows.length} sub={`${rows.filter((r) => r.status === 'Active').length} active`} />
-        <StatTile label="Calls today" value={`${callsToday}/${callTarget}`} tone={callsToday >= callTarget ? '#15803D' : '#B45309'} sub="§4.1 target, reported not enforced" />
-        <StatTile label="Due today" value={today_.length} tone={today_.length ? '#EA580C' : undefined} />
-        <StatTile label="Overdue" value={queue.length} tone={queue.length ? '#DC2626' : undefined} />
-        <StatTile label="Pipeline" value={fmtL(pipeline.pipeline)} sub={pipeline.estimatedPipeline ? `${fmtL(pipeline.estimatedPipeline)} estimated` : `${pipeline.count} open`} />
-        <StatTile label="Open orders" value={scopedOrders.filter((o) => KAM_OPEN_STATUSES.includes(o.status)).length} />
-      </div>
-
-      {loading && <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>}
-
-      {!loading && view === 'clients' && (
-        <KamClientsView
-        clients={clients}
-        filteredRows={filteredRows}
-        search={search}
-        setDrawerId={setDrawerId}
-        setSearch={setSearch}
-        setStatusFilter={setStatusFilter}
-        statusFilter={statusFilter}
-      />
-      )}
-
-      {!loading && view === 'today' && (
-        <CadenceList rows={today_} kind="today" onOpen={setDrawerId}
-          emptyNote="Nothing is due today. A client appears here when the follow-up date on its latest interaction is today." />
-      )}
-
-      {!loading && view === 'queue' && (
-        <>
-          <CadenceList rows={queue} kind="queue" onOpen={setDrawerId}
-            emptyNote="Nothing overdue. A row leaves this queue the moment you log the call — nothing has to be ticked off." />
-          {!!queue.length && (
-            <p className="text-[10px] text-gray-400 mt-2">
-              FIFO — oldest follow-up first. There is no floor on how far back the queue reaches (PRD open question #3);
-              the age badge is there so a queue full of month-old rows is visible rather than quietly trimmed.
-            </p>
-          )}
-        </>
-      )}
-
-      {!loading && view === 'orders' && (
-        <KamOrdersView
-        boardScroll={boardScroll}
-        legacyCount={legacyCount}
-        orderStatusFilter={orderStatusFilter}
-        scopedOrders={scopedOrders}
-        setOrderModal={setOrderModal}
-        setOrderStatusFilter={setOrderStatusFilter}
-        sync={sync}
-        unlinkedOrders={unlinkedOrders}
-      />
-      )}
+      {loading ? <p className="text-sm text-gray-400 py-8 text-center bg-white rounded-lg border border-gray-200">Loading firms and orders…</p>
+        : (isOrderLens(lens) ? ordersFailed : clientsFailed) ? (
+          <div className="bg-white rounded-lg border border-gray-200 py-12 flex flex-col items-center gap-3">
+            <p className="text-[12px] text-gray-600">{isOrderLens(lens) ? 'The order list' : 'The client master'} did not load, so nothing here can be counted yet.</p>
+            <button onClick={load} className={btnPrimary}>Try again</button>
+          </div>
+        ) : lens === 'orders' ? (
+          <KamOrdersView
+            boardScroll={boardScroll}
+            legacyCount={legacyCount}
+            orderStatusFilter={orderStatusFilter}
+            scopedOrders={filteredOrders}
+            setOrderModal={setOrderModal}
+            setOrderStatusFilter={setOrderStatusFilter}
+            sync={sync}
+            unlinkedOrders={unlinkedOrders}
+          />
+        ) : isOrderLens(lens) ? (
+          <KamOrderTable
+            lens={lens}
+            rows={ordersBy[lens]}
+            today={today}
+            search={search.trim()}
+            valueText={lens === 'pipeline' && (pipeline.pipeline || pipeline.estimatedPipeline)
+              ? `${fmtL(pipeline.pipeline)} on tickets · ${fmtL(pipeline.estimatedPipeline)} estimated, never summed` : undefined}
+            page={listPage}
+            setPage={setListPage}
+            onOpen={(o) => setOrderModal({ order: o, isNew: false })}
+          />
+        ) : (
+          <KamFirmTable
+            lens={lens}
+            rows={firmRows}
+            today={today}
+            search={search.trim()}
+            page={listPage}
+            setPage={setListPage}
+            onOpen={setDrawerId}
+            emptyAction={lens === 'overdue' || lens === 'due'
+              ? <button onClick={() => pickLens('nofollow')} className={btnGhost}>See firms with no follow-up →</button> : undefined}
+          />
+        )}
 
       {drawerRow && (
         <ClientDrawer

@@ -198,9 +198,9 @@ They live here now because the code cannot carry them.
 - **The rep leaderboard is the only place `inboundOwnerTotals` is rendered**, so
   that tab asks for it and the other three do not. See the owner-totals note
   above for why it cannot be derived instead.
-- **The KAM empty-state banner counts every order; the Active Orders chip counts
+- **The KAM empty-state banner counts every order; the Open orders tile counts
   the open ones.** Both numbers are named on screen deliberately — that is what
-  stops "30 orders exist" reading as a contradiction of a chip saying 4.
+  stops "30 orders exist" reading as a contradiction of a tile saying 4.
 - **A failed read is reported, never rendered as "no leads."** A BM would read an
   empty Outreach board as a day with nothing on it. This is the view-level half
   of the `Array.isArray(rows) ? rows : []` landmine.

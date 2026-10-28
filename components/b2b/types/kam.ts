@@ -65,14 +65,6 @@ export interface CallCompliance {
   dueToday: number;
 }
 
-export interface CadenceRow {
-  client: ClientEntity;
-  date: string;
-
-  agedDays: number;
-  from: ClientInteraction;
-}
-
 export interface AssignedClientRow {
   client: ClientEntity;
   company: string;
@@ -144,4 +136,15 @@ export interface NewVsRepeat {
   unknownClients: number;
 }
 
-export type KamView = 'clients' | 'today' | 'queue' | 'orders' | 'dashboard';
+export type KamFirmLens = 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'inactive' | 'atrisk';
+
+export type KamOrderLens = 'open' | 'pipeline' | 'orders';
+
+export type KamLens = KamFirmLens | KamOrderLens;
+
+export interface KamLensMeta {
+  title: string;
+  rule: string;
+  empty: string;
+  accent: string;
+}
