@@ -45,6 +45,19 @@ export function upsertOutreachLead(l: OutreachLead): Promise<string | null> {
   return upsert(outreachToRow(l), 'id');
 }
 
+export async function upsertOutreachLeads(list: OutreachLead[], opts?: { onlyNew?: boolean }): Promise<string | null> {
+  if (!list.length) return null;
+  try {
+    const { error } = await supabase.from(TABLE).upsert(list.map(outreachToRow), { onConflict: 'id', ignoreDuplicates: !!opts?.onlyNew });
+    if (error) throw error;
+    invalidateB2BCache();
+    return null;
+  } catch (e) {
+    console.error('[b2b] bulk outreach upsert failed', e);
+    return writeErrorMessage(e);
+  }
+}
+
 export function upsertClient(c: ClientEntity): Promise<string | null> {
   return upsert(clientToRow({ ...c, updatedAt: new Date().toISOString() }), 'id');
 }

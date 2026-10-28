@@ -13,7 +13,7 @@ export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClient
 export type { ClientOrderDetails, ClientOrderRow } from './orders/details';
 export { clientFromSeed, planClientSeed } from './leads/client-seed';
 export type { ClientSeedPlan } from './leads/client-seed';
-export { deleteB2BRow, upsertClient, upsertInboundLead, upsertKamOrder, upsertOutreachLead } from './data/writes';
+export { deleteB2BRow, upsertClient, upsertInboundLead, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
 export { fetchTargets, saveTargets } from './stats/targets';
 export { fetchUnifiedLeads } from './leads/unified';
 export type { LeadSource, UnifiedLead, UnifiedStatus } from './leads/unified';

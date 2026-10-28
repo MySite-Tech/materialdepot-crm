@@ -5,7 +5,40 @@ import { MAX_MEETINGS, MEETING_STATUSES, canScheduleMeeting, nextMeetingNumber }
 import { Empty, Field, ReadValue, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
-import { Dispatch, SetStateAction } from 'react';
+import { GeoPin, pinMapUrl } from '../../../models/outreach';
+import { Dispatch, SetStateAction, useState } from 'react';
+
+function PinButton({ pin, onPin }: { pin?: GeoPin; onPin: (p: GeoPin) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const capture = () => {
+    if (!navigator.geolocation) { setErr('This browser cannot share a location.'); return; }
+    setBusy(true);
+    setErr(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setBusy(false);
+        onPin({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), accuracy: Math.round(p.coords.accuracy), at: new Date().toISOString() });
+      },
+      (e) => { setBusy(false); setErr(e.code === 1 ? 'Location permission was refused — allow it for this site and try again.' : 'Could not get a location fix. Try again outdoors.'); },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+  return (
+    <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Live pin</span>
+      {pin ? (
+        <a href={pinMapUrl(pin)} target="_blank" rel="noreferrer" className="text-[#0F766E] hover:underline">
+          {`Pinned ${pin.at.slice(0, 10)}${pin.accuracy ? ` · ±${pin.accuracy}m` : ''} · open map`}
+        </a>
+      ) : <span className="text-amber-700">Not pinned — take it at the client&apos;s office</span>}
+      <button onClick={capture} disabled={busy} className="px-2 py-0.5 rounded-md border border-gray-200 bg-white text-gray-600 disabled:opacity-50">
+        {busy ? 'Locating…' : pin ? 'Re-pin' : 'Pin my location now'}
+      </button>
+      {err && <span className="text-red-600">{err}</span>}
+    </div>
+  );
+}
 
 export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, mTime, meetings, open, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
   exhausted: boolean;
@@ -107,15 +140,18 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
               </div>
     
               {m.status === 'Completed' ? (
-                <Field label="Meeting notes" className="mt-2.5">
-                  <textarea
-                    value={m.notes || ''}
-                    onChange={(e) => patchMeeting(m.n, { notes: e.target.value })}
-                    rows={2}
-                    placeholder="What was discussed, what they asked for…"
-                    className={inputCls + ' resize-none'}
-                  />
-                </Field>
+                <>
+                  <Field label="Meeting notes" required className="mt-2.5" error={!String(m.notes || '').trim() ? 'A held meeting needs its notes before you can save.' : undefined}>
+                    <textarea
+                      value={m.notes || ''}
+                      onChange={(e) => patchMeeting(m.n, { notes: e.target.value })}
+                      rows={2}
+                      placeholder="What was discussed, what they asked for…"
+                      className={(String(m.notes || '').trim() ? inputCls : errorInputCls) + ' resize-none'}
+                    />
+                  </Field>
+                  <PinButton pin={m.pin} onPin={(pin) => patchMeeting(m.n, { pin })} />
+                </>
               ) : m.notes ? (
                 <Field label="Meeting notes" hint="Recorded when this meeting was marked Completed" className="mt-2.5">
                   <ReadValue v={m.notes} />

@@ -2,13 +2,13 @@
 
 import { Pill } from './inbound-chips';
 import {
-  OUTREACH_STATUS_COLORS, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
+  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
   type OutreachStatus, type MeetingStatus, type OutreachMeeting,
   type LeadType,
 } from '../models/outreach';
 
 export function OutreachStatusBadge({ s }: { s: OutreachStatus }) {
-  return <Pill color={OUTREACH_STATUS_COLORS[s]}>{s}</Pill>;
+  return <Pill color={OUTREACH_STATUS_COLORS[s]}>{OUTREACH_STATUS_LABEL[s]}</Pill>;
 }
 
 export function MeetingStatusChip({ s }: { s: MeetingStatus }) {

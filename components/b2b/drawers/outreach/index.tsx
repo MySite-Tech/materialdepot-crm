@@ -3,35 +3,46 @@
 import { OutreachClientCard } from './cards/client';
 import { OutreachCompanyCard } from './cards/company';
 import { OutreachDealsCard } from './cards/deals';
-import { OutreachFooter } from './footer';
-import { OutreachHeader } from './header';
-import { OutreachMeetingsCard } from './cards/meetings';
+import { OutreachHandoverCard } from './cards/handover';
+import { OutreachJourneyCard } from './cards/journey';
 import { OutreachNotesCard } from './cards/notes';
 import { OutreachRequirementCard } from './cards/requirement';
 import { OutreachStatusCard } from './cards/status';
-
-import { Selection } from '../../models/outreach';
-
-import { KAMS, LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
-import { MAX_MEETINGS, OutreachMeeting, canScheduleMeeting, hasMet, istToday, meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors, outreachStatusPrompts } from '../../models/outreach';
+import { OutreachFooter } from './footer';
+import { OutreachHeader } from './header';
 import { SaveState } from './types';
 import { nowIso } from './utils';
-import { EnqLookup, fetchKamLoad, lookupEnqId, upsertOutreachLead } from '@/lib/b2b';
+
+import { LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
+import { dealIsOrder } from '../../models/client';
+import {
+  MAX_MEETINGS, OutreachMeeting, Selection, WaitlistSignup, canScheduleMeeting, completedMeetings, hasMet, istToday,
+  meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors,
+  outreachStatusPrompts,
+} from '../../models/outreach';
+import { isHandoverKam, respondToHandover, sendHandover } from '../../models/outreach/handover';
+import { Rep } from '../../models/outreach/intake';
+import { newOnboardingFrom } from '../../models/outreach/kpis';
+import { OutreachScope, SaveLead } from '../../views/outreach/types';
+import { EnqLookup, fetchKamLoad, lookupEnqId } from '@/lib/b2b';
 import { fetchLeadDeals } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function OutreachDrawer({
-  lead, onClose, onSaved,
+  lead, scope, waitlist, waitlistError, onClose, onSave,
 }: {
   lead: OutreachLead;
+  scope: OutreachScope;
+  waitlist: WaitlistSignup | null | undefined;
+  waitlistError: string | null;
   onClose: () => void;
-
-  onSaved: (updated: OutreachLead) => void;
+  onSave: SaveLead;
 }) {
   const [draft, setDraft] = useState<OutreachLead>(lead);
   const [save, setSave] = useState<SaveState>({ saving: false });
   const [showGates, setShowGates] = useState(false);
   const today = istToday();
+  const nowMs = useMemo(() => Date.now(), [lead]);
 
   const set = <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
@@ -49,15 +60,19 @@ export default function OutreachDrawer({
     return () => { alive = false; };
   }, [lead.phone]);
 
-  const gateErrors = useMemo(() => outreachGateErrors({
-    status: draft.status,
-    followUpDate: draft.followUpDate,
-    lostReason: draft.lostReason,
-  }), [draft.status, draft.followUpDate, draft.lostReason]);
+  const unNoted = useMemo(
+    () => completedMeetings(draft.meetings).filter((m) => !String(m.notes || '').trim()).map((m) => m.n),
+    [draft.meetings],
+  );
+
+  const gateErrors = useMemo(() => [
+    ...outreachGateErrors({ status: draft.status, followUpDate: draft.followUpDate, lostReason: draft.lostReason }),
+    ...unNoted.map((n) => `Meeting ${n} is marked held — add its notes.`),
+  ], [draft.status, draft.followUpDate, draft.lostReason, unNoted]);
 
   const prompts = useMemo(() => outreachStatusPrompts({
-    status: draft.status, enqId: draft.enqId, followUpDate: draft.followUpDate, kam: draft.kam,
-  }), [draft.status, draft.enqId, draft.followUpDate, draft.kam]);
+    status: draft.status, enqId: draft.enqId, followUpDate: draft.followUpDate,
+  }), [draft.status, draft.enqId, draft.followUpDate]);
 
   const gaps = useMemo(() => outreachEnrichmentGaps({
     contactPerson: draft.contactPerson,
@@ -89,11 +104,13 @@ export default function OutreachDrawer({
     const res = await lookupEnqId(draft.phone, want);
     setEnq(res);
     if (res.status === 'matched') {
+      const onboarding = deals && !dealsFailed ? newOnboardingFrom(deals, want, dealIsOrder) : undefined;
       setDraft((d) => ({
         ...d,
         orderValue: res.orderValue ?? 0,
         orderValueSource: 'deal',
         dealStatus: res.dealStatus,
+        newOnboarding: onboarding,
       }));
     } else if (res.status === 'no-match') {
       setDraft((d) => ({ ...d, orderValueSource: 'manual' }));
@@ -129,7 +146,7 @@ export default function OutreachDrawer({
       area: mArea.trim() || undefined,
       officeLocation: mOffice.trim() || undefined,
       status: 'Scheduled',
-      loggedBy: draft.bm,
+      loggedBy: scope.me.name || draft.bm,
       updatedAt: nowIso(),
     };
     setDraft((d) => ({ ...d, meetings: [...(d.meetings || []), m] }));
@@ -144,16 +161,10 @@ export default function OutreachDrawer({
     }));
 
   const [kamLoad, setKamLoad] = useState<Record<string, number> | null>(null);
-  const [kamAssigning, setKamAssigning] = useState(false);
-
-  const assignKam = async () => {
-    if (kamAssigning) return;
-    setKamAssigning(true);
+  const autoKam = async (): Promise<string | null> => {
     const load = kamLoad ?? await fetchKamLoad();
     setKamLoad(load);
-    const pick = nextKamRoundRobin(KAMS, load);
-    setKamAssigning(false);
-    if (pick) set('kam', pick);
+    return nextKamRoundRobin(scope.kams.map((k) => k.name), load) ?? null;
   };
 
   const [noteText, setNoteText] = useState('');
@@ -162,7 +173,7 @@ export default function OutreachDrawer({
     if (!text) return;
     const note: LeadNote = {
       ts: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-      author: draft.bm,
+      author: scope.me.name || draft.bm,
       text,
     };
     setDraft((d) => ({ ...d, notes: [...(d.notes || []), note] }));
@@ -175,125 +186,116 @@ export default function OutreachDrawer({
       return { ...d, selections: cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s] };
     });
 
-  const handleSave = async () => {
-    if (save.saving) return;
-    if (gateErrors.length) { setShowGates(true); return; }
+  const persist = async (next: OutreachLead, close: boolean, gated = true): Promise<boolean> => {
+    if (save.saving) return false;
+    if (gated && gateErrors.length) { setShowGates(true); return false; }
     setSave({ saving: true });
-
-    const statusChanged = draft.status !== lead.status;
+    const statusChanged = next.status !== lead.status;
     const toSave: OutreachLead = {
-      ...draft,
-      company: draft.company.trim(),
-      statusChangedAt: statusChanged ? nowIso() : draft.statusChangedAt,
-      quoteSharedAt: draft.status === 'Quote Share' && !draft.quoteSharedAt ? nowIso() : draft.quoteSharedAt,
-
-      value: Number(draft.orderValue) || 0,
+      ...next,
+      company: next.company.trim(),
+      statusChangedAt: statusChanged ? nowIso() : next.statusChangedAt,
+      quoteSharedAt: next.status === 'Quote Share' && !next.quoteSharedAt ? nowIso() : next.quoteSharedAt,
     };
-
-    const err = await upsertOutreachLead(toSave);
+    const err = await onSave(lead, toSave);
     if (err) {
       setSave({ saving: false, error: `Save failed: ${err}. Nothing was stored — try again.` });
-      return;
+      return false;
     }
-    setDraft(toSave);
-    onSaved(toSave);
     setSave({ saving: false });
-    onClose();
+    if (close) onClose();
+    return true;
+  };
+
+  const handleSave = async () => { await persist(draft, true); };
+
+  const sendNow = async (kam: Rep) => {
+    const next = sendHandover(draft, kam, scope.me.name || draft.bm, nowIso());
+    if (await persist(next, false)) setDraft(next);
+  };
+
+  const respond = async (accept: boolean, reason?: string) => {
+    const next = respondToHandover(lead, accept, scope.me.name, nowIso(), reason);
+    if (await persist(next, false, false)) setDraft((d) => ({ ...d, handover: next.handover }));
   };
 
   const enqDeal = enq?.status === 'matched' ? enq.deal : undefined;
+  const canRespond = scope.mode === 'open' || scope.isManager || isHandoverKam(lead, { name: scope.me.name, phone: scope.me.phone || '' });
 
   return (
     <div className="fixed inset-0 z-[1200] flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-[780px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
-
-        <OutreachHeader
-        draft={draft}
-        gaps={gaps}
-        onClose={onClose}
-        today={today}
-      />
+        <OutreachHeader draft={draft} gaps={gaps} onClose={onClose} today={today} waitlist={waitlist} waitlistError={waitlistError} nowMs={nowMs} />
 
         <div className="p-5 flex flex-col gap-4">
-
           <OutreachClientCard
-        draft={draft}
-        set={set}
-      />
+            draft={draft}
+            set={set}
+            reps={scope.reps}
+            canPickBm={scope.mode !== 'mine'}
+            onPickBm={(r) => setDraft((d) => ({ ...d, bm: r.name, bmPhone: r.phone }))}
+          />
 
           <OutreachCompanyCard
-        exhausted={exhausted}
-        mArea={mArea}
-        mDate={mDate}
-        mError={mError}
-        mOffice={mOffice}
-        mTime={mTime}
-        meetings={meetings}
-        open={open}
-        patchMeeting={patchMeeting}
-        scheduleMeeting={scheduleMeeting}
-        scheduling={scheduling}
-        setMArea={setMArea}
-        setMDate={setMDate}
-        setMError={setMError}
-        setMOffice={setMOffice}
-        setMTime={setMTime}
-        setScheduling={setScheduling}
-      />
+            exhausted={exhausted}
+            mArea={mArea}
+            mDate={mDate}
+            mError={mError}
+            mOffice={mOffice}
+            mTime={mTime}
+            meetings={meetings}
+            open={open}
+            patchMeeting={patchMeeting}
+            scheduleMeeting={scheduleMeeting}
+            scheduling={scheduling}
+            setMArea={setMArea}
+            setMDate={setMDate}
+            setMError={setMError}
+            setMOffice={setMOffice}
+            setMTime={setMTime}
+            setScheduling={setScheduling}
+          />
 
-          <OutreachRequirementCard
-        draft={draft}
-        set={set}
-        toggleSelection={toggleSelection}
-      />
+          <OutreachRequirementCard draft={draft} set={set} toggleSelection={toggleSelection} />
 
           <OutreachStatusCard
-        checkEnq={checkEnq}
-        draft={draft}
-        enq={enq}
-        enqChecking={enqChecking}
-        enqDeal={enqDeal}
-        gateErrors={gateErrors}
-        gateFor={gateFor}
-        prompts={prompts}
-        set={set}
-        setDraft={setDraft}
-        showGates={showGates}
-      />
+            checkEnq={checkEnq}
+            draft={draft}
+            enq={enq}
+            enqChecking={enqChecking}
+            enqDeal={enqDeal}
+            gateErrors={gateErrors}
+            gateFor={gateFor}
+            prompts={prompts}
+            set={set}
+            setDraft={setDraft}
+            showGates={showGates}
+          />
 
-          <OutreachMeetingsCard
-        assignKam={assignKam}
-        draft={draft}
-        kamAssigning={kamAssigning}
-        kamLoad={kamLoad}
-        set={set}
-        setDraft={setDraft}
-      />
+          <OutreachHandoverCard
+            draft={draft}
+            saved={lead}
+            kams={scope.kams}
+            canRespond={canRespond}
+            nowMs={nowMs}
+            busy={save.saving}
+            kamLoad={kamLoad}
+            onAutoKam={autoKam}
+            onSend={sendNow}
+            onRespond={respond}
+            set={set}
+            setDraft={setDraft}
+          />
 
-          <OutreachNotesCard
-        addNote={addNote}
-        draft={draft}
-        noteText={noteText}
-        setNoteText={setNoteText}
-      />
+          <OutreachNotesCard addNote={addNote} draft={draft} noteText={noteText} setNoteText={setNoteText} />
 
-          <OutreachDealsCard
-        checkEnq={checkEnq}
-        deals={deals}
-        dealsFailed={dealsFailed}
-        draft={draft}
-        set={set}
-      />
+          <OutreachDealsCard checkEnq={checkEnq} deals={deals} dealsFailed={dealsFailed} draft={draft} set={set} />
+
+          <OutreachJourneyCard lead={lead} waitlist={waitlist} />
         </div>
 
-        <OutreachFooter
-        handleSave={handleSave}
-        meetings={meetings}
-        met={met}
-        onClose={onClose}
-        save={save}
-      />
+        <OutreachFooter handleSave={handleSave} meetings={meetings} met={met} onClose={onClose} save={save} />
       </div>
     </div>
   );

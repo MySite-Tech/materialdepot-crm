@@ -2,7 +2,7 @@ import {
   SEGMENTS, LEAD_TYPES, LEAD_TYPE_COLORS, SELECTIONS, istToday, followUpBucket, daysUntil,
   nextKamRoundRobin,
   type Segment, type LeadType, type Selection, type FieldOwner, type FollowUpBucket,
-} from './inbound';
+} from '../inbound';
 
 export type { Segment, LeadType, Selection, FollowUpBucket };
 export {
@@ -32,9 +32,96 @@ export const OUTREACH_STATUS_HINT: Record<OutreachStatus, string> = {
   'Follow up':   'Needs a next follow-up date',
   'Quote Share': 'Quote logged as shared with the client',
   'PI Shared':   'Enq ID raised; order value comes from the deal ticket',
-  'Closed':      'Order placed — handed to a KAM',
+  'Closed':      'First order placed — converted, next is the KAM handover',
   'Lost':        'Needs a lost reason',
 };
+
+export const OUTREACH_STATUS_LABEL: Record<OutreachStatus, string> = {
+  'Yet to Meet': 'Yet to Meet',
+  'Follow up':   'Follow up',
+  'Quote Share': 'Quote Share',
+  'PI Shared':   'PI Shared',
+  'Closed':      'Converted',
+  'Lost':        'Lost',
+};
+
+export const OUTREACH_OPEN_STATUSES: OutreachStatus[] = ['Yet to Meet', 'Follow up', 'Quote Share', 'PI Shared'];
+
+export const OUTREACH_SOURCES = ['Inbound', 'EC referral', 'Dormant form', 'Own research'] as const;
+export type OutreachSource = typeof OUTREACH_SOURCES[number];
+
+export const OUTREACH_SOURCE_HINT: Record<OutreachSource, string> = {
+  'Inbound':      'Handed over by the Inbound team for an in-person meeting',
+  'EC referral':  'Referred by an Experience Centre',
+  'Dormant form': 'From an older lead form that is no longer worked',
+  'Own research': 'Found by the BM — field visit, directory, Instagram, CSV upload',
+};
+
+export const COVERAGE_SOURCES: OutreachSource[] = ['Inbound', 'EC referral'];
+
+export const TEAM_SIZES = ['1', '2-5', '6-15', '16-50', '50+'] as const;
+export type TeamSize = typeof TEAM_SIZES[number];
+
+export interface GeoPin {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  at: string;
+}
+
+export const pinMapUrl = (p: GeoPin): string => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+
+export const STUDIO_WAITLIST_URL = 'https://studio.materialdepot.com/join';
+
+export interface OutreachIntake {
+  from: 'Inbound';
+  inboundLeadId: string;
+  inboundOwner?: string;
+  inboundStage?: string;
+  assignedAt: string;
+  assignedBy: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  rejectReason?: string;
+}
+
+export type HandoverStatus = 'Pending' | 'Accepted' | 'Rejected';
+
+export interface OutreachHandover {
+  kam: string;
+  kamPhone?: string;
+  whatsappGroupLink: string;
+  sentAt: string;
+  sentBy: string;
+  status: HandoverStatus;
+  respondedAt?: string;
+  respondedBy?: string;
+  rejectReason?: string;
+  note?: string;
+}
+
+export type JourneyKind =
+  | 'created' | 'imported' | 'intake' | 'intake-accepted' | 'intake-rejected'
+  | 'status' | 'meeting-scheduled' | 'meeting-held' | 'meeting-postponed'
+  | 'order-verified' | 'handover-sent' | 'handover-accepted' | 'handover-rejected' | 'bm-changed';
+
+export interface JourneyEvent {
+  at: string;
+  by: string;
+  kind: JourneyKind;
+  text: string;
+}
+
+export interface WaitlistSignup {
+  phone: string;
+  firmName: string;
+  contactName: string;
+  city?: string;
+  firmType?: string;
+  teamSize?: string;
+  status: string;
+  createdAt: string;
+}
 
 type LegacyOutreachStage = 'In Progress' | 'Samples/Catalogues Shared';
 
@@ -90,6 +177,7 @@ export interface OutreachMeeting {
   status: MeetingStatus;
 
   notes?: string;
+  pin?: GeoPin;
   loggedBy?: string;
   updatedAt?: string;
 }
@@ -106,9 +194,17 @@ export function openMeeting(meetings: OutreachMeeting[] | undefined): OutreachMe
   return (meetings || []).find((m) => m.status === 'Scheduled');
 }
 
-function completedMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
-  return (meetings || []).filter((m) => m.status === 'Completed');
+export function completedMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
+  return (meetings || [])
+    .filter((m) => m.status === 'Completed')
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || a.n - b.n);
 }
+
+export function followUpMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
+  return completedMeetings(meetings).slice(1);
+}
+
+export const FOLLOW_UPS_REQUIRED = 2;
 
 export function hasMet(meetings: OutreachMeeting[] | undefined): boolean {
   return completedMeetings(meetings).length > 0;
@@ -160,7 +256,6 @@ export function outreachStatusPrompts(l: {
   status: OutreachStatus;
   enqId?: string;
   followUpDate?: string;
-  kam?: string;
 }): string[] {
   const prompts: string[] = [];
   if (l.status === 'PI Shared' && !String(l.enqId || '').trim()) {
@@ -170,9 +265,8 @@ export function outreachStatusPrompts(l: {
 
     prompts.push('No next follow-up set. The PRD leaves this optional on Quote Share — set one if you plan to chase it.');
   }
-  if (l.status === 'Closed') {
-    if (!String(l.enqId || '').trim()) prompts.push('Add the Enq ID to pull the order details from the deal ticket.');
-    if (!String(l.kam || '').trim()) prompts.push('Assign a KAM — a closed lead hands off on a round-robin basis (§7).');
+  if (l.status === 'Closed' && !String(l.enqId || '').trim()) {
+    prompts.push('Add the Enq ID of the first order and fetch it — a conversion only counts once the order is fetched from the deal ticket.');
   }
   return prompts;
 }
@@ -216,13 +310,15 @@ export const OUTREACH_LOST_REASONS = [
   'Unable to meet (4 meetings)',
 ] as const;
 
-export type OutreachView = 'today' | 'followups' | 'pi' | 'closed' | 'lost' | 'board' | 'list';
+export type OutreachView =
+  | 'today' | 'inbox' | 'followups' | 'pi' | 'closed' | 'lost' | 'board' | 'list' | 'team';
 
 export const OUTREACH_PRD_VIEWS: { key: OutreachView; label: string; note: string }[] = [
-  { key: 'today',     label: 'Today',      note: "Meetings scheduled for today, soonest first." },
+  { key: 'today',     label: 'My day',     note: "Today's meetings and every reminder, most urgent first." },
+  { key: 'inbox',     label: 'From Inbound', note: 'Leads the Inbound team worked, waiting for an in-person meeting.' },
   { key: 'followups', label: 'Follow-ups', note: 'Leads with a next follow-up date — overdue first.' },
   { key: 'pi',        label: 'PI Shared',  note: 'PIs out, awaiting a decision. Value comes from the deal ticket.' },
-  { key: 'closed',    label: 'Closed',     note: 'Orders placed and handed to a KAM.' },
+  { key: 'closed',    label: 'Converted',  note: 'First order placed. Each one ends in a KAM handover the KAM signs off.' },
   { key: 'lost',      label: 'Lost',       note: 'Every lost lead with the reason recorded.' },
 ];
 

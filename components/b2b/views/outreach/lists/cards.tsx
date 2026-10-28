@@ -1,25 +1,10 @@
 'use client';
 
-import { OutreachLead, fmtINR } from '../../models/mock-data';
-import { companyTypeLabel, meetingsExhausted, nextScheduledMeeting } from '../../models/outreach';
-import { FollowUpChip, fmtDay } from '../../ui/inbound-chips';
-import { MeetingProgress, OutreachLeadTypeChip } from '../../ui/outreach-chips';
-import { gapsFor } from './utils';
-
-export function Tile({ label, value, sub, accent, muted }: {
-  label: string; value: string; sub?: string; accent?: string; muted?: boolean;
-}) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 px-3.5 py-3 min-w-0">
-      <div className="flex items-center gap-1.5">
-        {accent && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accent }} />}
-        <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400 truncate">{label}</div>
-      </div>
-      <div className={`text-[22px] font-bold leading-tight mt-1 ${muted ? 'text-gray-300' : 'text-gray-900'}`}>{value}</div>
-      {sub && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{sub}</div>}
-    </div>
-  );
-}
+import { OutreachLead, fmtINR } from '../../../models/mock-data';
+import { companyTypeLabel, meetingsExhausted, nextScheduledMeeting } from '../../../models/outreach';
+import { FollowUpChip, fmtDay } from '../../../ui/inbound-chips';
+import { MeetingProgress, OutreachLeadTypeChip } from '../../../ui/outreach-chips';
+import { gapsFor } from '../utils';
 
 export function LeadCard({ lead, today, onClick, onDragStart }: {
   lead: OutreachLead; today: string; onClick: () => void; onDragStart: () => void;
@@ -66,7 +51,7 @@ export function LeadCard({ lead, today, onClick, onDragStart }: {
       )}
       {lead.status === 'Closed' && (
         <div className="text-[10.5px] text-gray-500 mt-1.5 leading-snug">
-          {lead.kam ? `KAM: ${lead.kam}` : <span className="text-amber-600">No KAM assigned</span>}
+          {lead.handover ? `${lead.handover.kam} · ${lead.handover.status}` : <span className="text-amber-600">Handover not sent</span>}
         </div>
       )}
       {meetingsExhausted(lead.meetings) && (

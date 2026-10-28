@@ -9,6 +9,7 @@ export const EXPORT_HEADERS = [
   'Selection', 'Requirement', 'Expected value',
   'Status', 'Next follow-up', 'Enq ID', 'Order value', 'Expected closure',
   'Lost reason', 'Spok', 'KAM', 'EC', 'EC BM',
+  'Source', 'City', 'Office address', 'Team size', 'WhatsApp group', 'Converted on', 'Handover', 'Studio Space waitlist',
 ];
 
 export const BUCKET_ORDER: FollowUpBucket[] = ['overdue', 'today', 'upcoming', 'none'];

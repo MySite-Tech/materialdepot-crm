@@ -2,8 +2,13 @@
 
 import { Selection } from '../../models/outreach';
 
-import { B2B_REPS, OutreachLead } from '../../models/mock-data';
-import { COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_STATUS_HINT, OutreachMeeting, OutreachStatus, SEGMENTS, SELECTIONS, Segment, outreachGateErrors } from '../../models/outreach';
+import { OutreachLead } from '../../models/mock-data';
+import {
+  COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT,
+  OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachMeeting, OutreachSource, OutreachStatus, SEGMENTS, SELECTIONS,
+  Segment, TEAM_SIZES, TeamSize, outreachGateErrors,
+} from '../../models/outreach';
+import { Rep } from '../../models/outreach/intake';
 import { LostReasonSelect } from '../../ui/lost-reason-select';
 import { Field, GateErrors, errorInputCls, inputCls } from '../../ui/inbound-chips';
 import { newB2BId } from '../../models/ids';
@@ -44,7 +49,7 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
       <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-[440px] mx-4">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[14px] font-bold text-gray-900">Move to {target}</h3>
+            <h3 className="text-[14px] font-bold text-gray-900">Move to {OUTREACH_STATUS_LABEL[target]}</h3>
             <button onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
           </div>
           <p className="text-[11px] text-gray-500 mt-1 leading-snug">
@@ -91,8 +96,9 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
           )}
           {target === 'Closed' && (
             <p className="text-[11px] text-gray-500 leading-snug">
-              Open the lead afterwards to fetch the order details and assign a <strong>KAM</strong> —
-              neither blocks the move.
+              Converted means the first order is placed. Open the lead afterwards to fetch the order from
+              its Enq ID (the conversion only counts once fetched) and send the KAM handover with the
+              WhatsApp group.
             </p>
           )}
           {touched && errors.length > 0 && <GateErrors errors={errors} />}
@@ -106,11 +112,19 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
   );
 }
 
-export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
+export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
+  reps: Rep[];
+  me: Rep;
+  canPickBm: boolean;
   onClose: () => void;
   onCreate: (lead: OutreachLead) => void;
-  defaultBm: string;
 }) {
+  const [source, setSource] = useState<OutreachSource>('Own research');
+  const [email, setEmail] = useState('');
+  const [city, setCity] = useState('');
+  const [officeAddress, setOfficeAddress] = useState('');
+  const [teamSize, setTeamSize] = useState<TeamSize | ''>('');
+  const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
   const [company, setCompany] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [designation, setDesignation] = useState('');
@@ -120,7 +134,8 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
   const [leadType, setLeadType] = useState<LeadType | ''>('');
   const [companyType, setCompanyType] = useState<CompanyType | ''>('');
   const [companyTypeOther, setCompanyTypeOther] = useState('');
-  const [bm, setBm] = useState(defaultBm);
+  const [bm, setBm] = useState((reps.find((r) => r.name === me.name) || reps[0] || me).name);
+  const rep = canPickBm ? reps.find((r) => r.name === bm) || { name: bm } : me;
   const [selections, setSelections] = useState<Selection[]>([]);
   const [requirement, setRequirement] = useState('');
   const [expectedOrderValue, setExpectedOrderValue] = useState('');
@@ -139,7 +154,7 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
       ? [{
         n: 1, date: mDate, time: mTime || undefined,
         area: mArea.trim() || undefined, officeLocation: mOffice.trim() || undefined,
-        status: 'Scheduled', loggedBy: bm, updatedAt: nowIso(),
+        status: 'Scheduled', loggedBy: rep.name, updatedAt: nowIso(),
       }]
       : [];
     onCreate({
@@ -153,7 +168,14 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
       leadType: leadType || undefined,
       companyType: companyType || undefined,
       companyTypeOther: companyType === 'Other' ? (companyTypeOther.trim() || undefined) : undefined,
-      bm,
+      bm: rep.name,
+      bmPhone: rep.phone,
+      source,
+      email: email.trim() || undefined,
+      city: city.trim() || undefined,
+      officeAddress: officeAddress.trim() || undefined,
+      teamSize: teamSize || undefined,
+      whatsappGroupLink: whatsappGroupLink.trim() || undefined,
       createdAt: nowIso(),
       meetings,
       selections,
@@ -162,7 +184,7 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
 
       status: 'Yet to Meet',
       statusChangedAt: nowIso(),
-      spok: bm,
+      spok: rep.name,
       notes: [],
       value: 0,
     });
@@ -194,6 +216,9 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
             <Field label="Contact number">
               <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
             </Field>
+            <Field label="Email">
+              <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+            </Field>
             <Field label="GST" hint="Optional — not mandatory">
               <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} className={inputCls} />
             </Field>
@@ -203,13 +228,25 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
                 {SEGMENTS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
+            <Field label="Team size">
+              <select value={teamSize} onChange={(e) => setTeamSize(e.target.value as TeamSize | '')} className={inputCls}>
+                <option value="">—</option>
+                {TEAM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="City">
+              <input value={city} onChange={(e) => setCity(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Office address" className="sm:col-span-2">
+              <input value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} className={inputCls} />
+            </Field>
             <Field label="Lead type">
               <select value={leadType} onChange={(e) => setLeadType(e.target.value as LeadType | '')} className={inputCls}>
                 <option value="">—</option>
                 {LEAD_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Company type">
+            <Field label="Client type">
               <select value={companyType} onChange={(e) => setCompanyType(e.target.value as CompanyType | '')} className={inputCls}>
                 <option value="">—</option>
                 {COMPANY_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -220,10 +257,20 @@ export function CreateLeadModal({ onClose, onCreate, defaultBm }: {
                 <input value={companyTypeOther} onChange={(e) => setCompanyTypeOther(e.target.value)} className={inputCls} />
               </Field>
             )}
-            <Field label="BM (owner)">
-              <select value={bm} onChange={(e) => setBm(e.target.value)} className={inputCls}>
-                {B2B_REPS.map((r) => <option key={r} value={r}>{r}</option>)}
+            <Field label="Source" hint={OUTREACH_SOURCE_HINT[source]}>
+              <select value={source} onChange={(e) => setSource(e.target.value as OutreachSource)} className={inputCls}>
+                {OUTREACH_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
+            </Field>
+            <Field label="BM (owner)">
+              {canPickBm ? (
+                <select value={bm} onChange={(e) => setBm(e.target.value)} className={inputCls}>
+                  {reps.map((r) => <option key={r.phone || r.name} value={r.name}>{r.name}</option>)}
+                </select>
+              ) : <input value={me.name} disabled className={inputCls} />}
+            </Field>
+            <Field label="WhatsApp group" hint="Good to have now; required at KAM handover" className="sm:col-span-2">
+              <input value={whatsappGroupLink} onChange={(e) => setWhatsappGroupLink(e.target.value)} placeholder="https://chat.whatsapp.com/…" className={inputCls} />
             </Field>
           </div>
 

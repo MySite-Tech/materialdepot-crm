@@ -1,9 +1,13 @@
 'use client';
 
 import { OutreachLead } from '../../models/mock-data';
-import { companyTypeLabel, meetingLocation, nextScheduledMeeting, outreachEnrichmentGaps } from '../../models/outreach';
+import { OUTREACH_STATUS_LABEL, WaitlistSignup, companyTypeLabel, meetingLocation, nextScheduledMeeting, outreachEnrichmentGaps } from '../../models/outreach';
+import { HANDOVER_STATE_LABEL, handoverState } from '../../models/outreach/handover';
 
-export const toExportRow = (l: OutreachLead): (string | number)[] => {
+const waitlistCell = (w: WaitlistSignup | null | undefined): string =>
+  w === undefined ? 'Unknown' : w ? `Joined ${w.createdAt.slice(0, 10)}` : 'Not joined';
+
+export const toExportRow = (l: OutreachLead, waitlist: WaitlistSignup | null | undefined, nowMs: number): (string | number)[] => {
   const next = nextScheduledMeeting(l.meetings);
   return [
     l.company || '',
@@ -22,7 +26,7 @@ export const toExportRow = (l: OutreachLead): (string | number)[] => {
     (l.selections || []).join(' / '),
     l.requirement || '',
     l.expectedOrderValue || '',
-    l.status,
+    OUTREACH_STATUS_LABEL[l.status],
     l.followUpDate || '',
     l.enqId || '',
     l.orderValue || '',
@@ -32,6 +36,14 @@ export const toExportRow = (l: OutreachLead): (string | number)[] => {
     l.kam || '',
     l.ecName || '',
     l.ecBmName || '',
+    l.source || '',
+    l.city || '',
+    l.officeAddress || '',
+    l.teamSize || '',
+    l.whatsappGroupLink || '',
+    l.convertedAt ? l.convertedAt.slice(0, 10) : '',
+    HANDOVER_STATE_LABEL[handoverState(l, nowMs)],
+    waitlistCell(waitlist),
   ];
 };
 

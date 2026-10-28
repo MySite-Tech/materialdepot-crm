@@ -1,7 +1,14 @@
 import { B2BLeadRow, MetaSpec, arr, num, str } from '../data/rows';
 import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbound';
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
-import { CompanyType, OutreachMeeting, normalizeOutreachStatus } from '@/components/b2b/models/outreach';
+import {
+  CompanyType, JourneyEvent, OUTREACH_SOURCES, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
+  TEAM_SIZES, TeamSize, normalizeOutreachStatus,
+} from '@/components/b2b/models/outreach';
+
+const obj = <T,>(v: any): T | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as T) : undefined);
+const oneOf = <T extends string>(list: readonly T[]) => (v: any): T | undefined =>
+  (list as readonly string[]).includes(String(v)) ? (v as T) : undefined;
 
 const OUTREACH_META: MetaSpec<OutreachLead> = {
   company:            { col: 'company',          read: (v) => String(v ?? '') },
@@ -33,6 +40,18 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   ecName:             { col: 'ec_name',          read: str },
   ecBmName:           { col: 'ec_bm_name',       read: str },
   notes:              { col: 'notes',            read: (v) => arr<LeadNote>(v) },
+  bmPhone:            { col: 'bm_phone',         read: str },
+  source:             { col: 'source',           read: (v) => oneOf<OutreachSource>(OUTREACH_SOURCES)(v) },
+  email:              { col: 'email',            read: str },
+  city:               { col: 'city',             read: str },
+  officeAddress:      { col: 'office_address',   read: str },
+  teamSize:           { col: 'team_size',        read: (v) => oneOf<TeamSize>(TEAM_SIZES)(v) },
+  whatsappGroupLink:  { col: 'whatsapp_group_link', read: str },
+  convertedAt:        { col: 'converted_at',     read: str },
+  newOnboarding:      { col: 'new_onboarding',   read: (v) => (typeof v === 'boolean' ? v : undefined) },
+  intake:             { col: 'intake',           read: (v) => obj<OutreachIntake>(v) },
+  handover:           { col: 'handover',         read: (v) => obj<OutreachHandover>(v) },
+  journey:            { col: 'journey',          read: (v) => arr<JourneyEvent>(v) },
 };
 
 export function rowToOutreach(r: B2BLeadRow): OutreachLead {

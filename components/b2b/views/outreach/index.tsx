@@ -1,113 +1,97 @@
 'use client';
 
 import OutreachDrawer from '../../drawers/outreach/index';
-import { B2B_REPS, DEFAULT_ASSIGNEE, OutreachLead, fmtINR } from '../../models/mock-data';
-import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_PRD_VIEWS, OUTREACH_STATUSES, OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OutreachStatus, OutreachView, SEGMENTS, companyTypeLabel, hasMeetingOn, istToday, outreachGateErrors, outreachSummary } from '../../models/outreach';
-import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
+import { OutreachLead } from '../../models/mock-data';
+import { OUTREACH_PRD_VIEWS, OutreachStatus, OutreachView, istToday, outreachGateErrors } from '../../models/outreach';
+import { handoverState } from '../../models/outreach/handover';
+import { intakePending } from '../../models/outreach/intake';
+import { currentMonth, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
 import { ExportFormat, ExportScope } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
-import { Empty, EnrichmentBadge, Spinner, fmtDay, inputCls } from '../../ui/inbound-chips';
-import { MeetingProgress, OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreach-chips';
-import { EXPORT_HEADERS, PAGE_SIZE } from './constants';
+import { Spinner } from '../../ui/inbound-chips';
+import { EXPORT_HEADERS } from './constants';
+import { useOutreachData } from './hooks/use-outreach-data';
+import { useOutreachScope } from './hooks/use-outreach-scope';
+import { ImportModal } from './intake/import-modal';
+import { FromInbound } from './intake';
+import { OutreachBoard, OutreachList } from './lists/board';
+import { FilterBar, NO_FILTERS, OutreachFilters, activeFilterCount, matchesFilters } from './lists/filters';
+import { ConvertedTable, FollowUpTable, StatusTable } from './lists/tables';
 import { CreateLeadModal, MoveModal } from './modals';
-import { FollowUpTable, StatusTable, TodayTable } from './tables';
-import { LeadCard, Tile } from './ui';
-import { gapsFor, nowIso, toExportRow } from './utils';
-import { fetchOutreachLeads, upsertOutreachLead } from '@/lib/b2b';
+import { MyDay } from './my-day';
+import { KpiStrip, TeamTable, monthLabel, monthOptions, repOwns } from './performance';
+import { nowIso, toExportRow } from './utils';
+import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { useEffect, useMemo, useState } from 'react';
 
-export default function OutreachLeads() {
-  const [view, setView] = useState<OutreachView>('today');
+const Banner = ({ tone, children, onClose }: { tone: 'red' | 'amber'; children: React.ReactNode; onClose?: () => void }) => (
+  <div className={`mb-3 rounded-md border px-3 py-2 text-[12px] flex items-start justify-between gap-3 ${tone === 'red' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+    <span className="leading-snug">{children}</span>
+    {onClose && <button onClick={onClose} className="opacity-60 hover:opacity-100 text-lg leading-none shrink-0">×</button>}
+  </div>
+);
 
-  const [leads, setLeads] = useState<OutreachLead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
+  const scope = useOutreachScope(team, viewer);
+  const data = useOutreachData(scope.me.name || 'Unknown user');
+  const today = istToday();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => { setNowMs(Date.now()); }, [data.leads]);
+
+  const [view, setView] = useState<OutreachView>('today');
+  const [month, setMonth] = useState(currentMonth(today));
+  const [f, setF] = useState<OutreachFilters>(NO_FILTERS);
+  const setFilters = (patch: Partial<OutreachFilters>) => setF((cur) => ({ ...cur, ...patch }));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [move, setMove] = useState<{ lead: OutreachLead; target: OutreachStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const [bm, setBm] = useState('all');
-  const [status, setStatus] = useState<'all' | OutreachStatus>('all');
-  const [companyType, setCompanyType] = useState('all');
-  const [leadType, setLeadType] = useState('all');
-  const [segment, setSegment] = useState('all');
-  const [createdFrom, setCreatedFrom] = useState('');
-  const [createdTo, setCreatedTo] = useState('');
-  const [search, setSearch] = useState('');
-  const [onlyGaps, setOnlyGaps] = useState(false);
+  const waitIdx = useMemo(() => waitlistIndex(data.waitlist), [data.waitlist]);
+  const scoped = useMemo(() => data.leads.filter(scope.owns), [data.leads, scope]);
+  const pickedRep = useMemo(
+    () => (scope.mode !== 'mine' && f.bm !== 'all' ? scope.reps.find((r) => r.name === f.bm) ?? { name: f.bm } : null),
+    [scope.mode, scope.reps, f.bm],
+  );
+  const filtered = useMemo(
+    () => scoped.filter((l) => matchesFilters(l, f, pickedRep ? repOwns(pickedRep) : () => true)),
+    [scoped, f, pickedRep],
+  );
+  const kpiLeads = useMemo(() => (pickedRep ? scoped.filter(repOwns(pickedRep)) : scoped), [scoped, pickedRep]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState<OutreachStatus | null>(null);
-  const [move, setMove] = useState<{ lead: OutreachLead; target: OutreachStatus } | null>(null);
+  const isKamView = scope.isKam && scope.mode === 'mine';
+  const tabs = useMemo(() => {
+    const base = [...OUTREACH_PRD_VIEWS, { key: 'board' as const, label: 'Board', note: '' }, { key: 'list' as const, label: 'List', note: '' }];
+    if (isKamView) return base.filter((v) => v.key === 'today' || v.key === 'closed').map((v) => (v.key === 'today' ? { ...v, label: 'Sign-offs' } : v));
+    return scope.mode === 'mine' ? base : [...base, { key: 'team' as const, label: 'Team', note: 'Every BM against their own monthly target.' }];
+  }, [isKamView, scope.mode]);
+  useEffect(() => { if (!tabs.some((t) => t.key === view)) setView('today'); }, [tabs, view]);
 
-  const today = istToday();
-
-  const load = () => {
-    setLoading(true);
-    setError(null);
-    fetchOutreachLeads({ createdFrom, createdTo })
-      .then(setLeads)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load outreach leads'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, [createdFrom, createdTo]);
-
-  const bmOptions = useMemo(() => {
-    const seen = new Set<string>(B2B_REPS);
-    leads.forEach((l) => l.bm && seen.add(l.bm));
-    return [...seen].sort();
-  }, [leads]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return leads.filter((l) => {
-      if (bm !== 'all' && l.bm !== bm) return false;
-      if (status !== 'all' && l.status !== status) return false;
-      if (companyType !== 'all' && l.companyType !== companyType) return false;
-      if (leadType !== 'all' && l.leadType !== leadType) return false;
-      if (segment !== 'all' && l.segment !== segment) return false;
-      if (onlyGaps && gapsFor(l).length === 0) return false;
-      if (q) {
-        const hay = [l.company, l.contactPerson, l.phone, l.enqId, l.designation]
-          .filter(Boolean).join(' ').toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [leads, bm, status, companyType, leadType, segment, onlyGaps, search]);
-
-  const byStatus = (s: OutreachStatus) => filtered.filter((l) => l.status === s);
-  const summary = useMemo(() => outreachSummary(filtered, today), [filtered, today]);
+  const badge = useMemo(() => ({
+    inbox: scoped.filter(intakePending).length,
+    followups: scoped.filter((l) => (l.status === 'Follow up' || l.status === 'PI Shared') && !!l.followUpDate && l.followUpDate.slice(0, 10) < today).length,
+    closed: scoped.filter((l) => ['ready', 'overdue', 'rejected'].includes(handoverState(l, nowMs))).length,
+  }) as Partial<Record<OutreachView, number>>, [scoped, today, nowMs]);
 
   const applyPatch = async (lead: OutreachLead, patch: Partial<OutreachLead>) => {
     const statusChanged = patch.status !== undefined && patch.status !== lead.status;
-    const updated: OutreachLead = {
+    const err = await data.save(lead, {
       ...lead,
       ...patch,
       statusChangedAt: statusChanged ? nowIso() : lead.statusChangedAt,
       quoteSharedAt: patch.status === 'Quote Share' && !lead.quoteSharedAt ? nowIso() : lead.quoteSharedAt,
-      value: Number(patch.orderValue ?? lead.orderValue) || 0,
-    };
-
-    setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
-    const err = await upsertOutreachLead(updated);
-    if (err) {
-      setLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
-      setMoveError(`Could not move ${lead.company}: ${err}`);
-    }
+    });
+    if (err) setMoveError(`Could not move ${lead.company}: ${err}`);
   };
 
   const requestMove = (id: string, target: OutreachStatus) => {
-    const lead = leads.find((l) => l.id === id);
-    setDragId(null);
-    setDragOver(null);
+    const lead = data.leads.find((l) => l.id === id);
     if (!lead || lead.status === target) return;
     setMoveError(null);
     const errs = outreachGateErrors({ status: target, followUpDate: lead.followUpDate, lostReason: lead.lostReason });
-
     if (errs.length || target === 'Quote Share' || target === 'Closed' || target === 'PI Shared') {
       setMove({ lead, target });
       return;
@@ -115,24 +99,14 @@ export default function OutreachLeads() {
     applyPatch(lead, { status: target });
   };
 
-  const createLead = async (lead: OutreachLead) => {
-    setLeads((prev) => [lead, ...prev]);
-    setCreating(false);
-    const err = await upsertOutreachLead(lead);
-    if (err) {
-      setLeads((prev) => prev.filter((l) => l.id !== lead.id));
-      setError(`Could not save ${lead.company}: ${err}. The lead was not created — try again.`);
-    }
-  };
-
-  const handleExport = async (format: ExportFormat, scope: ExportScope) => {
+  const handleExport = async (format: ExportFormat, which: ExportScope) => {
     if (exporting) return;
-    const list = scope === 'all' ? leads : filtered;
-    if (!list.length) { setError('No leads matched — nothing to export.'); return; }
+    const list = which === 'all' ? scoped : filtered;
+    if (!list.length) { data.setError('No leads matched — nothing to export.'); return; }
     setExporting(true);
     try {
-      const name = `b2b_outreach_leads_${scope}_${todayStr()}`;
-      const rows = list.map(toExportRow);
+      const name = `b2b_outreach_leads_${which}_${todayStr()}`;
+      const rows = list.map((l) => toExportRow(l, waitlistFor(l, waitIdx), nowMs));
       if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, rows, name);
       else await exportRowsExcel(EXPORT_HEADERS, rows, name, 'Outreach Leads');
     } finally {
@@ -140,314 +114,121 @@ export default function OutreachLeads() {
     }
   };
 
-  const clearFilters = () => {
-    setBm('all'); setStatus('all'); setCompanyType('all'); setLeadType('all');
-    setSegment('all'); setCreatedFrom(''); setCreatedTo(''); setSearch(''); setOnlyGaps(false);
-  };
-  const activeFilters = [
-    bm !== 'all', status !== 'all', companyType !== 'all', leadType !== 'all',
-    segment !== 'all', !!createdFrom, !!createdTo, !!search.trim(), onlyGaps,
-  ].filter(Boolean).length;
-
-  const selected = leads.find((l) => l.id === selectedId) || null;
-  const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
-
-  const todayLeads = useMemo(() => filtered.filter((l) => hasMeetingOn(l.meetings, today)), [filtered, today]);
-  const followUpLeads = useMemo(
-    () => filtered.filter((l) => l.status === 'Follow up' || l.status === 'PI Shared' || l.status === 'Quote Share'),
-    [filtered],
-  );
-
-  const [listPage, setListPage] = useState(0);
-  useEffect(() => { setListPage(0); }, [filtered.length, view]);
-  const listPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const listRows = filtered.slice(listPage * PAGE_SIZE, (listPage + 1) * PAGE_SIZE);
-
-  const VIEW_TABS: { key: OutreachView; label: string }[] = [
-    ...OUTREACH_PRD_VIEWS.map((v) => ({ key: v.key, label: v.label })),
-    { key: 'board', label: 'Board' },
-    { key: 'list', label: 'List' },
-  ];
-  const viewNote = OUTREACH_PRD_VIEWS.find((v) => v.key === view)?.note;
+  const selected = data.leads.find((l) => l.id === selectedId) || null;
+  const loading = data.loading || team.loading;
+  const viewNote = tabs.find((v) => v.key === view)?.note;
+  const kpiTitle = pickedRep ? pickedRep.name : scope.mode === 'mine' ? 'My numbers' : 'Outreach team';
+  const heads = pickedRep || scope.mode === 'mine' ? 1 : Math.max(1, scope.reps.length);
+  const canPickBm = scope.mode !== 'mine';
 
   return (
     <div className="p-4 sm:p-6">
-
-      <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
+      <div className="flex items-start justify-between mb-3 gap-3 flex-wrap">
         <div>
           <h1 className="text-[19px] font-bold text-gray-900">Outreach</h1>
           <p className="text-[11.5px] text-gray-500 mt-0.5">
-            Field visits — architects, interior designers, contractors &amp; builders
+            {isKamView ? 'Converted firms handed over to you'
+              : scope.mode === 'mine' ? `${scope.me.name}'s leads` : 'Every BM'}
             {loading ? ' · loading…' : ` · ${filtered.length} shown`}
+            {' · ends at the first order, then a KAM handover'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <ExportButton onExport={handleExport} disabled={exporting} />
-          <button
-            onClick={() => setCreating(true)}
-            className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap"
-          >
-            + Create Lead
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
-        <Tile
-          label="Today's meetings"
-          value={String(summary.meetingsToday)}
-          sub="leads with a meeting today"
-          accent={OUTREACH_STATUS_COLORS['Yet to Meet']}
-          muted={summary.meetingsToday === 0}
-        />
-        <Tile
-          label="Follow up"
-          value={String(summary.followUp.count)}
-          sub={summary.followUp.overdue ? `${summary.followUp.overdue} overdue · ${summary.followUp.dueToday} due today` : `${summary.followUp.dueToday} due today`}
-          accent={OUTREACH_STATUS_COLORS['Follow up']}
-        />
-        <Tile
-          label="Quote Shared"
-          value={String(summary.quoteShared.count)}
-          sub={summary.quoteShared.estimatedValue ? `~${fmtINR(summary.quoteShared.estimatedValue)} estimated` : 'no estimate entered'}
-          accent={OUTREACH_STATUS_COLORS['Quote Share']}
-        />
-        <Tile
-          label="PI Shared"
-          value={String(summary.piShared.count)}
-          sub={summary.piShared.orderValue ? fmtINR(summary.piShared.orderValue) : 'no order value yet'}
-          accent={OUTREACH_STATUS_COLORS['PI Shared']}
-        />
-        <Tile label="Lost" value={String(summary.lost)} accent={OUTREACH_STATUS_COLORS.Lost} muted={summary.lost === 0} />
-      </div>
-      <p className="text-[10px] text-gray-400 mb-4 leading-snug">
-        Counts cover the {activeFilters ? 'current filter' : 'loaded window'}. <strong>PI Shared</strong> revenue is
-        the order value fetched from the deal ticket; <strong>Quote Shared</strong> is the BM&apos;s own expected order
-        value, which is why it is shown as an estimate and never added to the other.
-      </p>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4">
-        <div className="flex items-end gap-2.5 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Search</label>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Company, contact, phone or Enq ID…"
-              className={inputCls}
-            />
-          </div>
-          {([
-            ['Status', 'All statuses', status, setStatus, ['all', ...OUTREACH_STATUSES]],
-            ['BM', 'All BMs', bm, setBm, ['all', ...bmOptions]],
-            ['Company type', 'All types', companyType, setCompanyType, ['all', ...COMPANY_TYPES]],
-            ['Lead type', 'All lead types', leadType, setLeadType, ['all', ...LEAD_TYPES]],
-            ['Segment', 'All segments', segment, setSegment, ['all', ...SEGMENTS]],
-          ] as const).map(([label, allLabel, val, setter, opts]) => (
-            <div key={label}>
-              <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</label>
-              <select
-                value={val as string}
-                onChange={(e) => (setter as (v: string) => void)(e.target.value)}
-                className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[120px]"
-              >
-                {opts.map((o) => <option key={o} value={o}>{o === 'all' ? allLabel : o}</option>)}
-              </select>
-            </div>
-          ))}
-          <div>
-            <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Created from</label>
-            <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)}
-              className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white" />
-          </div>
-          <div>
-            <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">to</label>
-            <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)}
-              className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white" />
-          </div>
-          <button
-            onClick={() => setOnlyGaps((v) => !v)}
-            className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border whitespace-nowrap ${
-              onlyGaps ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 border-gray-200 hover:border-amber-400'
-            }`}
-          >
-            ⚠ Needs filling
-          </button>
-          {activeFilters > 0 && (
-            <button onClick={clearFilters} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500 whitespace-nowrap">
-              Clear {activeFilters}
+        {!isKamView && (
+          <div className="flex items-center gap-2">
+            <ExportButton onExport={handleExport} disabled={exporting} />
+            <button onClick={() => setImporting(true)} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-700 whitespace-nowrap">
+              Import CSV
             </button>
-          )}
-        </div>
+            <button onClick={() => setCreating(true)} className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap">
+              + Create Lead
+            </button>
+          </div>
+        )}
       </div>
+
+      {scope.notice && <Banner tone="amber">{scope.notice}</Banner>}
+      {data.waitlistError && !isKamView && (
+        <Banner tone="amber">
+          {`Studio Space waitlist unavailable — ${data.waitlistError}. Waitlist status reads Unknown until it answers.`}{' '}
+          <button onClick={data.loadWaitlist} className="underline font-semibold">Retry</button>
+        </Banner>
+      )}
+      {data.error && <Banner tone="red" onClose={() => data.setError(null)}>{data.error} <button onClick={data.load} className="underline font-semibold">Retry</button></Banner>}
+      {moveError && <Banner tone="red" onClose={() => setMoveError(null)}>{moveError}</Banner>}
+
+      {!isKamView && !loading && (
+        <>
+          <div className="flex items-center justify-end mb-1">
+            <select value={month} onChange={(e) => setMonth(e.target.value)} className="px-2 py-1 text-[11.5px] border border-gray-200 rounded-md bg-white">
+              {monthOptions(today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+          </div>
+          <KpiStrip leads={kpiLeads} month={month} waitlist={waitIdx} heads={heads} title={kpiTitle} />
+        </>
+      )}
+
+      {!isKamView && <FilterBar f={f} set={setFilters} bmOptions={canPickBm ? scope.reps.map((r) => r.name) : null} />}
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="flex rounded-md border border-gray-200 overflow-hidden">
-          {VIEW_TABS.map((v) => (
-            <button
-              key={v.key}
-              onClick={() => setView(v.key)}
-              className={`px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap ${view === v.key ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}
-            >
+        <div className="flex rounded-md border border-gray-200 overflow-hidden flex-wrap">
+          {tabs.map((v) => (
+            <button key={v.key} onClick={() => setView(v.key)}
+              className={`px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap ${view === v.key ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}>
               {v.label}
+              {!!badge[v.key] && <span className={`ml-1.5 px-1.5 rounded-full text-[10px] ${view === v.key ? 'bg-white/20' : 'bg-red-50 text-red-600'}`}>{badge[v.key]}</span>}
             </button>
           ))}
         </div>
         {viewNote && <span className="text-[10.5px] text-gray-400">{viewNote}</span>}
+        {activeFilterCount(f) > 0 && view !== 'team' && <span className="text-[10.5px] text-amber-700">Filtered — KPIs above still count every lead</span>}
       </div>
-
-      {error && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 flex items-start justify-between gap-3">
-          <span>{error}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={load} className="text-[11px] font-semibold text-red-700 underline">Retry</button>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-700 text-lg leading-none">×</button>
-          </div>
-        </div>
-      )}
-      {moveError && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 flex items-start justify-between gap-3">
-          <span>{moveError}</span>
-          <button onClick={() => setMoveError(null)} className="text-red-400 hover:text-red-700 text-lg leading-none shrink-0">×</button>
-        </div>
-      )}
 
       {loading ? (
         <div className="bg-white rounded-lg border border-gray-200 py-16"><Spinner label="Loading outreach leads…" /></div>
       ) : (
         <>
-          {view === 'today' && <TodayTable leads={todayLeads} today={today} onOpen={setSelectedId} />}
-          {view === 'followups' && <FollowUpTable leads={followUpLeads} today={today} onOpen={setSelectedId} />}
-          {view === 'pi' && <StatusTable status="PI Shared" leads={byStatus('PI Shared')} onOpen={setSelectedId} />}
-          {view === 'closed' && <StatusTable status="Closed" leads={byStatus('Closed')} onOpen={setSelectedId} />}
-          {view === 'lost' && <StatusTable status="Lost" leads={byStatus('Lost')} onOpen={setSelectedId} />}
-
-          {view === 'board' && (
-            <div
-              ref={kanbanScroll.ref}
-              className="flex gap-3 overflow-x-auto pb-3 items-start"
-              onDragOver={kanbanScroll.onDragOver}
-              onDragEnd={kanbanScroll.onDragEnd}
-              onDrop={kanbanScroll.onDrop}
-            >
-              {OUTREACH_STATUSES.map((s) => {
-                const items = byStatus(s);
-                const isOver = dragOver === s;
-                return (
-                  <div
-                    key={s}
-                    className="flex-1 min-w-[220px] shrink-0"
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(s); }}
-                    onDragLeave={() => setDragOver((c) => (c === s ? null : c))}
-                    onDrop={() => dragId && requestMove(dragId, s)}
-                  >
-                    <div className={`bg-[#F2F2F3] rounded-lg border overflow-hidden transition-colors ${isOver ? 'border-[#0F766E] ring-2 ring-[#0F766E]/20' : 'border-gray-200'}`}>
-                      <div className="h-1" style={{ background: OUTREACH_STATUS_COLORS[s] }} />
-                      <div className="px-3 py-2 bg-white border-b border-gray-100">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">{s}</span>
-                          <span className="text-[11px] font-semibold text-gray-400">{items.length}</span>
-                        </div>
-                        <p className="text-[9.5px] text-gray-400 leading-snug mt-0.5">{OUTREACH_STATUS_HINT[s]}</p>
-                      </div>
-                      <div className="p-2 flex flex-col gap-2 min-h-[100px]">
-                        {items.length === 0
-                          ? <div className="text-[11px] text-gray-400 text-center py-5">{isOver ? 'Drop here' : 'Empty'}</div>
-                          : items.map((l) => (
-                            <LeadCard
-                              key={l.id}
-                              lead={l}
-                              today={today}
-                              onClick={() => setSelectedId(l.id)}
-                              onDragStart={() => setDragId(l.id)}
-                            />
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {view === 'today' && <MyDay leads={filtered} today={today} nowMs={nowMs} waitlist={waitIdx} isKam={isKamView} onOpen={setSelectedId} />}
+          {view === 'inbox' && (
+            <FromInbound leads={scoped} allLeads={data.leads} inbound={data.inbound} scope={scope} today={today}
+              save={data.save} createMany={data.createMany} onOpen={setSelectedId} />
           )}
-
-          {view === 'list' && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12.5px]">
-                  <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50/60">
-                      {['Company', 'Contact', 'Designation', 'Type', 'Seg', 'Lead', 'Status', 'Meetings',
-                        'Follow-up', 'Enq ID', 'Value', 'BM', ''].map((h, i) => (
-                        <th key={i} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {listRows.map((l) => {
-                      const gaps = gapsFor(l);
-                      return (
-                        <tr key={l.id} onClick={() => setSelectedId(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
-                          <td className="px-3 py-2 font-semibold text-gray-900 max-w-[200px] truncate">{l.company}</td>
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.contactPerson || '—'}</td>
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.designation || '—'}</td>
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{companyTypeLabel(l.companyType, l.companyTypeOther) || '—'}</td>
-                          <td className="px-3 py-2 text-gray-500">{l.segment || '—'}</td>
-                          <td className="px-3 py-2"><OutreachLeadTypeChip t={l.leadType} /></td>
-                          <td className="px-3 py-2"><OutreachStatusBadge s={l.status} /></td>
-                          <td className="px-3 py-2"><MeetingProgress meetings={l.meetings} /></td>
-                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{l.followUpDate ? fmtDay(l.followUpDate) : '—'}</td>
-                          <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{l.enqId || '—'}</td>
-                          <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">
-                            {l.orderValue ? fmtINR(l.orderValue)
-                              : l.expectedOrderValue ? <span className="text-gray-400" title="The BM's estimate">~{fmtINR(l.expectedOrderValue)}</span>
-                                : '—'}
-                          </td>
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.bm}</td>
-                          <td className="px-3 py-2">{gaps.length > 0 && <EnrichmentBadge gaps={gaps.map((g) => g.label)} />}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {listRows.length === 0 && <Empty>No leads match these filters.</Empty>}
-              <div className="flex items-center justify-between px-3 py-3 border-t border-gray-100">
-                <span className="text-[11px] text-gray-400">Page {listPage + 1} of {listPages} · {filtered.length} shown</span>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setListPage((p) => Math.max(0, p - 1))} disabled={listPage === 0}
-                    className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">← Prev</button>
-                  <button onClick={() => setListPage((p) => Math.min(listPages - 1, p + 1))} disabled={listPage >= listPages - 1}
-                    className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">Next →</button>
-                </div>
-              </div>
-            </div>
+          {view === 'followups' && (
+            <FollowUpTable leads={filtered.filter((l) => l.status === 'Follow up' || l.status === 'PI Shared' || l.status === 'Quote Share')} today={today} onOpen={setSelectedId} />
+          )}
+          {view === 'pi' && <StatusTable status="PI Shared" leads={filtered.filter((l) => l.status === 'PI Shared')} onOpen={setSelectedId} />}
+          {view === 'closed' && <ConvertedTable leads={filtered.filter((l) => l.status === 'Closed')} nowMs={nowMs} onOpen={setSelectedId} />}
+          {view === 'lost' && <StatusTable status="Lost" leads={filtered.filter((l) => l.status === 'Lost')} onOpen={setSelectedId} />}
+          {view === 'board' && <OutreachBoard leads={filtered} today={today} onOpen={setSelectedId} onMove={requestMove} />}
+          {view === 'list' && <OutreachList leads={filtered} onOpen={setSelectedId} />}
+          {view === 'team' && (
+            <TeamTable leads={scoped} reps={scope.reps} month={month} waitlist={waitIdx}
+              onPick={(rep) => { setFilters({ bm: rep.name }); setView('today'); }} />
           )}
         </>
       )}
 
       {creating && (
-        <CreateLeadModal
-          onClose={() => setCreating(false)}
-          onCreate={createLead}
-          defaultBm={bm !== 'all' ? bm : DEFAULT_ASSIGNEE}
-        />
+        <CreateLeadModal reps={scope.reps} me={scope.me} canPickBm={canPickBm} onClose={() => setCreating(false)}
+          onCreate={async (lead) => {
+            setCreating(false);
+            const err = await data.save(null, lead);
+            if (err) data.setError(`Could not save ${lead.company}: ${err}. The lead was not created — try again.`);
+          }} />
+      )}
+
+      {importing && (
+        <ImportModal existing={data.leads} inbound={data.inbound} reps={scope.reps} me={scope.me} canPickBm={canPickBm}
+          onClose={() => setImporting(false)} onImport={(list) => data.createMany(list)} />
       )}
 
       {move && (
-        <MoveModal
-          lead={move.lead}
-          target={move.target}
-          onCancel={() => setMove(null)}
-          onDone={(patch) => { applyPatch(move.lead, patch); setMove(null); }}
-        />
+        <MoveModal lead={move.lead} target={move.target} onCancel={() => setMove(null)}
+          onDone={(patch) => { applyPatch(move.lead, patch); setMove(null); }} />
       )}
 
       {selected && (
-        <OutreachDrawer
-          lead={selected}
-          onClose={() => setSelectedId(null)}
-          onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}
-        />
+        <OutreachDrawer lead={selected} scope={scope} waitlist={waitlistFor(selected, waitIdx)} waitlistError={data.waitlistError}
+          onClose={() => setSelectedId(null)} onSave={data.save} />
       )}
     </div>
   );

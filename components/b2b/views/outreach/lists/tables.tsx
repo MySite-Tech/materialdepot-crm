@@ -1,11 +1,12 @@
 'use client';
 
-import { OutreachLead, fmtINR } from '../../models/mock-data';
-import { FollowUpBucket, OutreachStatus, companyTypeLabel, followUpBucket, meetingLocation } from '../../models/outreach';
-import { Empty, EnrichmentBadge, fmtDay } from '../../ui/inbound-chips';
-import { MeetingProgress, OutreachStatusBadge } from '../../ui/outreach-chips';
-import { BUCKET_NOTE, BUCKET_ORDER, BUCKET_TITLE } from './constants';
-import { gapsFor } from './utils';
+import { OutreachLead, fmtINR } from '../../../models/mock-data';
+import { FollowUpBucket, OutreachStatus, companyTypeLabel, followUpBucket, meetingLocation } from '../../../models/outreach';
+import { Empty, EnrichmentBadge, Pill, fmtDay } from '../../../ui/inbound-chips';
+import { HANDOVER_STATE_COLOR, HANDOVER_STATE_LABEL, handoverState, orderVerified } from '../../../models/outreach/handover';
+import { MeetingProgress, OutreachStatusBadge } from '../../../ui/outreach-chips';
+import { BUCKET_NOTE, BUCKET_ORDER, BUCKET_TITLE } from '../constants';
+import { gapsFor } from '../utils';
 import { useMemo } from 'react';
 
 export function TodayTable({ leads, today, onOpen }: {
@@ -194,6 +195,59 @@ export function StatusTable({ status, leads, onOpen }: {
                 <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.bm}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function ConvertedTable({ leads, nowMs, onOpen }: {
+  leads: OutreachLead[]; nowMs: number; onOpen: (id: string) => void;
+}) {
+  const rows = useMemo(() => [...leads].sort((a, b) => {
+    const order = ['rejected', 'overdue', 'ready', 'pending', 'accepted'];
+    return order.indexOf(handoverState(a, nowMs)) - order.indexOf(handoverState(b, nowMs))
+      || String(b.convertedAt || '').localeCompare(String(a.convertedAt || ''));
+  }), [leads, nowMs]);
+  if (!rows.length) {
+    return <div className="bg-white rounded-lg border border-gray-200 py-10"><Empty>No converted leads in this filter.</Empty></div>;
+  }
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12.5px]">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50/60">
+              {['Firm', 'Converted', 'Enq ID', 'First order', 'Handover', 'KAM', 'WhatsApp', 'BM'].map((h) => (
+                <th key={h} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => {
+              const hs = handoverState(l, nowMs);
+              return (
+                <tr key={l.id} onClick={() => onOpen(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
+                  <td className="px-3 py-2 font-semibold text-gray-900 max-w-[220px] truncate">{l.company}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDay(l.convertedAt || l.statusChangedAt)}</td>
+                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{l.enqId || <span className="text-amber-600 text-[11px] font-sans">missing</span>}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {orderVerified(l)
+                      ? <span className="font-mono text-gray-700">{fmtINR(l.orderValue || 0)}{l.newOnboarding === false && <span className="ml-1 text-[10px] font-sans text-amber-700" title="This number ordered in the 6 months before">repeat</span>}</span>
+                      : <span className="text-amber-600 text-[11px]">not fetched</span>}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap"><Pill color={HANDOVER_STATE_COLOR[hs]}>{HANDOVER_STATE_LABEL[hs]}</Pill></td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.handover?.kam || l.kam || '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {l.whatsappGroupLink
+                      ? <a href={l.whatsappGroupLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-[11px] text-[#0F766E] hover:underline">Group</a>
+                      : <span className="text-amber-600 text-[11px]">none</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.bm}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
