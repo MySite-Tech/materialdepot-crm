@@ -30,7 +30,10 @@ Two ways to see a real dashboard without an OTP:
    accepts **only** `site_audit.admin` in `individualPermissions` — any other
    `site_audit.*` slug renders "This preview is limited to Site Audit oversight
    accounts." (hit 2026-09-23 with `site_audit.service_mgr`).
-2. **Stub the Django host only.** Monkey-patch `window.fetch` to intercept
+2. **Stub the Django host only.** (A person signing in for real needs none of
+   this, only the right port: `api-dev2` answers CORS for `localhost:3000`,
+   `:3001` and `:5173` only, verified 2026-10-28, so on `:3100` every call is
+   "Failed to fetch". `npm run dev` pins `:3001`.) Monkey-patch `window.fetch` to intercept
    `api-dev2.materialdepot.in` (return a token from `/verify-otp/`, a record
    from `/crm/user-profile/`, a roster from `/user-organisation/`, and `200 []`
    for everything else — never a 401, or `forceReLogin` fires), then drive the

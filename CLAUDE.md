@@ -8,16 +8,16 @@ Next.js 16 (App Router, Turbopack) + Tailwind CRM portal for Material Depot.
 ignore it.
 
 ```bash
-npm run dev        # next dev  (a dev server is often ALREADY running on :3000 —
-                   #  check before starting; a second one exits with "Another
-                   #  next dev server is already running". Check WHOSE: on
-                   #  2026-09-23 :3000 was b2b-client-dashboard, and on
-                   #  2026-10-28 it was ss-local-all, while this repo ran on
-                   #  :3100 against the Django stub on :4000. Neither :3000
-                   #  server was this repo.
-                   #  `ps aux | grep "next dev"` prints the path. Driving
-                   #  it in a browser and reporting what you saw is the failure
-                   #  mode; take a free port instead, `npx next dev -p 3100`)
+npm run dev        # next dev -p 3001. The port is not a preference: api-dev2's
+                   #  CORS allowlist has localhost:3000, :3001 and :5173 and
+                   #  nothing else, so on any other port (127.0.0.1:3000
+                   #  included) every Django call dies as "Failed to fetch" with
+                   #  no status — which reads like a code bug and is not one.
+                   #  :3000 is usually another repo's server (ss-local-all,
+                   #  b2b-client-dashboard); `ps aux | grep "next dev"` prints
+                   #  whose. Driving someone else's server in a browser and
+                   #  reporting what you saw is the failure mode. A free port
+                   #  other than these three only works against the stub below.
 npm run build      # next build
 npx tsc --noEmit   # typecheck — fast, run this before claiming a change compiles
 ```
@@ -76,8 +76,9 @@ which imports `.`) on 2026-09-15.
 
 ### Looking at a screen, which needs a stubbed Django
 
-There is no way to sign in on a dev machine: login is phone + OTP against
-`api-dev2.materialdepot.in`, which nobody here can reach. A ~40-line Node
+Real sign-in works on `npm run dev` (:3001): login is phone + OTP against
+`api-dev2.materialdepot.in`, and the OTP goes to a real phone — so a person can
+sign in, a session cannot. For an unattended look, a ~40-line Node
 server on `:4000` answering `/login-otp/`, `/verify-otp/`, `/crm/user-profile/`
 and `/user-organisation/` lets any phone and any four-digit code in, and
 **only Django may be stubbed** — Supabase stays real.
@@ -85,8 +86,23 @@ and `/user-organisation/` lets any phone and any four-digit code in, and
 Run the app against it:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/apiV1 API_BASE_URL=http://localhost:4000/apiV1 npm run dev
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/apiV1 API_BASE_URL=http://localhost:4000/apiV1 npx next dev -p 3100
 ```
+
+**A second `next dev` in this directory exits** with "Another next dev server
+is already running", and `:3001` usually already has the user's own server. That
+server uses real Django, so don't stop it. Run the stubbed one from an APFS
+copy-on-write clone in your scratchpad instead. It takes seconds and almost no
+disk space:
+
+```bash
+C=<scratchpad>/clone; mkdir -p "$C"
+for e in $(ls -A | grep -vE '^(\.next|\.git)$'); do cp -cR "$e" "$C/"; done
+cd "$C" && NEXT_PUBLIC_API_BASE_URL=… API_BASE_URL=… npx next dev -p 3100
+```
+
+The clone is a snapshot, so `cp` each file you edit afterwards into it. Kill
+both `:3100` and `:4000` when you are done. Verified 2026-10-28.
 
 Four things the stub must get right, each of which has cost a debugging round:
 
@@ -118,6 +134,10 @@ Chrome, `chromium.launch({ channel: 'chrome' })`. Listen on
 geometry (`getBoundingClientRect`) and computed style as well as on text — a
 status chip can be present, correct and still be making a false claim, which is
 how "On partner dashboards now" was caught sitting beside "Not pushed".
+Locate by exact text: `locator(sel, { hasText: 'Inactive' })` is a
+**case-insensitive substring** match. On 2026-10-28 it clicked the "Lapsing
+soon" tile, whose subtitle reads "go inactive in 30 days", and the test reported
+an app bug that did not exist. Use `hasText: /^Inactive$/` on the title element.
 
 **Supabase is real in that browser, so never exercise a SAVE path to see a
 feature work.** There is no staging Supabase — clicking through an editor writes
@@ -381,11 +401,13 @@ check with
 `gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`. Verified
 2026-09-23.
 
-**As of 2026-10-28, neither account can push.** `daaku-daddy` now has `pull`
-only too, and `git push` returns `403 … denied to daaku-daddy`. Run the
-`.permissions` check above before committing anything meant for `origin`. If
-`push` is `false` for both accounts, ask for access or push from someone else's
-machine. Don't try `upstream`.
+**As of 2026-10-28, no account here can push.** `gh auth status` lists three:
+`daaku-daddy`, `dhruv-md` and `dhr3vv`. All three have `pull` only on both
+`origin` and `upstream`, re-checked at 19:52 that day. `git push` returns
+`403 … denied to daaku-daddy`. Run the `.permissions` check above for each
+account before committing anything meant for `origin`. If `push` is `false`
+everywhere, ask for access or push from someone else's machine. Don't try
+`upstream`.
 
 Deployment is **Azure Static Web Apps CI/CD**
 (`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which
