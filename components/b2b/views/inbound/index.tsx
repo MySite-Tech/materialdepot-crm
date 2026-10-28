@@ -1,59 +1,53 @@
 'use client';
 
-import { InboundBuckets } from './ui/buckets';
-import { InboundDailyPanel } from './ui/daily-panel';
-
 import InboundDrawer from '../../drawers/inbound/index';
 
-import { INBOUND_STATUS_COLORS, InboundStatus, Priority, followUpBucket, isFollowUpStatus, isOpenStatus, istToday, statusGateErrors } from '../../models/inbound';
+import { InboundStatus, statusGateErrors, istToday } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ExportFormat, ExportScope } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { Spinner } from '../../ui/inbound-chips';
-import { EXPORT_HEADERS } from './constants';
+import { EXPORT_HEADERS, LENS_KEYS, NO_FILTERS } from './constants';
 import { MoveModal } from './ui/modals';
-import { View } from './types';
-import { Tile } from './ui';
-import { byNewestLeadFirst, gapsFor, istDay, toExportRow } from './utils';
+import { InboundBoard } from './ui/board';
+import { InboundFilterBar } from './ui/filters';
+import { LeadTable } from './ui/table';
+import { InboundFilters, Lens, View } from './types';
+import { LensPills, LensTiles, TileFigure } from './ui';
+import { activeFilterCount, byNewestLeadFirst, lensMatches, matchesFilters, sortForLens, toExportRow } from './utils';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
-import { B2B_INBOUND_OWNER_LIST, B2B_INBOUND_PAGE_SIZE } from '@/lib/api';
+import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
 import { runInboundRotation } from '@/lib/b2b/team';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
+const sumOrders = (ls: InboundLead[]) => ls.reduce((a, l) => a + (Number(l.orderValue) || 0), 0);
+
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
-  const [view, setView] = useState<View>('today');
+  const [view, setView] = useState<View>('list');
+  const [lens, setLens] = useState<Lens>('today');
   const [scopeChoice, setScopeChoice] = useState<'mine' | 'all' | null>(null);
   const [rotationNote, setRotationNote] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
-  const [owner, setOwner] = useState('all');
-  const [status, setStatus] = useState<'all' | InboundStatus>('all');
-  const [priority, setPriority] = useState<'all' | Priority>('all');
-  const [clientType, setClientType] = useState('all');
-  const [leadType, setLeadType] = useState('all');
-  const [location, setLocation] = useState('all');
-  const [newKylasStage, setNewKylasStage] = useState<'all' | number>('all');
-  const [createdAfter, setCreatedAfter] = useState('');
-  const [createdBefore, setCreatedBefore] = useState('');
+  const [f, setF] = useState<InboundFilters>(NO_FILTERS);
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
-  const [onlyGaps, setOnlyGaps] = useState(false);
 
   const [leads, setLeads] = useState<InboundLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [listPage, setListPage] = useState(0);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState<InboundStatus | null>(null);
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
 
@@ -74,26 +68,30 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const ownerId = useMemo(
     () => (scope === 'mine'
       ? myKylasId
-      : owner === 'all' ? undefined : inboundOwners.find((o) => o.name === owner)?.id),
-    [scope, myKylasId, owner, inboundOwners],
+      : f.owner === 'all' ? undefined : inboundOwners.find((o) => o.name === f.owner)?.id),
+    [scope, myKylasId, f.owner, inboundOwners],
   );
-  const kylasStageFilter = newKylasStage === 'all' ? undefined : newKylasStage;
   const serverOpts = useMemo(() => ({
-    ownerId, ownerIds: boardOwnerIds, search: appliedSearch, createdFrom: createdAfter,
-    createdTo: createdBefore, kylasStage: kylasStageFilter,
-  }), [ownerId, boardOwnerIds, appliedSearch, createdAfter, createdBefore, kylasStageFilter]);
+    ownerId, ownerIds: boardOwnerIds, search: appliedSearch, createdFrom: f.createdFrom,
+    createdTo: f.createdTo, kylasStage: f.kylasStage === 'all' ? undefined : Number(f.kylasStage),
+  }), [ownerId, boardOwnerIds, appliedSearch, f.createdFrom, f.createdTo, f.kylasStage]);
 
   const load = () => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     fetchInboundBoard({ page: 0, ...serverOpts })
       .then((res) => {
+        if (!res.ok) throw new Error('Kylas or the CRM database did not answer, so the board is missing leads. Nothing is counted until it loads.');
         setLeads(res.leads);
         setPage(res.page);
         setHasMore(res.hasMore);
         setTotal(res.total);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load leads'))
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Failed to load leads');
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -124,6 +122,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     setLoadingMore(true);
     fetchInboundBoard({ page: page + 1, ...serverOpts })
       .then((res) => {
+        if (!res.ok) { setError('Could not load more leads from Kylas. Try again.'); return; }
         setLeads((prev) => {
           const seen = new Set(prev.map((l) => l.id));
           return [...prev, ...res.leads.filter((l) => !seen.has(l.id))];
@@ -135,52 +134,64 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
       .finally(() => setLoadingMore(false));
   };
 
-  const filtered = useMemo(() => named.filter((l) => {
-    if (status !== 'all' && l.stage !== status) return false;
-    if (priority !== 'all' && l.priority !== priority) return false;
-    if (clientType !== 'all' && l.clientType !== clientType) return false;
-    if (leadType !== 'all' && l.leadType !== leadType) return false;
-    if (location !== 'all' && l.location !== location) return false;
-    if (onlyGaps && gapsFor(l).length === 0) return false;
-    return true;
-  }).sort(byNewestLeadFirst), [named, status, priority, clientType, leadType, location, onlyGaps]);
+  const filtered = useMemo(
+    () => named.filter((l) => matchesFilters(l, f)).sort(byNewestLeadFirst),
+    [named, f],
+  );
 
-  const byStatus = (s: InboundStatus) => filtered.filter((l) => l.stage === s);
+  const byLens = useMemo(() => {
+    const out = Object.fromEntries(LENS_KEYS.map((k) => [k, [] as InboundLead[]])) as Record<Lens, InboundLead[]>;
+    for (const l of filtered) for (const k of LENS_KEYS) if (lensMatches(k, l, today)) out[k].push(l);
+    return out;
+  }, [filtered, today]);
 
-  const summary = useMemo(() => {
-    const pi = filtered.filter((l) => l.stage === 'PI Shared');
-    const closed = filtered.filter((l) => l.stage === 'Closed');
-    const lost = filtered.filter((l) => l.stage === 'Lost');
-    const sum = (ls: InboundLead[]) => ls.reduce((a, l) => a + (Number(l.orderValue) || 0), 0);
-    const newToday = filtered.filter((l) => istDay(l.leadCreatedAt) === today).length;
-    const closedToday = closed.filter((l) => istDay(l.statusChangedAt) === today).length;
-    const piToday = pi.filter((l) => istDay(l.statusChangedAt) === today).length;
-    const overdue = filtered.filter((l) =>
-      isFollowUpStatus(l.stage) && followUpBucket(l.followUpDate, today) === 'overdue').length;
-    const dueToday = filtered.filter((l) =>
-      isFollowUpStatus(l.stage) && followUpBucket(l.followUpDate, today) === 'today').length;
-    const untimed = [...pi, ...closed].filter((l) => !l.statusChangedAt).length;
+  const counts = useMemo(
+    () => Object.fromEntries(LENS_KEYS.map((k) => [k, byLens[k].length])) as Record<Lens, number>,
+    [byLens],
+  );
 
-    // Pipeline value: every lead still open, at the best figure it has. A PI
-    // Shared lead carries the deal ticket's `orderValue`; anything earlier has
-    // only the BM's `expectedOrderValue`, so the two are counted separately and
-    // named separately — summing an estimate into a realised figure is the one
-    // thing `expectedOrderValue` must never do.
-    const open = filtered.filter((l) => isOpenStatus(l.stage));
-    const quoted = sum(open);
-    const estimated = open
+  const values = useMemo(() => {
+    const quoted = sumOrders(byLens.open);
+    const estimated = byLens.open
       .filter((l) => !Number(l.orderValue))
       .reduce((a, l) => a + (Number(l.expectedOrderValue) || 0), 0);
-
     return {
-      newToday, overdue, dueToday, untimed,
-      pipeline: { n: open.length, quoted, estimated, total: quoted + estimated },
-      pi: { n: pi.length, value: sum(pi), today: piToday },
-      closed: { n: closed.length, value: sum(closed), today: closedToday },
-      lost: { n: lost.length },
-      gaps: filtered.filter((l) => gapsFor(l).length > 0).length,
+      pi: sumOrders(byLens.pi),
+      closed: sumOrders(byLens.closed),
+      open: { quoted, estimated, total: quoted + estimated },
+      lostNoReason: byLens.lost.filter((l) => !l.lostReason).length,
     };
-  }, [filtered, today]);
+  }, [byLens]);
+
+  const figures: Partial<Record<Lens, TileFigure>> = {
+    new: { value: String(counts.new), sub: counts.new ? 'not called yet' : 'all called' },
+    overdue: { value: String(counts.overdue), sub: 'date passed' },
+    due: { value: String(counts.due), sub: 'booked for today' },
+    upcoming: { value: String(counts.upcoming), sub: 'booked ahead' },
+    pi: { value: String(counts.pi), sub: values.pi ? fmtINR(values.pi) : 'no ticket value yet' },
+    open: { value: values.open.total ? fmtINR(values.open.total) : '—', sub: `${counts.open} open lead${counts.open === 1 ? '' : 's'}` },
+    closed: { value: String(counts.closed), sub: values.closed ? fmtINR(values.closed) : 'no order value yet' },
+    lost: values.lostNoReason
+      ? { value: String(counts.lost), sub: `${values.lostNoReason} without a reason`, warn: true }
+      : { value: String(counts.lost), sub: 'reason recorded' },
+  };
+
+  const valueText = lens === 'pi' && values.pi ? `${fmtINR(values.pi)} on deal tickets`
+    : lens === 'closed' && values.closed ? `${fmtINR(values.closed)} ordered`
+      : lens === 'open' && values.open.total
+        ? `${fmtINR(values.open.quoted)} quoted${values.open.estimated ? ` + ${fmtINR(values.open.estimated)} estimated` : ''}`
+        : undefined;
+
+  const rows = useMemo(() => sortForLens(lens, byLens[lens], today), [lens, byLens, today]);
+
+  useEffect(() => { setListPage(0); }, [serverOpts, f, lens]);
+
+  const pickLens = (k: Lens) => { setLens(k); setView('list'); };
+
+  const runSearch = (q: string) => {
+    setAppliedSearch(q);
+    if (q) pickLens('all');
+  };
 
   const applyPatch = async (lead: InboundLead, patch: Partial<InboundLead>) => {
     const statusChanged = patch.stage !== undefined && patch.stage !== lead.stage;
@@ -201,8 +212,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
 
   const requestMove = (id: string, target: InboundStatus) => {
     const lead = leads.find((l) => l.id === id);
-    setDragId(null);
-    setDragOver(null);
     if (!lead || lead.stage === target) return;
     setMoveError(null);
     const errs = statusGateErrors({
@@ -221,6 +230,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     let p = 0;
     for (;;) {
       const res = await fetchInboundBoard({ ...opts, page: p });
+      if (!res.ok) throw new Error(`page ${p + 1} did not load from Kylas`);
       for (const l of res.leads) if (!seen.has(l.id)) { seen.add(l.id); all.push(l); }
       if (!res.hasMore) break;
       p += 1;
@@ -235,19 +245,13 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     try {
       let list = await fetchAll(exportScope === 'all' ? { ownerIds: boardOwnerIds } : serverOpts);
       if (exportScope !== 'all') {
-        list = list.filter((l) =>
-          (status === 'all' || l.stage === status)
-          && (priority === 'all' || l.priority === priority)
-          && (clientType === 'all' || l.clientType === clientType)
-          && (leadType === 'all' || l.leadType === leadType)
-          && (location === 'all' || l.location === location)
-          && (!onlyGaps || gapsFor(l).length > 0));
+        list = list.filter((l) => matchesFilters(l, f) && (view === 'board' || lensMatches(lens, l, today)));
       }
       if (!list.length) { setError('No leads matched — nothing to export.'); return; }
-      const name = `b2b_inbound_leads_${exportScope}_${todayStr()}`;
-      const rows = list.sort(byNewestLeadFirst).map(toExportRow);
-      if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, rows, name);
-      else await exportRowsExcel(EXPORT_HEADERS, rows, name, 'Inbound Leads');
+      const name = `b2b_inbound_leads_${exportScope === 'all' ? 'all' : lens}_${todayStr()}`;
+      const out = list.sort(byNewestLeadFirst).map(toExportRow);
+      if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, out, name);
+      else await exportRowsExcel(EXPORT_HEADERS, out, name, 'Inbound Leads');
     } catch (e) {
       setError('Export failed: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -255,33 +259,26 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     }
   };
 
-  const clearFilters = () => {
-    setOwner('all'); setStatus('all'); setPriority('all'); setClientType('all');
-    setLeadType('all'); setLocation('all'); setNewKylasStage('all');
-    setCreatedAfter(''); setCreatedBefore(''); setOnlyGaps(false);
-    setSearch(''); setAppliedSearch('');
-  };
-
-  const activeFilters = [
-    owner !== 'all', status !== 'all', priority !== 'all', clientType !== 'all',
-    leadType !== 'all', location !== 'all', newKylasStage !== 'all',
-    !!createdAfter, !!createdBefore, onlyGaps, !!appliedSearch,
-  ].filter(Boolean).length;
+  const clearFilters = () => setF(NO_FILTERS);
+  const activeFilters = activeFilterCount(f);
 
   const selected = named.find((l) => l.id === selectedId) || null;
   const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
-  const followUpLeads = useMemo(
-    () => filtered.filter((l) => isFollowUpStatus(l.stage)),
-    [filtered],
+  const emptyAction = (
+    <div className="flex items-center gap-2">
+      {lens === 'today' && counts.upcoming > 0 && (
+        <button onClick={() => pickLens('upcoming')} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-600 hover:border-[#0F766E] hover:text-[#0F766E]">
+          See {counts.upcoming} upcoming →
+        </button>
+      )}
+      {activeFilters > 0 && (
+        <button onClick={clearFilters} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-600 hover:border-gray-400">
+          Clear {activeFilters} filter{activeFilters === 1 ? '' : 's'}
+        </button>
+      )}
+    </div>
   );
-  const newToday = useMemo(() => filtered.filter((l) => l.stage === 'New'), [filtered]);
-  const piLeads = useMemo(() => filtered.filter((l) => l.stage === 'PI Shared'), [filtered]);
-
-  const [listPage, setListPage] = useState(0);
-  useEffect(() => { setListPage(0); }, [serverOpts, status, priority, clientType, leadType, location, onlyGaps]);
-  const listPages = Math.max(1, Math.ceil(filtered.length / B2B_INBOUND_PAGE_SIZE));
-  const listRows = filtered.slice(listPage * B2B_INBOUND_PAGE_SIZE, (listPage + 1) * B2B_INBOUND_PAGE_SIZE);
 
   return (
     <div className="p-4 sm:p-6">
@@ -292,11 +289,10 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           <p className="text-[11.5px] text-gray-500 mt-0.5">
             {scope === 'mine'
               ? `Your leads, ${me?.name ?? ''}`
-              : `Qualified by Presales in Kylas · ${inboundOwners.map((o) => o.name).join(', ').replace(/, ([^,]*)$/, ' & $1')}`}
-            {loading ? ' · loading…' : ` · ${filtered.length} shown`}
-            {!loading && total > 0 && (
-              <span className="text-gray-400"> · {total} unactioned in Kylas</span>
-            )}
+              : <span title={inboundOwners.map((o) => o.name).join(', ')}>Every inbound owner</span>}
+            {loading ? ' · loading…' : ` · ${filtered.length} loaded`}
+            {!loading && total > 0 && <span className="text-gray-400"> · {total} unactioned in Kylas</span>}
+            {!loading && hasMore && <span className="text-gray-400"> · counts cover loaded leads only</span>}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -305,7 +301,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
               {([['mine', 'Mine'], ['all', 'All inbound']] as const).map(([k, label]) => (
                 <button
                   key={k}
-                  onClick={() => { setScopeChoice(k); setOwner('all'); }}
+                  onClick={() => { setScopeChoice(k); setF((p) => ({ ...p, owner: 'all' })); }}
                   className={`px-3 py-1.5 text-[12px] font-semibold ${scope === k ? 'bg-[#EAB308] text-[#1A1A1A]' : 'bg-white text-gray-500 hover:text-gray-800'}`}
                 >
                   {label}
@@ -314,7 +310,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             </div>
           )}
           <div className="flex rounded-md border border-gray-200 overflow-hidden">
-            {(['today', 'board', 'list'] as const).map((v) => (
+            {(['list', 'board'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -347,84 +343,17 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </p>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-2 mb-3">
-        <Tile label="New today" value={String(summary.newToday)} sub="arrived in Kylas today" accent={INBOUND_STATUS_COLORS.New} />
-        <Tile
-          label="Pipeline value"
-          value={summary.pipeline.total ? fmtINR(summary.pipeline.total) : '—'}
-          sub={summary.pipeline.total
-            ? `${summary.pipeline.n} open · ${fmtINR(summary.pipeline.quoted)} quoted${summary.pipeline.estimated ? ` + ${fmtINR(summary.pipeline.estimated)} est.` : ''}`
-            : `${summary.pipeline.n} open · no value on any of them yet`}
-          accent="#0F766E"
-          muted={summary.pipeline.total === 0}
-        />
-        <Tile
-          label="PI Shared"
-          value={String(summary.pi.n)}
-          sub={summary.pi.value ? fmtINR(summary.pi.value) : 'no order value yet'}
-          accent={INBOUND_STATUS_COLORS['PI Shared']}
-        />
-        <Tile
-          label="Closed"
-          value={String(summary.closed.n)}
-          sub={summary.closed.value ? fmtINR(summary.closed.value) : 'no order value yet'}
-          accent={INBOUND_STATUS_COLORS.Closed}
-        />
-        <Tile label="Lost" value={String(summary.lost.n)} accent={INBOUND_STATUS_COLORS.Lost} />
-        <Tile
-          label="Overdue follow-ups"
-          value={String(summary.overdue)}
-          sub={`${summary.dueToday} due today`}
-          accent="#DC2626"
-          muted={summary.overdue === 0}
-        />
-        <Tile
-          label="Need enrichment"
-          value={String(summary.gaps)}
-          sub="missing §3.2 / §3.3 fields"
-          accent="#F59E0B"
-          muted={summary.gaps === 0}
-        />
-      </div>
-      <details className="mb-4 text-[10px] text-gray-400 leading-snug">
-        <summary className="cursor-pointer select-none hover:text-gray-600 w-fit">How these numbers are counted</summary>
-        <p className="mt-1">{[
-          `Counts cover the ${activeFilters ? 'current filter' : 'loaded window'}.`,
-          'Order value always comes from the matched deal ticket, never a typed estimate.',
-          'Pipeline value adds the BM’s estimate only for open leads that have no ticket value yet, and says so in the tile.',
-          summary.untimed > 0
-            ? `${summary.untimed} PI/closed ${summary.untimed === 1 ? 'lead pre-dates' : 'leads pre-date'} status timestamps, so ${summary.untimed === 1 ? 'it is' : 'they are'} not counted into today's figures.`
-            : '',
-        ].filter(Boolean).join(' ')}</p>
-      </details>
+      <LensTiles counts={counts} figures={figures} unknown={loading ? 'pending' : loadFailed ? 'failed' : null} active={view === 'list' ? lens : null} onPick={pickLens} />
 
-      <InboundDailyPanel ownerOptions={scope === 'mine' ? null : inboundOwners.map((o) => o.name)}
-        activeFilters={activeFilters}
-        appliedSearch={appliedSearch}
-        clearFilters={clearFilters}
-        clientType={clientType}
-        createdAfter={createdAfter}
-        createdBefore={createdBefore}
-        leadType={leadType}
-        location={location}
-        newKylasStage={newKylasStage}
-        onlyGaps={onlyGaps}
-        owner={owner}
-        priority={priority}
+      <InboundFilterBar
+        f={f}
+        set={(patch) => setF((p) => ({ ...p, ...patch }))}
+        onClear={clearFilters}
+        ownerOptions={scope === 'mine' ? null : inboundOwners.map((o) => o.name)}
         search={search}
-        setAppliedSearch={setAppliedSearch}
-        setClientType={setClientType}
-        setCreatedAfter={setCreatedAfter}
-        setCreatedBefore={setCreatedBefore}
-        setLeadType={setLeadType}
-        setLocation={setLocation}
-        setNewKylasStage={setNewKylasStage}
-        setOnlyGaps={setOnlyGaps}
-        setOwner={setOwner}
-        setPriority={setPriority}
         setSearch={setSearch}
-        setStatus={setStatus}
-        status={status}
+        onSearch={runSearch}
+        aside={<LensPills counts={counts} hideCounts={loading || loadFailed} active={view === 'list' ? lens : null} onPick={pickLens} />}
       />
 
       {error && (
@@ -440,33 +369,41 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </div>
       )}
 
-      {loading ? <div className="bg-white rounded-lg border border-gray-200 py-16"><Spinner label="Loading leads from Kylas and the CRM…" /></div> : (
-        <InboundBuckets
-        byStatus={byStatus}
-        dragId={dragId}
-        dragOver={dragOver}
-        filtered={filtered}
-        followUpLeads={followUpLeads}
-        hasMore={hasMore}
-        kanbanScroll={kanbanScroll}
-        listPage={listPage}
-        listPages={listPages}
-        listRows={listRows}
-        loadMore={loadMore}
-        loadingMore={loadingMore}
-        newToday={newToday}
-        piLeads={piLeads}
-        requestMove={requestMove}
-        searchQuery={appliedSearch}
-        setDragId={setDragId}
-        setDragOver={setDragOver}
-        setListPage={setListPage}
-        setSelectedId={setSelectedId}
-        setView={setView}
-        today={today}
-        total={total}
-        view={view}
-      />
+      {loading ? <div className="bg-white rounded-lg border border-gray-200 py-16"><Spinner label="Loading leads from Kylas and the CRM…" /></div>
+        : loadFailed ? (
+          <div className="bg-white rounded-lg border border-gray-200 py-12 flex flex-col items-center gap-3">
+            <p className="text-[12px] text-gray-600">Leads did not load, so nothing here can be counted yet.</p>
+            <button onClick={load} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Try again</button>
+          </div>
+        ) : view === 'board' ? (
+          <InboundBoard leads={filtered} today={today} total={total} scroll={kanbanScroll} onOpen={setSelectedId} onMove={requestMove} />
+        ) : (
+          <LeadTable
+            lens={lens}
+            rows={rows}
+            today={today}
+            showOwner={scope === 'all'}
+            searchQuery={appliedSearch}
+            valueText={valueText}
+            page={listPage}
+            setPage={setListPage}
+            onOpen={setSelectedId}
+            onClearSearch={() => { setSearch(''); setAppliedSearch(''); }}
+            emptyAction={emptyAction}
+          />
+        )}
+
+      {!loading && hasMore && (
+        <div className="flex items-center justify-center py-4">
+          {loadingMore ? <Spinner label="Loading more…" /> : (
+            <button
+              onClick={loadMore}
+              className="px-4 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 hover:border-[#0F766E] hover:text-[#0F766E]"
+            >
+              Load more from Kylas{total > 0 ? ` · ${total} unactioned in total` : ''}
+            </button>
+          )}
+        </div>
       )}
 
       {move && (

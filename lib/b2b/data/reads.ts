@@ -55,6 +55,7 @@ interface InboundBoardPage {
   page: number;
   hasMore: boolean;
   total: number;
+  ok: boolean;
 }
 
 export async function fetchInboundBoard(
@@ -74,6 +75,7 @@ export async function fetchInboundBoard(
   );
 
   let dbLeads: InboundLead[] = [];
+  let dbOk = true;
   try {
 
     const rows = await fetchRows('inbound', {
@@ -90,6 +92,7 @@ export async function fetchInboundBoard(
     }
   } catch (e) {
     console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
+    dbOk = false;
   }
 
   const kylasById = new Map(kylas.leads.map((k) => [k.id, k]));
@@ -107,6 +110,7 @@ export async function fetchInboundBoard(
       page: kylas.page,
       hasMore: kylas.hasMore,
       total: kylas.total,
+      ok: kylas.ok && dbOk,
     };
   }
 
@@ -119,6 +123,7 @@ export async function fetchInboundBoard(
     page: kylas.page,
     hasMore: kylas.hasMore,
     total: kylas.total,
+    ok: kylas.ok && dbOk,
   };
 }
 

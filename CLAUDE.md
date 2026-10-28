@@ -11,8 +11,11 @@ ignore it.
 npm run dev        # next dev  (a dev server is often ALREADY running on :3000 —
                    #  check before starting; a second one exits with "Another
                    #  next dev server is already running". Check WHOSE: on
-                   #  2026-09-23 :3000 was b2b-client-dashboard, a different
-                   #  repo. `ps aux | grep "next dev"` prints the path. Driving
+                   #  2026-09-23 :3000 was b2b-client-dashboard, and on
+                   #  2026-10-28 it was ss-local-all, while this repo ran on
+                   #  :3100 against the Django stub on :4000. Neither :3000
+                   #  server was this repo.
+                   #  `ps aux | grep "next dev"` prints the path. Driving
                    #  it in a browser and reporting what you saw is the failure
                    #  mode; take a free port instead, `npx next dev -p 3100`)
 npm run build      # next build
@@ -142,7 +145,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §The tiles are the navigation; KAM gets the same, slice 3) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -157,7 +160,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 43 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 59 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; the **pending** B2B move off Supabase and the tables it still has to cover |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -236,7 +239,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 43 titles, so grep a title and read around the line you
+**Contents** list of all 59 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -347,6 +350,27 @@ up to date while `main` was 5 commits ahead carrying a 498-line rewrite of
 `components/site-audit/staff/users/index.tsx` — building on the branch as-is would have re-reverted
 it, which is precisely the drift this file records happening twice already.
 Merge `origin/main` in first; the conflicts are usually just import lines.
+
+**Several Claude sessions work in this one working tree at the same time.** On
+2026-10-28 three sessions were editing B2B at once: Inbound, the KAM Firm page
+and Outreach. `ListAgents` showed 12 peer sessions, two of them busy. Uncommitted
+changes you did not make belong to a live session. Before editing a module:
+
+- Run `git status --short -- <module paths>` and look at the modified times. A
+  file changed in the last few minutes that you did not touch means someone is
+  mid-edit. Do not edit, revert or "fix" it. Wait for their commit, or ask the
+  user.
+- **Stage by explicit path, never `git add -A` / `git commit -a`.** A broad add
+  sweeps another session's half-finished work into your commit. Their
+  half-finished work can also fail the build, which is not yours to repair. On
+  2026-10-28 the shared dev server answered 500 ("Export `Metric` doesn't
+  exist") and `tsc` failed in `client-db/` and `kams/`, all from the KAM
+  session's in-progress refactor.
+- The dev server is shared too, so another session's broken import can take
+  every page down. Check whose error it is (the file path in the overlay or in
+  `tsc`) before debugging. Wait it out with a background `until curl …` loop.
+- Once the other session commits, re-read your diff of any file you both
+  touched before committing. `CLAUDE.md` and `docs/**` are the usual overlap.
 
 **Pushing to `origin` needs the `daaku-daddy` GitHub account, not `dhruv-md`.**
 Both are logged in to `gh` on this machine and `dhruv-md` is usually the active

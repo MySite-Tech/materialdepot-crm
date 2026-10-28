@@ -21,7 +21,7 @@ export async function fetchB2BInboundLeads(
       body: JSON.stringify(b2bInboundRule(ownerIds, search, createdAfter, createdBefore, kylasStage)),
     });
   } catch {
-    return { leads: [], page, hasMore: false, total: 0 };
+    return { leads: [], page, hasMore: false, total: 0, ok: false };
   }
   const content: Record<string, any>[] = res?.content || [];
   const total = typeof res?.totalElements === 'number' ? res.totalElements : content.length;
@@ -33,6 +33,7 @@ export async function fetchB2BInboundLeads(
     page,
     hasMore: page + 1 < totalPages,
     total,
+    ok: true,
   };
 }
 

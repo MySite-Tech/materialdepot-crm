@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-58 entries. They live in one file because they cross-reference each other —
+59 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -67,6 +67,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - The Leads tab offered every salesperson in the org, so B2B reps' carts read as a retail branch's leads
 - `/crm/available-bms/?branch=` listed JP Nagar and HQ staff as Basaveshwara Nagar's BMs
 - A logged call recorded the lead's owner as the caller
+- A Kylas outage made B2B Inbound say every new lead had been called
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -672,8 +673,8 @@ grep for a term, then read around the line you hit rather than opening all of it
   precedent for a new one.
 
 - **A grid or flex item will not shrink below its content, so an `overflow-x-auto`
-  inside one never engages.** The B2B Inbound "Today" view is
-  `grid-cols-[1fr_320px]` with the call table in the first track. Each bucket
+  inside one never engages.** The B2B Inbound "Today" view was
+  `grid-cols-[1fr_320px]` (replaced 2026-10-28 by the lens table) with the call table in the first track. Each bucket
   card already wrapped its table in `overflow-x-auto`, which worked until two
   columns (Enq / Cart ID, Assisted at EC) were added — then the track's default
   `min-width: auto` grew to fit the table instead of letting it scroll, the page
@@ -939,3 +940,19 @@ grep for a term, then read around the line you hit rather than opening all of it
   from the session, never from the record being acted on.** Effort is
   credited to the actor, output to the owner at the time of the outcome.
 
+- **A Kylas outage made B2B Inbound say every new lead had been called.**
+  Found 2026-10-28 by forcing the Kylas search to 500 in a browser.
+  `fetchB2BInboundLeads` caught the error into `{ leads: [], total: 0 }`.
+  `fetchInboundBoard` then went ahead with the CRM-database rows alone and
+  dropped every DB row still at `New` that Kylas had not returned, which was
+  all of them. The board rendered 884 leads with no error. First call read
+  "0 · all called" and the Kylas total vanished. A rep would read that as a
+  clean inbox. The database half had the same shape: its catch logged to the
+  console and returned `[]`. Both now return `ok`. The Inbound view treats
+  `ok: false` as a failed load: tiles say "Unknown", a retry panel replaces the
+  table, Load more raises an error, and Export fails rather than writing a
+  partial file. Same family as the "Every stats read carries an `ok`" note in
+  `docs/b2b/data-layer.md`: a catch behind a typed return is invisible at the
+  call site unless the type says so. **Other readers of `fetchB2BInboundLeads`
+  still ignore `ok`**: `fetchInboundOwnerTotals` and `leads/unified.ts`
+  (the Leads tab).

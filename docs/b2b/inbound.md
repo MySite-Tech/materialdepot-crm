@@ -64,8 +64,8 @@ it existed those sat in `Follow up` and were indistinguishable from a lead
 working towards a quote. It sits between `New` and `Follow up`, and **it is not a
 hard gate**: `statusGateErrors` still blocks exactly the four the PRD states, so
 a rep can park a lead there without inventing a date. It counts as a follow-up
-status everywhere else — `INBOUND_FOLLOW_UP_STATUSES` is what the Today view, the
-overdue tiles and `analytics.ts`'s in-progress and live pipeline all read, so use
+status everywhere else — `INBOUND_FOLLOW_UP_STATUSES` is what the follow-up lenses and
+`analytics.ts`'s in-progress and live pipeline all read, so use
 that constant rather than spelling the statuses out again. `b2b_lead.stage` is a plain `text` column with no check constraint, so no
 migration was needed and old rows are untouched.
 
@@ -108,34 +108,66 @@ sort is the fetch — which is exactly the rewrite above that was reverted. So
 `byNewestLeadFirst` runs on `filtered` in `views/inbound/index.tsx` instead: the
 data layer's grouping stays intact and every rendered list is still date-ordered.
 Leads with no `leadCreatedAt` sort last rather than to the top, which is what
-comparing empty strings the other way round would have done. The Today table is
-deliberately **not** date-ordered — it is a call list, sorted by priority then
-follow-up date.
+comparing empty strings the other way round would have done. The call lists
+(Call today, Overdue, Due today, Upcoming, PI Shared) are deliberately **not**
+date-ordered: `sortForLens` sorts them by priority, then follow-up date.
 
-**A search on Today shows every stage, not just follow-ups.** The call list only
-holds follow-up statuses; `New` and `PI Shared` live in the side panels. A rep
-who searched a phone number for a `New` lead got "No leads on follow-up" in the
-main pane and read it as "lead missing" while the lead sat in the side panel. So
-with `appliedSearch` set, `DailyTable` swaps the buckets for one "Search results"
-card over all of `filtered`, and the no-search empty state names how many leads
-are in the side panels and links to List view.
+### The tiles are the navigation (2026-10-28)
 
-**Today is kept short on purpose.** Each bucket card shows 8 rows then "Show all
-N"; Upcoming and No-follow-up-date start collapsed (Overdue and Due today never
-do — they are the day's calls). The side column is `xl:sticky` with its own
-viewport-height scroll, and the tile footnote sits in a closed `<details>`.
+Each tile is a *lens*. One predicate, `lensMatches` in `views/inbound/utils.ts`,
+decides both the tile's number and the rows listed under it, so a tile can never
+count leads its list does not show (see the badge entry in `docs/landmines.md`).
+On real data on 2026-10-28, all 13 lenses showed the same number on the tile as
+rows in the table.
 
-**The Today grid's `minmax(0,1fr)` and `min-w-0` are load-bearing, not tidying.**
-Its left track holds the call table, which is wide enough to need the
-`overflow-x-auto` each bucket card already had — and that wrapper does nothing on
-its own here, because a grid item's default `min-width: auto` will not shrink
-below its content. Adding the Enq / Cart ID and Assisted at EC columns was enough
-to grow the track past `<main>` and scroll the **whole tab** sideways under the
-B2B sidebar, which reads as a broken layout rather than a wide table. Anything
-scrollable added to either column needs the same treatment; see
-`docs/landmines.md`. For the same reason a tile's value is `truncate`d and the
-seven-tile row only goes seven-across at `2xl` — at `xl` each tile was ~146px,
-and a long rupee figure has no space to wrap at.
+It replaced a Today view that reps found hard to navigate. That view had seven
+static tiles, a follow-up table split into four collapsible buckets, side panels
+for New and PI Shared, and a separate List view. A PI Shared lead appeared twice,
+in the side panel and again in a bucket, because PI Shared is a follow-up status.
+"New today" (27, created today) sat beside "New — not yet actioned" (15, status
+New) with nothing explaining the difference. And no tile could be clicked.
+
+- **The groups.** Call today, whose header is itself a lens and the default:
+  First call · Overdue · Due today. Pipeline: Upcoming · PI Shared · Pipeline ₹.
+  Outcome: Closed · Lost. Four secondary lenses sit as pills: All leads, Arrived
+  today, No follow-up date, Needs enrichment. **Needs enrichment used to be a
+  tile, and 896 of 897 leads matched it**, so as a headline it said nothing.
+- **Lenses overlap on purpose.** PI Shared is a stage lens, and the same leads
+  also land in Overdue, Due today or Upcoming by date. Only Call today's three
+  parts are disjoint, since New is not a follow-up status, so its header is
+  their sum.
+- **Call today runs due today, then first calls, then overdue.** Overdue was 287
+  on 2026-10-28. The old Today put it first, which buried the 13 new leads on
+  page 12, against the KPI "New = 0 by end of day".
+- **One table, paged at 25,** and it resets to page 1 when the lens or a filter
+  changes. The Status column is hidden on single-status lenses. Deal becomes
+  Lost reason on Lost. The Missing column appears only on Needs enrichment;
+  before, its badge sat on 896 rows.
+- **Today and List merged into one List view.** Board is unchanged, and clicking
+  a tile from Board switches to List. Export's "Filtered" scope means the
+  selected lens plus filters (on Board, filters only).
+- **A search switches the lens to All leads.** The search reaches every stage and
+  owner (next section), so any narrower lens would hide what it found. That was
+  the old failure: a rep who searched a New lead's phone got an empty follow-up
+  list.
+- **Tiles show "…" while loading and "Unknown" if the fetch fails, never 0.** A
+  failed load shows a retry panel instead of "Nothing to call today". The old
+  tiles showed 0 throughout every load. "Fails" includes `ok: false` from
+  `fetchInboundBoard`. Kylas used to fail silently into a board of DB rows only,
+  with First call at "0 · all called" (see `docs/landmines.md`).
+- **No follow-up date was 130 on 2026-10-28.** These are leads on a follow-up
+  status that can never come up as due. Before, they sat in a bucket that
+  started collapsed.
+- While Kylas has more pages, the counts cover the loaded leads only, and the
+  subtitle says so.
+
+The table now sits in normal block flow rather than in the old
+`grid-cols-[1fr_320px]`. The tile groups are a grid, and every section in it
+carries `min-w-0`. If the table ever goes back inside a grid or flex track, that
+track needs `min-w-0` too (see `docs/landmines.md`). Otherwise the whole tab
+scrolls sideways under the B2B sidebar. Tile values are `truncate`d, and
+subtitles are kept to about 20 characters because a tile is ~120px wide at
+1280px. Checked at 1440, 1280 and 390.
 
 ### Search deliberately reaches outside the board
 
@@ -210,7 +242,7 @@ just stop the board being used. Dragging a card into a gated column opens
 `MoveModal` to collect the field rather than writing an incomplete status.
 
 There is **no reminder service in this stack**. The follow-up date's reminder is
-the Today view and the card badge. Do not word either as if a notification was
+the Due today and Overdue tiles and the card badge. Do not word either as if a notification was
 sent.
 
 ### Enq ID → order value

@@ -14,6 +14,7 @@ export interface B2BInboundPage {
   page: number;
   hasMore: boolean;
   total: number;
+  ok: boolean;
 }
 
 export interface ClientTicketResult {

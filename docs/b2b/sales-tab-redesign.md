@@ -235,6 +235,10 @@ Supabase.
 
 ### The working surface: the Today view becomes the rep's day
 
+**Layout done 2026-10-28.** The tiles are now clickable lenses, and the First
+call tile is the "New = 0" countdown. See `inbound.md` §The tiles are the
+navigation. The log-call modal and Dead derivation below are still to do.
+
 Every KPI below is meant to fall out of normal work, not to be filled in later.
 
 - **Log call is the primary action.** Call status (RNR / Connected), note
@@ -517,6 +521,12 @@ separate "My Dashboard". Steps 4–6 have not started.
   `b2b-team.sql` is **not applied**, and the Kylas owner PATCH has not been
   exercised on a real lead. A parallel session is building Outreach on the
   same `lib/b2b/team` layer.
+- **2026-10-28 (Inbound, layout)**: The user asked for clickable tiles that list
+  the leads behind them, and a less cluttered Today. Each tile is now a lens with
+  one predicate for its count and its list. Today and List merged into one paged
+  table, and the side panels are gone. Verified against real Kylas/Supabase with
+  Django stubbed and every write blocked. Every tile's count matched its rows.
+  No data change. Found 130 follow-up leads with no date.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

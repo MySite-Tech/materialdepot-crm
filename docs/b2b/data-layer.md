@@ -44,6 +44,8 @@ They live here now because the code cannot carry them.
   ₹0 pipeline. Both now return `ok`, and the Dashboard shows a banner rather
   than the zeros. Same trap as the Kylas `total: 0` note above — a caught error
   behind a typed return is invisible at the call site unless the type says so.
+  `fetchB2BInboundLeads` and `fetchInboundBoard` carry the same `ok` since
+  2026-10-28; see the Kylas-outage entry in `docs/landmines.md`.
 
 - **`fetchTargets` returns `{store, ok}`, not a bare store.** The catch path
   returns `defaultTargetStore()` — the built-in 120L — which is indistinguishable
