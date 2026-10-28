@@ -329,11 +329,11 @@ two is the denominator for Meeting Coverage. The proposal is firm status
 
 ### Orders, structurally
 
-Today, Client DB's order panel fetches **one request per phone**
-(`fetchClientTickets`, capped at 120, pooled 4-wide). It renders two columns
-that are always "not in Procurement" and repeats the contact on every row. It
-mixes placed orders, open carts and lost tickets in one list, and truncates the
-placed date. The rebuild:
+The Firm page's order panel still fetches **one request per phone**
+(`fetchClientTickets`, pooled 4-wide, cached per phone) when a firm opens. The
+phone-only half of the list below shipped on 2026-10-28: the Orders · Open ·
+Lost tabs, the strip, the Via column and paging. The GST half and the single
+request still wait on Django. The rebuild:
 
 - **A firm's orders are the union over every contact number and every GSTIN on
   the firm**, deduplicated by ENQ id. Each row names the key that matched it
@@ -413,6 +413,11 @@ Same caveat as `client-db.md` §3.2, and it must be shown on screen.
 1. **Firm page** (shared component): header with status, tier and Studio Space;
    contacts and GSTs; restructured orders panel; meeting/call timeline. Phone
    matching only until Django ships. No dependency on identity.
+   **Built 2026-10-28** as `components/b2b/drawers/firm/`, used by both Client
+   DB and the KAM tab, with inline add/remove of numbers and GSTINs (see
+   `client-db.md` § The Firm page). Not in it yet: tier and Studio Space, which
+   wait for slice 6 and the Studio Space field. The meeting/call log is the KAM
+   tab's existing one passed in as a child, not yet a shared timeline.
 2. **Identity and scope:** `kamPhone` backfill, `team`/`viewer` passed into
    `KAMs`, own-firms scope in the query.
 3. **KAM tab list:** one paginated firm table with filter chips (Status, Tier,
@@ -430,6 +435,11 @@ Opening a firm adds 1.
 
 ## Open / blocking (as of 2026-10-28)
 
+- **B2B data off Supabase.** The user reports it now lives on the Django
+  backend, but every B2B read and write still goes to Supabase `b2b_lead`,
+  `b2b_target` and `b2b_team_member`. Blocked on the Django endpoints. The
+  table of what has to move, and the switch point (`lib/b2b/data/`), are in
+  `docs/backends.md` § Pending.
 - **Where the Django repo is, and who changes it** (KAM slice 7). The user
   says someone has it.
 - **Meeting Coverage denominator:** 3-month firm status or ordered-this-month

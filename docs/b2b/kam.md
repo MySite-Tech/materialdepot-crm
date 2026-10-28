@@ -11,6 +11,11 @@ This module owns exactly one stored thing: the **Active Order**, still the same
 `pipeline='kam'` rows — 30 of them, live, split between two KAMs who are
 actually using them.
 
+Opening a client opens the shared Firm page (`components/b2b/drawers/firm/`,
+see `client-db.md`). `views/kams/drawer.tsx` only adds the KAM-only sections:
+calls and meetings, the KAM pipeline and escalations. So a number or GSTIN
+added on either tab shows on the other, because both edit the same client row.
+
 ### The old board's seven stages, mapped on READ
 
 `normalizeKamOrderStatus` is load-bearing, not a courtesy — nothing is rewritten

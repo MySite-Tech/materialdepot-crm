@@ -3,11 +3,12 @@
 import { KamClientsView } from './panels/clients';
 import { KamOrdersView } from './orders';
 
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, istToday, primaryContact } from '../../models/client';
+import { ClientEntity, ClientStatus, contactNumbers, istToday, primaryContact } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
 import { AssignedClientRow, DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_VIEWS, KamOrder, KamOrderStatus, KamView, assignedClientRows, callsLoggedOn, followUpQueue, isLegacyKamStage, kamPipeline, todaysCalls } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
 import { DEFAULT_KAM, KAMS, fmtL } from '../../models/mock-data';
+import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ExportFormat } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
@@ -15,10 +16,10 @@ import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { ClientDrawer } from './drawer';
 import { CadenceList, InteractionModal } from './panels/interactions';
 import { OrderModal } from './orders/modal';
-import { StatTile } from './ui';
+import { StatTile } from '../../ui/client-chips';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
-import { ClientOrderHistory, clientMetricsFrom, fetchB2BBulk, fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
+import { fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function KAMs() {
@@ -26,8 +27,6 @@ export default function KAMs() {
   const [orders, setOrders] = useState<KamOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState<string[]>([]);
-  const [aggregates, setAggregates] = useState<Record<string, ClientOrderHistory>>({});
-  const [dates, setDates] = useState<{ byPhone: Record<string, { last?: string; loaded: boolean }> } | null>(null);
   const [sync, setSync] = useState<{
     matched: number; noMatch: number; unavailable: number; overflow: number;
     advanced: number; writeErrors: string[];
@@ -47,6 +46,7 @@ export default function KAMs() {
 
   const today = istToday();
   const boardScroll = useDragAutoScroll<HTMLDivElement>();
+  const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,9 +60,7 @@ export default function KAMs() {
     setFailed(bad);
 
     const phones = cl.flatMap((c) => contactNumbers(c.contacts));
-    const { histories: agg, deals, ok: aggOk } = await fetchB2BBulk(phones, kamEnquiryIdsToResolve(ord));
-    setAggregates(agg);
-    setDates(orderDatesFromAggregates(agg, phones, aggOk));
+    const { deals } = await loadAggregates(phones, kamEnquiryIdsToResolve(ord));
     setLoading(false);
 
     if (!ord.length) return;
@@ -94,14 +92,9 @@ export default function KAMs() {
       advanced: advances.length,
       writeErrors,
     });
-  }, []);
+  }, [loadAggregates]);
 
   useEffect(() => { load(); }, [load]);
-
-  const metricsFor = useCallback(
-    (c: ClientEntity): ClientOrderMetrics => clientMetricsFrom(c.contacts, aggregates, dates || undefined),
-    [aggregates, dates],
-  );
 
   const kamOptions = useMemo(() => {
     const seen = new Set<string>(KAMS);
@@ -169,6 +162,7 @@ export default function KAMs() {
     const err = await upsertClient(c);
     if (err) return err;
     setClients((prev) => prev.map((x) => (x.id === c.id ? c : x)));
+    addPhones(contactNumbers(c.contacts));
     return null;
   };
 
@@ -342,6 +336,8 @@ export default function KAMs() {
       {drawerRow && (
         <ClientDrawer
           row={drawerRow}
+          clients={clients}
+          historyFor={historyFor}
           orders={orders.filter((o) => o.clientId === drawerRow.client.id)}
           today={today}
           onClose={() => setDrawerId(null)}

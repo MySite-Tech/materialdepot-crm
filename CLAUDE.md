@@ -118,7 +118,10 @@ how "On partner dashboards now" was caught sitting beside "Not pushed".
 
 **Supabase is real in that browser, so never exercise a SAVE path to see a
 feature work.** There is no staging Supabase — clicking through an editor writes
-production rows, and "it was only test data" is not recoverable. To see a screen
+production rows, and "it was only test data" is not recoverable. This includes
+all of B2B: a move of its data to Django was reported on 2026-10-28, but the code
+still reads and writes Supabase `b2b_lead` (see `docs/backends.md` § Pending).
+To see a screen
 in a state the data is not in, intercept the READ instead:
 `ctx.route(/app_settings/, r => r.request().method() === 'GET' ? r.fulfill({…}) : r.continue())`
 renders the page against whatever state you need and writes nothing. That is how
@@ -155,7 +158,7 @@ reading the module.
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
 | Shipped-and-fixed bugs | `docs/landmines.md` | 43 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
-| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds |
+| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; the **pending** B2B move off Supabase and the tables it still has to cover |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
 ### A code change is not done until its doc matches
@@ -353,6 +356,12 @@ the commit has already been made. `gh auth switch --user daaku-daddy` first, or
 check with
 `gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`. Verified
 2026-09-23.
+
+**As of 2026-10-28, neither account can push.** `daaku-daddy` now has `pull`
+only too, and `git push` returns `403 … denied to daaku-daddy`. Run the
+`.permissions` check above before committing anything meant for `origin`. If
+`push` is `false` for both accounts, ask for access or push from someone else's
+machine. Don't try `upstream`.
 
 Deployment is **Azure Static Web Apps CI/CD**
 (`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which

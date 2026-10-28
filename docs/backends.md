@@ -54,3 +54,31 @@ Gotchas:
   is the index: target project per file, plus which ones were never actually
   applied. New DDL goes in that folder — nothing runs it, so say in the PR that
   it still needs pasting into the right SQL Editor.
+
+## Pending: B2B data moving from Supabase to Django (reported 2026-10-28, NOT done in code)
+
+On 2026-10-28 the user said the B2B data now lives on the Django backend and
+the CRM should no longer need Supabase for it. **The code has not been
+switched.** On that date every B2B read and write below still went to the CRM
+Supabase, and `lib/api` had no Django endpoint for any of them. The only B2B
+Django calls are `/crm/leads/`, `/crm/leads/b2b-bulk/` and
+`/crm/leads/client-order-history/`.
+
+| Data | Supabase table | Read / written in |
+|---|---|---|
+| Client Database firms, KAM orders, Outreach leads, the DB half of Inbound | `b2b_lead`, split by `pipeline` (`client` · `kam` · `outbound` · `inbound`) | `lib/b2b/data/reads.ts` (`fetchAllRows`), `lib/b2b/data/writes.ts` |
+| Targets | `b2b_target` | `lib/b2b/stats/targets.ts` |
+| KAM round-robin load | `b2b_lead` | `lib/b2b/leads/kam-load.ts` |
+| Team identity / roster | `b2b_team_member` (service-role key) | `lib/server/b2b-team/store.ts` |
+
+Out of scope for that move, and still on Supabase: Site Audit (its own
+project), `store_checklist` and `rota_plan`.
+
+Until this table is empty, **treat Supabase as the production store for B2B**.
+Saving a firm, a number or a GSTIN writes `b2b_lead`, and the "never exercise a
+SAVE path" rule in `CLAUDE.md` still applies. Doing the move needs the Django
+endpoint for each row (path, envelope, write semantics) from the backend team.
+It also needs the existing rows migrated, or a period reading both stores. The
+switch point is `lib/b2b/data/`, because every view goes through
+`fetchRows` / `upsert*`. When a row moves, delete it from this table, and
+delete this section once the table is empty.

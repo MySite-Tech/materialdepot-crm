@@ -62,10 +62,39 @@ number attaches its money to this account.
 
 `CRMLeadRow` carries a client's PERSON name and **no GST at all**, so §3.2's
 "Company Name captured on that specific order" and "GST Number used on that
-specific order" are rendered as *"not in Procurement"*, not as blanks. A blank
-cell there reads as "this order had no company name on it". Same rule for
-§3.2's KAM column: it shows the account's KAM **today**, labelled as such,
-because nothing in this stack records who held the account at the time.
+specific order" are **not rendered as columns at all** until some row carries
+`companyOnOrder` / `gstOnOrder`. Until 2026-10-28 they were two columns of
+*"not in Procurement"* on every row: honest, but it was most of what the user
+called "texty". An absent column cannot be misread as "this order had no
+company name"; a blank cell could, so never bring the column back with blanks
+in it. The KAM shown on the Firm page is the account's KAM **today**. Nothing
+in this stack records who held the account at the time.
+
+### The Firm page: one drawer for Client DB and the KAM tab
+
+`components/b2b/drawers/firm/` is the page `sales-tab-redesign.md` §KAM calls
+"one Firm page, two lists". It replaced both Client DB's expanded row and the
+old KAM drawer, which showed the same firm two ways. The KAM tab passes its
+own sections (calls, KAM pipeline, escalations) as children. Things that are
+not visible in the code's shape:
+
+- **A number or GSTIN already on another firm is refused**, naming that firm
+  and pointing at Merge. The upload rule above treats an exact key as *the same
+  client*. Two firms sharing a phone would each count that phone's orders, so
+  the list's revenue total would count them twice.
+- **Per-number order counts read the bulk aggregates**, the same numbers
+  `clientMetricsFrom` sums for the summary strip. They do not read the ticket
+  list. That is why they always add up to the strip. The ticket list can
+  disagree with the aggregates, and if the numbers came from it they would not.
+- **Adding a number has to refetch that number's aggregate**
+  (`useClientAggregates().addPhones`, one bulk call). Without it,
+  `clientMetricsFrom` finds a phone with no `dates` entry and the firm turns
+  **Unknown** until the tab reloads. It is already wired into both views'
+  `saveClient`.
+- Removing the primary number promotes the next one, so a firm is never left
+  without one. Removal asks inline, never via `confirm()`.
+- The list and the order tabs page at 25 rows. The stat cards and the strip
+  count the full filtered set.
 
 ### §2.1's window is anchored to TODAY, and the PRD does not quite say that
 

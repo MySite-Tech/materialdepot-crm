@@ -3,7 +3,7 @@
 import { fmtL } from '../../../models/mock-data';
 import { ClientEntity, ClientStatus } from '../../../types/client';
 import { AssignedClientRow } from '../../../types/kam';
-import { Metric, StatusPill, TemperatureChip } from '../ui';
+import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
 import { Dispatch, SetStateAction } from 'react';
 
 export function KamClientsView({ clients, filteredRows, search, setDrawerId, setSearch, setStatusFilter, statusFilter }: {

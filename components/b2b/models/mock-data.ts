@@ -215,3 +215,11 @@ export const fmtL = (n: number): string => {
 };
 
 export const fmtINR = (n: number): string => '₹' + Number(n || 0).toLocaleString('en-IN');
+
+export const fmtShortINR = (n: number): string => {
+  const v = Number(n) || 0;
+  if (v >= 1_00_00_000) return '₹' + (v / 1_00_00_000).toFixed(2) + ' Cr';
+  if (v >= 1_00_000) return '₹' + (v / 1_00_000).toFixed(2) + ' L';
+  if (v >= 1_000) return '₹' + (v / 1_000).toFixed(1) + 'K';
+  return '₹' + Math.round(v);
+};

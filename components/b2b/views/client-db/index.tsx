@@ -1,36 +1,36 @@
 'use client';
 
-import { ACTIVE_WINDOW_MONTHS, CLIENT_ENTITY_TYPES, ClientEntity, ClientOrderMetrics, ClientStatus, EVIDENCE_IS_EXACT, MergeChoices, SEGMENTS, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact, temperatureColor, validateGst } from '../../models/client';
+import { ACTIVE_WINDOW_MONTHS, CLIENT_ENTITY_TYPES, ClientEntity, ClientStatus, EVIDENCE_IS_EXACT, MergeChoices, SEGMENTS, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact } from '../../models/client';
 import { newB2BId } from '../../models/ids';
-import { KAMS, fmtL } from '../../models/mock-data';
+import { KAMS, fmtShortINR } from '../../models/mock-data';
+import { FirmDrawer } from '../../drawers/firm';
+import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { ExportFormat } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
+import { StatTile, TemperatureChip } from '../../ui/client-chips';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
+import { PAGE_SIZE } from './constants';
 import { ClientModal } from './ui/client-modal';
 import { MergeModal } from './ui/merge';
-import { OrderDetailsTable } from './ui/rows';
+import { ClientTable } from './ui/table';
 import { SeedModal } from './seed';
-import { Metric, StatusPill } from './ui';
 import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
-import { ClientOrderDetails, ClientOrderHistory, clientFromSeed, clientMetricsFrom, deleteB2BRow, fetchB2BBulk, fetchClientOrderRows, fetchClients, invalidateClientTickets, orderDatesFromAggregates, upsertClient } from '@/lib/b2b';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { clientFromSeed, deleteB2BRow, fetchClients, upsertClient } from '@/lib/b2b';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function ClientDatabase() {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [aggregates, setAggregates] = useState<Record<string, ClientOrderHistory>>({});
-  const [dates, setDates] = useState<{ byPhone: Record<string, { last?: string; loaded: boolean }> } | null>(null);
-  const [detailsByClient, setDetailsByClient] = useState<Record<string, ClientOrderDetails>>({});
-  const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ClientEntity | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [merging, setMerging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all');
@@ -39,6 +39,7 @@ export default function ClientDatabase() {
   const [kamFilter, setKamFilter] = useState('all');
 
   const today = istToday();
+  const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,44 +47,16 @@ export default function ClientDatabase() {
     try {
       const list = await fetchClients();
       setClients(list);
-
-      const phones = list.flatMap((c) => contactNumbers(c.contacts));
-      const { histories: agg, ok: aggOk } = await fetchB2BBulk(phones, []);
-      setAggregates(agg);
-      setDates(orderDatesFromAggregates(agg, phones, aggOk));
+      await loadAggregates(list.flatMap((c) => contactNumbers(c.contacts)));
     } catch (e) {
       console.error('[b2b] client database load failed', e);
       setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadAggregates]);
 
   useEffect(() => { load(); }, [load]);
-
-  const metricsFor = useCallback(
-    (c: ClientEntity): ClientOrderMetrics => clientMetricsFrom(c.contacts, aggregates, dates || undefined),
-    [aggregates, dates],
-  );
-
-  const loadDetails = useCallback(async (c: ClientEntity, force = false) => {
-    const phones = contactNumbers(c.contacts);
-    if (!phones.length) return;
-    if (force) invalidateClientTickets(phones);
-    setDetailLoading((s) => ({ ...s, [c.id]: true }));
-    try {
-      const details = await fetchClientOrderRows(phones);
-      setDetailsByClient((s) => ({ ...s, [c.id]: details }));
-    } finally {
-      setDetailLoading((s) => ({ ...s, [c.id]: false }));
-    }
-  }, []);
-
-  const toggleExpand = (c: ClientEntity) => {
-    if (expanded === c.id) { setExpanded(null); return; }
-    setExpanded(c.id);
-    if (!detailsByClient[c.id]) loadDetails(c);
-  };
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
@@ -111,6 +84,30 @@ export default function ClientDatabase() {
         || a.client.company.localeCompare(b.client.company));
   }, [clients, metricsFor, search, statusFilter, segmentFilter, typeFilter, kamFilter, today]);
 
+  useEffect(() => { setPage(1); }, [search, statusFilter, segmentFilter, typeFilter, kamFilter]);
+
+  const totals = useMemo(() => {
+    let active = 0, inactive = 0, unassigned = 0, revenue = 0, unread = 0;
+    for (const r of rows) {
+      if (r.status === 'Active') active++;
+      else if (r.status === 'Inactive') inactive++;
+      if (!r.client.kam) unassigned++;
+      if (r.metrics.totalRevenue === undefined) unread++; else revenue += r.metrics.totalRevenue;
+    }
+    return { active, inactive, unassigned, revenue, unread };
+  }, [rows]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+
+  const openRow = useMemo(() => {
+    const client = clients.find((c) => c.id === openId);
+    if (!client) return null;
+    const metrics = metricsFor(client);
+    return { client, metrics, status: clientStatus(metrics, today), days: daysToInactive(metrics, today), temp: currentTemperature(client.interactions) };
+  }, [clients, openId, metricsFor, today]);
+
   const kamOptions = useMemo(() => {
     const seen = new Set<string>(KAMS);
     clients.forEach((c) => c.kam && seen.add(c.kam));
@@ -121,6 +118,7 @@ export default function ClientDatabase() {
     const err = await upsertClient(c);
     if (err) return err;
     setClients((prev) => (prev.some((x) => x.id === c.id) ? prev.map((x) => (x.id === c.id ? c : x)) : [c, ...prev]));
+    addPhones(contactNumbers(c.contacts));
     return null;
   };
 
@@ -208,7 +206,7 @@ export default function ClientDatabase() {
         <div>
           <h1 className="text-lg font-bold text-gray-800">Client Database</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            One row per business entity · order metrics derived from the deal tickets, never stored
+            Every firm we sell to, its numbers and GSTINs, and the orders placed on them
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -230,6 +228,15 @@ export default function ClientDatabase() {
         </div>
       )}
 
+      {!loading && !!clients.length && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
+          <StatTile label="Firms" value={rows.length} sub={rows.length === clients.length ? 'all firms' : `of ${clients.length}, filtered`} />
+          <StatTile label="Active" value={totals.active} tone="#15803D" sub={`ordered in the last ${ACTIVE_WINDOW_MONTHS} months`} />
+          <StatTile label="Inactive" value={totals.inactive} tone={totals.inactive ? '#B45309' : undefined} />
+          <StatTile label="No KAM" value={totals.unassigned} tone={totals.unassigned ? '#DC2626' : undefined} sub="need an owner" />
+          <StatTile label="Lifetime revenue" value={fmtShortINR(totals.revenue)} sub={totals.unread ? `${totals.unread} firm${totals.unread === 1 ? '' : 's'} unread` : undefined} />
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <input
@@ -255,7 +262,6 @@ export default function ClientDatabase() {
           <option value="unassigned">Unassigned</option>
           {kamOptions.map((k) => <option key={k} value={k}>{k}</option>)}
         </select>
-        <span className="text-[11px] text-gray-400 ml-auto">{rows.length} of {clients.length}</span>
       </div>
 
       {loading ? (
@@ -274,157 +280,45 @@ export default function ClientDatabase() {
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px] min-w-[1040px]">
-              <thead>
-                <tr className="bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider">
-                  <th className="text-left font-semibold px-3 py-2">Company</th>
-                  <th className="text-left font-semibold px-3 py-2">Contact person</th>
-                  <th className="text-left font-semibold px-3 py-2">Contact number</th>
-                  <th className="text-left font-semibold px-3 py-2">Last order</th>
-                  <th className="text-right font-semibold px-3 py-2">Orders</th>
-                  <th className="text-right font-semibold px-3 py-2">Total revenue</th>
-                  <th className="text-right font-semibold px-3 py-2">Avg order</th>
-                  <th className="text-left font-semibold px-3 py-2">Status</th>
-                  <th className="text-left font-semibold px-3 py-2">Seg</th>
-                  <th className="text-left font-semibold px-3 py-2">KAM</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ client, metrics, status, days }) => {
-                  const primary = primaryContact(client.contacts);
-                  const isOpen = expanded === client.id;
-                  const temp = currentTemperature(client.interactions);
-                  const numbers = contactNumbers(client.contacts);
-                  return (
-                    <Fragment key={client.id}>
-                      <tr
-                        onClick={() => toggleExpand(client)}
-                        className={`border-t border-gray-100 cursor-pointer hover:bg-gray-50 ${isOpen ? 'bg-gray-50' : ''}`}
-                      >
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-gray-300 text-[10px]">{isOpen ? '▾' : '▸'}</span>
-                            <span className="font-semibold text-gray-800">{client.company || <span className="text-gray-300">(unnamed)</span>}</span>
-                            {temp && (
-                              <span
-                                className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono"
-                                style={{ background: temperatureColor(temp.value) + '1A', color: temperatureColor(temp.value) }}
-                                title={`Account temperature ${temp.value}/10, scored ${temp.at}`}
-                              >
-                                {temp.value}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">
-                            {client.source}
-                            {client.clientType && ` · ${client.clientType}`}
-                            {numbers.length > 1 && ` · ${numbers.length} numbers`}
-                            {!!gstNumbers(client.gsts).length && ` · ${gstNumbers(client.gsts).length} GST`}
-                            {!!(client.mergedFrom || []).length && ` · merged ×${(client.mergedFrom || []).length}`}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-gray-600">{contactLabel(primary) || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 font-mono text-gray-600">{primary?.number || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap"><Metric value={metrics.lastOrderPlaced} state={metrics.dateState} /></td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-700"><Metric value={metrics.orders} state={metrics.dateState} /></td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-gray-800 whitespace-nowrap"><Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtL} /></td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-600 whitespace-nowrap"><Metric value={metrics.averageOrderValue} state={metrics.dateState} format={fmtL} /></td>
-                        <td className="px-3 py-2"><StatusPill status={status} days={days} /></td>
-                        <td className="px-3 py-2 text-gray-600">{client.segment || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{client.kam || <span className="text-gray-300">unassigned</span>}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditing(client); }}
-                            className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
-
-                      {isOpen && (
-                        <tr className="bg-gray-50/60">
-                          <td colSpan={11} className="px-3 pb-4 pt-1">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-                              <div className="bg-white rounded-md border border-gray-200 p-3">
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Business entity · §3.1</div>
-                                <div className="text-[13px] font-semibold text-gray-800">{client.company}</div>
-                                <div className="text-[11px] text-gray-400 mb-2">
-                                  {client.clientType || 'type not set'} · Segment {client.segment || '—'} · {client.source}
-                                </div>
-
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-3 mb-1">Contact numbers</div>
-                                {(client.contacts || []).map((c) => (
-                                  <div key={c.number} className="text-[11px] text-gray-600">
-                                    <span className="font-mono">{c.number}</span>
-                                    {contactLabel(c) && <span className="text-gray-400"> · {contactLabel(c)}</span>}
-                                    {c.primary && <span className="ml-1 text-[9px] font-bold text-[#0F766E]">PRIMARY</span>}
-                                  </div>
-                                ))}
-
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-3 mb-1">GST numbers</div>
-                                {!(client.gsts || []).length ? (
-                                  <p className="text-[11px] text-gray-300">None on file.</p>
-                                ) : (
-                                  (client.gsts || []).map((g) => {
-                                    const v = validateGst(g.number);
-                                    return (
-                                      <div key={g.number} className="text-[11px] text-gray-600">
-                                        <span className="font-mono">{g.number}</span>
-                                        {v.stateName && <span className="text-gray-400"> · {v.stateName}</span>}
-                                        {v.check === 'bad-checksum' && <span className="text-amber-600"> · check digit disagrees</span>}
-                                        <div className="text-[10px] text-gray-400">
-                                          {g.registeredName
-                                            ? `Registered as ${g.registeredName}`
-                                            : 'Registered company name unavailable — no GST Validator in this stack'}
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-
-                                {client.remarks && (
-                                  <>
-                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-3 mb-1">Remarks</div>
-                                    <p className="text-[11px] text-gray-600 break-words">{client.remarks}</p>
-                                  </>
-                                )}
-                              </div>
-
-                              <div className="bg-white rounded-md border border-gray-200 p-3 lg:col-span-2">
-                                <OrderDetailsTable
-                                  rows={detailsByClient[client.id]?.rows || []}
-                                  failedPhones={detailsByClient[client.id]?.failedPhones || []}
-                                  rejected={detailsByClient[client.id]?.rejected || 0}
-                                  loading={!!detailLoading[client.id]}
-                                  onRecheck={() => loadDetails(client, true)}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+          {rows.length ? (
+            <ClientTable rows={pageRows} onOpen={(c) => setOpenId(c.id)} />
+          ) : (
+            <p className="text-[12px] text-gray-400 py-10 text-center">No firm matches these filters.</p>
+          )}
+          <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-100 text-[11px] text-gray-500 flex-wrap">
+            <span>{rows.length ? `Showing ${(curPage - 1) * PAGE_SIZE + 1}–${Math.min(curPage * PAGE_SIZE, rows.length)} of ${rows.length}` : `0 of ${clients.length}`}</span>
+            {rows.length > PAGE_SIZE && (
+              <div className="flex gap-2">
+                <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
+                <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {`Client status is system-computed: Active means an ordered deal ticket within the last ${ACTIVE_WINDOW_MONTHS} months.`}{' '}
-        The PRD says the window is measured “from Last Order Placed”, which read literally would make every client who
-        ever ordered permanently Active — so it is anchored to today, which is the only reading under which the PRD&apos;s
-        own “re-evaluates on daily rollover” does anything. Flagged for KK.
+        {`Active means an order placed within the last ${ACTIVE_WINDOW_MONTHS} months, counted back from today`} (the PRD&apos;s
+        “measured from Last Order Placed” would make every past buyer Active forever; flagged for KK).
       </p>
 
       {addingNew && (
         <ClientModal client={blank()} isNew onClose={() => setAddingNew(false)} onSave={saveClient} />
+      )}
+      {openRow && (
+        <FirmDrawer
+          client={openRow.client}
+          clients={clients}
+          metrics={openRow.metrics}
+          status={openRow.status}
+          days={openRow.days}
+          historyFor={historyFor}
+          badges={openRow.temp && <TemperatureChip value={openRow.temp.value} at={openRow.temp.at} />}
+          reassignReason="Reassigned in the Client Database"
+          onClose={() => setOpenId(null)}
+          onSave={saveClient}
+          onEdit={() => setEditing(openRow.client)}
+        />
       )}
       {editing && (
         <ClientModal client={editing} onClose={() => setEditing(null)} onSave={saveClient} />
