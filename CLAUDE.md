@@ -392,22 +392,20 @@ changes you did not make belong to a live session. Before editing a module:
 - Once the other session commits, re-read your diff of any file you both
   touched before committing. `CLAUDE.md` and `docs/**` are the usual overlap.
 
-**Pushing to `origin` needs the `daaku-daddy` GitHub account, not `dhruv-md`.**
-Both are logged in to `gh` on this machine and `dhruv-md` is usually the active
-one, but it has pull-only on `MySite-Tech/materialdepot-crm` — a push fails with
-`403 … Permission to MySite-Tech/materialdepot-crm.git denied to dhruv-md`, after
-the commit has already been made. `gh auth switch --user daaku-daddy` first, or
-check with
-`gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`. Verified
-2026-09-23.
+**Check which account can push before committing for `origin`.** Three are
+logged in to `gh` here (`daaku-daddy`, `dhruv-md`, `dhr3vv`), and which one
+holds write access has changed twice. A push from the wrong one fails with
+`403 … Permission to MySite-Tech/materialdepot-crm.git denied to <account>`,
+after the commit has already been made. Check each account with
+`gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`.
 
-**As of 2026-10-28, no account here can push.** `gh auth status` lists three:
-`daaku-daddy`, `dhruv-md` and `dhr3vv`. All three have `pull` only on both
-`origin` and `upstream`, re-checked at 19:52 that day. `git push` returns
-`403 … denied to daaku-daddy`. Run the `.permissions` check above for each
-account before committing anything meant for `origin`. If `push` is `false`
-everywhere, ask for access or push from someone else's machine. Don't try
-`upstream`.
+**From 2026-10-28 (evening), push with `dhruv-md`.** It was given `write` access
+by invitation, and the invitation had to be **accepted** before
+`.permissions.push` read `true`. Until then the API reported `false` and the
+pending invite only showed under `gh api user/repository_invitations`.
+`daaku-daddy` and `dhr3vv` are `pull` only, and so is everyone on `upstream`.
+Git uses `gh auth git-credential`, so the *active* `gh` account is the one that
+pushes. Run `gh auth switch --user dhruv-md` first. Don't try `upstream`.
 
 Deployment is **Azure Static Web Apps CI/CD**
 (`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which
