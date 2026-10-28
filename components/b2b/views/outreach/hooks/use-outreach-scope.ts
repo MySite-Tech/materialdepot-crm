@@ -36,7 +36,7 @@ export function useOutreachScope(team: B2BTeamLoad, viewer: Viewer): OutreachSco
       return {
         mode: 'open', me, isManager: viewer.isManager, isKam, reps, kams, owns: () => true,
         notice: team.tableMissing
-          ? 'The B2B team list is not set up yet, so every BM\'s leads are shown and the pickers use the old roster.'
+          ? 'The B2B team list is not set up yet, so every BM\'s leads are shown and the BM pickers in forms use the old roster.'
           : `The B2B team list did not load (${team.error}), so every BM's leads are shown.`,
       };
     }

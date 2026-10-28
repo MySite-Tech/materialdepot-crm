@@ -2,7 +2,7 @@
 
 import { Pill } from './inbound-chips';
 import {
-  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
+  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, MAX_MEETINGS, meetingLocation,
   type OutreachStatus, type MeetingStatus, type OutreachMeeting,
   type LeadType,
 } from '../models/outreach';
@@ -44,6 +44,27 @@ export function MeetingProgress({ meetings }: { meetings?: OutreachMeeting[] }) 
       {all.length}/4 meetings
       {done > 0 && <span className="text-[#0F766E]"> · {done} held</span>}
       {postponed > 0 && <span className="text-amber-600"> · {postponed} postponed</span>}
+    </span>
+  );
+}
+
+export function MeetingDots({ meetings }: { meetings?: OutreachMeeting[] }) {
+  const all = [...(meetings || [])].sort((a, b) => a.n - b.n);
+  const title = all.length
+    ? all.map((m) => `Meeting ${m.n}: ${m.status}${m.date ? ` · ${m.date}` : ''}`).join('\n')
+    : 'No meetings yet';
+  return (
+    <span className="inline-flex items-center gap-1" title={title}>
+      {Array.from({ length: MAX_MEETINGS }, (_, i) => {
+        const m = all[i];
+        return (
+          <span
+            key={i}
+            className="w-2 h-2 rounded-full"
+            style={m ? { background: MEETING_STATUS_COLORS[m.status] } : { boxShadow: 'inset 0 0 0 1px #D1D5DB' }}
+          />
+        );
+      })}
     </span>
   );
 }

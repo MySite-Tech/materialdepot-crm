@@ -1,14 +1,10 @@
 'use client';
 
-import { OutreachLead, fmtINR } from '../../../models/mock-data';
-import { OUTREACH_STATUSES, OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachStatus, companyTypeLabel } from '../../../models/outreach';
+import { OutreachLead } from '../../../models/mock-data';
+import { OUTREACH_STATUSES, OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachStatus } from '../../../models/outreach';
 import { useDragAutoScroll } from '../../../hooks/use-drag-auto-scroll';
-import { Empty, EnrichmentBadge, fmtDay } from '../../../ui/inbound-chips';
-import { MeetingProgress, OutreachLeadTypeChip, OutreachStatusBadge } from '../../../ui/outreach-chips';
-import { PAGE_SIZE } from '../constants';
 import { LeadCard } from './cards';
-import { gapsFor } from '../utils';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export function OutreachBoard({ leads, today, onOpen, onMove }: {
   leads: OutreachLead[]; today: string; onOpen: (id: string) => void; onMove: (id: string, target: OutreachStatus) => void;
@@ -52,66 +48,6 @@ export function OutreachBoard({ leads, today, onOpen, onMove }: {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-export function OutreachList({ leads, onOpen }: { leads: OutreachLead[]; onOpen: (id: string) => void }) {
-  const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [leads.length]);
-  const pages = Math.max(1, Math.ceil(leads.length / PAGE_SIZE));
-  const rows = leads.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-[12.5px]">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/60">
-              {['Company', 'Contact', 'Type', 'Seg', 'Source', 'Lead', 'Status', 'Meetings', 'Follow-up', 'Enq ID', 'Value', 'BM', ''].map((h, i) => (
-                <th key={i} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((l) => {
-              const gaps = gapsFor(l);
-              return (
-                <tr key={l.id} onClick={() => onOpen(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
-                  <td className="px-3 py-2 font-semibold text-gray-900 max-w-[200px] truncate">{l.company}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.contactPerson || '—'}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{companyTypeLabel(l.companyType, l.companyTypeOther) || '—'}</td>
-                  <td className="px-3 py-2 text-gray-500">{l.segment || '—'}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.source || '—'}</td>
-                  <td className="px-3 py-2"><OutreachLeadTypeChip t={l.leadType} /></td>
-                  <td className="px-3 py-2"><OutreachStatusBadge s={l.status} /></td>
-                  <td className="px-3 py-2"><MeetingProgress meetings={l.meetings} /></td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{l.followUpDate ? fmtDay(l.followUpDate) : '—'}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{l.enqId || '—'}</td>
-                  <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">
-                    {l.orderValue ? fmtINR(l.orderValue)
-                      : l.expectedOrderValue ? <span className="text-gray-400" title="The BM's estimate">~{fmtINR(l.expectedOrderValue)}</span>
-                        : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.bm}</td>
-                  <td className="px-3 py-2">{gaps.length > 0 && <EnrichmentBadge gaps={gaps.map((g) => g.label)} />}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {rows.length === 0 && <Empty>No leads match these filters.</Empty>}
-      <div className="flex items-center justify-between px-3 py-3 border-t border-gray-100">
-        <span className="text-[11px] text-gray-400">
-          {leads.length ? `Showing ${page * PAGE_SIZE + 1}–${Math.min(leads.length, (page + 1) * PAGE_SIZE)} of ${leads.length}` : 'Showing 0 of 0'}
-        </span>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-            className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">← Prev</button>
-          <button onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
-            className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">Next →</button>
-        </div>
-      </div>
     </div>
   );
 }

@@ -13,18 +13,20 @@ export function useOutreachData(by: string) {
   const [inbound, setInbound] = useState<InboundLead[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [waitlist, setWaitlist] = useState<WaitlistSignup[] | null>(null);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     Promise.all([
       fetchOutreachLeads(),
       fetchInboundForOutreach().catch(() => null),
     ])
       .then(([o, i]) => { setLeads(o); setInbound(i); })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load outreach leads'))
+      .catch((e) => { setLoadFailed(true); setError(e instanceof Error ? e.message : 'Failed to load outreach leads'); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -57,5 +59,5 @@ export function useOutreachData(by: string) {
     return null;
   }, [by, load]);
 
-  return { leads, inbound, loading, error, setError, load, waitlist, waitlistError, loadWaitlist, save, createMany };
+  return { leads, inbound, loading, loadFailed, error, setError, load, waitlist, waitlistError, loadWaitlist, save, createMany };
 }

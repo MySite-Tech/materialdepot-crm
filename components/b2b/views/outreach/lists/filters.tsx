@@ -1,106 +1,148 @@
 'use client';
 
-import { OutreachLead } from '../../../models/mock-data';
-import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_SOURCES, OUTREACH_STATUSES, OUTREACH_STATUS_LABEL, OutreachStatus, SEGMENTS } from '../../../models/outreach';
-import { inputCls } from '../../../ui/inbound-chips';
-import { istDay } from '../../../models/outreach/reminders';
-import { gapsFor } from '../utils';
-
-export interface OutreachFilters {
-  bm: string;
-  status: 'all' | OutreachStatus;
-  companyType: string;
-  leadType: string;
-  segment: string;
-  source: string;
-  createdFrom: string;
-  createdTo: string;
-  search: string;
-  onlyGaps: boolean;
-}
-
-export const NO_FILTERS: OutreachFilters = {
-  bm: 'all', status: 'all', companyType: 'all', leadType: 'all', segment: 'all', source: 'all',
-  createdFrom: '', createdTo: '', search: '', onlyGaps: false,
-};
-
-export const activeFilterCount = (f: OutreachFilters): number =>
-  (Object.keys(NO_FILTERS) as (keyof OutreachFilters)[]).filter((k) => f[k] !== NO_FILTERS[k]).length;
-
-export function matchesFilters(l: OutreachLead, f: OutreachFilters, bmMatches: (l: OutreachLead) => boolean): boolean {
-  if (f.bm !== 'all' && !bmMatches(l)) return false;
-  if (f.status !== 'all' && l.status !== f.status) return false;
-  if (f.companyType !== 'all' && l.companyType !== f.companyType) return false;
-  if (f.leadType !== 'all' && l.leadType !== f.leadType) return false;
-  if (f.segment !== 'all' && l.segment !== f.segment) return false;
-  if (f.source !== 'all' && (l.source || 'none') !== f.source) return false;
-  const created = istDay(l.createdAt);
-  if (f.createdFrom && (!created || created < f.createdFrom)) return false;
-  if (f.createdTo && (!created || created > f.createdTo)) return false;
-  if (f.onlyGaps && gapsFor(l).length === 0) return false;
-  const q = f.search.trim().toLowerCase();
-  if (q) {
-    const hay = [l.company, l.contactPerson, l.phone, l.enqId, l.designation, l.city].filter(Boolean).join(' ').toLowerCase();
-    if (!hay.includes(q)) return false;
-  }
-  return true;
-}
+import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_SOURCES, SEGMENTS } from '../../../models/outreach';
+import { inputCls } from '../../../constants/ui';
+import { NO_FILTERS, RANGE_LABEL } from '../constants';
+import { BmOption, OutreachFilters, RangeKey } from '../types';
+import { activeFilterCount } from '../utils';
+import { ReactNode, useState } from 'react';
 
 const label = 'block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1';
-const select = 'px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[110px]';
+const control = 'px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[130px] focus:border-[#0F766E]';
+const chip = 'px-2.5 py-1 rounded-full text-[11.5px] font-semibold border whitespace-nowrap';
 
-export function FilterBar({ f, set, bmOptions }: {
+const ADDED: RangeKey[] = ['any', 'today', 'week', 'last7', 'last30', 'month', 'last-month', 'custom'];
+
+export function BmChips({ options, value, onChange }: {
+  options: BmOption[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  if (options.length > 7) {
+    return (
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={control}>
+        <option value="all">All BMs</option>
+        {options.map((o) => <option key={o.rep.name} value={o.rep.name}>{`${o.rep.name} (${o.leads})`}</option>)}
+      </select>
+    );
+  }
+  const btn = (key: string, text: ReactNode, title?: string) => (
+    <button
+      key={key}
+      onClick={() => onChange(key)}
+      title={title}
+      className={`${chip} ${value === key ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+    >
+      {text}
+    </button>
+  );
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {btn('all', 'All BMs')}
+      {options.map((o) => btn(
+        o.rep.name,
+        <>{o.rep.name}<span className="tabular-nums opacity-60"> {o.leads}</span></>,
+        o.onTeam ? undefined : 'Holds leads but is not on the Outreach team list',
+      ))}
+    </div>
+  );
+}
+
+const SELECTS: [string, keyof OutreachFilters, readonly string[], (v: string) => string][] = [
+  ['Client type', 'companyType', COMPANY_TYPES, (v) => v],
+  ['Segment', 'segment', SEGMENTS, (v) => `Segment ${v}`],
+  ['Lead type', 'leadType', LEAD_TYPES, (v) => v],
+  ['Source', 'source', [...OUTREACH_SOURCES, 'none'], (v) => (v === 'none' ? 'Source not set' : v)],
+];
+
+export function Toolbar({ f, set, onSearch, right }: {
   f: OutreachFilters;
   set: (patch: Partial<OutreachFilters>) => void;
-  bmOptions: string[] | null;
+  onSearch: (q: string) => void;
+  right?: ReactNode;
 }) {
   const active = activeFilterCount(f);
-  const selects: [string, string, keyof OutreachFilters, readonly string[], (v: string) => string][] = [
-    ['Status', 'All statuses', 'status', OUTREACH_STATUSES, (v) => OUTREACH_STATUS_LABEL[v as OutreachStatus]],
-    ...(bmOptions ? [['BM', 'All BMs', 'bm', bmOptions, (v: string) => v] as [string, string, keyof OutreachFilters, readonly string[], (v: string) => string]] : []),
-    ['Source', 'All sources', 'source', [...OUTREACH_SOURCES, 'none'], (v) => (v === 'none' ? 'Not set' : v)],
-    ['Client type', 'All types', 'companyType', COMPANY_TYPES, (v) => v],
-    ['Lead type', 'All lead types', 'leadType', LEAD_TYPES, (v) => v],
-    ['Segment', 'All segments', 'segment', SEGMENTS, (v) => v],
+  const [open, setOpen] = useState(false);
+  const chips: { key: string; text: string; clear: Partial<OutreachFilters> }[] = [
+    ...SELECTS.filter(([, k]) => f[k] !== 'all').map(([, k, , show]) => ({ key: k, text: show(f[k] as string), clear: { [k]: 'all' } })),
+    ...(f.added !== 'any' ? [{
+      key: 'added',
+      text: `Added ${f.added === 'custom' ? `${f.addedFrom || '…'} – ${f.addedTo || '…'}` : RANGE_LABEL[f.added].toLowerCase()}`,
+      clear: { added: 'any' as RangeKey, addedFrom: '', addedTo: '' },
+    }] : []),
+    ...(f.onlyGaps ? [{ key: 'gaps', text: 'Missing details', clear: { onlyGaps: false } }] : []),
   ];
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4">
-      <div className="flex items-end gap-2.5 flex-wrap">
-        <div className="flex-1 min-w-[200px]">
-          <label className={label}>Search</label>
-          <input value={f.search} onChange={(e) => set({ search: e.target.value })} placeholder="Firm, contact, phone, city or Enq ID…" className={inputCls} />
-        </div>
-        {selects.map(([name, all, key, opts, show]) => (
-          <div key={key}>
-            <label className={label}>{name}</label>
-            <select value={f[key] as string} onChange={(e) => set({ [key]: e.target.value } as Partial<OutreachFilters>)} className={select}>
-              <option value="all">{all}</option>
-              {opts.map((o) => <option key={o} value={o}>{show(o)}</option>)}
-            </select>
-          </div>
-        ))}
-        <div>
-          <label className={label}>Created from</label>
-          <input type="date" value={f.createdFrom} onChange={(e) => set({ createdFrom: e.target.value })} className={select} />
-        </div>
-        <div>
-          <label className={label}>to</label>
-          <input type="date" value={f.createdTo} onChange={(e) => set({ createdTo: e.target.value })} className={select} />
+    <div className="mb-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative w-full sm:w-[300px]">
+          <input
+            value={f.search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search firm, contact, phone, Enq ID or BM"
+            className={`${inputCls} pr-7`}
+          />
+          {f.search && (
+            <button onClick={() => onSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm leading-none">×</button>
+          )}
         </div>
         <button
-          onClick={() => set({ onlyGaps: !f.onlyGaps })}
-          className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border whitespace-nowrap ${
-            f.onlyGaps ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 border-gray-200 hover:border-amber-400'
-          }`}
+          onClick={() => setOpen((o) => !o)}
+          className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border whitespace-nowrap ${active ? 'border-[#0F766E] text-[#0F766E] bg-teal-50' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-400'}`}
         >
-          ⚠ Needs filling
+          Filters{active ? ` · ${active}` : ''} {open ? '▴' : '▾'}
         </button>
-        {active > 0 && (
-          <button onClick={() => set(NO_FILTERS)} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500 whitespace-nowrap">
-            Clear {active}
+        {chips.map((c) => (
+          <button key={c.key} onClick={() => set(c.clear)} title="Remove this filter"
+            className={`${chip} bg-teal-50 text-[#0F766E] border-teal-200 hover:border-[#0F766E]`}>
+            {c.text} <span className="opacity-60">×</span>
           </button>
+        ))}
+        {active > 1 && (
+          <button onClick={() => set({ ...NO_FILTERS, search: f.search })} className="text-[11.5px] font-semibold text-gray-500 hover:text-gray-800 whitespace-nowrap">Clear all</button>
         )}
+        <div className="ml-auto">{right}</div>
       </div>
+
+      {open && (
+        <div className="mt-2 bg-white rounded-lg border border-gray-200 p-3">
+          <div className="flex items-end gap-2.5 flex-wrap">
+            {SELECTS.map(([name, key, opts, show]) => (
+              <div key={key}>
+                <label className={label}>{name}</label>
+                <select value={f[key] as string} onChange={(e) => set({ [key]: e.target.value })} className={control}>
+                  <option value="all">Any</option>
+                  {opts.map((o) => <option key={o} value={o}>{show(o)}</option>)}
+                </select>
+              </div>
+            ))}
+            <div>
+              <label className={label}>Lead added</label>
+              <select value={f.added} onChange={(e) => set({ added: e.target.value as RangeKey })} className={control}>
+                {ADDED.map((k) => <option key={k} value={k}>{RANGE_LABEL[k]}</option>)}
+              </select>
+            </div>
+            {f.added === 'custom' && (
+              <>
+                <div>
+                  <label className={label}>From</label>
+                  <input type="date" value={f.addedFrom} onChange={(e) => set({ addedFrom: e.target.value })} className={control} />
+                </div>
+                <div>
+                  <label className={label}>To</label>
+                  <input type="date" value={f.addedTo} onChange={(e) => set({ addedTo: e.target.value })} className={control} />
+                </div>
+              </>
+            )}
+            <label className="flex items-center gap-1.5 text-[12px] text-gray-600 py-1.5 cursor-pointer select-none">
+              <input type="checkbox" checked={f.onlyGaps} onChange={(e) => set({ onlyGaps: e.target.checked })} className="accent-[#0F766E]" />
+              Only leads missing details
+            </label>
+          </div>
+          <p className="mt-2 text-[10.5px] text-gray-400">These narrow the tiles and lists below. The scorecard above follows only the BM and its period; a scorecard tile&apos;s list still honours these.</p>
+        </div>
+      )}
     </div>
   );
 }

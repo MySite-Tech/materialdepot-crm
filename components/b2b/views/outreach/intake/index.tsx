@@ -2,7 +2,7 @@
 
 import { InboundLead, OutreachLead } from '../../../models/mock-data';
 import {
-  INTAKE_REJECT_REASONS, Rep, inboundPool, intakePending, leadFromInbound, planRoundRobin, rejectIntake,
+  INTAKE_REJECT_REASONS, PoolLead, Rep, intakePending, leadFromInbound, planRoundRobin, rejectIntake,
 } from '../../../models/outreach/intake';
 import { currentMonth } from '../../../models/outreach/kpis';
 import { Empty, fmtDay } from '../../../ui/inbound-chips';
@@ -51,10 +51,10 @@ function PendingRow({ lead, canAct, onAccept, onReject, onOpen }: {
   );
 }
 
-export function FromInbound({ leads, allLeads, inbound, scope, today, save, createMany, onOpen }: {
+export function FromInbound({ leads, allLeads, pool, scope, today, save, createMany, onOpen }: {
   leads: OutreachLead[];
   allLeads: OutreachLead[];
-  inbound: InboundLead[] | null;
+  pool: PoolLead[] | null;
   scope: OutreachScope;
   today: string;
   save: SaveLead;
@@ -65,13 +65,13 @@ export function FromInbound({ leads, allLeads, inbound, scope, today, save, crea
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<Record<string, string>>({});
   const pending = useMemo(() => leads.filter(intakePending), [leads]);
-  const pool = useMemo(() => (inbound ? inboundPool(inbound, allLeads) : []), [inbound, allLeads]);
   const assigner = scope.mode !== 'mine';
 
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [pool.length]);
-  const pages = Math.max(1, Math.ceil(pool.length / PAGE_SIZE));
-  const rows = pool.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const poolSize = pool?.length ?? 0;
+  useEffect(() => { setPage(0); }, [poolSize]);
+  const pages = Math.max(1, Math.ceil(poolSize / PAGE_SIZE));
+  const rows = (pool ?? []).slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const run = async (fn: () => Promise<string | null>) => {
     setBusy(true);
@@ -85,7 +85,7 @@ export function FromInbound({ leads, allLeads, inbound, scope, today, save, crea
     run(() => createMany(items.map(({ lead, rep }) => leadFromInbound(lead, rep, scope.me.name, nowIso(), accepted)), { onlyNew: true }));
 
   const assignAll = () => {
-    const plan = planRoundRobin(pool.map((p) => p.lead), scope.reps, allLeads, currentMonth(today));
+    const plan = planRoundRobin((pool ?? []).map((p) => p.lead), scope.reps, allLeads, currentMonth(today));
     return assign(plan.map(({ item, rep }) => ({ lead: item, rep })), false);
   };
 
@@ -96,12 +96,11 @@ export function FromInbound({ leads, allLeads, inbound, scope, today, save, crea
       {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</div>}
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-gray-100 flex items-baseline gap-2">
+        <div className="px-4 py-2.5 border-b border-gray-100 flex items-baseline gap-2"
+          title="Inbound only gets credit once the assigned BM accepts. A rejection needs a reason, and those reasons are how Inbound's lead quality is judged.">
           <h3 className="text-[12px] font-bold text-gray-800">Waiting for sign-off</h3>
           <span className="text-[11px] font-semibold text-gray-400">{pending.length}</span>
-          <span className="text-[10px] text-gray-400 hidden sm:inline">
-            Inbound only gets credit once the assigned BM accepts. A rejection needs a reason, and those reasons are how Inbound&apos;s lead quality is judged.
-          </span>
+          <span className="text-[10.5px] text-gray-400 hidden sm:inline">Accept, or reject with a reason</span>
         </div>
         {!pending.length ? <div className="py-6"><Empty>Nothing waiting.</Empty></div> : (
           <div className="overflow-x-auto">
@@ -127,21 +126,20 @@ export function FromInbound({ leads, allLeads, inbound, scope, today, save, crea
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2 flex-wrap"
+          title="Leads Inbound has worked and not lost, with no Outreach lead on the same mobile. Converted by Inbound first.">
           <h3 className="text-[12px] font-bold text-gray-800">Inbound pool</h3>
-          <span className="text-[11px] font-semibold text-gray-400">{pool.length}</span>
-          <span className="text-[10px] text-gray-400 hidden sm:inline">
-            Leads Inbound has worked and not lost, with no Outreach lead on the same mobile. Converted by Inbound first.
-          </span>
-          {assigner && pool.length > 0 && (
+          <span className="text-[11px] font-semibold text-gray-400">{pool === null ? '?' : poolSize}</span>
+          <span className="text-[10.5px] text-gray-400 hidden sm:inline">Not assigned to a BM yet</span>
+          {assigner && poolSize > 0 && (
             <button disabled={busy || !scope.reps.length} onClick={assignAll} className={`${btn} ml-auto bg-[#0F766E] text-white`}>
-              {busy ? 'Assigning…' : `Assign all ${pool.length} round-robin`}
+              {busy ? 'Assigning…' : `Assign all ${poolSize} round-robin`}
             </button>
           )}
         </div>
-        {inbound === null ? (
+        {pool === null ? (
           <p className="px-4 py-3 text-[11.5px] text-amber-800 bg-amber-50">Inbound leads did not load, so the pool is unknown — not empty. Reload to try again.</p>
-        ) : !pool.length ? <div className="py-6"><Empty>Every Inbound lead in play already has an Outreach lead.</Empty></div> : (
+        ) : !poolSize ? <div className="py-6"><Empty>Every Inbound lead in play already has an Outreach lead.</Empty></div> : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">
@@ -186,9 +184,9 @@ export function FromInbound({ leads, allLeads, inbound, scope, today, save, crea
                 </tbody>
               </table>
             </div>
-            {pool.length > PAGE_SIZE && (
+            {poolSize > PAGE_SIZE && (
               <div className="flex items-center justify-between px-3 py-3 border-t border-gray-100">
-                <span className="text-[11px] text-gray-400">{`Showing ${page * PAGE_SIZE + 1}–${Math.min(pool.length, (page + 1) * PAGE_SIZE)} of ${pool.length}`}</span>
+                <span className="text-[11px] text-gray-400">{`Showing ${page * PAGE_SIZE + 1}–${Math.min(poolSize, (page + 1) * PAGE_SIZE)} of ${poolSize}`}</span>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
                     className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">← Prev</button>

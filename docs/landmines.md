@@ -68,6 +68,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - `/crm/available-bms/?branch=` listed JP Nagar and HQ staff as Basaveshwara Nagar's BMs
 - A logged call recorded the lead's owner as the caller
 - A Kylas outage made B2B Inbound say every new lead had been called
+- The Outreach BM picker listed two people who held none of the leads
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -956,3 +957,17 @@ grep for a term, then read around the line you hit rather than opening all of it
   call site unless the type says so. **Other readers of `fetchB2BInboundLeads`
   still ignore `ok`**: `fetchInboundOwnerTotals` and `leads/unified.ts`
   (the Leads tab).
+
+- **The Outreach BM picker listed two people who held none of the leads**
+  (fixed 2026-10-28). Its options were `scope.reps`: the Outreach members of
+  `b2b_team_member`, or `B2B_ROSTER` while that table is missing, which it
+  still is. The roster names two BMs. On 2026-10-28 the 53 real Outreach rows
+  belonged to five others plus one of those two (who held a single lead). A
+  manager could not narrow the board to anyone who actually had leads, and the
+  KPI strip multiplied every team target by those 2 heads. Nothing errored; the
+  picker simply looked complete. Options now come from `bmOptions()`
+  (`views/outreach/utils.ts`): the team members plus every BM name found on the
+  leads, each with its lead count, and the head count is that list while the
+  team table is not live. The shape: **a filter's options must be read off the
+  data it filters, not off a list of who is supposed to be there.** Same family
+  as the Leads tab offering every salesperson in the org.

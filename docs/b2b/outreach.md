@@ -158,16 +158,19 @@ before 2026-10-28 have no journey; the card says so instead of showing nothing.
 Writes from the Leads tab drawer (`views/leads/drawer.tsx`) do not go through
 `withJourney` yet.
 
-### Reminders and the "My day" view
+### Reminders and the Action needed tile
 
 `outreachReminders(lead)` is the one list of what a BM owes on a lead (meeting
 passed but not marked, held without notes or a pin, follow-up overdue, fewer
 than 2 follow-ups, Inbound/EC lead with no meeting, unverified conversion,
 handover not sent / pending / past 48h / rejected, not on the waitlist, missing
-mandatory fields). "My day" sorts them overdue → today → to do. A KAM gets a
-different list: handovers waiting on their sign-off, with the 48h clock.
-`onWaitlist: null` (Studio Space did not answer) suppresses the waitlist
-reminder rather than claiming they have not joined.
+mandatory fields), sorted overdue → today → to do. **Action needed** lists a
+lead only if one of its reminders is overdue or due today. A to-do alone (no
+pin, not on the waitlist, a missing field) does not qualify, or nearly every
+lead would. The table shows the first reminder plus "+n more", with all of them
+in the tooltip. A KAM gets `kamReminders` instead: handovers waiting on their
+sign-off, with the 48h clock. `onWaitlist: null` (Studio Space did not answer)
+suppresses the waitlist reminder rather than claiming they have not joined.
 
 ### Meetings: notes are now a hard gate, the pin is not
 
@@ -227,32 +230,92 @@ onboarding" in the KPI sub-line.
 
 ### KPIs (`models/outreach/kpis.ts`, `views/outreach/performance/`)
 
-One function per sheet row, per head, for a chosen month (IST). Team totals
-scale count targets by head count; % targets do not. Exact definitions are in
-`OUTREACH_KPIS[].rule` and shown as each tile's tooltip; the non-obvious ones:
+One function, `outreachKpis(leads, period, waitlist)`, computes all eight for an
+IST date period. **Each KPI returns its rows, not just a number**: one
+`KpiRow { lead, counts, note, at }` per lead it looked at, with `counts: false`
+and the reason in `note` for the ones it excluded. The value is derived from
+those rows, so a tile and the list behind it cannot disagree. Team totals scale
+count targets by head count; % targets do not. **Count and ₹ targets exist only
+for a whole calendar month** (`kpiTarget` returns `null` otherwise), because the
+sheet sets monthly targets and pro-rating them would be a target nobody set. A
+custom period shows the count with no target and no colour. For the current
+month a tick on each bar marks the even-pace point for today, and the colour is
+judged against that pace, not the full target. Without that, every tile was red
+for most of every month. Exact definitions are in `OUTREACH_KPIS[].rule` and
+shown as each tile's tooltip; the non-obvious ones:
 
 - **New-lead meetings** counts the first held meeting only if it has notes, an
   owner/designer name and a valid mobile — the sheet's "genuine lead" test.
   Missing pins are counted in the sub-line, not excluded.
-- **Follow-up meetings** = unique firms with a non-first held meeting this
-  month; the sub-line says how many reached 2 follow-ups or an order.
-- **CRM adherence** = leads *touched* this month (created, status change,
-  meeting date or journey event in the month) with zero gaps in
+- **Follow-up meetings** = unique firms with a non-first held meeting in the
+  period; each row says how far it got toward 2 follow-ups or an order.
+- **CRM adherence** = leads *touched* in the period (created, status change,
+  meeting date or journey event in it) with zero gaps in
   `outreachAdherence` ÷ touched. GST is not in it (many firms have none).
-- **Handover %** denominator is *all* conversions this month, verified or not.
+- **Handover %** denominator is *all* conversions in the period, verified or not.
 - **Revenue** is first-order value of verified, new-onboarding conversions only.
   Later orders from the same client are not in it — this CRM does not track
   them per Outreach lead.
 
-The KPI strip always counts the full scoped set; the filter bar only changes
-the lists (a notice says so when a filter is active).
+The scorecard follows only the BM chip and its period. The filter panel and
+search narrow the work tiles and every list, a scorecard tile's list included,
+which then says "Filters or search hide n of N".
+
+**Head count while the team table is missing** is the number of BMs holding
+leads, from `bmOptions()`, not the 2-name roster. See the BM picker entry in
+`docs/landmines.md`.
+
+### The page is tiles you click (UI pass, 2026-10-28)
+
+The user found the first build too texty to navigate: nine tabs, eight KPI
+tiles that could not be clicked, an always-open ten-control filter bar, two
+full-width banners, and My day as a wall of reminder sentences. The layout now
+matches Inbound's (`inbound.md` §The tiles are the navigation): **every number
+is a lens, and clicking it lists exactly what it counts**.
+
+- **Order: BM chips → Scorecard → search/filters → work tiles → one table.**
+  The BM chip sits under the title because it is the only control that moves
+  the scorecard. The filters sit below the scorecard, so "filters apply to
+  what is below them" is literally true.
+- **Scorecard**: Effort and Output, four tiles each, with a period picker
+  (this/last month, four earlier months, this week, last 7/30 days, custom) and
+  a **Tiles / By BM** switch for managers. Clicking a By BM row picks that BM.
+  A KPI tile opens its rows with a **Counts?** column (✓, or ✕ plus the reason)
+  and an All / Counted / Not counted switch. That is how "12 meetings, +9 not
+  counted" becomes nine named leads, each missing its notes.
+- **Work tiles**: *Action needed* (head; meetings today, follow-ups due, from
+  Inbound, handover) and *Pipeline* (head = all leads; one tile per stage,
+  with chevrons because it is a journey). `lensMatches` in `lenses/utils.ts` is
+  the one predicate for each tile's count and its rows, and
+  `hooks/use-outreach-lenses.ts` derives both together. On real data on
+  2026-10-28, all 11 work tiles matched their table row counts.
+- **One table** (`lists/table.tsx`), paged at 25, with columns chosen per lens
+  (`lists/columns.tsx`): firm and contact share a cell, meetings are four dots,
+  and *Next step* says "3d late" / "Today" rather than a bare date. Closed and
+  Lost leads have no next step. A stale follow-up date on a converted lead
+  read as "44d late" before that rule.
+- **Board** is a List/Board switch beside the filters. Clicking any tile from
+  Board returns to List. **Search** jumps to All leads (any narrower lens
+  would hide matches) and restores the previous tile when cleared.
+- **Lead added** (with presets) replaces the old two bare created-date inputs.
+  The **Status** filter went away because the pipeline tiles are that filter.
+  Source and City are still offered, but on 2026-10-28 none of the 53 real rows
+  had either set.
+- The two work-tile groups sit side by side only from 1400px. Below that their
+  titles truncated. Checked at 1440, 1280 and 390 with no horizontal scroll.
+- Tiles read "…" while loading and "Unknown"/"?" if `b2b_lead` failed
+  (`loadFailed` in `use-outreach-data`), never 0. A failed save also sets
+  `error`, so the error string alone could not tell the two apart.
 
 Verified 2026-10-28 by compiling `models/outreach/*` and running a fixture
 journey (intake → meetings → conversion → handover → sign-off) through
 `withJourney`, `outreachReminders`, `outreachKpis`, `planImport` and
 `planRoundRobin`; and in the browser on the stubbed-Django dev server with the
 `b2b_lead`, `/api/b2b/team` and `/api/b2b/waitlist` **GETs intercepted with
-fixtures** and every `b2b_lead` write aborted, as manager, Outreach BM and KAM.
+fixtures** and every `b2b_lead` write aborted, as manager, Outreach BM and KAM. The UI pass was checked
+the same way for BM and KAM, and against **real** `b2b_lead` reads as manager
+(Django stubbed, every Supabase and `/api/b2b` write aborted, none attempted).
+A fixture run asserted every count KPI's value equals its counted rows.
 
 ### Not built
 

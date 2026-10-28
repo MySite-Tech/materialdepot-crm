@@ -8,7 +8,7 @@ working tree. All of it is **uncommitted** on `Installation-Changes`.
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
 | Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
-| Outreach | **Built:** scoped views, From Inbound pool with sign-off, CSV import, journey log, My day, conversion check, KAM handover with WhatsApp gate, per-BM KPI strip | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
+| Outreach | **Built:** scoped views, From Inbound pool with sign-off, CSV import, journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Designed only, no code** | §KAM below | The Django repo's location (GST matching); the Meeting Coverage denominator |
 
 The shared identity layer every team builds on is `lib/b2b/team` (types and
@@ -598,3 +598,14 @@ Open, for the user:
   the user will choose the commit order. These two shared docs go in one
   commit; each session's code goes in its own.
 
+- **2026-10-28 (Outreach, UI pass)**: The user found the Outreach tab too texty
+  to navigate, its filters incomplete, and its KPI tiles not clickable. The page
+  is now Inbound's tile-lens layout. A scorecard has a period picker and a
+  By BM switch, and each KPI tile lists its leads, uncounted ones included with
+  the reason. Below it, Action needed and Pipeline tiles sit over one paged
+  table. Filters collapse into a panel with removable chips. `outreachKpis`
+  now returns rows, and targets apply only to whole months. The BM picker had
+  offered the 2-name roster while five other BMs held the 53 real leads (see
+  `docs/landmines.md`). Checked on real `b2b_lead` reads as manager, and with
+  fixtures as BM and KAM. Django was stubbed and no write was attempted. All
+  11 work tiles matched their tables. No data change.
