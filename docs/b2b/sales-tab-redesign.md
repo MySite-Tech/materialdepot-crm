@@ -1,15 +1,18 @@
 *Part of `docs/b2b/context.md` — see that file for the module overview.*
 
-## Status (end of 2026-10-28): Inbound and Outreach built, KAM designed. Nothing committed.
+## Status (end of 2026-10-28): Inbound, Outreach and Client DB built, KAM partly built. Pushed, not merged.
 
-Three sessions worked this file on 2026-10-28, one per team, in the same
-working tree. All of it is **uncommitted** on `Installation-Changes`.
+Several sessions worked this file on 2026-10-28 in the same working tree. All
+of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
+`origin`. There is no PR and nothing is deployed. Continue on that branch.
+`revamp-2026-10-28.md` lists its commits.
 
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
 | Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
 | Outreach | **Built:** scoped views, From Inbound pool with sign-off, CSV import, journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
-| KAM | **Designed only, no code** | §KAM below | The Django repo's location (GST matching); the Meeting Coverage denominator |
+| KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
+| Client DB | **Built:** lens tiles (All · Active · Lapsing soon · Inactive · No KAM), filter chips, sortable columns, export scope honoured | `client-db.md` §The list | Nothing. Order dates come from Django `b2b-bulk`, and one live firm has a future last-order date |
 
 The shared identity layer every team builds on is `lib/b2b/team` (types and
 rules) plus `lib/server/b2b-team` (server only). Its source is the
@@ -516,7 +519,7 @@ separate "My Dashboard". Steps 4–6 have not started.
   Firm page shared by both lists, tier set by managers only, and the proposed
   inactive-reason list. Metabase confirmed `estimate.client_gst` can drive GST
   order matching (253 GSTINs span several customer accounts). No code changed.
-  The parallel session's uncommitted identity layer (`lib/b2b/team`) is what
+  The parallel session's identity layer (`lib/b2b/team`, since committed) is what
   KAM slice 2 builds on. Waiting on: the Django repo's location and the
   Meeting Coverage denominator.
 - **2026-10-28 (Inbound, build)**: The user chose CRM-side round robin,
@@ -536,7 +539,14 @@ separate "My Dashboard". Steps 4–6 have not started.
   Built slice 3's list as nine lens tiles over one paged firm table and one paged
   order table. The tile component moved to `components/b2b/ui/lens-tiles.tsx`,
   shared with Inbound. The Outreach session has its own `LensStrip` in
-  `views/outreach/lenses/`, uncommitted at the time, which should move onto it.
+  `views/outreach/lenses/`, which should move onto it. It is committed in
+  `818f516` and has not been moved yet.
+- **2026-10-28 (Client DB, layout)**: The user said clicking the Active/Inactive
+  tiles "is not coming right" and asked for clearer filters. The tiles had no
+  click handler, and a status dropdown zeroed them. They are now lenses on the
+  shared component, with chips, highlighted filters and sortable columns. Every
+  tile's count matched its list in a browser, with Django stubbed and writes
+  blocked. The whole day's work was pushed as `b2b-revamp-2026-10-28`.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

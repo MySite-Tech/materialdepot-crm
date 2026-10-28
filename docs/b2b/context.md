@@ -21,7 +21,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
-| [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-28oct`: the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 251 |
+| [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (pushed, not merged): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 251 |
 
 ## Where the B2B work stands (2026-10-28)
 
@@ -38,12 +38,12 @@ a new session knows what is live and what is being worked on.
   columns. The status dropdown is gone. See `client-db.md` §The list.
 - **KAM: the same lens tiles, built 2026-10-28** (slice 3, minus Tier and Studio
   Space). See `kam.md` §The tiles are the navigation. Both tabs use
-  `components/b2b/ui/lens-tiles.tsx`. **Outreach's own `LensStrip`
-  (`views/outreach/lenses/`) should move onto that component** once its session
-  commits, so all three tabs share one tile shape.
-- **Parallel sessions.** The KAM Firm page landed as `7eb283e` while Inbound was
-  in progress, and an Outreach session had uncommitted changes in
-  `models/outreach` and `views/outreach` at the same time. Run `git status --short
-  -- components/b2b lib/b2b docs/b2b` before starting, and see `CLAUDE.md`
-  §Git for the rule.
+  `components/b2b/ui/lens-tiles.tsx`, and so does Client Database. **Outreach's
+  own `LensStrip` (`views/outreach/lenses/`) is the one left.** It is committed
+  (`818f516`) but not yet moved onto that component. That move is the next
+  tidy-up, so that all four tabs share one tile shape.
+- **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
+  It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
+  sessions worked one tree that day. Run `git status --short -- components/b2b
+  lib/b2b docs/b2b` before starting.
 

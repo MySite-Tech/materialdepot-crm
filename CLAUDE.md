@@ -353,6 +353,13 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
 
+**B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
+`Installation-Changes`. As of 2026-10-28 it is pushed to `origin` with 12
+commits and is **not merged**. No PR is open, so none of it is deployed.
+`docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
+prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
+of it. Don't build on that branch.
+
 **`origin` is a PUBLIC repository** (verified 2026-09-14 via `gh repo view`), as
 are `daaku-daddy/material-depot-site` and `daaku-daddy/B2B-Client-Dashboard`.
 Everything committed here is world-readable: no customer names, phone numbers,
