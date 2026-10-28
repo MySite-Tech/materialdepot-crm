@@ -1,8 +1,8 @@
 'use client';
 
-import { ClientEntity, DuplicateSuggestion, EVIDENCE_IS_EXACT, EVIDENCE_LABEL, MERGE_FIELD_LABEL, MergeChoices, contactNumbers, gstNumbers, mergeConflicts } from '../../../models/client';
-import { Field } from '.';
-import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
+import { ClientEntity, DuplicateSuggestion, EVIDENCE_IS_EXACT, EVIDENCE_LABEL, MERGE_FIELD_LABEL, MergeChoices, contactNumbers, gstNumbers, mergeConflicts } from '../../../../models/client';
+import { Field } from './rows';
+import { btnGhost, btnPrimary, inputCls } from '../../../../constants/ui';
 import { useMemo, useState } from 'react';
 
 export function MergeModal({ clients, suggestions, onClose, onMerge }: {

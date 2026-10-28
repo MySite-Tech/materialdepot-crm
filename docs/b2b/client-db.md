@@ -93,8 +93,45 @@ not visible in the code's shape:
   `saveClient`.
 - Removing the primary number promotes the next one, so a firm is never left
   without one. Removal asks inline, never via `confirm()`.
-- The list and the order tabs page at 25 rows. The stat cards and the strip
+- The list and the order tabs page at 25 rows. The tiles and the strip
   count the full filtered set.
+
+### The list: tiles are lenses, filters narrow them (2026-10-28)
+
+Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
+`clientLensMatches` (`views/client-db/utils.ts`) gives both a tile's count and
+the list it opens. Tiles: All firms · Active · Lapsing soon · Inactive, then
+No KAM, plus Unread only when some firm's orders did not load.
+
+- **Why it changed.** The five tiles were `StatTile`s with no click handler, and
+  a status dropdown did the tiles' job. The tiles counted the dropdown-filtered
+  rows, so picking "Active" turned the Inactive tile to 0. The user reported
+  this as "clicking Active/Inactive is not coming right".
+- **Tiles count the search plus segment/type/KAM scope, never the lens.** So
+  picking a tile cannot change another tile's number. The status dropdown and
+  the KAM dropdown's "Unassigned" option are gone, because the tiles are those
+  filters. Two controls for one predicate drift apart (the badge entry in
+  `docs/landmines.md`).
+- **Lapsing soon is not KAM's At risk.** It uses the same 30-day window
+  (`AT_RISK_WINDOW_DAYS`) with no follow-up condition, because this list has no
+  follow-up queue to judge. It is named differently on purpose. It is the same
+  set the Status pill marks "Nd left".
+- **Each lens has a default order** (`LENS_DEFAULT_SORT`): Lapsing puts the
+  oldest last order first, which means fewest days left. No KAM sorts by
+  revenue, and the rest by most recent order. A column header overrides it, and
+  picking a tile resets it. Unread values sort last in both directions.
+- **Export honours the menu's Current filter / All data.** It used to ignore
+  the scope and always export the filtered list.
+- **A last-order date after today is flagged "future date"** in amber. The date
+  is Django's `lastOrderDate`, and `clientStatus` still counts the firm as
+  Active. On 2026-10-28 one live firm showed 10 Feb 2027.
+
+Verified 2026-10-28 in a browser with real Supabase reads, Supabase writes
+aborted, and Django stubbed (`b2b-bulk` answered with synthetic per-phone
+dates). For every tile, its count equalled its list's `Showing … of N`. All
+equalled Active + Inactive (66 = 40 + 26). Segment 2 narrowed every tile
+(29 / 17 / 12), and removing a chip reset its select. There was no horizontal
+scroll at 390px and no page errors.
 
 ### §2.1's window is anchored to TODAY, and the PRD does not quite say that
 

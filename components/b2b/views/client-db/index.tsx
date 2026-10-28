@@ -1,20 +1,25 @@
 'use client';
 
-import { ACTIVE_WINDOW_MONTHS, CLIENT_ENTITY_TYPES, ClientEntity, ClientStatus, EVIDENCE_IS_EXACT, MergeChoices, SEGMENTS, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact } from '../../models/client';
+import { ACTIVE_WINDOW_MONTHS, ClientEntity, EVIDENCE_IS_EXACT, MergeChoices, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { KAMS, fmtShortINR } from '../../models/mock-data';
+import { AT_RISK_WINDOW_DAYS } from '../../constants/kam';
 import { FirmDrawer } from '../../drawers/firm';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
-import { ExportFormat } from '../../types/export';
+import { ExportFormat, ExportScope } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
-import { StatTile, TemperatureChip } from '../../ui/client-chips';
+import { TemperatureChip } from '../../ui/client-chips';
+import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
-import { PAGE_SIZE } from './constants';
-import { ClientModal } from './ui/client-modal';
-import { MergeModal } from './ui/merge';
+import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
+import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
+import { clientLensMatches, filterChips, matchesFilters, matchesSearch, sortRows } from './utils';
+import { ClientFilterBar, ListHead } from './ui/filters';
+import { ClientModal } from './ui/modals/client-modal';
+import { MergeModal } from './ui/modals/merge';
+import { SeedModal } from './ui/modals/seed';
+import { UploadModal } from './ui/modals/upload';
 import { ClientTable } from './ui/table';
-import { SeedModal } from './seed';
-import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { clientFromSeed, deleteB2BRow, fetchClients, upsertClient } from '@/lib/b2b';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -33,10 +38,9 @@ export default function ClientDatabase() {
   const [page, setPage] = useState(1);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all');
-  const [segmentFilter, setSegmentFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [kamFilter, setKamFilter] = useState('all');
+  const [f, setF] = useState<ClientFilters>(NO_FILTERS);
+  const [lens, setLens] = useState<ClientLens>('all');
+  const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
@@ -60,46 +64,61 @@ export default function ClientDatabase() {
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const digits = q.replace(/\D/g, '');
-    return clients
+  const scoped = useMemo<ClientListRow[]>(() =>
+    clients
+      .filter((c) => matchesFilters(c, f) && matchesSearch(c, search))
       .map((client) => {
         const metrics = metricsFor(client);
         return { client, metrics, status: clientStatus(metrics, today), days: daysToInactive(metrics, today) };
-      })
-      .filter(({ client, status }) => {
-        if (statusFilter !== 'all' && status !== statusFilter) return false;
-        if (segmentFilter !== 'all' && client.segment !== segmentFilter) return false;
-        if (typeFilter !== 'all' && client.clientType !== typeFilter) return false;
-        if (kamFilter !== 'all' && (client.kam || '') !== (kamFilter === 'unassigned' ? '' : kamFilter)) return false;
-        if (!q) return true;
-        return client.company.toLowerCase().includes(q)
-          || (client.contacts || []).some((c) => (c.name || '').toLowerCase().includes(q))
-          || (digits.length >= 4 && contactNumbers(client.contacts).some((p) => p.includes(digits)))
-          || gstNumbers(client.gsts).some((g) => g.toLowerCase().includes(q));
-      })
-      .sort((a, b) =>
-        String(b.metrics.lastOrderPlaced || '').localeCompare(String(a.metrics.lastOrderPlaced || ''))
-        || a.client.company.localeCompare(b.client.company));
-  }, [clients, metricsFor, search, statusFilter, segmentFilter, typeFilter, kamFilter, today]);
+      }),
+  [clients, metricsFor, f, search, today]);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter, segmentFilter, typeFilter, kamFilter]);
+  const byLens = useMemo(() => {
+    const out = Object.fromEntries((Object.keys(CLIENT_LENS) as ClientLens[]).map((k) => [k, [] as ClientListRow[]])) as Record<ClientLens, ClientListRow[]>;
+    for (const r of scoped) for (const k of Object.keys(out) as ClientLens[]) if (clientLensMatches(k, r)) out[k].push(r);
+    return out;
+  }, [scoped]);
 
-  const totals = useMemo(() => {
-    let active = 0, inactive = 0, unassigned = 0, revenue = 0, unread = 0;
-    for (const r of rows) {
-      if (r.status === 'Active') active++;
-      else if (r.status === 'Inactive') inactive++;
-      if (!r.client.kam) unassigned++;
-      if (r.metrics.totalRevenue === undefined) unread++; else revenue += r.metrics.totalRevenue;
-    }
-    return { active, inactive, unassigned, revenue, unread };
-  }, [rows]);
+  const sort = sortPick || LENS_DEFAULT_SORT[lens];
+  const rows = useMemo(() => sortRows(byLens[lens], sort), [byLens, lens, sort]);
+
+  useEffect(() => { setPage(1); }, [search, f, lens, sort]);
+
+  const sumRevenue = (list: ClientListRow[]) => list.reduce((n, r) => n + (r.metrics.totalRevenue || 0), 0);
+  const listRevenue = useMemo(() => sumRevenue(rows), [rows]);
+  const scopeRevenue = useMemo(() => sumRevenue(scoped), [scoped]);
+
+  const pickLens = (k: ClientLens) => { setLens(k); setSortPick(null); };
+  const clearAll = () => { setSearch(''); setF(NO_FILTERS); pickLens('all'); };
+  const filtersSet = !!search.trim() || filterChips(f).length > 0;
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
   const pageRows = rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+
+  const unread = byLens.unknown.length;
+  const neverOrdered = byLens.inactive.filter((r) => r.metrics.dateState === 'no-orders').length;
+  const tileValue = (k: ClientLens): { value: string; sub?: string; warn?: boolean } => {
+    if (loading) return { value: '…', sub: 'loading' };
+    if (loadError) return { value: 'Unknown', sub: 'did not load', warn: true };
+    const n = byLens[k].length;
+    switch (k) {
+      case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} unread` : ''}`, warn: !!unread };
+      case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_WINDOW_MONTHS} months` };
+      case 'lapsing':  return { value: String(n), sub: `go inactive in ${AT_RISK_WINDOW_DAYS} days` };
+      case 'inactive': return { value: String(n), sub: neverOrdered ? `${neverOrdered} never ordered` : `no order in ${ACTIVE_WINDOW_MONTHS} months` };
+      case 'unknown':  return { value: String(n), sub: 'orders did not load', warn: true };
+      case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
+    }
+  };
+  const tile = (k: ClientLens) => ({
+    key: k, title: CLIENT_LENS[k].title, rule: CLIENT_LENS[k].rule, accent: CLIENT_LENS[k].accent,
+    ...tileValue(k), muted: !loading && !loadError && byLens[k].length === 0 && k !== 'all',
+  });
+  const tileGroups: LensTileGroup<ClientLens>[] = [
+    { title: 'Firms by order activity', tiles: STATUS_LENSES.map(tile) },
+    { title: 'Needs attention', tiles: (['nokam', ...(unread ? ['unknown'] : [])] as ClientLens[]).map(tile) },
+  ];
 
   const openRow = useMemo(() => {
     const client = clients.find((c) => c.id === openId);
@@ -150,13 +169,16 @@ export default function ClientDatabase() {
       : null;
   };
 
-  const exportRows = (format: ExportFormat) => {
+  const exportRows = (format: ExportFormat, scope: ExportScope) => {
     const headers = [
       'Company Name', 'Contact Person', 'Primary Contact', 'All Contact Numbers', 'GST Numbers',
       'Segment', 'Client Type', 'Source', 'KAM', 'Client Status',
       'Last Order Placed', 'Number of Orders', 'Total Revenue', 'Average Order Value', 'Temperature', 'Remarks',
     ];
-    const body = rows.map(({ client, metrics, status }) => {
+    const list = scope === 'all'
+      ? sortRows(clients.map((client) => { const metrics = metricsFor(client); return { client, metrics, status: clientStatus(metrics, today) }; }), LENS_DEFAULT_SORT.all)
+      : rows;
+    const body = list.map(({ client, metrics, status }) => {
       const primary = primaryContact(client.contacts);
       const temp = currentTemperature(client.interactions);
       return [
@@ -178,10 +200,11 @@ export default function ClientDatabase() {
         client.remarks || '',
       ];
     });
+    const name = `client-database-${scope === 'all' ? 'all' : lens}-${todayStr()}`;
     setExporting(true);
     try {
-      if (format === 'csv') exportRowsCsv(headers, body, `client-database-${todayStr()}`);
-      else exportRowsExcel(headers, body, `client-database-${todayStr()}`, 'Clients');
+      if (format === 'csv') exportRowsCsv(headers, body, name);
+      else exportRowsExcel(headers, body, name, 'Clients');
     } finally {
       setExporting(false);
     }
@@ -210,10 +233,14 @@ export default function ClientDatabase() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ExportButton onExport={(f) => exportRows(f)} disabled={exporting} />
+          <ExportButton onExport={exportRows} disabled={exporting} />
           <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>
           <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>
-          <button onClick={() => setMerging(true)} className={btnGhost}>
+          <button
+            onClick={() => setMerging(true)}
+            className={btnGhost}
+            title={exactSuggestions.length ? `${exactSuggestions.length} pair${exactSuggestions.length === 1 ? '' : 's'} of firms share a number, GST or PAN and are probably one business` : 'Find and merge duplicate firms'}
+          >
             Merge
             {!!exactSuggestions.length && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">{exactSuggestions.length}</span>}
           </button>
@@ -228,41 +255,18 @@ export default function ClientDatabase() {
         </div>
       )}
 
-      {!loading && !!clients.length && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
-          <StatTile label="Firms" value={rows.length} sub={rows.length === clients.length ? 'all firms' : `of ${clients.length}, filtered`} />
-          <StatTile label="Active" value={totals.active} tone="#15803D" sub={`ordered in the last ${ACTIVE_WINDOW_MONTHS} months`} />
-          <StatTile label="Inactive" value={totals.inactive} tone={totals.inactive ? '#B45309' : undefined} />
-          <StatTile label="No KAM" value={totals.unassigned} tone={totals.unassigned ? '#DC2626' : undefined} sub="need an owner" />
-          <StatTile label="Lifetime revenue" value={fmtShortINR(totals.revenue)} sub={totals.unread ? `${totals.unread} firm${totals.unread === 1 ? '' : 's'} unread` : undefined} />
-        </div>
-      )}
+      {(loading || !!clients.length) && <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />}
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search company, contact, number or GST…"
-          className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white outline-none focus:border-[#0F766E] w-full sm:w-[280px]"
+      {!!clients.length && (
+        <ClientFilterBar
+          f={f}
+          set={(patch) => setF((p) => ({ ...p, ...patch }))}
+          search={search}
+          setSearch={setSearch}
+          kamOptions={kamOptions}
+          onClear={clearAll}
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | ClientStatus)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All statuses</option>
-          {(['Active', 'Inactive', 'Unknown'] as ClientStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={segmentFilter} onChange={(e) => setSegmentFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All segments</option>
-          {SEGMENTS.map((s) => <option key={s} value={s}>Segment {s}</option>)}
-        </select>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All types</option>
-          {CLIENT_ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All KAMs</option>
-          <option value="unassigned">Unassigned</option>
-          {kamOptions.map((k) => <option key={k} value={k}>{k}</option>)}
-        </select>
-      </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-400 py-8 text-center">Loading clients…</p>
@@ -280,20 +284,43 @@ export default function ClientDatabase() {
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <ListHead
+            lens={lens}
+            shown={rows.length}
+            total={clients.length}
+            revenue={listRevenue}
+            unread={rows.filter((r) => r.status === 'Unknown').length}
+            f={f}
+            search={search}
+            onLens={pickLens}
+            onFilter={(k) => setF((p) => ({ ...p, [k]: NO_FILTERS[k] }))}
+            onSearch={() => setSearch('')}
+            onClearAll={clearAll}
+          />
           {rows.length ? (
-            <ClientTable rows={pageRows} onOpen={(c) => setOpenId(c.id)} />
+            <ClientTable rows={pageRows} today={today} sort={sort} onSort={setSortPick} onOpen={(c) => setOpenId(c.id)} />
           ) : (
-            <p className="text-[12px] text-gray-400 py-10 text-center">No firm matches these filters.</p>
-          )}
-          <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-100 text-[11px] text-gray-500 flex-wrap">
-            <span>{rows.length ? `Showing ${(curPage - 1) * PAGE_SIZE + 1}–${Math.min(curPage * PAGE_SIZE, rows.length)} of ${rows.length}` : `0 of ${clients.length}`}</span>
-            {rows.length > PAGE_SIZE && (
-              <div className="flex gap-2">
-                <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
-                <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+            <div className="py-12 px-6 text-center">
+              <p className="text-[13px] font-semibold text-gray-600">
+                {filtersSet ? `No firm in ${CLIENT_LENS[lens].heading} matches the search and filters.` : CLIENT_LENS[lens].empty}
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                {filtersSet && <button onClick={() => { setSearch(''); setF(NO_FILTERS); }} className={btnGhost}>Clear search and filters</button>}
+                {lens !== 'all' && <button onClick={() => pickLens('all')} className={btnGhost}>Show all firms</button>}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+          {rows.length > 0 && (
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-100 text-[11px] text-gray-500 flex-wrap">
+              <span>Showing {(curPage - 1) * PAGE_SIZE + 1}–{Math.min(curPage * PAGE_SIZE, rows.length)} of {rows.length}</span>
+              {rows.length > PAGE_SIZE && (
+                <div className="flex gap-2">
+                  <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
+                  <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

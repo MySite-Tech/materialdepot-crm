@@ -1,6 +1,6 @@
 'use client';
 
-import { btnGhost, btnPrimary } from '../../constants/ui';
+import { btnGhost, btnPrimary } from '../../../../constants/ui';
 import { ClientSeedPlan, planClientSeed } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 

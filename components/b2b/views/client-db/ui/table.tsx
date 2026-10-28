@@ -1,34 +1,62 @@
 'use client';
 
 import { fmtDate, fmtGst, fmtPhone } from '../../../drawers/firm/utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactLabel, contactNumbers, currentTemperature, gstNumbers, primaryContact } from '../../../models/client';
+import { ClientEntity, contactLabel, contactNumbers, currentTemperature, gstNumbers, primaryContact } from '../../../models/client';
 import { fmtShortINR } from '../../../models/mock-data';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
-
-export interface ClientListRow {
-  client: ClientEntity;
-  metrics: ClientOrderMetrics;
-  status: ClientStatus;
-  days?: number;
-}
+import { SORT_FIRST_DIR } from '../constants';
+import { ClientListRow, SortKey, SortState } from '../types';
+import { sinceLabel } from '../utils';
 
 function More({ n }: { n: number }) {
   if (n <= 0) return null;
   return <span className="ml-1.5 px-1.5 py-px rounded-full bg-gray-100 text-gray-500 text-[10px] font-semibold font-sans">+{n}</span>;
 }
 
-export function ClientTable({ rows, onOpen }: { rows: ClientListRow[]; onOpen: (c: ClientEntity) => void }) {
+function SortTh({ label, k, sort, onSort, align = 'left', className = '' }: {
+  label: string;
+  k: SortKey;
+  sort: SortState;
+  onSort: (s: SortState) => void;
+  align?: 'left' | 'right';
+  className?: string;
+}) {
+  const on = sort.key === k;
+  const next: SortState = on
+    ? { key: k, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+    : { key: k, dir: SORT_FIRST_DIR[k] };
+  return (
+    <th className={`font-semibold py-2.5 ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}>
+      <button
+        onClick={() => onSort(next)}
+        title={`Sort by ${label.toLowerCase()}`}
+        className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-gray-800 ${on ? 'text-gray-800' : ''}`}
+      >
+        {label}
+        <span className={on ? '' : 'opacity-0 group-hover/th:opacity-40'}>{on && sort.dir === 'asc' ? '▲' : '▼'}</span>
+      </button>
+    </th>
+  );
+}
+
+export function ClientTable({ rows, today, sort, onSort, onOpen }: {
+  rows: ClientListRow[];
+  today: string;
+  sort: SortState;
+  onSort: (s: SortState) => void;
+  onOpen: (c: ClientEntity) => void;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px] min-w-[1000px]">
         <thead>
-          <tr className="bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider border-b border-gray-200">
-            <th className="text-left font-semibold px-4 py-2.5">Firm</th>
+          <tr className="group/th bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider border-b border-gray-200">
+            <SortTh label="Firm" k="company" sort={sort} onSort={onSort} className="px-4" />
             <th className="text-left font-semibold px-3 py-2.5">Primary contact</th>
             <th className="text-left font-semibold px-3 py-2.5">GST</th>
-            <th className="text-right font-semibold px-3 py-2.5">Orders</th>
-            <th className="text-right font-semibold px-3 py-2.5">Revenue</th>
-            <th className="text-left font-semibold px-3 py-2.5">Last order</th>
+            <SortTh label="Orders" k="orders" sort={sort} onSort={onSort} align="right" className="px-3" />
+            <SortTh label="Revenue" k="revenue" sort={sort} onSort={onSort} align="right" className="px-3" />
+            <SortTh label="Last order" k="lastOrder" sort={sort} onSort={onSort} className="px-3 pl-5" />
             <th className="text-left font-semibold px-3 py-2.5">Status</th>
             <th className="text-left font-semibold px-3 py-2.5">KAM</th>
             <th className="w-6" />
@@ -40,12 +68,18 @@ export function ClientTable({ rows, onOpen }: { rows: ClientListRow[]; onOpen: (
             const numbers = contactNumbers(client.contacts);
             const gsts = gstNumbers(client.gsts);
             const temp = currentTemperature(client.interactions);
+            const since = sinceLabel(metrics.lastOrderPlaced, today);
             return (
               <tr key={client.id} onClick={() => onOpen(client)} className="group border-t border-gray-100 cursor-pointer hover:bg-teal-50/40">
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-[13px] text-gray-900">{client.company || <span className="text-gray-300">(unnamed)</span>}</span>
-                    {temp && <TemperatureChip value={temp.value} at={temp.at} />}
+                    {temp && (
+                      <span className="inline-flex items-center gap-1" title="Temperature: the KAM's latest 0–10 reading of the account">
+                        <span className="text-[9px] uppercase tracking-wider text-gray-400">temp</span>
+                        <TemperatureChip value={temp.value} at={temp.at} />
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-gray-400 mt-0.5">
                     {[client.clientType, client.segment && `Segment ${client.segment}`].filter(Boolean).join(' · ') || 'Type and segment not set'}
@@ -65,14 +99,30 @@ export function ClientTable({ rows, onOpen }: { rows: ClientListRow[]; onOpen: (
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono text-gray-700"><Metric value={metrics.orders} state={metrics.dateState} /></td>
                 <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900 whitespace-nowrap"><Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtShortINR} /></td>
-                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">
-                  <Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} />
+                <td className="px-3 pl-5 py-2.5 whitespace-nowrap">
+                  {metrics.dateState === 'no-orders'
+                    ? <span className="text-gray-400">Never ordered</span>
+                    : (
+                      <>
+                        <div className="text-gray-700"><Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} /></div>
+                        {since && (
+                          <div
+                            className={`text-[10.5px] mt-0.5 ${since === 'future date' ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}
+                            title={since === 'future date' ? 'This date is after today, so a ticket is probably mis-dated in Django. It still counts the firm as Active.' : undefined}
+                          >
+                            {since}
+                          </div>
+                        )}
+                      </>
+                    )}
                 </td>
-                <td className="px-3 py-2.5"><StatusPill status={status} days={days} /></td>
+                <td className="px-3 py-2.5">
+                  <StatusPill status={status} days={days} />
+                </td>
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   {client.kam
                     ? <span className="text-gray-700">{client.kam}</span>
-                    : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700">Unassigned</span>}
+                    : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700">No KAM</span>}
                 </td>
                 <td className="pr-3 text-gray-300 group-hover:text-[#0F766E] text-[14px]">›</td>
               </tr>

@@ -1,13 +1,12 @@
 'use client';
 
-import { KAMS } from '../../../models/mock-data';
+import { KAMS } from '../../../../models/mock-data';
 
-import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, ClientEntity, ClientEntityType, ClientSource, SEGMENTS, Segment, clientEnrichmentGaps, clientGateErrors, normalizeContactNumber, normalizeGst } from '../../../models/client';
+import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, ClientEntity, ClientEntityType, ClientSource, SEGMENTS, Segment, clientEnrichmentGaps, clientGateErrors, normalizeContactNumber, normalizeGst } from '../../../../models/client';
 import { useState } from 'react';
 
-import { ContactRows, GstRows } from './rows';
-import { Field } from '.';
-import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
+import { ContactRows, Field, GstRows } from './rows';
+import { btnGhost, btnPrimary, inputCls } from '../../../../constants/ui';
 
 export function ClientModal({ client, isNew, onClose, onSave }: {
   client: ClientEntity;

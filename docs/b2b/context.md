@@ -14,7 +14,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, tiles as clickable lenses, the widened search, the Enq-ID resolve | 339 |
 | [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation; the 2026-10-28 rebuild — scope, Inbound pool, CSV import, journey log, reminders, conversion rules, KAM handover, Studio Space waitlist, KPIs with their rows and periods; the tile-lens page layout | 328 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 44 |
-| [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; parent-company grouping and why name is never a merge key | 242 |
+| [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; the list's lens tiles, chips and per-lens sort; parent-company grouping and why name is never a merge key | 280 |
 | [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; tiles as clickable lenses; call dedupe | 195 |
 | [`data-layer.md`](data-layer.md) | `lib/b2b` read shapes, the Kylas `total=0` trap, the `ok`-flag rule, the roster, the two revenue numbers, chart colours, split load | 120 |
 | [`partner-content.md`](partner-content.md) | The Partner Content sub-tab: banners and New Launches pushed onto partner dashboards. No CRM-side store, the push is a diff, images travel as bytes | 95 |
@@ -33,6 +33,9 @@ a new session knows what is live and what is being worked on.
   paged table, and the side panels are gone. A Kylas or database failure now
   reads "Unknown" rather than "0 · all called". See `inbound.md` §The tiles are
   the navigation and the Kylas-outage entry in `docs/landmines.md`.
+- **Client Database: the same lens tiles, built 2026-10-28.** All · Active ·
+  Lapsing soon · Inactive · No KAM, removable filter chips and sortable
+  columns. The status dropdown is gone. See `client-db.md` §The list.
 - **KAM: the same lens tiles, built 2026-10-28** (slice 3, minus Tier and Studio
   Space). See `kam.md` §The tiles are the navigation. Both tabs use
   `components/b2b/ui/lens-tiles.tsx`. **Outreach's own `LensStrip`

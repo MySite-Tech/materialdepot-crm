@@ -22,7 +22,7 @@ export function StatusPill({ status, days }: { status: ClientStatus; days?: numb
     >
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />
       {status}
-      {status === 'Active' && days !== undefined && days <= 30 && <span className="font-mono">{days}d</span>}
+      {status === 'Active' && days !== undefined && days <= 30 && <span className="font-mono">{days}d left</span>}
     </span>
   );
 }
