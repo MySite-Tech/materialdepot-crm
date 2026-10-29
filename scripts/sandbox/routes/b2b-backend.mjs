@@ -68,6 +68,15 @@ function putEcVisit(db, body) {
   return row;
 }
 
+function studioLogins(db) {
+  const phones = db.rows.filter((r) => r.pipeline === 'client').flatMap((r) => (r.meta_data?.contacts ?? []).map((c) => String(c.number).replace(/\D/g, '').slice(-10)));
+  return {
+    logins: phones.slice(0, 4).map((phone, i) => ({
+      phone, firm_name: 'Sandbox Studio', role: 'principal', visible_tabs: i % 2 ? ['rewards'] : null, power: i % 2 === 0,
+    })),
+  };
+}
+
 function listEcVisits(db, query) {
   const clientId = query.get('client_id');
   const from = query.get('from');
@@ -117,6 +126,7 @@ export function backendRoutes(db) {
       return { deleted: before - db.rows.length };
     }
     if (path === '/kam-load') return kamLoad(db);
+    if (path === '/studio-access') return studioLogins(db);
     if (path === '/target' && method === 'GET') return db.target;
     if (path === '/target' && method === 'POST') { db.target = { ...body, updated_at: new Date().toISOString() }; return db.target; }
 

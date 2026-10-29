@@ -1,10 +1,10 @@
 'use client';
 
 import { fmtPhone } from '../../../drawers/firm/utils';
-import { ClientEntity, STUDIO_ACCESS, isOnboarded, normalizeContactNumber } from '../../../models/client';
+import { ClientEntity, STUDIO_ACCESS, StudioLogins, normalizeContactNumber, studioAccessOf, studioLoginOf } from '../../../models/client';
 import { StudioRow } from '../types';
 
-export function StudioTable({ rows, onOpen }: { rows: StudioRow[]; onOpen: (c: ClientEntity) => void }) {
+export function StudioTable({ rows, logins, onOpen }: { rows: StudioRow[]; logins: StudioLogins; onOpen: (c: ClientEntity) => void }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px] min-w-[760px]">
@@ -19,7 +19,7 @@ export function StudioTable({ rows, onOpen }: { rows: StudioRow[]; onOpen: (c: C
         </thead>
         <tbody>
           {rows.map(({ client, studio }) => {
-            const onboarded = (client.contacts || []).filter((c) => normalizeContactNumber(c.number) && isOnboarded(c));
+            const onboarded = (client.contacts || []).filter((c) => normalizeContactNumber(c.number) && studioLoginOf(c, logins));
             return (
               <tr key={client.id} onClick={() => onOpen(client)} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer align-top">
                 <td className="px-4 py-2.5 font-semibold text-gray-800">{client.company || <span className="text-gray-400 italic">Unnamed firm</span>}</td>
@@ -28,10 +28,10 @@ export function StudioTable({ rows, onOpen }: { rows: StudioRow[]; onOpen: (c: C
                   {onboarded.length ? (
                     <div className="flex flex-wrap gap-1">
                       {onboarded.map((c) => (
-                        <span key={c.number} title={`${STUDIO_ACCESS[c.studioAccess!].hint}${c.label ? ` · ${c.label}` : ''}`}
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${c.studioAccess === 'power' ? 'bg-teal-50 text-[#0F766E]' : 'bg-gray-100 text-gray-600'}`}>
+                        <span key={c.number} title={`${STUDIO_ACCESS[studioAccessOf(c, logins)!].hint}${c.label ? ` · ${c.label}` : ''}`}
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${studioAccessOf(c, logins) === 'power' ? 'bg-teal-50 text-[#0F766E]' : 'bg-gray-100 text-gray-600'}`}>
                           <span className="font-mono">{fmtPhone(c.number)}</span>
-                          {c.studioAccess === 'power' ? 'Power' : 'Orders + Rewards'}
+                          {studioAccessOf(c, logins) === 'power' ? 'Power' : 'Normal'}
                         </span>
                       ))}
                     </div>

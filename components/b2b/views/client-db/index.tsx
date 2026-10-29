@@ -6,6 +6,7 @@ import { KAMS, fmtShortINR } from '../../models/mock-data';
 import { FirmDrawer } from '../../drawers/firm';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
+import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { AssignBar } from '../../ui/assign-bar';
 import { useFirmAssign } from './hooks/use-firm-assign';
 import { TemperatureChip } from '../../ui/client-chips';
@@ -48,6 +49,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
   });
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
+  const studio = useStudioLogins();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -281,6 +283,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             <ClientTable
               rows={pageRows}
               today={today}
+              studio={studio}
               sort={sort}
               onSort={setSortPick}
               onOpen={(c) => setOpenId(c.id)}

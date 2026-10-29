@@ -66,8 +66,8 @@ export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, s
 export const STUDIO_SPACE_URL = 'https://studio.materialdepot.com';
 
 export const STUDIO_ACCESS: Record<StudioAccess, { label: string; hint: string }> = {
-  power:       { label: 'Power user',     hint: 'Sees the whole Studio Space dashboard' },
-  'non-power': { label: 'Non-power user', hint: 'Sees only the Orders and Rewards tabs' },
+  power:       { label: 'Power user',  hint: 'Sees the whole Studio Space dashboard' },
+  'non-power': { label: 'Normal user', hint: 'Restricted: Studio Space has switched some tabs off for this login' },
 };
 
 export const CONTACT_CLASSES = ['Owner', 'Partner', 'Designer', 'Purchase', 'Accounts', 'Site'] as const;
