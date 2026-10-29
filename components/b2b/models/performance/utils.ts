@@ -1,6 +1,6 @@
 import { sameRep } from '../outreach/handover';
 import { Period, isWholeMonth } from '../outreach/kpis';
-import { Goals, PerfCard, PerfKpiDef, PerfRow, PerfValue, Person } from './types';
+import { Goals, PerfCard, PerfData, PerfKpiDef, PerfRow, PerfValue, Person } from './types';
 import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -96,4 +96,9 @@ export function withDataPeople(people: Person[], names: (string | undefined)[], 
     out.push({ key: personKey(name), name, onTeam });
   }
   return out;
+}
+
+export function onTeamList(data: PerfData, team: B2BTeam, name: string | undefined): boolean {
+  const list = (data.members || []).filter((m) => m.team === team && m.active);
+  return !list.length || list.some((m) => sameRep(name, m.name));
 }

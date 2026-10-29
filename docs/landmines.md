@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-65 entries. They live in one file because they cross-reference each other —
+66 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -75,6 +75,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Call duration typed in minutes showed as seconds
 - B2B calls and notes written to Kylas through the API key were credited to the key's owner
 - A rep with no team identity fell through to every rep's leads
+- Work a manager logged on a rep's lead counted for nobody
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1051,3 +1052,16 @@ grep for a term, then read around the line you hit rather than opening all of it
   **when a scope cannot tell who someone is, it must narrow, not widen.**
   "Show everything with a warning" is a fair soft gate for a missing feature, but
   not for an access rule.
+
+- **Work a manager logged on a rep's lead counted for nobody** (fixed
+  2026-10-30). Inbound calls credit `CallAttempt.by` and KAM meetings and calls
+  credit `interaction.loggedBy`, which is correct for a rep logging their own
+  work. But the user, signed in as the manager, logged a Connected call on
+  Asha's lead, and Asha's Calls on the Leadership Board did not move. The call
+  went to the manager, who is on no team, so no card showed it. It looked like
+  the KPIs were not wired to the CRM at all. Now a logger who is not on that
+  team's list is replaced by the lead's owner or the firm's KAM (`onTeamList`,
+  `leadership.md`). The shape: **crediting the actor is right only when the
+  actor is someone being scored**; otherwise the work belongs to the record's
+  owner. The inverse of "A logged call recorded the lead's owner as the
+  caller".

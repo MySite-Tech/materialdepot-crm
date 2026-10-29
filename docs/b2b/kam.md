@@ -171,8 +171,8 @@ the history was not read. Checked at each boundary in Node.
 drives the "Lapses in" column and the pill's "Nd left".
 
 Everything KAM reads it: the tab's tiles, the Firm page opened from KAM (through
-`statusScale`), and the B2B Dashboard's KAM section. That section's spoc split
-and At-Risk Accounts panel now treats at-risk as **Inactive 1 month with no
+`statusScale`), and the B2B Overview's KAM desk and Needs attention list (`overview.md`). Those
+now treat at-risk as **Inactive 1 month with no
 follow-up or an overdue one**, counted in days to 60. It also feeds the
 Leadership Board's KAM coverage denominator (`leadership.md`). The old At risk
 tile is gone: it was "Active, within 30 days of the 3-month cutoff", and the
