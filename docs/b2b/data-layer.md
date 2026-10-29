@@ -186,19 +186,17 @@ They live here now because the code cannot carry them.
   is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
   data, not a bug to tune away.
 
-- **Targets is still a third number**: it sums the
-  `value` field on closed Supabase rows, and will not reconcile with either
-  Django figure. Do not "fix" a mismatch by making one read the other; check
-  which source the panel is meant to speak for. Targets was compounding this by
-  comparing an **all-time** sum against a **monthly** goal, so its percentage
-  only ever climbed; `computeTargets` now takes a range and the tab passes the
-  current month.
+- **Targets is still a third number**: its B2B Target card adds up the
+  Inbound, Outreach and KAM Revenue KPIs (`leadership.md` §Targets tab), which
+  count Enq-fetched values on closed backend rows. It will not reconcile with
+  either Django figure. Do not "fix" a mismatch by making one read the other;
+  check which source the panel is meant to speak for.
 
 - **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**
   It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`
   (full names + phone numbers, keying the Dashboard's per-vertical stats) and
-  `KAMS`/`B2B_REPS`/`REP_TARGETS` in `models/mock-data.ts` (short names, keying
-  every dropdown, filter and Targets card). `Jadhav` vs `Krishna Jadhav`,
+  `KAMS`/`B2B_REPS` in `models/mock-data.ts` (short names, keying
+  every dropdown and filter). Targets no longer reads the roster (`leadership.md`). `Jadhav` vs `Krishna Jadhav`,
   `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
   so they drove revenue on the Dashboard and appeared nowhere on Targets or the
   old leaderboard. Everything now derives from `B2B_ROSTER`.

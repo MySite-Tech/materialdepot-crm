@@ -483,7 +483,7 @@ Opening a firm adds 1.
 
 Progress: step 1 is done as `b2b.manager` only, with team membership in
 `b2b_team_member` instead of slugs. Step 2 is done for Inbound and Outreach;
-KAM lists and Targets still read `B2B_ROSTER`. Step 3 was
+KAM lists still read `B2B_ROSTER`; Targets moved to the team list on 2026-10-29. Step 3 was
 built per team as each tab's own scope ("Mine", "My day"), and the
 cross-day view of it is "My performance" (step 4). Step 4 is built (see
 `leadership.md`). Steps 5–6 have not started.

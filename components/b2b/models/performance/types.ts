@@ -68,6 +68,13 @@ export interface TeamEngine {
   card: (data: PerfData, people: Person[], period: Period) => PerfCard;
 }
 
+export type Goals = Record<string, Record<string, number>>;
+
+export interface TargetStore {
+  monthlyTargetL: number;
+  goals: Goals;
+}
+
 export interface DayRow {
   day: string;
   card: PerfCard;

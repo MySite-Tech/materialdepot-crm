@@ -11,27 +11,24 @@ export interface B2BRep {
   vertical?: string;
 
   assignable: boolean;
-  revenueTargetL: number;
-  clientsTarget: number;
-  onboardingsTarget: number;
 }
 
 export const B2B_ROSTER: B2BRep[] = [
-  { name: 'Krishna Bhagavatula', fullName: 'Krishna Bhagavatula', role: 'Admin', assignable: true, revenueTargetL: 0, clientsTarget: 0, onboardingsTarget: 0 },
+  { name: 'Krishna Bhagavatula', fullName: 'Krishna Bhagavatula', role: 'Admin', assignable: true },
 
-  { name: 'Tharun',    fullName: 'Tharun',              contact: '8309230101', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true, revenueTargetL: 8, clientsTarget: 12, onboardingsTarget: 0 },
-  { name: 'Jadhav',    fullName: 'Krishna Jadhav',      contact: '9187200807', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true, revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
-  { name: 'Sidhant',   fullName: 'Sidhant',                                    role: 'KAM',                                 assignable: true, revenueTargetL: 7, clientsTarget: 10, onboardingsTarget: 0 },
-  { name: 'Sai Suresh', fullName: 'Sai Suresh',         contact: '9187953228', role: 'KAM',                                 assignable: true, revenueTargetL: 0, clientsTarget: 0,  onboardingsTarget: 0 },
+  { name: 'Tharun',    fullName: 'Tharun',              contact: '8309230101', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true },
+  { name: 'Jadhav',    fullName: 'Krishna Jadhav',      contact: '9187200807', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true },
+  { name: 'Sidhant',   fullName: 'Sidhant',                                    role: 'KAM',                                 assignable: true },
+  { name: 'Sai Suresh', fullName: 'Sai Suresh',         contact: '9187953228', role: 'KAM',                                 assignable: true },
 
-  { name: 'Hardi',     fullName: 'Hardi Patel',         contact: '9187191018', role: 'Inbound',  vertical: 'Inbound',       assignable: true, revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
-  { name: 'Mandeep',   fullName: 'Mandeep Ghai',        contact: '7223048042', role: 'Inbound',  vertical: 'Inbound',       assignable: true, revenueTargetL: 5, clientsTarget: 0,  onboardingsTarget: 8 },
+  { name: 'Hardi',     fullName: 'Hardi Patel',         contact: '9187191018', role: 'Inbound',  vertical: 'Inbound',       assignable: true },
+  { name: 'Mandeep',   fullName: 'Mandeep Ghai',        contact: '7223048042', role: 'Inbound',  vertical: 'Inbound',       assignable: true },
 
-  { name: 'Vilok',     fullName: 'Vilok Reddy',         contact: '9980123308', role: 'Outbound', vertical: 'Outreach',      assignable: true, revenueTargetL: 6, clientsTarget: 0,  onboardingsTarget: 6 },
-  { name: 'Praful',    fullName: 'Prafful Bhati',       contact: '8233435000', role: 'Outbound', vertical: 'Outreach',      assignable: true, revenueTargetL: 6, clientsTarget: 0,  onboardingsTarget: 6 },
+  { name: 'Vilok',     fullName: 'Vilok Reddy',         contact: '9980123308', role: 'Outbound', vertical: 'Outreach',      assignable: true },
+  { name: 'Praful',    fullName: 'Prafful Bhati',       contact: '8233435000', role: 'Outbound', vertical: 'Outreach',      assignable: true },
 
-  { name: 'Manikanta', fullName: 'Manikanta',           contact: '9059903118', role: 'KAM',      vertical: 'HYD',           assignable: true, revenueTargetL: 0, clientsTarget: 0,  onboardingsTarget: 0 },
-  { name: 'Shahrukh',  fullName: 'Shahrukh Irshad Ali', contact: '9187200815', role: 'KAM',      vertical: 'HYD',           assignable: true, revenueTargetL: 0, clientsTarget: 0,  onboardingsTarget: 0 },
+  { name: 'Manikanta', fullName: 'Manikanta',           contact: '9059903118', role: 'KAM',      vertical: 'HYD',           assignable: true },
+  { name: 'Shahrukh',  fullName: 'Shahrukh Irshad Ali', contact: '9187200815', role: 'KAM',      vertical: 'HYD',           assignable: true },
 ];
 
 export const B2B_ADMINS: string[] = B2B_ROSTER.filter((r) => r.role === 'Admin').map((r) => r.name);
@@ -41,8 +38,6 @@ export const ASSIGNABLE_REPS: string[] = B2B_ROSTER.filter((r) => r.assignable).
 export const KAMS: string[] = ASSIGNABLE_REPS;
 
 export const B2B_REPS: string[] = ASSIGNABLE_REPS;
-
-export const TARGET_REPS: B2BRep[] = B2B_ROSTER.filter((r) => r.assignable && r.role !== 'Admin');
 
 export const DEFAULT_ASSIGNEE = ASSIGNABLE_REPS[0];
 

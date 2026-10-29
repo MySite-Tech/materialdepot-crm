@@ -1,10 +1,11 @@
 'use client';
 
 import { Period } from '../../../models/outreach/kpis';
-import { PerfCard, PerfKpiDef, PerfValue } from '../../../models/performance/types';
+import { Goals, PerfCard, PerfKpiDef, PerfValue, Person } from '../../../models/performance/types';
 import { counted, elapsedDays, fmtNumber, fmtValue, paceFor, targetFor, tone } from '../../../models/performance/utils';
 import { Pager } from '../../kams/ui';
 import { PAGE_SIZE } from '../constants';
+import type { B2BTeam } from '@/lib/b2b/team/types';
 import { fmtDay } from '../utils';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -18,10 +19,9 @@ function hintFor(def: PerfKpiDef, k: PerfValue, days: number): { text: string; w
   return undefined;
 }
 
-function Tile({ def, k, heads, period, today, loading, on, onPick }: {
-  def: PerfKpiDef; k: PerfValue; heads: number; period: Period; today: string; loading: boolean; on: boolean; onPick: () => void;
+function Tile({ def, k, target, period, today, loading, on, onPick }: {
+  def: PerfKpiDef; k: PerfValue; target: number | null; period: Period; today: string; loading: boolean; on: boolean; onPick: () => void;
 }) {
-  const target = targetFor(def, heads, period, today);
   const pace = paceFor(def, period, today);
   const t = tone(loading ? null : k.value, target, pace);
   const width = loading || k.value === null || !target ? 0 : Math.min(100, Math.round((k.value / target) * 100));
@@ -53,10 +53,12 @@ function Tile({ def, k, heads, period, today, loading, on, onPick }: {
   );
 }
 
-export function Scorecard({ defs, card, heads, period, today, loading, active, onPick }: {
+export function Scorecard({ defs, card, team, people, goals, period, today, loading, active, onPick }: {
   defs: PerfKpiDef[];
   card: PerfCard;
-  heads: number;
+  team: B2BTeam;
+  people: Person[];
+  goals: Goals;
   period: Period;
   today: string;
   loading: (key: string) => boolean;
@@ -72,7 +74,7 @@ export function Scorecard({ defs, card, heads, period, today, loading, active, o
             <div className="px-3.5 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{kind}</div>
             <div className={`grid grid-cols-2 ${list.length > 3 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
               {list.map((d) => (
-                <Tile key={d.key} def={d} k={card[d.key]} heads={heads} period={period} today={today}
+                <Tile key={d.key} def={d} k={card[d.key]} target={targetFor(d, team, people, goals, period, today)} period={period} today={today}
                   loading={loading(d.key)} on={active === d.key} onPick={() => onPick(d.key)} />
               ))}
             </div>
