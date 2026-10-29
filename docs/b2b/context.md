@@ -15,7 +15,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation; the 2026-10-28 rebuild — scope, Inbound pool, no bulk import, the capture gate (role, team size, people, who was met, next follow-up), journey log, reminders, conversion rules, KAM handover, Studio Space waitlist, KPIs with their rows and periods; the tile-lens page layout | 376 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 44 |
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; the list's lens tiles, chips and per-lens sort; parent-company grouping and why name is never a merge key | 280 |
-| [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; tiles as clickable lenses; call dedupe | 195 |
+| [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; tiles as clickable lenses; the 30/60-day account status; call dedupe; the unbuilt per-PI and check-in specs | 228 |
 | [`data-layer.md`](data-layer.md) | `lib/b2b` read shapes, the Kylas `total=0` trap, the `ok`-flag rule, the roster, the two revenue numbers, chart colours, split load | 120 |
 | [`partner-content.md`](partner-content.md) | The Partner Content sub-tab: banners and New Launches pushed onto partner dashboards. No CRM-side store, the push is a diff, images travel as bytes | 95 |
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
@@ -45,6 +45,17 @@ a new session knows what is live and what is being worked on.
   tidy-up, so that all four tabs share one tile shape.
 - **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
   It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
+- **KAM: its own 30 / 60-day status, and no header buttons (2026-10-29).**
+  Active = ordered in the last 30 days, Inactive 1 month = 31–60 days,
+  Inactive = more than 60 days or none. **KAM only**: Client Database keeps the
+  3-month `clientStatus`, so one firm can differ between the two tabs on
+  purpose. The dashboard's KAM section and Leadership KAM coverage follow the
+  KAM rule. Export, Upload Orders and + Add Order are gone from the tab header
+  (orders are added from a firm's page). See `kam.md` §Account status.
+- **KAM, still to build (user's spec, 2026-10-29):** a follow-up date and a
+  closure date **per PI** (follow-ups are per firm today), and a location plus
+  photo-in-uniform check-in before every offline meeting for Outreach and KAM.
+  Neither is started. Open questions are in `kam.md` §Not built yet.
   sessions worked one tree that day. Run `git status --short -- components/b2b
   lib/b2b docs/b2b` before starting.
 

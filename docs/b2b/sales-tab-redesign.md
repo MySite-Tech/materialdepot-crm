@@ -300,9 +300,12 @@ a KAM's performance, and an admin view that can filter across everything.
   own book. **Client DB** stays as the managers' master list: unassigned firms,
   assignment, merge, bulk upload. The page replaces both `views/kams/drawer.tsx`
   and Client DB's expanded row, which today render the same firm two ways.
-- **Active / Inactive is `clientStatus`, unchanged.** The brief's rule ("any
-  order in the last 3 months") is what it already computes, anchored to today
-  (see `client-db.md`). Do not write a second one.
+- **Active / Inactive is `clientStatus` on Client DB only.** It means any
+  order in the last 3 months, anchored to today (see `client-db.md`). On
+  2026-10-29 the user overrode "no second rule" for KAM. KAM uses
+  `kamAccountStatus`: Active within 30 days, Inactive 1 month at 31–60 days,
+  Inactive beyond that. See `kam.md` §Account status. Don't merge the two back
+  into one rule.
 - **Power user / Normal user is a label, set by `b2b.manager` only.** KAMs see it
   and cannot change it. It applies to Active firms only; on an Inactive firm it
   is kept but shown greyed out. It is **not** derived from studio.materialdepot.com

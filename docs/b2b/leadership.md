@@ -112,9 +112,10 @@ matches nothing sees a notice, not an empty card.
 - **KAM meetings and calls are one per firm per day**, credited to
   `interaction.loggedBy`, falling back to the firm's KAM. Same dedupe as
   `callsLoggedOn`.
-- **KAM coverage** uses 3-month firm status (`clientStatus`, as of today) as its
-  denominator. That is the proposal in `sales-tab-redesign.md` §KAM and is
-  still unconfirmed. Against the Django stub every firm is Inactive, so it
+- **KAM coverage** uses the KAM tab's Active (`kamAccountStatus`: an order in
+  the last 30 days, as of today) as its denominator, since 2026-10-29. It was
+  3-month `clientStatus` before. `kpi-definitions.md` requires one meaning of
+  "active" across KAM. Against the Django stub every firm is Inactive, so it
   reads "—".
 - **KAM accounts ordering** = firms with a Closed KAM-board order in the period,
   or a `lastOrderPlaced` in the period, ÷ firms whose history loaded. The

@@ -108,8 +108,9 @@ list. On 2026-10-28 every tile matched its rows in a browser on real Supabase
 data, with Django stubbed.
 
 - **Follow-ups:** Overdue · Due today · No follow-up · Called today.
-  **Accounts:** Assigned · Active · At risk. **Orders:** Open orders · Pipeline.
-  Upcoming, Inactive and Order board are pills. The four follow-up buckets
+  **Accounts:** Assigned · Active · Inactive 1 month · Inactive (see §Account
+  status). **Orders:** Open orders · Pipeline. Upcoming and Order board are
+  pills. The four follow-up buckets
   partition the book: 9 + 2 + 44 + 11 = 66 firms on that day.
 - **They replaced the `KAM_VIEWS` chips**, which listed the same four things as
   the tiles under different names and counts. The Assigned Clients chip counted
@@ -126,8 +127,8 @@ data, with Django stubbed.
   summed.
 - **Overdue stays oldest-first** (§4.3 FIFO). Its age chip counts days past the
   follow-up date, the same number the old queue's `agedDays` showed, banded by
-  `queueAgeBand`. It is not days since contact. At risk sorts by
-  `daysToInactive`, and No follow-up puts the longest silence first. Assigned
+  `queueAgeBand`. It is not days since contact. Inactive 1 month sorts by
+  `kamDaysToLapse`, closest to 60 days first, and No follow-up puts the longest silence first. Assigned
   keeps the old order: overdue, then due, then the rest by silence.
 - **Called today counts firms in scope**, so on "All KAMs" it now includes an
   unassigned firm someone called. `callsLoggedOn` itself is unchanged (one per
@@ -137,10 +138,57 @@ data, with Django stubbed.
 - **A failed read shows Unknown, never 0.** The client master failing blanks the
   firm tiles, and the order list failing blanks the order tiles, independently,
   each with a retry panel. Firms whose order metrics were not read reach neither
-  Active nor Inactive (`clientStatus` gives Unknown), and the Assigned and
+  any status tile (`kamAccountStatus` gives Unknown), and the Assigned and
   Active tiles say how many.
 - **Against the Django stub every firm reads Inactive with ₹0.** The stub
   answers `200 []` for `b2b-bulk`, so this says nothing about real accounts.
+
+### Account status: 30 / 60 days, KAM only (2026-10-29)
+
+The user set KAM's own rule and said it applies to KAM only. Client Database
+keeps `clientStatus`, which uses a 3-month window. So one firm can read Active
+on Client DB and Inactive on KAM. That is intended, not drift.
+
+`kamAccountStatus` (`models/kam/cadence.ts`) counts days since
+`lastOrderPlaced`. **Active** is 0–30 days, **Inactive 1 month** is 31–60 days,
+and **Inactive** is more than 60 days or no order on record. **Unknown** means
+the history was not read. Checked at each boundary in Node.
+`kamDaysToLapse` gives the days left before a firm drops to the next bucket. It
+drives the "Lapses in" column and the pill's "Nd left".
+
+Everything KAM reads it: the tab's tiles, the Firm page opened from KAM (through
+`statusScale`), and the B2B Dashboard's KAM section. That section's spoc split
+and At-Risk Accounts panel now treats at-risk as **Inactive 1 month with no
+follow-up or an overdue one**, counted in days to 60. It also feeds the
+Leadership Board's KAM coverage denominator (`leadership.md`). The old At risk
+tile is gone: it was "Active, within 30 days of the 3-month cutoff", and the
+middle bucket replaced it. A future-dated `lastOrderPlaced`, from the b2b-bulk
+bug, reads Active.
+
+### No header actions (2026-10-29)
+
+Export, Upload Orders and + Add Order were removed from the tab header at the
+user's request. An order is now added only from a firm's page (`drawer.tsx`
+`onAddOrder`), so every new order carries a `clientId`. The header button had
+created orders with no client, which is what the board's "unlinked" count
+reports. The CSV order importer (`views/kams/upload.tsx` and its validator in
+`io/kam-import.ts`) went with it. That file keeps only the cell, phone and
+delimiter parsing that the Client Database import still uses.
+
+### Not built yet: the user's 2026-10-29 spec
+
+- **A follow-up date and a closure date on every PI.** A firm has many PIs (one
+  per order), and each needs both. A follow-up is stored per firm today (on the
+  latest interaction), while `expectedClosure` is already on the order. Per-PI
+  follow-up means a new field on `KamOrder`, saved into the live
+  `pipeline='kam'` rows, and the follow-up tiles would count PIs, not firms.
+  Check the row shape before writing.
+- **Check-in before an offline visit (Outreach and KAM):** location permission,
+  plus a photo in a Material Depot T-shirt with location on, taken before the
+  meeting. `components/site-audit/apps/field/camera.tsx` already captures a
+  photo with `navigator.geolocation`. Undecided: where photos are stored,
+  whether a meeting may be saved without a check-in or is only flagged, and who
+  reviews the T-shirt (software cannot).
 
 ### Calls are deduped per client per day
 
@@ -181,7 +229,7 @@ whichever board raised them; counting them here would count one order twice.
 
 Open question #5 (should objective signals feed Account Temperature?) — it stays
 the KAM's judgement, and `temperatureMismatch` names the contradiction beside it
-(a 9/10 on an account that has not ordered in three months, a 2/10 on one still
+(a 9/10 on an account that has not ordered in 60 days, a 2/10 on one still
 buying). Reported, never overridden.
 
 ### Verifying these two tabs without touching production

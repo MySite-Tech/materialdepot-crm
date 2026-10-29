@@ -1,8 +1,7 @@
 'use client';
 
 import { KamDashboard } from '../../../models/analytics';
-import { ACTIVE_WINDOW_MONTHS } from '../../../models/client';
-import { DAILY_CALL_TARGET } from '../../../models/kam';
+import { DAILY_CALL_TARGET, KAM_ACTIVE_DAYS, KAM_INACTIVE_DAYS } from '../../../models/kam';
 import { INBOUND_STAGE_COLORS, fmtL } from '../../../models/mock-data';
 import { Bars, Panel, Tile } from '.';
 
@@ -237,7 +236,7 @@ export function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDa
       {!!k.atRisk.length && (
         <Panel title={`At-Risk Accounts · ${k.atRisk.length}`} className="mt-3">
           <p className="text-[11px] text-gray-400 -mt-2 mb-2">
-            Active clients within 30 days of the {ACTIVE_WINDOW_MONTHS}-month Inactive cutoff with no follow-up booked.
+            Firms with no order in the last {KAM_ACTIVE_DAYS} days (Inactive 1 month) and no follow-up booked, or an overdue one. Days left until {KAM_INACTIVE_DAYS} days without an order.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] min-w-[420px]">

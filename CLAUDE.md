@@ -163,7 +163,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §The tiles are the navigation; KAM has the same, `kam.md` §The tiles are the navigation) |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` (30/60-day account status, KAM-only; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §The tiles are the navigation; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -352,8 +352,10 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 A teammate pushes to this branch regularly — **pull before starting.**
 
 **B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
-`Installation-Changes`. As of 2026-10-28 it is pushed to `origin` with 12
-commits and is **not merged**. No PR is open, so none of it is deployed.
+`Installation-Changes`. It is pushed to `origin` (12 commits on 2026-10-28, more
+on 2026-10-29) and is **not merged**. No PR is open, so none of it is deployed.
+`npm run dev` on :3001 serves the working tree, so whatever is committed or
+uncommitted here shows there without a restart.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
 prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
 of it. Don't build on that branch.

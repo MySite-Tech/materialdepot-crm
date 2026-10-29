@@ -1,10 +1,33 @@
-import { ClientEntity, ClientOrderMetrics, clientStatus, currentTemperature, daysToInactive, latestInteraction, nextFollowUp, primaryContact, temperatureBand } from '../client';
+import { ClientEntity, ClientOrderMetrics, currentTemperature, latestInteraction, nextFollowUp, primaryContact, temperatureBand } from '../client';
 import { daysUntil, followUpBucket, istToday } from '../inbound';
-import { AT_RISK_WINDOW_DAYS, DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, TEMPERATURE_SILENCE_DAYS } from '../../constants/kam';
-import { AssignedClientRow, CallCompliance, KamFirmLens, KamOrder, KamOrderLens, TemperatureMismatch } from '../../types/kam';
+import { DAILY_CALL_TARGET, KAM_ACTIVE_DAYS, KAM_INACTIVE_DAYS, KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, TEMPERATURE_SILENCE_DAYS } from '../../constants/kam';
+import { AssignedClientRow, CallCompliance, KamAccountStatus, KamFirmLens, KamOrder, KamOrderLens, TemperatureMismatch } from '../../types/kam';
 
 export const calledOn = (c: ClientEntity, day: string): boolean =>
   (c.interactions || []).some((i) => i.type === 'Call' && String(i.date || '').slice(0, 10) === day);
+
+function daysSinceLastOrder(m: ClientOrderMetrics, today: string): number | undefined {
+  const last = String(m.lastOrderPlaced || '').slice(0, 10);
+  const from = Date.parse(`${last}T00:00:00Z`);
+  const to = Date.parse(`${today}T00:00:00Z`);
+  return !last || Number.isNaN(from) || Number.isNaN(to) ? undefined : Math.round((to - from) / 86_400_000);
+}
+
+export function kamAccountStatus(m: ClientOrderMetrics, today: string = istToday()): KamAccountStatus {
+  if (m.dateState === 'pending' || m.dateState === 'unavailable' || m.dateState === 'no-phone') return 'Unknown';
+  const days = daysSinceLastOrder(m, today);
+  if (days === undefined || days > KAM_INACTIVE_DAYS) return 'Inactive';
+  return days <= KAM_ACTIVE_DAYS ? 'Active' : 'Inactive 1 month';
+}
+
+export function kamDaysToLapse(m: ClientOrderMetrics, today: string = istToday()): number | undefined {
+  const status = kamAccountStatus(m, today);
+  const days = daysSinceLastOrder(m, today);
+  if (days === undefined) return undefined;
+  if (status === 'Active') return KAM_ACTIVE_DAYS - days;
+  if (status === 'Inactive 1 month') return KAM_INACTIVE_DAYS - days;
+  return undefined;
+}
 
 export const firmFollowUp = (c: ClientEntity, today: string) => followUpBucket(nextFollowUp(c.interactions)?.date, today);
 
@@ -58,7 +81,7 @@ export function assignedClientRows(
       contactPerson: String(primary?.name || '').trim(),
       contactNumber: primary?.number || '',
       metrics,
-      status: clientStatus(metrics, today),
+      status: kamAccountStatus(metrics, today),
       segment: client.segment,
       temperature: temp?.value,
       temperatureAt: temp?.at,
@@ -82,7 +105,7 @@ export function temperatureMismatch(
   if (t >= 7 && row.status === 'Inactive') {
     return {
       kind: 'hot-but-cold',
-      message: `Scored ${t}/10 but the account has not ordered in over 3 months.`,
+      message: `Scored ${t}/10 but the account has not ordered in over ${KAM_INACTIVE_DAYS} days.`,
     };
   }
   if (t >= 7 && (row.daysSinceContact ?? 0) > TEMPERATURE_SILENCE_DAYS) {
@@ -100,10 +123,8 @@ export function temperatureMismatch(
   return undefined;
 }
 
-export function isAtRisk(row: AssignedClientRow, daysLeft: number | undefined): boolean {
-  if (row.status !== 'Active') return false;
-  if (daysLeft === undefined || daysLeft > AT_RISK_WINDOW_DAYS) return false;
-  return row.followUp === 'none' || row.followUp === 'overdue';
+export function isAtRisk(row: AssignedClientRow): boolean {
+  return row.status === 'Inactive 1 month' && (row.followUp === 'none' || row.followUp === 'overdue');
 }
 
 export function firmLensMatches(lens: KamFirmLens, r: AssignedClientRow, today: string): boolean {
@@ -115,8 +136,8 @@ export function firmLensMatches(lens: KamFirmLens, r: AssignedClientRow, today: 
     case 'nofollow': return r.followUp === 'none';
     case 'called':   return calledOn(r.client, today);
     case 'active':   return r.status === 'Active';
+    case 'lapsing':  return r.status === 'Inactive 1 month';
     case 'inactive': return r.status === 'Inactive';
-    case 'atrisk':   return isAtRisk(r, daysToInactive(r.metrics, today));
   }
 }
 
@@ -132,8 +153,8 @@ export function sortFirmsForLens(lens: KamFirmLens, rows: AssignedClientRow[], t
   if (lens === 'overdue' || lens === 'upcoming') {
     return out.sort((a, b) => (a.nextFollowUpDate || '').localeCompare(b.nextFollowUpDate || '') || byName(a, b));
   }
-  if (lens === 'atrisk') {
-    return out.sort((a, b) => (daysToInactive(a.metrics, today) ?? 0) - (daysToInactive(b.metrics, today) ?? 0) || byName(a, b));
+  if (lens === 'lapsing') {
+    return out.sort((a, b) => (kamDaysToLapse(a.metrics, today) ?? 0) - (kamDaysToLapse(b.metrics, today) ?? 0) || byName(a, b));
   }
   if (lens === 'nofollow') {
     return out.sort((a, b) => (b.daysSinceContact ?? Infinity) - (a.daysSinceContact ?? Infinity) || byName(a, b));

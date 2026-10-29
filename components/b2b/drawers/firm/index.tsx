@@ -6,19 +6,20 @@ import { GstsCard } from './cards/gsts';
 import { OrdersCard } from './cards/orders';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, StatusScale, contactNumbers } from '../../models/client';
 import { fmtShortINR } from '../../models/mock-data';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
 import { btnGhost } from '../../constants/ui';
 import { ClientOrderHistory } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
-export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, onClose, onSave, onEdit, children }: {
+export function FirmDrawer({ client, clients, metrics, status, days, statusScale, historyFor, badges, reassignReason, onClose, onSave, onEdit, children }: {
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
-  status: ClientStatus;
+  status: ClientStatus | string;
   days?: number;
+  statusScale?: StatusScale;
   historyFor: (phone: string) => ClientOrderHistory | undefined;
   badges?: React.ReactNode;
   reassignReason: string;
@@ -48,7 +49,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             <div className="min-w-0">
               <h2 className="text-[18px] font-bold text-gray-900 truncate">{client.company || <span className="text-gray-400 italic">Unnamed firm</span>}</h2>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <StatusPill status={status} days={days} />
+                <StatusPill status={status} days={days} scale={statusScale} />
                 {badges}
                 <span className="text-[12px] text-gray-500">{facts.join(' · ')}</span>
               </div>

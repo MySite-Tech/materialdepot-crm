@@ -1,4 +1,4 @@
-export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, DuplicateSuggestion, MergeChoices } from '../../types/client';
+export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, StatusScale, DuplicateSuggestion, MergeChoices } from '../../types/client';
 export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_MAX, TEMPERATURE_BANDS, ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL } from '../../constants/client';
 export { clientTypeFromLead, contactLabel, normalizeContactNumber, isValidContactNumber, primaryContact, contactNumbers, normalizeGst, clampTemperature, normalizeCompanyName } from '../utils/client';
 export { validateGst, gstNumbers } from './rules/gst';

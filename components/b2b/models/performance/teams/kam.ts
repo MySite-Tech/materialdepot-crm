@@ -1,4 +1,5 @@
-import { ClientEntity, ClientInteraction, clientStatus } from '../../client';
+import { ClientEntity, ClientInteraction } from '../../client';
+import { kamAccountStatus } from '../../kam';
 import { fmtINR } from '../../mock-data';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
@@ -39,7 +40,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const calls = loggedRows(data.clients, people, period, 'Call');
 
   const metFirms = new Set(meetings.map((r) => r.id.split(':')[0]));
-  const statuses = book.map((c) => ({ c, status: clientStatus(data.metricsFor(c), data.today) }));
+  const statuses = book.map((c) => ({ c, status: kamAccountStatus(data.metricsFor(c), data.today) }));
   const unknown = statuses.filter((s) => s.status === 'Unknown').length;
   const coverage: PerfRow[] = statuses
     .filter((s) => s.status === 'Active')

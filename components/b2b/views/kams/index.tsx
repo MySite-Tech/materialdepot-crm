@@ -6,19 +6,15 @@ import { KamOrderTable } from './orders/table';
 
 import { CLIENT_SOURCES, ClientEntity, contactNumbers, istToday, primaryContact } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, sortFirmsForLens } from '../../models/kam';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_ACTIVE_DAYS, KAM_FIRM_LENSES, KAM_INACTIVE_DAYS, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
 import { DEFAULT_KAM, KAMS, fmtL } from '../../models/mock-data';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
-import { ExportFormat } from '../../types/export';
-import { ExportButton } from '../../ui/export-button';
-import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { ClientDrawer } from './drawer';
 import { InteractionModal } from './panels/interactions';
 import { OrderModal } from './orders/modal';
 import { LensPills, LensTileGroup, LensTiles } from '../../ui/lens-tiles';
-import { UploadModal } from './upload';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -44,8 +40,6 @@ export default function KAMs() {
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [loggingFor, setLoggingFor] = useState<string | null>(null);
   const [orderModal, setOrderModal] = useState<{ order: KamOrder; isNew: boolean } | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const today = istToday();
   const boardScroll = useDragAutoScroll<HTMLDivElement>();
@@ -181,8 +175,9 @@ export default function KAMs() {
       case 'due':      return { value: String(n), sub: 'for today' };
       case 'nofollow': return { value: String(n), sub: 'none booked' };
       case 'assigned': return { value: String(n), sub: unread ? `${unread} orders unread` : 'firms in scope', warn: !!unread };
-      case 'active':   return { value: String(n), sub: unread ? `${unread} not read yet` : 'last 3 months', warn: !!unread };
-      case 'atrisk':   return { value: String(n), sub: 'lapsing soon' };
+      case 'active':   return { value: String(n), sub: unread ? `${unread} not read yet` : `last ${KAM_ACTIVE_DAYS} days`, warn: !!unread };
+      case 'lapsing':  return { value: String(n), sub: `${KAM_ACTIVE_DAYS + 1}–${KAM_INACTIVE_DAYS} days ago` };
+      case 'inactive': return { value: String(n), sub: `${KAM_INACTIVE_DAYS}+ days or never` };
       case 'pipeline': return { value: fmtL(pipeline.pipeline), sub: pipeline.estimatedPipeline ? `${fmtL(pipeline.estimatedPipeline)} est.` : `${n} at Quote/PI` };
       default:         return { value: String(n), sub: 'not closed' };
     }
@@ -237,49 +232,13 @@ export default function KAMs() {
     };
   };
 
-  const exportView = (format: ExportFormat) => {
-    if (isOrderLens(lens)) {
-      const oh = ['Company', 'KAM', 'Status', 'Enq ID', 'Ticket value', 'Estimate', 'Expected closure', 'Requirement'];
-      const ob = ordersBy[lens].map((o) => [o.company, o.kam, o.status, o.enqId || '', o.orderValue ?? '', o.estimatedValue ?? '', o.expectedClosure || '', o.requirement || '']);
-      const name = `kam-${lens}-${todayStr()}`;
-      setExporting(true);
-      try {
-        if (format === 'csv') exportRowsCsv(oh, ob, name);
-        else exportRowsExcel(oh, ob, name, KAM_LENS[lens].title);
-      } finally { setExporting(false); }
-      return;
-    }
-    const headers = ['Company', 'Source', 'Contact Person', 'Contact Number', 'Last Order Placed', 'Average Order Value',
-      'Number of Orders', 'Total Revenue Generated', 'Client Status', 'Segment', 'Temperature', 'Upcoming Project',
-      'Next Follow-up', 'Days Since Contact', 'KAM'];
-    const body = firmRows.map((r) => [
-      r.company, r.source, r.contactPerson, r.contactNumber,
-      r.metrics.lastOrderPlaced || (r.metrics.dateState === 'unavailable' ? 'unread' : ''),
-      r.metrics.averageOrderValue !== undefined ? Math.round(r.metrics.averageOrderValue) : '',
-      r.metrics.orders ?? '', r.metrics.totalRevenue ?? '', r.status, r.segment || '',
-      r.temperature ?? '', r.upcomingProject || '', r.nextFollowUpDate || '', r.daysSinceContact ?? '', r.client.kam || '',
-    ]);
-    setExporting(true);
-    try {
-      if (format === 'csv') exportRowsCsv(headers, body, `kam-${lens}-${todayStr()}`);
-      else exportRowsExcel(headers, body, `kam-${lens}-${todayStr()}`, KAM_LENS[lens].title);
-    } finally { setExporting(false); }
-  };
-
   return (
     <div className="p-4 sm:p-6">
-      <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
-        <div>
-          <h1 className="text-lg font-bold text-gray-800">KAM</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Key Account Management · clients handed off once their first order closed
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <ExportButton onExport={(f) => exportView(f)} disabled={exporting} />
-          <button onClick={() => setUploading(true)} className={btnGhost}>Upload Orders</button>
-          <button onClick={() => setOrderModal({ order: blankOrder(), isNew: true })} className={btnPrimary} disabled={!clients.length}>+ Add Order</button>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-lg font-bold text-gray-800">KAM</h1>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Key Account Management · clients handed off once their first order closed
+        </p>
       </div>
 
       {!!failed.length && (
@@ -404,26 +363,6 @@ export default function KAMs() {
         />
       )}
 
-      {uploading && (
-        <UploadModal
-          existing={orders}
-          onClose={() => setUploading(false)}
-          onImport={async (imported) => {
-
-            const errors: Record<string, string> = {};
-            const saved: KamOrder[] = [];
-            for (const o of imported) {
-              const err = await upsertKamOrder(o);
-              if (err) errors[o.id] = err; else saved.push(o);
-            }
-            if (saved.length) {
-              const ids = new Set(saved.map((o) => o.id));
-              setOrders((prev) => [...saved, ...prev.filter((o) => !ids.has(o.id))]);
-            }
-            return errors;
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 
-import { CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientOrderMetrics, ClientStatus, temperatureColor } from '../models/client';
+import { CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientOrderMetrics, StatusScale, temperatureColor } from '../models/client';
+
+const CLIENT_STATUS_SCALE: StatusScale = { colors: CLIENT_STATUS_COLORS, hint: CLIENT_STATUS_HINT };
 
 export function StatTile({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) {
   return (
@@ -12,17 +14,17 @@ export function StatTile({ label, value, sub, tone }: { label: string; value: Re
   );
 }
 
-export function StatusPill({ status, days }: { status: ClientStatus; days?: number }) {
-  const c = CLIENT_STATUS_COLORS[status];
+export function StatusPill({ status, days, scale = CLIENT_STATUS_SCALE }: { status: string; days?: number; scale?: StatusScale }) {
+  const c = scale.colors[status];
   return (
     <span
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
       style={{ background: c + '18', color: c }}
-      title={CLIENT_STATUS_HINT[status] + (days !== undefined ? ` · ${days} days left in the window` : '')}
+      title={scale.hint[status] + (days !== undefined ? ` · ${days} days left in the window` : '')}
     >
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />
       {status}
-      {status === 'Active' && days !== undefined && days <= 30 && <span className="font-mono">{days}d left</span>}
+      {days !== undefined && days <= 30 && <span className="font-mono">{days}d left</span>}
     </span>
   );
 }

@@ -1,4 +1,5 @@
-import { KamFirmLens, KamLens, KamLensMeta, KamOrderStatus, LegacyKamStage } from '../types/kam';
+import { StatusScale } from '../types/client';
+import { KamAccountStatus, KamFirmLens, KamLens, KamLensMeta, KamOrderStatus, LegacyKamStage } from '../types/kam';
 export const KAM_ORDER_STATUSES: KamOrderStatus[] = [
   'Requirement Logged', 'Quote Shared', 'PI Shared', 'Closed', 'Lost',
 ];
@@ -50,6 +51,20 @@ export const TEMPERATURE_SILENCE_DAYS = 45;
 
 export const AT_RISK_WINDOW_DAYS = 30;
 
+export const KAM_ACTIVE_DAYS = 30;
+
+export const KAM_INACTIVE_DAYS = 60;
+
+export const KAM_ACCOUNT_STATUS_SCALE: StatusScale & { colors: Record<KamAccountStatus, string> } = {
+  colors: { Active: '#22C55E', 'Inactive 1 month': '#F59E0B', Inactive: '#9CA3AF', Unknown: '#3B82F6' },
+  hint: {
+    Active: `Ordered within the last ${KAM_ACTIVE_DAYS} days`,
+    'Inactive 1 month': `Last order ${KAM_ACTIVE_DAYS + 1}–${KAM_INACTIVE_DAYS} days ago`,
+    Inactive: `No order in the last ${KAM_INACTIVE_DAYS} days`,
+    Unknown: 'Order dates could not be read for this client',
+  },
+};
+
 export const STATUS_RANK: Record<KamOrderStatus, number> = {
   'Requirement Logged': 0, 'Quote Shared': 1, 'PI Shared': 2, 'Closed': 3, 'Lost': 3,
 };
@@ -61,9 +76,9 @@ export const KAM_LENS: Record<KamLens, KamLensMeta> = {
   nofollow: { title: 'No follow-up', rule: 'The latest interaction set no next follow-up date, or nothing is logged at all, so the firm never comes up as due.', empty: 'Every firm has a follow-up booked.', accent: '#9CA3AF' },
   called:   { title: 'Called today', rule: 'Firms with a Call logged today. Counted once per firm per day, against the §4.1 target, which is reported and not enforced.', empty: 'No call logged today yet.', accent: '#0F766E' },
   upcoming: { title: 'Upcoming', rule: 'Follow-up booked after today.', empty: 'No follow-up is booked ahead.', accent: '#0EA5E9' },
-  active:   { title: 'Active', rule: 'At least one order placed in the last 3 months (clientStatus).', empty: 'No firm has ordered in the last 3 months.', accent: '#22C55E' },
-  inactive: { title: 'Inactive', rule: 'No order placed in the last 3 months.', empty: 'No inactive firm.', accent: '#9CA3AF' },
-  atrisk:   { title: 'At risk', rule: `Active, but goes inactive within ${AT_RISK_WINDOW_DAYS} days, and has no follow-up or an overdue one.`, empty: 'No active firm is about to lapse unattended.', accent: '#F59E0B' },
+  active:   { title: 'Active', rule: `Last order placed within the last ${KAM_ACTIVE_DAYS} days.`, empty: `No firm has ordered in the last ${KAM_ACTIVE_DAYS} days.`, accent: '#22C55E' },
+  lapsing:  { title: 'Inactive 1 month', rule: `No order in the last ${KAM_ACTIVE_DAYS} days, but one ${KAM_ACTIVE_DAYS + 1}–${KAM_INACTIVE_DAYS} days ago. Closest to going fully inactive first.`, empty: 'No firm is in its first month without an order.', accent: '#F59E0B' },
+  inactive: { title: 'Inactive', rule: `Last order more than ${KAM_INACTIVE_DAYS} days ago, or none on record.`, empty: 'No inactive firm.', accent: '#9CA3AF' },
   open:     { title: 'Open orders', rule: 'Orders at Requirement Logged, Quote Shared or PI Shared.', empty: 'No open order.', accent: '#6366F1' },
   pipeline: { title: 'Pipeline', rule: 'Orders at Quote Shared or PI Shared. Ticket value and the KAM estimate are kept apart, never summed.', empty: 'No order is at Quote or PI.', accent: '#8B5CF6' },
   orders:   { title: 'Order board', rule: 'Every order on the board, by status, with the procurement sync.', empty: 'No orders.', accent: '#1A1A1A' },
@@ -71,12 +86,12 @@ export const KAM_LENS: Record<KamLens, KamLensMeta> = {
 
 export const KAM_LENS_GROUPS: { title: string; lenses: KamLens[] }[] = [
   { title: 'Follow-ups', lenses: ['overdue', 'due', 'nofollow', 'called'] },
-  { title: 'Accounts', lenses: ['assigned', 'active', 'atrisk'] },
+  { title: 'Accounts', lenses: ['assigned', 'active', 'lapsing', 'inactive'] },
   { title: 'Orders', lenses: ['open', 'pipeline'] },
 ];
 
-export const KAM_SIDE_LENSES: KamLens[] = ['upcoming', 'inactive', 'orders'];
+export const KAM_SIDE_LENSES: KamLens[] = ['upcoming', 'orders'];
 
-export const KAM_FIRM_LENSES: KamFirmLens[] = ['assigned', 'overdue', 'due', 'nofollow', 'called', 'upcoming', 'active', 'inactive', 'atrisk'];
+export const KAM_FIRM_LENSES: KamFirmLens[] = ['assigned', 'overdue', 'due', 'nofollow', 'called', 'upcoming', 'active', 'lapsing', 'inactive'];
 
 export const KAM_LIST_PAGE_SIZE = 25;

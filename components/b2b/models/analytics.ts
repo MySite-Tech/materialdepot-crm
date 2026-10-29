@@ -13,7 +13,7 @@ import {
   KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES,
   kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit,
   assignedClientRows, callCompliance, lostReasonBreakdown, segmentRevenue,
-  newVsRepeat, isAtRisk, temperatureMismatch, DAILY_CALL_TARGET,
+  newVsRepeat, isAtRisk, kamDaysToLapse, temperatureMismatch, DAILY_CALL_TARGET,
   type KamOrder, type CallCompliance, type CohortMonth, type KamAccountSplit,
   type KamFunnel, type KamPipelineSplit, type NewVsRepeat,
 } from './kam';
@@ -236,21 +236,8 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
 
   type AtRiskRow = { company: string; kam?: string; daysLeft: number; lastContact?: string };
   const atRisk: AtRiskRow[] = rows
-    .map((r): AtRiskRow | null => {
-      const metrics = r.metrics;
-      const last = String(metrics.lastOrderPlaced || '').slice(0, 10);
-      if (!last) return null;
-      const [ly, lm, ld] = last.split('-').map(Number);
-      const expiry = new Date(Date.UTC(ly, lm - 1 + 3, ld)).getTime();
-      const now = Date.parse(`${today}T00:00:00Z`);
-      const daysLeft = Number.isNaN(expiry) || Number.isNaN(now)
-        ? undefined
-        : Math.max(0, Math.round((expiry - now) / 86_400_000));
-      return isAtRisk(r, daysLeft)
-        ? { company: r.company, kam: r.client.kam, daysLeft: daysLeft as number, lastContact: r.lastInteraction?.date }
-        : null;
-    })
-    .filter((x): x is AtRiskRow => x !== null)
+    .filter(isAtRisk)
+    .map((r) => ({ company: r.company, kam: r.client.kam, daysLeft: kamDaysToLapse(r.metrics, today) ?? 0, lastContact: r.lastInteraction?.date }))
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
   return {

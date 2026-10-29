@@ -115,6 +115,11 @@ export interface ClientOrderMetrics {
 
 export type ClientStatus = 'Active' | 'Inactive' | 'Unknown';
 
+export interface StatusScale {
+  colors: Record<string, string>;
+  hint: Record<string, string>;
+}
+
 export type DuplicateEvidence = 'contact' | 'gst' | 'pan' | 'name';
 
 export interface DuplicateSuggestion {
