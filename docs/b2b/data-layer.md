@@ -99,7 +99,7 @@ They live here now because the code cannot carry them.
   names the wrong slice (HYD's revenue once read as Outreach's). `revenueBySource`
   carries a `color` per row and both the `<Cell>` and the legend swatch read it.
 
-- **The Dashboard splits its load by dependency.** Only the pipeline and vertical
+- **The Overview (ex-Dashboard, `overview.md`) splits its load by dependency.** Only the pipeline and vertical
   stats depend on the range selector, so `loadBase` (board data, KAM resolution,
   client histories) runs once and survives a range switch, while `loadRange`
   re-runs alone. One stats request carries both the per-vertical groups and the
@@ -109,7 +109,7 @@ They live here now because the code cannot carry them.
   open pipeline. A non-month range adds a third for the month-scoped revenue.
   Three is the ceiling.
 
-- **The Dashboard has a date basis and a branch basis, and they are not
+- **The Overview has a date basis and a branch basis, and they are not
   independent.** `StatsBasis` (`lib/b2b/stats/pipeline.ts`) is `created` or
   `order`; `basisQuery` turns it into either `created_from/to` on the ticket, or
   `order_from/to` on `estimate.order_placed_time` **plus**
@@ -121,7 +121,7 @@ They live here now because the code cannot carry them.
   ₹13.44L to only ₹14.10L; adding the estimate branch moved it to ₹47.36L. Do
   not offer one without the other.
 
-- **The Dashboard checks that Django honoured the basis.** `/crm/leads/stats/`
+- **The Overview checks that Django honoured the basis.** `/crm/leads/stats/`
   echoes `basis`, `fetchVerticalStats` compares it to what it asked for and
   returns `basisApplied`, and the tab shows an amber notice when it is false.
   This is deliberately not cosmetic: the backend half deploys separately, and an
@@ -130,11 +130,10 @@ They live here now because the code cannot carry them.
   outright — that case is already `ok: false`, and two banners for one problem
   reads as two problems.
 
-- **The basis toggle governs the whole page except open pipeline, and defaults
-  to `order`.** The top panel, its status tiles, Order Won, Order Lost, Revenue
-  Generated, Target Achieved, Month Projection and Revenue by Source all follow
-  it. Two things do not and cannot: the **Open Pipeline** card and the
-  **Pipeline by Vertical** panel, both of which read `active` off the
+- **The basis toggle governs the whole page except open carts, and defaults
+  to `order`.** The Orders section, its status tiles, the month's revenue,
+  projection and "Where it came from" all follow it. One thing does not and
+  cannot: the **Open carts** card, which reads `active` off the
   created-basis call — a cart that is still open has no `order_placed_time` to
   be counted by, so under an order filter `active` comes back structurally 0.
   That zero is arithmetic, not a dropped call, which is why the Active Pipeline
@@ -181,7 +180,7 @@ They live here now because the code cannot carry them.
   ₹13,44,897 ("Order Won") while the verticals summed to ₹10,08,823 ("Revenue
   Generated"), because `bm_groups` keys on rep phone and the branch total does
   not. Both now read `pipeline.won.value`. The difference has to go somewhere,
-  so `revenueSources` (`views/dashboard/utils.ts`) appends a grey
+  so `revenueSources` (`views/overview/utils.ts`) appends a grey
   `No B2B rep on cart` slice for the remainder — on the order basis that slice
   is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
   data, not a bug to tune away.

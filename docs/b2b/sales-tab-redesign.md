@@ -502,7 +502,8 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
 4. **Leadership Board rebuild.** Built 2026-10-28 as `views/leadership/` over
    `models/performance/`. Managers get every person, and reps get their own
    card under the label "My performance". See `leadership.md`.
-5. **Dashboard tab rework** — shift toward business/revenue/pipeline
+5. **Dashboard tab rework** — done 2026-10-30 as **Overview** (`overview.md`).
+   Shift toward business/revenue/pipeline
    numbers now that Leadership Board owns per-person/team performance;
    scope once step 4's shape is known so the two views don't re-overlap.
 6. **Lifecycle view** — one client/lead across inbound→outreach→KAM.

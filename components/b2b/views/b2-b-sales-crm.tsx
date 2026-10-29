@@ -1,14 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import B2BDashboard from './dashboard/index';
+import B2BOverview from './overview/index';
 import InboundLeads from './inbound/index';
 import OutreachLeads from './outreach/index';
 import LeadsTab from './leads/index';
 import ClientDatabase from './client-db/index';
 import KAMs from './kams/index';
 import Leadership from './leadership/index';
-import Targets from './targets';
 import StudioSpace from './studio-space/index';
 import TeamView from './team/index';
 import { useB2BTeam } from '../hooks/use-b2b-team';
@@ -16,11 +15,11 @@ import { viewerFor } from '@/lib/b2b/team/utils';
 import type { AppUser } from '@/types/crm';
 
 type B2BView =
-  | 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
-  | 'leadership' | 'targets' | 'studio' | 'team';
+  | 'overview' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
+  | 'leadership' | 'studio' | 'team';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean }> = [
-  { key: 'dashboard',  label: 'Dashboard',        ready: true },
+  { key: 'overview',   label: 'Overview',         ready: true },
   { key: 'leads',      label: 'Leads',            ready: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
   { key: 'outreach',   label: 'Outreach',         ready: true },
@@ -28,14 +27,13 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly
   { key: 'clients',    label: 'Client Database',  ready: true },
   { key: 'kams',       label: 'KAM',              ready: true },
   { key: 'leadership', label: 'Leadership Board', ready: true },
-  { key: 'targets',    label: 'Targets',          ready: true },
 
   { key: 'studio',     label: 'Studio Space',     ready: true },
   { key: 'team',       label: 'Team',             ready: true, teamManagersOnly: true },
 ];
 
 export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | null }) {
-  const [view, setView] = useState<B2BView>('dashboard');
+  const [view, setView] = useState<B2BView>('overview');
   const team = useB2BTeam();
   const viewer = useMemo(() => viewerFor(currentUser, team.members), [currentUser, team.members]);
   const nav = useMemo(() => NAV
@@ -88,14 +86,13 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
       </div>
 
       <main className="flex-1 overflow-y-auto min-w-0">
-        {view === 'dashboard' && <B2BDashboard />}
+        {view === 'overview' && <B2BOverview team={team} onNavigate={setView} />}
         {view === 'inbound' && <InboundLeads team={team} viewer={viewer} />}
         {view === 'leads' && <LeadsTab />}
         {view === 'outreach' && <OutreachLeads team={team} viewer={viewer} />}
         {view === 'clients' && <ClientDatabase team={team} viewer={viewer} />}
         {view === 'kams' && <KAMs team={team} viewer={viewer} />}
         {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
-        {view === 'targets' && <Targets team={team} viewer={viewer} />}
         {view === 'studio' && <StudioSpace />}
         {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}
       </main>
