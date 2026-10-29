@@ -8,7 +8,7 @@ export function MemberRow({ member, busy, kylasUsers, onLoadKylasUsers, onChange
   busy: boolean;
   kylasUsers: KylasUser[] | null;
   onLoadKylasUsers: () => void;
-  onChange: (patch: Partial<Pick<TeamMember, 'inRotation' | 'active' | 'kylasUserId'>>) => void;
+  onChange: (patch: Partial<Pick<TeamMember, 'inRotation' | 'active' | 'kylasUserId' | 'isAdmin'>>) => void;
 }) {
   const [linking, setLinking] = useState(false);
   const isInbound = member.team === 'inbound';
@@ -64,6 +64,18 @@ export function MemberRow({ member, busy, kylasUsers, onLoadKylasUsers, onChange
             {member.inRotation && member.active ? 'Gets new leads' : 'Paused'}
           </label>
         ) : <span className="text-gray-300">—</span>}
+      </td>
+      <td className="px-3 py-2 text-[12px]">
+        <label className="inline-flex items-center gap-1.5 cursor-pointer" title="Sees every rep's B2B data and can assign work. Cannot change this team list.">
+          <input
+            type="checkbox"
+            className="accent-[#EAB308]"
+            disabled={busy || !member.active}
+            checked={member.isAdmin && member.active}
+            onChange={() => onChange({ isAdmin: !member.isAdmin })}
+          />
+          {member.isAdmin && member.active ? 'B2B admin' : 'Own data'}
+        </label>
       </td>
       <td className="px-3 py-2 text-right">
         <button

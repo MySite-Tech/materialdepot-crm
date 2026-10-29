@@ -22,12 +22,10 @@ export function useOutreachScope(team: B2BTeamLoad, viewer: Viewer): OutreachSco
     };
 
     if (!live) {
-      return {
-        mode: 'open', me, isManager: viewer.isManager, isKam, reps, kams, owns: () => true,
-        notice: team.tableMissing
-          ? 'The B2B team list is not set up yet, so every BM\'s leads are shown and the BM pickers in forms use the old roster.'
-          : `The B2B team list did not load (${team.error}), so every BM's leads are shown.`,
-      };
+      const why = team.tableMissing ? 'The B2B team list is not set up yet' : `The B2B team list did not load (${team.error})`;
+      return viewer.isManager
+        ? { mode: 'open', me, isManager: true, isKam, reps, kams, owns: () => true, notice: `${why}, so the BM pickers in forms use the old roster.` }
+        : { mode: 'mine', me, isManager: false, isKam, reps, kams, owns: mine, notice: `${why}, so only leads with you as BM are shown.` };
     }
     if (viewer.isManager) return { mode: 'team', me, isManager: true, isKam, reps, kams, owns: () => true, notice: null };
     return {

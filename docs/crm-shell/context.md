@@ -171,6 +171,17 @@ and every rep's rows. `B2BSalesCRM` now receives `currentUser` from
 `tab-panels.tsx`; before that, nothing under `components/b2b/` knew who was
 logged in.
 
+**A B2B admin can also be made from B2B → Team (2026-10-29),** without any CRM
+role or slug: the per-member "B2B admin" switch (`b2b_team_member.is_admin`,
+b2b-backend migration 0021). The user's reason: some B2B people need to see
+the whole team's data without being admins of the CRM or of procurement. The
+B2B tab itself still comes from the role, as before. `viewerFor` splits the
+two powers: `isManager` (see every rep's data, assign work) is the role, the
+slug **or** that switch, while `canManageTeam` (the Team tab, and so the
+switch) stays with the role and slug only. A switched-on member therefore
+cannot make more admins. The route (`app/api/b2b/team` PUT) still checks
+`isB2BManager`, so the Team-tab rule holds on the server too.
+
 ## Ex-GST figures on the Leads tab are additive, and computed in Django
 
 Added 2026-10-29. `cartValue` and every stats `value` stay GST-inclusive and

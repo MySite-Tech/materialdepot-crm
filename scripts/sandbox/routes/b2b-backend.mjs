@@ -41,15 +41,16 @@ function kamLoad(db) {
   return load;
 }
 
-const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'updated_at', 'updated_by'];
+const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'is_admin', 'updated_at', 'updated_by'];
 
 function putMember(db, body) {
   const phone = String(body?.phone ?? '').replace(/\D/g, '').slice(-10);
   if (phone.length !== 10) return reply(422, { error: 'phone must be 10 digits' });
+  const i = db.team.findIndex((m) => m.phone === phone);
   const row = Object.fromEntries(MEMBER_KEYS.map((k) => [k, body[k] ?? null]));
   row.phone = phone;
+  row.is_admin = typeof body.is_admin === 'boolean' ? body.is_admin : i >= 0 && db.team[i].is_admin === true;
   row.updated_at = new Date().toISOString();
-  const i = db.team.findIndex((m) => m.phone === phone);
   if (i >= 0) db.team[i] = row; else db.team.push(row);
   return row;
 }

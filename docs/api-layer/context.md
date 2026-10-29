@@ -142,6 +142,12 @@ the backend predates migration 0020, which the store turns into
 `TeamTableMissing`. Those paths are deliberately **not** in the relay's allow
 list: the browser has no business writing assignment rows.
 
+The store sends `is_admin` only when the caller passed one. The backend's PUT
+leaves the column untouched when the key is absent, so a save from an older
+client, or one that only flips round robin, cannot clear someone's B2B admin
+flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
+reads as false.
+
 ### There is no scheduled route in this app, and no platform cron to run one
 
 Worth knowing before someone adds one: this app deploys to **Azure Static Web

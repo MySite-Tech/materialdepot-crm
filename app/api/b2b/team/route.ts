@@ -63,6 +63,7 @@ export async function PUT(request: NextRequest) {
       team: body.team,
       inRotation: body.inRotation !== false,
       active: body.active !== false,
+      isAdmin: typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined,
       kylasUserId: body.kylasUserId,
     }, c.name));
   } catch (err) {

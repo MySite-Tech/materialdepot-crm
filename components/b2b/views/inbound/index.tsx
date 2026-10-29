@@ -61,7 +61,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
 
   const me = viewer.member?.team === 'inbound' && viewer.member.active ? viewer.member : null;
   const myKylasId = me?.kylasUserId ?? undefined;
-  const scope = scopeChoice ?? (myKylasId ? 'mine' : 'all');
+  const unlinked = !viewer.isManager && !myKylasId;
+  const scope = viewer.isManager ? scopeChoice ?? (myKylasId ? 'mine' : 'all') : 'mine';
 
   const ownerId = useMemo(
     () => (scope === 'mine'
@@ -75,9 +76,16 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   }), [ownerId, boardOwnerIds, appliedSearch, f.createdFrom, f.createdTo, f.kylasStage]);
 
   const load = () => {
-    setLoading(true);
     setError(null);
     setLoadFailed(false);
+    if (unlinked) {
+      setLeads([]);
+      setHasMore(false);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     fetchInboundBoard({ page: 0, ...serverOpts })
       .then((res) => {
         if (!res.ok) throw new Error('Kylas or the CRM database did not answer, so the board is missing leads. Nothing is counted until it loads.');
@@ -93,7 +101,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { if (!team.loading) load(); }, [serverOpts, team.loading]);
+  useEffect(() => { if (!team.loading) load(); }, [serverOpts, team.loading, unlinked]);
 
   const rotationReady = !team.loading && rotationOrder(team.members).length > 0;
   useEffect(() => {
@@ -276,7 +284,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {myKylasId && (
+          {viewer.isManager && myKylasId && (
             <div className="flex rounded-md border border-gray-200 overflow-hidden">
               {([['mine', 'Mine'], ['all', 'All inbound']] as const).map(([k, label]) => (
                 <button
@@ -315,6 +323,13 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         <p className="text-[12px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-3">
           You are on the inbound team but your Kylas user is not linked, so no lead can be yours yet. A B2B manager
           links it under <strong>Team</strong>.
+        </p>
+      )}
+      {unlinked && !team.loading && (
+        <p className="text-[12px] rounded px-3 py-2 mb-3 border bg-amber-50 border-amber-200 text-amber-800">
+          {team.error
+            ? `The B2B team list did not load (${team.error}), so your leads cannot be picked out and none are shown.`
+            : 'You are not on the Inbound team with a linked Kylas user, so no leads are shown. A B2B manager can add you under B2B → Team.'}
         </p>
       )}
       {rotationNote && (

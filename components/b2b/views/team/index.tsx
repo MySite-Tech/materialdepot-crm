@@ -42,7 +42,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
   );
   const rotationSize = useMemo(() => rotationOrder(team.members).length, [team.members]);
 
-  const save = (m: Pick<TeamMember, 'phone' | 'name' | 'team' | 'inRotation' | 'active'> & { kylasUserId?: number | null }) => {
+  const save = (m: Pick<TeamMember, 'phone' | 'name' | 'team' | 'inRotation' | 'active'> & { kylasUserId?: number | null; isAdmin?: boolean }) => {
     setBusyPhone(m.phone);
     setNotice(null);
     saveTeamMember(m)
@@ -66,7 +66,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       <div>
         <h2 className="text-[18px] font-bold text-gray-900">B2B team</h2>
         <p className="text-[12.5px] text-gray-500 mt-0.5">
-          Who is on Inbound, Outreach and KAM. Each person sees their own leads and accounts; managers see everyone.
+          Who is on Inbound, Outreach and KAM. Each person sees their own leads and accounts. Admins, B2B managers and anyone marked B2B admin here see everyone.
           People are added from the existing CRM users. Their Kylas user is found by phone number.
         </p>
       </div>
@@ -135,13 +135,14 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left table-fixed min-w-[640px]">
+                <table className="w-full text-left table-fixed min-w-[760px]">
                   <thead className="text-[10.5px] uppercase tracking-wider text-gray-400">
                     <tr>
-                      <th className="w-[22%] px-3 py-2 font-semibold">Name</th>
-                      <th className="w-[16%] px-3 py-2 font-semibold">Phone</th>
-                      <th className="w-[32%] px-3 py-2 font-semibold">Kylas user</th>
-                      <th className="w-[18%] px-3 py-2 font-semibold">Round robin</th>
+                      <th className="w-[20%] px-3 py-2 font-semibold">Name</th>
+                      <th className="w-[14%] px-3 py-2 font-semibold">Phone</th>
+                      <th className="w-[26%] px-3 py-2 font-semibold">Kylas user</th>
+                      <th className="w-[16%] px-3 py-2 font-semibold">Round robin</th>
+                      <th className="w-[14%] px-3 py-2 font-semibold">Access</th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>

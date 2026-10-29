@@ -172,7 +172,7 @@ function seedKam() {
 function seedTeam(at) {
   return PERSONAS.filter((p) => p.team).map((p) => ({
     phone: p.phone, name: p.name, team: p.team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
-    in_rotation: true, active: true, updated_at: at, updated_by: MEERA.name,
+    in_rotation: true, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
   }));
 }
 

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-64 entries. They live in one file because they cross-reference each other —
+65 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -74,6 +74,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A backend that decomposes a JSON blob into columns dropped every key it had no column for
 - Call duration typed in minutes showed as seconds
 - B2B calls and notes written to Kylas through the API key were credited to the key's owner
+- A rep with no team identity fell through to every rep's leads
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1038,3 +1039,15 @@ grep for a term, then read around the line you hit rather than opening all of it
   lead's owner as the caller": **the actor must come from the session, and a
   shared credential has no session.**
 
+- **A rep with no team identity fell through to every rep's leads** (fixed
+  2026-10-29). Inbound scoped by `scope = choice ?? (myKylasId ? 'mine' :
+  'all')`, and Outreach showed every BM's leads whenever the team table was
+  missing or failed. So the people the scope could not identify (a rep not yet
+  added under B2B → Team, a rep without a linked Kylas user, everyone on a day
+  the team list failed to load) were exactly the ones who saw everyone's leads.
+  The user had asked from the start that a rep sees only their own data. Now an
+  unidentified non-manager gets an empty Inbound board with a notice naming the
+  fix, and Outreach falls back to matching by BM phone or name. The shape:
+  **when a scope cannot tell who someone is, it must narrow, not widen.**
+  "Show everything with a warning" is a fair soft gate for a missing feature, but
+  not for an access rule.

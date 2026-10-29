@@ -203,7 +203,13 @@ managers, not only admins, must edit it, and the Django user endpoint is an
 admin screen; and each person needs a Kylas user id stored somewhere anyway.
 Manager-ness *does* stay a permission: the `b2b.manager` slug, or role
 `superadmin`/`admin`/`b2b_manager`, via `isB2BManager`. No `b2b.inbound`-style
-team slugs were added.
+team slugs were added. **Since 2026-10-29 a member can also be marked "B2B
+admin" on the Team tab** (`is_admin`, migration 0021). That grants
+`viewer.isManager` but not `viewer.canManageTeam`: see `docs/crm-shell/context.md`
+§`b2b.manager`. In the same change, Inbound's "All" switch became manager-only,
+and a rep the scope cannot identify now sees nothing rather than everything
+(`docs/landmines.md`, "A rep with no team identity…"). The user kept every other
+sub-tab's access as it was.
 
 What exists, all documented in `inbound.md` §Who owns a lead:
 

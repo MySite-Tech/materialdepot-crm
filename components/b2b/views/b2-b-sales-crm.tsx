@@ -19,7 +19,7 @@ type B2BView =
   | 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
   | 'leadership' | 'targets' | 'studio' | 'team';
 
-const NAV: Array<{ key: B2BView; label: string; ready: boolean; managerOnly?: boolean }> = [
+const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean }> = [
   { key: 'dashboard',  label: 'Dashboard',        ready: true },
   { key: 'leads',      label: 'Leads',            ready: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
@@ -31,7 +31,7 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean; managerOnly?: bo
   { key: 'targets',    label: 'Targets',          ready: true },
 
   { key: 'studio',     label: 'Studio Space',     ready: true },
-  { key: 'team',       label: 'Team',             ready: true, managerOnly: true },
+  { key: 'team',       label: 'Team',             ready: true, teamManagersOnly: true },
 ];
 
 export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | null }) {
@@ -39,8 +39,8 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
   const team = useB2BTeam();
   const viewer = useMemo(() => viewerFor(currentUser, team.members), [currentUser, team.members]);
   const nav = useMemo(() => NAV
-    .filter((item) => !item.managerOnly || viewer.isManager)
-    .map((item) => (item.key === 'leadership' && !viewer.isManager ? { ...item, label: 'My performance' } : item)), [viewer.isManager]);
+    .filter((item) => !item.teamManagersOnly || viewer.canManageTeam)
+    .map((item) => (item.key === 'leadership' && !viewer.isManager ? { ...item, label: 'My performance' } : item)), [viewer.isManager, viewer.canManageTeam]);
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-84px)] bg-[#FAFAFA]">
@@ -97,7 +97,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
         {view === 'targets' && <Targets />}
         {view === 'studio' && <StudioSpace />}
-        {view === 'team' && viewer.isManager && <TeamView team={team} viewer={viewer} />}
+        {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}
       </main>
     </div>
   );
