@@ -76,6 +76,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | BM / EC pickers | Django `/crm/available-bms/`, `/orgainsation-branch/` | Django stub |
 | Outreach pool, accept, meetings, handover | backend rows (pipeline `outbound`, id `OR-IN-<kylas id>`) | backend stub |
 | Studio Space waitlist | partner app `/api/sync/waitlist` | `{ signups: [] }` |
+| EC visits (Firm page, Appointment Tracker) | backend `GET/PUT /b2b/ec-visits` | backend stub |
 | KAM firms, orders, last-order status | backend rows (`client`, `kam`), `/b2b/kam-load`; Django `/crm/leads/b2b-bulk/`, `/client-order-history/` | backend and Django stubs |
 
 ## The seed
@@ -88,5 +89,8 @@ with team and Presales notes; Follow up; PI Shared on `ENQ-900101`; Closed on
 accepted into Outreach (`OR-IN-7000116`, a meeting held and one booked); one
 waiting for Omkar's sign-off (`OR-IN-7000117`). Outreach also has a converted
 lead with a handover pending on Kavya and one she accepted, which became the
-client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago. Every name, firm
+client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago.
+`CLI-SBX-0001` has one EC visit booked at Whitefield for tomorrow
+(`ECV-SBX-0001`), so the Firm page card and the Appointment Tracker's B2B list
+both have something to show. Every name, firm
 and phone is invented — `origin` is public.

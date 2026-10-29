@@ -176,10 +176,20 @@ function seedTeam(at) {
   }));
 }
 
+function seedEcVisits() {
+  return [{
+    id: 'ECV-SBX-0001', client_id: 'CLI-SBX-0001', firm: 'Template Builders', contact_name: 'Demo Owner B', phone: '9000020002',
+    branch: 'Whitefield', visit_date: istDay(1), visit_time: '11:30', purpose: 'Pick laminates for the next block',
+    status: 'Scheduled', bm_name: SNEHA.name, outcome: null, enq_id: null, scheduled_by: KAVYA.name,
+    created_at: istAt(-1, 15), updated_at: istAt(-1, 15), updated_by: KAVYA.name,
+  }];
+}
+
 export function seedPipeline() {
   return {
     rows: [...seedOutreach(), ...seedKam()],
     deals: seedDeals(),
     team: seedTeam(istAt(-30, 10)),
+    ecVisits: seedEcVisits(),
   };
 }

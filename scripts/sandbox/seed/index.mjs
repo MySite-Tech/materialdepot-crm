@@ -10,6 +10,7 @@ export function seed() {
     backend: {
       rows: [...inbound.rows, ...pipeline.rows],
       team: pipeline.team,
+      ecVisits: pipeline.ecVisits,
       assignments: inbound.assignments,
       nextAssignmentId: inbound.assignments.length + 1,
       target: null,

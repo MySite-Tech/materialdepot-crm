@@ -1,6 +1,7 @@
 'use client';
 
 import AdminOverview from '../admin-overview';
+import { B2BVisits, B2BVisitsState } from './ui/b2b-visits';
 import { PresalesCalendar } from './ui/calendar';
 import { DateRangeControl, SelectChip } from './ui/chips';
 import { ManagerSummary, ReceptionistList } from './ui/lists';
@@ -9,6 +10,7 @@ import { fetchFootfall, fetchPlan } from './rota/data';
 import { DateRange, FootfallMap, RotaPlan } from '../types';
 import { ageLabel, defaultPlan, defaultRange, shortDate } from './utils';
 import { Branch, EcReadyEntry, EcReadyMap, LS, ApptLead as Lead, Role, apptBranchesFor, apptBranchesFromCrm, branchFrom, fetchApptFeed, loadEcReady, resolveApptRole, saveEcReady } from '@/lib/appointments/appt-shared';
+import { fetchEcVisits } from '@/lib/b2b/ec-visits';
 import { AppUser } from '@/types/crm';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -115,6 +117,18 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
     return () => { cancelled = true; };
   }, [needsFootfall, branch, fromDate, toDate]);
 
+  const showB2B = view !== "overview";
+  const [b2bVisits, setB2bVisits] = useState<B2BVisitsState>({ kind: 'loading' });
+  useEffect(() => {
+    if (!showB2B) return;
+    let cancelled = false;
+    setB2bVisits({ kind: 'loading' });
+    fetchEcVisits({ from: fromDate, to: toDate })
+      .then((visits) => { if (!cancelled) setB2bVisits({ kind: 'ready', visits }); })
+      .catch((e) => { if (!cancelled) setB2bVisits({ kind: 'failed', error: e instanceof Error ? e.message : 'request failed' }); });
+    return () => { cancelled = true; };
+  }, [showB2B, fromDate, toDate]);
+
   const load = useCallback(() => loadLeads(true), [loadLeads]);
 
   const scopedLeads = useMemo(() => {
@@ -218,6 +232,7 @@ export default function AppointmentTrackerClient({ currentUser, branches }: {
         </div>
       )}
 
+      {showB2B && <B2BVisits state={b2bVisits} branch={branch} />}
       {(role === "presales" || (role === "admin" && adminView === "calendar")) && (
         <PresalesCalendar leads={scopedLeads} branch={branch} from={fromDate} to={toDate} plan={plan} footfall={footfall} />
       )}

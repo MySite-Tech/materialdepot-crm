@@ -14,6 +14,15 @@ lists, a manager summary, an admin overview, and the weekly rota planner.
 | Rota plan | CRM Supabase table `rota_plan` | `GET/POST /api/resource-plan` → `lib/appointments/rota-plan.ts` |
 | EC-ready state | **the viewer's own browser** | `localStorage` key `md_ec_ready` |
 | Footfall counts | `/api/footfall` | rota planner only (`tracker/rota/data.ts`), keyed `"<date>|<slotKey>"` |
+| B2B assisted visits | B2B backend `b2b_ec_visit` | `fetchEcVisits({from, to})` → `GET /api/b2b/ec-visits`, one call per date range |
+
+**B2B assisted visits (2026-10-29)** are booked from a firm's page in B2B Sales
+(`docs/b2b/client-db.md` §EC visits). They are not Kylas leads, so they can
+never be in the calendar's booked/visited counts. They show as their own list
+above the calendar and reception views, for the selected branch, matched on
+the exact branch name. Cancelled ones are hidden. A failed read shows an amber
+line instead of an empty list. Nothing in the tracker writes to them: the B2B
+team updates the outcome.
 
 `fetchApptFeed(force)` hits the route handler, not Kylas directly; the handler
 holds the `KYLAS_API_KEY` and a server-side cache. The response carries
