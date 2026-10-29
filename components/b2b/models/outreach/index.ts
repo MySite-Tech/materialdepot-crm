@@ -83,16 +83,20 @@ export const pinMapUrl = (p: GeoPin): string => `https://www.google.com/maps?q=$
 
 export const STUDIO_WAITLIST_URL = 'https://studio.materialdepot.com/join';
 
+export type AssignHow = 'manual' | 'round-robin' | 'self';
+
 export interface OutreachIntake {
-  from: 'Inbound';
-  inboundLeadId: string;
+  from: OutreachSource;
+  inboundLeadId?: string;
   inboundOwner?: string;
   inboundStage?: string;
   assignedAt: string;
   assignedBy: string;
+  how?: AssignHow;
   acceptedAt?: string;
   rejectedAt?: string;
   rejectReason?: string;
+  rejectedBy?: string;
 }
 
 export type HandoverStatus = 'Pending' | 'Accepted' | 'Rejected';

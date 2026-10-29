@@ -3,7 +3,8 @@
 import { ReactNode } from 'react';
 
 import { daysUntil } from '../../../models/inbound';
-import { KAM_ACCOUNT_STATUS_SCALE, KAM_LENS, KAM_LIST_PAGE_SIZE, kamDaysToLapse, queueAgeBand } from '../../../models/kam';
+import { KAM_LENS, KAM_LIST_PAGE_SIZE, queueAgeBand } from '../../../models/kam';
+import { daysToLapse } from '../../../models/client';
 import { fmtL } from '../../../models/mock-data';
 import { AssignedClientRow, KamFirmLens } from '../../../types/kam';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
@@ -86,7 +87,7 @@ export function KamFirmTable({ lens, rows, today, search, valueText, page, setPa
             </thead>
             <tbody>
               {visible.map((r) => {
-                const lapse = kamDaysToLapse(r.metrics, today);
+                const lapse = daysToLapse(r.metrics, today);
                 const last = r.lastInteraction;
                 return (
                   <tr key={r.client.id} onClick={() => onOpen(r.client.id)} className="border-t border-gray-100 cursor-pointer hover:bg-gray-50">
@@ -105,7 +106,7 @@ export function KamFirmTable({ lens, rows, today, search, valueText, page, setPa
                         : <span className="text-gray-300">no number</span>}
                       {r.contactPerson && <div className="text-[10px] text-gray-400">{r.contactPerson}</div>}
                     </td>
-                    <td className={td}><StatusPill status={r.status} days={lapse} scale={KAM_ACCOUNT_STATUS_SCALE} /></td>
+                    <td className={td}><StatusPill status={r.status} days={lapse} /></td>
                     {showLapse && (
                       <td className={`${td} whitespace-nowrap font-mono text-gray-600`}>{lapse !== undefined ? `${lapse}d` : '—'}</td>
                     )}

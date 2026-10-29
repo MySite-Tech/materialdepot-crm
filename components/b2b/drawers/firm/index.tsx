@@ -6,23 +6,23 @@ import { GstsCard } from './cards/gsts';
 import { OrdersCard } from './cards/orders';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, StatusScale, contactNumbers } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers } from '../../models/client';
 import { fmtShortINR } from '../../models/mock-data';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
 import { btnGhost } from '../../constants/ui';
 import { ClientOrderHistory } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
-export function FirmDrawer({ client, clients, metrics, status, days, statusScale, historyFor, badges, reassignReason, onClose, onSave, onEdit, children }: {
+export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, onClose, onSave, onEdit, children }: {
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
-  status: ClientStatus | string;
+  status: ClientStatus;
   days?: number;
-  statusScale?: StatusScale;
   historyFor: (phone: string) => ClientOrderHistory | undefined;
   badges?: React.ReactNode;
   reassignReason: string;
+  assignAs?: string;
   onClose: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
   onEdit?: () => void;
@@ -49,7 +49,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, statusScale
             <div className="min-w-0">
               <h2 className="text-[18px] font-bold text-gray-900 truncate">{client.company || <span className="text-gray-400 italic">Unnamed firm</span>}</h2>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <StatusPill status={status} days={days} scale={statusScale} />
+                <StatusPill status={status} days={days} />
                 {badges}
                 <span className="text-[12px] text-gray-500">{facts.join(' · ')}</span>
               </div>
@@ -69,9 +69,9 @@ export function FirmDrawer({ client, clients, metrics, status, days, statusScale
             <StatTile
               label="Last order"
               value={<span className="text-[15px]"><Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} /></span>}
-              sub={status === 'Active' && days !== undefined ? `${days} days until inactive` : undefined}
+              sub={days !== undefined ? `${days} days until ${status === 'Active' ? 'Inactive 1 month' : 'Inactive'}` : undefined}
             />
-            <StatTile label="Open pipeline" value={<Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} />} />
+            <StatTile label="Open carts" value={<Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} />} />
           </div>
           {metrics.dateState === 'unavailable' && (
             <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
@@ -88,7 +88,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, statusScale
             details={orders.details}
             loading={orders.loading}
             failed={orders.failed}
-            multiNumber={phones.length > 1}
+            numbers={phones.length}
             via={via}
             onClearVia={() => setVia(null)}
             onRecheck={orders.recheck}
@@ -96,7 +96,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, statusScale
 
           {children}
 
-          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} onSave={onSave} />
+          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} onSave={onSave} />
         </div>
       </div>
     </div>

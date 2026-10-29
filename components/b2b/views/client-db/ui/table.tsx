@@ -2,6 +2,7 @@
 
 import { fmtDate, fmtGst, fmtPhone } from '../../../drawers/firm/utils';
 import { ClientEntity, contactLabel, contactNumbers, currentTemperature, gstNumbers, primaryContact } from '../../../models/client';
+import { firmHandover } from '../../../models/kam';
 import { fmtShortINR } from '../../../models/mock-data';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
 import { SORT_FIRST_DIR } from '../constants';
@@ -39,18 +40,49 @@ function SortTh({ label, k, sort, onSort, align = 'left', className = '' }: {
   );
 }
 
-export function ClientTable({ rows, today, sort, onSort, onOpen }: {
+function KamCell({ client }: { client: ClientEntity }) {
+  const h = firmHandover(client);
+  if (client.kam) {
+    return (
+      <>
+        <span className="text-gray-700">{client.kam}</span>
+        {h?.status === 'Pending' && (
+          <div className="text-[10px] font-semibold text-violet-700 mt-0.5" title={`Assigned by ${h.by || 'an admin'}. Counts as theirs, and waits for them to accept or reject.`}>waiting for sign-off</div>
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700">No KAM</span>
+      {h?.status === 'Rejected' && (
+        <div className="text-[10px] text-red-700 mt-1 max-w-[180px] truncate" title={`${h.kam} rejected it: ${h.rejectReason || 'no reason'}`}>
+          {h.kam} rejected: {h.rejectReason || 'no reason'}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function ClientTable({ rows, today, sort, onSort, onOpen, picked, onPick, onPickPage }: {
   rows: ClientListRow[];
   today: string;
   sort: SortState;
   onSort: (s: SortState) => void;
   onOpen: (c: ClientEntity) => void;
+  picked?: Set<string>;
+  onPick?: (id: string) => void;
+  onPickPage?: () => void;
 }) {
+  const allOnPage = !!picked && rows.length > 0 && rows.every((r) => picked.has(r.client.id));
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px] min-w-[1000px]">
         <thead>
           <tr className="group/th bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider border-b border-gray-200">
+            {picked && (
+              <th className="pl-4 w-6"><input type="checkbox" checked={allOnPage} onChange={onPickPage} aria-label="Select this page" /></th>
+            )}
             <SortTh label="Firm" k="company" sort={sort} onSort={onSort} className="px-4" />
             <th className="text-left font-semibold px-3 py-2.5">Primary contact</th>
             <th className="text-left font-semibold px-3 py-2.5">GST</th>
@@ -71,6 +103,11 @@ export function ClientTable({ rows, today, sort, onSort, onOpen }: {
             const since = sinceLabel(metrics.lastOrderPlaced, today);
             return (
               <tr key={client.id} onClick={() => onOpen(client)} className="group border-t border-gray-100 cursor-pointer hover:bg-teal-50/40">
+                {picked && (
+                  <td className="pl-4" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={picked.has(client.id)} onChange={() => onPick?.(client.id)} aria-label={`Select ${client.company}`} />
+                  </td>
+                )}
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-[13px] text-gray-900">{client.company || <span className="text-gray-300">(unnamed)</span>}</span>
@@ -120,9 +157,7 @@ export function ClientTable({ rows, today, sort, onSort, onOpen }: {
                   <StatusPill status={status} days={days} />
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap">
-                  {client.kam
-                    ? <span className="text-gray-700">{client.kam}</span>
-                    : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700">No KAM</span>}
+                  <KamCell client={client} />
                 </td>
                 <td className="pr-3 text-gray-300 group-hover:text-[#0F766E] text-[14px]">›</td>
               </tr>

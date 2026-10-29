@@ -149,6 +149,45 @@ reason** from `INTAKE_REJECT_REASONS`, which mirror Inbound's qualification
 checklist so they can later score Inbound's lead quality. Rejecting moves the
 lead to Lost with `Rejected from Inbound — <reason>`.
 
+### Admin assignment from any source (2026-10-29)
+
+The user: admins assign leads to Outreach, manually or round robin, because leads
+arrive from many sources, not only Inbound, and the BM has to take the handover.
+The **Assignments** tile (was "From Inbound", lens key still `inbox`) holds
+three sections: Waiting for sign-off, the **Unassigned pool** (managers only)
+and the Inbound pool.
+
+- **One intake shape, not two.** `OutreachIntake.from` is now any
+  `OutreachSource`, and `inboundLeadId` is optional. `intake.how` records
+  `manual | round-robin | self`. Anything that credits Inbound must check
+  `from === 'Inbound'` (the Inbound qualified KPI does). A non-Inbound intake has
+  no Inbound owner, so without that check it would silently credit nobody.
+- **An unassigned lead is `bm === ''`.** The admin creates one with **+ New lead**
+  and BM set to "Unassigned — assign later". Those leads are excluded from every
+  lens and KPI (`isUnassigned`), so the team totals do not move until the lead
+  has a BM. The "next step" gate is waived for them, since the meeting belongs
+  to whoever gets the lead.
+- **Picking someone else's name is an assignment.** That covers + New lead with
+  another BM, the drawer's BM picker when a manager changes it, and the pool. It
+  writes a pending intake that the BM accepts or rejects, as with Inbound.
+  `assignLead` keeps `inboundLeadId` and `inboundOwner` across a reassignment, so
+  Inbound's credit follows the lead. A manager picking themselves is `self` and
+  is auto-accepted.
+- **Rejection differs by origin.** An Inbound lead still closes as Lost, because
+  those reasons score Inbound. Any other lead goes **back to the unassigned
+  pool** with `rejectedBy` and the reason shown, and its next assignment
+  replaces the intake. The rejection stays in the journey. Reasons are
+  `ASSIGN_REJECT_REASONS`, which is the Inbound list plus "Outside my area".
+- **One round-robin rule.** `spreadByLoad` (fewest load, ties by name) backs
+  both `planRoundRobin` (Outreach: intakes assigned this month, Inbound and admin
+  together) and `planFirmRoundRobin` (KAM, `kam.md`). The pool's bulk assignment
+  is one `POST /rows/bulk` through `saveMany`, not one write per lead. That
+  endpoint ships with b2b-backend `b2b-crm-extra-and-team`, as `createMany`
+  already needed.
+- **Only managers assign.** `scope.isManager` gates the pool and the bulk bar.
+  It is no longer `mode !== 'mine'`, which also let everyone assign while the
+  team table was missing.
+
 **There is no bulk import and no export (removed 2026-10-29).** The user's
 call: leads arrive only from Inbound and from the database the team uploads,
 and every other lead a BM finds is entered one at a time in **+ New lead**, so

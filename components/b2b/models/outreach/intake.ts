@@ -1,6 +1,6 @@
 import { InboundLead, LeadNote, OutreachLead } from '../mock-data';
 import { InboundStatus, sentToOutreach } from '../inbound';
-import { COMPANY_TYPES, CompanyType } from '.';
+import { AssignHow, COMPANY_TYPES, CompanyType } from '.';
 import { sameRep } from './handover';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -53,7 +53,7 @@ export function inboundContext(l: InboundLead): LeadNote[] {
   return [...calls, ...notes].sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
 }
 
-export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string, accepted: boolean): OutreachLead {
+export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string, how: AssignHow): OutreachLead {
   return {
     id: intakeLeadId(l.id),
     company: String(l.companyName || l.company || l.contactName || '').trim() || 'Unnamed lead',
@@ -88,24 +88,56 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
       inboundStage: l.stage,
       assignedAt: at,
       assignedBy: by,
-      acceptedAt: accepted ? at : undefined,
+      how,
+      acceptedAt: how === 'self' ? at : undefined,
     },
   };
 }
 
-export function planRoundRobin<T>(items: T[], reps: Rep[], current: OutreachLead[], month: string): { item: T; rep: Rep }[] {
+export function spreadByLoad<T>(items: T[], reps: Rep[], load: Map<string, number>): { item: T; rep: Rep }[] {
   if (!reps.length) return [];
-  const load = new Map(reps.map((r) => [r.name, 0]));
+  const held = new Map(reps.map((r) => [r.name, load.get(r.name) || 0]));
+  return items.map((item) => {
+    const rep = [...reps].sort((a, b) => (held.get(a.name)! - held.get(b.name)!) || a.name.localeCompare(b.name))[0];
+    held.set(rep.name, held.get(rep.name)! + 1);
+    return { item, rep };
+  });
+}
+
+export function planRoundRobin<T>(items: T[], reps: Rep[], current: OutreachLead[], month: string): { item: T; rep: Rep }[] {
+  const load = new Map<string, number>();
   for (const l of current) {
     if (!l.intake || String(l.intake.assignedAt).slice(0, 7) !== month) continue;
     const rep = reps.find((r) => sameRep(r.name, l.bm));
     if (rep) load.set(rep.name, (load.get(rep.name) || 0) + 1);
   }
-  return items.map((item) => {
-    const rep = [...reps].sort((a, b) => (load.get(a.name)! - load.get(b.name)!) || a.name.localeCompare(b.name))[0];
-    load.set(rep.name, load.get(rep.name)! + 1);
-    return { item, rep };
-  });
+  return spreadByLoad(items, reps, load);
+}
+
+export const isUnassigned = (l: OutreachLead): boolean => !String(l.bm || '').trim();
+
+export const unassignedPool = (leads: OutreachLead[]): OutreachLead[] =>
+  leads
+    .filter((l) => isUnassigned(l) && l.status !== 'Lost')
+    .sort((a, b) => String(b.intake?.rejectedAt || b.createdAt || '').localeCompare(String(a.intake?.rejectedAt || a.createdAt || '')));
+
+export function assignLead(l: OutreachLead, rep: Rep, by: string, at: string, how: AssignHow): OutreachLead {
+  return {
+    ...l,
+    bm: rep.name,
+    bmPhone: rep.phone,
+    spok: rep.name,
+    intake: {
+      from: l.intake?.from || l.source || 'Own research',
+      inboundLeadId: l.intake?.inboundLeadId,
+      inboundOwner: l.intake?.inboundOwner,
+      inboundStage: l.intake?.inboundStage,
+      assignedAt: at,
+      assignedBy: by,
+      how,
+      acceptedAt: how === 'self' ? at : undefined,
+    },
+  };
 }
 
 function companyTypeFrom(raw: string | undefined): CompanyType | undefined {
@@ -129,12 +161,11 @@ export const INTAKE_REJECT_REASONS = [
   'Duplicate of an existing lead',
 ] as const;
 
-export function rejectIntake(l: OutreachLead, reason: string, at: string): OutreachLead {
+export const ASSIGN_REJECT_REASONS = [...INTAKE_REJECT_REASONS, 'Outside my area'] as const;
+
+export function rejectIntake(l: OutreachLead, reason: string, at: string, by: string): OutreachLead {
   if (!l.intake) return l;
-  return {
-    ...l,
-    status: 'Lost',
-    lostReason: `Rejected from Inbound — ${reason}`,
-    intake: { ...l.intake, rejectedAt: at, rejectReason: reason },
-  };
+  const intake = { ...l.intake, rejectedAt: at, rejectReason: reason, rejectedBy: by };
+  if (l.intake.from !== 'Inbound') return { ...l, bm: '', bmPhone: undefined, spok: '', intake };
+  return { ...l, status: 'Lost', lostReason: `Rejected from Inbound — ${reason}`, intake };
 }

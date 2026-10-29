@@ -7,9 +7,10 @@ import { SectionCard } from '../../../ui/inbound-chips';
 import { btnPrimary } from '../../../constants/ui';
 import { useState } from 'react';
 
-export function AccountCard({ client, reassignReason, onSave }: {
+export function AccountCard({ client, reassignReason, assignAs, onSave }: {
   client: ClientEntity;
   reassignReason: string;
+  assignAs?: string;
   onSave: (c: ClientEntity) => Promise<string | null>;
 }) {
   const [reassigning, setReassigning] = useState(false);
@@ -25,7 +26,9 @@ export function AccountCard({ client, reassignReason, onSave }: {
     const err = await onSave({
       ...client,
       kam: nextKam || undefined,
-      assignments: [...(client.assignments || []), { kam: nextKam, at: new Date().toISOString(), reason: reassignReason }],
+      assignments: [...(client.assignments || []), nextKam
+        ? { kam: nextKam, at: new Date().toISOString(), by: assignAs, how: 'manual', status: 'Pending', reason: reassignReason }
+        : { kam: '', at: new Date().toISOString(), by: assignAs, reason: reassignReason }],
     });
     setBusy(false);
     if (err) setError(err); else setReassigning(false);
@@ -52,7 +55,7 @@ export function AccountCard({ client, reassignReason, onSave }: {
             <button onClick={reassign} disabled={busy} className={btnPrimary}>{busy ? 'Saving…' : 'Save'}</button>
             <button onClick={() => { setReassigning(false); setNextKam(client.kam || ''); }} className="text-[11px] text-gray-400 cursor-pointer">Cancel</button>
           </div>
-        ) : (
+        ) : assignAs !== undefined && (
           <button onClick={() => setReassigning(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer">
             {client.kam ? 'Reassign' : 'Assign'}
           </button>
@@ -68,6 +71,7 @@ export function AccountCard({ client, reassignReason, onSave }: {
               <li key={i} className="text-[11px] text-gray-500">
                 <span className="font-medium text-gray-700">{a.kam || 'Unassigned'}</span> · {fmtDate(a.at)}
                 {a.reason && <span className="text-gray-400"> · {a.reason}</span>}
+                {a.status && <span className="text-gray-400"> · {a.status}{a.rejectReason ? `: ${a.rejectReason}` : ''}</span>}
               </li>
             ))}
           </ol>

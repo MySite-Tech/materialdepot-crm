@@ -3,7 +3,7 @@
 **Covers:** `components/b2b/** · lib/b2b/** · lib/api/b2b/**`
 
 ## Purpose
-B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, the leadership board (My performance for reps), dashboard and the partner-content composer (~13.6k lines of components + 1.6k of domain/data).
+B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, the leadership board (My performance for reps), dashboard and the Studio Space tab (~13.6k lines of components + 1.6k of domain/data).
 
 Its data lives in the FastAPI `b2b-backend` (`newdb`), reached through
 `app/api/b2b/[...path]` — **not** Supabase anymore. The read/write shapes and why
@@ -22,7 +22,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; the list's lens tiles, chips and per-lens sort; parent-company grouping and why name is never a merge key | 293 |
 | [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; tiles as clickable lenses; the 30/60-day account status; call dedupe; the unbuilt per-PI and check-in specs | 243 |
 | [`data-layer.md`](data-layer.md) | `lib/b2b` read shapes, the Kylas `total=0` trap, the `ok`-flag rule, the roster, the two revenue numbers, chart colours, split load | 242 |
-| [`partner-content.md`](partner-content.md) | The Partner Content sub-tab: banners and New Launches pushed onto partner dashboards. No CRM-side store, the push is a diff, images travel as bytes | 115 |
+| [`studio-space.md`](studio-space.md) | The Studio Space tab (replaced Partner Content, 2026-10-29): link out to studio.materialdepot.com (no iframe, and why), the per-number onboarding list and the 25% KAM target, what is not synced to Studio Space | — |
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
@@ -46,7 +46,7 @@ a new session knows what is live and what is being worked on.
   deployed first** (`docs/backends.md`). Try it locally with `npm run
   dev:sandbox` (`sandbox.md`).
 - **Client Database: the same lens tiles, built 2026-10-28.** All · Active ·
-  Lapsing soon · Inactive · No KAM, removable filter chips and sortable
+  Inactive 1 month · Inactive · No KAM, removable filter chips and sortable
   columns. The status dropdown is gone. See `client-db.md` §The list.
 - **KAM: the same lens tiles, built 2026-10-28** (slice 3, minus Tier and Studio
   Space). See `kam.md` §The tiles are the navigation. Both tabs use
@@ -56,15 +56,22 @@ a new session knows what is live and what is being worked on.
   tidy-up, so that all four tabs share one tile shape.
 - **KAM: its own 30 / 60-day status, and no header buttons (2026-10-29).**
   Active = ordered in the last 30 days, Inactive 1 month = 31–60 days,
-  Inactive = more than 60 days or none. **KAM only**: Client Database keeps the
-  3-month `clientStatus`, so one firm can differ between the two tabs on
-  purpose. The dashboard's KAM section and Leadership KAM coverage follow the
-  KAM rule. Export, Upload Orders and + Add Order are gone from the tab header
+  Inactive = more than 60 days or none. **Since that evening it is every
+  firm's rule** (`clientStatus`), Client Database included, so the two tabs
+  agree again. Export, Upload Orders and + Add Order are gone from the tab header
   (orders are added from a firm's page). See `kam.md` §Account status.
 - **KAM, still to build (user's spec, 2026-10-29):** a follow-up date and a
   closure date **per PI** (follow-ups are per firm today), and a location plus
   photo-in-uniform check-in before every offline meeting for Outreach and KAM.
   Neither is started. Open questions are in `kam.md` §Not built yet.
+- **2026-10-29, evening (the user's eight-point list):**
+  - every firm is on the 30/60-day status;
+  - Client DB has no export for anyone;
+  - targets are monthly: KAM 500 calls and 35 meetings, Inbound 1,500 calls;
+  - Partner Content is deleted and Studio Space replaced it (`studio-space.md`);
+  - on the Firm page, each enquiry expands to its cart, dates, visits and remarks, and each number has a classification and Studio Space access, Power or Non-power (`client-db.md`);
+  - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin, and the assignee must accept or reject (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
+  - **Not done:** enquiries cannot be found by GSTIN (needs a Django `gst` filter on `/crm/leads/`), and the Power user marking does not yet change access on Studio Space (needs a b2b-backend `/sync` write to `partner_user.visible_tabs`).
 - **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
   It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
   sessions worked one tree that day. Run `git status --short -- components/b2b

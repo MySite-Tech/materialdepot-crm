@@ -1,5 +1,5 @@
 
-import { ClientStatus, DuplicateEvidence, MergeField } from '../types/client';
+import { ClientStatus, DuplicateEvidence, MergeField, StatusScale, StudioAccess } from '../types/client';
 
 export const CLIENT_ENTITY_TYPES = [
   'Architect', 'Interior Designer', 'Contractor', 'Builder', 'End Consumer', 'Other',
@@ -49,19 +49,28 @@ export const TEMPERATURE_BANDS = [
   { key: 'hot',   label: '7–10 · healthy', min: 7, max: 10, color: '#22C55E' },
 ] as const;
 
-export const ACTIVE_WINDOW_MONTHS = 3;
+export const ACTIVE_DAYS = 30;
 
-export const CLIENT_STATUS_COLORS: Record<ClientStatus, string> = {
-  Active:   '#22C55E',
-  Inactive: '#9CA3AF',
-  Unknown:  '#3B82F6',
+export const INACTIVE_DAYS = 60;
+
+export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {
+  colors: { Active: '#22C55E', 'Inactive 1 month': '#F59E0B', Inactive: '#9CA3AF', Unknown: '#3B82F6' },
+  hint: {
+    Active: `Ordered within the last ${ACTIVE_DAYS} days`,
+    'Inactive 1 month': `Last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago`,
+    Inactive: `No order in the last ${INACTIVE_DAYS} days`,
+    Unknown: 'Order dates could not be read for this client',
+  },
 };
 
-export const CLIENT_STATUS_HINT: Record<ClientStatus, string> = {
-  Active:   `Ordered within the last ${ACTIVE_WINDOW_MONTHS} months`,
-  Inactive: `No order in the last ${ACTIVE_WINDOW_MONTHS} months`,
-  Unknown:  'Order dates could not be read for this client',
+export const STUDIO_SPACE_URL = 'https://studio.materialdepot.com';
+
+export const STUDIO_ACCESS: Record<StudioAccess, { label: string; hint: string }> = {
+  power:       { label: 'Power user',     hint: 'Sees the whole Studio Space dashboard' },
+  'non-power': { label: 'Non-power user', hint: 'Sees only the Orders and Rewards tabs' },
 };
+
+export const CONTACT_CLASSES = ['Owner', 'Partner', 'Designer', 'Purchase', 'Accounts', 'Site'] as const;
 
 export const EVIDENCE_LABEL: Record<DuplicateEvidence, string> = {
   contact: 'Same contact number',

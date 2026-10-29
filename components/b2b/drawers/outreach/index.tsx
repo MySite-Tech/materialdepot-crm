@@ -20,8 +20,8 @@ import {
   meetingsStalled, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors,
   outreachStatusPrompts,
 } from '../../models/outreach';
-import { isHandoverKam, respondToHandover, sendHandover } from '../../models/outreach/handover';
-import { Rep } from '../../models/outreach/intake';
+import { isHandoverKam, respondToHandover, sameRep, sendHandover } from '../../models/outreach/handover';
+import { Rep, assignLead } from '../../models/outreach/intake';
 import { newOnboardingFrom } from '../../models/outreach/kpis';
 import { outreachCaptureErrors } from '../../models/outreach/reminders';
 import { OutreachScope, SaveLead } from '../../views/outreach/types';
@@ -233,7 +233,7 @@ export default function OutreachDrawer({
             set={set}
             reps={scope.reps}
             canPickBm={scope.mode !== 'mine'}
-            onPickBm={(r) => setDraft((d) => ({ ...d, bm: r.name, bmPhone: r.phone }))}
+            onPickBm={(r) => setDraft((d) => (scope.isManager ? assignLead(d, r, scope.me.name, nowIso(), sameRep(r.name, scope.me.name) ? 'self' : 'manual') : { ...d, bm: r.name, bmPhone: r.phone }))}
           />
 
           <OutreachCompanyCard

@@ -12,6 +12,18 @@ export interface ClientContact {
 
   label?: string;
   primary?: boolean;
+
+  studioAccess?: StudioAccess;
+  studioOnboardedAt?: string;
+}
+
+export type StudioAccess = 'power' | 'non-power';
+
+export interface FirmStudioState {
+  numbers: number;
+  onboarded: number;
+  power: number;
+  unclassified: number;
 }
 
 type GstCheck = 'valid' | 'bad-format' | 'bad-checksum' | 'unknown-state' | 'empty';
@@ -45,11 +57,19 @@ export interface ClientMergeRecord {
   mergedBy?: string;
 }
 
+export type FirmHandoverStatus = 'Pending' | 'Accepted' | 'Rejected';
+
 export interface KamAssignment {
   kam: string;
+  kamPhone?: string;
 
   at: string;
   by?: string;
+  how?: 'manual' | 'round-robin';
+  status?: FirmHandoverStatus;
+  respondedAt?: string;
+  respondedBy?: string;
+  rejectReason?: string;
   reason?: string;
 }
 
@@ -113,7 +133,7 @@ export interface ClientOrderMetrics {
   dateState: 'ok' | 'pending' | 'unavailable' | 'no-phone' | 'no-orders';
 }
 
-export type ClientStatus = 'Active' | 'Inactive' | 'Unknown';
+export type ClientStatus = 'Active' | 'Inactive 1 month' | 'Inactive' | 'Unknown';
 
 export interface StatusScale {
   colors: Record<string, string>;

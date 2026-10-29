@@ -4,8 +4,9 @@ import { ORDER_PAGE_SIZE, ORDER_TABS } from '../constants';
 import { OrderTab, fmtDate, fmtPhone, orderTab } from '../utils';
 import { fmtINR } from '../../../models/mock-data';
 import { SectionCard, Spinner } from '../../../ui/inbound-chips';
+import { EnquiryDetail } from './enquiry';
 import { ClientOrderDetails, ClientOrderRow } from '@/lib/b2b';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 function EnqChip({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
@@ -13,7 +14,7 @@ function EnqChip({ id }: { id: string }) {
     navigator.clipboard?.writeText(id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {});
   };
   return (
-    <button onClick={copy} title="Copy enquiry ID"
+    <button onClick={(e) => { e.stopPropagation(); copy(); }} title="Copy enquiry ID"
       className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-gray-800 bg-gray-100 hover:bg-gray-200 rounded px-1.5 py-0.5 cursor-pointer whitespace-nowrap">
       {id || '—'}
       <span className="text-[9px] font-sans font-semibold text-gray-400">{copied ? 'copied' : 'copy'}</span>
@@ -30,17 +31,18 @@ function StatusChip({ r }: { r: ClientOrderRow }) {
   );
 }
 
-export function OrdersCard({ details, loading, failed, multiNumber, via, onClearVia, onRecheck }: {
+export function OrdersCard({ details, loading, failed, numbers, via, onClearVia, onRecheck }: {
   details: ClientOrderDetails | null;
   loading: boolean;
   failed: boolean;
-  multiNumber: boolean;
+  numbers: number;
   via: string | null;
   onClearVia: () => void;
   onRecheck: () => void;
 }) {
   const [tab, setTab] = useState<OrderTab>('placed');
   const [page, setPage] = useState(1);
+  const [openEnq, setOpenEnq] = useState<string | null>(null);
 
   const scoped = useMemo(
     () => (details?.rows || []).filter((r) => !via || r.contactNumber === via),
@@ -52,13 +54,13 @@ export function OrdersCard({ details, loading, failed, multiNumber, via, onClear
     return out;
   }, [scoped]);
 
-  useEffect(() => { setPage(1); }, [tab, via]);
+  useEffect(() => { setPage(1); setOpenEnq(null); }, [tab, via]);
 
   const list = byTab[tab];
   const totalPages = Math.max(1, Math.ceil(list.length / ORDER_PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
   const pageRows = list.slice((curPage - 1) * ORDER_PAGE_SIZE, curPage * ORDER_PAGE_SIZE);
-  const showVia = multiNumber && !via;
+  const showVia = numbers > 1 && !via;
   const showCompany = list.some((r) => r.companyOnOrder);
   const showGst = list.some((r) => r.gstOnOrder);
   const failedPhones = details?.failedPhones || [];
@@ -67,7 +69,7 @@ export function OrdersCard({ details, loading, failed, multiNumber, via, onClear
   return (
     <SectionCard
       title="Enquiries & orders"
-      subtitle={details ? `${scoped.length} enquir${scoped.length === 1 ? 'y' : 'ies'}${via ? ` on ${fmtPhone(via)}` : ''}` : undefined}
+      subtitle={details ? `${scoped.length} enquir${scoped.length === 1 ? 'y' : 'ies'} ${via ? `on ${fmtPhone(via)}` : numbers > 1 ? `across all ${numbers} numbers` : 'on this number'} · click one for its cart and history` : undefined}
       right={<button onClick={onRecheck} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">Re-check</button>}
     >
       <div className="flex items-center gap-1 border-b border-gray-100 mb-2 flex-wrap">
@@ -111,8 +113,15 @@ export function OrdersCard({ details, loading, failed, multiNumber, via, onClear
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((r) => (
-                  <tr key={r.enqId + r.contactNumber} className="border-t border-gray-50 align-top">
+                {pageRows.map((r) => {
+                  const rowKey = r.enqId + r.contactNumber + (r.ticketId ?? '');
+                  const expanded = openEnq === rowKey;
+                  return (
+                  <Fragment key={rowKey}>
+                  <tr
+                    onClick={() => setOpenEnq(expanded ? null : rowKey)}
+                    className={`border-t border-gray-50 align-top cursor-pointer ${expanded ? 'bg-teal-50/50' : 'hover:bg-gray-50'}`}
+                  >
                     <td className="px-1 py-1.5"><EnqChip id={r.enqId} /></td>
                     <td className="px-1 py-1.5 text-gray-600 whitespace-nowrap">
                       {tab === 'placed'
@@ -129,9 +138,19 @@ export function OrdersCard({ details, loading, failed, multiNumber, via, onClear
                     {showGst && <td className="px-1 py-1.5 font-mono text-[11px] text-gray-600">{r.gstOnOrder || <span className="text-gray-300">—</span>}</td>}
                     <td className="px-1 py-1.5 text-gray-600">
                       {[r.branch, r.spoc].filter(Boolean).join(' · ') || <span className="text-gray-300">—</span>}
+                      <span className="ml-1 text-gray-300">{expanded ? '▴' : '▾'}</span>
                     </td>
                   </tr>
-                ))}
+                  {expanded && (
+                    <tr>
+                      <td colSpan={5 + (showVia ? 1 : 0) + (showCompany ? 1 : 0) + (showGst ? 1 : 0)} className="px-1 pb-2">
+                        <EnquiryDetail r={r} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

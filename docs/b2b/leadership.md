@@ -64,16 +64,18 @@ with `counts` and a reason, the same contract as `outreachKpis`.
 
 ### Targets
 
-`targetFor` scales by head count. `per: 'day'` targets (Inbound calls 90, KAM
-calls 40) are multiplied by the calendar days of the period up to today; Sundays
-are not excluded, because the sheet says nothing about them. `per: 'month'`
-targets exist only for a whole calendar month, as on Outreach. **Inbound revenue
+`targetFor` scales by head count. Every count target is now `per: 'month'`
+and shows only for a whole calendar month, with pace inside the current one.
+**Calls are monthly since 2026-10-29, at the user's instruction:** Inbound
+1,500 a month per head, KAM 500 a month per head, KAM meetings 35 (the earlier
+90 a day and 40 a day are gone). A partial-month or single-day period shows the
+count with no target. `per: 'day'` still exists in `targetFor` but no KPI uses it. **Inbound revenue
 (25 L), Inbound qualified (30) and KAM revenue (50 L) have no frequency in the
 sheet. They are treated as monthly here; that is an assumption to confirm.**
 
-**The sheet's KAM call target is 40 a day; `DAILY_CALL_TARGET` (the KAM tab and
-Dashboard) is 10.** This tab uses the sheet. The two disagree until someone
-decides which is right.
+`DAILY_CALL_TARGET` (the KAM tab's and Dashboard's "calls today" bar) is
+derived from the monthly 500 over 26 Mon–Sat working days, rounded up: 20. The
+two can no longer disagree.
 
 ## Who the people are
 
@@ -112,9 +114,9 @@ matches nothing sees a notice, not an empty card.
 - **KAM meetings and calls are one per firm per day**, credited to
   `interaction.loggedBy`, falling back to the firm's KAM. Same dedupe as
   `callsLoggedOn`.
-- **KAM coverage** uses the KAM tab's Active (`kamAccountStatus`: an order in
-  the last 30 days, as of today) as its denominator, since 2026-10-29. It was
-  3-month `clientStatus` before. `kpi-definitions.md` requires one meaning of
+- **KAM coverage** uses Active (`clientStatus`: an order in the last 30 days,
+  as of today) as its denominator, since 2026-10-29. It was a 3-month window
+  before. `kpi-definitions.md` requires one meaning of
   "active" across KAM. Against the Django stub every firm is Inactive, so it
   reads "—".
 - **KAM accounts ordering** = firms with a Closed KAM-board order in the period,

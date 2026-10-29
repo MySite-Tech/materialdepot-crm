@@ -5,7 +5,7 @@ import { ClientStatus } from '../../models/client';
 import { RangeKey } from './types';
 import { StatsBasis } from '@/lib/b2b';
 
-export const CLIENT_STATUS_ORDER: ClientStatus[] = ['Active', 'Inactive', 'Unknown'];
+export const CLIENT_STATUS_ORDER: ClientStatus[] = ['Active', 'Inactive 1 month', 'Inactive', 'Unknown'];
 
 export const SOURCE_COLORS = ['#1A1A1A', '#EAB308', '#0F766E', '#C2410C'];
 

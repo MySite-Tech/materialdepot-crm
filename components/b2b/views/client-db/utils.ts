@@ -1,5 +1,5 @@
-import { ClientEntity, contactNumbers, gstNumbers } from '../../models/client';
-import { AT_RISK_WINDOW_DAYS } from '../../constants/kam';
+import { ClientEntity } from '../../models/client';
+import { firmHandoverPending } from '../../models/kam';
 import { NO_FILTERS } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
 
@@ -7,10 +7,11 @@ export function clientLensMatches(lens: ClientLens, r: ClientListRow): boolean {
   switch (lens) {
     case 'all':      return true;
     case 'active':   return r.status === 'Active';
-    case 'lapsing':  return r.status === 'Active' && r.days !== undefined && r.days <= AT_RISK_WINDOW_DAYS;
+    case 'lapsing':  return r.status === 'Inactive 1 month';
     case 'inactive': return r.status === 'Inactive';
     case 'unknown':  return r.status === 'Unknown';
     case 'nokam':    return !r.client.kam;
+    case 'pending':  return firmHandoverPending(r.client);
   }
 }
 
@@ -18,16 +19,6 @@ export function matchesFilters(c: ClientEntity, f: ClientFilters): boolean {
   return (f.segment === 'all' || c.segment === f.segment)
     && (f.type === 'all' || c.clientType === f.type)
     && (f.kam === 'all' || c.kam === f.kam);
-}
-
-export function matchesSearch(c: ClientEntity, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const digits = q.replace(/\D/g, '');
-  return c.company.toLowerCase().includes(q)
-    || (c.contacts || []).some((x) => (x.name || '').toLowerCase().includes(q))
-    || (digits.length >= 4 && contactNumbers(c.contacts).some((p) => p.includes(digits)))
-    || gstNumbers(c.gsts).some((g) => g.toLowerCase().includes(q));
 }
 
 export function filterChips(f: ClientFilters): { key: keyof ClientFilters; label: string }[] {

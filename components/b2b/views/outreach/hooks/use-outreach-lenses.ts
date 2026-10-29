@@ -15,7 +15,7 @@ import { useMemo } from 'react';
 const day = (d: string | undefined) => String(d || '').slice(0, 10);
 const lakh = (n: number) => `₹${Math.round((n / 1_00_000) * 10) / 10}L`;
 
-export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, waitlist, pool }: {
+export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, waitlist, pool, unassigned }: {
   leads: OutreachLead[];
   kpis: OutreachKpis;
   lens: Lens;
@@ -24,6 +24,7 @@ export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, wait
   nowMs: number;
   waitlist: Map<string, WaitlistSignup> | null;
   pool: PoolLead[] | null;
+  unassigned: number;
 }) {
   const rows = useMemo<LensRow[]>(() => leads.map((lead) => {
     const w = waitlistFor(lead, waitlist);
@@ -54,8 +55,8 @@ export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, wait
     if (firstAt) h.meetings = { text: `first at ${firstAt}` };
     const late = (lists.followups ?? []).filter((r) => day(r.lead.followUpDate) < today).length;
     if (late) h.followups = { text: `${late} overdue`, warn: true };
-    if (pool === null) h.inbox = { text: 'pool unknown', warn: true };
-    else if (pool.length) h.inbox = { text: `${pool.length} unassigned` };
+    if (pool === null) h.inbox = { text: unassigned ? `${unassigned} unassigned · Inbound pool unknown` : 'Inbound pool unknown', warn: true };
+    else if (pool.length + unassigned) h.inbox = { text: `${pool.length + unassigned} unassigned` };
     const pi = (lists.pi ?? []).reduce((a, r) => a + (Number(r.lead.orderValue) || 0), 0);
     if (pi) h.pi = { text: lakh(pi) };
     const won = lists.won ?? [];
@@ -64,7 +65,7 @@ export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, wait
     const signoffLate = (lists.signoff ?? []).filter((r) => r.reminders[0]?.level === 'overdue').length;
     if (signoffLate) h.signoff = { text: `${signoffLate} past 48h`, warn: true };
     return h;
-  }, [lists, today, pool]);
+  }, [lists, today, pool, unassigned]);
 
   const kpiKey = lens.startsWith('kpi:') ? (lens.slice(4) as OutreachKpiKey) : null;
   const kpi = useMemo(() => {

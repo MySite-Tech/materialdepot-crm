@@ -5,7 +5,7 @@ import {
   type RepRole, type TargetStore,
 } from './mock-data';
 import {
-  clientStatus, istToday,
+  clientStatus, daysToLapse, istToday,
   type ClientEntity, type ClientOrderMetrics, type ClientStatus,
 } from './client';
 import { INBOUND_FOLLOW_UP_STATUSES, INBOUND_NURTURE_STATUS, isFollowUpStatus } from './inbound';
@@ -13,7 +13,7 @@ import {
   KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES,
   kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit,
   assignedClientRows, callCompliance, lostReasonBreakdown, segmentRevenue,
-  newVsRepeat, isAtRisk, kamDaysToLapse, temperatureMismatch, DAILY_CALL_TARGET,
+  newVsRepeat, isAtRisk, temperatureMismatch, DAILY_CALL_TARGET,
   type KamOrder, type CallCompliance, type CohortMonth, type KamAccountSplit,
   type KamFunnel, type KamPipelineSplit, type NewVsRepeat,
 } from './kam';
@@ -76,7 +76,7 @@ export function computeDashboard(
     kam.filter((o) => o.status === 'PI Shared').length;
   const wonCount = wonInbound.length + wonOutreach.length + wonKam.length;
 
-  const clientCounts: Record<ClientStatus, number> = { Active: 0, Inactive: 0, Unknown: 0 };
+  const clientCounts: Record<ClientStatus, number> = { Active: 0, 'Inactive 1 month': 0, Inactive: 0, Unknown: 0 };
   for (const c of clients) {
     clientCounts[clientStatus(clientMetrics[c.id] || { dateState: 'pending' }, today)]++;
   }
@@ -237,7 +237,7 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
   type AtRiskRow = { company: string; kam?: string; daysLeft: number; lastContact?: string };
   const atRisk: AtRiskRow[] = rows
     .filter(isAtRisk)
-    .map((r) => ({ company: r.company, kam: r.client.kam, daysLeft: kamDaysToLapse(r.metrics, today) ?? 0, lastContact: r.lastInteraction?.date }))
+    .map((r) => ({ company: r.company, kam: r.client.kam, daysLeft: daysToLapse(r.metrics, today) ?? 0, lastContact: r.lastInteraction?.date }))
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
   return {
