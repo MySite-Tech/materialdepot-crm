@@ -4,6 +4,13 @@ import { AppUser, Branch, Lead, Remark, Visit } from '../../types/crm';
 
 export type MainTab = 'leads' | 'dashboard' | 'footfall' | 'weeklyFunnel' | 'reportCard' | 'remarksQuality' | 'storeVisit' | 'sales' | 'b2bSales' | 'admin' | 'nps' | 'appointmentTracker' | 'siteAudit' | 'storeDisplay' | 'storeChecklist';
 
+export interface PipelineExclGst {
+  total?: number;
+  active?: number;
+  won?: number;
+  lost?: number;
+}
+
 export interface AvatarProps {
   name?: string;
   size?: number;

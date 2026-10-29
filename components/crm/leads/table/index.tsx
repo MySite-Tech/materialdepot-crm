@@ -45,7 +45,8 @@ export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync
               {isColVisible('cartItems') && <Th label="Cart Items" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('followUpDate') && <Th label="Follow-up" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
               {isColVisible('closureDate') && <Th label="Closure Date" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
-              {isColVisible('cartValue') && <Th label="Cart Value" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />}
+              {isColVisible('cartValueExclGst') && <Th label="Cart Value (excl. GST)" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />}
+              {isColVisible('cartValue') && <Th label="Cart Value (incl. GST)" sortKey="cartValue" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />}
               <Th label="Actions" sortKey={null} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
             </tr>
           </thead>
@@ -107,7 +108,10 @@ export function LeadsTable({ COL_COUNT, filtered, filteredTotal, handleKylasSync
                     </span>
                   ) : <span className="text-gray-400 text-[11px] border-b border-dashed border-gray-300">+ Set date</span>}
                 </td>}
-                {isColVisible('cartValue') && <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
+                {isColVisible('cartValueExclGst') && <td className="px-3 py-2.5 text-[13px] align-middle text-right font-mono font-bold">
+                  {l.cartValueExclGst != null ? fmtINR(l.cartValueExclGst) : <span className="font-normal text-gray-400">—</span>}
+                </td>}
+                {isColVisible('cartValue') && <td className="px-3 py-2.5 text-[12px] align-middle text-right font-mono text-gray-400">
                   {fmtINR(l.cartValue)}
                 </td>}
                 <td className="px-3 py-2.5 text-[13px] align-middle whitespace-nowrap">

@@ -22,7 +22,7 @@ import { CrmTabBar } from './shell/tab-bar';
 
 import { CRMLeadsStats, CategoryOption, fetchCategoryOptions, fetchLeadRemarks, fetchLeadVisits } from '../../lib/api';
 import { AppUser, Lead } from '../../types/crm';
-import { DEFAULT_BRANCHES } from './constants';
+import { COLUMNS_ADDED_SINCE_PICKER, DEFAULT_BRANCHES } from './constants';
 import { useDebouncedValue } from './hooks/use-debounced-value';
 import { LoginScreen } from './login';
 import { CsvRow, DateEditState, MainTab } from './types';
@@ -213,19 +213,24 @@ export default function App() {
     { key: 'cartItems', label: 'Cart Items' },
     { key: 'followUpDate', label: 'Follow-up' },
     { key: 'closureDate', label: 'Closure Date' },
-    { key: 'cartValue', label: 'Cart Value' },
+    { key: 'cartValueExclGst', label: 'Cart Value (excl. GST)' },
+    { key: 'cartValue', label: 'Cart Value (incl. GST)' },
   ];
   const [visibleCols, setVisibleCols] = useState<string[]>(() => {
     if (typeof window === 'undefined') return ALL_COLUMNS.map((c) => c.key);
     try {
       const stored = localStorage.getItem('materialdepot_cols');
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const seenRaw = localStorage.getItem('materialdepot_cols_seen');
+        const seen: string[] = seenRaw ? JSON.parse(seenRaw) : ALL_COLUMNS.map((c) => c.key).filter((k) => !COLUMNS_ADDED_SINCE_PICKER.includes(k));
+        return [...JSON.parse(stored), ...ALL_COLUMNS.map((c) => c.key).filter((k) => !seen.includes(k))];
+      }
     } catch {}
     return ALL_COLUMNS.map((c) => c.key);
   });
   const isColVisible = (key: string) => visibleCols.includes(key);
 
-  const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
+  const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
@@ -342,6 +347,7 @@ export default function App() {
         pipelineLost={pipelineLost}
         pipelineTotal={pipelineTotal}
         pipelineWon={pipelineWon}
+        pipelineExclGst={pipelineExclGst}
         runLeadsExport={runLeadsExport}
         safePage={safePage}
         search={search}

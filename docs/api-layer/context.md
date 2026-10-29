@@ -171,6 +171,13 @@ present a failed request as data".
 Because the 8s GET dedupe keys on the full path, the two bases are separate
 cache entries and never collide.
 
+`valueExclGst` on each bucket (and `cartValueExclGst` on `/crm/leads/` rows) is
+**optional in the types on purpose**: Django adds it only to the plain stats and
+list calls, never to `bm_groups=` stats, and an older deployment omits it. Absent
+means unknown: a caller may show the GST-inclusive `value` instead only if it
+labels it "incl. GST", never under an ex-GST label. See
+`docs/crm-shell/context.md` for how it is computed and displayed.
+
 ## `fetchLead` selects on `ticketId`, not on the lead id
 
 `lib/api/crm/lead-details.ts` re-reads a single row after a save. It cannot match
