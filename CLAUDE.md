@@ -102,6 +102,12 @@ cd "$C" && npm run dev:stub
 The clone is a snapshot, so `cp` each file you edit afterwards into it. Kill
 both `:3100` and `:4000` when you are done. Verified 2026-10-28.
 
+When another session already holds :3100/:4000, run a second sandbox from your
+own clone on other ports: `STUB_PORT=4100 APP_PORT=3200 node
+scripts/sandbox/index.mjs --reset`. If a sandbox's stub process is killed, the
+next `next dev` on that same clone can answer 404 for `/`. Delete the clone's
+`.next` and start it again. Both seen 2026-10-30.
+
 Four things the stub must get right, each of which has cost a debugging round:
 
 - **The envelope is `{ success: true, status, data }`** and `unwrapEnvelope`
