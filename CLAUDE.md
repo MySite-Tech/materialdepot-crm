@@ -383,6 +383,32 @@ re-clone it after pulling.
 prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
 of it. Don't build on that branch.
 
+**Branching while other sessions edit this tree: use a `git worktree`.**
+Switching branches here drags every session's uncommitted files along.
+`git worktree add -b <branch> <scratchpad>/<dir> origin/main` leaves the shared
+tree alone. A fresh worktree has no `node_modules` and no generated
+`.next/types`, so `npx tsc` prints `RouteContext` errors from `app/api/*` that
+are not yours. Symlink `node_modules` in, filter `RouteContext` out of the tsc
+output, and remove the symlink before committing.
+
+**b2b-backend is a sibling repo** (`~/Projects/b2b-backend`,
+`MySite-Tech/b2b-backend`, production is `origin/master`). Its checkout has
+`dhruv-changes` on it, which was dropped on purpose: never commit there. Make a
+worktree off `origin/master`, push with `dhruv-md`. There is no FastAPI or
+Postgres on this machine, so a new backend route is only syntax-checked until
+it runs against newdb. Say that, and say the CRM reads Unknown until it
+deploys. Studio Space's own data (`partner_user.visible_tabs`, where `NULL`
+is the whole dashboard) lives there too.
+
+**The sandbox's backend stub is at `:4000/b2b-backend/b2b/<route>`** with header
+`x-sync-key: sandbox`. Without the `/b2b-backend` prefix it answers `200 []`,
+which reads like an empty route. It loads routes once at start, so restart it
+after editing `scripts/sandbox/routes/*`.
+
+**`bash .claude/hooks/docs-guard.sh` hangs when run by hand** because it `cat`s
+stdin. Run it as `bash .claude/hooks/docs-guard.sh </dev/null`. macOS has no
+`timeout`.
+
 **`origin` is a PUBLIC repository** (verified 2026-09-14 via `gh repo view`), as
 are `daaku-daddy/material-depot-site` and `daaku-daddy/B2B-Client-Dashboard`.
 Everything committed here is world-readable: no customer names, phone numbers,

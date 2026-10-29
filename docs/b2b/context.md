@@ -87,8 +87,12 @@ a new session knows what is live and what is being worked on.
   - on the Firm page, each enquiry expands to its cart, dates, visits and remarks, and each number has a classification and a Studio Space access read from Studio Space itself, Power or Normal (`client-db.md`, `studio-space.md`);
   - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin, and the assignee must accept or reject (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
   - **Not done:** enquiries cannot be found by GSTIN (needs a Django `gst` filter on `/crm/leads/`), and the CRM cannot grant or change Studio Space access, it only reads it (the read needs b2b-backend `GET /b2b/studio-access`, branch `b2b-studio-access`, not yet deployed).
-- **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
-  It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
+- **Where it lives.** PR #29 (the revamp) is merged and deployed (2026-10-29).
+  The branch `b2b-revamp-2026-10-28` kept taking commits after it (Studio Space
+  access read-only, Targets, Leadership "Set targets", Overview). Those are
+  pushed but not on `main` and not deployed: they need a new PR (see `CLAUDE.md`
+  §Git). Studio Space access also needs b2b-backend branch `b2b-studio-access`
+  (`5825ca6`, one read route, no migration) deployed first. Several
   sessions worked one tree that day. Run `git status --short -- components/b2b
   lib/b2b docs/b2b` before starting.
 
