@@ -38,7 +38,7 @@ Probe the column before trusting a DB-backed feature.
 | `supabase-setup-b2b_target.sql` | CRM | **RETIRED** — `b2b_target` moved to `newdb` with the above |
 | `rota_plan.sql` | CRM | yes — one row per branch |
 | `supabase-store-checklist.sql` | CRM | **NO** — written 2026-09-10, never pasted. Until it runs, `/api/store-checklist` 502s with `Could not find the table 'public.store_checklist'` and the Store Checklist tab shows that instead of a checklist. Creates the table **and** the `store_checklist_mark()` merge function — the tab needs both |
-| `b2b-team.sql` | CRM | **NO** — written 2026-10-28. `b2b_team_member` + `b2b_lead_assignment`. Until it runs, `/api/b2b/team` answers `tableMissing: true`, the Team tab says so, the round robin skips, and Inbound shows every rep's leads (the pre-existing behaviour) |
+| `b2b-team.sql` | CRM | **NO, and do not run it** — superseded 2026-10-29. Both tables now live in the FastAPI b2b-backend (migration `0020_b2b_extra_and_team`); see `docs/backends.md` |
 | `b2b-migration-inbound-status.sql` | CRM | **optional** — `normalizeStatus`/`decomposeLegacyStage` run on every read, so the board is correct whether or not this is ever run |
 | `site-audit-migration-001-branch-column.sql` | Site Audit | yes — `profiles.branch` |
 | `site-audit-migration-002-branch-mgr-role.sql` | Site Audit | yes — branch-manager role |

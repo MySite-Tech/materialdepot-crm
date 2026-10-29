@@ -13,7 +13,6 @@ export async function fetchKamLoad(): Promise<Record<string, number>> {
   }
 }
 
-export const fetchInboundKamLoad = fetchKamLoad;
 
 export interface VerticalStats {
   label: string;

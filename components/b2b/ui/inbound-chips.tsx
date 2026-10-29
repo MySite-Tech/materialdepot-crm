@@ -108,6 +108,34 @@ export function SectionCard({
   );
 }
 
+export function CollapsibleCard({
+  title, owner, subtitle, summary, children, defaultOpen = false,
+}: {
+  title: string;
+  owner?: FieldOwner;
+  subtitle?: string;
+  summary?: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details open={defaultOpen} className="group bg-white rounded-lg border border-gray-200">
+      <summary className="flex items-center justify-between gap-2 px-4 py-3.5 cursor-pointer list-none select-none">
+        <span className="flex items-center gap-2 min-w-0">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 whitespace-nowrap">{title}</h3>
+          {owner && <ProvenanceChip owner={owner} />}
+          {subtitle && <span className="text-[10px] text-gray-400 truncate">{subtitle}</span>}
+        </span>
+        <span className="flex items-center gap-2 min-w-0">
+          {summary && <span className="text-[11px] text-gray-500 truncate group-open:hidden">{summary}</span>}
+          <span className="text-gray-400 text-[11px] transition-transform group-open:rotate-180">▾</span>
+        </span>
+      </summary>
+      <div className="px-4 pb-4">{children}</div>
+    </details>
+  );
+}
+
 export function Field({
   label, owner, hint, error, required, children, className = '',
 }: {

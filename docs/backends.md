@@ -9,7 +9,7 @@ This is the single most common source of confusion here.
 | What | Where | How it's reached |
 |---|---|---|
 | **Employees, permissions, auth, leads** | Django, `https://api-dev2.materialdepot.in/apiV1` | `lib/api/core/client.ts` (`mdFetch`), re-exported from the `lib/api/index.ts` barrel |
-| **B2B sales CRM data** | FastAPI `b2b-backend` → `newdb` Postgres on `psql-md-prod-cin-01` | Browser → `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` route handler (`lib/server/b2b-backend.ts`: `requireCaller` + the `admin`/`b2b_sales` gate) → FastAPI, trusted by `x-sync-key: B2B_BACKEND_SECRET`. Env: `B2B_BACKEND_URL` + `B2B_BACKEND_SECRET`, **server-only** (route handler), so like the other server-only keys they are NOT in the deploy workflow — set them in Azure application settings. See `docs/b2b/data-layer.md` |
+| **B2B sales CRM data** | FastAPI `b2b-backend` → `newdb` Postgres on `psql-md-prod-cin-01` | Browser → `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` route handler (`lib/server/b2b-backend.ts`: `requireCaller` + `canUseB2B`, the same B2B Sales rule as the tab gate) → FastAPI, trusted by `x-sync-key: B2B_BACKEND_SECRET`. Env: `B2B_BACKEND_URL` + `B2B_BACKEND_SECRET`, **server-only** (route handler), so like the other server-only keys they are NOT in the deploy workflow — set them in Azure application settings. See `docs/b2b/data-layer.md` |
 | **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | Route handlers only, `SUPABASE_SERVICE_ROLE_KEY` via `lib/appointments/rota-plan.ts` and `lib/store-checklist/checklist-store.ts`, which bypass RLS. **No longer reached from the browser** — `lib/supabase.ts` (the anon client, used only by `lib/b2b/**`) was deleted when B2B moved to the FastAPI backend above. `b2b_lead`/`b2b_target` are retired there |
 | **Site Audit / field-app Supabase** | project `jqrdfnjfxqxrazfkaofm` | `components/site-audit/shared/sb-client.ts` — `sbGet`/`sbPost`/`sbPatch` |
 
@@ -56,30 +56,18 @@ Gotchas:
   applied. New DDL goes in that folder — nothing runs it, so say in the PR that
   it still needs pasting into the right SQL Editor.
 
-## Pending: B2B data moving from Supabase to Django (reported 2026-10-28, NOT done in code)
+## B2B is off Supabase entirely (2026-10-29)
 
-On 2026-10-28 the user said the B2B data now lives on the Django backend and
-the CRM should no longer need Supabase for it. **The code has not been
-switched.** On that date every B2B read and write below still went to the CRM
-Supabase, and `lib/api` had no Django endpoint for any of them. The only B2B
-Django calls are `/crm/leads/`, `/crm/leads/b2b-bulk/` and
-`/crm/leads/client-order-history/`.
+PR #27 moved the four B2B pipelines and `b2b_target` to the FastAPI backend. The
+revamp branch then moved the last two B2B tables with it: the team roster
+`b2b_team_member` and the inbound assignment log `b2b_lead_assignment`
+(`supabase/migrations/b2b-team.sql` was never applied and is superseded).
+`lib/server/b2b-team/store.ts` now calls the backend server-to-server through
+`b2bBackendFetch` (`lib/server/b2b-backend.ts`) with the same `x-sync-key`.
 
-| Data | Supabase table | Read / written in |
-|---|---|---|
-| Client Database firms, KAM orders, Outreach leads, the DB half of Inbound | `b2b_lead`, split by `pipeline` (`client` · `kam` · `outbound` · `inbound`) | `lib/b2b/data/reads.ts` (`fetchAllRows`), `lib/b2b/data/writes.ts` |
-| Targets | `b2b_target` | `lib/b2b/stats/targets.ts` |
-| KAM round-robin load | `b2b_lead` | `lib/b2b/leads/kam-load.ts` |
-| Team identity / roster | `b2b_team_member` (service-role key) | `lib/server/b2b-team/store.ts` |
-
-Out of scope for that move, and still on Supabase: Site Audit (its own
-project), `store_checklist` and `rota_plan`.
-
-Until this table is empty, **treat Supabase as the production store for B2B**.
-Saving a firm, a number or a GSTIN writes `b2b_lead`, and the "never exercise a
-SAVE path" rule in `CLAUDE.md` still applies. Doing the move needs the Django
-endpoint for each row (path, envelope, write semantics) from the backend team.
-It also needs the existing rows migrated, or a period reading both stores. The
-switch point is `lib/b2b/data/`, because every view goes through
-`fetchRows` / `upsert*`. When a row moves, delete it from this table, and
-delete this section once the table is empty.
+That needs **b2b-backend migration `0020_b2b_extra_and_team`** (branch
+`b2b-crm-extra-and-team`), which also adds an `extra` jsonb column to the four
+B2B tables. **Deploy it before this CRM branch.** Until it runs, the backend
+answers 404 on `/b2b/team`, the store reads that as `TeamTableMissing`, the
+Team tab says so and the round robin skips. Every inbound lead then stays with
+Hardi, which is what the user saw on 2026-10-29.

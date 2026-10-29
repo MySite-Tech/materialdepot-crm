@@ -1,19 +1,46 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from './session';
+import { canUseB2B } from '@/lib/b2b/team/utils';
 
-const B2B_ROLES = new Set(['admin', 'b2b_sales']);
 const ALLOW = new Set(['rows', 'kam-load', 'target']);
 
 class AccessError extends Error {}
 
 function authorise(caller: Caller): void {
-  if (!B2B_ROLES.has(caller.role)) {
+  if (!canUseB2B(caller)) {
     throw new AccessError('Only the B2B team can use this data');
   }
 }
 
 const accessErrorResponse = (err: unknown) =>
   err instanceof AccessError ? Response.json({ error: err.message }, { status: 403 }) : null;
+
+export class B2BBackendError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+export async function b2bBackendFetch<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+  const target = endpoint();
+  if (target instanceof Response) throw new B2BBackendError(503, 'B2B_BACKEND_URL or B2B_BACKEND_SECRET is not set on this deployment');
+  const hasBody = init?.body !== undefined;
+  const res = await fetch(`${target.base}/b2b${path}`, {
+    method: init?.method ?? 'GET',
+    headers: { 'x-sync-key': target.secret, ...(hasBody ? { 'Content-Type': 'application/json' } : {}) },
+    body: hasBody ? JSON.stringify(init?.body) : undefined,
+    cache: 'no-store',
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new B2BBackendError(res.status, errorDetail(body) ?? `B2B backend answered ${res.status}`);
+  return body as T;
+}
+
+function errorDetail(body: unknown): string | undefined {
+  const b = body as { error?: unknown; detail?: unknown } | null;
+  const d = b?.error ?? b?.detail;
+  return typeof d === 'string' ? d : undefined;
+}
 
 function endpoint(): { base: string; secret: string } | Response {
   const base = (process.env.B2B_BACKEND_URL ?? '').replace(/\/+$/, '');
@@ -57,8 +84,7 @@ export async function relayB2B(
 
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
-    const detail = (body as { error?: unknown })?.error;
-    return Response.json({ error: typeof detail === 'string' ? detail : `B2B backend answered ${res.status}` }, { status: 502 });
+    return Response.json({ error: errorDetail(body) ?? `B2B backend answered ${res.status}` }, { status: 502 });
   }
   return Response.json(body);
 }

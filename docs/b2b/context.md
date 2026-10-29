@@ -16,7 +16,7 @@ This module's detail is split by topic so a question costs one part, not the who
 
 | Part | Covers | Lines |
 |---|---|---|
-| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the Clients / PI / Results tabs and their lens tiles, Invalid as a status, Send to Outreach, the widened search, the Enq-ID resolve | 378 |
+| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the one-tab lens tiles, the 5 pm work day, the call log and Ready to close, client details and SPoCs, Invalid as a status, Send to Outreach, the widened search, the Enq-ID resolve | 378 |
 | [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation; the 2026-10-28 rebuild — scope, Inbound pool, no bulk import, the capture gate (role, team size, people, who was met, next follow-up), journey log, reminders, conversion rules, KAM handover, Studio Space waitlist, KPIs with their rows and periods; the tile-lens page layout | 379 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 44 |
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; the list's lens tiles, chips and per-lens sort; parent-company grouping and why name is never a merge key | 280 |
@@ -34,13 +34,14 @@ This module's detail is split by topic so a question costs one part, not the who
 `sales-tab-redesign.md` holds the per-team record. This is the short version, so
 a new session knows what is live and what is being worked on.
 
-- **Inbound: three tabs, Clients · PI · Results (2026-10-29),** each with
-  clickable lens tiles. One predicate (`lensMatches`) gives both a tile's count
-  and the list it opens. A lead moves to PI once it has one, and the PI tab is
-  date-ranged (default 30 days). Invalid is its own status with a hard gate, and
-  Inbound now *sends* leads to Outreach. Outreach's pool shows only those. See
-  `inbound.md` §The tiles are the navigation, and the Kylas-outage entry in
-  `docs/landmines.md`.
+- **Inbound: one tab (2026-10-29, evening),** with three tile groups: Call
+  today, Pipeline and Outcomes. One predicate (`lensMatches`) gives both a
+  tile's count and the list it opens. Leads after 5 pm count for the next
+  working day. RNR is one click and books the next working day. Calls and notes
+  are the B2B team's own record, kept out of Kylas. Ready to close (5 RNRs in 7
+  days, or 7 days without progress) gates the no-response Lost reasons. Inbound
+  sends leads to Outreach with a meeting location and a summary, and no longer
+  hands to a KAM. See `inbound.md`.
 - **Client Database: the same lens tiles, built 2026-10-28.** All · Active ·
   Lapsing soon · Inactive · No KAM, removable filter chips and sortable
   columns. The status dropdown is gone. See `client-db.md` §The list.

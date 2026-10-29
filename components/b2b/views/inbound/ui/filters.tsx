@@ -6,10 +6,8 @@ import { B2B_FRESH_START } from '../../../../../lib/b2b';
 import { CLIENT_TYPES, INBOUND_LOCATIONS, INBOUND_STATUSES, LEAD_TYPES, PRIORITIES } from '../../../constants/inbound';
 import { NEW_KYLAS_STAGES } from '../../../models/mock-data';
 import { inputCls } from '../../../constants/ui';
-import { PI_PRESETS } from '../constants';
-import { InboundFilters, PiBasis, PiRange } from '../types';
-import { activeFilterCount, piWindow } from '../utils';
-import { fmtDay } from '../../../ui/inbound-chips';
+import { InboundFilters } from '../types';
+import { activeFilterCount } from '../utils';
 
 const label = 'block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1';
 const control = 'px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[130px]';
@@ -96,43 +94,3 @@ export function InboundFilterBar({ f, set, onClear, ownerOptions, search, setSea
 
 const seg = (on: boolean) =>
   `px-2.5 py-1 text-[11.5px] font-semibold ${on ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`;
-
-export function PiRangeBar({ range, set, today }: {
-  range: PiRange;
-  set: (r: PiRange) => void;
-  today: string;
-}) {
-  const { from, to } = piWindow(range, today);
-  const basisLabel: Record<PiBasis, string> = { shared: 'PI shared', called: 'Last follow-up call' };
-  return (
-    <div className="mb-3 bg-white rounded-lg border border-gray-200 px-3 py-2 flex items-center gap-x-3 gap-y-2 flex-wrap">
-      <span className={label + ' mb-0'}>Date by</span>
-      <div className="flex rounded-md border border-gray-200 overflow-hidden">
-        {(Object.keys(basisLabel) as PiBasis[]).map((b) => (
-          <button key={b} onClick={() => set({ ...range, basis: b })} className={seg(range.basis === b)}>{basisLabel[b]}</button>
-        ))}
-      </div>
-      <div className="flex rounded-md border border-gray-200 overflow-hidden">
-        {PI_PRESETS.map((d) => (
-          <button key={d} onClick={() => set({ ...range, days: d })} className={seg(range.days === d)}>{d} days</button>
-        ))}
-        <button onClick={() => set({ ...range, days: null, from, to })} className={seg(!range.days)}>Custom</button>
-      </div>
-      {range.days ? (
-        <span className="text-[11.5px] text-gray-500">{fmtDay(from)} – {fmtDay(to)}</span>
-      ) : (
-        <div className="flex items-center gap-1.5">
-          <input type="date" value={range.from} max={range.to || undefined} onChange={(e) => set({ ...range, from: e.target.value })} className={control + ' min-w-0'} />
-          <span className="text-[11px] text-gray-400">to</span>
-          <input type="date" value={range.to} min={range.from || undefined} onChange={(e) => set({ ...range, to: e.target.value })} className={control + ' min-w-0'} />
-          {(range.from || range.to) && (
-            <button onClick={() => set({ ...range, from: '', to: '' })} className="text-[11.5px] font-semibold text-gray-500 hover:text-gray-800">All time</button>
-          )}
-        </div>
-      )}
-      <span className="text-[10.5px] text-gray-400 sm:ml-auto">
-        {range.basis === 'shared' ? 'PIs shared before this field existed use their last status change.' : 'A PI with no logged call has no date, so it drops out.'}
-      </span>
-    </div>
-  );
-}

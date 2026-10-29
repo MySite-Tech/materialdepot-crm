@@ -1,36 +1,21 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { B2BBackendError, b2bBackendFetch } from '@/lib/server/b2b-backend';
 import type { B2BTeam, TeamMember, TeamState } from '@/lib/b2b/team/types';
-
-const MEMBERS = 'b2b_team_member';
-const ASSIGNMENTS = 'b2b_lead_assignment';
-const MEMBER_COLS = 'phone, name, team, kylas_user_id, kylas_name, in_rotation, active, updated_at, updated_by';
-
-let _admin: SupabaseClient | null = null;
-
-function admin(): SupabaseClient {
-  if (_admin) return _admin;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
-  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
-  _admin = createClient(url, key, { auth: { persistSession: false } });
-  return _admin;
-}
-
-type PgError = { code?: string; message: string } | null;
-
-const isMissingTable = (e: PgError) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
 export class TeamTableMissing extends Error {
   constructor() {
-    super('The B2B team tables are not set up yet — run supabase/migrations/b2b-team.sql');
+    super('The B2B backend has no team tables yet — deploy b2b-backend migration 0020');
   }
 }
 
-function check(error: PgError): void {
-  if (!error) return;
-  if (isMissingTable(error)) throw new TeamTableMissing();
-  throw new Error(error.message);
+const missing = (e: unknown) => e instanceof B2BBackendError && e.status === 404;
+
+async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+  try {
+    return await b2bBackendFetch<T>(path, init);
+  } catch (e) {
+    if (missing(e)) throw new TeamTableMissing();
+    throw e;
+  }
 }
 
 type MemberRow = {
@@ -58,16 +43,19 @@ const toMember = (r: MemberRow): TeamMember => ({
 });
 
 export async function readMembers(): Promise<TeamState> {
-  const { data, error } = await admin().from(MEMBERS).select(MEMBER_COLS).order('name').order('phone');
-  if (isMissingTable(error)) return { members: [], tableMissing: true };
-  check(error);
-  return { members: ((data ?? []) as MemberRow[]).map(toMember), tableMissing: false };
+  try {
+    const { members } = await call<{ members: MemberRow[] }>('/team');
+    return { members: members.map(toMember), tableMissing: false };
+  } catch (e) {
+    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true };
+    throw e;
+  }
 }
 
 export async function upsertMember(m: Omit<TeamMember, 'updatedAt'>): Promise<TeamMember> {
-  const { data, error } = await admin()
-    .from(MEMBERS)
-    .upsert({
+  const row = await call<MemberRow>('/team', {
+    method: 'PUT',
+    body: {
       phone: m.phone,
       name: m.name,
       team: m.team,
@@ -75,47 +63,26 @@ export async function upsertMember(m: Omit<TeamMember, 'updatedAt'>): Promise<Te
       kylas_name: m.kylasName,
       in_rotation: m.inRotation,
       active: m.active,
-      updated_at: new Date().toISOString(),
       updated_by: m.updatedBy,
-    }, { onConflict: 'phone' })
-    .select(MEMBER_COLS)
-    .single();
-  check(error);
-  return toMember(data as MemberRow);
+    },
+  });
+  return toMember(row);
 }
 
 export async function lastRoundRobinKylasId(): Promise<number | null> {
-  const { data, error } = await admin()
-    .from(ASSIGNMENTS)
-    .select('to_kylas_id')
-    .eq('kind', 'round_robin')
-    .order('at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(1);
-  check(error);
-  const row = (data ?? [])[0] as { to_kylas_id: number } | undefined;
-  return row ? Number(row.to_kylas_id) : null;
+  const { to_kylas_id } = await call<{ to_kylas_id: number | null }>('/assignments/last-round-robin');
+  return to_kylas_id == null ? null : Number(to_kylas_id);
 }
 
 export async function assignedLeadIdsSince(sinceIso: string): Promise<Set<string>> {
-  const { data, error } = await admin()
-    .from(ASSIGNMENTS)
-    .select('lead_id')
-    .gte('lead_created_at', sinceIso);
-  check(error);
-  return new Set(((data ?? []) as { lead_id: string }[]).map((r) => r.lead_id));
+  const { lead_ids } = await call<{ lead_ids: string[] }>(`/assignments/lead-ids?since=${encodeURIComponent(sinceIso)}`);
+  return new Set(lead_ids.map(String));
 }
 
 export async function workedInboundLeadIds(ids: string[]): Promise<Set<string>> {
   if (!ids.length) return new Set();
-  const { data, error } = await admin()
-    .from('b2b_lead')
-    .select('kylas_lead_id')
-    .eq('pipeline', 'inbound')
-    .neq('stage', 'New')
-    .in('kylas_lead_id', ids);
-  check(error);
-  return new Set(((data ?? []) as { kylas_lead_id: string }[]).map((r) => r.kylas_lead_id));
+  const res = await call<{ ids: string[] }>('/inbound/worked', { method: 'POST', body: { ids } });
+  return new Set(res.ids.map(String));
 }
 
 export interface AssignmentRow {
@@ -130,18 +97,19 @@ export interface AssignmentRow {
 }
 
 export async function claimRoundRobin(row: AssignmentRow): Promise<number | null> {
-  const { data, error } = await admin().from(ASSIGNMENTS).insert(row).select('id').single();
-  if (error?.code === '23505') return null;
-  check(error);
-  return Number((data as { id: number }).id);
+  try {
+    const { id } = await call<{ id: number }>('/assignments', { method: 'POST', body: row });
+    return Number(id);
+  } catch (e) {
+    if (e instanceof B2BBackendError && e.status === 409) return null;
+    throw e;
+  }
 }
 
 export async function releaseClaim(id: number): Promise<void> {
-  const { error } = await admin().from(ASSIGNMENTS).delete().eq('id', id);
-  check(error);
+  await call(`/assignments/${id}`, { method: 'DELETE' });
 }
 
 export async function recordAssignment(row: AssignmentRow): Promise<void> {
-  const { error } = await admin().from(ASSIGNMENTS).insert(row);
-  check(error);
+  await call('/assignments', { method: 'POST', body: row });
 }

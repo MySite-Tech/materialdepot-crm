@@ -1,6 +1,6 @@
 'use client';
 
-import { INBOUND_STATUS_HINT, InboundStatus, statusGateErrors } from '../../../models/inbound';
+import { INBOUND_STATUS_HINT, InboundStatus, closureReadiness, hasConnected, statusGateErrors } from '../../../models/inbound';
 import { INBOUND_INVALID_REASONS, INBOUND_LOST_REASONS, INVALID_NOTE_MIN } from '../../../constants/inbound';
 import { InboundLead } from '../../../models/mock-data';
 import { Field, GateErrors, LeadName, errorInputCls, inputCls } from '../../../ui/inbound-chips';
@@ -23,7 +23,10 @@ export function MoveModal({
   const [touched, setTouched] = useState(false);
 
   const calls = lead.callAttempts?.length || 0;
-  const errors = statusGateErrors({ status: target, followUpDate, enqId, lostReason, invalidReason, invalidNote, calls });
+  const errors = statusGateErrors({
+    status: target, followUpDate, enqId, lostReason, invalidReason, invalidNote, calls,
+    connected: hasConnected(lead.callAttempts), readiness: closureReadiness(lead),
+  });
   const needsFollowUp = target === 'Follow up' || target === 'PI Shared';
   const needsEnq = target === 'PI Shared';
   const needsReason = target === 'Lost';
@@ -89,7 +92,7 @@ export function MoveModal({
             </Field>
           )}
           {needsReason && (
-            <Field label="Lost reason" required error={touched ? errors.find((e) => e.includes('lost reason')) : undefined}>
+            <Field label="Lost reason" required error={touched ? errors.find((e) => /lost/i.test(e)) : undefined}>
               <select
                 value={lostReason}
                 onChange={(e) => setLostReason(e.target.value)}

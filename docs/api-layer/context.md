@@ -114,8 +114,10 @@ Four things worth knowing before reusing it:
 `lib/server/b2b-backend.ts`, used by `app/api/b2b/[...path]`. The B2B tab's data
 lives in the FastAPI `b2b-backend` now, not Supabase (see `docs/backends.md`),
 and the browser must not reach it directly — that would be a fifth egress path.
-So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces the
-`admin`/`b2b_sales` gate, then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
+So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces
+`canUseB2B` (the tab's own rule — role set or the `crm.b2b_sales` slug; the
+original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
+then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
 server-only `x-sync-key: B2B_BACKEND_SECRET` — the same server-to-server pattern
 `app/api/b2b/partner-content` uses. Three things it deliberately does:
 
@@ -127,6 +129,17 @@ server-only `x-sync-key: B2B_BACKEND_SECRET` — the same server-to-server patte
   `{ error }` at 502, so a dropped upstream call can't read as data. The CRM
   client (`lib/b2b/data/backend.ts`) sends the bearer token and retries once on
   401 via `refreshSession()`, exactly as the store-checklist caller does.
+- The backend's errors arrive as `{ error }` (its global handler) or FastAPI's
+  `{ detail }`; both are read.
+
+`b2bBackendFetch` in the same file is the **server-only** sibling, for route
+handlers that talk to the backend themselves rather than relaying the browser:
+`lib/server/b2b-team/store.ts` (team roster, round-robin claims) uses it. It
+throws `B2BBackendError` with the upstream status, because the callers branch
+on it. A 409 on a round-robin claim means "already claimed", and a 404 means
+the backend predates migration 0020, which the store turns into
+`TeamTableMissing`. Those paths are deliberately **not** in the relay's allow
+list: the browser has no business writing assignment rows.
 
 ### There is no scheduled route in this app, and no platform cron to run one
 

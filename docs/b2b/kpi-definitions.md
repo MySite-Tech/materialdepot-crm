@@ -105,8 +105,10 @@ Non-obvious rules:
   worked, not only orders the inbound rep closed themselves.
 - **Dead-lead rule, as worded**: at least 5 calls within 7 days. If 5 calls are
   done and the call status is still RNR or Connected (i.e. never progressed to a
-  lead stage), or if RNR persists past 7 days, the lead moves to Dead. Today's
-  code caps attempts at 4 (`MAX_CALL_ATTEMPTS`) and has no Dead status.
+  lead stage), or if RNR persists past 7 days, the lead moves to Dead. Built
+  2026-10-29 as **Ready to close** (`closureReadiness`, `inbound.md`): 5 RNRs in
+  7 days, or 7+ days with 4+ calls and still New/Connected. It is not a status:
+  the rep closes it as Lost with the matching reason. Attempts are uncapped.
 - **Call statuses are two** (RNR, Connected) **and lead stages are separate**
   (Follow-up, PI Shared, Closed, Lost-with-reason) — matches today's split of
   `CallAttemptOutcome` vs `InboundStatus`.

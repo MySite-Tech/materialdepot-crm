@@ -1,7 +1,7 @@
 import {
   INBOUND_STATUSES, INBOUND_STATUS_COLORS,
   type InboundStatus, type InboundLocation, type Segment, type ClientType,
-  type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder, type OutreachReferral,
+  type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder, type OutreachReferral, type ContactPerson,
 } from './inbound';
 import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
@@ -71,6 +71,9 @@ export interface InboundLead {
   source: 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Google' | 'Other';
 
   companyName?: string;
+  primaryContactName?: string;
+  primaryContactPhone?: string;
+  additionalContacts?: ContactPerson[];
   gstNumber?: string;
   segment?: Segment;
   clientType?: ClientType;

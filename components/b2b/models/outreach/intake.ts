@@ -1,4 +1,4 @@
-import { InboundLead, OutreachLead } from '../mock-data';
+import { InboundLead, LeadNote, OutreachLead } from '../mock-data';
 import { InboundStatus, sentToOutreach } from '../inbound';
 import { COMPANY_TYPES, CompanyType } from '.';
 import { sameRep } from './handover';
@@ -35,18 +35,32 @@ function referralBrief(l: InboundLead): string {
   return [
     `Decision maker: ${r.decisionMaker}`,
     `Project: ${r.project}`,
-    `Wants to meet: ${slot}`,
+    `Wants to meet: ${slot}${r.meetingLocation ? ` at ${r.meetingLocation}` : ''}`,
     l.requirement ? `Requirement: ${l.requirement}` : '',
-    `From ${r.by} (Inbound): ${r.note}`,
+    `From ${r.by} (Inbound): ${r.summary || r.note || ''}`,
   ].filter(Boolean).join('\n');
+}
+
+export function inboundContext(l: InboundLead): LeadNote[] {
+  const calls = (l.callAttempts || []).map((a): LeadNote => ({
+    ts: a.at,
+    author: `${a.by || 'Inbound'} (Inbound call)`,
+    text: a.outcome === 'Connected'
+      ? `Connected${a.durationMin ? `, ${a.durationMin} min` : ''}: ${a.note || ''}`.trim()
+      : 'RNR — no answer',
+  }));
+  const notes = (l.notes || []).map((n): LeadNote => ({ ...n, author: `${n.author || 'Inbound'} (Inbound note)` }));
+  return [...calls, ...notes].sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
 }
 
 export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string, accepted: boolean): OutreachLead {
   return {
     id: intakeLeadId(l.id),
     company: String(l.companyName || l.company || l.contactName || '').trim() || 'Unnamed lead',
-    contactPerson: l.contactName || '',
-    phone: l.phone || undefined,
+    contactPerson: l.primaryContactName || l.contactName || '',
+    phone: l.primaryContactPhone || l.phone || undefined,
+    altPhone: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.phone : undefined,
+    contacts: (l.additionalContacts || []).filter((c) => c.name || c.phone).map((c) => ({ name: c.name, role: '', phone: c.phone || undefined })),
     gstNumber: l.gstNumber || undefined,
     segment: l.segment,
     leadType: l.leadType,
@@ -63,7 +77,7 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
     status: 'Yet to Meet',
     statusChangedAt: at,
     meetings: [],
-    notes: [],
+    notes: inboundContext(l),
     spok: rep.name,
     value: 0,
     intake: {

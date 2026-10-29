@@ -7,7 +7,7 @@ export { fetchB2BBulk } from './orders/history';
 export type { ClientOrderHistory } from './orders/history';
 export { lookupEnqId } from './leads/enq-lookup';
 export type { EnqLookup } from './leads/enq-lookup';
-export { fetchInboundKamLoad, fetchKamLoad, fetchVerticalStats } from './leads/kam-load';
+export { fetchKamLoad, fetchVerticalStats } from './leads/kam-load';
 export type { VerticalStats } from './leads/kam-load';
 export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClientOrderRows, firstOrderValueFromAggregates, invalidateClientTickets, orderDatesFromAggregates, resolveKamOrders } from './orders/details';
 export type { ClientOrderDetails, ClientOrderRow } from './orders/details';

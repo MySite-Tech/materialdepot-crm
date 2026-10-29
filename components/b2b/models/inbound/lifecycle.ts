@@ -1,4 +1,4 @@
-import { INBOUND_CLOSED_STATUSES } from '../../constants/inbound';
+import { DEAL_ORDER_STATUSES, INBOUND_CLOSED_STATUSES } from '../../constants/inbound';
 import { CallAttempt, FollowUpBucket, InboundStatus, OutreachReferral } from '../../types/inbound';
 import { istToday } from '../../utils/inbound';
 
@@ -61,4 +61,43 @@ export function withStatusStamps<T extends LifecycleLead>(before: LifecycleLead,
     statusChangedAt: now,
     piSharedAt: after.stage === 'PI Shared' && !after.piSharedAt ? now : after.piSharedAt,
   };
+}
+
+export interface Spoc { name?: string; detail: string }
+
+export interface ClientSpocs { inbound: Spoc; outreach: Spoc; kam: Spoc; ec: Spoc }
+
+interface SpocOutreachRow {
+  bm?: string;
+  intake?: { acceptedAt?: string; rejectedAt?: string };
+  handover?: { kam?: string; status?: string };
+  kam?: string;
+}
+
+interface SpocDeal { status: string; assignedTo?: string; branch?: string; createdAt?: string; id: string }
+
+export function clientSpocs(
+  l: { owner?: string; outreachReferral?: Partial<OutreachReferral> },
+  outreach: SpocOutreachRow | null,
+  deals: SpocDeal[],
+): ClientSpocs {
+  const inbound: Spoc = { name: l.owner || undefined, detail: 'Owns the lead in Kylas' };
+  let out: Spoc = { detail: l.outreachReferral?.at ? 'Sent — waiting in the Outreach pool' : 'Not sent to Outreach' };
+  if (outreach?.bm) {
+    out = {
+      name: outreach.bm,
+      detail: outreach.intake?.rejectedAt ? 'Rejected the lead' : outreach.intake?.acceptedAt ? 'Accepted the lead' : 'Assigned, not accepted yet',
+    };
+  }
+  const kamName = outreach?.handover?.kam || outreach?.kam;
+  const kam: Spoc = kamName
+    ? { name: kamName, detail: outreach?.handover?.status ? `Handover ${outreach.handover.status.toLowerCase()}` : 'Assigned' }
+    : { detail: 'Assigned by Outreach at handover' };
+  const order = deals
+    .filter((d) => DEAL_ORDER_STATUSES.includes(d.status) && d.assignedTo)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+  const ec: Spoc = order
+    ? { name: order.assignedTo, detail: `BM on the last order, ${order.id}${order.branch ? ` · ${order.branch}` : ''}` }
+    : { detail: 'No order at an EC yet' };
+  return { inbound, outreach: out, kam, ec };
 }

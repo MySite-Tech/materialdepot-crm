@@ -16,11 +16,25 @@ They live here now because the code cannot carry them.
   meta_data}` wire shape on read and decomposes it on write, so `rowToInbound` /
   `inboundToRow` and friends still see a `B2BLeadRow`. The browser never reaches
   the backend directly (that would be a fifth egress): it goes
-  `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` (`requireCaller` + the
-  `admin`/`b2b_sales` gate) → FastAPI, trusted by `x-sync-key`. See
+  `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` (`requireCaller` +
+  `canUseB2B`) → FastAPI, trusted by `x-sync-key`. The relay originally
+  admitted only `admin`/`b2b_sales`, which would have 403'd every `b2b_KAM`,
+  `b2b_manager` and `crm.b2b_sales`-slug user; it uses the tab's own rule now. See
   `docs/backends.md`. This also closed a hole: the old `b2b_lead` had an
   `Allow all access` anon RLS policy, so the boards were writable by anyone who
   could load the app — now every read and write is behind `requireCaller`.
+
+- **A `meta_data` key with no column used to vanish on save.** The router
+  decomposed `meta_data` into columns and dropped every other key, silently.
+  After PR #27 that ate `invalid_reason`, `invalid_note`, `pi_shared_at`,
+  `office_location` and `outreach_referral` on inbound and `alt_phone`/`contacts`
+  on outreach: the save returned 200 and the fields were blank on reload. Since
+  backend migration `0020` each table has an `extra` jsonb; any key that is not a
+  column goes there and comes back in `meta_data` on read, a real column winning
+  a name clash. **So a new CRM-owned field needs no backend change**, but a key
+  must not be renamed casually: the old name's value stays in `extra`, unread.
+  `POST /rows/bulk {rows, only_new}` is the bulk write (Outreach's intake);
+  `only_new` is `ON CONFLICT DO NOTHING`.
 
 - **One read serves every board.** Each B2B view wants a different pipeline, but
   `fetchAllRows` makes a single `GET /api/b2b/rows` (the backend runs the four

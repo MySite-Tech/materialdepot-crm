@@ -14,6 +14,9 @@ interface MetaField {
 const INBOUND_META: MetaField[] = [
 
   { ui: 'companyName',        db: 'company_name',         kind: 'string' },
+  { ui: 'primaryContactName', db: 'primary_contact_name', kind: 'string' },
+  { ui: 'primaryContactPhone', db: 'primary_contact_phone', kind: 'string' },
+  { ui: 'additionalContacts', db: 'additional_contacts',  kind: 'array'  },
   { ui: 'gstNumber',          db: 'gst_number',           kind: 'string' },
   { ui: 'segment',            db: 'segment',              kind: 'string' },
   { ui: 'clientType',         db: 'client_type',          kind: 'string' },

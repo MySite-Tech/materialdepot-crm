@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-61 entries. They live in one file because they cross-reference each other —
+64 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -71,6 +71,9 @@ grep for a term, then read around the line you hit rather than opening all of it
 - The Outreach BM picker listed two people who held none of the leads
 - Custom range with no dates showed this month and called it a custom period
 - A Supabase table with an `Allow all access` anon policy is world-writable from the browser
+- A backend that decomposes a JSON blob into columns dropped every key it had no column for
+- Call duration typed in minutes showed as seconds
+- B2B calls and notes written to Kylas through the API key were credited to the key's owner
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1003,3 +1006,35 @@ grep for a term, then read around the line you hit rather than opening all of it
   ship it first: the frontend flip only works once `0018_b2b_crm` is applied and
   the tables are seeded (`scripts/seed_b2b_from_csv.py`), or `GET /api/b2b/rows`
   502s and the zero-caching rule turns that into a durable wrong number.
+
+- **A backend that decomposes a JSON blob into columns dropped every key it had no column for.** Found 2026-10-29 while merging `main` into the B2B revamp
+  branch. PR #27's `b2b_crm` router rebuilt `meta_data` from columns on read
+  and kept only the keys that matched a column on write. The branch had added
+  `invalid_reason`, `invalid_note`, `pi_shared_at`, `office_location` and
+  `outreach_referral` (and Outreach `alt_phone`, `contacts`). None of these
+  had a column. Every save returned 200, and on reload the Invalid reason, the
+  note and the whole Send to Outreach referral were blank. So no lead could
+  ever reach Outreach's pool. Fixed by backend migration `0020`: an `extra`
+  jsonb holds every key without a column (`docs/b2b/data-layer.md`). The shape:
+  **a translation layer that accepts a superset and stores a subset must say so
+  loudly or keep the remainder.** A 200 is not evidence the data landed; read
+  the row back.
+
+- **Call duration typed in minutes showed as seconds** (fixed 2026-10-29). The inbound call form asked for minutes
+  and posted `duration=N&durationType=minutes` to Kylas. Kylas ignored the unit
+  and stored N seconds, so the call records showed a 4-minute call as "0m 4s".
+  Nothing errored. Calls are now stored in the CRM as `durationMin` and no longer
+  posted to Kylas (next entry). The shape: **a unit passed as a separate field is
+  an assumption about the receiver;** check the read-back, not the request.
+
+- **B2B calls and notes written to Kylas through the API key were credited to the key's owner** (fixed 2026-10-29). The inbound drawer logged every call
+  attempt as a Kylas call log, and every note as a Kylas note, using the
+  browser's shared API key. Kylas records the creator as the key's user, so
+  every B2B call appeared as made by one Presales person, mixed in with real
+  Presales calls, and team notes looked written "by Kylas". Calls and notes now
+  stay in the CRM row with the session user as author, and Kylas data is shown
+  read-only in the From Presales card. Records written before the fix remain in
+  Kylas under the key owner's name. Same family as "A logged call recorded the
+  lead's owner as the caller": **the actor must come from the session, and a
+  shared credential has no session.**
+

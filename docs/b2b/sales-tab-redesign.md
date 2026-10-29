@@ -9,7 +9,7 @@ of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
 
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
-| Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller; 2026-10-29: Clients / PI / Results tabs, Invalid status, office location, Send to Outreach | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
+| Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller; 2026-10-29: Invalid status, Send to Outreach; evening: one tab, 5 pm work day, CRM-only call log and notes, Ready to close, client people, SPoCs, no KAM handoff | §Inbound below; `inbound.md` | b2b-backend migration 0020 not deployed (round robin skips until then); round-robin start date; first real Kylas owner change unverified |
 | Outreach | **Built:** scoped views, From Inbound pool with sign-off, one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
 | Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | `b2b-team.sql` (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
@@ -254,10 +254,9 @@ Every KPI below is meant to fall out of normal work, not to be filled in later.
   untouched assigned leads, not a column to scroll.
 - **Dead leads are derived on read**, the same way `normalizeStatus` already
   is, because there is no scheduler and this repo has twice shipped a
-  migration nobody ran. The rule is in `kpi-definitions.md`. The current code
-  contradicts it in two places: `MAX_CALL_ATTEMPTS` is 4 against the sheet's 5,
-  and there is no `Dead` status. Whether 7 days is calendar or business days
-  is open.
+  migration nobody ran. The rule is in `kpi-definitions.md`; built as Ready
+  to close (`inbound.md`). The 7 days are calendar days for the RNR window and
+  counted from the lead's 5 pm work day for the stalled rule.
 
 ### Inbound KPIs: what each is computed from
 
@@ -585,7 +584,7 @@ Decisions taken (all overrulable; none is expensive to change):
   `meta_data`. Nothing waits on an unapplied migration.
 - **Inbound → Outreach was a pull; since 2026-10-29 it is a push.** Inbound
   sends a qualified lead with a checklist, and the pool lists only those
-  (`inbound.md` §Office location, and Send to Outreach). Manager assigns
+  (`inbound.md` §Client details, and Send to Outreach). Manager assigns
   (round-robin or per row), the BM accepts or rejects with a reason — that
   acceptance is Inbound's "sign-off required".
 - **"Inactive forms" = leads entered by hand with `Source = Dormant form`.**
@@ -637,6 +636,18 @@ Open, for the user:
   shared by New lead, the drawer, the reminders and CRM adherence, plus "who you
   met" on held meetings. The Custom-range picker bug was fixed too. Detail is in
   `outreach.md` §What a BM must capture.
+- **2026-10-29 (Inbound, evening)**: The user asked for one tab instead of
+  Clients / PI / Results; leads after 5 pm counted for the next day; RNR with
+  no note and an automatic next-working-day follow-up; one follow-up field;
+  unlimited calls; B2B calls and notes kept apart from Kylas and credited to
+  their author; minutes not seconds; primary and additional people and City on
+  the client; meeting location and a summary on the Outreach send; no KAM
+  handoff from Inbound; Enq IDs picked from the client's tickets; concrete
+  Lost/Invalid reasons; four SPoCs on every lead; and a dummy-data sandbox
+  (`sandbox.md`). Also found that the merged backend was dropping every meta key
+  without a column, so yesterday's Invalid and Send to Outreach fields never
+  persisted. b2b-backend migration 0020 adds `extra` jsonb plus the team tables.
+  Detail in `inbound.md` and `data-layer.md`.
 - **2026-10-28 (end of day, all sessions)**: Put the per-team status table at
   the top of this file and marked build-order progress. Checked the combined
   tree: `tsc` clean, branch level with `origin/main`, every B2B sub-tab

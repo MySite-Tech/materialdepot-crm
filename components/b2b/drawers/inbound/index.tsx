@@ -5,7 +5,6 @@ import { InboundDrawerHeader } from './header';
 
 import { InboundCallsCard } from './cards/calls';
 import { InboundClientCard } from './cards/client';
-import { InboundEnrichCard } from './cards/enrich';
 import { InboundNotesCard } from './cards/notes';
 import { InboundOwnerCard } from './cards/owner';
 import type { TeamMember } from '@/lib/b2b/team/types';
@@ -14,15 +13,31 @@ import { InboundPresalesCard } from './cards/presales';
 import { InboundRequirementCard } from './cards/requirement';
 import { GateField, InboundStatusCard } from './cards/status';
 import { InboundOutreachCard } from './cards/outreach';
+import { useCallLog } from './hooks/use-call-log';
+import { useInboundDetail } from './hooks/use-inbound-detail';
 
-import { CallAttempt, CallAttemptOutcome, InboundStatus, OutreachReferral, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors, withStatusStamps } from '../../models/inbound';
-import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote } from '../../models/mock-data';
+import { OutreachReferral, PlacedUnder, clientSpocs, closureReadiness, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, selectionsKylasWillDrop, statusGateErrors, withStatusStamps } from '../../models/inbound';
+import { InboundLead } from '../../models/mock-data';
 import { Spinner } from '../../ui/inbound-chips';
-import { KYLAS_OUTCOME } from './constants';
 import { SaveState } from '../../types/inbound-drawer';
-import { EnqLookup, fetchInboundKamLoad, lookupEnqId, upsertInboundLead } from '@/lib/b2b';
-import { createInboundCallLog, createLeadNote, fetchCallLogSummary, fetchInboundLeadDetail, fetchLeadCallLogs, fetchLeadDeals, fetchLeadNotes, updateInboundLeadKylas } from '@/lib/api';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { EnqLookup, lookupEnqId, upsertInboundLead } from '@/lib/b2b';
+import { updateInboundLeadKylas } from '@/lib/api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+const GATE_TEXT: Record<GateField, string> = {
+  followUpDate: 'follow-up date',
+  enqId: 'Enq ID',
+  lostReason: 'lost',
+  invalidCalls: 'Log at least one call',
+  invalidReason: 'invalid reason',
+  invalidNote: 'invalid note',
+};
+
+const withContactDefaults = (l: InboundLead): InboundLead => ({
+  ...l,
+  primaryContactName: l.primaryContactName || l.contactName || undefined,
+  primaryContactPhone: l.primaryContactPhone || l.phone || undefined,
+});
 
 export default function InboundDrawer({
   lead, onClose, onSaved, actorName, members, canReassign,
@@ -32,91 +47,24 @@ export default function InboundDrawer({
   actorName: string;
   members: TeamMember[];
   canReassign: boolean;
-
   onSaved: (updated: InboundLead) => void;
 }) {
-  const [draft, setDraft] = useState<InboundLead>(lead);
+  const [draft, setDraft] = useState<InboundLead>(() => withContactDefaults(lead));
   const [save, setSave] = useState<SaveState>({ saving: false });
   const [showGates, setShowGates] = useState(false);
 
   const set = <K extends keyof InboundLead>(k: K, v: InboundLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
-  const [detailLoading, setDetailLoading] = useState(true);
-  const [detailFailed, setDetailFailed] = useState(false);
-  const [phoneId, setPhoneId] = useState<number | undefined>(undefined);
+  const detail = useInboundDetail(lead, setDraft);
+  const today = istToday();
 
-  useEffect(() => {
-    let alive = true;
-    setDetailLoading(true);
-    setDetailFailed(false);
-    fetchInboundLeadDetail(lead.id)
-      .then((d) => {
-        if (!alive) return;
-        if (!d.loaded) { setDetailFailed(true); return; }
-        setPhoneId(d.phoneId);
-        setDraft((prev) => ({
-          ...prev,
+  const commit = useCallback((next: InboundLead) => { setDraft(next); onSaved(next); }, [onSaved]);
+  const calls = useCallLog(draft, actorName, commit);
 
-          leadSummary: d.leadSummary ?? prev.leadSummary,
-          urgency: d.urgency ?? prev.urgency,
-          pincode: d.pincode ?? prev.pincode,
-          presalesOwner: d.presalesOwner ?? prev.presalesOwner,
-          presalesClientType: d.presalesClientType ?? prev.presalesClientType,
-          presalesMissedCalls: d.presalesMissedCalls ?? prev.presalesMissedCalls,
-          qualificationTag: d.qualificationTag ?? prev.qualificationTag,
-          leadCreatedAt: d.leadCreatedAt ?? prev.leadCreatedAt,
-          phone: d.phone || prev.phone,
-
-          contactName: d.contactName ?? prev.contactName,
-          company: d.kylasName || prev.company,
-
-          requirement: prev.requirement || d.requirement,
-          selections: prev.selections?.length ? prev.selections : d.selections,
-        }));
-      })
-      .finally(() => { if (alive) setDetailLoading(false); });
-    return () => { alive = false; };
-  }, [lead.id]);
-
-  const [kylasNotes, setKylasNotes] = useState<LeadNote[]>([]);
-  const [notesLoading, setNotesLoading] = useState(true);
-  const [callLogs, setCallLogs] = useState<CallLogEntry[]>([]);
-  const [callsLoading, setCallsLoading] = useState(true);
-  const [deals, setDeals] = useState<LeadDeal[]>([]);
-  const [dealsLoading, setDealsLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    setNotesLoading(true);
-    fetchLeadNotes(lead.id, lead.ownerId)
-      .then((n) => { if (alive) setKylasNotes(n); })
-      .finally(() => { if (alive) setNotesLoading(false); });
-    return () => { alive = false; };
-  }, [lead.id, lead.ownerId]);
-
-  const reloadCalls = () => {
-    setCallsLoading(true);
-    fetchLeadCallLogs(lead.id).then(setCallLogs).finally(() => setCallsLoading(false));
-  };
-
-  useEffect(() => {
-    let alive = true;
-    setCallsLoading(true);
-    fetchLeadCallLogs(lead.id)
-      .then((c) => { if (alive) setCallLogs(c); })
-      .finally(() => { if (alive) setCallsLoading(false); });
-    return () => { alive = false; };
-  }, [lead.id]);
-
-  useEffect(() => {
-    let alive = true;
-    setDealsLoading(true);
-    fetchLeadDeals(lead.phone)
-      .then((d) => { if (alive) setDeals(d); })
-      .finally(() => { if (alive) setDealsLoading(false); });
-    return () => { alive = false; };
-  }, [lead.phone]);
+  const connected = hasConnected(draft.callAttempts);
+  const readiness = useMemo(() => closureReadiness(draft, today),
+    [draft.stage, draft.leadCreatedAt, draft.callAttempts, draft.outreachReferral, today]);
 
   const gateErrors = useMemo(() => statusGateErrors({
     status: draft.stage,
@@ -126,32 +74,15 @@ export default function InboundDrawer({
     invalidReason: draft.invalidReason,
     invalidNote: draft.invalidNote,
     calls: draft.callAttempts?.length,
-  }), [draft.stage, draft.followUpDate, draft.enqId, draft.lostReason, draft.invalidReason, draft.invalidNote, draft.callAttempts]);
+    connected,
+    readiness,
+  }), [draft.stage, draft.followUpDate, draft.enqId, draft.lostReason, draft.invalidReason, draft.invalidNote, draft.callAttempts, connected, readiness]);
 
-  const gaps = useMemo(() => enrichmentGaps({
-    companyName: draft.companyName,
-    gstNumber: draft.gstNumber,
-    segment: draft.segment,
-    clientType: draft.clientType,
-    leadType: draft.leadType,
-    priority: draft.priority,
-    selections: draft.selections,
-    expectedOrderValue: draft.expectedOrderValue,
-    officeLocation: draft.officeLocation,
-  }), [draft.companyName, draft.gstNumber, draft.segment, draft.clientType,
-    draft.leadType, draft.priority, draft.selections, draft.expectedOrderValue, draft.officeLocation]);
+  const gaps = useMemo(() => enrichmentGaps(draft), [draft]);
 
   const gateFor = (field: GateField): string | undefined => {
     if (!showGates) return undefined;
-    const map: Record<GateField, string> = {
-      followUpDate: 'follow-up date',
-      enqId: 'Enq ID',
-      lostReason: 'lost reason',
-      invalidCalls: 'Log at least one call',
-      invalidReason: 'invalid reason',
-      invalidNote: 'invalid note',
-    };
-    return gateErrors.find((e) => e.toLowerCase().includes(map[field].toLowerCase()));
+    return gateErrors.find((e) => e.toLowerCase().includes(GATE_TEXT[field].toLowerCase()));
   };
 
   const [enq, setEnq] = useState<EnqLookup | null>(null);
@@ -170,11 +101,9 @@ export default function InboundDrawer({
         ...d,
         orderValue: res.orderValue ?? 0,
         orderValueSource: 'deal',
-
         placedUnder: { ...(d.placedUnder || {}), bmName: res.bmName || d.placedUnder?.bmName },
       }));
     } else if (res.status === 'no-match') {
-
       setDraft((d) => ({ ...d, orderValueSource: 'manual' }));
     }
     setEnqChecking(false);
@@ -185,105 +114,8 @@ export default function InboundDrawer({
     if (cur !== lastCheckedEnq.current) setEnq(null);
   }, [draft.enqId]);
 
-  const attempts = draft.callAttempts || [];
-  const attemptNo = nextAttemptNumber(attempts);
-  const exhausted = retriesExhausted(attempts);
-  const connected = hasConnected(attempts);
-
-  const [logOpen, setLogOpen] = useState(false);
-  const [logOutcome, setLogOutcome] = useState<CallAttemptOutcome>('Connected');
-  const [logNote, setLogNote] = useState('');
-  const [logDuration, setLogDuration] = useState('');
-  const [logFollowUp, setLogFollowUp] = useState(draft.followUpDate || '');
-  const [logging, setLogging] = useState(false);
-  const [logError, setLogError] = useState<string | null>(null);
-
-  const logAttempt = async () => {
-    if (logging) return;
-    const gate = callGateErrors(logFollowUp);
-    if (gate.length) { setLogError(gate[0]); return; }
-    setLogError(null);
-    setLogging(true);
-
-    const attempt: CallAttempt = {
-      n: attemptNo,
-      outcome: logOutcome,
-      at: new Date().toISOString(),
-      by: actorName || draft.owner,
-      note: logNote.trim() || undefined,
-    };
-    const nextAttempts = [...attempts, attempt];
-
-    const nextStatus: InboundStatus =
-      draft.stage === 'New' ? 'Follow up' : draft.stage;
-    const updated: InboundLead = {
-      ...draft,
-      callAttempts: nextAttempts,
-      followUpDate: logFollowUp,
-      stage: nextStatus,
-      statusChangedAt: nextStatus !== draft.stage ? new Date().toISOString() : draft.statusChangedAt,
-    };
-
-    let kylasNote = '';
-    if (phoneId) {
-      const ok = await createInboundCallLog({
-        leadId: draft.id,
-        leadName: draft.companyName || draft.contactName || draft.company,
-        phoneId,
-        outcome: KYLAS_OUTCOME[logOutcome],
-        callSummary: logNote.trim(),
-        durationMinutes: logOutcome === 'Connected' && logDuration ? Number(logDuration) : undefined,
-      });
-      if (!ok) kylasNote = 'Recorded here, but Kylas rejected the call log.';
-    } else {
-      kylasNote = 'Recorded here only — no Kylas phone id for this lead.';
-    }
-
-    const err = await upsertInboundLead(updated);
-    setLogging(false);
-    if (err) { setLogError(`Could not save the attempt: ${err}`); return; }
-
-    setDraft(updated);
-    onSaved(updated);
-    setLogOpen(false);
-    setLogNote('');
-    setLogDuration('');
-    if (kylasNote) setSave({ saving: false, warning: kylasNote });
-    if (phoneId) reloadCalls();
-  };
-
-  const [kamLoad, setKamLoad] = useState<Record<string, number> | null>(null);
-  const [kamAssigning, setKamAssigning] = useState(false);
-
-  const assignKam = async () => {
-    if (kamAssigning) return;
-    setKamAssigning(true);
-    const load = kamLoad ?? await fetchInboundKamLoad();
-    setKamLoad(load);
-    const pick = nextKamRoundRobin(KAMS, load);
-    setKamAssigning(false);
-    if (pick) set('kam', pick);
-  };
-
   const setPlaced = (patch: Partial<PlacedUnder>) =>
     setDraft((d) => ({ ...d, placedUnder: { ...(d.placedUnder || {}), ...patch } }));
-
-  const [noteText, setNoteText] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
-
-  const addNote = async () => {
-    const text = noteText.trim();
-    if (!text || savingNote) return;
-    setSavingNote(true);
-    const ok = await createLeadNote(lead.id, text);
-    if (ok) {
-      setNoteText('');
-      setKylasNotes(await fetchLeadNotes(lead.id, lead.ownerId));
-    } else {
-      setSave({ saving: false, warning: 'Kylas rejected the note. Nothing was saved.' });
-    }
-    setSavingNote(false);
-  };
 
   const handleSave = async (extra?: Partial<InboundLead>) => {
     if (save.saving) return;
@@ -295,16 +127,12 @@ export default function InboundDrawer({
       ...extra,
       company: draft.companyName?.trim() || draft.company,
       value: Number(draft.orderValue) || 0,
-
       timeline: draft.urgency,
       requirementBrief: draft.leadSummary,
     }, new Date().toISOString());
 
     const [kylasRes, dbErr] = await Promise.all([
-      updateInboundLeadKylas(lead.id, {
-        requirement: toSave.requirement,
-        selections: toSave.selections,
-      }),
+      updateInboundLeadKylas(lead.id, { requirement: toSave.requirement, selections: toSave.selections }),
       upsertInboundLead(toSave),
     ]);
 
@@ -330,143 +158,88 @@ export default function InboundDrawer({
   const openCallSummary = async (callLogId: string) => {
     setSummaryModal({ loading: true });
     try {
-      const text = await fetchCallLogSummary(callLogId);
+      const text = await detail.fetchCallLogSummary(callLogId);
       setSummaryModal({ loading: false, text: text || 'No summary available for this call.' });
     } catch {
       setSummaryModal({ loading: false, error: 'Failed to load call summary. Please try again.' });
     }
   };
 
-  const droppedSelections = selectionsKylasWillDrop(draft.selections);
+  const spocs = useMemo(() => clientSpocs(draft, detail.outreach.data, detail.deals.data),
+    [draft, detail.outreach.data, detail.deals.data]);
   const presalesTypeUnmapped = kylasClientTypeIsAmbiguous(draft.presalesClientType);
-  const today = istToday();
 
   return (
     <div className="fixed inset-0 z-[1200] flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-[780px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
-
-        <InboundDrawerHeader
-        draft={draft}
-        gaps={gaps}
-        onClose={onClose}
-        today={today}
-      />
+        <InboundDrawerHeader draft={draft} gaps={gaps} onClose={onClose} today={today} />
 
         <div className="p-5 flex flex-col gap-4">
-
           <InboundOwnerCard
-        draft={draft}
-        members={members}
-        canReassign={canReassign}
-        onReassigned={(to) => {
-          const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
-          setDraft((d) => ({ ...d, ...owned }));
-          onSaved({ ...lead, ...owned });
-        }}
-      />
-
-          <InboundPresalesCard
-        detailFailed={detailFailed}
-        detailLoading={detailLoading}
-        draft={draft}
-        presalesTypeUnmapped={presalesTypeUnmapped}
-      />
-
-          <InboundClientCard
-        draft={draft}
-        presalesTypeUnmapped={presalesTypeUnmapped}
-        set={set}
-      />
-
-          <InboundRequirementCard
-        draft={draft}
-        droppedSelections={droppedSelections}
-        set={set}
-      />
+            draft={draft}
+            spocs={spocs}
+            spocsLoading={detail.outreach.loading || detail.deals.loading}
+            members={members}
+            canReassign={canReassign}
+            onReassigned={(to) => {
+              const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
+              setDraft((d) => ({ ...d, ...owned }));
+              onSaved({ ...lead, ...owned });
+            }}
+          />
 
           <InboundCallsCard
-        attemptNo={attemptNo}
-        attempts={attempts}
-        callLogs={callLogs}
-        callsLoading={callsLoading}
-        connected={connected}
-        detailLoading={detailLoading}
-        draft={draft}
-        exhausted={exhausted}
-        logAttempt={logAttempt}
-        logDuration={logDuration}
-        logError={logError}
-        logFollowUp={logFollowUp}
-        logNote={logNote}
-        logOpen={logOpen}
-        logOutcome={logOutcome}
-        logging={logging}
-        openCallSummary={openCallSummary}
-        phoneId={phoneId}
-        setDraft={setDraft}
-        setLogDuration={setLogDuration}
-        setLogError={setLogError}
-        setLogFollowUp={setLogFollowUp}
-        setLogNote={setLogNote}
-        setLogOpen={setLogOpen}
-        setLogOutcome={setLogOutcome}
-      />
+            draft={draft}
+            calls={calls}
+            readiness={readiness}
+            onClose={(reason) => { setDraft((d) => ({ ...d, stage: 'Lost', lostReason: reason })); setShowGates(false); }}
+          />
+
+          <InboundClientCard draft={draft} presalesTypeUnmapped={presalesTypeUnmapped} set={set} />
+
+          <InboundRequirementCard draft={draft} droppedSelections={selectionsKylasWillDrop(draft.selections)} set={set} />
 
           <InboundStatusCard
-        checkEnq={checkEnq}
-        draft={draft}
-        enq={enq}
-        enqChecking={enqChecking}
-        gateFor={gateFor}
-        set={set}
-        setDraft={setDraft}
-        setShowGates={setShowGates}
-      />
+            checkEnq={checkEnq}
+            draft={draft}
+            enq={enq}
+            enqChecking={enqChecking}
+            gateFor={gateFor}
+            set={set}
+            setDraft={setDraft}
+            setShowGates={setShowGates}
+            deals={detail.deals}
+            readiness={readiness}
+            connected={connected}
+          />
+
+          {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
+            <InboundPlacedUnderCard draft={draft} setPlaced={setPlaced} />
+          )}
 
           <InboundOutreachCard
             draft={draft}
             actorName={actorName}
             today={today}
             saving={save.saving}
-            set={set}
             onSend={(referral: OutreachReferral) => handleSave({ outreachReferral: referral })}
           />
 
-          {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
-            <InboundPlacedUnderCard
-              assignKam={assignKam}
-              draft={draft}
-              kamAssigning={kamAssigning}
-              setKam={(kam) => set('kam', kam)}
-              setPlaced={setPlaced}
-            />
-          )}
+          <InboundNotesCard draft={draft} calls={calls} />
 
-          <InboundEnrichCard
-        deals={deals}
-        dealsLoading={dealsLoading}
-        draft={draft}
-      />
-
-          <InboundNotesCard
-        addNote={addNote}
-        kylasNotes={kylasNotes}
-        noteText={noteText}
-        notesLoading={notesLoading}
-        savingNote={savingNote}
-        setNoteText={setNoteText}
-      />
+          <InboundPresalesCard
+            detailFailed={detail.detailFailed}
+            detailLoading={detail.detailLoading}
+            draft={draft}
+            presalesTypeUnmapped={presalesTypeUnmapped}
+            calls={detail.presalesCalls}
+            notes={detail.presalesNotes}
+            openCallSummary={openCallSummary}
+          />
         </div>
 
-        <InboundDrawerFooter
-        gaps={gaps}
-        gateErrors={gateErrors}
-        handleSave={handleSave}
-        onClose={onClose}
-        save={save}
-        showGates={showGates}
-      />
+        <InboundDrawerFooter gaps={gaps} gateErrors={gateErrors} handleSave={handleSave} onClose={onClose} save={save} showGates={showGates} />
       </div>
 
       {summaryModal && (
