@@ -9,7 +9,7 @@ import ClientDatabase from './client-db/index';
 import KAMs from './kams/index';
 import Leadership from './leadership/index';
 import Targets from './targets';
-import PartnerContent from './partner-content/index';
+import StudioSpace from './studio-space/index';
 import TeamView from './team/index';
 import { useB2BTeam } from '../hooks/use-b2b-team';
 import { viewerFor } from '@/lib/b2b/team/utils';
@@ -17,7 +17,7 @@ import type { AppUser } from '@/types/crm';
 
 type B2BView =
   | 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
-  | 'leadership' | 'targets' | 'content' | 'team';
+  | 'leadership' | 'targets' | 'studio' | 'team';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean; managerOnly?: boolean }> = [
   { key: 'dashboard',  label: 'Dashboard',        ready: true },
@@ -30,7 +30,7 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean; managerOnly?: bo
   { key: 'leadership', label: 'Leadership Board', ready: true },
   { key: 'targets',    label: 'Targets',          ready: true },
 
-  { key: 'content',    label: 'Partner Content',  ready: true },
+  { key: 'studio',     label: 'Studio Space',     ready: true },
   { key: 'team',       label: 'Team',             ready: true, managerOnly: true },
 ];
 
@@ -92,11 +92,11 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'inbound' && <InboundLeads team={team} viewer={viewer} />}
         {view === 'leads' && <LeadsTab />}
         {view === 'outreach' && <OutreachLeads team={team} viewer={viewer} />}
-        {view === 'clients' && <ClientDatabase />}
-        {view === 'kams' && <KAMs />}
+        {view === 'clients' && <ClientDatabase team={team} viewer={viewer} />}
+        {view === 'kams' && <KAMs team={team} viewer={viewer} />}
         {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
         {view === 'targets' && <Targets />}
-        {view === 'content' && <PartnerContent />}
+        {view === 'studio' && <StudioSpace />}
         {view === 'team' && viewer.isManager && <TeamView team={team} viewer={viewer} />}
       </main>
     </div>

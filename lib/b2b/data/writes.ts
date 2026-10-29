@@ -60,6 +60,19 @@ export function upsertClient(c: ClientEntity): Promise<string | null> {
   return upsert(clientToRow({ ...c, updatedAt: new Date().toISOString() }));
 }
 
+export async function upsertClients(list: ClientEntity[]): Promise<string | null> {
+  if (!list.length) return null;
+  const at = new Date().toISOString();
+  try {
+    await b2bBackendPost('/rows/bulk', { rows: list.map((c) => clientToRow({ ...c, updatedAt: at })) });
+    invalidateB2BCache();
+    return null;
+  } catch (e) {
+    console.error('[b2b] bulk client upsert failed', e);
+    return writeErrorMessage(e);
+  }
+}
+
 export function upsertKamOrder(o: KamOrder): Promise<string | null> {
   return upsert(kamOrderToRow(o));
 }

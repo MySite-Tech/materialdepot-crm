@@ -20,16 +20,18 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
   const push = (kind: JourneyEvent['kind'], text: string) => ev.push({ at, by, kind, text });
 
   if (!before) {
-    if (after.intake) push('intake', `Assigned to ${after.bm} from Inbound${after.intake.inboundOwner ? ` (worked by ${after.intake.inboundOwner})` : ''}`);
-    else push('created', `Created by ${by} · source ${after.source || 'not set'}`);
+    if (after.intake?.from === 'Inbound') push('intake', `Assigned to ${after.bm} from Inbound${after.intake.inboundOwner ? ` (worked by ${after.intake.inboundOwner})` : ''}`);
+    else push('created', `Created by ${by} · source ${after.source || 'not set'}${after.bm ? '' : ' · left unassigned'}`);
+    if (after.intake && after.intake.from !== 'Inbound') push('intake', `Assigned to ${after.bm} by ${after.intake.assignedBy}`);
     if (after.intake?.acceptedAt) push('intake-accepted', `${after.bm} took the lead`);
     for (const m of after.meetings || []) push('meeting-scheduled', `${meetingWord(m)} scheduled`);
     return ev;
   }
 
-  if (before.bm !== after.bm) push('bm-changed', `BM changed from ${before.bm} to ${after.bm}`);
-  if (!before.intake?.acceptedAt && after.intake?.acceptedAt) push('intake-accepted', `${by} accepted the lead from Inbound`);
-  if (!before.intake?.rejectedAt && after.intake?.rejectedAt) push('intake-rejected', `${by} rejected the lead from Inbound: ${after.intake.rejectReason || 'no reason'}`);
+  if (before.intake?.assignedAt !== after.intake?.assignedAt && after.intake && after.bm) push('intake', `Assigned to ${after.bm} by ${after.intake.assignedBy}${after.intake.how === 'round-robin' ? ' (round robin)' : ''}`);
+  else if (before.bm !== after.bm) push('bm-changed', after.bm ? `BM changed from ${before.bm || 'unassigned'} to ${after.bm}` : `${before.bm} returned the lead to the unassigned pool`);
+  if (!before.intake?.acceptedAt && after.intake?.acceptedAt) push('intake-accepted', `${by} accepted the lead${after.intake.from === 'Inbound' ? ' from Inbound' : ''}`);
+  if (!before.intake?.rejectedAt && after.intake?.rejectedAt) push('intake-rejected', `${by} rejected the lead${after.intake.from === 'Inbound' ? ' from Inbound' : ''}: ${after.intake.rejectReason || 'no reason'}`);
   if (before.status !== after.status) {
     push('status', `${OUTREACH_STATUS_LABEL[before.status]} → ${OUTREACH_STATUS_LABEL[after.status]}${after.status === 'Lost' && after.lostReason ? ` (${after.lostReason})` : ''}`);
   }
@@ -143,7 +145,7 @@ export function outreachReminders(
   const scheduled = meetings.filter((m) => m.status === 'Scheduled');
   const open = l.status !== 'Closed';
 
-  if (intakePending(l)) add('intake', 'today', 'New from Inbound — accept it or reject it with a reason');
+  if (intakePending(l)) add('intake', 'today', `Assigned to you${l.intake?.from === 'Inbound' ? ' from Inbound' : ` by ${l.intake?.assignedBy || 'an admin'}`} — accept it or reject it with a reason`);
 
   for (const m of scheduled) {
     const d = String(m.date || '').slice(0, 10);

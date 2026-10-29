@@ -1,13 +1,14 @@
 'use client';
 
-import { CONTACT_LABELS } from '../constants';
 import { firmHolding, fmtPhone } from '../utils';
-import { ClientContact, ClientEntity, contactLabel, isValidContactNumber, normalizeContactNumber } from '../../../models/client';
+import { CONTACT_CLASSES, ClientContact, ClientEntity, STUDIO_ACCESS, StudioAccess, isValidContactNumber, normalizeContactNumber } from '../../../models/client';
 import { fmtShortINR } from '../../../models/mock-data';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { ClientOrderHistory } from '@/lib/b2b';
 import { useState } from 'react';
+
+const selectCls = 'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-[11px] cursor-pointer disabled:opacity-60';
 
 export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }: {
   client: ClientEntity;
@@ -58,6 +59,17 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
     if (await write(next)) { setRemoving(null); if (via === normalizeContactNumber(number)) onVia(null); }
   };
 
+  const patch = (number: string, change: Partial<ClientContact>) =>
+    write(contacts.map((x) => (x.number === number ? { ...x, ...change } : x)));
+
+  const setAccess = (c: ClientContact, value: string) => {
+    const access = (value || undefined) as StudioAccess | undefined;
+    patch(c.number, {
+      studioAccess: access,
+      studioOnboardedAt: access ? c.studioOnboardedAt || new Date().toISOString().slice(0, 10) : undefined,
+    });
+  };
+
   return (
     <SectionCard
       title="Contact numbers"
@@ -79,7 +91,7 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
                     <span className="font-mono text-[13px] font-semibold text-gray-800 tracking-tight">{fmtPhone(n)}</span>
                     {c.primary && <span className="px-1.5 py-px rounded text-[9px] font-bold bg-[#0F766E] text-white">PRIMARY</span>}
                   </div>
-                  <div className="text-[11px] text-gray-500 truncate">{contactLabel(c) || <span className="text-gray-300">No name on file</span>}</div>
+                  <div className="text-[11px] text-gray-500 truncate">{String(c.name || '').trim() || <span className="text-gray-300">No name on file</span>}</div>
                 </div>
                 <button
                   onClick={() => onVia(active ? null : n)}
@@ -92,6 +104,29 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
                   </div>
                   <div className="text-[10px] text-gray-400">{h ? fmtShortINR(h.lifetimeValue) : 'not read'}</div>
                 </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                <select
+                  value={c.label || ''}
+                  onChange={(e) => patch(c.number, { label: e.target.value || undefined })}
+                  disabled={busy}
+                  title="What this person is at the firm"
+                  className={`${selectCls} ${c.label ? 'text-gray-700' : 'text-amber-700 border-amber-300'}`}
+                >
+                  <option value="">Not classified</option>
+                  {c.label && !(CONTACT_CLASSES as readonly string[]).includes(c.label) && <option value={c.label}>{c.label}</option>}
+                  {CONTACT_CLASSES.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <select
+                  value={c.studioAccess || ''}
+                  onChange={(e) => setAccess(c, e.target.value)}
+                  disabled={busy}
+                  title={c.studioAccess ? `${STUDIO_ACCESS[c.studioAccess].hint}. Onboarded ${c.studioOnboardedAt || ''}`.trim() : 'Not onboarded on Studio Space'}
+                  className={`${selectCls} ${c.studioAccess === 'power' ? 'text-[#0F766E] border-teal-300' : c.studioAccess ? 'text-gray-700' : 'text-gray-400'}`}
+                >
+                  <option value="">Studio Space: not onboarded</option>
+                  {(Object.keys(STUDIO_ACCESS) as StudioAccess[]).map((k) => <option key={k} value={k}>Onboarded · {STUDIO_ACCESS[k].label}</option>)}
+                </select>
               </div>
               {removing === c.number ? (
                 <div className="flex items-center gap-2 mt-1.5 text-[11px]">
@@ -128,8 +163,10 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
               className={`${inputCls} font-mono ${draftError ? 'border-red-300' : ''}`}
             />
             <input value={draft.name || ''} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Name" className={inputCls} />
-            <input value={draft.label || ''} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} placeholder="Role" list="firm-contact-labels" className={inputCls} />
-            <datalist id="firm-contact-labels">{CONTACT_LABELS.map((l) => <option key={l} value={l} />)}</datalist>
+            <select value={draft.label || ''} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} className={inputCls}>
+              <option value="">Classification</option>
+              {CONTACT_CLASSES.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
           </div>
           {draftError && <p className="text-[11px] text-red-600">{draftError}</p>}
           <p className="text-[10px] text-gray-400">Every order placed on this number from now on, and every past one, counts towards this firm.</p>
@@ -139,6 +176,9 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
           </div>
         </div>
       )}
+      <p className="text-[10px] text-gray-400 mt-2">
+        Power user: the whole Studio Space dashboard. Non-power user: Orders and Rewards only. This is the CRM&apos;s record; it does not change anyone&apos;s access on Studio Space.
+      </p>
       {error && <p className="text-[11px] text-red-600 mt-2">Could not save: {error}</p>}
     </SectionCard>
   );

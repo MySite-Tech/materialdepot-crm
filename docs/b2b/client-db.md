@@ -96,6 +96,61 @@ not visible in the code's shape:
 - The list and the order tabs page at 25 rows. The tiles and the strip
   count the full filtered set.
 
+### One enquiry, opened in place (2026-10-29)
+
+Clicking an enquiry row on the Firm page expands it into everything Django
+already returned on that ticket: cart lines, cart value with and without GST,
+status, the created / follow-up / closure / lost dates, branch, assigned BM,
+client type, property, project phase, architect involved, visits and remarks
+(`cards/enquiry.tsx`). **It costs no request.** `/crm/leads/?q=<phone>` already
+returns those fields, so `ticketToOrderRow` carries them instead of dropping
+them. The remarks shown are the ones on the ticket. `/crm/lead-remarks/` is
+not called, because `fetchLeadRemarks` swallows failures into `[]` and would
+turn an outage into "no remarks".
+
+- **`cartItems` arrives as a string or as `CartItem[]`** (the Sales CRM's leads
+  table handles both). `String()` on the array gave "[object Object]", so
+  `cartLines` reads either shape. A string is split on newlines only. A comma
+  can be part of a product name.
+- **"Open pipeline" is now labelled "Open carts".** The value is still the
+  aggregates' `openValue`, and the order tab of that name counts the open
+  tickets. No second figure was added, so the tile and the tab cannot
+  disagree about anything new.
+- The subtitle says "across all N numbers" because the list was always every
+  number's tickets merged. The Via column shows that only once a firm has two
+  numbers.
+
+### GST: what can and cannot be linked
+
+Tickets carry **no GSTIN**, and no Django endpoint filters by GST (`lib/api`
+has none). So an enquiry billed to one of the firm's GSTINs, but raised on a
+number that is not on the firm, cannot be found. The GST card says so in amber,
+and names the ask: a `gst=` filter on `/crm/leads/`. Do not join GST to
+enquiries by firm name or by PAN on the frontend. That is the name-merge
+mistake §Parent companies rules out.
+
+### Each number: classification and Studio Space access (2026-10-29)
+
+Every contact on a firm carries a **classification** in its existing `label`
+field (`CONTACT_CLASSES`: Owner, Partner, Designer, Purchase, Accounts, Site).
+It is a select now. A free-text label from before is kept as an extra option,
+not wiped. It also carries **`studioAccess`**: unset means not onboarded,
+`power` means the whole Studio Space dashboard, and `non-power` means Orders
+and Rewards only. `studioOnboardedAt` is stamped the first time it is set.
+The user's call was **per phone, not per firm**. The older per-firm "Power user
+/ Normal user" tier in `sales-tab-redesign.md` is superseded.
+
+Both persist with no migration. `contacts` is its own jsonb column on
+`b2b_client` in the deployed b2b-backend (`master`), and the mapper passes
+unknown contact keys through. This was verified on the sandbox: the change
+reached `.sandbox/state.json` through the normal `onSave`.
+
+**It is a record, not a grant.** Studio Space's own access lives in
+`partner_user.visible_tabs` in b2b-backend, where `NULL` means unrestricted.
+Nothing writes that from here, and nothing reads it back. Making the marking
+real needs a `/sync` endpoint keyed by phone. It is not built. The Studio Space
+tab reads these fields; see `studio-space.md`.
+
 ### The list: tiles are lenses, filters narrow them (2026-10-28)
 
 Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
@@ -112,16 +167,16 @@ No KAM, plus Unread only when some firm's orders did not load.
   the KAM dropdown's "Unassigned" option are gone, because the tiles are those
   filters. Two controls for one predicate drift apart (the badge entry in
   `docs/landmines.md`).
-- **Lapsing soon is not KAM's At risk.** It uses the same 30-day window
-  (`AT_RISK_WINDOW_DAYS`) with no follow-up condition, because this list has no
-  follow-up queue to judge. It is named differently on purpose. It is the same
-  set the Status pill marks "Nd left".
+- **Inactive 1 month replaced Lapsing soon (2026-10-29)**, when the 30/60 rule
+  became every firm's. It is the same set as KAM's tile of that name.
 - **Each lens has a default order** (`LENS_DEFAULT_SORT`): Lapsing puts the
   oldest last order first, which means fewest days left. No KAM sorts by
   revenue, and the rest by most recent order. A column header overrides it, and
   picking a tile resets it. Unread values sort last in both directions.
-- **Export honours the menu's Current filter / All data.** It used to ignore
-  the scope and always export the filtered list.
+- **There is no export, for anyone (2026-10-29).** The user called client data
+  export a security issue and removed it for admins too. Do not bring it back
+  behind a role check. The upload modal's "Download log" stays: it lists only
+  row numbers, company names and the outcome of the file the user uploaded.
 - **A last-order date after today is flagged "future date"** in amber. The date
   is Django's `lastOrderDate`, and `clientStatus` still counts the firm as
   Active.
@@ -147,7 +202,20 @@ equalled Active + Inactive (66 = 40 + 26). Segment 2 narrowed every tile
 (29 / 17 / 12), and removing a chip reset its select. There was no horizontal
 scroll at 390px and no page errors.
 
+### Assigning firms to KAMs (managers only, 2026-10-29)
+
+Managers get a checkbox column and an assign bar (`ui/assign-bar.tsx`, shared
+with Outreach's pool). Picking a KAM or Round robin writes a pending handover
+that the KAM signs off on the KAM tab. The rules (where the state is stored,
+why it is book size and not `/kam-load`, what rejection does) are in `kam.md`
+§Admin assigns firms. The checkbox column renders only when `picked` is passed,
+so non-managers get the old table unchanged.
+
 ### §2.1's window is anchored to TODAY, and the PRD does not quite say that
+
+**The window is 30 / 60 days since 2026-10-29** (`kam.md` §Account status), not
+the PRD's 3 months: the user asked for KAM's rule on every firm. The anchoring
+argument below still holds.
 
 "Active: at least one order placed within the last 3 months, **measured from
 Last Order Placed**." Read literally that is vacuous — the last order is always
@@ -155,8 +223,7 @@ within three months of itself, so every client who ever ordered would be Active
 forever and the column would carry no information. The PRD's own next sentence
 settles it: status "re-evaluates … on a daily rollover", and a daily rollover
 only changes the answer if the window is anchored to today. So `clientStatus`
-compares against `monthsBefore(today, 3)`. **Flagged for KK on screen**, not
-silently chosen.
+compares against today.
 
 ### There is no GST Validator in this stack
 

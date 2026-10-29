@@ -4,14 +4,14 @@ import OutreachDrawer from '../../drawers/outreach/index';
 import { OutreachLead } from '../../models/mock-data';
 import { OutreachStatus, STUDIO_WAITLIST_URL, istToday, outreachGateErrors } from '../../models/outreach';
 import { repOwns } from '../../models/outreach/handover';
-import { inboundPool } from '../../models/outreach/intake';
+import { inboundPool, isUnassigned, unassignedPool } from '../../models/outreach/intake';
 import { OUTREACH_KPIS, Period, monthPeriod, outreachKpis, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS, NO_FILTERS } from './constants';
 import { useOutreachData } from './hooks/use-outreach-data';
 import { useOutreachLenses } from './hooks/use-outreach-lenses';
 import { useOutreachScope } from './hooks/use-outreach-scope';
-import { FromInbound } from './intake';
+import { Assignments } from './intake';
 import { LensStrip } from './lenses';
 import { OutreachBoard } from './lists/board';
 import { columnsFor } from './lists/columns';
@@ -68,7 +68,8 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const added = useMemo(() => rangeFor(f.added, today, { from: f.addedFrom, to: f.addedTo }), [f.added, f.addedFrom, f.addedTo, today]);
 
   const waitIdx = useMemo(() => waitlistIndex(data.waitlist), [data.waitlist]);
-  const scoped = useMemo(() => data.leads.filter(scope.owns), [data.leads, scope]);
+  const scoped = useMemo(() => data.leads.filter((l) => scope.owns(l) && !isUnassigned(l)), [data.leads, scope]);
+  const unassigned = useMemo(() => (scope.isManager ? unassignedPool(data.leads) : []), [data.leads, scope.isManager]);
   const teamLive = scope.mode !== 'open';
   const bms = useMemo(() => bmOptions(scoped, scope.reps, teamLive), [scoped, scope.reps, teamLive]);
   const canPickBm = scope.mode !== 'mine';
@@ -80,7 +81,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const filtered = useMemo(() => bmLeads.filter((l) => matchesFilters(l, f, added)), [bmLeads, f, added]);
   const kpis = useMemo(() => outreachKpis(bmLeads, period, waitIdx), [bmLeads, period, waitIdx]);
   const pool = useMemo(() => (data.inbound ? inboundPool(data.inbound, data.leads) : null), [data.inbound, data.leads]);
-  const lenses = useOutreachLenses({ leads: filtered, kpis, lens, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool });
+  const lenses = useOutreachLenses({ leads: filtered, kpis, lens, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
 
   const validLens = lens.startsWith('kpi:') ? !isKamView : lenses.groups.some((g) => g.head === lens || g.lenses.includes(lens as WorkLens));
   useEffect(() => { if (!validLens) setLens(defaultLens); }, [validLens, defaultLens]);
@@ -247,8 +248,8 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         ) : view === 'board' ? (
           <OutreachBoard leads={filtered} today={today} onOpen={setSelectedId} onMove={requestMove} />
         ) : lens === 'inbox' ? (
-          <FromInbound leads={filtered} allLeads={data.leads} pool={pool} scope={scope} today={today}
-            save={data.save} createMany={data.createMany} onOpen={setSelectedId} />
+          <Assignments leads={filtered} allLeads={data.leads} pool={pool} unassigned={unassigned} scope={scope} today={today}
+            save={data.save} saveMany={data.saveMany} createMany={data.createMany} onOpen={setSelectedId} />
         ) : kpiDef && lenses.kpi ? (
           <LensTable
             title={kpiDef.label}
@@ -294,7 +295,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
       </div>
 
       {creating && (
-        <CreateLeadModal reps={scope.reps} me={scope.me} canPickBm={canPickBm} onClose={() => setCreating(false)}
+        <CreateLeadModal reps={scope.reps} me={scope.me} canPickBm={canPickBm} assigner={scope.isManager} onClose={() => setCreating(false)}
           onCreate={async (lead) => {
             setCreating(false);
             const err = await data.save(null, lead);

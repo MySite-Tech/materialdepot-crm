@@ -7,7 +7,7 @@ import {
   OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachContact, OutreachMeeting, OutreachSource, OutreachStatus, SEGMENTS,
   SELECTIONS, Segment, Selection, TEAM_SIZES, TeamSize, istToday, outreachGateErrors,
 } from '../../models/outreach';
-import { isMobile } from '../../models/outreach/handover';
+import { isMobile, sameRep } from '../../models/outreach/handover';
 import { normalisePhone } from '@/lib/org/utils';
 import { Rep } from '../../models/outreach/intake';
 import { LostReasonSelect } from '../../ui/lost-reason-select';
@@ -113,10 +113,11 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
   );
 }
 
-export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
+export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCreate }: {
   reps: Rep[];
   me: Rep;
   canPickBm: boolean;
+  assigner: boolean;
   onClose: () => void;
   onCreate: (lead: OutreachLead) => void;
 }) {
@@ -140,6 +141,8 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
   const [companyTypeOther, setCompanyTypeOther] = useState('');
   const [bm, setBm] = useState((reps.find((r) => r.name === me.name) || reps[0] || me).name);
   const rep = canPickBm ? reps.find((r) => r.name === bm) || { name: bm } : me;
+  const toPool = assigner && bm === '';
+  const assignedByAdmin = assigner && !toPool && !sameRep(rep.name, me.name);
   const [selections, setSelections] = useState<Selection[]>([]);
   const [requirement, setRequirement] = useState('');
   const [expectedOrderValue, setExpectedOrderValue] = useState('');
@@ -160,7 +163,7 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
     ...(altPhone.trim() && (!isMobile(altPhone) || normalisePhone(altPhone) === normalisePhone(phone)) && { altPhone: 'Must be a different 10-digit mobile.' }),
     ...(!segment && { segment: 'Pick a segment.' }),
     ...(!teamSize && { teamSize: 'Pick a team size.' }),
-    ...(!mDate && !followUpDate && { next: 'Book meeting 1 or set a next follow-up date — every lead needs a next step.' }),
+    ...(!toPool && !mDate && !followUpDate && { next: 'Book meeting 1 or set a next follow-up date — every lead needs a next step.' }),
     ...(contacts.some((c) => !c.name.trim() || !c.role.trim()) && { contacts: 'Every extra person needs a name and a role.' }),
   };
   const err = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
@@ -172,7 +175,7 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
       ? [{
         n: 1, date: mDate, time: mTime || undefined,
         area: mArea.trim() || undefined, officeLocation: mOffice.trim() || undefined,
-        status: 'Scheduled', loggedBy: rep.name, updatedAt: nowIso(),
+        status: 'Scheduled', loggedBy: rep.name || me.name, updatedAt: nowIso(),
       }]
       : [];
     onCreate({
@@ -192,6 +195,7 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
       bm: rep.name,
       bmPhone: rep.phone,
       source,
+      intake: assignedByAdmin ? { from: source, assignedAt: nowIso(), assignedBy: me.name, how: 'manual' } : undefined,
       email: email.trim() || undefined,
       city: city.trim() || undefined,
       officeAddress: officeAddress.trim() || undefined,
@@ -287,9 +291,10 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
                 {OUTREACH_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="BM (owner)">
+            <Field label="BM (owner)" hint={assigner ? (toPool ? 'Goes to the unassigned pool under Assignments' : assignedByAdmin ? 'They must accept it before it counts as theirs' : undefined) : undefined}>
               {canPickBm ? (
                 <select value={bm} onChange={(e) => setBm(e.target.value)} className={inputCls}>
+                  {assigner && <option value="">Unassigned — assign later</option>}
                   {reps.map((r) => <option key={r.phone || r.name} value={r.name}>{r.name}</option>)}
                 </select>
               ) : <input value={me.name} disabled className={inputCls} />}

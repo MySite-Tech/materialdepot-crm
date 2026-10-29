@@ -128,7 +128,7 @@ data, with Django stubbed.
 - **Overdue stays oldest-first** (§4.3 FIFO). Its age chip counts days past the
   follow-up date, the same number the old queue's `agedDays` showed, banded by
   `queueAgeBand`. It is not days since contact. Inactive 1 month sorts by
-  `kamDaysToLapse`, closest to 60 days first, and No follow-up puts the longest silence first. Assigned
+  `daysToLapse`, closest to 60 days first, and No follow-up puts the longest silence first. Assigned
   keeps the old order: overdue, then due, then the rest by silence.
 - **Called today counts firms in scope**, so on "All KAMs" it now includes an
   unassigned firm someone called. `callsLoggedOn` itself is unchanged (one per
@@ -138,22 +138,24 @@ data, with Django stubbed.
 - **A failed read shows Unknown, never 0.** The client master failing blanks the
   firm tiles, and the order list failing blanks the order tiles, independently,
   each with a retry panel. Firms whose order metrics were not read reach neither
-  any status tile (`kamAccountStatus` gives Unknown), and the Assigned and
+  any status tile (`clientStatus` gives Unknown), and the Assigned and
   Active tiles say how many.
 - **Against the Django stub every firm reads Inactive with ₹0.** The stub
   answers `200 []` for `b2b-bulk`, so this says nothing about real accounts.
 
-### Account status: 30 / 60 days, KAM only (2026-10-29)
+### Account status: 30 / 60 days, every firm (2026-10-29)
 
-The user set KAM's own rule and said it applies to KAM only. Client Database
-keeps `clientStatus`, which uses a 3-month window. So one firm can read Active
-on Client DB and Inactive on KAM. That is intended, not drift.
+The user set this rule for KAM in the morning and, the same evening, asked for
+it on **every firm**. So there is one rule again: `clientStatus`
+(`models/client/rules/status.ts`), used by KAM, Client Database, the Dashboard
+and Leadership. Client DB's old 3-month window and its "Lapsing soon" tile are
+gone; its middle tile is now Inactive 1 month, the same set as KAM's.
 
-`kamAccountStatus` (`models/kam/cadence.ts`) counts days since
+`clientStatus` counts days since
 `lastOrderPlaced`. **Active** is 0–30 days, **Inactive 1 month** is 31–60 days,
 and **Inactive** is more than 60 days or no order on record. **Unknown** means
 the history was not read. Checked at each boundary in Node.
-`kamDaysToLapse` gives the days left before a firm drops to the next bucket. It
+`daysToLapse` gives the days left before a firm drops to the next bucket. It
 drives the "Lapses in" column and the pill's "Nd left".
 
 Everything KAM reads it: the tab's tiles, the Firm page opened from KAM (through
@@ -174,6 +176,40 @@ created orders with no client, which is what the board's "unlinked" count
 reports. The CSV order importer (`views/kams/upload.tsx` and its validator in
 `io/kam-import.ts`) went with it. That file keeps only the cell, phone and
 delimiter parsing that the Client Database import still uses.
+
+### Admin assigns firms, the KAM signs off (2026-10-29)
+
+An admin selects firms in the Client Database (one or many) and assigns them to
+a KAM, either by name or round robin. The KAM accepts, or rejects with a reason,
+from the **Waiting for sign-off** tile here (`panels/signoff.tsx`).
+
+- **The handover lives on the latest `assignments` entry**, as `status`,
+  `how`, `kamPhone`, `respondedAt/By` and `rejectReason`. There is no new meta
+  key. `assignments` is a real `b2b_client` jsonb column on the deployed
+  backend. A new key would only persist once migration 0020's `extra` column
+  ships, and until then it would be dropped silently. `firmHandover()` reads the
+  latest entry only. **The Firm page's KAM picker goes through the same
+  sign-off**: it is shown to managers only (`assignAs`), assigning there appends
+  a `Pending` entry, and setting Unassigned appends one with no `status`, which
+  ends any pending handover. Before this, any KAM could reassign a firm from
+  its page and skip the sign-off entirely.
+- **A pending firm already has `kam` set.** It counts in that KAM's book, tiles
+  and coverage from the moment it is assigned, so a KAM cannot shrink their
+  book by leaving it unanswered. Rejecting clears `kam`. The firm then lands in
+  Client DB's **No KAM** lens, with "X rejected: reason" under the KAM column.
+  Client DB also gets an **Awaiting KAM** tile while any firm is pending.
+- **Round robin uses book size, not `fetchKamLoad`.** It picks the active,
+  in-rotation KAM holding the fewest firms right now, ignoring the firms being
+  moved, and ties go by name. `/kam-load` counts converted Inbound and Outreach
+  leads. It answers a different question (who got the most new conversions), and
+  it costs a request. Book size comes from the list already loaded.
+- **Who may answer:** the KAM it was assigned to (phone, then name), a
+  manager, or anyone while the team table is not live. The 48-hour window
+  matches the Outreach handover (`HANDOVER_TAT_HOURS`). The tile counts those
+  past it.
+- **One bulk write.** An assignment is one `POST /rows/bulk` (`upsertClients`).
+  On failure nothing is assigned and the error says so. A partial set never
+  shows as done.
 
 ### Not built yet: the user's 2026-10-29 spec
 

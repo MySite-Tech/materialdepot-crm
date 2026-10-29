@@ -1,19 +1,18 @@
 'use client';
 
-import { ACTIVE_WINDOW_MONTHS, ClientEntity, EVIDENCE_IS_EXACT, MergeChoices, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { KAMS, fmtShortINR } from '../../models/mock-data';
-import { AT_RISK_WINDOW_DAYS } from '../../constants/kam';
 import { FirmDrawer } from '../../drawers/firm';
+import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
-import { ExportFormat, ExportScope } from '../../types/export';
-import { ExportButton } from '../../ui/export-button';
+import { AssignBar } from '../../ui/assign-bar';
+import { useFirmAssign } from './hooks/use-firm-assign';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
-import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
-import { clientLensMatches, filterChips, matchesFilters, matchesSearch, sortRows } from './utils';
+import { clientLensMatches, filterChips, matchesFilters, sortRows } from './utils';
 import { ClientFilterBar, ListHead } from './ui/filters';
 import { ClientModal } from './ui/modals/client-modal';
 import { MergeModal } from './ui/modals/merge';
@@ -22,9 +21,10 @@ import { UploadModal } from './ui/modals/upload';
 import { ClientTable } from './ui/table';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { clientFromSeed, deleteB2BRow, fetchClients, upsertClient } from '@/lib/b2b';
+import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export default function ClientDatabase() {
+export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -34,7 +34,6 @@ export default function ClientDatabase() {
   const [merging, setMerging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
 
   const [search, setSearch] = useState('');
@@ -43,6 +42,11 @@ export default function ClientDatabase() {
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
+  const { kams } = useB2BReps(team);
+  const assigner = useFirmAssign(clients, kams, viewer.member?.name || viewer.name, (list) => {
+    const byId = new Map(list.map((c) => [c.id, c]));
+    setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
+  });
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
 
   const load = useCallback(async () => {
@@ -66,10 +70,10 @@ export default function ClientDatabase() {
 
   const scoped = useMemo<ClientListRow[]>(() =>
     clients
-      .filter((c) => matchesFilters(c, f) && matchesSearch(c, search))
+      .filter((c) => matchesFilters(c, f) && clientMatchesSearch(c, search))
       .map((client) => {
         const metrics = metricsFor(client);
-        return { client, metrics, status: clientStatus(metrics, today), days: daysToInactive(metrics, today) };
+        return { client, metrics, status: clientStatus(metrics, today), days: daysToLapse(metrics, today) };
       }),
   [clients, metricsFor, f, search, today]);
 
@@ -104,11 +108,12 @@ export default function ClientDatabase() {
     const n = byLens[k].length;
     switch (k) {
       case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} unread` : ''}`, warn: !!unread };
-      case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_WINDOW_MONTHS} months` };
-      case 'lapsing':  return { value: String(n), sub: `go inactive in ${AT_RISK_WINDOW_DAYS} days` };
-      case 'inactive': return { value: String(n), sub: neverOrdered ? `${neverOrdered} never ordered` : `no order in ${ACTIVE_WINDOW_MONTHS} months` };
+      case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_DAYS} days` };
+      case 'lapsing':  return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
+      case 'inactive': return { value: String(n), sub: neverOrdered ? `${neverOrdered} never ordered` : `no order in ${INACTIVE_DAYS} days` };
       case 'unknown':  return { value: String(n), sub: 'orders did not load', warn: true };
       case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
+      case 'pending':  return { value: String(n), sub: 'not accepted yet' };
     }
   };
   const tile = (k: ClientLens) => ({
@@ -117,14 +122,14 @@ export default function ClientDatabase() {
   });
   const tileGroups: LensTileGroup<ClientLens>[] = [
     { title: 'Firms by order activity', tiles: STATUS_LENSES.map(tile) },
-    { title: 'Needs attention', tiles: (['nokam', ...(unread ? ['unknown'] : [])] as ClientLens[]).map(tile) },
+    { title: 'Needs attention', tiles: (['nokam', ...(byLens.pending.length ? ['pending'] : []), ...(unread ? ['unknown'] : [])] as ClientLens[]).map(tile) },
   ];
 
   const openRow = useMemo(() => {
     const client = clients.find((c) => c.id === openId);
     if (!client) return null;
     const metrics = metricsFor(client);
-    return { client, metrics, status: clientStatus(metrics, today), days: daysToInactive(metrics, today), temp: currentTemperature(client.interactions) };
+    return { client, metrics, status: clientStatus(metrics, today), days: daysToLapse(metrics, today), temp: currentTemperature(client.interactions) };
   }, [clients, openId, metricsFor, today]);
 
   const kamOptions = useMemo(() => {
@@ -169,47 +174,6 @@ export default function ClientDatabase() {
       : null;
   };
 
-  const exportRows = (format: ExportFormat, scope: ExportScope) => {
-    const headers = [
-      'Company Name', 'Contact Person', 'Primary Contact', 'All Contact Numbers', 'GST Numbers',
-      'Segment', 'Client Type', 'Source', 'KAM', 'Client Status',
-      'Last Order Placed', 'Number of Orders', 'Total Revenue', 'Average Order Value', 'Temperature', 'Remarks',
-    ];
-    const list = scope === 'all'
-      ? sortRows(clients.map((client) => { const metrics = metricsFor(client); return { client, metrics, status: clientStatus(metrics, today) }; }), LENS_DEFAULT_SORT.all)
-      : rows;
-    const body = list.map(({ client, metrics, status }) => {
-      const primary = primaryContact(client.contacts);
-      const temp = currentTemperature(client.interactions);
-      return [
-        client.company,
-        contactLabel(primary),
-        primary?.number || '',
-        contactNumbers(client.contacts).join(' '),
-        gstNumbers(client.gsts).join(' '),
-        client.segment || '',
-        client.clientType || '',
-        client.source,
-        client.kam || '',
-        status,
-        metrics.lastOrderPlaced || (metrics.dateState === 'unavailable' ? 'unread' : ''),
-        metrics.orders ?? '',
-        metrics.totalRevenue ?? '',
-        metrics.averageOrderValue !== undefined ? Math.round(metrics.averageOrderValue) : '',
-        temp ? temp.value : '',
-        client.remarks || '',
-      ];
-    });
-    const name = `client-database-${scope === 'all' ? 'all' : lens}-${todayStr()}`;
-    setExporting(true);
-    try {
-      if (format === 'csv') exportRowsCsv(headers, body, name);
-      else exportRowsExcel(headers, body, name, 'Clients');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const blank = (): ClientEntity => ({
     id: newB2BId('CLI'),
     company: '',
@@ -233,7 +197,6 @@ export default function ClientDatabase() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ExportButton onExport={exportRows} disabled={exporting} />
           <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>
           <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>
           <button
@@ -297,8 +260,34 @@ export default function ClientDatabase() {
             onSearch={() => setSearch('')}
             onClearAll={clearAll}
           />
+          {viewer.isManager && (
+            <AssignBar
+              count={assigner.picked.size}
+              noun="firm"
+              reps={kams}
+              busy={assigner.busy}
+              rule="Round robin gives each firm to the active, in-rotation KAM holding the fewest firms. The KAM must accept or reject it."
+              onAssign={assigner.assign}
+              onClear={assigner.clear}
+            />
+          )}
+          {assigner.error && (
+            <div className="px-4 py-2 text-[12px] text-red-700 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">
+              <span>{assigner.error}</span>
+              <button onClick={() => assigner.setError(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
+            </div>
+          )}
           {rows.length ? (
-            <ClientTable rows={pageRows} today={today} sort={sort} onSort={setSortPick} onOpen={(c) => setOpenId(c.id)} />
+            <ClientTable
+              rows={pageRows}
+              today={today}
+              sort={sort}
+              onSort={setSortPick}
+              onOpen={(c) => setOpenId(c.id)}
+              picked={viewer.isManager ? assigner.picked : undefined}
+              onPick={assigner.toggle}
+              onPickPage={() => assigner.togglePage(pageRows.map((r) => r.client.id))}
+            />
           ) : (
             <div className="py-12 px-6 text-center">
               <p className="text-[13px] font-semibold text-gray-600">
@@ -325,8 +314,7 @@ export default function ClientDatabase() {
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {`Active means an order placed within the last ${ACTIVE_WINDOW_MONTHS} months, counted back from today`} (the PRD&apos;s
-        “measured from Last Order Placed” would make every past buyer Active forever; flagged for KK).
+        {`Active means an order placed in the last ${ACTIVE_DAYS} days, Inactive 1 month ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago, Inactive anything older, counted back from today. The KAM tab uses the same rule.`}
       </p>
 
       {addingNew && (
@@ -342,6 +330,7 @@ export default function ClientDatabase() {
           historyFor={historyFor}
           badges={openRow.temp && <TemperatureChip value={openRow.temp.value} at={openRow.temp.at} />}
           reassignReason="Reassigned in the Client Database"
+          assignAs={viewer.isManager ? viewer.member?.name || viewer.name : undefined}
           onClose={() => setOpenId(null)}
           onSave={saveClient}
           onEdit={() => setEditing(openRow.client)}

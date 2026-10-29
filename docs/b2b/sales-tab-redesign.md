@@ -10,9 +10,9 @@ of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
 | Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller; 2026-10-29: Invalid status, Send to Outreach; evening: one tab, 5 pm work day, CRM-only call log and notes, Ready to close, client people, SPoCs, no KAM handoff | §Inbound below; `inbound.md` | b2b-backend migration 0020 not deployed (round robin skips until then); round-robin start date; first real Kylas owner change unverified |
-| Outreach | **Built:** scoped views, From Inbound pool with sign-off, one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same b2b-backend migration 0020 (team tables): until it deploys there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
+| Outreach | **Built:** scoped views, Assignments (Inbound pool plus an admin's unassigned pool from any source, manual or round robin, BM sign-off; 2026-10-29), one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same b2b-backend migration 0020 (team tables): until it deploys there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
-| Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | b2b-backend migration 0020 (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
+| Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | b2b-backend migration 0020 (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, the KAM coverage denominator |
 | Client DB | **Built:** lens tiles (All · Active · Lapsing soon · Inactive · No KAM), filter chips, sortable columns, export scope honoured | `client-db.md` §The list | Nothing. Django: `b2b-bulk` serves a wrong `lastOrderDate` (future dates on many firms), which skews Active/Inactive. See `client-db.md` §The list |
 
 The shared identity layer every team builds on is `lib/b2b/team` (types and
@@ -194,7 +194,7 @@ The user answered the open questions:
 - **Round robin runs in the CRM.** Fixing it in Kylas was tried and failed.
 - **Nothing hardcoded.** Managers put existing CRM users onto teams, and people
   will keep joining and leaving.
-- **Calls target is 90/day.** The sheet's 1500 is wrong.
+- **Calls target is 1,500 a month per head** (user, 2026-10-29; was 90/day).
 - **Outreach/KAM get a scoped view, not a server-side block.**
 
 That changed one earlier decision. **Team membership is a CRM-Supabase table,
@@ -265,7 +265,7 @@ Every KPI below is meant to fall out of normal work, not to be filled in later.
 | KPI | Type | Computed from | Missing today |
 |---|---|---|---|
 | Coverage (daily) | Effort | leads assigned on D with ≥1 `CallAttempt` on D ÷ leads assigned on D | assignment record (date) |
-| Calls / day (target 90) | Effort | `CallAttempt.at` on D, grouped by **who made the call**, not who owns the lead | done: `by` is the session user since 2026-10-28; older rows hold the owner |
+| Calls (target 1,500 a month) | Effort | `CallAttempt.at` on D, grouped by **who made the call**, not who owns the lead | done: `by` is the session user since 2026-10-28; older rows hold the owner |
 | CRM adherence | Effort | mandatory fields + same-day log ÷ leads handled; **one shared function** for all three teams | segment, GST, address fields; identity |
 | Revenue | Output | `orderValue` of Closed leads by owner at close, plus EC orders via §3.5 Placed-under | owner-at-close snapshot |
 | Qualified for Outreach | Output | handoff records Outreach signed off, counted only after conversion or 2 Outreach follow-ups | the handoff record itself (shared with the Outreach brief) |
@@ -301,13 +301,13 @@ a KAM's performance, and an admin view that can filter across everything.
   own book. **Client DB** stays as the managers' master list: unassigned firms,
   assignment, merge, bulk upload. The page replaces both `views/kams/drawer.tsx`
   and Client DB's expanded row, which today render the same firm two ways.
-- **Active / Inactive is `clientStatus` on Client DB only.** It means any
-  order in the last 3 months, anchored to today (see `client-db.md`). On
-  2026-10-29 the user overrode "no second rule" for KAM. KAM uses
-  `kamAccountStatus`: Active within 30 days, Inactive 1 month at 31–60 days,
-  Inactive beyond that. See `kam.md` §Account status. Don't merge the two back
-  into one rule.
-- **Power user / Normal user is a label, set by `b2b.manager` only.** KAMs see it
+- **One status for every firm (2026-10-29, evening):** `clientStatus`, Active
+  within 30 days, Inactive 1 month at 31–60 days, Inactive beyond that. The
+  3-month Client DB rule is gone. See `kam.md` §Account status.
+- **Superseded 2026-10-29:** the user now defines Power user per PHONE as
+  Studio Space dashboard access (Power = whole dashboard, Non-power = Orders and
+  Rewards only); see `client-db.md`. The per-firm tier below was never built.
+- ~~**Power user / Normal user is a label, set by `b2b.manager` only.**~~ KAMs see it
   and cannot change it. It applies to Active firms only; on an Inactive firm it
   is kept but shown greyed out. It is **not** derived from studio.materialdepot.com
   usage: the user said the two are not interconnected. Stored in the client row's
@@ -331,7 +331,7 @@ These are two different numbers, and both stay:
 
 | Name on screen | Rule | Used by |
 |---|---|---|
-| Firm status: Active / Inactive | `clientStatus`: any order in the last 3 months, anchored to today | Firm lists, filters, tier eligibility, inactive reasons |
+| Firm status: Active / Inactive 1 month / Inactive | `clientStatus`: 30 / 60 days since the last order, anchored to today | Firm lists, filters, tier eligibility, inactive reasons |
 | Ordered this month | at least one placed order in the calendar month | Active Account Rate KPI (new-handover and old, split) |
 
 Never label "Ordered this month" as "Active". The open question is which of the
@@ -352,9 +352,9 @@ request still wait on Django. The rebuild:
   ("via 98xxxxxx12", "via GST 29ABCDE…"), so a KAM can see why an order is
   attached to the account. Phone matching stays exact, with the drops counted,
   as today.
-- **Three tabs inside the panel: Orders (placed) · Open (carts/quotes) · Lost**,
+- **Three tabs inside the panel: Orders (placed) · Open carts · Lost**,
   each with a count. A summary strip above it shows Lifetime revenue,
-  Last 3 months, Orders, AOV, Last order and days to inactive, and Open pipeline.
+  Last 3 months, Orders, AOV, Last order and days to the next status, and Open carts. Clicking an enquiry expands its cart, dates, visits and remarks (`client-db.md`).
   The strip counts the full set; paging the rows never changes it
   (house-style rule).
 - **Columns:** ENQ id, Placed on, Value, Status, Via, Company on order, Branch /

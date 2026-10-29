@@ -1,12 +1,13 @@
 'use client';
 
 import { KamFirmTable } from './panels/clients';
+import { KamSignoffTable } from './panels/signoff';
 import { KamOrdersView } from './orders';
 import { KamOrderTable } from './orders/table';
 
-import { CLIENT_SOURCES, ClientEntity, contactNumbers, istToday, primaryContact } from '../../models/client';
+import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, contactNumbers, istToday, primaryContact } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_ACTIVE_DAYS, KAM_FIRM_LENSES, KAM_INACTIVE_DAYS, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, sortFirmsForLens } from '../../models/kam';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, respondFirmHandover, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
 import { DEFAULT_KAM, KAMS, fmtL } from '../../models/mock-data';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
@@ -17,9 +18,12 @@ import { OrderModal } from './orders/modal';
 import { LensPills, LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
+import { HANDOVER_TAT_HOURS } from '../../models/outreach/handover';
+import { useB2BReps } from '../../hooks/use-b2b-reps';
+import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export default function KAMs() {
+export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [orders, setOrders] = useState<KamOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +46,9 @@ export default function KAMs() {
   const [orderModal, setOrderModal] = useState<{ order: KamOrder; isNew: boolean } | null>(null);
 
   const today = istToday();
+  const { live } = useB2BReps(team);
+  const me = useMemo(() => ({ name: viewer.member?.name || viewer.name, phone: viewer.phone }), [viewer.member, viewer.name, viewer.phone]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const boardScroll = useDragAutoScroll<HTMLDivElement>();
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
 
@@ -92,6 +99,7 @@ export default function KAMs() {
   }, [loadAggregates]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setNowMs(Date.now()); }, [clients]);
 
   const kamOptions = useMemo(() => {
     const seen = new Set<string>(KAMS);
@@ -165,19 +173,21 @@ export default function KAMs() {
   const ordersFailed = failed.includes('the order list');
   const unread = firmsBy.assigned.filter((r) => r.status === 'Unknown').length;
 
+  const lateSignoffs = firmsBy.signoff.filter((r) => firmHandoverState(r.client, nowMs) === 'overdue').length;
   const tileValue = (k: KamLens): { value: string; sub?: string; warn?: boolean } => {
     if (loading) return { value: '…', sub: 'loading' };
     if (isOrderLens(k) ? ordersFailed : clientsFailed) return { value: 'Unknown', sub: 'did not load', warn: true };
     const n = countOf(k);
     switch (k) {
+      case 'signoff':  return { value: String(n), sub: lateSignoffs ? `${lateSignoffs} past ${HANDOVER_TAT_HOURS}h` : 'to accept or reject', warn: lateSignoffs > 0 };
       case 'called':   return { value: `${n}/${callTarget}`, sub: n >= callTarget ? 'target met' : `${callTarget - n} to go` };
       case 'overdue':  return { value: String(n), sub: 'date passed' };
       case 'due':      return { value: String(n), sub: 'for today' };
       case 'nofollow': return { value: String(n), sub: 'none booked' };
       case 'assigned': return { value: String(n), sub: unread ? `${unread} orders unread` : 'firms in scope', warn: !!unread };
-      case 'active':   return { value: String(n), sub: unread ? `${unread} not read yet` : `last ${KAM_ACTIVE_DAYS} days`, warn: !!unread };
-      case 'lapsing':  return { value: String(n), sub: `${KAM_ACTIVE_DAYS + 1}–${KAM_INACTIVE_DAYS} days ago` };
-      case 'inactive': return { value: String(n), sub: `${KAM_INACTIVE_DAYS}+ days or never` };
+      case 'active':   return { value: String(n), sub: unread ? `${unread} not read yet` : `last ${ACTIVE_DAYS} days`, warn: !!unread };
+      case 'lapsing':  return { value: String(n), sub: `${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
+      case 'inactive': return { value: String(n), sub: `${INACTIVE_DAYS}+ days or never` };
       case 'pipeline': return { value: fmtL(pipeline.pipeline), sub: pipeline.estimatedPipeline ? `${fmtL(pipeline.estimatedPipeline)} est.` : `${n} at Quote/PI` };
       default:         return { value: String(n), sub: 'not closed' };
     }
@@ -313,6 +323,16 @@ export default function KAMs() {
             setPage={setListPage}
             onOpen={(o) => setOrderModal({ order: o, isNew: false })}
           />
+        ) : lens === 'signoff' ? (
+          <KamSignoffTable
+            rows={firmRows}
+            nowMs={nowMs}
+            page={listPage}
+            setPage={setListPage}
+            canRespond={(c) => canRespondToFirm(c, me, viewer.isManager, live)}
+            onRespond={(c, reason) => saveClient(respondFirmHandover(c, me.name, new Date().toISOString(), reason))}
+            onOpen={setDrawerId}
+          />
         ) : (
           <KamFirmTable
             lens={lens}
@@ -330,6 +350,7 @@ export default function KAMs() {
       {drawerRow && (
         <ClientDrawer
           row={drawerRow}
+          assignAs={viewer.isManager ? me.name : undefined}
           clients={clients}
           historyFor={historyFor}
           orders={orders.filter((o) => o.clientId === drawerRow.client.id)}

@@ -119,8 +119,8 @@ So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces
 `canUseB2B` (the tab's own rule — role set or the `crm.b2b_sales` slug; the
 original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
 then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
-server-only `x-sync-key: B2B_BACKEND_SECRET` — the same server-to-server pattern
-`app/api/b2b/partner-content` uses. Three things it deliberately does:
+server-only `x-sync-key: B2B_BACKEND_SECRET`, the same server-to-server pattern
+`app/api/b2b/waitlist` uses. Three things it deliberately does:
 
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`) so the
   catch-all is a defined surface, not an open proxy to the backend.

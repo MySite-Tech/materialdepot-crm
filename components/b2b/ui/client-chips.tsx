@@ -1,8 +1,6 @@
 'use client';
 
-import { CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientOrderMetrics, StatusScale, temperatureColor } from '../models/client';
-
-const CLIENT_STATUS_SCALE: StatusScale = { colors: CLIENT_STATUS_COLORS, hint: CLIENT_STATUS_HINT };
+import { CLIENT_STATUS_SCALE, ClientOrderMetrics, StatusScale, temperatureColor } from '../models/client';
 
 export function StatTile({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) {
   return (

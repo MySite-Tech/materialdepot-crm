@@ -48,7 +48,7 @@ export function OutreachHeader({ draft, gaps, onClose, today, waitlist, waitlist
             <WaitlistChip w={waitlist} error={waitlistError} />
           </div>
           <div className="text-[11px] text-gray-400 mt-1">
-            {[draft.source ? `Source: ${draft.source}` : 'Source not set', draft.intake?.inboundOwner ? `from Inbound (${draft.intake.inboundOwner})` : '', `BM ${draft.bm}`]
+            {[draft.source ? `Source: ${draft.source}` : 'Source not set', draft.intake?.inboundOwner ? `from Inbound (${draft.intake.inboundOwner})` : '', draft.bm ? `BM ${draft.bm}` : 'No BM yet — assign it from Assignments']
               .filter(Boolean).join(' · ')}
           </div>
         </div>

@@ -2,14 +2,14 @@
 
 import { FirmDrawer } from '../../drawers/firm';
 import { ClientEntity, currentUpcomingProject, sortedInteractions } from '../../models/client';
-import { AssignedClientRow, KAM_ACCOUNT_STATUS_SCALE, KAM_ORDER_STATUS_COLORS, KamOrder, temperatureMismatch } from '../../models/kam';
+import { AssignedClientRow, KAM_ORDER_STATUS_COLORS, KamOrder, temperatureMismatch } from '../../models/kam';
 import { fmtINR } from '../../models/mock-data';
 import { SectionCard } from '../../ui/inbound-chips';
 import { TemperatureChip } from '../../ui/client-chips';
 import { EscalationSection } from './panels/escalations';
 import { ClientOrderHistory } from '@/lib/b2b';
 
-export function ClientDrawer({ row, clients, orders, today, historyFor, onClose, onLogInteraction, onSaveClient, onOpenOrder, onAddOrder }: {
+export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, onClose, onLogInteraction, onSaveClient, onOpenOrder, onAddOrder }: {
   row: AssignedClientRow;
   clients: ClientEntity[];
   orders: KamOrder[];
@@ -18,6 +18,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, onClose,
   onClose: () => void;
   onLogInteraction: () => void;
   onSaveClient: (c: ClientEntity) => Promise<string | null>;
+  assignAs?: string;
   onOpenOrder: (o: KamOrder) => void;
   onAddOrder: () => void;
 }) {
@@ -33,12 +34,12 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, onClose,
       clients={clients}
       metrics={metrics}
       status={row.status}
-      statusScale={KAM_ACCOUNT_STATUS_SCALE}
       historyFor={historyFor}
       badges={<TemperatureChip value={row.temperature} previous={row.previousTemperature} at={row.temperatureAt} />}
       reassignReason="Reassigned from the KAM tab"
       onClose={onClose}
       onSave={onSaveClient}
+      assignAs={assignAs}
     >
       {mismatch && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">

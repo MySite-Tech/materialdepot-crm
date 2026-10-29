@@ -9,7 +9,7 @@ import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 90,   per: 'day',   daily: true,  rule: 'Call attempts logged in the period by this person (the caller, not the lead owner). Target 90 a day, for every day of the period up to today.' },
+  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person (the caller, not the lead owner). Target 1,500 a month per head.' },
   { key: 'firstCalls', kind: 'Effort', label: 'New leads called',       short: 'First calls',    unit: 'count', target: null,               daily: true,  rule: 'Leads they own whose first ever call attempt fell in the period.' },
   { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).' },
   { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with contact name, mobile, firm name, segment, client type, city, a status past New, a next follow-up date while open, and a note on every call ÷ leads they called.' },
@@ -99,7 +99,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const qualified: PerfRow[] = [];
   for (const l of data.outreach) {
     const intake = l.intake;
-    if (!intake) continue;
+    if (!intake || intake.from !== 'Inbound' || !intake.inboundLeadId) continue;
     const src = inboundById.get(intake.inboundLeadId);
     const theirs = intake.inboundOwner ? isPerson(people, intake.inboundOwner) : !!src && owns(src);
     if (!theirs) continue;

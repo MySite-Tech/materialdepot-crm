@@ -1,5 +1,5 @@
-import { ClientEntity, ClientInteraction } from '../../client';
-import { kamAccountStatus } from '../../kam';
+import { ACTIVE_DAYS, ClientEntity, ClientInteraction, clientStatus } from '../../client';
+import { KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET } from '../../kam';
 import { fmtINR } from '../../mock-data';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
@@ -8,9 +8,9 @@ import { countValue, counted, isPerson, lakhs, memberPeople, pct, withDataPeople
 import type { TeamMember } from '@/lib/b2b/team/types';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'meetings',  kind: 'Effort', label: 'Account meetings',        short: 'Meetings',       unit: 'count', target: 35,  per: 'month', daily: true,  rule: 'Meetings they logged in the period, one per firm per day.' },
-  { key: 'coverage',  kind: 'Effort', label: 'Meeting coverage',        short: 'Coverage',       unit: '%',     target: 50,                daily: false, rule: 'Active firms assigned to them (an order in the last 3 months, as of today) that they met in the period ÷ their active firms. Repeat meetings with one firm add nothing.' },
-  { key: 'calls',     kind: 'Effort', label: 'Calls',                   short: 'Calls',          unit: 'count', target: 40,  per: 'day',   daily: true,  rule: 'Calls they logged in the period, one per firm per day. Target 40 a day, for every day of the period up to today.' },
+  { key: 'meetings',  kind: 'Effort', label: 'Account meetings',        short: 'Meetings',       unit: 'count', target: KAM_MONTHLY_MEETING_TARGET, per: 'month', daily: true,  rule: 'Meetings they logged in the period, one per firm per day.' },
+  { key: 'coverage',  kind: 'Effort', label: 'Meeting coverage',        short: 'Coverage',       unit: '%',     target: 50,                daily: false, rule: `Active firms assigned to them (an order in the last ${ACTIVE_DAYS} days, as of today) that they met in the period ÷ their active firms. Repeat meetings with one firm add nothing.` },
+  { key: 'calls',     kind: 'Effort', label: 'Calls',                   short: 'Calls',          unit: 'count', target: KAM_MONTHLY_CALL_TARGET, per: 'month', daily: true, rule: `Calls they logged in the period, one per firm per day. Target ${KAM_MONTHLY_CALL_TARGET} a month per head.` },
   { key: 'adherence', kind: 'Effort', label: 'CRM adherence',           short: 'CRM adherence',  unit: '%',     target: 100,               daily: true,  rule: 'Calls and meetings they logged in the period with notes and a next follow-up date ÷ all they logged. Profile completeness is not in it yet.' },
   { key: 'revenue',   kind: 'Output', label: 'Revenue',                 short: 'Revenue',        unit: 'L',     target: 50,  per: 'month', daily: true,  rule: 'Order value of KAM-board orders they own that moved to Closed in the period, counted only when the value was fetched from the Enq ID.' },
   { key: 'ordering',  kind: 'Output', label: 'Accounts ordering',       short: 'Ordering',       unit: '%',     target: 60,                daily: false, rule: 'Firms assigned to them that placed an order in the period (a Closed KAM order, or a last order date in the period) ÷ firms assigned whose order history loaded.' },
@@ -40,7 +40,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const calls = loggedRows(data.clients, people, period, 'Call');
 
   const metFirms = new Set(meetings.map((r) => r.id.split(':')[0]));
-  const statuses = book.map((c) => ({ c, status: kamAccountStatus(data.metricsFor(c), data.today) }));
+  const statuses = book.map((c) => ({ c, status: clientStatus(data.metricsFor(c), data.today) }));
   const unknown = statuses.filter((s) => s.status === 'Unknown').length;
   const coverage: PerfRow[] = statuses
     .filter((s) => s.status === 'Active')

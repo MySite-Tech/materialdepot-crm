@@ -59,5 +59,16 @@ export function useOutreachData(by: string) {
     return null;
   }, [by, load]);
 
-  return { leads, inbound, loading, loadFailed, error, setError, load, waitlist, waitlistError, loadWaitlist, save, createMany };
+  const saveMany = useCallback(async (pairs: { before: OutreachLead; after: OutreachLead }[]): Promise<string | null> => {
+    if (!pairs.length) return null;
+    const at = nowIso();
+    const next = new Map(pairs.map(({ before, after }) => [before.id, withJourney(before, { ...after, value: Number(after.orderValue) || 0 }, by, at)]));
+    const prior = new Map(pairs.map(({ before }) => [before.id, before]));
+    setLeads((prev) => prev.map((l) => next.get(l.id) ?? l));
+    const err = await upsertOutreachLeads([...next.values()]);
+    if (err) setLeads((prev) => prev.map((l) => prior.get(l.id) ?? l));
+    return err;
+  }, [by]);
+
+  return { leads, inbound, loading, loadFailed, error, setError, load, waitlist, waitlistError, loadWaitlist, save, saveMany, createMany };
 }

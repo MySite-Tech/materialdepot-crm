@@ -71,7 +71,7 @@ Non-obvious rules behind these numbers:
 | KPI | Type | Target | Unit | Frequency |
 |---|---|---|---|---|
 | Coverage over new leads | Effort | 100% | % of new leads | Daily |
-| Calls — new & follow-ups | Effort | 90 | Calls | Per day, per head |
+| Calls — new & follow-ups | Effort | 1500 | Calls | Per month, per head |
 | CRM Adherence | Effort | 100% | — | — |
 | Revenue | Output | 25 | Lacs | — |
 | Qualified Leads for Outreach | Output | 30 | Round-robin to Outreach, sign-off required | — |
@@ -99,8 +99,9 @@ Non-obvious rules:
 - **A qualified lead is only credited late**: Outreach can validate it only once
   the lead has converted, or Outreach has logged 2 follow-ups with it. So this
   KPI lags the handoff by weeks and a month's count keeps moving after month end.
-- **The sheet says 1500 calls/day/head; the user confirmed 90** (2026-10-28).
-  If the sheet is re-pulled, do not take its 1500.
+- **Calls are 1,500 a month per head** (the user, 2026-10-29). This replaced
+  the 90 a day confirmed on 2026-10-28. The sheet's "1500 per day" was the
+  monthly figure under the wrong frequency.
 - **Revenue includes orders placed at an EC** for a lead the inbound owner
   worked, not only orders the inbound rep closed themselves.
 - **Dead-lead rule, as worded**: at least 5 calls within 7 days. If 5 calls are
@@ -117,11 +118,11 @@ Non-obvious rules:
 
 | KPI | Type | Target | Unit | Frequency |
 |---|---|---|---|---|
-| Account Meetings | Effort | 35 | Meetings | Per month, across assigned accounts |
+| Account Meetings | Effort | 35 | Meetings | Per month per head, across assigned accounts |
 | Meeting Coverage of Active Clients | Effort | 50% | % of active accounts | Per month |
 | Handover of New Accounts | Effort | 100% | — | — |
 | CRM Adherence | Effort | 100% | — | — |
-| Calls | Effort | 40 | Calls | Daily |
+| Calls | Effort | 500 | Calls | Per month, per head (user, 2026-10-29; was 40 a day) |
 | New Handed-over Account Active Rate | Output | 100% | % of last month's handovers | MoM / QoQ |
 | Old Active Account Rate | Output | 60% | % of accounts | MoM / QoQ |
 | Revenue | Output | 50 | Lacs | — (EC, self and referrals all count) |

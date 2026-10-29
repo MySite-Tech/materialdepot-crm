@@ -16,7 +16,7 @@ export const LENS: Record<WorkLens, { title: string; rule: string; accent: strin
   action:    { title: 'Action needed', rule: 'Leads with something overdue or due today — a meeting to mark, notes to write, a follow-up, a sign-off or a handover.', accent: '#1A1A1A' },
   meetings:  { title: 'Meetings today', rule: 'A meeting is scheduled for today. Mark each one held or postponed in the lead.', accent: '#3B82F6' },
   followups: { title: 'Follow-ups due', rule: 'Open leads whose next follow-up date is today or earlier.', accent: '#DC2626' },
-  inbox:     { title: 'From Inbound', rule: 'Inbound leads waiting for the assigned BM to accept or reject. The tile note counts the pool nobody has been assigned yet.', accent: '#0EA5E9' },
+  inbox:     { title: 'Assignments', rule: 'Leads an admin assigned to a BM, from Inbound or any other source, waiting for that BM to accept or reject. The tile note counts the leads nobody has been assigned yet: the Inbound pool plus the unassigned pool.', accent: '#0EA5E9' },
   handoff:   { title: 'Handover', rule: `Converted leads whose KAM handover is not sent, rejected, or unsigned after ${HANDOVER_TAT_HOURS}h.`, accent: '#16A34A' },
   all:       { title: 'All leads', rule: 'Every lead in view, newest first.', accent: '#6B7280' },
   yet:       statusLens('Yet to Meet', 'Yet to meet'),

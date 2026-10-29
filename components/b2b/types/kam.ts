@@ -1,4 +1,4 @@
-import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, InteractionType, TemperatureBand } from '../models/client';
+import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, ClientStatus, InteractionType, TemperatureBand } from '../models/client';
 import { FollowUpBucket, Segment } from '../models/inbound';
 export type KamOrderStatus =
   | 'Requirement Logged' | 'Quote Shared' | 'PI Shared' | 'Closed' | 'Lost';
@@ -72,7 +72,7 @@ export interface AssignedClientRow {
   contactPerson: string;
   contactNumber: string;
   metrics: ClientOrderMetrics;
-  status: KamAccountStatus;
+  status: ClientStatus;
   segment?: Segment;
   temperature?: number;
   temperatureAt?: string;
@@ -136,9 +136,8 @@ export interface NewVsRepeat {
   unknownClients: number;
 }
 
-export type KamAccountStatus = 'Active' | 'Inactive 1 month' | 'Inactive' | 'Unknown';
 
-export type KamFirmLens = 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'lapsing' | 'inactive';
+export type KamFirmLens = 'signoff' | 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'lapsing' | 'inactive';
 
 export type KamOrderLens = 'open' | 'pipeline' | 'orders';
 

@@ -1,0 +1,103 @@
+'use client';
+
+import { InboundLead } from '../../../models/mock-data';
+import { PoolLead, Rep } from '../../../models/outreach/intake';
+import { Empty, fmtDay } from '../../../ui/inbound-chips';
+import { useEffect, useState } from 'react';
+
+const PAGE_SIZE = 25;
+const th = 'px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap';
+const btn = 'px-2.5 py-1 text-[11px] font-semibold rounded-md whitespace-nowrap disabled:opacity-50';
+
+export function InboundPool({ pool, reps, me, assigner, busy, onAssign, onAssignAll }: {
+  pool: PoolLead[] | null;
+  reps: Rep[];
+  me: Rep;
+  assigner: boolean;
+  busy: boolean;
+  onAssign: (lead: InboundLead, rep: Rep, self: boolean) => void;
+  onAssignAll: () => void;
+}) {
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(0);
+  const poolSize = pool?.length ?? 0;
+  useEffect(() => { setPage(0); }, [poolSize]);
+  const pages = Math.max(1, Math.ceil(poolSize / PAGE_SIZE));
+  const rows = (pool ?? []).slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2 flex-wrap"
+        title="Leads an Inbound rep sent with Send to Outreach, with no Outreach lead on the same mobile yet. Newest sends first.">
+        <h3 className="text-[12px] font-bold text-gray-800">Inbound pool</h3>
+        <span className="text-[11px] font-semibold text-gray-400">{pool === null ? '?' : poolSize}</span>
+        <span className="text-[10.5px] text-gray-400 hidden sm:inline">Not assigned to a BM yet</span>
+        {assigner && poolSize > 0 && (
+          <button disabled={busy || !reps.length} onClick={onAssignAll} className={`${btn} ml-auto bg-[#0F766E] text-white`}>
+            {busy ? 'Assigning…' : `Assign all ${poolSize} round-robin`}
+          </button>
+        )}
+      </div>
+      {pool === null ? (
+        <p className="px-4 py-3 text-[11.5px] text-amber-800 bg-amber-50">Inbound leads did not load, so the pool is unknown — not empty. Reload to try again.</p>
+      ) : !poolSize ? <div className="py-6"><Empty>No lead is waiting. Inbound sends a lead here from its drawer once the client has agreed to meet.</Empty></div> : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12.5px]">
+              <thead><tr className="border-b border-gray-100 bg-gray-50/60">
+                {['Firm', 'Contact', 'Inbound owner', 'Inbound stage', 'Created', ''].map((h) => <th key={h} className={th}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {rows.map(({ lead, converted }) => (
+                  <tr key={lead.id} className="border-b border-gray-50 last:border-0">
+                    <td className="px-3 py-2 font-semibold text-gray-900 max-w-[220px] truncate">
+                      {lead.companyName || lead.company}
+                      {converted && <span className="ml-1.5 text-[9.5px] font-bold uppercase tracking-wider text-green-700 bg-green-50 px-1.5 py-0.5 rounded">Converted</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{lead.contactName || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{lead.owner || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{lead.stage}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDay(lead.leadCreatedAt)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {assigner ? (
+                        <div className="flex items-center gap-1.5">
+                          <select value={pick[lead.id] || ''} onChange={(e) => setPick((p) => ({ ...p, [lead.id]: e.target.value }))}
+                            className="px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white">
+                            <option value="">Assign to…</option>
+                            {reps.map((r) => <option key={r.phone || r.name} value={r.name}>{r.name}</option>)}
+                          </select>
+                          <button
+                            disabled={busy || !pick[lead.id]}
+                            onClick={() => onAssign(lead, reps.find((r) => r.name === pick[lead.id])!, false)}
+                            className={`${btn} border border-gray-200 text-gray-700`}
+                          >
+                            Assign
+                          </button>
+                        </div>
+                      ) : (
+                        <button disabled={busy} onClick={() => onAssign(lead, me, true)} className={`${btn} bg-[#0F766E] text-white`}>
+                          Take it
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {poolSize > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-3 py-3 border-t border-gray-100">
+              <span className="text-[11px] text-gray-400">{`Showing ${page * PAGE_SIZE + 1}–${Math.min(poolSize, (page + 1) * PAGE_SIZE)} of ${poolSize}`}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">← Prev</button>
+                <button onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
+                  className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40">Next →</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
