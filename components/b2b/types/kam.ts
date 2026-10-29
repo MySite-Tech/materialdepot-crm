@@ -33,6 +33,7 @@ export interface KamOrder {
   dealStatus?: string;
 
   expectedClosure?: string;
+  followUpDate?: string;
 
   lostReason?: string;
   kam: string;
@@ -51,6 +52,8 @@ export interface KamOrderGateInput {
   enqId?: string;
   lostReason?: string;
   company?: string;
+  expectedClosure?: string;
+  followUpDate?: string;
 }
 
 export interface InteractionGateInput {
