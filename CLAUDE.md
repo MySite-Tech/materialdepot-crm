@@ -364,15 +364,15 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 A teammate pushes to this branch regularly — **pull before starting.**
 
 **B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
-`Installation-Changes`. It is pushed to `origin` (12 commits on 2026-10-28, and
-the Leadership Board, `dev:stub`, Outreach capture, KAM status and Inbound
-commits on 2026-10-29) and is **not merged into `main`**. No PR is open, so none
+`Installation-Changes`. It is open as **PR #29** to `main`, not merged, so none
 of it is deployed. `origin/main` (PR #27, B2B on the FastAPI backend) was merged
-**into** it on 2026-10-29. It now depends on b2b-backend branch
-`b2b-crm-extra-and-team` (commit `2690925`, migration 0020; **local only, not
-pushed**, it lives in `~/Projects/b2b-backend`'s git), which must deploy first
-(see `docs/backends.md`). Until it does, the round robin skips and the new
-Inbound fields do not persist against the real backend.
+**into** it on 2026-10-29. Side branches merge into it, e.g.
+`b2b-structural-2026-10-29`. It depends on **b2b-backend PR #13** (branch
+`b2b-crm-extra-and-team`, migrations 0020 and 0021), which must deploy and
+migrate first (see `docs/b2b/revamp-2026-10-28.md` §Before you deploy). **The
+tech team merges both PRs, not a session**, unless Dhruv asks. Until #13 is
+live, the round robin skips, and new fields (Inbound, requirement history,
+per-PI dates) do not persist against the real backend.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy

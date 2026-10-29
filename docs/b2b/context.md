@@ -60,14 +60,15 @@ a new session knows what is live and what is being worked on.
   firm's rule** (`clientStatus`), Client Database included, so the two tabs
   agree again. Export, Upload Orders and + Add Order are gone from the tab header
   (orders are added from a firm's page). See `kam.md` §Account status.
-- **Branch `b2b-structural-2026-10-29` (built 2026-10-29, not pushed),** on
-  top of the revamp branch, from the user's structural list: uncapped Outreach
+- **The structural list (2026-10-29),** built on `b2b-structural-2026-10-29`
+  and merged into the revamp branch, so it is in PR #29: uncapped Outreach
   meetings; a name and role on the alternate number; minutes required on a KAM
   meeting; requirement history on Inbound, Outreach and KAM orders
   (`data-layer.md`); B2B admins made from the Team tab, and reps never falling
   through to everyone's leads; EC visits from any firm, shown in the
   Appointment Tracker (`client-db.md`); per-PI follow-up and closure dates
-  (`kam.md`). It needs b2b-backend migration 0021 (`docs/backends.md`).
+  (`kam.md`). It needs b2b-backend migration 0021, which is in PR #13 with
+  0020 (`docs/backends.md`).
 - **KAM, still to build:** the location plus photo-in-uniform check-in before
   every offline meeting, for Outreach and KAM. Decisions are in `kam.md` §Not
   built yet.
