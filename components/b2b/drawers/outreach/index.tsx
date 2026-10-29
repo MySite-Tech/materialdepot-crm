@@ -16,8 +16,8 @@ import { nowIso } from './utils';
 import { LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
 import { dealIsOrder } from '../../models/client';
 import {
-  MAX_MEETINGS, OutreachMeeting, Selection, WaitlistSignup, canScheduleMeeting, hasMet, istToday,
-  meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors,
+  OutreachMeeting, Selection, WaitlistSignup, hasMet, istToday,
+  meetingsStalled, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors,
   outreachStatusPrompts,
 } from '../../models/outreach';
 import { isHandoverKam, respondToHandover, sendHandover } from '../../models/outreach/handover';
@@ -121,7 +121,7 @@ export default function OutreachDrawer({
 
   const meetings = draft.meetings || [];
   const open = openMeeting(meetings);
-  const exhausted = meetingsExhausted(meetings);
+  const exhausted = meetingsStalled(meetings);
   const met = hasMet(meetings);
 
   const [scheduling, setScheduling] = useState(false);
@@ -133,7 +133,6 @@ export default function OutreachDrawer({
 
   const scheduleMeeting = () => {
     if (!mDate) { setMError('A meeting date is required.'); return; }
-    if (!canScheduleMeeting(meetings)) { setMError(`Only ${MAX_MEETINGS} meetings can be logged on a lead.`); return; }
     setMError(null);
     const m: OutreachMeeting = {
       n: nextMeetingNumber(meetings),

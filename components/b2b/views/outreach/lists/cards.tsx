@@ -1,7 +1,7 @@
 'use client';
 
 import { OutreachLead, fmtINR } from '../../../models/mock-data';
-import { companyTypeLabel, meetingsExhausted, nextScheduledMeeting } from '../../../models/outreach';
+import { companyTypeLabel, meetingsStalled, nextScheduledMeeting } from '../../../models/outreach';
 import { FollowUpChip, fmtDay } from '../../../ui/inbound-chips';
 import { MeetingProgress, OutreachLeadTypeChip } from '../../../ui/outreach-chips';
 import { gapsFor } from '../utils';
@@ -54,8 +54,8 @@ export function LeadCard({ lead, today, onClick, onDragStart }: {
           {lead.handover ? `${lead.handover.kam} · ${lead.handover.status}` : <span className="text-amber-600">Handover not sent</span>}
         </div>
       )}
-      {meetingsExhausted(lead.meetings) && (
-        <div className="text-[10px] text-amber-700 mt-1.5 leading-snug">All 4 meetings postponed — decide Lost or park</div>
+      {meetingsStalled(lead.meetings) && (
+        <div className="text-[10px] text-amber-700 mt-1.5 leading-snug">{lead.meetings?.length} meetings postponed, none held: book another, mark Lost or park</div>
       )}
       <div className="flex items-center justify-between gap-1.5 mt-2 pt-2 border-t border-gray-50">
         <MeetingProgress meetings={lead.meetings} />

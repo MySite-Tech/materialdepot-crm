@@ -72,16 +72,23 @@ does not name them:
 none of them has a hard gate — those are the three moves with something worth
 collecting, and a silent move is how a status ends up with none of its fields.
 
-### Meetings are a four-slot loop, not a visit counter
+### Meetings are an open-ended loop, not a visit counter
 
-The old board had `visitCount: number`. The PRD wants meetings 1–4, each
+The old board had `visitCount: number`. The PRD wanted meetings 1–4, each
 `Completed` or `Postponed`, with location (area + office) and notes captured
 **once a meeting is Completed** — the notes box only appears then. `Scheduled`
 is a third state the PRD does not name and cannot be avoided: a booked meeting
 is neither outcome, and storing it as either reports a meeting that never
-happened (the same reasoning as Inbound's `New`). `meetingsExhausted` is the
-diagram's "Meeting 4: Postponed" branch and only *offers* Lost or a long-term
-park — it never decides.
+happened (the same reasoning as Inbound's `New`).
+
+**There is no cap on meetings (user, 2026-10-29).** The PRD stopped at four;
+the user wants a lead to keep getting meetings after that. Only one meeting may
+be open (`Scheduled`) at a time. `meetingsStalled` is what is left of the
+diagram's "Meeting 4: Postponed" branch: `UNMET_NUDGE_AFTER` (4) or more meetings,
+none held, none open. It shows a banner that offers Lost, a long-term park or
+another booking. It never decides and never blocks a booking. The lost reason
+keeps its stored text "Unable to meet (4 meetings)", because Lost rows already
+hold that exact string.
 
 ### One KAM rotation, not two
 
@@ -334,7 +341,7 @@ is a lens, and clicking it lists exactly what it counts**.
   `hooks/use-outreach-lenses.ts` derives both together. On real data on
   2026-10-28, all 11 work tiles matched their table row counts.
 - **One table** (`lists/table.tsx`), paged at 25, with columns chosen per lens
-  (`lists/columns.tsx`): firm and contact share a cell, meetings are four dots,
+  (`lists/columns.tsx`): firm and contact share a cell, meetings are one dot each (the last six, then "+n"),
   and *Next step* says "3d late" / "Today" rather than a bare date. Closed and
   Lost leads have no next step. A stale follow-up date on a converted lead
   read as "44d late" before that rule.
