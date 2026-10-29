@@ -102,6 +102,12 @@ cd "$C" && npm run dev:stub
 The clone is a snapshot, so `cp` each file you edit afterwards into it. Kill
 both `:3100` and `:4000` when you are done. Verified 2026-10-28.
 
+When another session already holds :3100/:4000, run a second sandbox from your
+own clone on other ports: `STUB_PORT=4100 APP_PORT=3200 node
+scripts/sandbox/index.mjs --reset`. If a sandbox's stub process is killed, the
+next `next dev` on that same clone can answer 404 for `/`. Delete the clone's
+`.next` and start it again. Both seen 2026-10-30.
+
 Four things the stub must get right, each of which has cost a debugging round:
 
 - **The envelope is `{ success: true, status, data }`** and `unwrapEnvelope`
@@ -175,7 +181,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
+| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -363,19 +369,25 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
 
-**B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
-`Installation-Changes`. Its first cut shipped on 2026-10-29: **PR #29** merged
-to `main`, with **b2b-backend PR #13** (migrations 0020 and 0021) on `master`.
-Work after that merge (Studio Space access read from Studio Space, Targets per
-person, Overview) is on the branch and **not deployed**. As of 2026-10-30 it all
-rides in **PR #30** (`studio-space-waitlist-2026-10-29`, which has the revamp
-branch merged in, plus the Outreach waitlist fix). PR #30 needs **b2b-backend
-PR #14** (`b2b-crm-waitlist`: `GET /b2b/waitlist` and `GET /b2b/studio-access`,
+**B2B Sales work is on `b2b-revamp-2026-10-28`**, not `Installation-Changes`.
+Its **PR #29 was merged to `main` and deployed on 2026-10-29** (`3483cc3`),
+together with b2b-backend PR #13 (migrations 0020 and 0021, live). **The branch
+has moved on since: four commits are on it but not on `main`,** so they are not
+deployed: Studio Space access read-only (`5402162`), per-person Targets
+(`aa86b0f`), the Leadership Board's "Set targets" replacing the Targets tab
+(`5af8bf2`), and Dashboard → **Overview** (`6309057`, `docs/b2b/overview.md`).
+They ship in **PR #30** (`studio-space-waitlist-2026-10-29`: the branch plus
+the Outreach waitlist fix, fast-forwarded into this branch on 2026-10-30), which
+needs **b2b-backend PR #14** (`GET /b2b/waitlist` and `GET /b2b/studio-access`,
 no migration). Without #14 the Waitlist KPI and the Studio Space tab read
-Unknown. **The tech team merges the PRs, not a session**, unless Dhruv asks.
-Side branches merge into the revamp branch, e.g. `b2b-structural-2026-10-29`.
+Unknown. Check `git log origin/main..HEAD` before claiming anything is live.
+**The tech team merges, not a session**, unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
-uncommitted here shows there without a restart.
+uncommitted here shows there without a restart. While `npm run dev:sandbox` is
+running from this directory (:3100), a second `next dev` here exits. To host
+real data on :3001 at the same time, run `npx next dev -p 3001` from an APFS
+clone (the recipe in §Looking at a screen). The clone is a snapshot, so
+re-clone it after pulling.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
 prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
 of it. Don't build on that branch.
@@ -388,6 +400,37 @@ Push both with `dhruv-md`. Only `main`/`staging` (dashboard) and `master`
 Space on 2026-10-29 got the backend, hosting and waitlist all wrong. Its local
 dev stack is `~/Projects/ss-local-stack` (`status.sh`, dashboard on
 `127.0.0.1:3700`, backend :8700, Postgres :54700).
+
+**Branching while other sessions edit this tree: use a `git worktree`.**
+Switching branches here drags every session's uncommitted files along.
+`git worktree add -b <branch> <scratchpad>/<dir> origin/main` leaves the shared
+tree alone. A fresh worktree has no `node_modules` and no generated
+`.next/types`, so `npx tsc` prints `RouteContext` errors from `app/api/*` that
+are not yours. Symlink `node_modules` in for `tsc` and filter `RouteContext`
+out of its output. `next dev` rejects a symlinked `node_modules` ("points out of the
+filesystem root"), so `cp -cR` it instead to run a server. Either way, keep it
+out of the commit.
+
+**b2b-backend is a sibling repo** (`~/Projects/b2b-backend`,
+`MySite-Tech/b2b-backend`, production is `origin/master`). Its checkout has
+`dhruv-changes` on it, which was dropped on purpose: never commit there. Make a
+worktree off `origin/master`, push with `dhruv-md`. A local FastAPI and
+Postgres do exist: `~/Projects/ss-local-stack` (see Studio Space below). Its
+database lags `master`'s migrations, so a `/b2b` route over the 0018+ tables
+500s there. Run a second uvicorn from your worktree on another port with
+`common.sh` sourced and your own `SYNC_SHARED_SECRET`, not the stack's :8700.
+Say the CRM reads Unknown until the route deploys. Studio Space's own data
+(`partner_user.visible_tabs`, where `NULL` is the whole dashboard) lives there
+too.
+
+**The sandbox's backend stub is at `:4000/b2b-backend/b2b/<route>`** with header
+`x-sync-key: sandbox`. Without the `/b2b-backend` prefix it answers `200 []`,
+which reads like an empty route. It loads routes once at start, so restart it
+after editing `scripts/sandbox/routes/*`.
+
+**`bash .claude/hooks/docs-guard.sh` hangs when run by hand** because it `cat`s
+stdin. Run it as `bash .claude/hooks/docs-guard.sh </dev/null`. macOS has no
+`timeout`.
 
 **`origin` is a PUBLIC repository** (verified 2026-09-14 via `gh repo view`), as
 are `daaku-daddy/material-depot-site` and `daaku-daddy/B2B-Client-Dashboard`.
