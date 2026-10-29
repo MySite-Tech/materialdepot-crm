@@ -364,20 +364,30 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 A teammate pushes to this branch regularly — **pull before starting.**
 
 **B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
-`Installation-Changes`. It is open as **PR #29** to `main`, not merged, so none
-of it is deployed. `origin/main` (PR #27, B2B on the FastAPI backend) was merged
-**into** it on 2026-10-29. Side branches merge into it, e.g.
-`b2b-structural-2026-10-29`. It depends on **b2b-backend PR #13** (branch
-`b2b-crm-extra-and-team`, migrations 0020 and 0021), which must deploy and
-migrate first (see `docs/b2b/revamp-2026-10-28.md` §Before you deploy). **The
-tech team merges both PRs, not a session**, unless Dhruv asks. Until #13 is
-live, the round robin skips, and new fields (Inbound, requirement history,
-per-PI dates) do not persist against the real backend.
+`Installation-Changes`. Its first cut shipped on 2026-10-29: **PR #29** merged
+to `main`, with **b2b-backend PR #13** (migrations 0020 and 0021) on `master`.
+Work after that merge (Studio Space access read from Studio Space, Targets per
+person, Overview) is on the branch and **not deployed**. As of 2026-10-30 it all
+rides in **PR #30** (`studio-space-waitlist-2026-10-29`, which has the revamp
+branch merged in, plus the Outreach waitlist fix). PR #30 needs **b2b-backend
+PR #14** (`b2b-crm-waitlist`: `GET /b2b/waitlist` and `GET /b2b/studio-access`,
+no migration). Without #14 the Waitlist KPI and the Studio Space tab read
+Unknown. **The tech team merges the PRs, not a session**, unless Dhruv asks.
+Side branches merge into the revamp branch, e.g. `b2b-structural-2026-10-29`.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
 prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
 of it. Don't build on that branch.
+
+**Studio Space is `MySite-Tech/b2b-dashboard` on `MySite-Tech/b2b-backend`**,
+the same FastAPI backend as B2B here, served at `studio.materialdepot.com`.
+Push both with `dhruv-md`. Only `main`/`staging` (dashboard) and `master`
+(backend) deploy. `dhruv-md/Studio-Sales` and `daaku-daddy/B2B-Client-Dashboard`
+(Vercel, Supabase) are older ancestors. A session that analysed them as Studio
+Space on 2026-10-29 got the backend, hosting and waitlist all wrong. Its local
+dev stack is `~/Projects/ss-local-stack` (`status.sh`, dashboard on
+`127.0.0.1:3700`, backend :8700, Postgres :54700).
 
 **`origin` is a PUBLIC repository** (verified 2026-09-14 via `gh repo view`), as
 are `daaku-daddy/material-depot-site` and `daaku-daddy/B2B-Client-Dashboard`.

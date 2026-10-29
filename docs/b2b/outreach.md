@@ -7,7 +7,7 @@
 | Call | Endpoint | Notes |
 |---|---|---|
 | `fetchOutreachLeads()` + `fetchInboundForOutreach()` | Supabase `b2b_lead` (`select *`, paged 1000) | **One read**: both go through the cached all-rows fetch (`withB2BCache('rows|all')`). The created-date filter is applied client-side, so changing it refetches nothing |
-| `fetchStudioWaitlist()` | `GET /api/b2b/waitlist` → b2b-backend `GET /b2b/waitlist` (`b2bBackendFetch`, `x-sync-key`) | One per mount. Behind `requireCaller` + `canUseB2B`. Needs b2b-backend PR `b2b-crm-waitlist` deployed — see *Studio Space waitlist* below |
+| `fetchStudioWaitlist()` | `GET /api/b2b/waitlist` → b2b-backend `GET /b2b/waitlist` (`b2bBackendFetch`, `x-sync-key`) | One per mount. Behind `requireCaller` + `canUseB2B`. Needs b2b-backend PR #14 (`b2b-crm-waitlist`) deployed — see *Studio Space waitlist* below |
 | `upsertOutreachLead()` | `b2b_lead` upsert on `id` | Every single-lead write, always via `useOutreachData().save`, which runs `withJourney` first |
 | `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | Inbound intake only (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
 | `fetchLeadDeals(phone)` | Django `/crm/leads/?q=` | Drawer only, as before; now also feeds the 6-month new-onboarding check |
