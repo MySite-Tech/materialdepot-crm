@@ -64,6 +64,8 @@ export const ORDER_LOST_REASONS = [
   'Not Responding',
 ];
 
+export const COLUMNS_ADDED_SINCE_PICKER = ['cartValueExclGst'];
+
 export const BACKEND_SORTABLE_COLS = new Set([
   'createdAt', 'clientName', 'clientPhone', 'assignedTo', 'branch', 'cartValue',
 ]);

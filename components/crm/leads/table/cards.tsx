@@ -29,7 +29,7 @@ export function LeadsCardList({ isOverdue, leadsLoading, paginatedRows, setDrawe
             {l.followUpDate && <span className={isOverdue(l) ? 'text-red-500 font-semibold' : ''}>{isOverdue(l) ? '⚠ ' : ''}Follow-up: {fmtDate(l.followUpDate)}</span>}
             {!l.followUpDate && <span className="text-gray-300">No follow-up date</span>}
             {l.closureDate && <span>Closure: {fmtDate(l.closureDate)}</span>}
-            {(l.cartValue || 0) > 0 && <span className="font-mono font-semibold text-gray-700">{fmtINR(l.cartValue)}</span>}
+            {(l.cartValue || 0) > 0 && <span className="font-mono font-semibold text-gray-700">{fmtINR(l.cartValueExclGst ?? l.cartValue)}{l.cartValueExclGst == null && <span className="font-normal text-gray-400"> incl. GST</span>}</span>}
           </div>
           <div className="flex justify-between items-center mt-2">
             <div className="flex items-center gap-1.5">

@@ -71,7 +71,7 @@ export function LeadsFiltersDesktop({ ALL_COLUMNS, availableBMs, branchFilter, b
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex gap-2 items-center ml-auto">
-          <MultiSelect options={ALL_COLUMNS.map((c) => c.label)} selected={ALL_COLUMNS.filter((c) => isColVisible(c.key)).map((c) => c.label)} onChange={(labels) => { const keys = ALL_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key); setVisibleCols(keys); localStorage.setItem('materialdepot_cols', JSON.stringify(keys)); }} label="Columns" />
+          <MultiSelect options={ALL_COLUMNS.map((c) => c.label)} selected={ALL_COLUMNS.filter((c) => isColVisible(c.key)).map((c) => c.label)} onChange={(labels) => { const keys = ALL_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key); setVisibleCols(keys); localStorage.setItem('materialdepot_cols', JSON.stringify(keys)); localStorage.setItem('materialdepot_cols_seen', JSON.stringify(ALL_COLUMNS.map((c) => c.key))); }} label="Columns" />
           <div className="relative">
             <button className="inline-flex items-center gap-1.5 bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-md text-[13px] font-medium cursor-pointer whitespace-nowrap hover:bg-gray-50 disabled:opacity-50 disabled:cursor-default" disabled={exporting} onClick={() => setExportMenuOpen((o) => !o)}>
               <Download size={15} strokeWidth={2} className={exporting ? 'animate-pulse' : ''} />
