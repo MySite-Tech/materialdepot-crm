@@ -10,9 +10,9 @@ of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
 | Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller; 2026-10-29: Invalid status, Send to Outreach; evening: one tab, 5 pm work day, CRM-only call log and notes, Ready to close, client people, SPoCs, no KAM handoff | §Inbound below; `inbound.md` | b2b-backend migration 0020 not deployed (round robin skips until then); round-robin start date; first real Kylas owner change unverified |
-| Outreach | **Built:** scoped views, From Inbound pool with sign-off, one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
+| Outreach | **Built:** scoped views, From Inbound pool with sign-off, one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same b2b-backend migration 0020 (team tables): until it deploys there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
-| Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | `b2b-team.sql` (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
+| Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | b2b-backend migration 0020 (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
 | Client DB | **Built:** lens tiles (All · Active · Lapsing soon · Inactive · No KAM), filter chips, sortable columns, export scope honoured | `client-db.md` §The list | Nothing. Django: `b2b-bulk` serves a wrong `lastOrderDate` (future dates on many firms), which skews Active/Inactive. See `client-db.md` §The list |
 
 The shared identity layer every team builds on is `lib/b2b/team` (types and
@@ -207,9 +207,11 @@ team slugs were added.
 
 What exists, all documented in `inbound.md` §Who owns a lead:
 
-- `supabase/migrations/b2b-team.sql`: `b2b_team_member` (keyed on the last 10
-  digits of the phone, which is the one id the session, `requireCaller` and
-  `/user-organisation/` all share) and `b2b_lead_assignment`. **Not applied yet.**
+- `b2b_team_member` (keyed on the last 10 digits of the phone, which is the one
+  id the session, `requireCaller` and `/user-organisation/` all share) and
+  `b2b_lead_assignment`, now on the b2b-backend (migration 0020, **not deployed
+  yet**). The original `supabase/migrations/b2b-team.sql` was never applied and
+  is superseded.
 - `lib/b2b/team/`: shared types, constants and pure rules (`canUseB2B`,
   `isB2BManager`, `viewerFor`, `rotationOrder`, `planRotation`), plus the
   route client. `lib/server/b2b-team/`: Supabase and Kylas, server-only.
@@ -529,7 +531,7 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
 - **2026-10-28 (Inbound, build)**: The user chose CRM-side round robin,
   manager-edited membership (nothing hardcoded), 90 calls/day, and scoped views
   for Outreach/KAM. Built slices 1–3 (see §Team membership above).
-  `b2b-team.sql` is **not applied**, and the Kylas owner PATCH has not been
+  b2b-backend migration 0020 is **not deployed**, and the Kylas owner PATCH has not been
   exercised on a real lead. A parallel session is building Outreach on the
   same `lib/b2b/team` layer.
 - **2026-10-28 (Inbound, layout)**: The user asked for clickable tiles that list

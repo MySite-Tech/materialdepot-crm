@@ -79,8 +79,8 @@ decides which is right.
 
 `team.members` (`b2b_team_member`) when the table is live. People who hold work
 in the data but are not on the list are added, matched by name with `sameRep`
-and marked "not on team". While the table is missing (true on 2026-10-28,
-`b2b-team.sql` not applied) the list comes from the data: Inbound uses the
+and marked "not on team". While the table is missing (true until b2b-backend
+migration 0020 deploys) the list comes from the data: Inbound uses the
 legacy `B2B_INBOUND_OWNER_LIST` plus lead owners, Outreach uses `bm`, and KAM
 uses firm and order `kam`. Placeholder names ("Unassigned") are dropped.
 
