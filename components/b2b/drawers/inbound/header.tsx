@@ -1,6 +1,6 @@
 'use client';
 
-import { ENRICHMENT_FIELD_COUNT, isFollowUpStatus } from '../../constants/inbound';
+import { ENRICHMENT_FIELD_COUNT, isOpenStatus } from '../../constants/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { EnrichmentGap } from '../../types/inbound';
 import { FollowUpChip, LeadTypeChip, PriorityChip, StatusBadge } from '../../ui/inbound-chips';
@@ -28,7 +28,7 @@ export function InboundDrawerHeader({ draft, gaps, onClose, today }: {
             <StatusBadge s={draft.stage} />
             <PriorityChip p={draft.priority} />
             <LeadTypeChip t={draft.leadType} />
-            {isFollowUpStatus(draft.stage) && (
+            {isOpenStatus(draft.stage) && !!draft.followUpDate && (
               <FollowUpChip date={draft.followUpDate} today={today} />
             )}
             {draft.enqId && (

@@ -124,6 +124,14 @@ Four things the stub must get right, each of which has cost a debugging round:
 So a local CRM shows **real Supabase data and empty Django data** — say which
 half was stubbed when reporting anything from it.
 
+**For B2B, use `npm run dev:sandbox` instead** (`docs/b2b/sandbox.md`). It runs
+the same Django stub plus a stubbed FastAPI b2b-backend and Kylas, seeded with
+dummy leads across the whole Inbound → Outreach → KAM journey, on the same
+:4000 / :3100 ports and from the same APFS clone. Five personas log in by phone
+(`9000000001` inbound … `9000000099` manager). B2B saves land in
+`.sandbox/state.json` in the clone, so **saving is safe there**, and only there.
+`--reset` reseeds relative to now. Supabase is still real in it.
+
 **Driving it with a browser.** Playwright is not a dependency here and should
 not become one; install it in a scratch directory with
 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i playwright` and launch the system
@@ -140,12 +148,12 @@ an app bug that did not exist. Use `hasText: /^Inactive$/` on the title element.
 **Supabase is real in that browser, so never exercise a SAVE path to see a
 feature work.** There is no staging Supabase — clicking through an editor writes
 production rows, and "it was only test data" is not recoverable. This includes
-all of B2B. **On `main` since PR #27 (2026-10-29) B2B data lives in the FastAPI
+all of B2B. **Since PR #27 (2026-10-29) B2B data lives in the FastAPI
 `b2b-backend`** (`lib/b2b/data/backend.ts` → `app/api/b2b/[...path]`, see
-`docs/backends.md` on `main`), which is production too. **On
-`b2b-revamp-2026-10-28` it is still Supabase `b2b_lead`** until that branch
-merges `main`. That table is retired, so a save on the branch lands in rows
-production no longer reads. Either way, never click Save to test.
+`docs/backends.md`), which is production too, on `main` and on the revamp branch
+(merged the same evening). Never click Save to test. The exception is **`npm run
+dev:sandbox`** (`docs/b2b/sandbox.md`), which stubs the B2B backend, Kylas and
+Django with dummy data, so B2B saves land in a local file.
 To see a screen
 in a state the data is not in, intercept the READ instead:
 `ctx.route(/app_settings/, r => r.request().method() === 'GET' ? r.fulfill({…}) : r.continue())`
@@ -167,7 +175,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` (30/60-day account status, KAM-only; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §The tiles are the navigation; KAM has the same, `kam.md` §The tiles are the navigation) |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` (30/60-day account status, KAM-only; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -182,7 +190,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 60 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 64 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; the **pending** B2B move off Supabase and the tables it still has to cover |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -261,7 +269,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 60 titles, so grep a title and read around the line you
+**Contents** list of all 64 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -358,16 +366,13 @@ A teammate pushes to this branch regularly — **pull before starting.**
 **B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
 `Installation-Changes`. It is pushed to `origin` (12 commits on 2026-10-28, and
 the Leadership Board, `dev:stub`, Outreach capture, KAM status and Inbound
-Clients/PI/Results commits on 2026-10-29) and
-is **not merged**. No PR is open, so none of it is deployed. **Merge
-`origin/main` into it before anything else.** `main` gained PR #27 on 2026-10-29,
-which moved B2B data from Supabase to the FastAPI backend. The branch still talks
-to Supabase, so :3001 shows stale B2B rows until that merge. Expect conflicts in
-`lib/b2b/data/{reads,writes}.ts` and the B2B docs. Also check that nothing on the
-branch still imports the deleted `lib/supabase.ts`, and that the branch's
-`b2b_team_member`, `/api/b2b/team` and `/api/b2b/waitlist` routes sit alongside
-`app/api/b2b/[...path]`. The merge waits until no session has uncommitted edits
-in `docs/b2b/context.md`, because git refuses to merge over them.
+commits on 2026-10-29) and is **not merged into `main`**. No PR is open, so none
+of it is deployed. `origin/main` (PR #27, B2B on the FastAPI backend) was merged
+**into** it on 2026-10-29. It now depends on b2b-backend branch
+`b2b-crm-extra-and-team` (commit `2690925`, migration 0020; **local only, not
+pushed**, it lives in `~/Projects/b2b-backend`'s git), which must deploy first
+(see `docs/backends.md`). Until it does, the round robin skips and the new
+Inbound fields do not persist against the real backend.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy

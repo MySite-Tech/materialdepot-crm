@@ -67,13 +67,13 @@ export function LensTiles<K extends string>({ groups, active, onPick }: {
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.accent }} />
-                      <span className={`text-[11.5px] font-semibold truncate ${on ? 'text-gray-900' : 'text-gray-500'}`}>{t.title}</span>
+                      <span className={`text-[11.5px] font-semibold leading-tight line-clamp-2 ${on ? 'text-gray-900' : 'text-gray-500'}`}>{t.title}</span>
                     </div>
                     <div className={`text-[22px] font-bold leading-tight mt-0.5 truncate tabular-nums ${t.muted ? 'text-gray-300' : 'text-gray-900'}`} title={t.value}>
                       {t.value}
                     </div>
                     {t.sub && (
-                      <div className={`text-[10.5px] truncate ${t.warn ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>{t.sub}</div>
+                      <div className={`text-[10.5px] leading-snug line-clamp-2 ${t.warn ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>{t.sub}</div>
                     )}
                     {on && <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: t.accent }} />}
                   </button>

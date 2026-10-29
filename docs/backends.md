@@ -17,8 +17,9 @@ Gotchas:
 
 - **Both base URLs live in `lib/api/core/config.ts` and nowhere else.**
   `MD_API_BASE_URL` resolves `NEXT_PUBLIC_API_BASE_URL` → `API_BASE_URL` →
-  the dev2 default; `KYLAS_API_BASE_URL` resolves `KYLAS_API_BASE_URL` → the
-  Kylas default. They were previously copy-pasted across seven and fifteen call
+  the dev2 default; `KYLAS_API_BASE_URL` resolves `NEXT_PUBLIC_KYLAS_API_BASE_URL` →
+  `KYLAS_API_BASE_URL` → the Kylas default (the `NEXT_PUBLIC_` one moves the
+  browser's calls too; `npm run dev:sandbox` uses it). They were previously copy-pasted across seven and fifteen call
   sites respectively, and one route (`app/api/kylas/sync-estimate`) had drifted
   onto a *different* host (`api-dev`, not `api-dev2`) via its own
   `MD_BACKEND_URL` var, which is why nobody could answer "which backend does the

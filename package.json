@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "dev:stub": "node scripts/django-stub.mjs",
+    "dev:sandbox": "node scripts/sandbox/index.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

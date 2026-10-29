@@ -59,7 +59,8 @@ Error text for a non-OK response is taken in order:
 
 Tokens live in `localStorage` under `jwt_token` and `refresh_token`. `API_BASE_URL`
 is re-exported from `lib/api/core/config.ts`, which is the only place either
-backend's base URL is written — see `docs/backends.md`.
+backend's base URL is written — see `docs/backends.md`. The browser's Kylas base
+moves only with `NEXT_PUBLIC_KYLAS_API_BASE_URL`, which `docs/b2b/sandbox.md` sets.
 
 ## Server-side helpers (route handlers only)
 

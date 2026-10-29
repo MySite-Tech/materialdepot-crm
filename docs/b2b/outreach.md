@@ -311,7 +311,7 @@ leads, from `bmOptions()`, not the 2-name roster. See the BM picker entry in
 The user found the first build too texty to navigate: nine tabs, eight KPI
 tiles that could not be clicked, an always-open ten-control filter bar, two
 full-width banners, and My day as a wall of reminder sentences. The layout now
-matches Inbound's (`inbound.md` §The tiles are the navigation): **every number
+matches Inbound's (`inbound.md` §One tab, three tile groups): **every number
 is a lens, and clicking it lists exactly what it counts**.
 
 - **Order: BM chips → Scorecard → search/filters → work tiles → one table.**
