@@ -2,6 +2,7 @@
 
 import { AccountCard } from './cards/account';
 import { ContactsCard } from './cards/contacts';
+import { EcVisitsCard } from './cards/ec-visits';
 import { GstsCard } from './cards/gsts';
 import { OrdersCard } from './cards/orders';
 import { useFirmOrders } from './hooks/use-firm-orders';
@@ -93,6 +94,8 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             onClearVia={() => setVia(null)}
             onRecheck={orders.recheck}
           />
+
+          <EcVisitsCard client={client} />
 
           {children}
 

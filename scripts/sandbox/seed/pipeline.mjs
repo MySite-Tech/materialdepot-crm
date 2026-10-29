@@ -172,8 +172,17 @@ function seedKam() {
 function seedTeam(at) {
   return PERSONAS.filter((p) => p.team).map((p) => ({
     phone: p.phone, name: p.name, team: p.team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
-    in_rotation: true, active: true, updated_at: at, updated_by: MEERA.name,
+    in_rotation: true, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
   }));
+}
+
+function seedEcVisits() {
+  return [{
+    id: 'ECV-SBX-0001', client_id: 'CLI-SBX-0001', firm: 'Template Builders', contact_name: 'Demo Owner B', phone: '9000020002',
+    branch: 'Whitefield', visit_date: istDay(1), visit_time: '11:30', purpose: 'Pick laminates for the next block',
+    status: 'Scheduled', bm_name: SNEHA.name, outcome: null, enq_id: null, scheduled_by: KAVYA.name,
+    created_at: istAt(-1, 15), updated_at: istAt(-1, 15), updated_by: KAVYA.name,
+  }];
 }
 
 export function seedPipeline() {
@@ -181,5 +190,6 @@ export function seedPipeline() {
     rows: [...seedOutreach(), ...seedKam()],
     deals: seedDeals(),
     team: seedTeam(istAt(-30, 10)),
+    ecVisits: seedEcVisits(),
   };
 }

@@ -85,3 +85,10 @@ B2B tables. **Deploy it before this CRM branch.** Until it runs, the backend
 answers 404 on `/b2b/team`, the store reads that as `TeamTableMissing`, the
 Team tab says so and the round robin skips. Every inbound lead then stays with
 Hardi, which is what the user saw on 2026-10-29.
+
+**Migration `0021_b2b_admin_and_ec_visit`** (b2b-backend branch
+`b2b-team-admin`, on top of `b2b-crm-extra-and-team`, local only as of
+2026-10-29) adds `b2b_team_member.is_admin` and the `b2b_ec_visit` table with
+`GET/PUT /b2b/ec-visits`. The CRM reads both gracefully without it: a missing
+`is_admin` reads as false. **Neither 0020 nor 0021 has ever run against
+Postgres.** There was none on this machine to try them on.

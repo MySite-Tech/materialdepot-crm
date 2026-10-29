@@ -23,3 +23,6 @@ export const b2bBackendPost = <T,>(path: string, data: unknown): Promise<T> =>
   call<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
 
 export const b2bBackendDelete = <T,>(path: string): Promise<T> => call<T>(path, { method: 'DELETE' });
+
+export const b2bBackendPut = <T,>(path: string, data: unknown): Promise<T> =>
+  call<T>(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });

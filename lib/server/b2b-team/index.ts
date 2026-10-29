@@ -62,6 +62,7 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     kylasName,
     inRotation: input.inRotation,
     active: input.active,
+    isAdmin: input.isAdmin,
     updatedBy: byName,
   });
   return { member, warning };

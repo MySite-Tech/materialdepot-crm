@@ -41,17 +41,41 @@ function kamLoad(db) {
   return load;
 }
 
-const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'updated_at', 'updated_by'];
+const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'is_admin', 'updated_at', 'updated_by'];
 
 function putMember(db, body) {
   const phone = String(body?.phone ?? '').replace(/\D/g, '').slice(-10);
   if (phone.length !== 10) return reply(422, { error: 'phone must be 10 digits' });
+  const i = db.team.findIndex((m) => m.phone === phone);
   const row = Object.fromEntries(MEMBER_KEYS.map((k) => [k, body[k] ?? null]));
   row.phone = phone;
+  row.is_admin = typeof body.is_admin === 'boolean' ? body.is_admin : i >= 0 && db.team[i].is_admin === true;
   row.updated_at = new Date().toISOString();
-  const i = db.team.findIndex((m) => m.phone === phone);
   if (i >= 0) db.team[i] = row; else db.team.push(row);
   return row;
+}
+
+const EC_VISIT_KEYS = ['id', 'client_id', 'firm', 'contact_name', 'phone', 'branch', 'visit_date', 'visit_time', 'purpose',
+  'status', 'bm_name', 'outcome', 'enq_id', 'scheduled_by', 'updated_by'];
+
+function putEcVisit(db, body) {
+  if (!body?.id || !body?.firm || !body?.branch || !body?.scheduled_by) return reply(400, { error: 'id, firm, branch and scheduled_by are required' });
+  db.ecVisits ??= [];
+  const i = db.ecVisits.findIndex((v) => v.id === body.id);
+  const now = new Date().toISOString();
+  const row = { ...Object.fromEntries(EC_VISIT_KEYS.map((k) => [k, body[k] ?? null])), created_at: i >= 0 ? db.ecVisits[i].created_at : now, updated_at: now };
+  if (i >= 0) { row.scheduled_by = db.ecVisits[i].scheduled_by; db.ecVisits[i] = row; } else db.ecVisits.push(row);
+  return row;
+}
+
+function listEcVisits(db, query) {
+  const clientId = query.get('client_id');
+  const from = query.get('from');
+  const to = query.get('to');
+  const visits = (db.ecVisits ?? [])
+    .filter((v) => (!clientId || v.client_id === clientId) && (!from || v.visit_date >= from) && (!to || v.visit_date <= to))
+    .sort((a, b) => a.visit_date.localeCompare(b.visit_date) || String(a.visit_time ?? '').localeCompare(String(b.visit_time ?? '')));
+  return { visits };
 }
 
 function addAssignment(db, body) {
@@ -100,6 +124,8 @@ export function backendRoutes(db) {
       return { members: [...db.team].sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone)) };
     }
     if (path === '/team' && method === 'PUT') return putMember(db, body);
+    if (path === '/ec-visits' && method === 'GET') return listEcVisits(db, query);
+    if (path === '/ec-visits' && method === 'PUT') return putEcVisit(db, body);
     if (path === '/assignments/last-round-robin') return lastRoundRobin(db);
     if (path === '/assignments/lead-ids') {
       const since = query.get('since') || '';

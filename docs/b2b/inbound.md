@@ -330,10 +330,14 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   a failure. **This had not been exercised against a real lead as of
   2026-10-28**: the first real run is the verification.
 - **Mine vs All is in the fetch.** A rep linked to Kylas gets `ownerId` = their
-  own id, and the owner filter is hidden. "All inbound" is one click away for
-  every inbound rep, deliberately, because a rep covering for an absent
-  colleague needs it. Outreach and KAM will be hard-scoped instead. This is a
-  focus aid, not confidentiality: the Kylas key is in the browser.
+  own id, and the owner filter is hidden. **"All inbound" is for managers and
+  B2B admins only (2026-10-29).** It used to be one click away for every rep,
+  for covering an absent colleague, and the user ruled that out: a rep sees
+  only their own leads. A rep who is not an active Inbound member with a
+  linked Kylas user is shown **no** leads and an amber notice naming the fix
+  (B2B → Team). Before this they fell through to every owner's leads. This is
+  still a screen filter, not confidentiality: the Kylas key is in the browser.
+  Filtering on the server is the planned next step.
 - **Reassign** (the drawer's Owner card) is open to any active inbound member or
   manager. The route re-checks that rule, refuses any lead outside the
   inbound pipeline, and logs `kind = 'reassign'` with a reason.

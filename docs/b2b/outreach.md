@@ -114,8 +114,10 @@ Identity comes from the shell's `team` + `viewer` (`lib/b2b/team`, built by the
 Inbound session). Manager (`b2b.manager` or a manager role) → every BM, a BM
 filter, and a **Team** tab. Outreach member → only their leads. KAM member →
 only handovers addressed to them, in a two-tab view (Sign-offs, Converted).
-**If the team table is missing or failed**, everyone sees everything with an
-amber notice — the soft gate, because the table is not applied yet.
+**If the team table is missing or failed**, a manager still sees everything,
+with an amber notice. **A rep sees only leads with them as BM** (by phone, else
+name), with a notice saying why (2026-10-29). It used to show every BM's leads
+to everyone, and the user ruled that a rep only ever sees their own.
 
 A lead is "mine" by `bm_phone` (exact 10 digits) when it has one, else by name
 with `sameRep`: equal, or one is a **whole-word** prefix of the other ("Vilok" ↔

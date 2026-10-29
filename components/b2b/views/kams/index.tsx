@@ -379,6 +379,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
           isNew={orderModal.isNew}
           clients={kamFilter === 'all' ? clients : scopedClients}
           kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : DEFAULT_KAM}
+          actor={me.name}
           onClose={() => setOrderModal(null)}
           onSave={saveOrder}
         />

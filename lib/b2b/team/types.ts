@@ -8,6 +8,7 @@ export interface TeamMember {
   kylasName: string | null;
   inRotation: boolean;
   active: boolean;
+  isAdmin: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -31,6 +32,7 @@ export interface MemberInput {
   inRotation: boolean;
   active: boolean;
   kylasUserId?: number | null;
+  isAdmin?: boolean;
 }
 
 export interface SavedMember {
@@ -57,6 +59,7 @@ export interface Viewer {
   name: string;
   phone: string;
   isManager: boolean;
+  canManageTeam: boolean;
   member: TeamMember | null;
 }
 

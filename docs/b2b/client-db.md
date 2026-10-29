@@ -96,6 +96,31 @@ not visible in the code's shape:
 - The list and the order tabs page at 25 rows. The tiles and the strip
   count the full filtered set.
 
+### EC visits from the Firm page (2026-10-29)
+
+Firms also order through the Experience Centres, not only through the B2B
+team, so the user asked that any firm can have an assisted EC visit booked
+from its page. The **EC visits** card (`cards/ec-visits.tsx`) books one (date,
+time, EC and BM via `EcPicker`, who is coming, what they want to see) and
+updates it to Visited / No show / Cancelled with an outcome and the Enquiry
+ID of any order raised there.
+
+- **Stored on the B2B backend, never in Kylas** (`b2b_ec_visit`, migration
+  0021), through `app/api/b2b/ec-visits`. That route has its own file rather
+  than going through the relay for two reasons: the relay has no PUT, and the
+  Appointment Tracker's users (receptionists, presales) are not B2B users. So
+  the GET is open to any signed-in caller, but it needs a firm or a date range.
+  The PUT needs `canUseB2B`, and the route stamps `scheduled_by` and
+  `updated_by` from the session, never from the body.
+- **The EC name is the tracker's branch name**, because `EcPicker` already
+  resolves CRM branches through `apptBranchesFromCrm`. The tracker can then
+  match on equality rather than the fuzzy `sameBranch`.
+- Cost: one request when the Firm page opens. The picker's branch-list call
+  happens only while the form is open. A failed read says "Unknown" and hides
+  the book button, rather than claiming the firm has no visits.
+- Before migration 0021 the route answers 503 naming the migration, and the
+  card shows that message.
+
 ### One enquiry, opened in place (2026-10-29)
 
 Clicking an enquiry row on the Firm page expands it into everything Django

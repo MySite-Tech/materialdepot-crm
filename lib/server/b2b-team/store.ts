@@ -26,6 +26,7 @@ type MemberRow = {
   kylas_name: string | null;
   in_rotation: boolean;
   active: boolean;
+  is_admin?: boolean;
   updated_at: string | null;
   updated_by: string | null;
 };
@@ -38,6 +39,7 @@ const toMember = (r: MemberRow): TeamMember => ({
   kylasName: r.kylas_name,
   inRotation: r.in_rotation,
   active: r.active,
+  isAdmin: r.is_admin === true,
   updatedAt: r.updated_at,
   updatedBy: r.updated_by,
 });
@@ -52,7 +54,7 @@ export async function readMembers(): Promise<TeamState> {
   }
 }
 
-export async function upsertMember(m: Omit<TeamMember, 'updatedAt'>): Promise<TeamMember> {
+export async function upsertMember(m: Omit<TeamMember, 'updatedAt' | 'isAdmin'> & { isAdmin?: boolean }): Promise<TeamMember> {
   const row = await call<MemberRow>('/team', {
     method: 'PUT',
     body: {
@@ -63,6 +65,7 @@ export async function upsertMember(m: Omit<TeamMember, 'updatedAt'>): Promise<Te
       kylas_name: m.kylasName,
       in_rotation: m.inRotation,
       active: m.active,
+      is_admin: m.isAdmin,
       updated_by: m.updatedBy,
     },
   });
