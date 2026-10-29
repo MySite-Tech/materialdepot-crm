@@ -175,7 +175,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
+| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -363,18 +363,22 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
 
-**B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
-`Installation-Changes`. It is open as **PR #29** to `main`, not merged, so none
-of it is deployed. `origin/main` (PR #27, B2B on the FastAPI backend) was merged
-**into** it on 2026-10-29. Side branches merge into it, e.g.
-`b2b-structural-2026-10-29`. It depends on **b2b-backend PR #13** (branch
-`b2b-crm-extra-and-team`, migrations 0020 and 0021), which must deploy and
-migrate first (see `docs/b2b/revamp-2026-10-28.md` §Before you deploy). **The
-tech team merges both PRs, not a session**, unless Dhruv asks. Until #13 is
-live, the round robin skips, and new fields (Inbound, requirement history,
-per-PI dates) do not persist against the real backend.
+**B2B Sales work is on `b2b-revamp-2026-10-28`**, not `Installation-Changes`.
+Its **PR #29 was merged to `main` and deployed on 2026-10-29** (`3483cc3`),
+together with b2b-backend PR #13 (migrations 0020 and 0021, live). **The branch
+has moved on since: four commits are on it but not on `main`,** so they are not
+deployed: Studio Space access read-only (`5402162`), per-person Targets
+(`aa86b0f`), the Leadership Board's "Set targets" replacing the Targets tab
+(`5af8bf2`), and Dashboard → **Overview** (`6309057`, `docs/b2b/overview.md`).
+Shipping them needs a new PR to `main`. Check `git log origin/main..HEAD`
+before claiming anything is live. **The tech team merges, not a session**,
+unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
-uncommitted here shows there without a restart.
+uncommitted here shows there without a restart. While `npm run dev:sandbox` is
+running from this directory (:3100), a second `next dev` here exits. To host
+real data on :3001 at the same time, run `npx next dev -p 3001` from an APFS
+clone (the recipe in §Looking at a screen). The clone is a snapshot, so
+re-clone it after pulling.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
 prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
 of it. Don't build on that branch.

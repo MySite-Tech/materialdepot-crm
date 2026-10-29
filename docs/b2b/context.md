@@ -70,6 +70,12 @@ a new session knows what is live and what is being worked on.
   Appointment Tracker (`client-db.md`); per-PI follow-up and closure dates
   (`kam.md`). It needs b2b-backend migration 0021, which is in PR #13 with
   0020 (`docs/backends.md`).
+- **After PR #29 shipped (2026-10-29/30), on the branch but not on `main`:**
+  Studio Space access is read, not assigned; Targets moved into the Leadership
+  Board's "Set targets", and the B2B target is now the sum of every person's
+  revenue target (`leadership.md`); Dashboard became **Overview**, with five
+  sections and no duplicate panels (`overview.md`). These need a new PR to
+  `main` to deploy.
 - **KAM, still to build:** the location plus photo-in-uniform check-in before
   every offline meeting, for Outreach and KAM. Decisions are in `kam.md` §Not
   built yet.
