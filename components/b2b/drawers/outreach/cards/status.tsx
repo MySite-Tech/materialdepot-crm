@@ -29,13 +29,13 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
             {OUTREACH_STATUSES.map((s) => <option key={s} value={s}>{OUTREACH_STATUS_LABEL[s]}</option>)}
           </select>
         </Field>
-        {(draft.status === 'Follow up' || draft.status === 'PI Shared' || draft.status === 'Quote Share') && (
+        {draft.status !== 'Closed' && draft.status !== 'Lost' && (
           <>
             <Field
               label="Next follow-up"
-              required={draft.status !== 'Quote Share'}
+              required={draft.status === 'Follow up' || draft.status === 'PI Shared'}
               error={gateFor('followUpDate')}
-              hint={draft.status === 'Quote Share' ? 'Optional on Quote Share' : undefined}
+              hint={draft.status === 'Follow up' || draft.status === 'PI Shared' ? undefined : 'Required once a meeting is held, unless the next one is booked'}
             >
               <input
                 type="date"

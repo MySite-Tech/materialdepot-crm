@@ -5,7 +5,7 @@ import {
 } from './inbound';
 import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
-  type OutreachSource, type TeamSize, type OutreachIntake, type OutreachHandover, type JourneyEvent,
+  type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
 } from './outreach';
 
 type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
@@ -159,6 +159,8 @@ export interface OutreachLead {
   notes?: LeadNote[];
 
   bmPhone?: string;
+  altPhone?: string;
+  contacts?: OutreachContact[];
   source?: OutreachSource;
   email?: string;
   city?: string;

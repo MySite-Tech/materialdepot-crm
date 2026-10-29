@@ -10,7 +10,7 @@ of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
 | Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
-| Outreach | **Built:** scoped views, From Inbound pool with sign-off, CSV import, journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
+| Outreach | **Built:** scoped views, From Inbound pool with sign-off, one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
 | Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | `b2b-team.sql` (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
 | Client DB | **Built:** lens tiles (All · Active · Lapsing soon · Inactive · No KAM), filter chips, sortable columns, export scope honoured | `client-db.md` §The list | Nothing. Django: `b2b-bulk` serves a wrong `lastOrderDate` (future dates on many firms), which skews Active/Inactive. See `client-db.md` §The list |
@@ -584,8 +584,9 @@ Decisions taken (all overrulable; none is expensive to change):
   `b2b_lead` rows as a pool; Inbound needs no new button. Manager assigns
   (round-robin or per row), the BM accepts or rejects with a reason — that
   acceptance is Inbound's "sign-off required".
-- **"Inactive forms" = CSV import with `Source = Dormant form`.** No form
-  integration was built; the forms were not identified.
+- **"Inactive forms" = leads entered by hand with `Source = Dormant form`.**
+  No form integration was built; the forms were not identified. The CSV import
+  that first carried them was removed on 2026-10-29 at the user's request.
 - **Converted stays the stored `Closed`**, relabelled. Only an Enq-ID-fetched
   first order counts as a conversion; new revenue additionally excludes numbers
   that ordered in the 6 months before.
@@ -613,6 +614,13 @@ Open, for the user:
   WhatsApp gate and 48h sign-off, waitlist bridge (CRM half), per-head KPI strip
   and manager Team table. Checked with fixtures in Node and in the browser with
   reads intercepted and writes aborted; no production row written.
+- **2026-10-29 (Outreach, capture)**: The user asked Outreach to capture team
+  size, segment, an alternate number, the firm's people with their roles and a
+  next follow-up date on every lead; to record each visit properly; and to drop
+  CSV import and export so leads are entered one by one. Built as a capture gate
+  shared by New lead, the drawer, the reminders and CRM adherence, plus "who you
+  met" on held meetings. The Custom-range picker bug was fixed too. Detail is in
+  `outreach.md` §What a BM must capture.
 - **2026-10-28 (end of day, all sessions)**: Put the per-team status table at
   the top of this file and marked build-order progress. Checked the combined
   tree: `tsc` clean, branch level with `origin/main`, every B2B sub-tab

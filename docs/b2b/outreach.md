@@ -9,7 +9,7 @@
 | `fetchOutreachLeads()` + `fetchInboundForOutreach()` | Supabase `b2b_lead` (`select *`, paged 1000) | **One read**: both go through the cached all-rows fetch (`withB2BCache('rows|all')`). The created-date filter is applied client-side, so changing it refetches nothing |
 | `fetchStudioWaitlist()` | `GET /api/b2b/waitlist` → `${PARTNER_APP_BASE_URL}/api/sync/waitlist` (`x-sync-key`) | One per mount. Behind `requireCaller` + `canUseB2B`. **The upstream route does not exist yet** — see *Studio Space waitlist* below |
 | `upsertOutreachLead()` | `b2b_lead` upsert on `id` | Every single-lead write, always via `useOutreachData().save`, which runs `withJourney` first |
-| `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | CSV import (one request for the file) and inbound intake (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
+| `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | Inbound intake only (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
 | `fetchLeadDeals(phone)` | Django `/crm/leads/?q=` | Drawer only, as before; now also feeds the 6-month new-onboarding check |
 | `fetchKamLoad()` | `b2b_lead` closed rows | Drawer only, on "Round-robin" |
 
@@ -121,7 +121,7 @@ a focus aid, not confidentiality (same caveat as Inbound).
 
 `Inbound | EC referral | Dormant form | Own research`. "Dormant form" is the
 user's "existing forms that are inactive": there is no integration for those
-forms — their responses come in through the CSV import with `Source` set.
+forms, so a BM enters each one by hand with `Source` set.
 Inbound and EC referral are the two the **coverage** KPI is measured on.
 
 **Inbound → Outreach** (`intake/`): the pool is inbound `b2b_lead` rows in
@@ -137,21 +137,49 @@ reason** from `INTAKE_REJECT_REASONS`, which mirror Inbound's qualification
 checklist so they can later score Inbound's lead quality. Rejecting moves the
 lead to Lost with `Rejected from Inbound — <reason>`.
 
-**CSV / Excel import** (`intake/import-modal.tsx`, `planImport`): parsed with
-the existing `xlsx` dependency, so `.csv` and `.xlsx` both work. Header aliases
-(Company, Phone, Contact number, GSTIN, Address…) are matched; required are
-Firm name + Mobile. Every row is previewed with errors (blocks the row) and
-warnings (imports with a fix-up) before anything is written. A mobile already in
-Outreach is skipped; one that is an Inbound lead is imported with a warning, not
-blocked — Outreach meeting an Inbound lead in person is the intended flow.
-500 rows per file; rows past that are counted on screen, never silently dropped.
+**There is no bulk import and no export (removed 2026-10-29).** The user's
+call: leads arrive only from Inbound and from the database the team uploads,
+and every other lead a BM finds is entered one at a time in **+ New lead**, so
+each one starts with its capture fields filled. Do not bring back a CSV path
+without asking. It would create leads with none of the fields below.
+
+### What a BM must capture (2026-10-29)
+
+The user asked that every lead carry team size, segment, an alternate number,
+the people at the firm with their roles, and a next follow-up date, and that
+every visit be recorded properly. New fields in `meta_data`: `alt_phone`,
+`contacts` (`{name, role, phone?}[]`, the people other than the owner), and
+`metWith` on each meeting. `designation` is labelled **Their role**, with
+`CONTACT_ROLES` offered as suggestions but free text allowed, because old rows
+hold free-text titles.
+
+Three places enforce it. They share `outreachCaptureErrors` and `meetingGaps`
+(`models/outreach/reminders.ts`), so the drawer gate, the reminders and the
+CRM adherence KPI cannot disagree:
+
+- **+ New lead** blocks until it has firm, owner, role, a 10-digit mobile,
+  segment, team size, and a next step: meeting 1 booked **or** a next
+  follow-up date. Alternate number and extra people are optional, but are
+  validated if given.
+- **The drawer** hard-gates the save once a lead has a held meeting and is not
+  Lost. It needs owner, role, mobile, segment, team size, and a next follow-up
+  date unless another meeting is already booked. The blocked save says what is
+  missing next to the Save button. Before the first visit nothing is gated,
+  because an Inbound lead arrives without most of this.
+- **Next follow-up** shows for every open stage now, not just Follow up and PI
+  Shared, and again inside the latest held meeting. A held meeting is where
+  the BM knows the next step.
+
+An alternate number must be a different 10-digit mobile. An extra person needs
+both a name and a role.
 
 ### The journey log (`withJourney` in `models/outreach/reminders.ts`)
 
 Every write diffs before/after and appends `{at, by, kind, text}` to
 `meta_data.journey`: created/imported, intake assigned/accepted/rejected,
-status changes, meetings scheduled/held/postponed, first order verified,
-handover sent/accepted/rejected, BM changed. **It is derived from the diff, not
+status changes, meetings scheduled/held (with who was met)/postponed, next
+follow-up set or moved, each note added, each person added, first order
+verified, handover sent/accepted/rejected, BM changed. **It is derived from the diff, not
 written by each button**, so a new write path cannot forget to log. The drawer's
 Journey card merges in the waitlist sign-up from Studio Space. Rows written
 before 2026-10-28 have no journey; the card says so instead of showing nothing.
@@ -172,11 +200,16 @@ in the tooltip. A KAM gets `kamReminders` instead: handovers waiting on their
 sign-off, with the 48h clock. `onWaitlist: null` (Studio Space did not answer)
 suppresses the waitlist reminder rather than claiming they have not joined.
 
-### Meetings: notes are now a hard gate, the pin is not
+### Meetings: notes and who was met are hard gates, the pin is not
 
-A meeting marked Completed **blocks the drawer save until it has notes** — the
-sheet names meeting notes as mandatory, and an empty held meeting is exactly the
-log the KPI cannot validate. The **live pin** (`navigator.geolocation`, stored on
+A meeting marked Completed **blocks the drawer save until it has notes and
+"Who you met"**. The sheet names meeting notes as mandatory, and an empty held
+meeting is exactly the log the KPI cannot validate. "Who you met" suggests the
+owner and the firm's other people, but accepts free text. **It applies only to
+meetings dated on or after `MET_WITH_FROM` (2026-10-29).** Without that cut-over,
+every lead with an older held meeting failed both the save and its adherence
+until someone typed a name for a visit weeks old. On real data that meant made-up
+names. The **live pin** (`navigator.geolocation`, stored on
 the meeting with accuracy and time) is asked for and counted, never required: a
 BM logging a meeting after leaving the office cannot produce one honestly.
 
@@ -252,6 +285,9 @@ shown as each tile's tooltip; the non-obvious ones:
 - **CRM adherence** = leads *touched* in the period (created, status change,
   meeting date or journey event in it) with zero gaps in
   `outreachAdherence` ÷ touched. GST is not in it (many firms have none).
+  Since 2026-10-29 it also needs the owner's role, team size and "who they
+  met" (from the cut-over date), so the figure drops for leads touched before
+  those were captured. That drop is the point, not a regression.
 - **Handover %** denominator is *all* conversions in the period, verified or not.
 - **Revenue** is first-order value of verified, new-onboarding conversions only.
   Later orders from the same client are not in it — this CRM does not track
@@ -278,7 +314,10 @@ is a lens, and clicking it lists exactly what it counts**.
   the scorecard. The filters sit below the scorecard, so "filters apply to
   what is below them" is literally true.
 - **Scorecard**: Effort and Output, four tiles each, with a period picker
-  (this/last month, four earlier months, this week, last 7/30 days, custom) and
+  (this/last month, four earlier months, this week, last 7/30 days, custom;
+  grouped Months / Ranges). Picking **Custom range** seeds both dates from
+  the period on screen. The end date is clamped to today, and an incomplete
+  range is flagged in amber, never presented as custom (`docs/landmines.md`) and
   a **Tiles / By BM** switch for managers. Clicking a By BM row picks that BM.
   A KPI tile opens its rows with a **Counts?** column (✓, or ✕ plus the reason)
   and an All / Counted / Not counted switch. That is how "12 meetings, +9 not
@@ -309,13 +348,22 @@ is a lens, and clicking it lists exactly what it counts**.
 
 Verified 2026-10-28 by compiling `models/outreach/*` and running a fixture
 journey (intake → meetings → conversion → handover → sign-off) through
-`withJourney`, `outreachReminders`, `outreachKpis`, `planImport` and
-`planRoundRobin`; and in the browser on the stubbed-Django dev server with the
+`withJourney`, `outreachReminders`, `outreachKpis` and `planRoundRobin`
+(`planImport` too, since deleted); and in the browser on the stubbed-Django dev server with the
 `b2b_lead`, `/api/b2b/team` and `/api/b2b/waitlist` **GETs intercepted with
 fixtures** and every `b2b_lead` write aborted, as manager, Outreach BM and KAM. The UI pass was checked
 the same way for BM and KAM, and against **real** `b2b_lead` reads as manager
 (Django stubbed, every Supabase and `/api/b2b` write aborted, none attempted).
 A fixture run asserted every count KPI's value equals its counted rows.
+
+The 2026-10-29 capture change was checked the same two ways.
+`outreachCaptureErrors`, `outreachAdherence`, `outreachReminders` and
+`journeyDiff` were run on fixture leads. Then a stubbed-Django clone was driven
+against **real** `b2b_lead` reads as admin, with every Supabase and `/api/b2b`
+write aborted (none was attempted). Results: no Import or Export button; Custom
+range opened at 1 Oct – 29 Oct; an empty New lead named its 7 missing fields;
+and a real lead with two older held meetings was blocked only on team size and
+the next follow-up date.
 
 ### Not built
 

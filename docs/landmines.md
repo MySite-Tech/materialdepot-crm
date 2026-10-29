@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-59 entries. They live in one file because they cross-reference each other —
+60 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -69,6 +69,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A logged call recorded the lead's owner as the caller
 - A Kylas outage made B2B Inbound say every new lead had been called
 - The Outreach BM picker listed two people who held none of the leads
+- Custom range with no dates showed this month and called it a custom period
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -971,3 +972,15 @@ grep for a term, then read around the line you hit rather than opening all of it
   team table is not live. The shape: **a filter's options must be read off the
   data it filters, not off a list of who is supposed to be there.** Same family
   as the Leads tab offering every salesperson in the org.
+
+- **Custom range with no dates showed this month and called it a custom
+  period** (fixed 2026-10-29). In the Outreach scorecard, picking "Custom range"
+  left both date inputs empty. `rangeFor('custom')` returned `null`, and the
+  page fell back to this month. The line beside the picker still read "1 Oct –
+  31 Oct · no monthly targets", and the tiles were this month's numbers with
+  the targets stripped off. The user saw a blank range that seemed to be doing
+  something. Picking Custom now seeds both dates from the period on screen,
+  with the end clamped to today. If a date is cleared, the line says in amber
+  that it is showing the fallback. The shape: **when a picker falls back, the
+  label must describe the fallback, not the option that was picked.** Same
+  family as presenting a failed request as data.

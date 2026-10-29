@@ -4,16 +4,6 @@ import { OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OutreachStatus } from '..
 import { HANDOVER_TAT_HOURS } from '../../models/outreach/handover';
 import { LensGroup, OutreachFilters, RangeKey, WorkLens } from './types';
 
-export const EXPORT_HEADERS = [
-  'Company', 'Contact person', 'Designation', 'Contact number', 'GST',
-  'Segment', 'Lead type', 'Company type', 'BM',
-  'Meetings', 'Held', 'Next meeting', 'Location',
-  'Selection', 'Requirement', 'Expected value',
-  'Status', 'Next follow-up', 'Enq ID', 'Order value', 'Expected closure',
-  'Lost reason', 'Spok', 'KAM', 'EC', 'EC BM',
-  'Source', 'City', 'Office address', 'Team size', 'WhatsApp group', 'Converted on', 'Handover', 'Studio Space waitlist',
-];
-
 export const PAGE_SIZE = 25;
 
 export const LENS_STATUS: Partial<Record<WorkLens, OutreachStatus>> = {

@@ -54,13 +54,23 @@ export const OUTREACH_SOURCE_HINT: Record<OutreachSource, string> = {
   'Inbound':      'Handed over by the Inbound team for an in-person meeting',
   'EC referral':  'Referred by an Experience Centre',
   'Dormant form': 'From an older lead form that is no longer worked',
-  'Own research': 'Found by the BM — field visit, directory, Instagram, CSV upload',
+  'Own research': 'Found by the BM — field visit, directory, Instagram',
 };
 
 export const COVERAGE_SOURCES: OutreachSource[] = ['Inbound', 'EC referral'];
 
 export const TEAM_SIZES = ['1', '2-5', '6-15', '16-50', '50+'] as const;
 export type TeamSize = typeof TEAM_SIZES[number];
+
+export const CONTACT_ROLES = [
+  'Owner / Principal', 'Partner', 'Designer', 'Project manager', 'Procurement', 'Site supervisor', 'Accounts',
+] as const;
+
+export interface OutreachContact {
+  name: string;
+  role: string;
+  phone?: string;
+}
 
 export interface GeoPin {
   lat: number;
@@ -103,7 +113,8 @@ export interface OutreachHandover {
 export type JourneyKind =
   | 'created' | 'imported' | 'intake' | 'intake-accepted' | 'intake-rejected'
   | 'status' | 'meeting-scheduled' | 'meeting-held' | 'meeting-postponed'
-  | 'order-verified' | 'handover-sent' | 'handover-accepted' | 'handover-rejected' | 'bm-changed';
+  | 'order-verified' | 'handover-sent' | 'handover-accepted' | 'handover-rejected' | 'bm-changed'
+  | 'follow-up-set' | 'note-added' | 'contact-added';
 
 export interface JourneyEvent {
   at: string;
@@ -176,6 +187,7 @@ export interface OutreachMeeting {
   officeLocation?: string;
   status: MeetingStatus;
 
+  metWith?: string;
   notes?: string;
   pin?: GeoPin;
   loggedBy?: string;

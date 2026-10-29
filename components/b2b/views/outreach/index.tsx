@@ -6,15 +6,11 @@ import { OutreachStatus, STUDIO_WAITLIST_URL, istToday, outreachGateErrors } fro
 import { repOwns } from '../../models/outreach/handover';
 import { inboundPool } from '../../models/outreach/intake';
 import { OUTREACH_KPIS, Period, monthPeriod, outreachKpis, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
-import { ExportFormat, ExportScope } from '../../types/export';
-import { ExportButton } from '../../ui/export-button';
-import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { Spinner } from '../../ui/inbound-chips';
-import { EXPORT_HEADERS, LENS, NO_FILTERS } from './constants';
+import { LENS, NO_FILTERS } from './constants';
 import { useOutreachData } from './hooks/use-outreach-data';
 import { useOutreachLenses } from './hooks/use-outreach-lenses';
 import { useOutreachScope } from './hooks/use-outreach-scope';
-import { ImportModal } from './intake/import-modal';
 import { FromInbound } from './intake';
 import { LensStrip } from './lenses';
 import { OutreachBoard } from './lists/board';
@@ -26,7 +22,7 @@ import { Scorecard } from './performance';
 import { PeriodPicker } from './performance/period';
 import { TeamTable } from './performance/team-table';
 import { Lens, OutreachFilters, RangeKey, WorkLens } from './types';
-import { bmOptions, fmtRange, matchesFilters, nowIso, rangeFor, toExportRow } from './utils';
+import { bmOptions, fmtRange, matchesFilters, nowIso, rangeFor } from './utils';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -62,10 +58,8 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const tableRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [move, setMove] = useState<{ lead: OutreachLead; target: OutreachStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
 
   const period = useMemo<Period>(
     () => (periodKey.startsWith('m:') ? monthPeriod(periodKey.slice(2)) : rangeFor(periodKey as RangeKey, today, custom) ?? monthPeriod(today.slice(0, 7))),
@@ -140,28 +134,18 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
     ? lenses.kpi.visible.filter((r) => kpiShow === 'all' || (kpiShow === 'counted') === r.kpi!.counts)
     : lenses.lists[lens as WorkLens] ?? [];
 
-  const handleExport = async (format: ExportFormat, which: ExportScope) => {
-    if (exporting) return;
-    const list = which === 'all' ? scoped : view === 'list' && lens !== 'inbox' ? rows.map((r) => r.lead) : filtered;
-    if (!list.length) { data.setError('No leads matched — nothing to export.'); return; }
-    setExporting(true);
-    try {
-      const name = `b2b_outreach_leads_${which}_${todayStr()}`;
-      const out = list.map((l) => toExportRow(l, waitlistFor(l, waitIdx), nowMs));
-      if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, out, name);
-      else await exportRowsExcel(EXPORT_HEADERS, out, name, 'Outreach Leads');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const copyWaitlistLink = () => { navigator.clipboard?.writeText(STUDIO_WAITLIST_URL).catch(() => {}); };
 
   const selected = data.leads.find((l) => l.id === selectedId) || null;
   const loading = data.loading || team.loading;
   const state = loading ? 'loading' : data.loadFailed ? 'failed' : 'ready';
   const heads = pickedRep || scope.mode === 'mine' ? 1 : Math.max(1, teamLive ? scope.reps.length : bms.length);
-  const customPeriod = !periodKey.startsWith('m:') && !['month', 'last-month'].includes(periodKey);
+  const customIncomplete = periodKey === 'custom' && !rangeFor('custom', today, custom);
+  const customPeriod = !customIncomplete && !periodKey.startsWith('m:') && !['month', 'last-month'].includes(periodKey);
+  const pickPeriod = (key: string) => {
+    if (key === 'custom' && !rangeFor('custom', today, custom)) setCustom({ from: period.from, to: period.to > today ? today : period.to });
+    setPeriodKey(key);
+  };
   const hidden = lenses.kpi ? lenses.kpi.total - lenses.kpi.visible.length : 0;
   const notices: ReactNode[] = [
     scope.notice,
@@ -188,10 +172,6 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         </div>
         {!isKamView && (
           <div className="flex items-center gap-2">
-            <ExportButton onExport={handleExport} disabled={exporting} />
-            <button onClick={() => setImporting(true)} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-700 whitespace-nowrap">
-              Import CSV
-            </button>
             <button onClick={() => setCreating(true)} className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap">
               + New lead
             </button>
@@ -221,9 +201,10 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         <div className="mb-4">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <h2 className="text-[13px] font-bold text-gray-900">Scorecard</h2>
-            <PeriodPicker value={periodKey} onChange={setPeriodKey} custom={custom} setCustom={setCustom} today={today} />
-            <span className="text-[11px] text-gray-400">
-              {customPeriod ? `${fmtRange(period)} · no monthly targets` : heads > 1 ? `Targets for ${heads} BMs` : 'Per-head targets'}
+            <PeriodPicker value={periodKey} onChange={pickPeriod} custom={custom} setCustom={setCustom} today={today} />
+            <span className={`text-[11px] ${customIncomplete ? 'text-amber-700' : 'text-gray-400'}`}>
+              {customIncomplete ? `Pick a start and an end date — showing ${fmtRange(period)} until then`
+                : customPeriod ? `${fmtRange(period)} · no monthly targets` : heads > 1 ? `Targets for ${heads} BMs` : 'Per-head targets'}
             </span>
             {!customPeriod && periodKey === 'month' && (
               <span className="text-[11px] text-gray-400 flex items-center gap-1" title="The marker on each bar is where the number should be by today, at an even pace through the month.">
@@ -319,11 +300,6 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
             const err = await data.save(null, lead);
             if (err) data.setError(`Could not save ${lead.company}: ${err}. The lead was not created — try again.`);
           }} />
-      )}
-
-      {importing && (
-        <ImportModal existing={data.leads} inbound={data.inbound} reps={scope.reps} me={scope.me} canPickBm={canPickBm}
-          onClose={() => setImporting(false)} onImport={(list) => data.createMany(list)} />
       )}
 
       {move && (

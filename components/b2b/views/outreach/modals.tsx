@@ -1,13 +1,14 @@
 'use client';
 
-import { Selection } from '../../models/outreach';
-
+import { ContactsEditor, RoleOptions } from '../../drawers/outreach/cards/client';
 import { OutreachLead } from '../../models/mock-data';
 import {
   COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT,
-  OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachMeeting, OutreachSource, OutreachStatus, SEGMENTS, SELECTIONS,
-  Segment, TEAM_SIZES, TeamSize, outreachGateErrors,
+  OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachContact, OutreachMeeting, OutreachSource, OutreachStatus, SEGMENTS,
+  SELECTIONS, Segment, Selection, TEAM_SIZES, TeamSize, istToday, outreachGateErrors,
 } from '../../models/outreach';
+import { isMobile } from '../../models/outreach/handover';
+import { normalisePhone } from '@/lib/org/utils';
 import { Rep } from '../../models/outreach/intake';
 import { LostReasonSelect } from '../../ui/lost-reason-select';
 import { Field, GateErrors, errorInputCls, inputCls } from '../../ui/inbound-chips';
@@ -129,6 +130,9 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
   const [contactPerson, setContactPerson] = useState('');
   const [designation, setDesignation] = useState('');
   const [phone, setPhone] = useState('');
+  const [altPhone, setAltPhone] = useState('');
+  const [contacts, setContacts] = useState<OutreachContact[]>([]);
+  const [followUpDate, setFollowUpDate] = useState('');
   const [gstNumber, setGstNumber] = useState('');
   const [segment, setSegment] = useState<Segment | ''>('');
   const [leadType, setLeadType] = useState<LeadType | ''>('');
@@ -148,8 +152,22 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
   const toggle = (s: Selection) =>
     setSelections((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
 
+  const errors: Partial<Record<'company' | 'contactPerson' | 'designation' | 'phone' | 'altPhone' | 'segment' | 'teamSize' | 'next' | 'contacts', string>> = {
+    ...(!company.trim() && { company: 'A company name is required.' }),
+    ...(!contactPerson.trim() && { contactPerson: 'Who is the owner or designer?' }),
+    ...(!designation.trim() && { designation: 'What is their role?' }),
+    ...(!isMobile(phone) && { phone: 'A 10-digit mobile is required.' }),
+    ...(altPhone.trim() && (!isMobile(altPhone) || normalisePhone(altPhone) === normalisePhone(phone)) && { altPhone: 'Must be a different 10-digit mobile.' }),
+    ...(!segment && { segment: 'Pick a segment.' }),
+    ...(!teamSize && { teamSize: 'Pick a team size.' }),
+    ...(!mDate && !followUpDate && { next: 'Book meeting 1 or set a next follow-up date — every lead needs a next step.' }),
+    ...(contacts.some((c) => !c.name.trim() || !c.role.trim()) && { contacts: 'Every extra person needs a name and a role.' }),
+  };
+  const err = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
+  const cls = (k: keyof typeof errors) => (err(k) ? errorInputCls : inputCls);
+
   const save = () => {
-    if (!company.trim()) { setTouched(true); return; }
+    if (Object.keys(errors).length) { setTouched(true); return; }
     const meetings: OutreachMeeting[] = mDate
       ? [{
         n: 1, date: mDate, time: mTime || undefined,
@@ -162,7 +180,10 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
       company: company.trim(),
       contactPerson: contactPerson.trim(),
       designation: designation.trim() || undefined,
-      phone: phone.trim() || undefined,
+      phone: normalisePhone(phone),
+      altPhone: altPhone.trim() ? normalisePhone(altPhone) : undefined,
+      contacts: contacts.map((c) => ({ name: c.name.trim(), role: c.role.trim(), phone: c.phone?.trim() || undefined })),
+      followUpDate: followUpDate || undefined,
       gstNumber: gstNumber.trim() || undefined,
       segment: segment || undefined,
       leadType: leadType || undefined,
@@ -204,17 +225,21 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
 
         <div className="px-6 py-5 overflow-y-auto flex flex-col gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Company name" required error={touched && !company.trim() ? 'A company name is required.' : undefined}>
-              <input value={company} onChange={(e) => setCompany(e.target.value)} className={touched && !company.trim() ? errorInputCls : inputCls} />
+            <Field label="Company name" required error={err('company')}>
+              <input value={company} onChange={(e) => setCompany(e.target.value)} className={cls('company')} />
             </Field>
-            <Field label="Contact person">
-              <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} className={inputCls} />
+            <Field label="Owner / designer" required error={err('contactPerson')}>
+              <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} className={cls('contactPerson')} />
             </Field>
-            <Field label="Designation">
-              <input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Principal Architect, Partner…" className={inputCls} />
+            <Field label="Their role" required error={err('designation')}>
+              <input value={designation} onChange={(e) => setDesignation(e.target.value)} list="outreach-new-roles" placeholder="Owner / Principal, Partner…" className={cls('designation')} />
+              <RoleOptions id="outreach-new-roles" />
             </Field>
-            <Field label="Contact number">
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
+            <Field label="Mobile" required error={err('phone')}>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} className={cls('phone')} />
+            </Field>
+            <Field label="Alternate number" hint="Optional — a second mobile for the firm" error={err('altPhone')}>
+              <input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} className={cls('altPhone')} />
             </Field>
             <Field label="Email">
               <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
@@ -222,14 +247,14 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
             <Field label="GST" hint="Optional — not mandatory">
               <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} className={inputCls} />
             </Field>
-            <Field label="Segment">
-              <select value={segment} onChange={(e) => setSegment(e.target.value as Segment | '')} className={inputCls}>
+            <Field label="Segment" required error={err('segment')}>
+              <select value={segment} onChange={(e) => setSegment(e.target.value as Segment | '')} className={cls('segment')}>
                 <option value="">—</option>
                 {SEGMENTS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Team size">
-              <select value={teamSize} onChange={(e) => setTeamSize(e.target.value as TeamSize | '')} className={inputCls}>
+            <Field label="Team size" required error={err('teamSize')}>
+              <select value={teamSize} onChange={(e) => setTeamSize(e.target.value as TeamSize | '')} className={cls('teamSize')}>
                 <option value="">—</option>
                 {TEAM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -275,6 +300,11 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
           </div>
 
           <div className="pt-3 border-t border-gray-100">
+            <ContactsEditor contacts={contacts} onChange={setContacts} />
+            {err('contacts') && <p className="text-[10px] text-red-500 mt-1">{err('contacts')}</p>}
+          </div>
+
+          <div className="pt-3 border-t border-gray-100">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Requirement (optional now)</span>
             <div className="flex flex-wrap gap-2">
               {SELECTIONS.map((s) => (
@@ -298,17 +328,24 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
           </div>
 
           <div className="pt-3 border-t border-gray-100">
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Schedule meeting 1 (optional)</span>
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Next step — book meeting 1 or set a follow-up date</span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Field label="Date"><input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)} className={inputCls} /></Field>
+              <Field label="Meeting date"><input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)} className={cls('next')} /></Field>
               <Field label="Time"><input type="time" value={mTime} onChange={(e) => setMTime(e.target.value)} className={inputCls} /></Field>
               <Field label="Area"><input value={mArea} onChange={(e) => setMArea(e.target.value)} className={inputCls} /></Field>
               <Field label="Office location"><input value={mOffice} onChange={(e) => setMOffice(e.target.value)} className={inputCls} /></Field>
+              <Field label="Or next follow-up" className="col-span-2 sm:col-span-1">
+                <input type="date" value={followUpDate} min={istToday()} onChange={(e) => setFollowUpDate(e.target.value)} className={cls('next')} />
+              </Field>
             </div>
+            {err('next') && <p className="text-[10px] text-red-500 mt-1.5">{err('next')}</p>}
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
+          {touched && Object.keys(errors).length > 0 && (
+            <span className="mr-auto text-[11px] text-red-600">Fill the {Object.keys(errors).length} highlighted field{Object.keys(errors).length === 1 ? '' : 's'} to create the lead.</span>
+          )}
           <button onClick={onClose} className="px-4 py-2 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-500 bg-white">Cancel</button>
           <button onClick={save} className="px-4 py-2 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Create lead</button>
         </div>

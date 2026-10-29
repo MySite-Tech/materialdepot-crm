@@ -2,7 +2,7 @@ import { B2BLeadRow, MetaSpec, arr, num, str } from '../data/rows';
 import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbound';
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
 import {
-  CompanyType, JourneyEvent, OUTREACH_SOURCES, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
+  CompanyType, JourneyEvent, OUTREACH_SOURCES, OutreachContact, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
   TEAM_SIZES, TeamSize, normalizeOutreachStatus,
 } from '@/components/b2b/models/outreach';
 
@@ -41,6 +41,8 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   ecBmName:           { col: 'ec_bm_name',       read: str },
   notes:              { col: 'notes',            read: (v) => arr<LeadNote>(v) },
   bmPhone:            { col: 'bm_phone',         read: str },
+  altPhone:           { col: 'alt_phone',        read: str },
+  contacts:           { col: 'contacts',         read: (v) => arr<OutreachContact>(v) },
   source:             { col: 'source',           read: (v) => oneOf<OutreachSource>(OUTREACH_SOURCES)(v) },
   email:              { col: 'email',            read: str },
   city:               { col: 'city',             read: str },

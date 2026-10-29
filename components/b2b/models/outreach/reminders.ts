@@ -2,6 +2,7 @@ import { OutreachLead } from '../mock-data';
 import {
   FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings,
 } from '.';
+import { normalisePhone } from '@/lib/org/utils';
 import { HANDOVER_TAT_HOURS, handoverState, hoursSince, isMobile, orderVerified } from './handover';
 import { intakePending } from './intake';
 
@@ -37,8 +38,16 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
   for (const m of after.meetings || []) {
     const p = prev.get(m.n);
     if (!p) push('meeting-scheduled', `${meetingWord(m)} scheduled`);
-    if (m.status !== p?.status && m.status === 'Completed') push('meeting-held', `${meetingWord(m)} held${m.pin ? ' · pinned on the map' : ''}`);
+    if (m.status !== p?.status && m.status === 'Completed') push('meeting-held', `${meetingWord(m)} held${m.metWith ? ` with ${m.metWith}` : ''}${m.pin ? ' · pinned on the map' : ''}`);
     if (m.status !== p?.status && m.status === 'Postponed') push('meeting-postponed', `${meetingWord(m)} postponed`);
+  }
+
+  const fu = String(after.followUpDate || '').slice(0, 10);
+  if (fu && fu !== String(before.followUpDate || '').slice(0, 10)) push('follow-up-set', `Next follow-up set for ${fu}${after.followUpTime ? ` ${after.followUpTime}` : ''}`);
+  for (const n of (after.notes || []).slice((before.notes || []).length)) push('note-added', `Note: ${n.text}`);
+  const known = new Set((before.contacts || []).map((c) => c.name.trim().toLowerCase()));
+  for (const c of after.contacts || []) {
+    if (c.name.trim() && !known.has(c.name.trim().toLowerCase())) push('contact-added', `Contact added: ${c.name.trim()}${c.role ? ` (${c.role})` : ''}`);
   }
 
   if (!orderVerified(before) && orderVerified(after)) push('order-verified', `First order ${after.enqId} fetched from the deal ticket`);
@@ -58,19 +67,52 @@ export function withJourney(before: OutreachLead | null, after: OutreachLead, by
   return { ...after, convertedAt, journey: [...(after.journey || []), ...events] };
 }
 
+export const MET_WITH_FROM = '2026-10-29';
+
+export function meetingGaps(m: OutreachMeeting): string[] {
+  if (m.status !== 'Completed') return [];
+  return [
+    !String(m.metWith || '').trim() && String(m.date || '') >= MET_WITH_FROM ? 'who you met' : '',
+    !String(m.notes || '').trim() ? 'notes' : '',
+  ].filter(Boolean);
+}
+
+const needsNextStep = (l: OutreachLead) => l.status !== 'Closed' && l.status !== 'Lost' && completedMeetings(l.meetings).length > 0
+  && !l.followUpDate && !(l.meetings || []).some((m) => m.status === 'Scheduled');
+
+const altPhoneOk = (l: OutreachLead) => !String(l.altPhone || '').trim()
+  || (isMobile(l.altPhone) && normalisePhone(l.altPhone) !== normalisePhone(l.phone));
+
+const CAPTURE: { label: string; ok: (l: OutreachLead) => boolean }[] = [
+  { label: 'owner/designer',      ok: (l) => !!String(l.contactPerson || '').trim() },
+  { label: 'their role',          ok: (l) => !!String(l.designation || '').trim() },
+  { label: 'mobile',              ok: (l) => isMobile(l.phone) },
+  { label: 'segment',             ok: (l) => !!l.segment },
+  { label: 'team size',           ok: (l) => !!l.teamSize },
+  { label: 'next follow-up date', ok: (l) => !needsNextStep(l) },
+];
+
+export function outreachCaptureErrors(l: OutreachLead): string[] {
+  const errs = (l.meetings || []).flatMap((m) => {
+    const g = meetingGaps(m);
+    return g.length ? [`Meeting ${m.n} is marked held — add ${g.join(' and ')}.`] : [];
+  });
+  if (!altPhoneOk(l)) errs.push('The alternate number must be a different 10-digit mobile.');
+  if ((l.contacts || []).some((c) => !c.name.trim() || !c.role.trim())) errs.push('Every extra contact needs a name and a role.');
+  if (l.status === 'Lost' || !completedMeetings(l.meetings).length) return errs;
+  const missing = CAPTURE.filter((c) => !c.ok(l)).map((c) => c.label);
+  if (missing.length) errs.push(`A visited lead needs ${missing.join(', ')}.`);
+  return errs;
+}
+
 const ADHERENCE: { label: string; ok: (l: OutreachLead) => boolean }[] = [
   { label: 'firm name',      ok: (l) => !!String(l.company || '').trim() },
-  { label: 'owner/designer', ok: (l) => !!String(l.contactPerson || '').trim() },
-  { label: 'mobile',         ok: (l) => isMobile(l.phone) },
-  { label: 'segment',        ok: (l) => !!l.segment },
+  ...CAPTURE.filter((c) => c.label !== 'next follow-up date'),
   { label: 'client type',    ok: (l) => !!l.companyType },
   { label: 'office address', ok: (l) => !!String(l.officeAddress || '').trim() },
-  { label: 'meeting notes',  ok: (l) => completedMeetings(l.meetings).every((m) => !!String(m.notes || '').trim()) },
-  {
-    label: 'next follow-up date',
-    ok: (l) => l.status === 'Closed' || l.status === 'Lost' || !completedMeetings(l.meetings).length
-      || !!l.followUpDate || (l.meetings || []).some((m) => m.status === 'Scheduled'),
-  },
+  { label: 'meeting notes',  ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('notes')) },
+  { label: 'who they met',   ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('who you met')) },
+  { label: 'next follow-up date', ok: (l) => !needsNextStep(l) },
   { label: 'Enq ID of the first order', ok: (l) => l.status !== 'Closed' || !!String(l.enqId || '').trim() },
   { label: 'KAM handover', ok: (l) => l.status !== 'Closed' || !!l.handover },
 ];
@@ -109,7 +151,8 @@ export function outreachReminders(
     else if (d === ctx.today) add(`m${m.n}`, 'today', `Meeting ${m.n} today${m.time ? ` at ${m.time}` : ''}`);
   }
   for (const m of held) {
-    if (!String(m.notes || '').trim()) add(`n${m.n}`, 'overdue', `Meeting ${m.n} was held with no notes`);
+    const g = meetingGaps(m);
+    if (g.length) add(`n${m.n}`, 'overdue', `Meeting ${m.n} was held — add ${g.join(' and ')}`);
     if (!m.pin) add(`p${m.n}`, 'todo', `Meeting ${m.n} has no live location pin`);
   }
 
@@ -143,7 +186,7 @@ export function outreachReminders(
 
   if (held.length && ctx.onWaitlist === false) add('waitlist', 'todo', 'Not on the Studio Space waitlist yet — ask them to join');
 
-  const missing = outreachAdherence(l).filter((m) => m !== 'meeting notes' && m !== 'next follow-up date'
+  const missing = outreachAdherence(l).filter((m) => m !== 'meeting notes' && m !== 'who they met' && m !== 'next follow-up date'
     && m !== 'Enq ID of the first order' && m !== 'KAM handover');
   if (missing.length) add('fields', 'todo', `Missing ${missing.join(', ')}`);
 

@@ -3,11 +3,44 @@
 import { LEAD_TYPES } from '../../../constants/inbound';
 import { SEGMENTS } from '../../../models/kam';
 import { CompanyType, OutreachLead } from '../../../models/mock-data';
-import { COMPANY_TYPES, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT, OutreachSource, TEAM_SIZES, TeamSize } from '../../../models/outreach';
+import { COMPANY_TYPES, CONTACT_ROLES, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT, OutreachContact, OutreachSource, TEAM_SIZES, TeamSize } from '../../../models/outreach';
 import { Rep } from '../../../models/outreach/intake';
 import { LeadType, Segment } from '../../../types/inbound';
 import { Field, SectionCard } from '../../../ui/inbound-chips';
 import { inputCls } from '../../../constants/ui';
+
+export const RoleOptions = ({ id }: { id: string }) => (
+  <datalist id={id}>{CONTACT_ROLES.map((r) => <option key={r} value={r} />)}</datalist>
+);
+
+export function ContactsEditor({ contacts, onChange }: { contacts: OutreachContact[]; onChange: (next: OutreachContact[]) => void }) {
+  const patch = (i: number, p: Partial<OutreachContact>) => onChange(contacts.map((c, j) => (j === i ? { ...c, ...p } : c)));
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Other people at the firm</span>
+        <button type="button" onClick={() => onChange([...contacts, { name: '', role: '' }])} className="text-[11px] font-semibold text-[#0F766E] hover:underline">
+          + Add person
+        </button>
+      </div>
+      <RoleOptions id="outreach-contact-roles" />
+      {!contacts.length ? (
+        <p className="text-[11px] text-gray-400">Partners, project leads, procurement — anyone else you deal with.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {contacts.map((c, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+              <input value={c.name} onChange={(e) => patch(i, { name: e.target.value })} placeholder="Name" className={inputCls} />
+              <input value={c.role} onChange={(e) => patch(i, { role: e.target.value })} list="outreach-contact-roles" placeholder="Role" className={inputCls} />
+              <input value={c.phone || ''} onChange={(e) => patch(i, { phone: e.target.value || undefined })} placeholder="Mobile" className={inputCls} />
+              <button type="button" onClick={() => onChange(contacts.filter((_, j) => j !== i))} title="Remove" className="text-gray-400 hover:text-red-600 text-lg leading-none px-1">×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function OutreachClientCard({ draft, set, reps, canPickBm, onPickBm }: {
   draft: OutreachLead;
@@ -26,11 +59,15 @@ export function OutreachClientCard({ draft, set, reps, canPickBm, onPickBm }: {
         <Field label="Owner / designer" required>
           <input value={draft.contactPerson || ''} onChange={(e) => set('contactPerson', e.target.value)} className={inputCls} />
         </Field>
-        <Field label="Designation">
-          <input value={draft.designation || ''} onChange={(e) => set('designation', e.target.value)} className={inputCls} />
+        <Field label="Their role" required>
+          <input value={draft.designation || ''} onChange={(e) => set('designation', e.target.value)} list="outreach-owner-roles" className={inputCls} />
+          <RoleOptions id="outreach-owner-roles" />
         </Field>
         <Field label="Mobile" required hint="Matches deal tickets and the Studio Space waitlist">
           <input value={draft.phone || ''} onChange={(e) => set('phone', e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Alternate number">
+          <input value={draft.altPhone || ''} onChange={(e) => set('altPhone', e.target.value || undefined)} className={inputCls} />
         </Field>
         <Field label="GST" hint="Where the firm has one">
           <input value={draft.gstNumber || ''} onChange={(e) => set('gstNumber', e.target.value)} className={inputCls} />
@@ -44,7 +81,7 @@ export function OutreachClientCard({ draft, set, reps, canPickBm, onPickBm }: {
         <Field label="Office address" required className="col-span-2 sm:col-span-3">
           <input value={draft.officeAddress || ''} onChange={(e) => set('officeAddress', e.target.value || undefined)} className={inputCls} />
         </Field>
-        <Field label="Team size">
+        <Field label="Team size" required>
           <select value={draft.teamSize || ''} onChange={(e) => set('teamSize', (e.target.value || undefined) as TeamSize | undefined)} className={inputCls}>
             <option value="">—</option>
             {TEAM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -86,6 +123,9 @@ export function OutreachClientCard({ draft, set, reps, canPickBm, onPickBm }: {
             {bmOptions.map((r) => <option key={r.phone || r.name} value={r.name}>{r.name}</option>)}
           </select>
         </Field>
+      </div>
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <ContactsEditor contacts={draft.contacts || []} onChange={(next) => set('contacts', next)} />
       </div>
     </SectionCard>
   );

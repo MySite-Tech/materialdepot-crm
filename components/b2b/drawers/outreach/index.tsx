@@ -16,13 +16,14 @@ import { nowIso } from './utils';
 import { LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
 import { dealIsOrder } from '../../models/client';
 import {
-  MAX_MEETINGS, OutreachMeeting, Selection, WaitlistSignup, canScheduleMeeting, completedMeetings, hasMet, istToday,
+  MAX_MEETINGS, OutreachMeeting, Selection, WaitlistSignup, canScheduleMeeting, hasMet, istToday,
   meetingsExhausted, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors,
   outreachStatusPrompts,
 } from '../../models/outreach';
 import { isHandoverKam, respondToHandover, sendHandover } from '../../models/outreach/handover';
 import { Rep } from '../../models/outreach/intake';
 import { newOnboardingFrom } from '../../models/outreach/kpis';
+import { outreachCaptureErrors } from '../../models/outreach/reminders';
 import { OutreachScope, SaveLead } from '../../views/outreach/types';
 import { EnqLookup, fetchKamLoad, lookupEnqId } from '@/lib/b2b';
 import { fetchLeadDeals } from '@/lib/api';
@@ -60,15 +61,10 @@ export default function OutreachDrawer({
     return () => { alive = false; };
   }, [lead.phone]);
 
-  const unNoted = useMemo(
-    () => completedMeetings(draft.meetings).filter((m) => !String(m.notes || '').trim()).map((m) => m.n),
-    [draft.meetings],
-  );
-
   const gateErrors = useMemo(() => [
     ...outreachGateErrors({ status: draft.status, followUpDate: draft.followUpDate, lostReason: draft.lostReason }),
-    ...unNoted.map((n) => `Meeting ${n} is marked held — add its notes.`),
-  ], [draft.status, draft.followUpDate, draft.lostReason, unNoted]);
+    ...outreachCaptureErrors(draft),
+  ], [draft]);
 
   const prompts = useMemo(() => outreachStatusPrompts({
     status: draft.status, enqId: draft.enqId, followUpDate: draft.followUpDate,
@@ -188,7 +184,11 @@ export default function OutreachDrawer({
 
   const persist = async (next: OutreachLead, close: boolean, gated = true): Promise<boolean> => {
     if (save.saving) return false;
-    if (gated && gateErrors.length) { setShowGates(true); return false; }
+    if (gated && gateErrors.length) {
+      setShowGates(true);
+      setSave({ saving: false, error: `Not saved yet — ${gateErrors.join(' ')}` });
+      return false;
+    }
     setSave({ saving: true });
     const statusChanged = next.status !== lead.status;
     const toSave: OutreachLead = {
@@ -238,6 +238,9 @@ export default function OutreachDrawer({
           />
 
           <OutreachCompanyCard
+            draft={draft}
+            set={set}
+            showGates={showGates}
             exhausted={exhausted}
             mArea={mArea}
             mDate={mDate}

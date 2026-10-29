@@ -1,7 +1,8 @@
 'use client';
 
-import { MeetingStatus, OutreachMeeting } from '../../../models/mock-data';
-import { MAX_MEETINGS, MEETING_STATUSES, canScheduleMeeting, nextMeetingNumber } from '../../../models/outreach';
+import { MeetingStatus, OutreachLead, OutreachMeeting } from '../../../models/mock-data';
+import { MAX_MEETINGS, MEETING_STATUSES, canScheduleMeeting, completedMeetings, nextMeetingNumber } from '../../../models/outreach';
+import { meetingGaps } from '../../../models/outreach/reminders';
 import { Empty, Field, ReadValue, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
@@ -40,7 +41,10 @@ function PinButton({ pin, onPin }: { pin?: GeoPin; onPin: (p: GeoPin) => void })
   );
 }
 
-export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, mTime, meetings, open, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
+export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, mDate, mError, mOffice, mTime, meetings, open, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
+  draft: OutreachLead;
+  set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
+  showGates: boolean;
   exhausted: boolean;
   mArea: string;
   mDate: string;
@@ -59,6 +63,16 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
   setMTime: Dispatch<SetStateAction<string>>;
   setScheduling: Dispatch<SetStateAction<boolean>>;
 }) {
+  const held = completedMeetings(meetings);
+  const lastHeld = held.length ? held[held.length - 1].n : undefined;
+  const openLead = draft.status !== 'Closed' && draft.status !== 'Lost';
+  const scheduledNext = meetings.some((m) => m.status === 'Scheduled');
+  const followUpError = showGates && !scheduledNext && !draft.followUpDate;
+  const people = [
+    draft.contactPerson ? `${draft.contactPerson}${draft.designation ? ` (${draft.designation})` : ''}` : '',
+    ...(draft.contacts || []).filter((c) => c.name.trim()).map((c) => `${c.name.trim()}${c.role ? ` (${c.role})` : ''}`),
+  ].filter(Boolean);
+  const contactList = `outreach-met-${draft.id}`;
   return (
     <SectionCard
       title={`Meetings · ${meetings.length} of ${MAX_MEETINGS}`}
@@ -105,6 +119,7 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
         </div>
       )}
     
+      <datalist id={contactList}>{people.map((p) => <option key={p} value={p} />)}</datalist>
       {meetings.length === 0 && !scheduling ? (
         <Empty>No meetings scheduled yet — the lead sits in &ldquo;Yet to Meet&rdquo; until one is held.</Empty>
       ) : (
@@ -141,7 +156,16 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
     
               {m.status === 'Completed' ? (
                 <>
-                  <Field label="Meeting notes" required className="mt-2.5" error={!String(m.notes || '').trim() ? 'A held meeting needs its notes before you can save.' : undefined}>
+                  <Field label="Who you met" required className="mt-2.5" error={showGates && meetingGaps(m).includes('who you met') ? 'Name the people in the room, with their roles.' : undefined}>
+                    <input
+                      value={m.metWith || ''}
+                      onChange={(e) => patchMeeting(m.n, { metWith: e.target.value })}
+                      list={contactList}
+                      placeholder="e.g. Asha (owner), Ravi (procurement)"
+                      className={showGates && meetingGaps(m).includes('who you met') ? errorInputCls : inputCls}
+                    />
+                  </Field>
+                  <Field label="Meeting notes" required className="mt-2.5" error={meetingGaps(m).includes('notes') ? 'A held meeting needs its notes before you can save.' : undefined}>
                     <textarea
                       value={m.notes || ''}
                       onChange={(e) => patchMeeting(m.n, { notes: e.target.value })}
@@ -150,6 +174,17 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
                       className={(String(m.notes || '').trim() ? inputCls : errorInputCls) + ' resize-none'}
                     />
                   </Field>
+                  {m.n === lastHeld && openLead && (
+                    <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+                      <Field label="Next follow-up date" required={!scheduledNext} hint={scheduledNext ? 'Optional — the next meeting is already booked' : undefined}
+                        error={followUpError ? 'Set when you will next follow up after this visit.' : undefined}>
+                        <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value)} className={followUpError ? errorInputCls : inputCls} />
+                      </Field>
+                      <Field label="Time" hint="Optional">
+                        <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value)} className={inputCls} />
+                      </Field>
+                    </div>
+                  )}
                   <PinButton pin={m.pin} onPin={(pin) => patchMeeting(m.n, { pin })} />
                 </>
               ) : m.notes ? (
