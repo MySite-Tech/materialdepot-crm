@@ -1,15 +1,16 @@
-# Three backends
+# Four backends
 
-**Covers:** `lib/api/** · lib/supabase.ts · components/site-audit/shared/sb-client.ts · supabase/migrations/`
+**Covers:** `lib/api/** · lib/server/b2b-backend.ts · lib/b2b/data/backend.ts · components/site-audit/shared/sb-client.ts · supabase/migrations/`
 
 ## Purpose
-The three backends this app talks to, which is which, and the env/migration facts that go with them.
+The four backends this app talks to, which is which, and the env/migration facts that go with them.
 This is the single most common source of confusion here.
 
 | What | Where | How it's reached |
 |---|---|---|
 | **Employees, permissions, auth, leads** | Django, `https://api-dev2.materialdepot.in/apiV1` | `lib/api/core/client.ts` (`mdFetch`), re-exported from the `lib/api/index.ts` barrel |
-| **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | From the browser: `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` via `lib/supabase.ts` — only `lib/b2b/**`. From a route handler: `SUPABASE_SERVICE_ROLE_KEY` via `lib/appointments/rota-plan.ts` and `lib/store-checklist/checklist-store.ts`, which bypass RLS |
+| **B2B sales CRM data** | FastAPI `b2b-backend` → `newdb` Postgres on `psql-md-prod-cin-01` | Browser → `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` route handler (`lib/server/b2b-backend.ts`: `requireCaller` + the `admin`/`b2b_sales` gate) → FastAPI, trusted by `x-sync-key: B2B_BACKEND_SECRET`. Env: `B2B_BACKEND_URL` + `B2B_BACKEND_SECRET`, **server-only** (route handler), so like the other server-only keys they are NOT in the deploy workflow — set them in Azure application settings. See `docs/b2b/data-layer.md` |
+| **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | Route handlers only, `SUPABASE_SERVICE_ROLE_KEY` via `lib/appointments/rota-plan.ts` and `lib/store-checklist/checklist-store.ts`, which bypass RLS. **No longer reached from the browser** — `lib/supabase.ts` (the anon client, used only by `lib/b2b/**`) was deleted when B2B moved to the FastAPI backend above. `b2b_lead`/`b2b_target` are retired there |
 | **Site Audit / field-app Supabase** | project `jqrdfnjfxqxrazfkaofm` | `components/site-audit/shared/sb-client.ts` — `sbGet`/`sbPost`/`sbPatch` |
 
 Gotchas:
