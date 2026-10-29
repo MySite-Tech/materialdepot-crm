@@ -124,7 +124,21 @@ No KAM, plus Unread only when some firm's orders did not load.
   the scope and always export the filtered list.
 - **A last-order date after today is flagged "future date"** in amber. The date
   is Django's `lastOrderDate`, and `clientStatus` still counts the firm as
-  Active. On 2026-10-28 one live firm showed 10 Feb 2027.
+  Active.
+- **`b2b-bulk`'s `lastOrderDate` is wrong at the source — a Django bug, open.**
+  On 2026-10-28 the top seven rows of the list all showed future dates
+  (30 Oct 2026 to 10 Feb 2027). In Metabase (`materialdepot_azure`), no estimate
+  has an `order_placed_time` after today, and each of those seven firms' real
+  latest `order_placed_time` fell between 7 and 28 Oct 2026. Neither
+  `expected_delivery_time`, `estimate_items.order_placed_time`,
+  `estimate_payment_term.deadline`, `po.delivery_date` nor any `ticket.extra_data`
+  key produces the served dates, so the endpoint reads something else — the
+  hand-set look (month-ends) points at the deal's expected closure date, which
+  is not in Metabase. Revenue only partly agrees too (one firm ₹7.5L served
+  against ₹72.8L placed). The frontend passes the value through untouched; the
+  fix is `max(order_placed_time)` over placed estimates in Django. Until then,
+  Active/Inactive and the lens counts are unreliable for any firm with a deal
+  open.
 
 Verified 2026-10-28 in a browser with real Supabase reads, Supabase writes
 aborted, and Django stubbed (`b2b-bulk` answered with synthetic per-phone

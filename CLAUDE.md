@@ -78,16 +78,14 @@ which imports `.`) on 2026-09-15.
 
 Real sign-in works on `npm run dev` (:3001): login is phone + OTP against
 `api-dev2.materialdepot.in`, and the OTP goes to a real phone — so a person can
-sign in, a session cannot. For an unattended look, a ~40-line Node
-server on `:4000` answering `/login-otp/`, `/verify-otp/`, `/crm/user-profile/`
-and `/user-organisation/` lets any phone and any four-digit code in, and
-**only Django may be stubbed** — Supabase stays real.
-
-Run the app against it:
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/apiV1 API_BASE_URL=http://localhost:4000/apiV1 npx next dev -p 3100
-```
+sign in, a session cannot. For an unattended look, `npm run dev:stub`
+(`scripts/django-stub.mjs`) starts a Django stub on `:4000` answering
+`/login-otp/`, `/verify-otp/`, `/crm/user-profile/` and `/user-organisation/`,
+then the app on `:3100` pointed at it. Any phone and any four-digit code get in
+as `admin` (`STUB_ROLE=b2b_KAM` etc. to change it, `STUB_PERMISSIONS=` for a
+comma list of slugs), and **only Django is stubbed** — Supabase stays real.
+`node scripts/django-stub.mjs --stub-only` starts just the stub, for the clone
+below.
 
 **A second `next dev` in this directory exits** with "Another next dev server
 is already running", and `:3001` usually already has the user's own server. That
@@ -98,7 +96,7 @@ disk space:
 ```bash
 C=<scratchpad>/clone; mkdir -p "$C"
 for e in $(ls -A | grep -vE '^(\.next|\.git)$'); do cp -cR "$e" "$C/"; done
-cd "$C" && NEXT_PUBLIC_API_BASE_URL=… API_BASE_URL=… npx next dev -p 3100
+cd "$C" && npm run dev:stub
 ```
 
 The clone is a snapshot, so `cp` each file you edit afterwards into it. Kill
