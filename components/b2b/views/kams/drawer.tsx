@@ -102,6 +102,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
                     {o.enqId ? <span className="font-mono font-semibold text-gray-600">{o.enqId}</span> : 'no Enq ID'}
                     {o.orderValue !== undefined ? ` · ${fmtINR(o.orderValue)} from Procurement` : o.estimatedValue ? ` · ${fmtINR(o.estimatedValue)} estimated` : ''}
                     {o.expectedClosure && ` · closes ${o.expectedClosure}`}
+                    {o.followUpDate && o.status !== 'Closed' && o.status !== 'Lost' && ` · follow up ${o.followUpDate}`}
                   </div>
                 </button>
               ))}

@@ -9,6 +9,8 @@ export function kamOrderGateErrors(o: KamOrderGateInput): string[] {
   if (o.status === 'Lost' && !String(o.lostReason || '').trim()) {
     errs.push('A lost reason is required to set Lost.');
   }
+  if (o.status === 'PI Shared' && !o.followUpDate) errs.push('A PI needs its own next follow-up date.');
+  if (o.status === 'PI Shared' && !o.expectedClosure) errs.push('A PI needs its own expected date of closure.');
   return errs;
 }
 
@@ -17,6 +19,7 @@ export function kamOrderStatusPrompts(o: {
   enqId?: string;
   orderValue?: number;
   expectedClosure?: string;
+  followUpDate?: string;
   requirement?: string;
 }): string[] {
   const prompts: string[] = [];
@@ -30,9 +33,9 @@ export function kamOrderStatusPrompts(o: {
     prompts.push('The Enquiry ID has not resolved to a deal ticket yet, so no order value is on file.');
   }
   if (!String(o.requirement || '').trim()) prompts.push('No requirement details captured (§5.1).');
-  if (!o.expectedClosure && o.status !== 'Closed' && o.status !== 'Lost') {
-    prompts.push('No expected date of closure set (§5.1).');
-  }
+  const open = o.status !== 'Closed' && o.status !== 'Lost' && o.status !== 'PI Shared';
+  if (!o.expectedClosure && open) prompts.push('No expected date of closure set (§5.1).');
+  if (!o.followUpDate && open) prompts.push('No next follow-up date on this order.');
   return prompts;
 }
 

@@ -50,6 +50,7 @@ export function KamOrderTable({ lens, rows, today, search, valueText, page, setP
                 <th className={`${th} text-right`}>Estimate</th>
                 <th className={th}>In status</th>
                 <th className={th}>Expected close</th>
+                <th className={th}>Follow-up</th>
                 <th className={th}>Requirement</th>
               </tr>
             </thead>
@@ -77,6 +78,7 @@ export function KamOrderTable({ lens, rows, today, search, valueText, page, setP
                     </td>
                     <td className={`${td} whitespace-nowrap text-gray-500`}>{since !== undefined ? `${since}d` : '—'}</td>
                     <td className={`${td} whitespace-nowrap font-mono text-gray-500`}>{o.expectedClosure || '—'}</td>
+                    <td className={`${td} whitespace-nowrap`}><FollowUp order={o} today={today} /></td>
                     <td className={`${td} max-w-[260px] text-gray-500`}>
                       <div className="truncate" title={o.requirement}>{o.requirement || '—'}</div>
                     </td>
@@ -91,4 +93,12 @@ export function KamOrderTable({ lens, rows, today, search, valueText, page, setP
       {rows.length > 0 && <Pager total={rows.length} page={cur} pages={pages} size={KAM_LIST_PAGE_SIZE} setPage={setPage} />}
     </div>
   );
+}
+
+function FollowUp({ order, today }: { order: KamOrder; today: string }) {
+  if (order.status === 'Closed' || order.status === 'Lost') return <span className="text-gray-300">—</span>;
+  const d = daysUntil(order.followUpDate, today);
+  if (d === undefined) return <span className={order.status === 'PI Shared' ? 'text-amber-600 font-semibold' : 'text-gray-300'}>{order.status === 'PI Shared' ? 'Missing' : '—'}</span>;
+  if (d < 0) return <span className="text-red-600 font-semibold">{-d}d late</span>;
+  return <span className="font-mono text-gray-500">{d === 0 ? 'Today' : order.followUpDate}</span>;
 }

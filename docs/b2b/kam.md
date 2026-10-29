@@ -223,20 +223,31 @@ from the **Waiting for sign-off** tile here (`panels/signoff.tsx`).
   On failure nothing is assigned and the error says so. A partial set never
   shows as done.
 
-### Not built yet: the user's 2026-10-29 spec
+### Per-PI follow-up and closure dates (2026-10-29)
 
-- **A follow-up date and a closure date on every PI.** A firm has many PIs (one
-  per order), and each needs both. A follow-up is stored per firm today (on the
-  latest interaction), while `expectedClosure` is already on the order. Per-PI
-  follow-up means a new field on `KamOrder`, saved into the live
-  `pipeline='kam'` rows, and the follow-up tiles would count PIs, not firms.
-  Check the row shape before writing.
+The user confirmed that every PI carries its own follow-up date and closure date.
+`KamOrder.followUpDate` (`meta.follow_up_date`, so it lives in the backend's
+`extra`) sits beside the existing `expectedClosure`. **Both are hard-gated at PI
+Shared**, and earlier open stages only get a prompt. The orders table has a
+Follow-up column ("3d late", "Today", or "Missing" on a PI), and the firm's
+order rows show both dates.
+
+**The follow-up tiles still count firms**, from the latest interaction's date.
+Making Overdue / Due today count PIs, or a firm whose PI is overdue, changes
+what those tiles mean, so it was left for the user to decide. A PI with an
+overdue date is visible in the orders table, not yet in the tiles. A PI Shared
+order saved before this has neither date and is refused on its next save until
+both are filled. That is intended.
+
+### Not built yet: check-in before an offline visit
+
 - **Check-in before an offline visit (Outreach and KAM):** location permission,
   plus a photo in a Material Depot T-shirt with location on, taken before the
   meeting. `components/site-audit/apps/field/camera.tsx` already captures a
-  photo with `navigator.geolocation`. Undecided: where photos are stored,
-  whether a meeting may be saved without a check-in or is only flagged, and who
-  reviews the T-shirt (software cannot).
+  photo with `navigator.geolocation`. **Decided 2026-10-29:** photos go to our
+  own storage (the b2b-backend already uploads to Material Depot's R2 file
+  service for partner content), a missing check-in never blocks the meeting
+  but is flagged to admins, and admins review the photos.
 
 ### Calls are deduped per client per day
 

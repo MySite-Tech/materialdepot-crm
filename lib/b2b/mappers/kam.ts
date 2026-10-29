@@ -17,6 +17,7 @@ const KAM_ORDER_META: MetaSpec<KamOrder> = {
   orderValueSource: { col: 'order_value_source', read: (v) => (v === 'deal' || v === 'manual' ? v : undefined) },
   dealStatus:       { col: 'deal_status',        read: str },
   expectedClosure:  { col: 'expected_closure',   read: str },
+  followUpDate:     { col: 'follow_up_date',     read: str },
   lostReason:       { col: 'lost_reason',        read: str },
   statusChangedAt:  { col: 'status_changed_at',  read: str },
   source:           { col: 'source',             read: (v) => (str(v) as ClientSource | undefined) || 'Existing' },

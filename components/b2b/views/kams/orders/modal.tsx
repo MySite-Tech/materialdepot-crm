@@ -140,8 +140,11 @@ export function OrderModal({ order, isNew, clients, kam, actor, onClose, onSave 
             <Field label="Order value (your estimate)" hint="Never reported as revenue — §5.1.">
               <input type="number" min={0} value={draft.estimatedValue ?? ''} onChange={(e) => set('estimatedValue', Number(e.target.value) || undefined)} className={inputCls} />
             </Field>
-            <Field label="Expected date of closure">
+            <Field label={`Expected date of closure${draft.status === 'PI Shared' ? ' *' : ''}`}>
               <input type="date" value={draft.expectedClosure || ''} onChange={(e) => set('expectedClosure', e.target.value || undefined)} className={inputCls} />
+            </Field>
+            <Field label={`Next follow-up on this order${draft.status === 'PI Shared' ? ' *' : ''}`} hint="Each PI keeps its own follow-up, separate from the firm's.">
+              <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value || undefined)} className={inputCls} />
             </Field>
           </div>
 
