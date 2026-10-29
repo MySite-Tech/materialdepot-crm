@@ -9,7 +9,7 @@ of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
 
 | Team | State | Where the detail is | Blocks real use |
 |---|---|---|---|
-| Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
+| Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller; 2026-10-29: Clients / PI / Results tabs, Invalid status, office location, Send to Outreach | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
 | Outreach | **Built:** scoped views, From Inbound pool with sign-off, one-at-a-time lead entry with a capture gate (CSV import and export removed 2026-10-29), journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
 | Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | `b2b-team.sql` (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
@@ -583,8 +583,9 @@ Decisions taken (all overrulable; none is expensive to change):
 
 - **No new table.** Intake, handover and journey live in the outreach row's
   `meta_data`. Nothing waits on an unapplied migration.
-- **Inbound → Outreach is a pull, not a push.** Outreach reads Inbound's worked
-  `b2b_lead` rows as a pool; Inbound needs no new button. Manager assigns
+- **Inbound → Outreach was a pull; since 2026-10-29 it is a push.** Inbound
+  sends a qualified lead with a checklist, and the pool lists only those
+  (`inbound.md` §Office location, and Send to Outreach). Manager assigns
   (round-robin or per row), the BM accepts or rejects with a reason — that
   acceptance is Inbound's "sign-off required".
 - **"Inactive forms" = leads entered by hand with `Source = Dormant form`.**
@@ -617,6 +618,18 @@ Open, for the user:
   WhatsApp gate and 48h sign-off, waitlist bridge (CRM half), per-head KPI strip
   and manager Team table. Checked with fixtures in Node and in the browser with
   reads intercepted and writes aborted; no production row written.
+- **2026-10-29 (Inbound, three tabs)**: The user asked for Clients / PI /
+  Results at the top of Inbound, a mandatory, careful Invalid, office location,
+  and a way to send a matured lead to Outreach. They chose: Invalid as its own
+  status (logged call + reason + 15-char note); Outreach's pool narrowed to
+  **sent leads only**, which reverses the "Inbound → Outreach is a pull" decision
+  below; and the PI range keyed on the PI shared date, switchable to the last
+  follow-up call. Detail in `inbound.md`. Checked in a browser at 1440, 1280
+  and 390 against real Kylas and `b2b_lead` reads, with Django stubbed and
+  every write aborted: all 18 tiles and heads matched their tables, and the
+  Send to Outreach payload was captured from the aborted upsert. Old
+  `Enquiry invalid` Lost rows (101 on 2026-10-29) now read as Invalid with no
+  reason or note, so Lost fell from 420 to 319.
 - **2026-10-29 (Outreach, capture)**: The user asked Outreach to capture team
   size, segment, an alternate number, the firm's people with their roles and a
   next follow-up date on every lead; to record each visit properly; and to drop

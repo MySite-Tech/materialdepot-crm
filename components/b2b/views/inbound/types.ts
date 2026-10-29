@@ -2,11 +2,14 @@
 
 export type View = 'list' | 'board';
 
+export type Section = 'clients' | 'pi' | 'results';
+
 export type Lens =
   | 'today' | 'new' | 'overdue' | 'due'
-  | 'upcoming' | 'pi' | 'open'
-  | 'closed' | 'lost'
-  | 'all' | 'arrived' | 'undated' | 'gaps';
+  | 'clients' | 'upcoming' | 'undated' | 'arrived'
+  | 'pis' | 'pi' | 'piChase' | 'piWon' | 'piDropped'
+  | 'results' | 'closed' | 'lost' | 'invalid' | 'sent'
+  | 'all' | 'gaps';
 
 export interface LensMeta {
   title: string;
@@ -25,4 +28,13 @@ export interface InboundFilters {
   kylasStage: string;
   createdFrom: string;
   createdTo: string;
+}
+
+export type PiBasis = 'shared' | 'called';
+
+export interface PiRange {
+  basis: PiBasis;
+  days: number | null;
+  from: string;
+  to: string;
 }

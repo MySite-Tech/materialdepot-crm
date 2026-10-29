@@ -18,7 +18,7 @@ import {
   type KamFunnel, type KamPipelineSplit, type NewVsRepeat,
 } from './kam';
 
-const isInboundDead = (l: InboundLead) => l.stage === 'Lost';
+const isInboundDead = (l: InboundLead) => l.stage === 'Lost' || l.stage === 'Invalid';
 
 const inboundOpen = (l: InboundLead) => l.stage !== 'Closed' && !isInboundDead(l);
 const outreachOpen = (l: OutreachLead) => l.status !== 'Closed' && l.status !== 'Lost';

@@ -49,7 +49,7 @@ function inboundToUnified(l: InboundLead): UnifiedLead {
 
     spok: l.placedUnder?.spok || l.owner || undefined,
     status: l.stage === 'Closed' ? 'Closed' : 'Yet to Close',
-    lost: l.stage === 'Lost',
+    lost: l.stage === 'Lost' || l.stage === 'Invalid',
     sourceStatus: l.stage,
     inbound: l,
   };

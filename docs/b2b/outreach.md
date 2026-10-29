@@ -124,11 +124,16 @@ user's "existing forms that are inactive": there is no integration for those
 forms, so a BM enters each one by hand with `Source` set.
 Inbound and EC referral are the two the **coverage** KPI is measured on.
 
-**Inbound → Outreach** (`intake/`): the pool is inbound `b2b_lead` rows in
-`Closed | PI Shared | Follow up | Connected` with no Outreach lead linked by
-`intake.inboundLeadId` **or** on the same 10-digit mobile. Untouched Kylas `New`
-leads have no `b2b_lead` row and are not in the pool, deliberately — Inbound has
-not worked them. The Outreach row id is `OR-IN-<kylas id>`, deterministic, and
+**Inbound → Outreach** (`intake/`): since 2026-10-29 the pool is **only the
+inbound leads an Inbound rep sent** with "Send to Outreach" (`sentToOutreach`, a
+`meta_data.outreach_referral` with an `at`). It still requires a pool stage
+(`Closed | PI Shared | Follow up | Connected`) and no Outreach lead linked by
+`intake.inboundLeadId` **or** on the same 10-digit mobile. Newest sends come
+first. Before this the pool was every worked inbound lead, and the user replaced
+it with an explicit push (`inbound.md` §Office location, and Send to Outreach).
+The referral's decision maker, project, preferred meeting slot and note travel
+into the Outreach lead's `requirement`, and the office location into
+`officeAddress`. The Outreach row id is `OR-IN-<kylas id>`, deterministic, and
 the write is insert-if-absent. A manager assigns (per row, or all round-robin
 over active Outreach members by fewest intakes this month); a BM can "Take it",
 which is auto-accepted. A manager-assigned lead waits for the BM to **accept**
@@ -370,7 +375,5 @@ the next follow-up date.
 - The upstream waitlist route (both repos) — contract above.
 - A KAM-side client record on acceptance. Acceptance is recorded on the
   outreach row; creating the KAM account is the KAM sub-tab's brief.
-- Inbound's "Send to Outreach" button. The pool reads Inbound's rows directly,
-  so Inbound needs no change for this to work.
 - Server-side enforcement of any of the above (all writes are anon-key client
   upserts, as for every other B2B board).

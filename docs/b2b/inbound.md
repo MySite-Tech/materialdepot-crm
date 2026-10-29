@@ -56,7 +56,8 @@ deliberate — this repo has twice shipped a migration nobody ran. Two of the ni
 were never statuses: `Hyderabad` (40 rows) was a **location**, confirmed against
 `zipcode` (11 of 13 sampled were 50xxxx Telangana while every Followup Required
 row was 56xxxx Karnataka), and `RNR` (13 rows) was a **call outcome**.
-`Enquiry Invalid` became a lost reason. Nothing was deleted.
+`Enquiry Invalid` became a lost reason at first, and since 2026-10-29 it is the
+`Invalid` status (below). Nothing was deleted.
 
 **`Connected - Need nurturing` is a fifth, added after the PRD** (Business Head
 request, Sept 2026) for the lead that answered but has nothing live yet — before
@@ -112,63 +113,110 @@ comparing empty strings the other way round would have done. The call lists
 (Call today, Overdue, Due today, Upcoming, PI Shared) are deliberately **not**
 date-ordered: `sortForLens` sorts them by priority, then follow-up date.
 
-### The tiles are the navigation (2026-10-28)
+### The tiles are the navigation, in three tabs: Clients, PI, Results (2026-10-29)
 
-Each tile is a *lens*, rendered by the shared `components/b2b/ui/lens-tiles.tsx`
-(KAM uses it too). One predicate, `lensMatches` in `views/inbound/utils.ts`,
-decides both the tile's number and the rows listed under it, so a tile can never
-count leads its list does not show (see the badge entry in `docs/landmines.md`).
-On real data on 2026-10-28, all 13 lenses showed the same number on the tile as
-rows in the table.
+The user asked for three things at the top of Inbound: a client view, a PI view
+(where "we'll be dealing in financials"), and outcomes. **A lead moves from
+Clients to PI the moment it has a PI**, and the user called them tabs, so they are
+tabs, each with its own tiles and its own table columns. This replaced the
+three tile groups (Call today · Pipeline · Outcome) laid out side by side.
 
-It replaced a Today view that reps found hard to navigate. That view had seven
-static tiles, a follow-up table split into four collapsible buckets, side panels
-for New and PI Shared, and a separate List view. A PI Shared lead appeared twice,
-in the side panel and again in a bucket, because PI Shared is a follow-up status.
-"New today" (27, created today) sat beside "New — not yet actioned" (15, status
-New) with nothing explaining the difference. And no tile could be clicked.
+| Tab | Holds | Tiles | Columns |
+|---|---|---|---|
+| Clients | open (`New`, Connected, Follow up) **with no PI** | Call today → First call · Overdue · Due today; All clients → Upcoming · No follow-up date · Arrived today | When, Calls, Deal |
+| PI | every lead with a PI, **inside the date range** | PIs → Open · Follow-up due · Converted · Dropped | PI shared, Last call, Next follow-up, value + Enq ID |
+| Results | `Closed`, `Lost`, `Invalid`, or sent to Outreach | Results → Closed · Lost · Invalid · Sent to Outreach | Outcome on, the reason / handover |
 
-- **The groups.** Call today, whose header is itself a lens and the default:
-  First call · Overdue · Due today. Pipeline: Upcoming · PI Shared · Pipeline ₹.
-  Outcome: Closed · Lost. Four secondary lenses sit as pills: All leads, Arrived
-  today, No follow-up date, Needs enrichment. **Needs enrichment used to be a
-  tile, and 896 of 897 leads matched it**, so as a headline it said nothing.
-- **Lenses overlap on purpose.** PI Shared is a stage lens, and the same leads
-  also land in Overdue, Due today or Upcoming by date. Only Call today's three
-  parts are disjoint, since New is not a follow-up status, so its header is
-  their sum.
-- **Call today runs due today, then first calls, then overdue.** Overdue was 287
-  on 2026-10-28. The old Today put it first, which buried the 13 new leads on
-  page 12, against the KPI "New = 0 by end of day".
-- **One table, paged at 25,** and it resets to page 1 when the lens or a filter
-  changes. The Status column is hidden on single-status lenses. Deal becomes
-  Lost reason on Lost. The Missing column appears only on Needs enrichment;
-  before, its badge sat on 896 rows.
-- **Today and List merged into one List view.** Board is unchanged, and clicking
-  a tile from Board switches to List. Export's "Filtered" scope means the
-  selected lens plus filters (on Board, filters only).
-- **A search switches the lens to All leads.** The search reaches every stage and
-  owner (next section), so any narrower lens would hide what it found. That was
-  the old failure: a rep who searched a New lead's phone got an empty follow-up
-  list.
-- **Tiles show "…" while loading and "Unknown" if the fetch fails, never 0.** A
-  failed load shows a retry panel instead of "Nothing to call today". The old
-  tiles showed 0 throughout every load. "Fails" includes `ok: false` from
-  `fetchInboundBoard`. Kylas used to fail silently into a board of DB rows only,
-  with First call at "0 · all called" (see `docs/landmines.md`).
-- **No follow-up date was 130 on 2026-10-28.** These are leads on a follow-up
-  status that can never come up as due. Before, they sat in a bucket that
-  started collapsed.
-- While Kylas has more pages, the counts cover the loaded leads only, and the
-  subtitle says so.
+- **"Has a PI" is `hasPi` in `models/inbound/lifecycle.ts`, and nothing else
+  decides it:** status `PI Shared`, or a `piSharedAt` stamp, or a closed-out lead
+  (`Closed`/`Lost`/`Invalid`) carrying an Enq ID. Because the stamp stays, a PI
+  lead moved back to Follow up stays on the PI tab. A PI that went cold is still
+  a PI to chase, not a fresh client.
+- **The PI tab defaults to the last 30 days.** Presets are 7/30/90, or a custom
+  range, which can be cleared to all time. "Date by" switches between **PI
+  shared** (the default) and **Last follow-up call** (the last
+  `CallAttempt.at`), which is how the user answered "which date". A PI with no
+  logged call has no last-call date and drops out of the range on that basis;
+  the bar says so.
+- **`piSharedAt` is new, so older PIs have no stamp.** `piDay` falls back to
+  `statusChangedAt`. For a lead still at PI Shared that is the day it moved
+  there. For an old Closed lead it is the close date, so its PI date reads late.
+  The stamp is written by `withStatusStamps`, which both write paths use (the
+  drawer save and the board drag), and only when the stage changes to PI Shared
+  with no stamp yet.
+- **Lenses still overlap on purpose,** and one predicate (`lensMatches`) still
+  gives a tile's count and the rows it lists. Converted also counts in Results →
+  Closed. Closed and Lost in Results are **not** date-ranged; only the PI tab is.
+- **Overdue / Due today / Upcoming no longer include PI leads.** A PI's follow-up
+  shows on the PI tab's Follow-up due tile. So Call today is smaller than it was
+  for the same data. The PI chase has not vanished; it has moved.
+- **The Pipeline ₹ tile is gone.** It summed ticket value plus the BM's estimate
+  over every open lead. The PI tab now carries the money, and only from deal
+  tickets. `expectedOrderValue` is therefore summed into no rupee total anywhere
+  in the module again.
+- A tab's number is its head lens (All clients, PIs in range, Results). Clicking
+  a tab opens Call today, PIs, or Results. Needs enrichment and All leads are
+  pills on every tab. A search still jumps to All leads.
 
-The table now sits in normal block flow rather than in the old
-`grid-cols-[1fr_320px]`. The tile groups are a grid, and every section in it
-carries `min-w-0`. If the table ever goes back inside a grid or flex track, that
-track needs `min-w-0` too (see `docs/landmines.md`). Otherwise the whole tab
-scrolls sideways under the B2B sidebar. Tile values are `truncate`d, and
-subtitles are kept to about 20 characters because a tile is ~120px wide at
-1280px. Checked at 1440, 1280 and 390.
+What carried over unchanged from the 2026-10-28 layout:
+
+- **One table, paged at 25,** reset to page 1 when the lens, a filter or the PI
+  range changes. The Status column is hidden on single-status lenses.
+- **Tiles and tab counts show "…" while loading and "Unknown" / "?" if the fetch
+  fails, never 0.** That includes `ok: false` from `fetchInboundBoard` (see the
+  Kylas-outage entry in `docs/landmines.md`).
+- **Call today runs due today, then first calls, then overdue,** so the new
+  leads are not buried behind a long overdue list (KPI: "New = 0 by end of day").
+- Board is unchanged except for an Invalid column; clicking a tile from Board
+  switches to List. Export's "Filtered" scope is the selected lens plus filters.
+- While Kylas has more pages, counts cover the loaded leads only and the subtitle
+  says so. PI leads always load in full: every PI has a `b2b_lead` row, and page
+  0 carries every DB row.
+- The tile groups keep `min-w-0`; a table inside a grid or flex track needs it
+  too, or the tab scrolls sideways (see `docs/landmines.md`).
+
+### Invalid is a status, not a lost reason (2026-10-29)
+
+Every inbound lead is called to qualify it, and the answer is either genuine or
+invalid. Invalid was the lost reason `Enquiry invalid`, which counted junk
+enquiries as lost sales. It is now its own status in Results. **It is the
+strictest gate in the module.** `statusGateErrors` demands:
+
+- **at least one logged call** — nobody marks a lead invalid without trying it.
+  The drag modal cannot satisfy this, so it says to open the lead and log a call;
+- a reason from `INBOUND_INVALID_REASONS`;
+- a note of at least `INVALID_NOTE_MIN` (15) characters saying what was checked,
+  so "na" does not pass.
+
+Old data is read, never migrated, like everything else here. A `b2b_lead.stage`
+of `Enquiry Invalid`, or `Lost` with `lost_reason` = `Enquiry invalid`, reads as
+`Invalid`. Neither has a reason or a note, so the Invalid tile flags them as
+"missing reason or note" rather than pretending they were qualified. `Invalid`
+counts as dead (not open) in `analytics.ts` and as `lost` in the unified Leads
+tab. `Enquiry invalid` is no longer offered as a lost reason.
+
+### Office location, and Send to Outreach (2026-10-29)
+
+`officeLocation` is free text on the Client card (area plus address), and it is
+the ninth enrichment field. Outreach needs it to go and meet the client.
+
+**Inbound now pushes to Outreach; it no longer just sits in a pool Outreach
+reads.** The user chose this explicitly: Outreach's From Inbound pool lists
+**only** leads with an `outreachReferral`. The drawer's Outreach card sends one,
+and it needs a **Connected** call first (the sheet's "verified phone") plus a
+status other than New, Lost or Invalid. The form is the sheet's qualification
+checklist, all mandatory except the time: decision maker, active/upcoming
+project, office location (written to the lead too), preferred meeting date,
+"agreed to meet" ticked, and a note for the BM. Sending saves the whole lead,
+through the same gates as Save.
+
+- **Test `sentToOutreach(l)` (`outreachReferral?.at`), never the object.** An
+  `object`-kind meta field writes `{}` when empty and reads `{}` back, so
+  `!!l.outreachReferral` is true on every saved row. `placedUnder` has the same
+  shape.
+- There is no withdraw. Once Outreach accepts a lead, it lives on the Outreach
+  row (`OR-IN-<id>`), and Inbound's KPI credits it only after that acceptance
+  (`kpi-definitions.md`).
 
 ### Search deliberately reaches outside the board
 
@@ -233,11 +281,12 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   `draft.owner`, which would have credited every call on a reassigned lead to
   its new owner. Calls are an Effort KPI and belong to whoever dialled.
 
-### Gates: four hard, eight soft
+### Gates: the PRD's four, Invalid's three, nine soft
 
-`statusGateErrors` blocks exactly the four the PRD states — follow-up date on
-`Follow up`, Enq ID **and** follow-up date on `PI Shared`, lost reason on `Lost`.
-Everything in §3.2/§3.3 is chased through `enrichmentGaps` and never blocks: all
+`statusGateErrors` blocks the four the PRD states — follow-up date on
+`Follow up`, Enq ID **and** follow-up date on `PI Shared`, lost reason on `Lost`
+— plus Invalid's call, reason and note (above). Everything in §3.2/§3.3, and
+office location, is chased through `enrichmentGaps` and never blocks: the first
 eight were empty on all 151 live rows when this shipped, so a hard block would
 just stop the board being used. Dragging a card into a gated column opens
 `MoveModal` to collect the field rather than writing an incomplete status.
@@ -307,16 +356,6 @@ at EC" is never auto-filled** from the ticket's branch or assignee. A cart's
 branch is where it was raised; "assisted at" is a claim about who helped close
 it. `bmName` is the one exception, and only because `checkEnq` fills it from the
 matched deal's own `assignedTo`.
-
-### What the tiles count
-
-`Pipeline value` is the sum over **open** leads (`INBOUND_OPEN_STATUSES` — every
-status but `Closed` and `Lost`) and it keeps the two figures apart: the deal
-ticket's `orderValue` where there is one, plus `expectedOrderValue` **only for
-leads that have no ticket value yet**. The tile's subtitle names both. This is
-the one place `expectedOrderValue` is added to a rupee total anywhere in the
-module, and it is allowed here because the tile is explicitly a forecast — it is
-still never summed as revenue, which is the rule the rest of this doc states.
 
 ### Two vocabularies that deliberately do not fully map
 

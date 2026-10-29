@@ -127,7 +127,7 @@ export function FromInbound({ leads, allLeads, pool, scope, today, save, createM
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2 flex-wrap"
-          title="Leads Inbound has worked and not lost, with no Outreach lead on the same mobile. Converted by Inbound first.">
+          title="Leads an Inbound rep sent with Send to Outreach, with no Outreach lead on the same mobile yet. Newest sends first.">
           <h3 className="text-[12px] font-bold text-gray-800">Inbound pool</h3>
           <span className="text-[11px] font-semibold text-gray-400">{pool === null ? '?' : poolSize}</span>
           <span className="text-[10.5px] text-gray-400 hidden sm:inline">Not assigned to a BM yet</span>
@@ -139,7 +139,7 @@ export function FromInbound({ leads, allLeads, pool, scope, today, save, createM
         </div>
         {pool === null ? (
           <p className="px-4 py-3 text-[11.5px] text-amber-800 bg-amber-50">Inbound leads did not load, so the pool is unknown — not empty. Reload to try again.</p>
-        ) : !poolSize ? <div className="py-6"><Empty>Every Inbound lead in play already has an Outreach lead.</Empty></div> : (
+        ) : !poolSize ? <div className="py-6"><Empty>No lead is waiting. Inbound sends a lead here from its drawer once the client has agreed to meet.</Empty></div> : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">

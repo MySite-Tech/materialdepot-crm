@@ -11,8 +11,8 @@ This module's detail is split by topic so a question costs one part, not the who
 
 | Part | Covers | Lines |
 |---|---|---|
-| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, tiles as clickable lenses, the widened search, the Enq-ID resolve | 339 |
-| [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation; the 2026-10-28 rebuild — scope, Inbound pool, no bulk import, the capture gate (role, team size, people, who was met, next follow-up), journey log, reminders, conversion rules, KAM handover, Studio Space waitlist, KPIs with their rows and periods; the tile-lens page layout | 376 |
+| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the Clients / PI / Results tabs and their lens tiles, Invalid as a status, Send to Outreach, the widened search, the Enq-ID resolve | 378 |
+| [`outreach.md`](outreach.md) | The field half, meetings as a four-slot loop, KAM rotation; the 2026-10-28 rebuild — scope, Inbound pool, no bulk import, the capture gate (role, team size, people, who was met, next follow-up), journey log, reminders, conversion rules, KAM handover, Studio Space waitlist, KPIs with their rows and periods; the tile-lens page layout | 379 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 44 |
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; the list's lens tiles, chips and per-lens sort; parent-company grouping and why name is never a merge key | 280 |
 | [`kam.md`](kam.md) | Clients and orders as two things; auto-advance; tiles as clickable lenses; the 30/60-day account status; call dedupe; the unbuilt per-PI and check-in specs | 228 |
@@ -29,11 +29,13 @@ This module's detail is split by topic so a question costs one part, not the who
 `sales-tab-redesign.md` holds the per-team record. This is the short version, so
 a new session knows what is live and what is being worked on.
 
-- **Inbound: tiles are clickable lenses.** One predicate (`lensMatches`) gives
-  both a tile's count and the list it opens. Today and List merged into one
-  paged table, and the side panels are gone. A Kylas or database failure now
-  reads "Unknown" rather than "0 · all called". See `inbound.md` §The tiles are
-  the navigation and the Kylas-outage entry in `docs/landmines.md`.
+- **Inbound: three tabs, Clients · PI · Results (2026-10-29),** each with
+  clickable lens tiles. One predicate (`lensMatches`) gives both a tile's count
+  and the list it opens. A lead moves to PI once it has one, and the PI tab is
+  date-ranged (default 30 days). Invalid is its own status with a hard gate, and
+  Inbound now *sends* leads to Outreach. Outreach's pool shows only those. See
+  `inbound.md` §The tiles are the navigation, and the Kylas-outage entry in
+  `docs/landmines.md`.
 - **Client Database: the same lens tiles, built 2026-10-28.** All · Active ·
   Lapsing soon · Inactive · No KAM, removable filter chips and sortable
   columns. The status dropdown is gone. See `client-db.md` §The list.
@@ -43,8 +45,6 @@ a new session knows what is live and what is being worked on.
   own `LensStrip` (`views/outreach/lenses/`) is the one left.** It is committed
   (`818f516`) but not yet moved onto that component. That move is the next
   tidy-up, so that all four tabs share one tile shape.
-- **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
-  It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
 - **KAM: its own 30 / 60-day status, and no header buttons (2026-10-29).**
   Active = ordered in the last 30 days, Inactive 1 month = 31–60 days,
   Inactive = more than 60 days or none. **KAM only**: Client Database keeps the
@@ -56,6 +56,8 @@ a new session knows what is live and what is being worked on.
   closure date **per PI** (follow-ups are per firm today), and a location plus
   photo-in-uniform check-in before every offline meeting for Outreach and KAM.
   Neither is started. Open questions are in `kam.md` §Not built yet.
+- **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
+  It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
   sessions worked one tree that day. Run `git status --short -- components/b2b
   lib/b2b docs/b2b` before starting.
 

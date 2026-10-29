@@ -2,14 +2,14 @@
 
 import { ReactNode } from 'react';
 
-import { isFollowUpStatus, lastAttempt } from '../../../models/inbound';
+import { isFollowUpStatus, isOpenStatus, istDay, lastAttempt, lastCallDay, piDay } from '../../../models/inbound';
 import { InboundLead, fmtINR } from '../../../models/mock-data';
 import { Empty, FollowUpChip, LeadName, PriorityChip, StatusBadge, fmtDay } from '../../../ui/inbound-chips';
-import { LENS, LIST_PAGE_SIZE } from '../constants';
-import { Lens } from '../types';
-import { gapsFor, istDay } from '../utils';
+import { LENS, LENS_SECTION, LIST_PAGE_SIZE } from '../constants';
+import { Lens, PiBasis } from '../types';
+import { gapsFor } from '../utils';
 
-const SINGLE_STATUS: Lens[] = ['new', 'pi', 'closed', 'lost'];
+const SINGLE_STATUS: Lens[] = ['new', 'piWon', 'closed', 'lost', 'invalid'];
 
 const th = 'px-3 py-2 text-[9.5px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap';
 const td = 'px-3 py-2.5 align-top';
@@ -32,6 +32,34 @@ function When({ lead, today }: { lead: InboundLead; today: string }) {
   return <span className="text-gray-500">{lead.statusChangedAt ? `${lead.stage} ${fmtDay(istDay(lead.statusChangedAt))}` : '—'}</span>;
 }
 
+function Outcome({ lead, lens }: { lead: InboundLead; lens: Lens }) {
+  const r = lead.outreachReferral;
+  if (lens === 'sent' && r?.at) {
+    return (
+      <div className="flex flex-col gap-0.5 text-[11.5px]">
+        <span className="text-[#0F766E] font-semibold">Sent {fmtDay(istDay(r.at))} by {r.by}</span>
+        <span className="text-gray-500">Meet {fmtDay(r.meetingDate)}{r.meetingTime ? ` · ${r.meetingTime}` : ''} · {r.decisionMaker}</span>
+      </div>
+    );
+  }
+  if (lead.stage === 'Invalid') {
+    if (!lead.invalidReason || !lead.invalidNote) {
+      return <span className="text-amber-600 font-semibold">{lead.invalidReason || 'No reason recorded'}{lead.invalidNote ? '' : ' · no note'}</span>;
+    }
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="text-gray-700 font-semibold">{lead.invalidReason}</span>
+        <span className="text-[11px] text-gray-500 line-clamp-2" title={lead.invalidNote}>{lead.invalidNote}</span>
+      </div>
+    );
+  }
+  return <Deal lead={lead} />;
+}
+
+function Day({ day, empty }: { day: string; empty: string }) {
+  return day ? <span className="text-gray-700">{fmtDay(day)}</span> : <span className="text-gray-300">{empty}</span>;
+}
+
 function Deal({ lead }: { lead: InboundLead }) {
   if (lead.stage === 'Lost') {
     return lead.lostReason
@@ -48,8 +76,9 @@ function Deal({ lead }: { lead: InboundLead }) {
   return <div className="flex flex-col gap-0.5 whitespace-nowrap">{value}{enq}</div>;
 }
 
-export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText, page, setPage, onOpen, onClearSearch, emptyAction }: {
+export function LeadTable({ lens, piBasis, rows, today, showOwner, searchQuery, valueText, page, setPage, onOpen, onClearSearch, emptyAction }: {
   lens: Lens;
+  piBasis: PiBasis;
   rows: InboundLead[];
   today: string;
   showOwner: boolean;
@@ -67,6 +96,10 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
   const visible = rows.slice(cur * LIST_PAGE_SIZE, (cur + 1) * LIST_PAGE_SIZE);
   const showStatus = !SINGLE_STATUS.includes(lens);
   const showGaps = lens === 'gaps';
+  const section = searchQuery ? undefined : LENS_SECTION[lens];
+  const isPi = section === 'pi';
+  const isResult = section === 'results';
+  const outcomeHead = lens === 'lost' ? 'Lost reason' : lens === 'invalid' ? 'Why invalid' : lens === 'sent' ? 'Handed over' : isResult ? 'Outcome' : 'Deal';
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -104,10 +137,16 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
                 <th className={th}>Pri</th>
                 <th className={th}>Lead</th>
                 {showStatus && <th className={th}>Status</th>}
-                <th className={th}>When</th>
-                <th className={th}>Calls</th>
+                {isPi ? (
+                  <>
+                    <th className={`${th} ${piBasis === 'shared' ? 'text-gray-600' : ''}`}>PI shared</th>
+                    <th className={`${th} ${piBasis === 'called' ? 'text-gray-600' : ''}`}>Last call</th>
+                    <th className={th}>Next follow-up</th>
+                  </>
+                ) : <th className={th}>{isResult ? 'Outcome on' : 'When'}</th>}
+                {!isResult && <th className={th}>Calls</th>}
                 {showOwner && <th className={th}>Owner</th>}
-                <th className={th}>{lens === 'lost' ? 'Lost reason' : 'Deal'}</th>
+                <th className={th}>{outcomeHead}</th>
                 {showGaps && <th className={th}>Missing</th>}
               </tr>
             </thead>
@@ -128,14 +167,28 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
                       </div>
                     </td>
                     {showStatus && <td className={td}><StatusBadge s={l.stage} /></td>}
-                    <td className={`${td} whitespace-nowrap`}><When lead={l} today={today} /></td>
-                    <td className={`${td} whitespace-nowrap text-gray-500`}>
-                      {n
-                        ? <>{n}/4 <span className={last?.outcome === 'RNR' ? 'text-red-500' : 'text-[#0F766E]'}>{last?.outcome}</span></>
-                        : <span className="text-gray-300">None yet</span>}
-                    </td>
+                    {isPi ? (
+                      <>
+                        <td className={`${td} whitespace-nowrap`}><Day day={piDay(l)} empty="—" /></td>
+                        <td className={`${td} whitespace-nowrap`}><Day day={lastCallDay(l)} empty="No call logged" /></td>
+                        <td className={`${td} whitespace-nowrap`}>
+                          {isFollowUpStatus(l.stage) ? <When lead={l} today={today} /> : <span className="text-gray-300">—</span>}
+                        </td>
+                      </>
+                    ) : isResult ? (
+                      <td className={`${td} whitespace-nowrap`}>
+                        <Day day={istDay(lens === 'sent' || isOpenStatus(l.stage) ? l.outreachReferral?.at : l.statusChangedAt)} empty="—" />
+                      </td>
+                    ) : <td className={`${td} whitespace-nowrap`}><When lead={l} today={today} /></td>}
+                    {!isResult && (
+                      <td className={`${td} whitespace-nowrap text-gray-500`}>
+                        {n
+                          ? <>{n}/4 <span className={last?.outcome === 'RNR' ? 'text-red-500' : 'text-[#0F766E]'}>{last?.outcome}</span></>
+                          : <span className="text-gray-300">None yet</span>}
+                      </td>
+                    )}
                     {showOwner && <td className={`${td} whitespace-nowrap text-gray-500`}>{l.owner}</td>}
-                    <td className={`${td} max-w-[220px]`}><Deal lead={l} /></td>
+                    <td className={`${td} max-w-[260px]`}><Outcome lead={l} lens={lens} /></td>
                     {showGaps && (
                       <td className={`${td} max-w-[260px] text-[11px] text-amber-700`}>
                         {gapsFor(l).map((g) => g.label).join(', ')}

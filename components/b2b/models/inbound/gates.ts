@@ -1,4 +1,4 @@
-import { ENRICHMENT_CHECKS } from '../../constants/inbound';
+import { ENRICHMENT_CHECKS, INVALID_NOTE_MIN } from '../../constants/inbound';
 import { EnrichmentGap, EnrichmentInput, StatusGateInput } from '../../types/inbound';
 
 export function statusGateErrors(l: StatusGateInput): string[] {
@@ -12,6 +12,13 @@ export function statusGateErrors(l: StatusGateInput): string[] {
   }
   if (l.status === 'Lost' && !String(l.lostReason || '').trim()) {
     errs.push('A lost reason is required to set Lost.');
+  }
+  if (l.status === 'Invalid') {
+    if (!l.calls) errs.push('Log at least one call before marking a lead Invalid — qualify it first.');
+    if (!String(l.invalidReason || '').trim()) errs.push('An invalid reason is required to set Invalid.');
+    if (String(l.invalidNote || '').trim().length < INVALID_NOTE_MIN) {
+      errs.push(`An invalid note of at least ${INVALID_NOTE_MIN} characters is required — say what you checked.`);
+    }
   }
   return errs;
 }

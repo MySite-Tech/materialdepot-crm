@@ -30,7 +30,7 @@ export function InboundDrawerFooter({ gaps, gateErrors, handleSave, onClose, sav
             <span className="text-[10px] text-amber-700 hidden sm:inline">{gaps.length} field{gaps.length === 1 ? '' : 's'} still empty</span>
           )}
           <button
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={save.saving}
             className="px-4 py-2 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white disabled:opacity-50"
           >

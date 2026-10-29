@@ -19,7 +19,7 @@ export const OWNER_CHIP: Record<FieldOwner, string> = {
 export const INBOUND_NURTURE_STATUS: InboundStatus = 'Connected - Need nurturing';
 
 export const INBOUND_STATUSES: InboundStatus[] = [
-  'New', INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared', 'Closed', 'Lost',
+  'New', INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared', 'Closed', 'Lost', 'Invalid',
 ];
 
 export const INBOUND_STATUS_COLORS: Record<InboundStatus, string> = {
@@ -29,6 +29,7 @@ export const INBOUND_STATUS_COLORS: Record<InboundStatus, string> = {
   'PI Shared':                  '#8B5CF6',
   'Closed':                     '#22C55E',
   'Lost':                       '#EF4444',
+  'Invalid':                    '#6B7280',
 };
 
 export const INBOUND_STATUS_HINT: Record<InboundStatus, string> = {
@@ -37,8 +38,11 @@ export const INBOUND_STATUS_HINT: Record<InboundStatus, string> = {
   'Follow up':                  'Needs a next follow-up date',
   'PI Shared':                  'Enq ID raised; order value comes from the deal ticket',
   'Closed':                     'Order placed — handed to a KAM',
-  'Lost':                       'Needs a lost reason',
+  'Lost':                       'A genuine enquiry that did not convert — needs a lost reason',
+  'Invalid':                    'Not a genuine enquiry — needs a logged call, a reason and a note',
 };
+
+export const INBOUND_CLOSED_STATUSES: InboundStatus[] = ['Closed', 'Lost', 'Invalid'];
 
 export const INBOUND_FOLLOW_UP_STATUSES: InboundStatus[] = [
   INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared',
@@ -54,7 +58,7 @@ export const isFollowUpStatus = (s: InboundStatus): boolean =>
 export const isOpenStatus = (s: InboundStatus): boolean =>
   INBOUND_OPEN_STATUSES.includes(s);
 
-const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
+export const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
 
 export const LEGACY_STAGES: Record<LegacyStage, LegacyDecomposition> = {
   'New':               { status: 'New' },
@@ -65,7 +69,7 @@ export const LEGACY_STAGES: Record<LegacyStage, LegacyDecomposition> = {
   'PI Shared':         { status: 'PI Shared' },
   'Closed':            { status: 'Closed' },
   'Lost':              { status: 'Lost' },
-  'Enquiry Invalid':   { status: 'Lost', lostReason: INVALID_ENQUIRY_REASON },
+  'Enquiry Invalid':   { status: 'Invalid' },
 };
 
 export const INBOUND_LOCATIONS: InboundLocation[] = ['Bangalore', 'Hyderabad'];
@@ -139,6 +143,7 @@ export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; fil
   { key: 'priority',           label: 'Priority',       filled: (l) => !!l.priority },
   { key: 'selections',         label: 'Selection',      filled: (l) => !!(l.selections || []).length },
   { key: 'expectedOrderValue', label: 'Expected value', filled: (l) => Number(l.expectedOrderValue || 0) > 0 },
+  { key: 'officeLocation',     label: 'Office location', filled: (l) => !!String(l.officeLocation || '').trim() },
 ];
 
 export const ENRICHMENT_FIELD_COUNT = ENRICHMENT_CHECKS.length;
@@ -162,5 +167,16 @@ export const INBOUND_LOST_REASONS = [
   'Price Issue',
   'Timeline/Delivery Delay',
   'Unreachable (4 attempts)',
-  INVALID_ENQUIRY_REASON,
 ] as const;
+
+export const INBOUND_INVALID_REASONS = [
+  'Wrong or not-in-service number',
+  'Not a B2B buyer (retail / one-off)',
+  'Spam or test enquiry',
+  'Duplicate of another lead',
+  'Outside our service area',
+  'Vendor or job seeker',
+  'Other',
+] as const;
+
+export const INVALID_NOTE_MIN = 15;

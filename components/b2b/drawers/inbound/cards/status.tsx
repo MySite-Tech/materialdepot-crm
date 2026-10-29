@@ -1,18 +1,20 @@
 'use client';
 
 import { EnqLookup } from '../../../../../lib/b2b';
-import { INBOUND_LOST_REASONS, INBOUND_NURTURE_STATUS, INBOUND_STATUSES, INBOUND_STATUS_HINT, isFollowUpStatus } from '../../../constants/inbound';
+import { INBOUND_INVALID_REASONS, INBOUND_LOST_REASONS, INBOUND_NURTURE_STATUS, INBOUND_STATUSES, INBOUND_STATUS_HINT, INVALID_NOTE_MIN, isFollowUpStatus } from '../../../constants/inbound';
 import { InboundLead } from '../../../models/mock-data';
 import { InboundStatus } from '../../../types/inbound';
 import { Field, SectionCard, errorInputCls, inputCls } from '../../../ui/inbound-chips';
 import { Dispatch, SetStateAction } from 'react';
+
+export type GateField = 'followUpDate' | 'enqId' | 'lostReason' | 'invalidCalls' | 'invalidReason' | 'invalidNote';
 
 export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, set, setDraft, setShowGates }: {
   checkEnq: (id?: string | undefined) => Promise<void>;
   draft: InboundLead;
   enq: EnqLookup | null;
   enqChecking: boolean;
-  gateFor: (field: "followUpDate" | "enqId" | "lostReason") => string | undefined;
+  gateFor: (field: GateField) => string | undefined;
   set: <K extends keyof InboundLead>(k: K, v: InboundLead[K]) => void;
   setDraft: Dispatch<SetStateAction<InboundLead>>;
   setShowGates: Dispatch<SetStateAction<boolean>>;
@@ -151,6 +153,41 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
               )}
             </select>
           </Field>
+        )}
+
+        {draft.stage === 'Invalid' && (
+          <>
+            {gateFor('invalidCalls') && (
+              <p className="sm:col-span-2 text-[11.5px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 leading-snug">
+                {gateFor('invalidCalls')} Use <strong>Log attempt</strong> under Calls above.
+              </p>
+            )}
+            <Field label="Why is it invalid?" required error={gateFor('invalidReason')} className="sm:col-span-2">
+              <select
+                value={draft.invalidReason || ''}
+                onChange={(e) => set('invalidReason', e.target.value)}
+                className={gateFor('invalidReason') ? errorInputCls : inputCls}
+              >
+                <option value="">Select a reason…</option>
+                {INBOUND_INVALID_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </Field>
+            <Field
+              label="What did you check?"
+              required
+              error={gateFor('invalidNote')}
+              hint={`At least ${INVALID_NOTE_MIN} characters. Managers read these to judge lead quality.`}
+              className="sm:col-span-2"
+            >
+              <textarea
+                value={draft.invalidNote || ''}
+                onChange={(e) => set('invalidNote', e.target.value)}
+                rows={3}
+                placeholder="e.g. Called twice, number belongs to a homeowner buying for one flat"
+                className={gateFor('invalidNote') ? errorInputCls : inputCls}
+              />
+            </Field>
+          </>
         )}
       </div>
     </SectionCard>

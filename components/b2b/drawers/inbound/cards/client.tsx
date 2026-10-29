@@ -72,6 +72,18 @@ export function InboundClientCard({ draft, presalesTypeUnmapped, set }: {
             {INBOUND_LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
         </Field>
+        <Field
+          label="Office location"
+          className="sm:col-span-2"
+          hint="Area and address of their office or studio — where Outreach would go to meet them."
+        >
+          <input
+            value={draft.officeLocation || ''}
+            onChange={(e) => set('officeLocation', e.target.value)}
+            placeholder="e.g. 2nd floor, 14 Main Rd, Indiranagar"
+            className={inputCls}
+          />
+        </Field>
       </div>
     </SectionCard>
   );

@@ -1,7 +1,7 @@
 import {
   INBOUND_STATUSES, INBOUND_STATUS_COLORS,
   type InboundStatus, type InboundLocation, type Segment, type ClientType,
-  type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder,
+  type LeadType, type Priority, type Selection, type CallAttempt, type PlacedUnder, type OutreachReferral,
 } from './inbound';
 import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
@@ -92,6 +92,12 @@ export interface InboundLead {
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
   lostReason?: string;
+  invalidReason?: string;
+  invalidNote?: string;
+  piSharedAt?: string;
+
+  officeLocation?: string;
+  outreachReferral?: OutreachReferral;
 
   placedUnder?: PlacedUnder;
   kam?: string;

@@ -12,9 +12,10 @@ import type { TeamMember } from '@/lib/b2b/team/types';
 import { InboundPlacedUnderCard } from './cards/placed-under';
 import { InboundPresalesCard } from './cards/presales';
 import { InboundRequirementCard } from './cards/requirement';
-import { InboundStatusCard } from './cards/status';
+import { GateField, InboundStatusCard } from './cards/status';
+import { InboundOutreachCard } from './cards/outreach';
 
-import { CallAttempt, CallAttemptOutcome, InboundStatus, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors } from '../../models/inbound';
+import { CallAttempt, CallAttemptOutcome, InboundStatus, OutreachReferral, PlacedUnder, callGateErrors, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, nextAttemptNumber, nextKamRoundRobin, retriesExhausted, selectionsKylasWillDrop, statusGateErrors, withStatusStamps } from '../../models/inbound';
 import { CallLogEntry, InboundLead, KAMS, LeadDeal, LeadNote } from '../../models/mock-data';
 import { Spinner } from '../../ui/inbound-chips';
 import { KYLAS_OUTCOME } from './constants';
@@ -122,7 +123,10 @@ export default function InboundDrawer({
     followUpDate: draft.followUpDate,
     enqId: draft.enqId,
     lostReason: draft.lostReason,
-  }), [draft.stage, draft.followUpDate, draft.enqId, draft.lostReason]);
+    invalidReason: draft.invalidReason,
+    invalidNote: draft.invalidNote,
+    calls: draft.callAttempts?.length,
+  }), [draft.stage, draft.followUpDate, draft.enqId, draft.lostReason, draft.invalidReason, draft.invalidNote, draft.callAttempts]);
 
   const gaps = useMemo(() => enrichmentGaps({
     companyName: draft.companyName,
@@ -133,15 +137,19 @@ export default function InboundDrawer({
     priority: draft.priority,
     selections: draft.selections,
     expectedOrderValue: draft.expectedOrderValue,
+    officeLocation: draft.officeLocation,
   }), [draft.companyName, draft.gstNumber, draft.segment, draft.clientType,
-    draft.leadType, draft.priority, draft.selections, draft.expectedOrderValue]);
+    draft.leadType, draft.priority, draft.selections, draft.expectedOrderValue, draft.officeLocation]);
 
-  const gateFor = (field: 'followUpDate' | 'enqId' | 'lostReason'): string | undefined => {
+  const gateFor = (field: GateField): string | undefined => {
     if (!showGates) return undefined;
-    const map: Record<typeof field, string> = {
+    const map: Record<GateField, string> = {
       followUpDate: 'follow-up date',
       enqId: 'Enq ID',
       lostReason: 'lost reason',
+      invalidCalls: 'Log at least one call',
+      invalidReason: 'invalid reason',
+      invalidNote: 'invalid note',
     };
     return gateErrors.find((e) => e.toLowerCase().includes(map[field].toLowerCase()));
   };
@@ -277,21 +285,20 @@ export default function InboundDrawer({
     setSavingNote(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (extra?: Partial<InboundLead>) => {
     if (save.saving) return;
     if (gateErrors.length) { setShowGates(true); return; }
     setSave({ saving: true });
 
-    const statusChanged = draft.stage !== lead.stage;
-    const toSave: InboundLead = {
+    const toSave: InboundLead = withStatusStamps(lead, {
       ...draft,
+      ...extra,
       company: draft.companyName?.trim() || draft.company,
       value: Number(draft.orderValue) || 0,
-      statusChangedAt: statusChanged ? new Date().toISOString() : draft.statusChangedAt,
 
       timeline: draft.urgency,
       requirementBrief: draft.leadSummary,
-    };
+    }, new Date().toISOString());
 
     const [kylasRes, dbErr] = await Promise.all([
       updateInboundLeadKylas(lead.id, {
@@ -416,6 +423,15 @@ export default function InboundDrawer({
         setDraft={setDraft}
         setShowGates={setShowGates}
       />
+
+          <InboundOutreachCard
+            draft={draft}
+            actorName={actorName}
+            today={today}
+            saving={save.saving}
+            set={set}
+            onSend={(referral: OutreachReferral) => handleSave({ outreachReferral: referral })}
+          />
 
           {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
             <InboundPlacedUnderCard

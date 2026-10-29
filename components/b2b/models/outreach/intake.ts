@@ -1,5 +1,5 @@
 import { InboundLead, OutreachLead } from '../mock-data';
-import { InboundStatus } from '../inbound';
+import { InboundStatus, sentToOutreach } from '../inbound';
 import { COMPANY_TYPES, CompanyType } from '.';
 import { sameRep } from './handover';
 import { normalisePhone } from '@/lib/org/utils';
@@ -21,13 +21,24 @@ export const intakePending = (l: OutreachLead): boolean =>
 export function inboundPool(inbound: InboundLead[], outreach: OutreachLead[]): PoolLead[] {
   const linked = new Set(outreach.map((l) => l.intake?.inboundLeadId).filter(Boolean) as string[]);
   const phones = new Set(outreach.map((l) => normalisePhone(l.phone)).filter((p) => p.length === 10));
-  const rank = (s: InboundStatus) => INBOUND_POOL_STAGES.indexOf(s);
   return inbound
-    .filter((l) => INBOUND_POOL_STAGES.includes(l.stage))
+    .filter((l) => sentToOutreach(l) && INBOUND_POOL_STAGES.includes(l.stage))
     .filter((l) => !linked.has(l.id) && !phones.has(normalisePhone(l.phone)))
     .map((lead) => ({ lead, converted: lead.stage === 'Closed' }))
-    .sort((a, b) => rank(a.lead.stage) - rank(b.lead.stage)
-      || String(b.lead.leadCreatedAt || '').localeCompare(String(a.lead.leadCreatedAt || '')));
+    .sort((a, b) => String(b.lead.outreachReferral?.at || '').localeCompare(String(a.lead.outreachReferral?.at || '')));
+}
+
+function referralBrief(l: InboundLead): string {
+  const r = l.outreachReferral;
+  if (!r?.at) return '';
+  const slot = `${r.meetingDate}${r.meetingTime ? ` ${r.meetingTime}` : ''}`;
+  return [
+    `Decision maker: ${r.decisionMaker}`,
+    `Project: ${r.project}`,
+    `Wants to meet: ${slot}`,
+    l.requirement ? `Requirement: ${l.requirement}` : '',
+    `From ${r.by} (Inbound): ${r.note}`,
+  ].filter(Boolean).join('\n');
 }
 
 export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string, accepted: boolean): OutreachLead {
@@ -42,7 +53,8 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
     companyType: companyTypeFrom(l.clientType),
     city: l.location,
     selections: l.selections || [],
-    requirement: l.requirement || l.leadSummary || undefined,
+    requirement: referralBrief(l) || l.requirement || l.leadSummary || undefined,
+    officeAddress: l.officeLocation || undefined,
     expectedOrderValue: l.expectedOrderValue,
     bm: rep.name,
     bmPhone: rep.phone,

@@ -2,21 +2,21 @@
 
 import InboundDrawer from '../../drawers/inbound/index';
 
-import { InboundStatus, statusGateErrors, istToday } from '../../models/inbound';
+import { InboundStatus, statusGateErrors, istToday, withStatusStamps } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ExportFormat, ExportScope } from '../../types/export';
 import { ExportButton } from '../../ui/export-button';
 import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { Spinner } from '../../ui/inbound-chips';
-import { EXPORT_HEADERS, LENS_KEYS, NO_FILTERS } from './constants';
+import { DEFAULT_PI_RANGE, EXPORT_HEADERS, LENS, LENS_KEYS, LENS_SECTION, NO_FILTERS, SECTIONS, SECTION_COUNT } from './constants';
 import { MoveModal } from './ui/modals';
 import { InboundBoard } from './ui/board';
-import { InboundFilterBar } from './ui/filters';
+import { InboundFilterBar, PiRangeBar } from './ui/filters';
 import { LeadTable } from './ui/table';
-import { InboundFilters, Lens, View } from './types';
+import { InboundFilters, Lens, PiRange, Section, View } from './types';
 import { LensPills, LensTiles } from '../../ui/lens-tiles';
-import { TileFigure, activeFilterCount, byNewestLeadFirst, lensMatches, matchesFilters, sidePills, sortForLens, tileGroups, toExportRow } from './utils';
+import { activeFilterCount, byNewestLeadFirst, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups, toExportRow } from './utils';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
@@ -24,11 +24,11 @@ import { runInboundRotation } from '@/lib/b2b/team';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
-const sumOrders = (ls: InboundLead[]) => ls.reduce((a, l) => a + (Number(l.orderValue) || 0), 0);
-
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [view, setView] = useState<View>('list');
+  const [section, setSection] = useState<Section>('clients');
   const [lens, setLens] = useState<Lens>('today');
+  const [piRange, setPiRange] = useState<PiRange>(DEFAULT_PI_RANGE);
   const [scopeChoice, setScopeChoice] = useState<'mine' | 'all' | null>(null);
   const [rotationNote, setRotationNote] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
@@ -141,52 +141,35 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
 
   const byLens = useMemo(() => {
     const out = Object.fromEntries(LENS_KEYS.map((k) => [k, [] as InboundLead[]])) as Record<Lens, InboundLead[]>;
-    for (const l of filtered) for (const k of LENS_KEYS) if (lensMatches(k, l, today)) out[k].push(l);
+    for (const l of filtered) for (const k of LENS_KEYS) if (lensMatches(k, l, today, piRange)) out[k].push(l);
     return out;
-  }, [filtered, today]);
+  }, [filtered, today, piRange]);
 
   const counts = useMemo(
     () => Object.fromEntries(LENS_KEYS.map((k) => [k, byLens[k].length])) as Record<Lens, number>,
     [byLens],
   );
 
-  const values = useMemo(() => {
-    const quoted = sumOrders(byLens.open);
-    const estimated = byLens.open
-      .filter((l) => !Number(l.orderValue))
-      .reduce((a, l) => a + (Number(l.expectedOrderValue) || 0), 0);
-    return {
-      pi: sumOrders(byLens.pi),
-      closed: sumOrders(byLens.closed),
-      open: { quoted, estimated, total: quoted + estimated },
-      lostNoReason: byLens.lost.filter((l) => !l.lostReason).length,
-    };
-  }, [byLens]);
+  const values = useMemo(() => lensValues(byLens), [byLens]);
+  const figures = tileFigures(counts, values, fmtINR);
 
-  const figures: Partial<Record<Lens, TileFigure>> = {
-    new: { value: String(counts.new), sub: counts.new ? 'not called yet' : 'all called' },
-    overdue: { value: String(counts.overdue), sub: 'date passed' },
-    due: { value: String(counts.due), sub: 'booked for today' },
-    upcoming: { value: String(counts.upcoming), sub: 'booked ahead' },
-    pi: { value: String(counts.pi), sub: values.pi ? fmtINR(values.pi) : 'no ticket value yet' },
-    open: { value: values.open.total ? fmtINR(values.open.total) : '—', sub: `${counts.open} open lead${counts.open === 1 ? '' : 's'}` },
-    closed: { value: String(counts.closed), sub: values.closed ? fmtINR(values.closed) : 'no order value yet' },
-    lost: values.lostNoReason
-      ? { value: String(counts.lost), sub: `${values.lostNoReason} without a reason`, warn: true }
-      : { value: String(counts.lost), sub: 'reason recorded' },
+  const valueText = lens === 'pis' && values.pis ? `${fmtINR(values.pis)} on deal tickets`
+    : lens === 'pi' && values.pi ? `${fmtINR(values.pi)} open on deal tickets`
+      : lens === 'piWon' && values.piWon ? `${fmtINR(values.piWon)} ordered`
+        : lens === 'closed' && values.closed ? `${fmtINR(values.closed)} ordered`
+          : undefined;
+
+  const rows = useMemo(() => sortForLens(lens, byLens[lens], today, piRange), [lens, byLens, today, piRange]);
+
+  useEffect(() => { setListPage(0); }, [serverOpts, f, lens, piRange]);
+
+  const pickLens = (k: Lens) => {
+    setLens(k);
+    setView('list');
+    const s = LENS_SECTION[k];
+    if (s) setSection(s);
   };
-
-  const valueText = lens === 'pi' && values.pi ? `${fmtINR(values.pi)} on deal tickets`
-    : lens === 'closed' && values.closed ? `${fmtINR(values.closed)} ordered`
-      : lens === 'open' && values.open.total
-        ? `${fmtINR(values.open.quoted)} quoted${values.open.estimated ? ` + ${fmtINR(values.open.estimated)} estimated` : ''}`
-        : undefined;
-
-  const rows = useMemo(() => sortForLens(lens, byLens[lens], today), [lens, byLens, today]);
-
-  useEffect(() => { setListPage(0); }, [serverOpts, f, lens]);
-
-  const pickLens = (k: Lens) => { setLens(k); setView('list'); };
+  const pickSection = (s: Section) => pickLens(SECTIONS.find((x) => x.key === s)!.lens);
 
   const runSearch = (q: string) => {
     setAppliedSearch(q);
@@ -194,13 +177,11 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   };
 
   const applyPatch = async (lead: InboundLead, patch: Partial<InboundLead>) => {
-    const statusChanged = patch.stage !== undefined && patch.stage !== lead.stage;
-    const updated: InboundLead = {
+    const updated: InboundLead = withStatusStamps(lead, {
       ...lead,
       ...patch,
-      statusChangedAt: statusChanged ? new Date().toISOString() : lead.statusChangedAt,
       value: Number(patch.orderValue ?? lead.orderValue) || 0,
-    };
+    }, new Date().toISOString());
 
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
     const err = await upsertInboundLead(updated);
@@ -219,6 +200,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
       followUpDate: lead.followUpDate,
       enqId: lead.enqId,
       lostReason: lead.lostReason,
+      invalidReason: lead.invalidReason,
+      invalidNote: lead.invalidNote,
+      calls: lead.callAttempts?.length,
     });
     if (errs.length) { setMove({ lead, target }); return; }
     applyPatch(lead, { stage: target });
@@ -245,7 +229,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     try {
       let list = await fetchAll(exportScope === 'all' ? { ownerIds: boardOwnerIds } : serverOpts);
       if (exportScope !== 'all') {
-        list = list.filter((l) => matchesFilters(l, f) && (view === 'board' || lensMatches(lens, l, today)));
+        list = list.filter((l) => matchesFilters(l, f) && (view === 'board' || lensMatches(lens, l, today, piRange)));
       }
       if (!list.length) { setError('No leads matched — nothing to export.'); return; }
       const name = `b2b_inbound_leads_${exportScope === 'all' ? 'all' : lens}_${todayStr()}`;
@@ -343,7 +327,28 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </p>
       )}
 
-      <LensTiles groups={tileGroups(counts, figures, loading ? 'pending' : loadFailed ? 'failed' : null)} active={view === 'list' ? lens : null} onPick={pickLens} />
+      <div className="flex items-end gap-1 border-b border-gray-200 mb-3 overflow-x-auto">
+        {SECTIONS.map((s) => {
+          const on = section === s.key;
+          return (
+            <button
+              key={s.key}
+              onClick={() => pickSection(s.key)}
+              title={`${s.title}: ${LENS[SECTION_COUNT[s.key]].rule}`}
+              className={`px-4 py-2 -mb-px border-b-2 text-[13px] font-semibold whitespace-nowrap ${on ? 'border-[#1A1A1A] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+            >
+              {s.title}
+              <span className="ml-1.5 tabular-nums text-gray-400 font-medium">
+                {loading ? '…' : loadFailed ? '?' : counts[SECTION_COUNT[s.key]]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {section === 'pi' && <PiRangeBar range={piRange} set={setPiRange} today={today} />}
+
+      <LensTiles groups={tileGroups(section, counts, figures, loading ? 'pending' : loadFailed ? 'failed' : null)} active={view === 'list' ? lens : null} onPick={pickLens} />
 
       <InboundFilterBar
         f={f}
@@ -380,6 +385,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         ) : (
           <LeadTable
             lens={lens}
+            piBasis={piRange.basis}
             rows={rows}
             today={today}
             showOwner={scope === 'all'}

@@ -8,7 +8,7 @@ export type FieldOwner =
   | 'derived';
 
 export type InboundStatus =
-  | 'New' | 'Connected - Need nurturing' | 'Follow up' | 'PI Shared' | 'Closed' | 'Lost';
+  | 'New' | 'Connected - Need nurturing' | 'Follow up' | 'PI Shared' | 'Closed' | 'Lost' | 'Invalid';
 
 export type LegacyStage =
   | 'New' | 'Hyderabad' | 'RNR' | 'Followup Required' | 'Quote'
@@ -56,6 +56,19 @@ export interface StatusGateInput {
   followUpDate?: string;
   enqId?: string;
   lostReason?: string;
+  invalidReason?: string;
+  invalidNote?: string;
+  calls?: number;
+}
+
+export interface OutreachReferral {
+  at: string;
+  by: string;
+  decisionMaker: string;
+  project: string;
+  meetingDate: string;
+  meetingTime?: string;
+  note: string;
 }
 
 export interface EnrichmentInput {
@@ -67,6 +80,7 @@ export interface EnrichmentInput {
   priority?: string;
   selections?: string[];
   expectedOrderValue?: number;
+  officeLocation?: string;
 }
 
 export interface EnrichmentGap { key: keyof EnrichmentInput; label: string }
