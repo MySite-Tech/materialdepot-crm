@@ -5,18 +5,15 @@ import InboundDrawer from '../../drawers/inbound/index';
 import { InboundStatus, closureReadiness, hasConnected, statusGateErrors, istToday, withStatusStamps } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
-import { ExportFormat, ExportScope } from '../../types/export';
-import { ExportButton } from '../../ui/export-button';
-import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { Spinner } from '../../ui/inbound-chips';
-import { EXPORT_HEADERS, LENS_KEYS, NO_FILTERS } from './constants';
+import { LENS_KEYS, NO_FILTERS } from './constants';
 import { MoveModal } from './ui/modals';
 import { InboundBoard } from './ui/board';
 import { InboundFilterBar } from './ui/filters';
 import { LeadTable } from './ui/table';
 import { InboundFilters, Lens, View } from './types';
 import { LensPills, LensTiles } from '../../ui/lens-tiles';
-import { activeFilterCount, byNewestLeadFirst, countsTomorrow, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups, toExportRow } from './utils';
+import { activeFilterCount, byNewestLeadFirst, countsTomorrow, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups } from './utils';
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
@@ -42,7 +39,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [listPage, setListPage] = useState(0);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -204,41 +200,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     applyPatch(lead, { stage: target });
   };
 
-  const fetchAll = async (opts: Parameters<typeof fetchInboundBoard>[0]): Promise<InboundLead[]> => {
-    const all: InboundLead[] = [];
-    const seen = new Set<string>();
-    let p = 0;
-    for (;;) {
-      const res = await fetchInboundBoard({ ...opts, page: p });
-      if (!res.ok) throw new Error(`page ${p + 1} did not load from Kylas`);
-      for (const l of res.leads) if (!seen.has(l.id)) { seen.add(l.id); all.push(l); }
-      if (!res.hasMore) break;
-      p += 1;
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    return all;
-  };
-
-  const handleExport = async (format: ExportFormat, exportScope: ExportScope) => {
-    if (exporting) return;
-    setExporting(true);
-    try {
-      let list = await fetchAll(exportScope === 'all' ? { ownerIds: boardOwnerIds } : serverOpts);
-      if (exportScope !== 'all') {
-        list = list.filter((l) => matchesFilters(l, f) && (view === 'board' || lensMatches(lens, l, today)));
-      }
-      if (!list.length) { setError('No leads matched — nothing to export.'); return; }
-      const name = `b2b_inbound_leads_${exportScope === 'all' ? 'all' : lens}_${todayStr()}`;
-      const out = list.sort(byNewestLeadFirst).map(toExportRow);
-      if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, out, name);
-      else await exportRowsExcel(EXPORT_HEADERS, out, name, 'Inbound Leads');
-    } catch (e) {
-      setError('Export failed: ' + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const clearFilters = () => setF(NO_FILTERS);
   const activeFilters = activeFilterCount(f);
 
@@ -300,7 +261,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
               </button>
             ))}
           </div>
-          <ExportButton onExport={handleExport} disabled={exporting} />
           <button
             onClick={load}
             disabled={loading}

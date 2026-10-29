@@ -537,7 +537,7 @@ for it.
   quick check is to render the panel and grep its `innerText` for a digit jammed
   against a word.
 
-- **`ExportButton`'s `disabled` prop means "an export is running", not "there is
-  nothing to export".** It renders a spinner and the word "Exporting…" when
-  true, so passing `!rows.length` makes an empty tab claim it is mid-export.
-  Every caller passes only its own `exporting` flag.
+- **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
+  removed it from Client Database, Leads and Inbound for every role, admins
+  included, as a security decision; KAM and Outreach lost theirs earlier the same
+  day. `ExportButton` is deleted. Do not add an export back behind a role check.

@@ -47,3 +47,7 @@ than in JSX:
 Inbound contributes `fetchInboundBoard()` page 0 plus the whole DB overlay — the
 same set the Inbound tab shows — so the footer states how many unactioned Kylas
 leads are NOT in the list rather than implying the count is everything.
+
+**No export (2026-10-29).** The user removed the CSV/Excel export from this tab
+for every role, admins included, as a security decision. Do not restore it
+behind a role check.

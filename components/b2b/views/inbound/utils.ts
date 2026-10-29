@@ -8,51 +8,6 @@ import { LENS, LENS_GROUPS, NO_FILTERS, OUTCOME_LENSES, PRIORITY_RANK, SIDE_LENS
 import type { LensPill, LensTileGroup } from '../../ui/lens-tiles';
 import { InboundFilters, Lens } from './types';
 
-export const toExportRow = (l: InboundLead): (string | number)[] => {
-  const last = lastAttempt(l.callAttempts);
-  const tally = callTally(l.callAttempts);
-  return [
-    l.leadCreatedAt ? fmtLeadDateTime(l.leadCreatedAt) : '',
-    l.companyName || l.company || '',
-    l.contactName || '',
-    l.phone || '',
-    l.owner || '',
-    l.gstNumber || '',
-    l.segment || '',
-    l.clientType || '',
-    l.leadType || '',
-    l.priority || '',
-    l.location || '',
-    (l.selections || []).join(' / '),
-    l.requirement || '',
-    l.expectedOrderValue || '',
-    l.stage,
-    l.followUpDate || '',
-    tally.total,
-    last?.outcome || '',
-    l.enqId || '',
-    l.orderValue || '',
-    l.lostReason || '',
-    l.placedUnder?.spok || '',
-    l.placedUnder?.bmName || '',
-    l.placedUnder?.ecName || '',
-    l.placedUnder?.ecBmName || '',
-    l.kam || '',
-    l.presalesOwner || '',
-    l.officeLocation || '',
-    piDay(l),
-    lastCallDay(l),
-    l.invalidReason || '',
-    l.invalidNote || '',
-    sentToOutreach(l) ? istDay(l.outreachReferral?.at) : '',
-    l.primaryContactName || '',
-    l.primaryContactPhone || '',
-    (l.additionalContacts || []).map((c) => `${c.name} ${c.phone}`.trim()).join(' / '),
-    tally.connected,
-    tally.rnr,
-  ];
-};
-
 export const gapsFor = (l: InboundLead) => enrichmentGaps(l);
 
 export const byNewestLeadFirst = (a: InboundLead, b: InboundLead): number => {

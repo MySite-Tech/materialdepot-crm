@@ -113,6 +113,10 @@ comparing empty strings the other way round would have done. The call lists
 (Call today, Overdue, Due today, Upcoming, PI Shared) are deliberately **not**
 date-ordered: `sortForLens` sorts them by priority, then follow-up date.
 
+**No export (2026-10-29).** The user removed the CSV/Excel export from this tab
+for every role, admins included, as a security decision. Do not restore it
+behind a role check.
+
 ### One tab, three tile groups (2026-10-29, replacing Clients / PI / Results)
 
 The user asked for one tab, "clean and easy", read as an ordinary pipeline. The

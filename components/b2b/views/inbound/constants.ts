@@ -3,16 +3,6 @@
 import { INBOUND_STATUS_COLORS } from '../../models/inbound';
 import { InboundFilters, Lens, LensMeta } from './types';
 
-export const EXPORT_HEADERS = [
-  'Lead date', 'Company', 'Contact name', 'Contact number', 'Assigned BM',
-  'GST', 'Segment', 'Client type', 'Lead type', 'Priority', 'Location',
-  'Selection', 'Requirement', 'Expected value', 'Status', 'Next follow-up',
-  'Attempts', 'Last outcome', 'Enq ID', 'Order value', 'Lost reason',
-  'Spok', 'BM (placed under)', 'Assisted at EC', 'EC BM', 'KAM', 'Qualified by',
-  'Office address', 'PI shared', 'Last call', 'Invalid reason', 'Invalid note', 'Sent to Outreach',
-  'Primary person', 'Primary mobile', 'Additional people', 'Connected calls', 'RNRs',
-];
-
 export const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, '': 3 };
 
 export const LIST_PAGE_SIZE = 25;
