@@ -86,7 +86,7 @@ They live here now because the code cannot carry them.
   returns `defaultTargetStore()` — the built-in 120L — which is indistinguishable
   from a team that genuinely set 120L. `saveTargets` likewise returned `void`
   and swallowed its error, so a target edit looked saved and was not; it now
-  returns the message and the Targets tab renders it.
+  returns the message and Set targets (Leadership Board) renders it.
 
 - **Enquiry-id matching is case-insensitive on both sides, but the id sent to
   the backend keeps its original case** so the indexed `__in` lookup hits
@@ -186,11 +186,10 @@ They live here now because the code cannot carry them.
   is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
   data, not a bug to tune away.
 
-- **Targets is still a third number**: its B2B Target card adds up the
-  Inbound, Outreach and KAM Revenue KPIs (`leadership.md` §Targets tab), which
-  count Enq-fetched values on closed backend rows. It will not reconcile with
-  either Django figure. Do not "fix" a mismatch by making one read the other;
-  check which source the panel is meant to speak for.
+- **The B2B target is the sum of every team member's revenue target**
+  (`b2bTargetL`, `leadership.md` §Set targets), not a typed 120L. Achieved on
+  the Overview is still Django's figure, so achieved and target come from
+  different places by design.
 
 - **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**
   It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`
@@ -207,11 +206,11 @@ They live here now because the code cannot carry them.
     display/matching attributes; only `contact` may be corrected freely.
   - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
     Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
-    `DEFAULT_KAM`, but he has no Targets card. That asymmetry is deliberate and predates this
+    `DEFAULT_KAM`, but he had no Targets card (the tab is gone since 2026-10-30). That asymmetry is deliberate and predates this
     file; it was briefly "fixed" by making him unassignable and reverted the
     same day.
   - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
-    only grants the tab; every KAM list, dropdown and Targets card reads this
+    only grants the tab; every KAM list and dropdown reads this
     file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
     nowhere until he was added here (Oct 2026). A new B2B hire needs a roster
     row as well as the role.
@@ -219,7 +218,7 @@ They live here now because the code cannot carry them.
     `b2b_team_member` table, which managers edit under B2B Sales → Team; see
     `inbound.md` §Who owns a lead. Nor does the Leadership Board, which reads
     the team table and falls back to names in the data (`leadership.md`). KAM
-    lists and Targets still read `B2B_ROSTER` until the redesign retires it.
+    lists still read `B2B_ROSTER` until the redesign retires it.
 
 - **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
   `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people

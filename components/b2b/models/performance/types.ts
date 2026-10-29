@@ -55,6 +55,7 @@ export interface PerfData {
   waitlist: Map<string, WaitlistSignup> | null;
   metricsFor: (c: ClientEntity) => ClientOrderMetrics;
   assigned?: Record<string, number | null>;
+  members?: TeamMember[];
   today: string;
 }
 

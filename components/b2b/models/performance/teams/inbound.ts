@@ -4,12 +4,12 @@ import { isMobile, sameRep } from '../../outreach/handover';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
 import { PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, isPlaceholderName, lakhs, memberPeople, pct, personKey } from '../utils';
+import { countValue, counted, isPerson, isPlaceholderName, lakhs, memberPeople, onTeamList, pct, personKey } from '../utils';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person (the caller, not the lead owner). Target 1,500 a month per head.' },
+  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by someone not on the Inbound team list (a manager, say) goes to the lead owner. Target 1,500 a month per head.' },
   { key: 'firstCalls', kind: 'Effort', label: 'New leads called',       short: 'First calls',    unit: 'count', target: null,               daily: true,  rule: 'Leads they own whose first ever call attempt fell in the period.' },
   { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).' },
   { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with contact name, mobile, firm name, segment, client type, city, a status past New, a next follow-up date while open, and a note on every call ÷ leads they called.' },
@@ -54,10 +54,10 @@ function assignedTotal(data: PerfData, people: Person[]): number | null {
 function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const owns = ownsLead(people);
   const mine = data.inbound.filter(owns);
-  const byThem = (by: string | undefined) => isPerson(people, by);
+  const byThem = (l: InboundLead, by: string | undefined) => (by && onTeamList(data, 'inbound', by) ? isPerson(people, by) : owns(l));
 
   const calls: PerfRow[] = data.inbound.flatMap((l) => (l.callAttempts || [])
-    .filter((a) => inPeriod(a.at, period) && byThem(a.by))
+    .filter((a) => inPeriod(a.at, period) && byThem(l, a.by))
     .map((a) => ({ id: `${l.id}:${a.n}:${a.at}`, title: title(l), at: a.at, counts: true, note: `${a.outcome}${filled(a.note) ? '' : ' · no note'}` })));
   const connected = calls.filter((r) => r.note.startsWith('Connected')).length;
 
@@ -77,7 +77,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const sameDay = coverageRows.filter((r) => r.note.startsWith('Called the day')).length;
 
   const handled = data.inbound
-    .map((l) => ({ l, theirs: (l.callAttempts || []).filter((a) => inPeriod(a.at, period) && byThem(a.by)) }))
+    .map((l) => ({ l, theirs: (l.callAttempts || []).filter((a) => inPeriod(a.at, period) && byThem(l, a.by)) }))
     .filter(({ theirs }) => theirs.length);
   const adherence: PerfRow[] = handled.map(({ l, theirs }) => {
     const gaps = FIELDS.filter(([, ok]) => !ok(l)).map(([label]) => label);

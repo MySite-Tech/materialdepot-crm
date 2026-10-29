@@ -2,7 +2,7 @@
 
 ## Leadership Board / My performance (rebuilt 2026-10-28)
 
-**Covers:** `components/b2b/views/leadership/**` · `components/b2b/views/targets/**` · `components/b2b/models/performance/**` · `lib/b2b/stats/targets.ts`
+**Covers:** `components/b2b/views/leadership/**` · `components/b2b/models/performance/**` · `lib/b2b/stats/targets.ts`
 
 ## Data
 
@@ -12,13 +12,13 @@
 | `fetchB2BInboundLeads(…, size=1)`, once per linked inbound person, **one at a time** | Kylas `POST /search/lead` (two inbound stages, `createdAt` in the period) | Inbound team only, per period. Capped at `KYLAS_COUNT_CAP` (6). Successful counts are cached per person and period |
 | `fetchStudioWaitlist` | `GET /api/b2b/waitlist` | Outreach team only, once |
 | `fetchB2BBulk` via `useClientAggregates` | Django `/crm/leads/b2b-bulk/` | KAM team only, once |
-| `fetchTargets` | backend `GET /target` (one `b2b_target` row), shared through the B2B cache | On open, on both tabs |
-| `saveTargets` | backend `POST /target` | Targets tab, a manager leaving a target field |
+| `fetchTargets` | backend `GET /target` (one `b2b_target` row), shared through the B2B cache | On open |
+| `saveTargets` | backend `POST /target` | Set targets, a manager pressing Save targets |
 
 Opening the Inbound board as a manager on 2026-10-28 took 6 Kylas counts plus
 one automatic 429 retry and the waitlist call. The Supabase read was a cache hit
 from the Dashboard; a cold open adds 1–2 more. An individual pays 1 Kylas call.
-**Nothing on the Leadership tab writes.** The Targets tab writes the target row.
+**Only Set targets writes**, the one target row, on Save.
 
 ## What it is
 
@@ -67,7 +67,7 @@ with `counts` and a reason, the same contract as `outreachKpis`.
 ### Targets
 
 The KPI sheet's numbers are the **defaults** in each engine's defs (`target`).
-A manager can override any of them per person on the Targets tab. Overrides
+A manager overrides any of them per person under **Leadership Board → Set targets**. Overrides
 are stored in `b2b_target.reps` (free JSONB, no migration needed) as
 `{ "<team>|<personKey>": { "<kpiKey>": n } }`. `personKey` is the 10-digit
 phone, or `name:<lowercased>` for someone with no phone. A value equal to the
@@ -76,7 +76,7 @@ changes. The old `{ "<rep name>": { revenueTargetL, … } }` entries are dropped
 on read. They belonged to the hardcoded roster and went away on the first save.
 
 `targetFor(def, team, people, goals, …)` is the one function every tile, table
-cell and Targets card reads. For counts and lakhs it **sums each person's goal**
+cell and the editor's team total reads. For counts and lakhs it **sums each person's goal**
 (override or sheet), so a team total follows the overrides. For % it averages
 them. Every count target is `per: 'month'` and shows only for a whole calendar
 month, with pace inside the current one. The compare-table header reads "set per
@@ -89,38 +89,30 @@ count with no target. `per: 'day'` still exists in `targetFor` but no KPI uses i
 (25 L), Inbound qualified (30) and KAM revenue (50 L) have no frequency in the
 sheet. They are treated as monthly here; that is an assumption to confirm.**
 
-## Targets tab (rebuilt 2026-10-29)
+## Set targets (2026-10-30; replaced the Targets tab)
 
-It used to read `REP_TARGETS` off `B2B_ROSTER`: eleven hardcoded names with
-Revenue / Active Clients / New Onboardings goals that matched nothing in the
-sheet. Its "Active clients" was the size of a book, not activity. Now:
+The user's call: targets are set by leadership and the results already live on
+the Performance view, so a separate tab showing results again was noise. The
+Targets tab (`views/targets/`, built 2026-10-29) is deleted and its nav entry
+gone. Managers get a **Performance | Set targets** toggle on this board;
+reps never see it.
 
-- **People come from the Team tab** (`team.members`, active, per team). Someone
-  who holds work but is not on the list gets no card. Their names are listed in
-  a notice pointing at B2B → Team. While the team table is missing, the data's
-  people are shown instead, as on the Leadership Board.
-- **One team at a time** (Inbound · Outreach · KAM), through
-  `usePerformanceData`, so the tab costs what the Leadership Board costs for that
-  team, plus the target row.
-- **Each card is the engine's card for this month** for one person, every KPI the
-  engine scores, with an editable target beside it. A "Whole team" card sums the
-  targets. KPIs the sheet lists but the engine cannot score are named under
-  "not scored yet". They are the same `notMeasured` list.
-- **Only managers edit** (`viewer.isManager`). Anyone else sees their own card,
-  read-only, found with `selfOn`. Saves happen on blur or Enter, never per keystroke.
-- **The B2B Target card** (`monthlyTargetL`, also read by the Dashboard) is now
-  compared against the three engines' Revenue KPIs added together over everyone
-  in the data. Those are Enq-fetched values only, where the old card summed typed
-  values. A lead credited to two teams counts for both, the same as before.
+- **One table per team**: a row per active member of that team on the Team tab,
+  a column per KPI that has a sheet target, and a Team row (sum, or average
+  for %). A blank cell shows the sheet default in grey; a set cell is amber.
+  Edits are a draft until **Save targets**, with Discard. One write, not one
+  per keystroke.
+- **The B2B monthly revenue target is the sum of every member's revenue
+  target** across the three teams (`b2bTargetL`, `models/performance`). There
+  is no separate number to set any more. The Overview (ex-Dashboard) target
+  reads the same function. `monthly_target_l` is still stored but is read only
+  while the team table is missing or failed to load.
+- People with work but not on the team list get no row; add them on Team.
 
-Checked 2026-10-29 in `npm run dev:sandbox` as Meera (manager) and Asha (rep):
-setting Asha's calls to 1,200 saved `inbound|9000000001 → {calls: 1200}`. The
-team total and the Leadership Board's Calls tile both moved to 2,700, and Asha's
-own Targets view showed 1,200 with no inputs.
-
-`DAILY_CALL_TARGET` (the KAM tab's and Dashboard's "calls today" bar) is
-derived from the monthly 500 over 26 Mon–Sat working days, rounded up: 20. The
-two can no longer disagree.
+Checked 2026-10-30 in `npm run dev:sandbox` as Meera: Asha calls 1,200 and
+revenue 30 saved as `inbound|9000000001 → {calls: 1200, revenue: 30}`, the B2B
+target read ₹110L (Inbound 55 + Outreach 5 + KAM 50), and the Dashboard read
+"of ₹1.10 Cr target".
 
 ## Who the people are
 
@@ -137,9 +129,14 @@ matches nothing sees a notice, not an empty card.
 
 ## KPI rules that are not obvious from the defs
 
-- **Inbound calls are credited to `CallAttempt.by`, the caller.** Rows before
-  2026-10-28 hold the owner there, and every intake lead is created under Hardi,
-  so on 2026-10-28 all 311 October calls were credited to Hardi.
+- **Inbound calls are credited to `CallAttempt.by`, the caller — unless the
+  caller is not on the Inbound team list, then to the lead's owner**
+  (`onTeamList`, 2026-10-30). Before that, a call a manager logged on Asha's
+  lead counted for the manager, who is on no team, so it counted for nobody:
+  the user logged one as Meera and saw Asha's Calls not move. With no team
+  list (table missing) the caller is always credited. Rows before 2026-10-28
+  hold the owner in `by`, and every intake lead is created under Hardi, so on
+  2026-10-28 all 311 October calls were credited to Hardi.
 - **Inbound coverage** = leads created in the period and *now* owned by the
   person with at least one call ÷ Kylas's count of their leads created in the
   period. The Kylas count is stage-filtered (the two inbound stages), so the
@@ -157,7 +154,8 @@ matches nothing sees a notice, not an empty card.
 - **Revenue (Inbound and KAM) counts only Enq-fetched values**
   (`orderValueSource === 'deal'`). Typed values are listed as "not counted".
 - **KAM meetings and calls are one per firm per day**, credited to
-  `interaction.loggedBy`, falling back to the firm's KAM. Same dedupe as
+  `interaction.loggedBy` when that person is on the KAM team list, otherwise
+  (or when empty) to the firm's KAM. Same rule as Inbound calls, same reason. Same dedupe as
   `callsLoggedOn`.
 - **KAM coverage** uses Active (`clientStatus`: an order in the last 30 days,
   as of today) as its denominator, since 2026-10-29. It was a 3-month window
