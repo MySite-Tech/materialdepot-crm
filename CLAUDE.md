@@ -140,8 +140,12 @@ an app bug that did not exist. Use `hasText: /^Inactive$/` on the title element.
 **Supabase is real in that browser, so never exercise a SAVE path to see a
 feature work.** There is no staging Supabase — clicking through an editor writes
 production rows, and "it was only test data" is not recoverable. This includes
-all of B2B: a move of its data to Django was reported on 2026-10-28, but the code
-still reads and writes Supabase `b2b_lead` (see `docs/backends.md` § Pending).
+all of B2B. **On `main` since PR #27 (2026-10-29) B2B data lives in the FastAPI
+`b2b-backend`** (`lib/b2b/data/backend.ts` → `app/api/b2b/[...path]`, see
+`docs/backends.md` on `main`), which is production too. **On
+`b2b-revamp-2026-10-28` it is still Supabase `b2b_lead`** until that branch
+merges `main`. That table is retired, so a save on the branch lands in rows
+production no longer reads. Either way, never click Save to test.
 To see a screen
 in a state the data is not in, intercept the READ instead:
 `ctx.route(/app_settings/, r => r.request().method() === 'GET' ? r.fulfill({…}) : r.continue())`
@@ -352,8 +356,18 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 A teammate pushes to this branch regularly — **pull before starting.**
 
 **B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
-`Installation-Changes`. It is pushed to `origin` (12 commits on 2026-10-28, more
-on 2026-10-29) and is **not merged**. No PR is open, so none of it is deployed.
+`Installation-Changes`. It is pushed to `origin` (12 commits on 2026-10-28, and
+the Leadership Board, `dev:stub`, Outreach capture and KAM status commits on
+2026-10-29) and
+is **not merged**. No PR is open, so none of it is deployed. **Merge
+`origin/main` into it before anything else.** `main` gained PR #27 on 2026-10-29,
+which moved B2B data from Supabase to the FastAPI backend. The branch still talks
+to Supabase, so :3001 shows stale B2B rows until that merge. Expect conflicts in
+`lib/b2b/data/{reads,writes}.ts` and the B2B docs. Also check that nothing on the
+branch still imports the deleted `lib/supabase.ts`, and that the branch's
+`b2b_team_member`, `/api/b2b/team` and `/api/b2b/waitlist` routes sit alongside
+`app/api/b2b/[...path]`. The merge waits until no session has uncommitted edits
+in `docs/b2b/context.md`, because git refuses to merge over them.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart.
 `docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
