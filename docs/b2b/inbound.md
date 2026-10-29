@@ -187,7 +187,7 @@ written to Kylas**.
 - **unreachable**: at least `READY_RNR_COUNT` (5) RNRs dated within the last
   `READY_WINDOW_DAYS` (7) days; or
 - **stalled**: at least 7 days since its work day, at least
-  `MIN_ATTEMPTS_BEFORE_CLOSE` (4) calls, still `New` or `Connected`, and not sent
+  `MIN_ATTEMPTS_BEFORE_CLOSE` (5) calls, still `New` or `Connected`, and not sent
   to Outreach.
 
 It feeds the Ready to close tile, a banner in the call log with a one-click
@@ -195,9 +195,11 @@ It feeds the Ready to close tile, a banner in the call log with a one-click
 readiness says so, and every other lost reason needs a Connected call.** A
 reason like "Price issue" can only come from someone who spoke to the client.
 `Unreachable (4 attempts)` is no longer offered; old rows keep it and show it as
-"previously recorded". The user also stated "4 calls before lost or junk";
-Invalid still needs only one logged call, because one call is enough to prove a
-wrong number.
+"previously recorded". The requirement keeps its earlier versions
+(`data-layer.md` §Requirement history). **Confirmed by the user on 2026-10-29:** 5 calls before
+a lead closes as no progress (it was 4), and Invalid needs only one logged call,
+because one call is enough to prove a wrong number. Calls and notes are never
+written to Kylas, also confirmed that day.
 
 ### Invalid is a status, not a lost reason (2026-10-29)
 

@@ -2,7 +2,7 @@
 
 import { Pill } from './inbound-chips';
 import {
-  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, MAX_MEETINGS, meetingLocation,
+  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
   type OutreachStatus, type MeetingStatus, type OutreachMeeting,
   type LeadType,
 } from '../models/outreach';
@@ -41,12 +41,14 @@ export function MeetingProgress({ meetings }: { meetings?: OutreachMeeting[] }) 
   const postponed = all.filter((m) => m.status === 'Postponed').length;
   return (
     <span className="text-[10px] text-gray-500 whitespace-nowrap">
-      {all.length}/4 meetings
+      {all.length} {all.length === 1 ? 'meeting' : 'meetings'}
       {done > 0 && <span className="text-[#0F766E]"> · {done} held</span>}
       {postponed > 0 && <span className="text-amber-600"> · {postponed} postponed</span>}
     </span>
   );
 }
+
+const MEETING_DOTS = 6;
 
 export function MeetingDots({ meetings }: { meetings?: OutreachMeeting[] }) {
   const all = [...(meetings || [])].sort((a, b) => a.n - b.n);
@@ -55,16 +57,11 @@ export function MeetingDots({ meetings }: { meetings?: OutreachMeeting[] }) {
     : 'No meetings yet';
   return (
     <span className="inline-flex items-center gap-1" title={title}>
-      {Array.from({ length: MAX_MEETINGS }, (_, i) => {
-        const m = all[i];
-        return (
-          <span
-            key={i}
-            className="w-2 h-2 rounded-full"
-            style={m ? { background: MEETING_STATUS_COLORS[m.status] } : { boxShadow: 'inset 0 0 0 1px #D1D5DB' }}
-          />
-        );
-      })}
+      {!all.length && <span className="w-2 h-2 rounded-full" style={{ boxShadow: 'inset 0 0 0 1px #D1D5DB' }} />}
+      {all.slice(-MEETING_DOTS).map((m) => (
+        <span key={m.n} className="w-2 h-2 rounded-full" style={{ background: MEETING_STATUS_COLORS[m.status] }} />
+      ))}
+      {all.length > MEETING_DOTS && <span className="text-[10px] text-gray-400">+{all.length - MEETING_DOTS}</span>}
     </span>
   );
 }

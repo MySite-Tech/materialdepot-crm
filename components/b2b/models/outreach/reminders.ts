@@ -1,4 +1,5 @@
 import { OutreachLead } from '../mock-data';
+import { withRequirementHistory } from '../requirement';
 import {
   FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings,
 } from '.';
@@ -46,6 +47,7 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
 
   const fu = String(after.followUpDate || '').slice(0, 10);
   if (fu && fu !== String(before.followUpDate || '').slice(0, 10)) push('follow-up-set', `Next follow-up set for ${fu}${after.followUpTime ? ` ${after.followUpTime}` : ''}`);
+  if ((after.requirementHistory || []).length > (before.requirementHistory || []).length) push('requirement-changed', `Requirement changed: ${String(after.requirement || '').trim() || 'cleared'}`);
   for (const n of (after.notes || []).slice((before.notes || []).length)) push('note-added', `Note: ${n.text}`);
   const known = new Set((before.contacts || []).map((c) => c.name.trim().toLowerCase()));
   for (const c of after.contacts || []) {
@@ -62,7 +64,8 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
   return ev;
 }
 
-export function withJourney(before: OutreachLead | null, after: OutreachLead, by: string, at: string): OutreachLead {
+export function withJourney(before: OutreachLead | null, latest: OutreachLead, by: string, at: string): OutreachLead {
+  const after = withRequirementHistory(before, latest, by, at);
   const events = journeyDiff(before, after, by, at);
   const convertedAt = after.status === 'Closed' && !after.convertedAt ? at : after.convertedAt;
   if (!events.length && convertedAt === after.convertedAt) return after;
@@ -85,6 +88,9 @@ const needsNextStep = (l: OutreachLead) => l.status !== 'Closed' && l.status !==
 const altPhoneOk = (l: OutreachLead) => !String(l.altPhone || '').trim()
   || (isMobile(l.altPhone) && normalisePhone(l.altPhone) !== normalisePhone(l.phone));
 
+const altContactOk = (l: OutreachLead) => !String(l.altPhone || '').trim()
+  || (!!String(l.altName || '').trim() && !!String(l.altRole || '').trim());
+
 const CAPTURE: { label: string; ok: (l: OutreachLead) => boolean }[] = [
   { label: 'owner/designer',      ok: (l) => !!String(l.contactPerson || '').trim() },
   { label: 'their role',          ok: (l) => !!String(l.designation || '').trim() },
@@ -100,6 +106,7 @@ export function outreachCaptureErrors(l: OutreachLead): string[] {
     return g.length ? [`Meeting ${m.n} is marked held — add ${g.join(' and ')}.`] : [];
   });
   if (!altPhoneOk(l)) errs.push('The alternate number must be a different 10-digit mobile.');
+  if (!altContactOk(l)) errs.push('The alternate number needs the name and role of the person on it.');
   if ((l.contacts || []).some((c) => !c.name.trim() || !c.role.trim())) errs.push('Every extra contact needs a name and a role.');
   if (l.status === 'Lost' || !completedMeetings(l.meetings).length) return errs;
   const missing = CAPTURE.filter((c) => !c.ok(l)).map((c) => c.label);

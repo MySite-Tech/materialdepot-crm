@@ -118,7 +118,7 @@ export type JourneyKind =
   | 'created' | 'imported' | 'intake' | 'intake-accepted' | 'intake-rejected'
   | 'status' | 'meeting-scheduled' | 'meeting-held' | 'meeting-postponed'
   | 'order-verified' | 'handover-sent' | 'handover-accepted' | 'handover-rejected' | 'bm-changed'
-  | 'follow-up-set' | 'note-added' | 'contact-added';
+  | 'follow-up-set' | 'note-added' | 'contact-added' | 'requirement-changed';
 
 export interface JourneyEvent {
   at: string;
@@ -168,7 +168,7 @@ export function companyTypeLabel(
   return specified ? `Other — ${specified}` : 'Other';
 }
 
-export const MAX_MEETINGS = 4;
+export const UNMET_NUDGE_AFTER = 4;
 
 export type MeetingStatus = 'Scheduled' | 'Completed' | 'Postponed';
 export const MEETING_STATUSES: MeetingStatus[] = ['Scheduled', 'Completed', 'Postponed'];
@@ -202,10 +202,6 @@ export function nextMeetingNumber(meetings: OutreachMeeting[] | undefined): numb
   return (meetings?.length || 0) + 1;
 }
 
-export function canScheduleMeeting(meetings: OutreachMeeting[] | undefined): boolean {
-  return (meetings?.length || 0) < MAX_MEETINGS;
-}
-
 export function openMeeting(meetings: OutreachMeeting[] | undefined): OutreachMeeting | undefined {
   return (meetings || []).find((m) => m.status === 'Scheduled');
 }
@@ -226,9 +222,9 @@ export function hasMet(meetings: OutreachMeeting[] | undefined): boolean {
   return completedMeetings(meetings).length > 0;
 }
 
-export function meetingsExhausted(meetings: OutreachMeeting[] | undefined): boolean {
+export function meetingsStalled(meetings: OutreachMeeting[] | undefined): boolean {
   const m = meetings || [];
-  return m.length >= MAX_MEETINGS && !hasMet(m) && !openMeeting(m);
+  return m.length >= UNMET_NUDGE_AFTER && !hasMet(m) && !openMeeting(m);
 }
 
 export function hasMeetingOn(

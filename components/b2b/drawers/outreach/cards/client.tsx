@@ -69,6 +69,12 @@ export function OutreachClientCard({ draft, set, reps, canPickBm, onPickBm }: {
         <Field label="Alternate number">
           <input value={draft.altPhone || ''} onChange={(e) => set('altPhone', e.target.value || undefined)} className={inputCls} />
         </Field>
+        <Field label="Name on alternate" required={!!draft.altPhone?.trim()}>
+          <input value={draft.altName || ''} onChange={(e) => set('altName', e.target.value || undefined)} className={inputCls} />
+        </Field>
+        <Field label="Their role" required={!!draft.altPhone?.trim()}>
+          <input value={draft.altRole || ''} onChange={(e) => set('altRole', e.target.value || undefined)} list="outreach-owner-roles" className={inputCls} />
+        </Field>
         <Field label="GST" hint="Where the firm has one">
           <input value={draft.gstNumber || ''} onChange={(e) => set('gstNumber', e.target.value)} className={inputCls} />
         </Field>

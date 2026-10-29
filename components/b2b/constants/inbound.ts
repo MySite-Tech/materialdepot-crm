@@ -119,7 +119,7 @@ export const READY_RNR_COUNT = 5;
 
 export const READY_WINDOW_DAYS = 7;
 
-export const MIN_ATTEMPTS_BEFORE_CLOSE = 4;
+export const MIN_ATTEMPTS_BEFORE_CLOSE = 5;
 
 export const INBOUND_DAY_CUTOFF_HOUR = 17;
 

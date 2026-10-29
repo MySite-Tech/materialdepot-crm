@@ -1,7 +1,7 @@
 'use client';
 
 import { MeetingStatus, OutreachLead, OutreachMeeting } from '../../../models/mock-data';
-import { MAX_MEETINGS, MEETING_STATUSES, canScheduleMeeting, completedMeetings, nextMeetingNumber } from '../../../models/outreach';
+import { MEETING_STATUSES, completedMeetings, nextMeetingNumber } from '../../../models/outreach';
 import { meetingGaps } from '../../../models/outreach/reminders';
 import { Empty, Field, ReadValue, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
@@ -75,10 +75,10 @@ export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, m
   const contactList = `outreach-met-${draft.id}`;
   return (
     <SectionCard
-      title={`Meetings · ${meetings.length} of ${MAX_MEETINGS}`}
+      title={`Meetings · ${meetings.length}`}
       owner="crm"
       subtitle="Each logged Completed or Postponed"
-      right={canScheduleMeeting(meetings) && !open && (
+      right={!open && (
         <button
           onClick={() => setScheduling((v) => !v)}
           className="px-3 py-1 text-[11px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
@@ -89,9 +89,9 @@ export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, m
     >
       {exhausted && (
         <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800 leading-snug">
-          All {MAX_MEETINGS} meetings were postponed and none was held. The PRD&apos;s lifecycle
-          stops here: mark the lead <strong>Lost</strong> with reason &ldquo;Unable to meet (4 meetings)&rdquo;,
-          or park it on <strong>Follow up</strong> with a long-term date. Nothing is decided for you.
+          {meetings.length} meetings were postponed and none was held. Book another, mark the lead
+          {' '}<strong>Lost</strong> with reason &ldquo;Unable to meet (4 meetings)&rdquo;, or park it on
+          {' '}<strong>Follow up</strong> with a long-term date. Nothing is decided for you.
         </div>
       )}
     

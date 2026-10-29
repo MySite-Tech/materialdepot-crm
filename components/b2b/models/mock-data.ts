@@ -7,6 +7,7 @@ import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
   type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
 } from './outreach';
+import type { RequirementVersion } from './requirement';
 
 type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
 
@@ -84,6 +85,7 @@ export interface InboundLead {
 
   selections?: Selection[];
   requirement?: string;
+  requirementHistory?: RequirementVersion[];
   expectedOrderValue?: number;
 
   stage: InboundStatus;
@@ -143,6 +145,7 @@ export interface OutreachLead {
 
   selections?: Selection[];
   requirement?: string;
+  requirementHistory?: RequirementVersion[];
 
   expectedOrderValue?: number;
 
@@ -169,6 +172,8 @@ export interface OutreachLead {
 
   bmPhone?: string;
   altPhone?: string;
+  altName?: string;
+  altRole?: string;
   contacts?: OutreachContact[];
   source?: OutreachSource;
   email?: string;

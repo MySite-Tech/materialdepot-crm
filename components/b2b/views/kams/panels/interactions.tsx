@@ -76,8 +76,9 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
             </Field>
           </div>
 
-          <Field label="Summary">
-            <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} className={inputCls + ' resize-none'} placeholder="What was discussed" />
+          <Field label={type === 'Meeting' ? 'Minutes of meeting *' : 'Summary'}>
+            <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} className={inputCls + ' resize-none'}
+              placeholder={type === 'Meeting' ? 'Who was there, what was discussed, what was agreed' : 'What was discussed'} />
           </Field>
 
           <Field

@@ -75,7 +75,7 @@ export function matchesFilters(l: OutreachLead, f: OutreachFilters, added: Perio
   if (f.onlyGaps && gapsFor(l).length === 0) return false;
   const q = f.search.trim().toLowerCase();
   if (q) {
-    const hay = [l.company, l.contactPerson, l.phone, l.altPhone, l.enqId, l.designation, l.city, l.bm,
+    const hay = [l.company, l.contactPerson, l.phone, l.altPhone, l.altName, l.enqId, l.designation, l.city, l.bm,
       ...(l.contacts || []).flatMap((c) => [c.name, c.phone])].filter(Boolean).join(' ').toLowerCase();
     if (!hay.includes(q)) return false;
   }

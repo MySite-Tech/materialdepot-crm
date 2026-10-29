@@ -61,7 +61,7 @@ function LeadCard({ lead, today, onClick, onDragStart }: {
       )}
       <div className="flex items-center justify-between gap-1.5 mt-2 pt-2 border-t border-gray-50">
         <span className="text-[10px] text-gray-400 whitespace-nowrap">
-          {attempts ? `${attempts}/4 · ${last?.outcome}` : 'No calls yet'}
+          {attempts ? `${attempts} ${attempts === 1 ? 'call' : 'calls'} · ${last?.outcome}` : 'No calls yet'}
         </span>
         {gaps.length > 0 && (
           <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="text-[10px] font-semibold text-amber-600 whitespace-nowrap">
