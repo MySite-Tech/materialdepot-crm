@@ -74,7 +74,7 @@ status: Delivered)"` **twice**, because the write that would have prevented the
 second was fire-and-forget and its failure invisible. Now the caller awaits every
 write and reports failures, and an identical consecutive note is not re-appended.
 
-### Gates: two hard on an order, one hard on an interaction
+### Gates: two hard on an order, two hard on an interaction
 
 `kamOrderGateErrors` blocks exactly what §5.2 writes the word "Requires"
 against — an Enq ID on `PI Shared`, a lost reason on `Lost`. Note this differs
@@ -86,6 +86,15 @@ names as required, and no more.
 because §4.1 says one "is required … before it can be saved". Scoped to a call,
 which is the word the document uses; a meeting is prompted instead, since a site
 visit ending in "we'll call when the drawings land" has no honest date to give.
+
+**A Meeting needs its minutes (2026-10-29).** The user asked that every
+meeting a KAM or an Outreach BM has with a client carries a summary/MOM, so a
+`Meeting` with an empty summary is refused and the field reads "Minutes of
+meeting \*". A Call keeps the soft "No summary" prompt, because the ask was
+about meetings. Outreach already hard-gated notes on a held meeting
+(`outreach.md` §Meetings: notes and who was met are hard gates), so this
+brings KAM level with it. Meetings logged before this have no minutes, and
+the KAM KPI rows still say "No notes" for them rather than hiding them.
 
 ### §4.3's "actioned" needs no new field
 

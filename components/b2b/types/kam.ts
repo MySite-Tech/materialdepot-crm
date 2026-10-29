@@ -55,6 +55,7 @@ export interface InteractionGateInput {
   type: InteractionType;
   date?: string;
   nextFollowUpDate?: string;
+  summary?: string;
 }
 
 export interface CallCompliance {
