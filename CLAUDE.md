@@ -357,8 +357,8 @@ A teammate pushes to this branch regularly — **pull before starting.**
 
 **B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
 `Installation-Changes`. It is pushed to `origin` (12 commits on 2026-10-28, and
-the Leadership Board, `dev:stub`, Outreach capture and KAM status commits on
-2026-10-29) and
+the Leadership Board, `dev:stub`, Outreach capture, KAM status and Inbound
+Clients/PI/Results commits on 2026-10-29) and
 is **not merged**. No PR is open, so none of it is deployed. **Merge
 `origin/main` into it before anything else.** `main` gained PR #27 on 2026-10-29,
 which moved B2B data from Supabase to the FastAPI backend. The branch still talks
