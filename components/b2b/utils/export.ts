@@ -17,15 +17,6 @@ export const exportRowsCsv = (headers: string[], rows: (string | number)[][], fi
   triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename + '.csv');
 };
 
-export const exportRowsExcel = async (headers: string[], rows: (string | number)[][], filename: string, sheet = 'Sheet1') => {
-  const XLSX = await import('xlsx');
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws['!cols'] = headers.map(() => ({ wch: 18 }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheet);
-  XLSX.writeFile(wb, filename + '.xlsx');
-};
-
 export const todayStr = (): string => {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');

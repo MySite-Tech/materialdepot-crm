@@ -28,12 +28,12 @@ plus the §7/§10 handoff that should create its users.
 |---|---|---|
 | §2 | Five roles incl. MD and a client login | Partial — `B2B_ROSTER` has KAM/Inbound/Outbound/Admin only |
 | §3 | BM↔Zone map, daily visit + follow-up targets, rollup by Zone | **Missing.** No zone concept anywhere; `b2b_target` is one row of monthly revenue goals, a different thing |
-| §4 | Mon–Wed new / Thu–Sat follow-up, auto-classify, soft warn | **Missing.** The four-slot meeting loop in `models/outreach.ts` is where it hangs |
+| §4 | Mon–Wed new / Thu–Sat follow-up, auto-classify, soft warn | **Missing.** The meeting loop in `models/outreach.ts` is where it hangs |
 | §5 | Lead fields, Hot/Warm/Cold, stage ladder, next-date gate | Mostly done — `outreachGateErrors` already gates the next date. New: **Company Size, Team Size** |
 | §6 | Catalogue/sample request → Admin approval, four statuses | **Missing** |
 | §7 | Mandatory handoff meeting + four-item resource checklist | **Missing — this is the core of the PRD.** Today "handoff" is a KAM dropdown and the round-robin button in `drawers/outreach/cards/meetings.tsx` |
 | §8 | Meeting every 12 days, green/amber/red, satisfaction + inputs | Partial — `ClientInteraction` carries date/summary/temperature; the meter is a new derivation, satisfaction and free-text inputs are new fields |
-| §9 | Order-volume tiers, inactive on missed cadence | Partial — `clientStatus` is three-month recency with three states |
+| §9 | Order-volume tiers, inactive on missed cadence | Partial — `clientStatus` is 30/60-day recency with four states |
 | §10 | Onboarding form → Admin → MD → dashboard provisioned | **Missing. This is the bridge to the second app** |
 | §11 | The client dashboard | **Built.** See above |
 

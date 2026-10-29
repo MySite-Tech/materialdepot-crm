@@ -1,5 +1,6 @@
 'use client';
 
+import { RequirementHistory } from '../../../ui/requirement-history';
 import { SELECTIONS } from '../../../constants/inbound';
 import { InboundLead } from '../../../models/mock-data';
 import { Field, SectionCard } from '../../../ui/inbound-chips';
@@ -48,6 +49,7 @@ export function InboundRequirementCard({ draft, droppedSelections, set }: {
           placeholder="What the client actually needs — quantities, sizes, sites."
           className={inputCls + ' resize-none'}
         />
+        <RequirementHistory history={draft.requirementHistory} />
       </Field>
       <Field
         label="Expected order value"

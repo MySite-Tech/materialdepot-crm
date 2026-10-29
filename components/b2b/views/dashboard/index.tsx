@@ -2,7 +2,7 @@
 
 import { HealthOverview, buildHealthOverview } from '../../models/account-health';
 import { ClientMetricsMap, DashboardMetrics, KamDashboard, computeDashboard, computeKamDashboard } from '../../models/analytics';
-import { ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, ClientEntity, contactNumbers } from '../../models/client';
+import { ACTIVE_DAYS, CLIENT_STATUS_SCALE, ClientEntity, INACTIVE_DAYS, contactNumbers } from '../../models/client';
 import { INBOUND_STAGE_COLORS, fmtINR, fmtL } from '../../models/mock-data';
 import { BASIS_HINT, BASIS_LABELS, CLIENT_STATUS_ORDER, RANGE_LABELS, UNATTRIBUTED_SOURCE } from './constants';
 import { AccountHealthPanel } from './ui/health';
@@ -368,16 +368,16 @@ export default function B2BDashboard() {
                 <ResponsiveContainer width="45%" height={150}>
                   <PieChart>
                     <Pie data={clientData.filter((c) => c.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={62} paddingAngle={2}>
-                      {clientData.filter((c) => c.value > 0).map((c) => <Cell key={c.name} fill={CLIENT_STATUS_COLORS[c.name]} />)}
+                      {clientData.filter((c) => c.value > 0).map((c) => <Cell key={c.name} fill={CLIENT_STATUS_SCALE.colors[c.name]} />)}
                     </Pie>
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex-1 flex flex-col gap-2">
                   {clientData.map((c) => (
-                    <div key={c.name} className="flex items-center justify-between text-[13px]" title={CLIENT_STATUS_HINT[c.name]}>
+                    <div key={c.name} className="flex items-center justify-between text-[13px]" title={CLIENT_STATUS_SCALE.hint[c.name]}>
                       <span className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: CLIENT_STATUS_COLORS[c.name] }} />
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: CLIENT_STATUS_SCALE.colors[c.name] }} />
                         {c.name}
                       </span>
                       <span className="font-mono font-semibold">{c.value}</span>
@@ -386,7 +386,7 @@ export default function B2BDashboard() {
                 </div>
               </div>
               <p className="text-[10px] text-gray-400 mt-2">
-                Active = an order in the last {ACTIVE_WINDOW_MONTHS}{' '}months, from the deal tickets. System-computed, never set by hand.
+                Active = an order in the last {ACTIVE_DAYS} days, Inactive 1 month = {ACTIVE_DAYS + 1}–{INACTIVE_DAYS} days, from the deal tickets. System-computed, never set by hand.
               </p>
             </>
           )}

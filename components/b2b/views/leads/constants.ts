@@ -12,10 +12,4 @@ export const STATUS_COLORS: Record<UnifiedStatus, string> = {
   'Yet to Close': '#64748B',
 };
 
-export const EXPORT_HEADERS = [
-  'Company Name', 'GST', 'Contact Number', 'Enquiry ID', 'Order Value',
-  'Expected Date of Closure', 'KAM', 'Source', 'Spok', 'Status', 'Lost',
-  'Source status',
-];
-
 export const PAGE_SIZE = 50;

@@ -1,5 +1,6 @@
-import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, InteractionType, TemperatureBand, clientStatus } from '../models/client';
+import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, ClientStatus, InteractionType, TemperatureBand } from '../models/client';
 import { FollowUpBucket, Segment } from '../models/inbound';
+import type { RequirementVersion } from '../models/requirement';
 export type KamOrderStatus =
   | 'Requirement Logged' | 'Quote Shared' | 'PI Shared' | 'Closed' | 'Lost';
 
@@ -15,6 +16,7 @@ export interface KamOrder {
   phone?: string;
 
   requirement?: string;
+  requirementHistory?: RequirementVersion[];
 
   estimatedValue?: number;
   status: KamOrderStatus;
@@ -31,6 +33,7 @@ export interface KamOrder {
   dealStatus?: string;
 
   expectedClosure?: string;
+  followUpDate?: string;
 
   lostReason?: string;
   kam: string;
@@ -49,12 +52,15 @@ export interface KamOrderGateInput {
   enqId?: string;
   lostReason?: string;
   company?: string;
+  expectedClosure?: string;
+  followUpDate?: string;
 }
 
 export interface InteractionGateInput {
   type: InteractionType;
   date?: string;
   nextFollowUpDate?: string;
+  summary?: string;
 }
 
 export interface CallCompliance {
@@ -65,14 +71,6 @@ export interface CallCompliance {
   dueToday: number;
 }
 
-export interface CadenceRow {
-  client: ClientEntity;
-  date: string;
-
-  agedDays: number;
-  from: ClientInteraction;
-}
-
 export interface AssignedClientRow {
   client: ClientEntity;
   company: string;
@@ -80,7 +78,7 @@ export interface AssignedClientRow {
   contactPerson: string;
   contactNumber: string;
   metrics: ClientOrderMetrics;
-  status: ReturnType<typeof clientStatus>;
+  status: ClientStatus;
   segment?: Segment;
   temperature?: number;
   temperatureAt?: string;
@@ -144,4 +142,16 @@ export interface NewVsRepeat {
   unknownClients: number;
 }
 
-export type KamView = 'clients' | 'today' | 'queue' | 'orders' | 'dashboard';
+
+export type KamFirmLens = 'signoff' | 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'lapsing' | 'inactive';
+
+export type KamOrderLens = 'open' | 'pipeline' | 'orders';
+
+export type KamLens = KamFirmLens | KamOrderLens;
+
+export interface KamLensMeta {
+  title: string;
+  rule: string;
+  empty: string;
+  accent: string;
+}

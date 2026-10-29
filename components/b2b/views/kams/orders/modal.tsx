@@ -1,6 +1,8 @@
 'use client';
 
 import { ClientEntity, primaryContact } from '../../../models/client';
+import { withRequirementHistory } from '../../../models/requirement';
+import { RequirementHistory } from '../../../ui/requirement-history';
 import { KAM_ORDER_LOST_REASONS, KAM_ORDER_STATUSES, KAM_ORDER_STATUS_HINT, KamOrder, KamOrderStatus, kamOrderGateErrors, kamOrderStatusPrompts } from '../../../models/kam';
 import { fmtINR } from '../../../models/mock-data';
 import { LostReasonSelect } from '../../../ui/lost-reason-select';
@@ -9,11 +11,12 @@ import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { lookupEnqId } from '@/lib/b2b';
 import { useState } from 'react';
 
-export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
+export function OrderModal({ order, isNew, clients, kam, actor, onClose, onSave }: {
   order: KamOrder;
   isNew?: boolean;
   clients: ClientEntity[];
   kam: string;
+  actor: string;
   onClose: () => void;
   onSave: (o: KamOrder) => Promise<string | null>;
 }) {
@@ -80,14 +83,15 @@ export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
     setSaving(true);
     setError('');
     const statusChanged = draft.status !== order.status;
-    const err = await onSave({
+    const at = new Date().toISOString();
+    const err = await onSave(withRequirementHistory(isNew ? null : order, {
       ...draft,
 
       value: Number(draft.orderValue) || 0,
-      statusChangedAt: statusChanged || isNew ? new Date().toISOString() : draft.statusChangedAt,
-      createdAt: draft.createdAt || new Date().toISOString(),
+      statusChangedAt: statusChanged || isNew ? at : draft.statusChangedAt,
+      createdAt: draft.createdAt || at,
       kam: draft.kam || kam,
-    });
+    }, actor || kam, at));
     setSaving(false);
     if (err) setError(err); else onClose();
   };
@@ -129,14 +133,18 @@ export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
 
           <Field label="Requirement details">
             <textarea value={draft.requirement || ''} onChange={(e) => set('requirement', e.target.value)} rows={3} className={inputCls + ' resize-none'} placeholder="What the client needs" />
+            <RequirementHistory history={draft.requirementHistory} />
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Order value (your estimate)" hint="Never reported as revenue — §5.1.">
               <input type="number" min={0} value={draft.estimatedValue ?? ''} onChange={(e) => set('estimatedValue', Number(e.target.value) || undefined)} className={inputCls} />
             </Field>
-            <Field label="Expected date of closure">
+            <Field label={`Expected date of closure${draft.status === 'PI Shared' ? ' *' : ''}`}>
               <input type="date" value={draft.expectedClosure || ''} onChange={(e) => set('expectedClosure', e.target.value || undefined)} className={inputCls} />
+            </Field>
+            <Field label={`Next follow-up on this order${draft.status === 'PI Shared' ? ' *' : ''}`} hint="Each PI keeps its own follow-up, separate from the firm's.">
+              <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value || undefined)} className={inputCls} />
             </Field>
           </div>
 

@@ -8,13 +8,16 @@ Next.js 16 (App Router, Turbopack) + Tailwind CRM portal for Material Depot.
 ignore it.
 
 ```bash
-npm run dev        # next dev  (a dev server is often ALREADY running on :3000 —
-                   #  check before starting; a second one exits with "Another
-                   #  next dev server is already running". Check WHOSE: on
-                   #  2026-09-23 :3000 was b2b-client-dashboard, a different
-                   #  repo. `ps aux | grep "next dev"` prints the path. Driving
-                   #  it in a browser and reporting what you saw is the failure
-                   #  mode; take a free port instead, `npx next dev -p 3100`)
+npm run dev        # next dev -p 3001. The port is not a preference: api-dev2's
+                   #  CORS allowlist has localhost:3000, :3001 and :5173 and
+                   #  nothing else, so on any other port (127.0.0.1:3000
+                   #  included) every Django call dies as "Failed to fetch" with
+                   #  no status — which reads like a code bug and is not one.
+                   #  :3000 is usually another repo's server (ss-local-all,
+                   #  b2b-client-dashboard); `ps aux | grep "next dev"` prints
+                   #  whose. Driving someone else's server in a browser and
+                   #  reporting what you saw is the failure mode. A free port
+                   #  other than these three only works against the stub below.
 npm run build      # next build
 npx tsc --noEmit   # typecheck — fast, run this before claiming a change compiles
 ```
@@ -73,17 +76,31 @@ which imports `.`) on 2026-09-15.
 
 ### Looking at a screen, which needs a stubbed Django
 
-There is no way to sign in on a dev machine: login is phone + OTP against
-`api-dev2.materialdepot.in`, which nobody here can reach. A ~40-line Node
-server on `:4000` answering `/login-otp/`, `/verify-otp/`, `/crm/user-profile/`
-and `/user-organisation/` lets any phone and any four-digit code in, and
-**only Django may be stubbed** — Supabase stays real.
+Real sign-in works on `npm run dev` (:3001): login is phone + OTP against
+`api-dev2.materialdepot.in`, and the OTP goes to a real phone — so a person can
+sign in, a session cannot. For an unattended look, `npm run dev:stub`
+(`scripts/django-stub.mjs`) starts a Django stub on `:4000` answering
+`/login-otp/`, `/verify-otp/`, `/crm/user-profile/` and `/user-organisation/`,
+then the app on `:3100` pointed at it. Any phone and any four-digit code get in
+as `admin` (`STUB_ROLE=b2b_KAM` etc. to change it, `STUB_PERMISSIONS=` for a
+comma list of slugs), and **only Django is stubbed** — Supabase stays real.
+`node scripts/django-stub.mjs --stub-only` starts just the stub, for the clone
+below.
 
-Run the app against it:
+**A second `next dev` in this directory exits** with "Another next dev server
+is already running", and `:3001` usually already has the user's own server. That
+server uses real Django, so don't stop it. Run the stubbed one from an APFS
+copy-on-write clone in your scratchpad instead. It takes seconds and almost no
+disk space:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/apiV1 API_BASE_URL=http://localhost:4000/apiV1 npm run dev
+C=<scratchpad>/clone; mkdir -p "$C"
+for e in $(ls -A | grep -vE '^(\.next|\.git)$'); do cp -cR "$e" "$C/"; done
+cd "$C" && npm run dev:stub
 ```
+
+The clone is a snapshot, so `cp` each file you edit afterwards into it. Kill
+both `:3100` and `:4000` when you are done. Verified 2026-10-28.
 
 Four things the stub must get right, each of which has cost a debugging round:
 
@@ -107,6 +124,14 @@ Four things the stub must get right, each of which has cost a debugging round:
 So a local CRM shows **real Supabase data and empty Django data** — say which
 half was stubbed when reporting anything from it.
 
+**For B2B, use `npm run dev:sandbox` instead** (`docs/b2b/sandbox.md`). It runs
+the same Django stub plus a stubbed FastAPI b2b-backend and Kylas, seeded with
+dummy leads across the whole Inbound → Outreach → KAM journey, on the same
+:4000 / :3100 ports and from the same APFS clone. Five personas log in by phone
+(`9000000001` inbound … `9000000099` manager). B2B saves land in
+`.sandbox/state.json` in the clone, so **saving is safe there**, and only there.
+`--reset` reseeds relative to now. Supabase is still real in it.
+
 **Driving it with a browser.** Playwright is not a dependency here and should
 not become one; install it in a scratch directory with
 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i playwright` and launch the system
@@ -115,10 +140,21 @@ Chrome, `chromium.launch({ channel: 'chrome' })`. Listen on
 geometry (`getBoundingClientRect`) and computed style as well as on text — a
 status chip can be present, correct and still be making a false claim, which is
 how "On partner dashboards now" was caught sitting beside "Not pushed".
+Locate by exact text: `locator(sel, { hasText: 'Inactive' })` is a
+**case-insensitive substring** match. On 2026-10-28 it clicked the "Lapsing
+soon" tile, whose subtitle reads "go inactive in 30 days", and the test reported
+an app bug that did not exist. Use `hasText: /^Inactive$/` on the title element.
 
 **Supabase is real in that browser, so never exercise a SAVE path to see a
 feature work.** There is no staging Supabase — clicking through an editor writes
-production rows, and "it was only test data" is not recoverable. To see a screen
+production rows, and "it was only test data" is not recoverable. This includes
+all of B2B. **Since PR #27 (2026-10-29) B2B data lives in the FastAPI
+`b2b-backend`** (`lib/b2b/data/backend.ts` → `app/api/b2b/[...path]`, see
+`docs/backends.md`), which is production too, on `main` and on the revamp branch
+(merged the same evening). Never click Save to test. The exception is **`npm run
+dev:sandbox`** (`docs/b2b/sandbox.md`), which stubs the B2B backend, Kylas and
+Django with dummy data, so B2B saves land in a local file.
+To see a screen
 in a state the data is not in, intercept the READ instead:
 `ctx.route(/app_settings/, r => r.request().method() === 'GET' ? r.fulfill({…}) : r.continue())`
 renders the page against whatever state you need and writes nothing. That is how
@@ -139,7 +175,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` · `data-layer` · `partner-content` (the banners and New Launches an architect sees, composed here and pushed to the partner app) · `partner-bridge` (design only); `context.md` is the pointer table |
+| B2B sales CRM | `docs/b2b/` | Split into `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups and the visit check-in are specced, not built) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -154,8 +190,8 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 43 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
-| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 64 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; the **pending** B2B move off Supabase and the tables it still has to cover |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
 ### A code change is not done until its doc matches
@@ -233,7 +269,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 43 titles, so grep a title and read around the line you
+**Contents** list of all 64 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -327,6 +363,22 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 `manishgmr/materialdepot-crm`. Feature work happens on `Installation-Changes`.
 A teammate pushes to this branch regularly — **pull before starting.**
 
+**B2B Sales revamp work continues on `b2b-revamp-2026-10-28`**, not
+`Installation-Changes`. It is open as **PR #29** to `main`, not merged, so none
+of it is deployed. `origin/main` (PR #27, B2B on the FastAPI backend) was merged
+**into** it on 2026-10-29. Side branches merge into it, e.g.
+`b2b-structural-2026-10-29`. It depends on **b2b-backend PR #13** (branch
+`b2b-crm-extra-and-team`, migrations 0020 and 0021), which must deploy and
+migrate first (see `docs/b2b/revamp-2026-10-28.md` §Before you deploy). **The
+tech team merges both PRs, not a session**, unless Dhruv asks. Until #13 is
+live, the round robin skips, and new fields (Inbound, requirement history,
+per-PI dates) do not persist against the real backend.
+`npm run dev` on :3001 serves the working tree, so whatever is committed or
+uncommitted here shows there without a restart.
+`docs/b2b/revamp-2026-10-28.md` lists the commits and the deploy
+prerequisites. The local `b2b-revamp-28oct` is an older, never-pushed ancestor
+of it. Don't build on that branch.
+
 **`origin` is a PUBLIC repository** (verified 2026-09-14 via `gh repo view`), as
 are `daaku-daddy/material-depot-site` and `daaku-daddy/B2B-Client-Dashboard`.
 Everything committed here is world-readable: no customer names, phone numbers,
@@ -345,14 +397,41 @@ up to date while `main` was 5 commits ahead carrying a 498-line rewrite of
 it, which is precisely the drift this file records happening twice already.
 Merge `origin/main` in first; the conflicts are usually just import lines.
 
-**Pushing to `origin` needs the `daaku-daddy` GitHub account, not `dhruv-md`.**
-Both are logged in to `gh` on this machine and `dhruv-md` is usually the active
-one, but it has pull-only on `MySite-Tech/materialdepot-crm` — a push fails with
-`403 … Permission to MySite-Tech/materialdepot-crm.git denied to dhruv-md`, after
-the commit has already been made. `gh auth switch --user daaku-daddy` first, or
-check with
-`gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`. Verified
-2026-09-23.
+**Several Claude sessions work in this one working tree at the same time.** On
+2026-10-28 three sessions were editing B2B at once: Inbound, the KAM Firm page
+and Outreach. `ListAgents` showed 12 peer sessions, two of them busy. Uncommitted
+changes you did not make belong to a live session. Before editing a module:
+
+- Run `git status --short -- <module paths>` and look at the modified times. A
+  file changed in the last few minutes that you did not touch means someone is
+  mid-edit. Do not edit, revert or "fix" it. Wait for their commit, or ask the
+  user.
+- **Stage by explicit path, never `git add -A` / `git commit -a`.** A broad add
+  sweeps another session's half-finished work into your commit. Their
+  half-finished work can also fail the build, which is not yours to repair. On
+  2026-10-28 the shared dev server answered 500 ("Export `Metric` doesn't
+  exist") and `tsc` failed in `client-db/` and `kams/`, all from the KAM
+  session's in-progress refactor.
+- The dev server is shared too, so another session's broken import can take
+  every page down. Check whose error it is (the file path in the overlay or in
+  `tsc`) before debugging. Wait it out with a background `until curl …` loop.
+- Once the other session commits, re-read your diff of any file you both
+  touched before committing. `CLAUDE.md` and `docs/**` are the usual overlap.
+
+**Check which account can push before committing for `origin`.** Three are
+logged in to `gh` here (`daaku-daddy`, `dhruv-md`, `dhr3vv`), and which one
+holds write access has changed twice. A push from the wrong one fails with
+`403 … Permission to MySite-Tech/materialdepot-crm.git denied to <account>`,
+after the commit has already been made. Check each account with
+`gh api repos/MySite-Tech/materialdepot-crm --jq .permissions`.
+
+**From 2026-10-28 (evening), push with `dhruv-md`.** It was given `write` access
+by invitation, and the invitation had to be **accepted** before
+`.permissions.push` read `true`. Until then the API reported `false` and the
+pending invite only showed under `gh api user/repository_invitations`.
+`daaku-daddy` and `dhr3vv` are `pull` only, and so is everyone on `upstream`.
+Git uses `gh auth git-credential`, so the *active* `gh` account is the one that
+pushes. Run `gh auth switch --user dhruv-md` first. Don't try `upstream`.
 
 Deployment is **Azure Static Web Apps CI/CD**
 (`.github/workflows/azure-static-web-apps-gentle-meadow-00fe92000.yml`), which
@@ -458,7 +537,7 @@ for it.
   quick check is to render the panel and grep its `innerText` for a digit jammed
   against a word.
 
-- **`ExportButton`'s `disabled` prop means "an export is running", not "there is
-  nothing to export".** It renders a spinner and the word "Exporting…" when
-  true, so passing `!rows.length` makes an empty tab claim it is mid-export.
-  Every caller passes only its own `exporting` flag.
+- **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
+  removed it from Client Database, Leads and Inbound for every role, admins
+  included, as a security decision; KAM and Outreach lost theirs earlier the same
+  day. `ExportButton` is deleted. Do not add an export back behind a role check.

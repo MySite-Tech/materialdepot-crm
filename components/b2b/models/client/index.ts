@@ -1,10 +1,12 @@
-export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, DuplicateSuggestion, MergeChoices } from '../../types/client';
-export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_MAX, TEMPERATURE_BANDS, ACTIVE_WINDOW_MONTHS, CLIENT_STATUS_COLORS, CLIENT_STATUS_HINT, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL } from '../../constants/client';
+export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, StatusScale, DuplicateSuggestion, MergeChoices, StudioAccess, FirmStudioState } from '../../types/client';
+export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_MAX, TEMPERATURE_BANDS, ACTIVE_DAYS, INACTIVE_DAYS, CLIENT_STATUS_SCALE, STUDIO_SPACE_URL, STUDIO_ACCESS, CONTACT_CLASSES, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL } from '../../constants/client';
 export { clientTypeFromLead, contactLabel, normalizeContactNumber, isValidContactNumber, primaryContact, contactNumbers, normalizeGst, clampTemperature, normalizeCompanyName } from '../utils/client';
 export { validateGst, gstNumbers } from './rules/gst';
+export { clientMatchesSearch } from './derived/search';
 export { dealIsOrder, dealIsOpen, averageOrderValue } from './derived/deals';
+export { isOnboarded, firmStudioState } from './derived/studio';
 export { sortedInteractions, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './derived/interactions';
-export { clientStatus, daysToInactive } from './rules/status';
+export { clientStatus, daysToLapse } from './rules/status';
 export { findDuplicates } from './rules/duplicates';
 export { groupIntoParents, parentSubjectFromClient } from './parents';
 export type { ParentSubject, ParentCompany, ParentGrouping, NameOnlyCandidate } from './parents';

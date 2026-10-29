@@ -2,13 +2,13 @@
 
 import { Pill } from './inbound-chips';
 import {
-  OUTREACH_STATUS_COLORS, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
+  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
   type OutreachStatus, type MeetingStatus, type OutreachMeeting,
   type LeadType,
 } from '../models/outreach';
 
 export function OutreachStatusBadge({ s }: { s: OutreachStatus }) {
-  return <Pill color={OUTREACH_STATUS_COLORS[s]}>{s}</Pill>;
+  return <Pill color={OUTREACH_STATUS_COLORS[s]}>{OUTREACH_STATUS_LABEL[s]}</Pill>;
 }
 
 export function MeetingStatusChip({ s }: { s: MeetingStatus }) {
@@ -41,9 +41,27 @@ export function MeetingProgress({ meetings }: { meetings?: OutreachMeeting[] }) 
   const postponed = all.filter((m) => m.status === 'Postponed').length;
   return (
     <span className="text-[10px] text-gray-500 whitespace-nowrap">
-      {all.length}/4 meetings
+      {all.length} {all.length === 1 ? 'meeting' : 'meetings'}
       {done > 0 && <span className="text-[#0F766E]"> · {done} held</span>}
       {postponed > 0 && <span className="text-amber-600"> · {postponed} postponed</span>}
+    </span>
+  );
+}
+
+const MEETING_DOTS = 6;
+
+export function MeetingDots({ meetings }: { meetings?: OutreachMeeting[] }) {
+  const all = [...(meetings || [])].sort((a, b) => a.n - b.n);
+  const title = all.length
+    ? all.map((m) => `Meeting ${m.n}: ${m.status}${m.date ? ` · ${m.date}` : ''}`).join('\n')
+    : 'No meetings yet';
+  return (
+    <span className="inline-flex items-center gap-1" title={title}>
+      {!all.length && <span className="w-2 h-2 rounded-full" style={{ boxShadow: 'inset 0 0 0 1px #D1D5DB' }} />}
+      {all.slice(-MEETING_DOTS).map((m) => (
+        <span key={m.n} className="w-2 h-2 rounded-full" style={{ background: MEETING_STATUS_COLORS[m.status] }} />
+      ))}
+      {all.length > MEETING_DOTS && <span className="text-[10px] text-gray-400">+{all.length - MEETING_DOTS}</span>}
     </span>
   );
 }

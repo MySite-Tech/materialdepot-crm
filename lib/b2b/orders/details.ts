@@ -26,8 +26,20 @@ export interface ClientOrderRow {
 
   spoc?: string;
   branch?: string;
-  cartItems?: string;
+  cart: CartLine[];
   lostReason?: string;
+
+  ticketId?: number;
+  cartValueExclGst?: number;
+  clientType?: string;
+  propertyType?: string;
+  architectInvolved?: boolean;
+  projectPhase?: string;
+  followUpDate?: string;
+  closureDate?: string;
+  lostMarkDate?: string;
+  visits: CRMLeadRow['visits'];
+  remarks: CRMLeadRow['remarks'];
 }
 
 export interface ClientOrderDetails {
@@ -149,6 +161,21 @@ export async function resolveKamOrders(
   return { resolutions, overflow: Math.max(0, needing.length - head.length) };
 }
 
+export interface CartLine {
+  name: string;
+  qty?: number;
+  price?: number;
+}
+
+function cartLines(v: unknown): CartLine[] {
+  if (Array.isArray(v)) {
+    return v
+      .map((i) => (typeof i === 'string' ? { name: i } : { name: String(i?.name || ''), qty: Number(i?.qty) || undefined, price: Number(i?.price) || undefined }))
+      .filter((i) => i.name.trim());
+  }
+  return String(v || '').split('\n').map((name) => ({ name: name.trim() })).filter((i) => i.name);
+}
+
 function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
   const ordered = dealIsOrder(t.status);
   return {
@@ -166,8 +193,19 @@ function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
     createdAt: String(t.createdAt || '').slice(0, 10) || undefined,
     spoc: String(t.assignedTo || '').trim() || undefined,
     branch: String(t.branch || '').trim() || undefined,
-    cartItems: String(t.cartItems || '').trim() || undefined,
+    cart: cartLines(t.cartItems),
     lostReason: String(t.lostReason || '').trim() || undefined,
+    ticketId: t.ticketId,
+    cartValueExclGst: t.cartValueExclGst !== undefined && t.cartValueExclGst !== null ? Number(t.cartValueExclGst) || 0 : undefined,
+    clientType: String(t.clientType || '').trim() || undefined,
+    propertyType: String(t.propertyType || '').trim() || undefined,
+    architectInvolved: typeof t.architectInvolved === 'boolean' ? t.architectInvolved : undefined,
+    projectPhase: String(t.projectPhase || '').trim() || undefined,
+    followUpDate: String(t.followUpDate || '').slice(0, 10) || undefined,
+    closureDate: String(t.closureDate || '').slice(0, 10) || undefined,
+    lostMarkDate: String(t.lostMarkDate || '').slice(0, 10) || undefined,
+    visits: Array.isArray(t.visits) ? t.visits : [],
+    remarks: Array.isArray(t.remarks) ? t.remarks : [],
   };
 }
 

@@ -4,6 +4,7 @@ import { SELECTIONS } from '../../../constants/inbound';
 import { OutreachLead } from '../../../models/mock-data';
 import { Field, SectionCard } from '../../../ui/inbound-chips';
 import { inputCls } from '../../../constants/ui';
+import { RequirementHistory } from '../../../ui/requirement-history';
 
 export function OutreachRequirementCard({ draft, set, toggleSelection }: {
   draft: OutreachLead;
@@ -30,6 +31,7 @@ export function OutreachRequirementCard({ draft, set, toggleSelection }: {
       </Field>
       <Field label="Requirement summary" className="mt-3">
         <textarea value={draft.requirement || ''} onChange={(e) => set('requirement', e.target.value)} rows={3} className={inputCls + ' resize-none'} />
+        <RequirementHistory history={draft.requirementHistory} />
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
         <Field

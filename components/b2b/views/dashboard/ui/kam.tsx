@@ -1,8 +1,8 @@
 'use client';
 
 import { KamDashboard } from '../../../models/analytics';
-import { ACTIVE_WINDOW_MONTHS } from '../../../models/client';
-import { DAILY_CALL_TARGET } from '../../../models/kam';
+import { DAILY_CALL_TARGET, KAM_MONTHLY_CALL_TARGET } from '../../../models/kam';
+import { ACTIVE_DAYS, INACTIVE_DAYS } from '../../../models/client';
 import { INBOUND_STAGE_COLORS, fmtL } from '../../../models/mock-data';
 import { Bars, Panel, Tile } from '.';
 
@@ -173,7 +173,7 @@ export function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDa
         <Panel title="Call Compliance · §4.1">
           <div className="flex items-baseline justify-between mb-2">
             <span className="font-mono text-2xl font-bold text-gray-800">{k.complianceTotals.logged}</span>
-            <span className="text-[12px] text-gray-400">of {k.complianceTotals.target} calls today ({DAILY_CALL_TARGET}/KAM)</span>
+            <span className="text-[12px] text-gray-400">of {k.complianceTotals.target} calls today ({DAILY_CALL_TARGET}/KAM, {KAM_MONTHLY_CALL_TARGET} a month)</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
             <div className="h-full rounded-full" style={{ width: `${Math.min(100, compliancePct)}%`, background: compliancePct >= 100 ? '#22C55E' : compliancePct >= 60 ? '#F59E0B' : '#EF4444' }} />
@@ -237,7 +237,7 @@ export function KamDashboardSection({ k, monthlyTarget, unresolved }: { k: KamDa
       {!!k.atRisk.length && (
         <Panel title={`At-Risk Accounts · ${k.atRisk.length}`} className="mt-3">
           <p className="text-[11px] text-gray-400 -mt-2 mb-2">
-            Active clients within 30 days of the {ACTIVE_WINDOW_MONTHS}-month Inactive cutoff with no follow-up booked.
+            Firms with no order in the last {ACTIVE_DAYS} days (Inactive 1 month) and no follow-up booked, or an overdue one. Days left until {INACTIVE_DAYS} days without an order.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] min-w-[420px]">

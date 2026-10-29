@@ -9,7 +9,7 @@ field live?" for an inbound lead. Three systems hold pieces of the same lead:
 | Holds | System | Reached via |
 |---|---|---|
 | Presales' capture (§3.1) | Kylas pipeline 31627 | `lib/api/` `kylasFetch` |
-| Everything the Inbound team types (§3.2–3.5) | `b2b_lead.meta_data` (CRM Supabase) | `lib/b2b/data/` |
+| Everything the Inbound team types (§3.2–3.5), its calls and its notes | `b2b_inbound_lead` (+ `extra` jsonb) on the FastAPI b2b-backend | `lib/b2b/data/` |
 | Cart / PI / order **value** | Django deal tickets, `/crm/leads/` | `fetchCRMLeads` |
 
 Every field declares its `FieldOwner`, which is what the drawer's provenance
@@ -56,7 +56,8 @@ deliberate — this repo has twice shipped a migration nobody ran. Two of the ni
 were never statuses: `Hyderabad` (40 rows) was a **location**, confirmed against
 `zipcode` (11 of 13 sampled were 50xxxx Telangana while every Followup Required
 row was 56xxxx Karnataka), and `RNR` (13 rows) was a **call outcome**.
-`Enquiry Invalid` became a lost reason. Nothing was deleted.
+`Enquiry Invalid` became a lost reason at first, and since 2026-10-29 it is the
+`Invalid` status (below). Nothing was deleted.
 
 **`Connected - Need nurturing` is a fifth, added after the PRD** (Business Head
 request, Sept 2026) for the lead that answered but has nothing live yet — before
@@ -64,8 +65,8 @@ it existed those sat in `Follow up` and were indistinguishable from a lead
 working towards a quote. It sits between `New` and `Follow up`, and **it is not a
 hard gate**: `statusGateErrors` still blocks exactly the four the PRD states, so
 a rep can park a lead there without inventing a date. It counts as a follow-up
-status everywhere else — `INBOUND_FOLLOW_UP_STATUSES` is what the Today view, the
-overdue tiles and `analytics.ts`'s in-progress and live pipeline all read, so use
+status everywhere else — `INBOUND_FOLLOW_UP_STATUSES` is what the follow-up lenses and
+`analytics.ts`'s in-progress and live pipeline all read, so use
 that constant rather than spelling the statuses out again. `b2b_lead.stage` is a plain `text` column with no check constraint, so no
 migration was needed and old rows are untouched.
 
@@ -108,34 +109,174 @@ sort is the fetch — which is exactly the rewrite above that was reverted. So
 `byNewestLeadFirst` runs on `filtered` in `views/inbound/index.tsx` instead: the
 data layer's grouping stays intact and every rendered list is still date-ordered.
 Leads with no `leadCreatedAt` sort last rather than to the top, which is what
-comparing empty strings the other way round would have done. The Today table is
-deliberately **not** date-ordered — it is a call list, sorted by priority then
-follow-up date.
+comparing empty strings the other way round would have done. The call lists
+(Call today, Overdue, Due today, Upcoming, PI Shared) are deliberately **not**
+date-ordered: `sortForLens` sorts them by priority, then follow-up date.
 
-**A search on Today shows every stage, not just follow-ups.** The call list only
-holds follow-up statuses; `New` and `PI Shared` live in the side panels. A rep
-who searched a phone number for a `New` lead got "No leads on follow-up" in the
-main pane and read it as "lead missing" while the lead sat in the side panel. So
-with `appliedSearch` set, `DailyTable` swaps the buckets for one "Search results"
-card over all of `filtered`, and the no-search empty state names how many leads
-are in the side panels and links to List view.
+**No export (2026-10-29).** The user removed the CSV/Excel export from this tab
+for every role, admins included, as a security decision. Do not restore it
+behind a role check.
 
-**Today is kept short on purpose.** Each bucket card shows 8 rows then "Show all
-N"; Upcoming and No-follow-up-date start collapsed (Overdue and Due today never
-do — they are the day's calls). The side column is `xl:sticky` with its own
-viewport-height scroll, and the tile footnote sits in a closed `<details>`.
+### One tab, three tile groups (2026-10-29, replacing Clients / PI / Results)
 
-**The Today grid's `minmax(0,1fr)` and `min-w-0` are load-bearing, not tidying.**
-Its left track holds the call table, which is wide enough to need the
-`overflow-x-auto` each bucket card already had — and that wrapper does nothing on
-its own here, because a grid item's default `min-width: auto` will not shrink
-below its content. Adding the Enq / Cart ID and Assisted at EC columns was enough
-to grow the track past `<main>` and scroll the **whole tab** sideways under the
-B2B sidebar, which reads as a broken layout rather than a wide table. Anything
-scrollable added to either column needs the same treatment; see
-`docs/landmines.md`. For the same reason a tile's value is `truncate`d and the
-seven-tile row only goes seven-across at `2xl` — at `xl` each tile was ~146px,
-and a long rupee figure has no space to wrap at.
+The user asked for one tab, "clean and easy", read as an ordinary pipeline. The
+three sub-tabs from earlier the same day are gone, and with them the PI date
+range bar and the PI-only lenses (Follow-up due, Converted, Dropped).
+
+| Group (head) | Tiles | Rule |
+|---|---|---|
+| Call today | First call · Due today · Overdue · Ready to close | the day's work |
+| Pipeline | Connected · Follow up · PI shared | one tile per open status |
+| Outcomes | Sent to Outreach · Closed · Lost · Invalid | where leads ended up |
+
+Arrived today, Upcoming, No follow-up date, Needs enrichment and All leads are
+pills. One predicate (`lensMatches`) still gives each tile its count and its
+rows, and lenses still overlap on purpose (a sent lead is open *and* an outcome).
+
+- **PI follow-ups are back in Due today / Overdue.** A PI is a call to make like
+  any other; the separate PI chase tile existed only because of the PI tab.
+- **"Called" replaces "follow-up status" in the follow-up lenses.** An RNR no
+  longer moves a lead off `New` (below), so Due/Overdue/Upcoming/No date cover
+  every open lead with at least one logged call, `New` included. First call is
+  `New` with **no** call.
+- Tiles show "…" while loading and "Unknown" on a failed load, never 0, as before.
+
+### The working day ends at 5 pm (2026-10-29)
+
+`inboundWorkDay(leadCreatedAt)` (`utils/inbound.ts`) is the day a lead counts
+for: its IST date, or the **next working day** if it arrived at or after 17:00,
+or on a non-working day. Working days are Mon–Sat, six a week, confirmed by the user on 2026-10-29 (`NON_WORKING_WEEKDAYS`). An RNR on Saturday books Monday. A
+lead that lands at 8 pm is tomorrow's first call: it is not in today's First
+call (the tile's subtitle says "+N after 5 pm, for tomorrow"), and Arrived today
+uses the same day. Kylas timestamps are untouched; only the counting moves.
+Public holidays are not modelled.
+
+### The call log (2026-10-29)
+
+Calls are the B2B team's own record, stored in `call_attempts` and **no longer
+written to Kylas**.
+
+- **RNR is one click.** It saves at once, sets the follow-up to
+  `nextWorkingDay(today)` and keeps the owner, so the same rep gets it on
+  their next working day. It asks for no note and no date, and the lead's status
+  does not change: an unanswered lead stays `New`.
+- **Connected asks for minutes, the next follow-up date (optional time) and
+  what was discussed** (`connectedCallErrors`, all required). A `New` lead moves
+  to `Connected - Need nurturing`; moving it further is a status decision.
+- **That call form is the only place a follow-up date is typed.** The Status
+  card shows it read-only ("set from the call log"). There used to be a second
+  input there, and the two could disagree. The board's drag modal still asks for
+  one when a move needs it; it writes the same field.
+- **No cap on attempts.** The 4-box strip and "Attempt n of 4" are gone. Four
+  was always the minimum before closing a lead, never a maximum.
+- **Duration is minutes, stored as `durationMin`.** The old path posted the
+  number to Kylas with `durationType: minutes`, which Kylas ignored. Kylas stored
+  it as seconds, so a 4-minute call showed as "0m 4s".
+- **Every logged call and note carries the logged-in user as `by`/`author`.**
+  Writing them to Kylas through the API key credited them to the key's owner
+  ("Kousika K") and showed notes as written by Kylas. Team notes now live in the
+  row's `notes`. Kylas's own call records and notes stay visible, read-only,
+  inside the collapsed **From Presales** card, so Presales' history and ours
+  never mix. Calls the CRM already wrote to Kylas before this change remain
+  there under the key owner's name.
+
+### Ready to close (2026-10-29)
+
+`closureReadiness` decides when a lead may be closed for lack of response:
+
+- **unreachable**: at least `READY_RNR_COUNT` (5) RNRs dated within the last
+  `READY_WINDOW_DAYS` (7) days; or
+- **stalled**: at least 7 days since its work day, at least
+  `MIN_ATTEMPTS_BEFORE_CLOSE` (5) calls, still `New` or `Connected`, and not sent
+  to Outreach.
+
+It feeds the Ready to close tile, a banner in the call log with a one-click
+"Mark Lost", and the Lost gate. **The two no-response reasons are refused unless
+readiness says so, and every other lost reason needs a Connected call.** A
+reason like "Price issue" can only come from someone who spoke to the client.
+`Unreachable (4 attempts)` is no longer offered; old rows keep it and show it as
+"previously recorded". The requirement keeps its earlier versions
+(`data-layer.md` §Requirement history). **Confirmed by the user on 2026-10-29:** 5 calls before
+a lead closes as no progress (it was 4), and Invalid needs only one logged call,
+because one call is enough to prove a wrong number. Calls and notes are never
+written to Kylas, also confirmed that day.
+
+### Invalid is a status, not a lost reason (2026-10-29)
+
+Every inbound lead is called to qualify it, and the answer is either genuine or
+invalid. Invalid was the lost reason `Enquiry invalid`, which counted junk
+enquiries as lost sales. It is now its own status in Results. **It is the
+strictest gate in the module.** `statusGateErrors` demands:
+
+- **at least one logged call** — nobody marks a lead invalid without trying it.
+  The drag modal cannot satisfy this, so it says to open the lead and log a call;
+- a reason from `INBOUND_INVALID_REASONS`;
+- a note of at least `INVALID_NOTE_MIN` (15) characters saying what was checked,
+  so "na" does not pass.
+
+Old data is read, never migrated, like everything else here. A `b2b_lead.stage`
+of `Enquiry Invalid`, or `Lost` with `lost_reason` = `Enquiry invalid`, reads as
+`Invalid`. Neither has a reason or a note, so the Invalid tile flags them as
+"missing reason or note" rather than pretending they were qualified. `Invalid`
+counts as dead (not open) in `analytics.ts` and as `lost` in the unified Leads
+tab. `Enquiry invalid` is no longer offered as a lost reason.
+
+### Client details, and Send to Outreach (2026-10-29)
+
+The Client details card holds what Inbound fills for everyone after them:
+company name, **primary person (name + mobile)**, any number of **additional
+people**, GST, segment, priority, client type, lead type, **City** (the old
+Location, still pincode-defaulted) and an optional office address. The primary
+person is pre-filled from Kylas's contact name and number the first time the
+drawer opens. They are stored as `primary_contact_*` and `additional_contacts`,
+because Kylas's `contact_name` is a snapshot that every sync overwrites. Office
+location is no longer an enrichment field; primary person and City are.
+
+**Inbound pushes to Outreach; Outreach does not just read a pool.** The Outreach
+card sends an `outreachReferral`. It needs a **Connected** call first, plus a
+status other than New, Lost or Invalid. The form asks for the decision maker,
+the project, the preferred meeting date (time optional), the **meeting location**,
+"agreed to meet", and a **summary for Outreach**. The summary is pre-filled from
+the Connected calls' notes. The meeting location replaced office location, which
+was being asked twice. Old referrals carry `note` instead of `summary`, and both
+readers fall back to it.
+
+- **Test `sentToOutreach(l)` (`outreachReferral?.at`), never the object.** An
+  `object`-kind meta field writes `{}` when empty and reads `{}` back.
+- **The context travels.** `leadFromInbound` builds the Outreach row with the
+  primary person as contact (the Kylas number as `altPhone` if it differs), the
+  additional people as `contacts`, and `inboundContext(l)` as its `notes`: every
+  Inbound call and team note, each labelled with who wrote it. The Outreach
+  drawer's notes therefore open with the full Inbound history.
+- **There is no KAM handoff in Inbound any more.** The block under Placed under
+  and its auto-assign are gone. A client reaches a KAM only through Outreach's
+  handover.
+- There is no withdraw. Once Outreach accepts, the lead lives on the Outreach row
+  (`OR-IN-<id>`), and Inbound's KPI credits it only after that acceptance.
+
+### One SPoC per team (2026-10-29)
+
+The drawer's first card, **People on this client**, shows four SPoCs, derived by
+`clientSpocs` and never stored:
+
+| SPoC | From |
+|---|---|
+| Inbound | the lead's Kylas owner |
+| Outreach | the BM on the linked Outreach row (`intake.inboundLeadId`), with whether they accepted |
+| KAM | that row's `handover.kam`, else its `kam` |
+| EC | `assignedTo` on the newest deal ticket in an order status (`DEAL_ORDER_STATUSES`) on the client's numbers |
+
+The Outreach row comes from the cached all-rows read, so it costs no extra
+request when the board has just loaded. The backend's `client_master` has
+`inbound_spoc`/`outbound_spoc`/`kam_spoc` columns. Nothing writes them yet.
+
+### Enq ID is picked from the client's deal tickets
+
+At PI Shared and Closed, the Status card lists the deal tickets on the Kylas
+number and the primary person's number (at most two `fetchLeadDeals` calls). Each
+shows its value, status, branch and BM, and clicking one sets the Enq ID and runs
+the lookup. Typing an Enq ID is still possible, for a ticket raised on a number
+the lead does not have. The separate Deal tickets card is gone.
 
 ### Search deliberately reaches outside the board
 
@@ -148,24 +289,78 @@ unless one owner was explicitly picked in the filter. An explicit Kylas-tag
 filter still wins over the widening. A search also drops the `B2B_FRESH_START`
 created-date floor (`fetchInboundBoard`), for Kylas and the DB rows alike — a
 B2B lead created in March was unfindable by its own phone number (2026-10-16).
-A user-picked "Lead date from" still applies. Inbound owners are Hardi, Mandeep,
-Praful (`76459`, added 2026-10-12; his B2B leads all pre-date `B2B_FRESH_START`,
-so he shows 0 until new ones land), Vikas (`87068`), Krishna (`80618`) and
-Vilok (`78539`), the last three added 2026-10-26. A lead owned outside them maps
-to `owner: 'Unassigned'` — that is `B2B_INBOUND_OWNERS` having no name for that
-id, not a claim that Kylas left it unassigned.
+A user-picked "Lead date from" still applies. A lead owned by nobody the board
+knows maps to `owner: 'Unassigned'`. That means no team member or legacy owner
+has that Kylas id, not that Kylas left the lead unassigned.
 
-### Gates: four hard, eight soft
+### Who owns a lead: the team table, round robin, and Mine vs All
 
-`statusGateErrors` blocks exactly the four the PRD states — follow-up date on
-`Follow up`, Enq ID **and** follow-up date on `PI Shared`, lost reason on `Lost`.
-Everything in §3.2/§3.3 is chased through `enrichmentGaps` and never blocks: all
+Built 2026-10-28; the design is in `sales-tab-redesign.md` §Inbound. **Inbound
+ownership is the Kylas `ownerId`, and the people who can hold it are the
+`inbound` rows of `b2b_team_member`**, which a B2B manager edits under the
+**Team** sub-tab. Nothing about who is on the team is hardcoded any more.
+
+- **`B2B_INBOUND_OWNERS` is now only a fallback**, for display and for the
+  board's owner set until managers have added everyone. The board's owner set
+  is the legacy six **plus** every inbound member, so a lead held by someone not
+  yet added (Mandeep, Praful…) does not vanish. Once the Team tab lists
+  everyone, delete the constant.
+- **Kylas delivers every Presales-qualified lead to Hardi (`81181`).** Verified
+  2026-10-28: 245 of 245 leads in the two inbound stages over the previous two
+  weeks, at 10–32 a day. Fixing that in Kylas was tried and did not work. The
+  CRM therefore re-owns them: `POST /api/b2b/inbound/assign {mode:'rotate'}`.
+- **The pool** = owner `81181`, the two inbound stages, created after
+  `INBOUND_ROTATION_START` and within the last `INBOUND_ROTATION_WINDOW_DAYS`
+  (7). From that it drops leads with any `b2b_lead_assignment` row, and leads
+  Hardi already worked (a `b2b_lead` row past `New`). **Hardi is also a
+  rotation member**, so "owned by Hardi" cannot mean "unassigned". The
+  assignment row is what tells the two apart.
+- **The race guard is the partial unique index** on `lead_id` where
+  `kind = 'round_robin'`. Every Inbound tab open runs the rotation, so two reps
+  opening it together both plan the same leads; the second insert gets `23505`
+  and skips that lead. The claim row is written before the Kylas PATCH, and
+  deleted again if Kylas refuses, so a failed lead is retried on the next run.
+- **Order** = active, in-rotation, Kylas-linked inbound members, sorted by name,
+  continuing after whoever got the last `round_robin` row (`planRotation`).
+  "Paused" is how a manager takes someone out for the day. A paused person can
+  still *receive* a manual reassign.
+- **The owner change is a JSON Patch on `/ownerId`**, and `setLeadOwner` then
+  reads `ownerId` back. Not every API applies a write it accepts with a 200
+  (see the "Success reported off an HTTP 200" landmine), so a mismatch counts as
+  a failure. **This had not been exercised against a real lead as of
+  2026-10-28**: the first real run is the verification.
+- **Mine vs All is in the fetch.** A rep linked to Kylas gets `ownerId` = their
+  own id, and the owner filter is hidden. **"All inbound" is for managers and
+  B2B admins only (2026-10-29).** It used to be one click away for every rep,
+  for covering an absent colleague, and the user ruled that out: a rep sees
+  only their own leads. A rep who is not an active Inbound member with a
+  linked Kylas user is shown **no** leads and an amber notice naming the fix
+  (B2B → Team). Before this they fell through to every owner's leads. This is
+  still a screen filter, not confidentiality: the Kylas key is in the browser.
+  Filtering on the server is the planned next step.
+- **Reassign** (the drawer's Owner card) is open to any active inbound member or
+  manager. The route re-checks that rule, refuses any lead outside the
+  inbound pipeline, and logs `kind = 'reassign'` with a reason.
+- **`CallAttempt.by` is the logged-in user, not the lead's owner.** It was
+  `draft.owner`, which would have credited every call on a reassigned lead to
+  its new owner. Calls are an Effort KPI and belong to whoever dialled.
+- **The team and the assignment log live on the b2b-backend**
+  (`/b2b/team`, `/b2b/assignments*`, `/b2b/inbound/worked`), not Supabase. Until
+  backend migration 0020 is deployed the round robin skips and every lead stays
+  with Hardi (`docs/backends.md`).
+
+### Gates: the PRD's four, Invalid's three, nine soft
+
+`statusGateErrors` blocks the four the PRD states — follow-up date on
+`Follow up`, Enq ID **and** follow-up date on `PI Shared`, lost reason on `Lost`
+— plus the Lost reason rule (Ready to close, above) and Invalid's call, reason
+and note. Everything in §3.2/§3.3 is chased through `enrichmentGaps` and never blocks: the first
 eight were empty on all 151 live rows when this shipped, so a hard block would
 just stop the board being used. Dragging a card into a gated column opens
 `MoveModal` to collect the field rather than writing an incomplete status.
 
 There is **no reminder service in this stack**. The follow-up date's reminder is
-the Today view and the card badge. Do not word either as if a notification was
+the Due today and Overdue tiles and the card badge. Do not word either as if a notification was
 sent.
 
 ### Enq ID → order value
@@ -207,8 +402,7 @@ keeps the same shape, throwing rather than swallowing so the branch stays live.
 four fields are behind one title per status — "Assisted by" while the PI is out,
 "Placed under" once it is won (`PLACED_UNDER_TITLE`) — because they are the same
 claim about who worked the lead, and asking for it only at Closed meant nobody
-could see who was on a live PI. The KAM handoff block stays `Closed`-only: there
-is nothing to hand over until there is an order.
+could see who was on a live PI.
 
 All four are **dropdowns now, not free text**:
 
@@ -229,16 +423,6 @@ at EC" is never auto-filled** from the ticket's branch or assignee. A cart's
 branch is where it was raised; "assisted at" is a claim about who helped close
 it. `bmName` is the one exception, and only because `checkEnq` fills it from the
 matched deal's own `assignedTo`.
-
-### What the tiles count
-
-`Pipeline value` is the sum over **open** leads (`INBOUND_OPEN_STATUSES` — every
-status but `Closed` and `Lost`) and it keeps the two figures apart: the deal
-ticket's `orderValue` where there is one, plus `expectedOrderValue` **only for
-leads that have no ticket value yet**. The tile's subtitle names both. This is
-the one place `expectedOrderValue` is added to a rupee total anywhere in the
-module, and it is allowed here because the tile is explicitly a forecast — it is
-still never summed as revenue, which is the rule the rest of this doc states.
 
 ### Two vocabularies that deliberately do not fully map
 

@@ -2,7 +2,7 @@
 
 import { EnqLookup } from '../../../../../lib/b2b';
 import { LeadDeal, OutreachLead, OutreachStatus, fmtINR } from '../../../models/mock-data';
-import { OUTREACH_LOST_REASONS, OUTREACH_STATUSES, OUTREACH_STATUS_HINT } from '../../../models/outreach';
+import { OUTREACH_LOST_REASONS, OUTREACH_STATUSES, OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL } from '../../../models/outreach';
 import { LostReasonSelect } from '../../../ui/lost-reason-select';
 import { Field, GateErrors, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { inputCls } from '../../../constants/ui';
@@ -26,16 +26,16 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Status" required>
           <select value={draft.status} onChange={(e) => set('status', e.target.value as OutreachStatus)} className={inputCls}>
-            {OUTREACH_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {OUTREACH_STATUSES.map((s) => <option key={s} value={s}>{OUTREACH_STATUS_LABEL[s]}</option>)}
           </select>
         </Field>
-        {(draft.status === 'Follow up' || draft.status === 'PI Shared' || draft.status === 'Quote Share') && (
+        {draft.status !== 'Closed' && draft.status !== 'Lost' && (
           <>
             <Field
               label="Next follow-up"
-              required={draft.status !== 'Quote Share'}
+              required={draft.status === 'Follow up' || draft.status === 'PI Shared'}
               error={gateFor('followUpDate')}
-              hint={draft.status === 'Quote Share' ? 'Optional on Quote Share' : undefined}
+              hint={draft.status === 'Follow up' || draft.status === 'PI Shared' ? undefined : 'Required once a meeting is held, unless the next one is booked'}
             >
               <input
                 type="date"
@@ -96,6 +96,13 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
               {enq.branch ? ` · ${enq.branch}` : ''}
               {enqDeal?.cartItems && <div className="text-gray-500 mt-1">{enqDeal.cartItems}</div>}
             </div>
+          )}
+          {draft.status === 'Closed' && draft.orderValueSource === 'deal' && (
+            <p className={`mt-2 text-[11px] leading-snug ${draft.newOnboarding === false ? 'text-amber-700' : 'text-gray-500'}`}>
+              {draft.newOnboarding === true && 'New onboarding — no order on this mobile in the 6 months before this one. Counts towards new revenue.'}
+              {draft.newOnboarding === false && 'Repeat client — this mobile ordered in the 6 months before. The conversion counts; the revenue does not count as new.'}
+              {draft.newOnboarding === undefined && 'Not yet checked for an order in the previous 6 months — fetch the Enq ID again once the deal tickets load.'}
+            </p>
           )}
           {enq?.status === 'no-match' && (
             <div className="mt-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800 leading-snug">

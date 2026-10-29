@@ -16,11 +16,25 @@ They live here now because the code cannot carry them.
   meta_data}` wire shape on read and decomposes it on write, so `rowToInbound` /
   `inboundToRow` and friends still see a `B2BLeadRow`. The browser never reaches
   the backend directly (that would be a fifth egress): it goes
-  `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` (`requireCaller` + the
-  `admin`/`b2b_sales` gate) → FastAPI, trusted by `x-sync-key`. See
+  `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` (`requireCaller` +
+  `canUseB2B`) → FastAPI, trusted by `x-sync-key`. The relay originally
+  admitted only `admin`/`b2b_sales`, which would have 403'd every `b2b_KAM`,
+  `b2b_manager` and `crm.b2b_sales`-slug user; it uses the tab's own rule now. See
   `docs/backends.md`. This also closed a hole: the old `b2b_lead` had an
   `Allow all access` anon RLS policy, so the boards were writable by anyone who
   could load the app — now every read and write is behind `requireCaller`.
+
+- **A `meta_data` key with no column used to vanish on save.** The router
+  decomposed `meta_data` into columns and dropped every other key, silently.
+  After PR #27 that ate `invalid_reason`, `invalid_note`, `pi_shared_at`,
+  `office_location` and `outreach_referral` on inbound and `alt_phone`/`contacts`
+  on outreach: the save returned 200 and the fields were blank on reload. Since
+  backend migration `0020` each table has an `extra` jsonb; any key that is not a
+  column goes there and comes back in `meta_data` on read, a real column winning
+  a name clash. **So a new CRM-owned field needs no backend change**, but a key
+  must not be renamed casually: the old name's value stays in `extra`, unread.
+  `POST /rows/bulk {rows, only_new}` is the bulk write (Outreach's intake);
+  `only_new` is `ON CONFLICT DO NOTHING`.
 
 - **One read serves every board.** Each B2B view wants a different pipeline, but
   `fetchAllRows` makes a single `GET /api/b2b/rows` (the backend runs the four
@@ -35,10 +49,10 @@ They live here now because the code cannot carry them.
   totals cannot be derived.** `fetchB2BInboundLeads` catches internally and
   returns `total: 0`. Deriving the last owner's count by subtracting from the
   board total would therefore let a single 429 move one rep's leads silently
-  onto another rep's card. `fetchInboundOwnerTotals` pays one call per owner
-  (`size=1`, only `totalElements` is read) and is **opt-in**, cached separately
-  from `fetchB2BData` — only `computeLeadership` reads it, so the Dashboard and
-  Targets tabs no longer pay two Kylas calls for a number they never render.
+  onto another rep's card. The Leadership Board's Inbound coverage pays one
+  call per person (`size=1`, `totalElements` only, checking `ok`) for this
+  reason, and caches only the counts it actually got (`leadership.md`). The old
+  `fetchInboundOwnerTotals` went with the old board on 2026-10-28.
 
 - **Only cache a zero you actually received.** A phone the backend has no deals
   for is a real zero and worth caching. A phone whose request failed is not —
@@ -65,6 +79,8 @@ They live here now because the code cannot carry them.
   ₹0 pipeline. Both now return `ok`, and the Dashboard shows a banner rather
   than the zeros. Same trap as the Kylas `total: 0` note above — a caught error
   behind a typed return is invisible at the call site unless the type says so.
+  `fetchB2BInboundLeads` and `fetchInboundBoard` carry the same `ok` since
+  2026-10-28; see the Kylas-outage entry in `docs/landmines.md`.
 
 - **`fetchTargets` returns `{store, ok}`, not a bare store.** The catch path
   returns `defaultTargetStore()` — the built-in 120L — which is indistinguishable
@@ -170,7 +186,7 @@ They live here now because the code cannot carry them.
   is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
   data, not a bug to tune away.
 
-- **The Leaderboard and Targets are still a third number** — they sum the
+- **Targets is still a third number**: it sums the
   `value` field on closed Supabase rows, and will not reconcile with either
   Django figure. Do not "fix" a mismatch by making one read the other; check
   which source the panel is meant to speak for. Targets was compounding this by
@@ -185,7 +201,7 @@ They live here now because the code cannot carry them.
   every dropdown, filter and Targets card). `Jadhav` vs `Krishna Jadhav`,
   `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
   so they drove revenue on the Dashboard and appeared nowhere on Targets or the
-  Leaderboard. Everything now derives from `B2B_ROSTER`.
+  old leaderboard. Everything now derives from `B2B_ROSTER`.
   Two constraints on editing it:
   - **`name` is a stored value, not a label.** It is what sits in
     `meta_data.kam` and `owner` on existing `b2b_lead` rows, so renaming one
@@ -193,8 +209,7 @@ They live here now because the code cannot carry them.
     display/matching attributes; only `contact` may be corrected freely.
   - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
     Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
-    `DEFAULT_KAM`, but `repUniverse()` filters `B2B_ADMINS` off the Leaderboard
-    and he has no Targets card. That asymmetry is deliberate and predates this
+    `DEFAULT_KAM`, but he has no Targets card. That asymmetry is deliberate and predates this
     file; it was briefly "fixed" by making him unassignable and reverted the
     same day.
   - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
@@ -202,20 +217,51 @@ They live here now because the code cannot carry them.
     file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
     nowhere until he was added here (Oct 2026). A new B2B hire needs a roster
     row as well as the role.
+  - **Inbound ownership no longer reads this file** (2026-10-28). It reads the
+    `b2b_team_member` table, which managers edit under B2B Sales → Team; see
+    `inbound.md` §Who owns a lead. Nor does the Leadership Board, which reads
+    the team table and falls back to names in the data (`leadership.md`). KAM
+    lists and Targets still read `B2B_ROSTER` until the redesign retires it.
 
 - **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
   `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people
   creating a client in the same millisecond silently overwrote one another.
   `models/ids.ts` appends a random suffix.
 
+### Requirement history: one diff, three pipelines (2026-10-29)
+
+The user asked that a client's requirement can change at any stage (Inbound,
+Outreach, KAM) and that every earlier version stays readable.
+`models/requirement` `withRequirementHistory(before, after, by, at)` appends
+the old text to `requirement_history` (`{text, replacedAt, replacedBy}[]`)
+whenever a non-empty requirement changes. It is applied at the write, diffed
+against the last saved record, not wired to a button:
+
+- **Outreach:** inside `withJourney`, which every Outreach save already goes
+  through. It also logs a `requirement-changed` journey event.
+- **Inbound:** the drawer keeps a `saved` ref, and both the Save button and the
+  call log go through it. The call log writes the whole draft, so a requirement
+  edited and then a call logged would otherwise skip the history.
+- **KAM:** per order, in the order modal's save. A new order has none. The
+  modal's `kam` prop is the KAM a new order defaults to (often the hardcoded
+  `DEFAULT_KAM`), not the editor, so the entry takes `actor`. The first
+  browser run recorded a roster name instead of the KAM who made the edit.
+
+Filling an empty requirement is not a change, clearing one keeps the old text,
+and an entry equal to the last one is skipped, so a stale baseline cannot
+duplicate a version. Each editor shows "Previous requirements (n)", newest
+first (`ui/requirement-history.tsx`). Rows written before this have no history,
+so their first change starts it. `requirement_history` is a new meta key, so
+it is stored in the backend's `extra` and persists only once migration 0020 is
+live. Checked by compiling the helper and running the A→B→A→B, clear,
+whitespace and stale-baseline cases, then in the sandbox browser: two edits to
+a KAM order read "Previous requirements (2)", naming the KAM who made them.
+
 ### View-level decisions worth not re-litigating
 
-- **The rep leaderboard is the only place `inboundOwnerTotals` is rendered**, so
-  that tab asks for it and the other three do not. See the owner-totals note
-  above for why it cannot be derived instead.
-- **The KAM empty-state banner counts every order; the Active Orders chip counts
+- **The KAM empty-state banner counts every order; the Open orders tile counts
   the open ones.** Both numbers are named on screen deliberately — that is what
-  stops "30 orders exist" reading as a contradiction of a chip saying 4.
+  stops "30 orders exist" reading as a contradiction of a tile saying 4.
 - **A failed read is reported, never rendered as "no leads."** A BM would read an
   empty Outreach board as a day with nothing on it. This is the view-level half
   of the `Array.isArray(rows) ? rows : []` landmine.

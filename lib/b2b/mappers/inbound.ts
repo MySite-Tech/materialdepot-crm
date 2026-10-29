@@ -1,6 +1,7 @@
 import { B2BLeadRow } from '../data/rows';
 import { CallAttempt, InboundStatus, clientTypeFromKylas, decomposeLegacyStage, locationFromPincode, normalizeStatus } from '@/components/b2b/models/inbound';
 import { InboundLead } from '@/components/b2b/models/mock-data';
+import { INVALID_ENQUIRY_REASON } from '@/components/b2b/constants/inbound';
 
 type MetaKind = 'string' | 'number' | 'array' | 'object';
 
@@ -13,6 +14,9 @@ interface MetaField {
 const INBOUND_META: MetaField[] = [
 
   { ui: 'companyName',        db: 'company_name',         kind: 'string' },
+  { ui: 'primaryContactName', db: 'primary_contact_name', kind: 'string' },
+  { ui: 'primaryContactPhone', db: 'primary_contact_phone', kind: 'string' },
+  { ui: 'additionalContacts', db: 'additional_contacts',  kind: 'array'  },
   { ui: 'gstNumber',          db: 'gst_number',           kind: 'string' },
   { ui: 'segment',            db: 'segment',              kind: 'string' },
   { ui: 'clientType',         db: 'client_type',          kind: 'string' },
@@ -23,6 +27,7 @@ const INBOUND_META: MetaField[] = [
 
   { ui: 'selections',         db: 'selections',           kind: 'array'  },
   { ui: 'requirement',        db: 'requirement',          kind: 'string' },
+  { ui: 'requirementHistory', db: 'requirement_history',  kind: 'array'  },
   { ui: 'expectedOrderValue', db: 'expected_order_value', kind: 'number' },
 
   { ui: 'followUpDate',       db: 'follow_up_date',       kind: 'string' },
@@ -31,7 +36,13 @@ const INBOUND_META: MetaField[] = [
   { ui: 'orderValue',         db: 'order_value',          kind: 'number' },
   { ui: 'orderValueSource',   db: 'order_value_source',   kind: 'string' },
   { ui: 'lostReason',         db: 'lost_reason',          kind: 'string' },
+  { ui: 'invalidReason',      db: 'invalid_reason',       kind: 'string' },
+  { ui: 'invalidNote',        db: 'invalid_note',         kind: 'string' },
   { ui: 'statusChangedAt',    db: 'status_changed_at',    kind: 'string' },
+  { ui: 'piSharedAt',         db: 'pi_shared_at',         kind: 'string' },
+
+  { ui: 'officeLocation',     db: 'office_location',      kind: 'string' },
+  { ui: 'outreachReferral',   db: 'outreach_referral',    kind: 'object' },
 
   { ui: 'placedUnder',        db: 'placed_under',         kind: 'object' },
   { ui: 'kam',                db: 'kam',                  kind: 'string' },
@@ -103,7 +114,11 @@ export function rowToInbound(r: B2BLeadRow): InboundLead {
     if (v !== undefined) lead[f.ui as string] = v;
   }
 
-  const status: InboundStatus = normalizeStatus(r.stage);
+  let status: InboundStatus = normalizeStatus(r.stage);
+  if (status === 'Lost' && String(lead.lostReason || '').trim().toLowerCase() === INVALID_ENQUIRY_REASON.toLowerCase()) {
+    status = 'Invalid';
+    delete lead.lostReason;
+  }
   const legacy = decomposeLegacyStage(r.stage);
   if (legacy.location && !lead.location) lead.location = legacy.location;
   if (legacy.lostReason && !lead.lostReason) lead.lostReason = legacy.lostReason;

@@ -1,44 +1,53 @@
 'use client';
 
-import { ACTIVE_WINDOW_MONTHS, CLIENT_ENTITY_TYPES, ClientEntity, ClientOrderMetrics, ClientStatus, EVIDENCE_IS_EXACT, MergeChoices, SEGMENTS, clientStatus, contactLabel, contactNumbers, currentTemperature, daysToInactive, findDuplicates, gstNumbers, istToday, mergeClients, primaryContact, temperatureColor, validateGst } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
-import { KAMS, fmtL } from '../../models/mock-data';
-import { ExportFormat } from '../../types/export';
-import { ExportButton } from '../../ui/export-button';
-import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
-import { ClientModal } from './ui/client-modal';
-import { MergeModal } from './ui/merge';
-import { OrderDetailsTable } from './ui/rows';
-import { SeedModal } from './seed';
-import { Metric, StatusPill } from './ui';
-import { UploadModal } from './upload';
+import { KAMS, fmtShortINR } from '../../models/mock-data';
+import { FirmDrawer } from '../../drawers/firm';
+import { useB2BReps } from '../../hooks/use-b2b-reps';
+import { useClientAggregates } from '../../hooks/use-client-aggregates';
+import { AssignBar } from '../../ui/assign-bar';
+import { useFirmAssign } from './hooks/use-firm-assign';
+import { TemperatureChip } from '../../ui/client-chips';
+import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
+import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
+import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
+import { clientLensMatches, filterChips, matchesFilters, sortRows } from './utils';
+import { ClientFilterBar, ListHead } from './ui/filters';
+import { ClientModal } from './ui/modals/client-modal';
+import { MergeModal } from './ui/modals/merge';
+import { SeedModal } from './ui/modals/seed';
+import { UploadModal } from './ui/modals/upload';
+import { ClientTable } from './ui/table';
 import { btnGhost, btnPrimary } from '../../constants/ui';
-import { ClientOrderDetails, ClientOrderHistory, clientFromSeed, clientMetricsFrom, deleteB2BRow, fetchB2BBulk, fetchClientOrderRows, fetchClients, invalidateClientTickets, orderDatesFromAggregates, upsertClient } from '@/lib/b2b';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { clientFromSeed, deleteB2BRow, fetchClients, upsertClient } from '@/lib/b2b';
+import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export default function ClientDatabase() {
+export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [aggregates, setAggregates] = useState<Record<string, ClientOrderHistory>>({});
-  const [dates, setDates] = useState<{ byPhone: Record<string, { last?: string; loaded: boolean }> } | null>(null);
-  const [detailsByClient, setDetailsByClient] = useState<Record<string, ClientOrderDetails>>({});
-  const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ClientEntity | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [merging, setMerging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all');
-  const [segmentFilter, setSegmentFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [kamFilter, setKamFilter] = useState('all');
+  const [f, setF] = useState<ClientFilters>(NO_FILTERS);
+  const [lens, setLens] = useState<ClientLens>('all');
+  const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
+  const { kams } = useB2BReps(team);
+  const assigner = useFirmAssign(clients, kams, viewer.member?.name || viewer.name, (list) => {
+    const byId = new Map(list.map((c) => [c.id, c]));
+    setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
+  });
+  const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,70 +55,82 @@ export default function ClientDatabase() {
     try {
       const list = await fetchClients();
       setClients(list);
-
-      const phones = list.flatMap((c) => contactNumbers(c.contacts));
-      const { histories: agg, ok: aggOk } = await fetchB2BBulk(phones, []);
-      setAggregates(agg);
-      setDates(orderDatesFromAggregates(agg, phones, aggOk));
+      await loadAggregates(list.flatMap((c) => contactNumbers(c.contacts)));
     } catch (e) {
       console.error('[b2b] client database load failed', e);
       setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadAggregates]);
 
   useEffect(() => { load(); }, [load]);
 
-  const metricsFor = useCallback(
-    (c: ClientEntity): ClientOrderMetrics => clientMetricsFrom(c.contacts, aggregates, dates || undefined),
-    [aggregates, dates],
-  );
-
-  const loadDetails = useCallback(async (c: ClientEntity, force = false) => {
-    const phones = contactNumbers(c.contacts);
-    if (!phones.length) return;
-    if (force) invalidateClientTickets(phones);
-    setDetailLoading((s) => ({ ...s, [c.id]: true }));
-    try {
-      const details = await fetchClientOrderRows(phones);
-      setDetailsByClient((s) => ({ ...s, [c.id]: details }));
-    } finally {
-      setDetailLoading((s) => ({ ...s, [c.id]: false }));
-    }
-  }, []);
-
-  const toggleExpand = (c: ClientEntity) => {
-    if (expanded === c.id) { setExpanded(null); return; }
-    setExpanded(c.id);
-    if (!detailsByClient[c.id]) loadDetails(c);
-  };
-
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const digits = q.replace(/\D/g, '');
-    return clients
+  const scoped = useMemo<ClientListRow[]>(() =>
+    clients
+      .filter((c) => matchesFilters(c, f) && clientMatchesSearch(c, search))
       .map((client) => {
         const metrics = metricsFor(client);
-        return { client, metrics, status: clientStatus(metrics, today), days: daysToInactive(metrics, today) };
-      })
-      .filter(({ client, status }) => {
-        if (statusFilter !== 'all' && status !== statusFilter) return false;
-        if (segmentFilter !== 'all' && client.segment !== segmentFilter) return false;
-        if (typeFilter !== 'all' && client.clientType !== typeFilter) return false;
-        if (kamFilter !== 'all' && (client.kam || '') !== (kamFilter === 'unassigned' ? '' : kamFilter)) return false;
-        if (!q) return true;
-        return client.company.toLowerCase().includes(q)
-          || (client.contacts || []).some((c) => (c.name || '').toLowerCase().includes(q))
-          || (digits.length >= 4 && contactNumbers(client.contacts).some((p) => p.includes(digits)))
-          || gstNumbers(client.gsts).some((g) => g.toLowerCase().includes(q));
-      })
-      .sort((a, b) =>
-        String(b.metrics.lastOrderPlaced || '').localeCompare(String(a.metrics.lastOrderPlaced || ''))
-        || a.client.company.localeCompare(b.client.company));
-  }, [clients, metricsFor, search, statusFilter, segmentFilter, typeFilter, kamFilter, today]);
+        return { client, metrics, status: clientStatus(metrics, today), days: daysToLapse(metrics, today) };
+      }),
+  [clients, metricsFor, f, search, today]);
+
+  const byLens = useMemo(() => {
+    const out = Object.fromEntries((Object.keys(CLIENT_LENS) as ClientLens[]).map((k) => [k, [] as ClientListRow[]])) as Record<ClientLens, ClientListRow[]>;
+    for (const r of scoped) for (const k of Object.keys(out) as ClientLens[]) if (clientLensMatches(k, r)) out[k].push(r);
+    return out;
+  }, [scoped]);
+
+  const sort = sortPick || LENS_DEFAULT_SORT[lens];
+  const rows = useMemo(() => sortRows(byLens[lens], sort), [byLens, lens, sort]);
+
+  useEffect(() => { setPage(1); }, [search, f, lens, sort]);
+
+  const sumRevenue = (list: ClientListRow[]) => list.reduce((n, r) => n + (r.metrics.totalRevenue || 0), 0);
+  const listRevenue = useMemo(() => sumRevenue(rows), [rows]);
+  const scopeRevenue = useMemo(() => sumRevenue(scoped), [scoped]);
+
+  const pickLens = (k: ClientLens) => { setLens(k); setSortPick(null); };
+  const clearAll = () => { setSearch(''); setF(NO_FILTERS); pickLens('all'); };
+  const filtersSet = !!search.trim() || filterChips(f).length > 0;
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+
+  const unread = byLens.unknown.length;
+  const neverOrdered = byLens.inactive.filter((r) => r.metrics.dateState === 'no-orders').length;
+  const tileValue = (k: ClientLens): { value: string; sub?: string; warn?: boolean } => {
+    if (loading) return { value: '…', sub: 'loading' };
+    if (loadError) return { value: 'Unknown', sub: 'did not load', warn: true };
+    const n = byLens[k].length;
+    switch (k) {
+      case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} unread` : ''}`, warn: !!unread };
+      case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_DAYS} days` };
+      case 'lapsing':  return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
+      case 'inactive': return { value: String(n), sub: neverOrdered ? `${neverOrdered} never ordered` : `no order in ${INACTIVE_DAYS} days` };
+      case 'unknown':  return { value: String(n), sub: 'orders did not load', warn: true };
+      case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
+      case 'pending':  return { value: String(n), sub: 'not accepted yet' };
+    }
+  };
+  const tile = (k: ClientLens) => ({
+    key: k, title: CLIENT_LENS[k].title, rule: CLIENT_LENS[k].rule, accent: CLIENT_LENS[k].accent,
+    ...tileValue(k), muted: !loading && !loadError && byLens[k].length === 0 && k !== 'all',
+  });
+  const tileGroups: LensTileGroup<ClientLens>[] = [
+    { title: 'Firms by order activity', tiles: STATUS_LENSES.map(tile) },
+    { title: 'Needs attention', tiles: (['nokam', ...(byLens.pending.length ? ['pending'] : []), ...(unread ? ['unknown'] : [])] as ClientLens[]).map(tile) },
+  ];
+
+  const openRow = useMemo(() => {
+    const client = clients.find((c) => c.id === openId);
+    if (!client) return null;
+    const metrics = metricsFor(client);
+    return { client, metrics, status: clientStatus(metrics, today), days: daysToLapse(metrics, today), temp: currentTemperature(client.interactions) };
+  }, [clients, openId, metricsFor, today]);
 
   const kamOptions = useMemo(() => {
     const seen = new Set<string>(KAMS);
@@ -121,6 +142,7 @@ export default function ClientDatabase() {
     const err = await upsertClient(c);
     if (err) return err;
     setClients((prev) => (prev.some((x) => x.id === c.id) ? prev.map((x) => (x.id === c.id ? c : x)) : [c, ...prev]));
+    addPhones(contactNumbers(c.contacts));
     return null;
   };
 
@@ -152,43 +174,6 @@ export default function ClientDatabase() {
       : null;
   };
 
-  const exportRows = (format: ExportFormat) => {
-    const headers = [
-      'Company Name', 'Contact Person', 'Primary Contact', 'All Contact Numbers', 'GST Numbers',
-      'Segment', 'Client Type', 'Source', 'KAM', 'Client Status',
-      'Last Order Placed', 'Number of Orders', 'Total Revenue', 'Average Order Value', 'Temperature', 'Remarks',
-    ];
-    const body = rows.map(({ client, metrics, status }) => {
-      const primary = primaryContact(client.contacts);
-      const temp = currentTemperature(client.interactions);
-      return [
-        client.company,
-        contactLabel(primary),
-        primary?.number || '',
-        contactNumbers(client.contacts).join(' '),
-        gstNumbers(client.gsts).join(' '),
-        client.segment || '',
-        client.clientType || '',
-        client.source,
-        client.kam || '',
-        status,
-        metrics.lastOrderPlaced || (metrics.dateState === 'unavailable' ? 'unread' : ''),
-        metrics.orders ?? '',
-        metrics.totalRevenue ?? '',
-        metrics.averageOrderValue !== undefined ? Math.round(metrics.averageOrderValue) : '',
-        temp ? temp.value : '',
-        client.remarks || '',
-      ];
-    });
-    setExporting(true);
-    try {
-      if (format === 'csv') exportRowsCsv(headers, body, `client-database-${todayStr()}`);
-      else exportRowsExcel(headers, body, `client-database-${todayStr()}`, 'Clients');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const blank = (): ClientEntity => ({
     id: newB2BId('CLI'),
     company: '',
@@ -208,14 +193,17 @@ export default function ClientDatabase() {
         <div>
           <h1 className="text-lg font-bold text-gray-800">Client Database</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            One row per business entity · order metrics derived from the deal tickets, never stored
+            Every firm we sell to, its numbers and GSTINs, and the orders placed on them
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ExportButton onExport={(f) => exportRows(f)} disabled={exporting} />
           <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>
           <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>
-          <button onClick={() => setMerging(true)} className={btnGhost}>
+          <button
+            onClick={() => setMerging(true)}
+            className={btnGhost}
+            title={exactSuggestions.length ? `${exactSuggestions.length} pair${exactSuggestions.length === 1 ? '' : 's'} of firms share a number, GST or PAN and are probably one business` : 'Find and merge duplicate firms'}
+          >
             Merge
             {!!exactSuggestions.length && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">{exactSuggestions.length}</span>}
           </button>
@@ -230,33 +218,18 @@ export default function ClientDatabase() {
         </div>
       )}
 
+      {(loading || !!clients.length) && <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />}
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search company, contact, number or GST…"
-          className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white outline-none focus:border-[#0F766E] w-full sm:w-[280px]"
+      {!!clients.length && (
+        <ClientFilterBar
+          f={f}
+          set={(patch) => setF((p) => ({ ...p, ...patch }))}
+          search={search}
+          setSearch={setSearch}
+          kamOptions={kamOptions}
+          onClear={clearAll}
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | ClientStatus)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All statuses</option>
-          {(['Active', 'Inactive', 'Unknown'] as ClientStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={segmentFilter} onChange={(e) => setSegmentFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All segments</option>
-          {SEGMENTS.map((s) => <option key={s} value={s}>Segment {s}</option>)}
-        </select>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All types</option>
-          {CLIENT_ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All KAMs</option>
-          <option value="unassigned">Unassigned</option>
-          {kamOptions.map((k) => <option key={k} value={k}>{k}</option>)}
-        </select>
-        <span className="text-[11px] text-gray-400 ml-auto">{rows.length} of {clients.length}</span>
-      </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-400 py-8 text-center">Loading clients…</p>
@@ -274,157 +247,94 @@ export default function ClientDatabase() {
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px] min-w-[1040px]">
-              <thead>
-                <tr className="bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider">
-                  <th className="text-left font-semibold px-3 py-2">Company</th>
-                  <th className="text-left font-semibold px-3 py-2">Contact person</th>
-                  <th className="text-left font-semibold px-3 py-2">Contact number</th>
-                  <th className="text-left font-semibold px-3 py-2">Last order</th>
-                  <th className="text-right font-semibold px-3 py-2">Orders</th>
-                  <th className="text-right font-semibold px-3 py-2">Total revenue</th>
-                  <th className="text-right font-semibold px-3 py-2">Avg order</th>
-                  <th className="text-left font-semibold px-3 py-2">Status</th>
-                  <th className="text-left font-semibold px-3 py-2">Seg</th>
-                  <th className="text-left font-semibold px-3 py-2">KAM</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ client, metrics, status, days }) => {
-                  const primary = primaryContact(client.contacts);
-                  const isOpen = expanded === client.id;
-                  const temp = currentTemperature(client.interactions);
-                  const numbers = contactNumbers(client.contacts);
-                  return (
-                    <Fragment key={client.id}>
-                      <tr
-                        onClick={() => toggleExpand(client)}
-                        className={`border-t border-gray-100 cursor-pointer hover:bg-gray-50 ${isOpen ? 'bg-gray-50' : ''}`}
-                      >
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-gray-300 text-[10px]">{isOpen ? '▾' : '▸'}</span>
-                            <span className="font-semibold text-gray-800">{client.company || <span className="text-gray-300">(unnamed)</span>}</span>
-                            {temp && (
-                              <span
-                                className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono"
-                                style={{ background: temperatureColor(temp.value) + '1A', color: temperatureColor(temp.value) }}
-                                title={`Account temperature ${temp.value}/10, scored ${temp.at}`}
-                              >
-                                {temp.value}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">
-                            {client.source}
-                            {client.clientType && ` · ${client.clientType}`}
-                            {numbers.length > 1 && ` · ${numbers.length} numbers`}
-                            {!!gstNumbers(client.gsts).length && ` · ${gstNumbers(client.gsts).length} GST`}
-                            {!!(client.mergedFrom || []).length && ` · merged ×${(client.mergedFrom || []).length}`}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-gray-600">{contactLabel(primary) || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 font-mono text-gray-600">{primary?.number || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap"><Metric value={metrics.lastOrderPlaced} state={metrics.dateState} /></td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-700"><Metric value={metrics.orders} state={metrics.dateState} /></td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-gray-800 whitespace-nowrap"><Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtL} /></td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-600 whitespace-nowrap"><Metric value={metrics.averageOrderValue} state={metrics.dateState} format={fmtL} /></td>
-                        <td className="px-3 py-2"><StatusPill status={status} days={days} /></td>
-                        <td className="px-3 py-2 text-gray-600">{client.segment || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{client.kam || <span className="text-gray-300">unassigned</span>}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditing(client); }}
-                            className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
-
-                      {isOpen && (
-                        <tr className="bg-gray-50/60">
-                          <td colSpan={11} className="px-3 pb-4 pt-1">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-                              <div className="bg-white rounded-md border border-gray-200 p-3">
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Business entity · §3.1</div>
-                                <div className="text-[13px] font-semibold text-gray-800">{client.company}</div>
-                                <div className="text-[11px] text-gray-400 mb-2">
-                                  {client.clientType || 'type not set'} · Segment {client.segment || '—'} · {client.source}
-                                </div>
-
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-3 mb-1">Contact numbers</div>
-                                {(client.contacts || []).map((c) => (
-                                  <div key={c.number} className="text-[11px] text-gray-600">
-                                    <span className="font-mono">{c.number}</span>
-                                    {contactLabel(c) && <span className="text-gray-400"> · {contactLabel(c)}</span>}
-                                    {c.primary && <span className="ml-1 text-[9px] font-bold text-[#0F766E]">PRIMARY</span>}
-                                  </div>
-                                ))}
-
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-3 mb-1">GST numbers</div>
-                                {!(client.gsts || []).length ? (
-                                  <p className="text-[11px] text-gray-300">None on file.</p>
-                                ) : (
-                                  (client.gsts || []).map((g) => {
-                                    const v = validateGst(g.number);
-                                    return (
-                                      <div key={g.number} className="text-[11px] text-gray-600">
-                                        <span className="font-mono">{g.number}</span>
-                                        {v.stateName && <span className="text-gray-400"> · {v.stateName}</span>}
-                                        {v.check === 'bad-checksum' && <span className="text-amber-600"> · check digit disagrees</span>}
-                                        <div className="text-[10px] text-gray-400">
-                                          {g.registeredName
-                                            ? `Registered as ${g.registeredName}`
-                                            : 'Registered company name unavailable — no GST Validator in this stack'}
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-
-                                {client.remarks && (
-                                  <>
-                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-3 mb-1">Remarks</div>
-                                    <p className="text-[11px] text-gray-600 break-words">{client.remarks}</p>
-                                  </>
-                                )}
-                              </div>
-
-                              <div className="bg-white rounded-md border border-gray-200 p-3 lg:col-span-2">
-                                <OrderDetailsTable
-                                  rows={detailsByClient[client.id]?.rows || []}
-                                  failedPhones={detailsByClient[client.id]?.failedPhones || []}
-                                  rejected={detailsByClient[client.id]?.rejected || 0}
-                                  loading={!!detailLoading[client.id]}
-                                  onRecheck={() => loadDetails(client, true)}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ListHead
+            lens={lens}
+            shown={rows.length}
+            total={clients.length}
+            revenue={listRevenue}
+            unread={rows.filter((r) => r.status === 'Unknown').length}
+            f={f}
+            search={search}
+            onLens={pickLens}
+            onFilter={(k) => setF((p) => ({ ...p, [k]: NO_FILTERS[k] }))}
+            onSearch={() => setSearch('')}
+            onClearAll={clearAll}
+          />
+          {viewer.isManager && (
+            <AssignBar
+              count={assigner.picked.size}
+              noun="firm"
+              reps={kams}
+              busy={assigner.busy}
+              rule="Round robin gives each firm to the active, in-rotation KAM holding the fewest firms. The KAM must accept or reject it."
+              onAssign={assigner.assign}
+              onClear={assigner.clear}
+            />
+          )}
+          {assigner.error && (
+            <div className="px-4 py-2 text-[12px] text-red-700 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">
+              <span>{assigner.error}</span>
+              <button onClick={() => assigner.setError(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
+            </div>
+          )}
+          {rows.length ? (
+            <ClientTable
+              rows={pageRows}
+              today={today}
+              sort={sort}
+              onSort={setSortPick}
+              onOpen={(c) => setOpenId(c.id)}
+              picked={viewer.isManager ? assigner.picked : undefined}
+              onPick={assigner.toggle}
+              onPickPage={() => assigner.togglePage(pageRows.map((r) => r.client.id))}
+            />
+          ) : (
+            <div className="py-12 px-6 text-center">
+              <p className="text-[13px] font-semibold text-gray-600">
+                {filtersSet ? `No firm in ${CLIENT_LENS[lens].heading} matches the search and filters.` : CLIENT_LENS[lens].empty}
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                {filtersSet && <button onClick={() => { setSearch(''); setF(NO_FILTERS); }} className={btnGhost}>Clear search and filters</button>}
+                {lens !== 'all' && <button onClick={() => pickLens('all')} className={btnGhost}>Show all firms</button>}
+              </div>
+            </div>
+          )}
+          {rows.length > 0 && (
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-100 text-[11px] text-gray-500 flex-wrap">
+              <span>Showing {(curPage - 1) * PAGE_SIZE + 1}–{Math.min(curPage * PAGE_SIZE, rows.length)} of {rows.length}</span>
+              {rows.length > PAGE_SIZE && (
+                <div className="flex gap-2">
+                  <button disabled={curPage <= 1} onClick={() => setPage(curPage - 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">← Prev</button>
+                  <button disabled={curPage >= totalPages} onClick={() => setPage(curPage + 1)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer disabled:opacity-40 disabled:cursor-default">Next →</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {`Client status is system-computed: Active means an ordered deal ticket within the last ${ACTIVE_WINDOW_MONTHS} months.`}{' '}
-        The PRD says the window is measured “from Last Order Placed”, which read literally would make every client who
-        ever ordered permanently Active — so it is anchored to today, which is the only reading under which the PRD&apos;s
-        own “re-evaluates on daily rollover” does anything. Flagged for KK.
+        {`Active means an order placed in the last ${ACTIVE_DAYS} days, Inactive 1 month ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago, Inactive anything older, counted back from today. The KAM tab uses the same rule.`}
       </p>
 
       {addingNew && (
         <ClientModal client={blank()} isNew onClose={() => setAddingNew(false)} onSave={saveClient} />
+      )}
+      {openRow && (
+        <FirmDrawer
+          client={openRow.client}
+          clients={clients}
+          metrics={openRow.metrics}
+          status={openRow.status}
+          days={openRow.days}
+          historyFor={historyFor}
+          badges={openRow.temp && <TemperatureChip value={openRow.temp.value} at={openRow.temp.at} />}
+          reassignReason="Reassigned in the Client Database"
+          assignAs={viewer.isManager ? viewer.member?.name || viewer.name : undefined}
+          onClose={() => setOpenId(null)}
+          onSave={saveClient}
+          onEdit={() => setEditing(openRow.client)}
+        />
       )}
       {editing && (
         <ClientModal client={editing} onClose={() => setEditing(null)} onSave={saveClient} />

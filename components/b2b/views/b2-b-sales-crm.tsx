@@ -1,21 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import B2BDashboard from './dashboard/index';
 import InboundLeads from './inbound/index';
 import OutreachLeads from './outreach/index';
 import LeadsTab from './leads/index';
 import ClientDatabase from './client-db/index';
 import KAMs from './kams/index';
-import LeadershipBoard from './leadership-board';
+import Leadership from './leadership/index';
 import Targets from './targets';
-import PartnerContent from './partner-content/index';
+import StudioSpace from './studio-space/index';
+import TeamView from './team/index';
+import { useB2BTeam } from '../hooks/use-b2b-team';
+import { viewerFor } from '@/lib/b2b/team/utils';
+import type { AppUser } from '@/types/crm';
 
 type B2BView =
   | 'dashboard' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
-  | 'leadership' | 'targets' | 'content';
+  | 'leadership' | 'targets' | 'studio' | 'team';
 
-const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
+const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean }> = [
   { key: 'dashboard',  label: 'Dashboard',        ready: true },
   { key: 'leads',      label: 'Leads',            ready: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
@@ -26,11 +30,17 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean }> = [
   { key: 'leadership', label: 'Leadership Board', ready: true },
   { key: 'targets',    label: 'Targets',          ready: true },
 
-  { key: 'content',    label: 'Partner Content',  ready: true },
+  { key: 'studio',     label: 'Studio Space',     ready: true },
+  { key: 'team',       label: 'Team',             ready: true, teamManagersOnly: true },
 ];
 
-export default function B2BSalesCRM() {
+export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | null }) {
   const [view, setView] = useState<B2BView>('dashboard');
+  const team = useB2BTeam();
+  const viewer = useMemo(() => viewerFor(currentUser, team.members), [currentUser, team.members]);
+  const nav = useMemo(() => NAV
+    .filter((item) => !item.teamManagersOnly || viewer.canManageTeam)
+    .map((item) => (item.key === 'leadership' && !viewer.isManager ? { ...item, label: 'My performance' } : item)), [viewer.isManager, viewer.canManageTeam]);
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-84px)] bg-[#FAFAFA]">
@@ -41,7 +51,7 @@ export default function B2BSalesCRM() {
           <div className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">B2B Sales CRM</div>
         </div>
         <nav className="flex flex-col mt-2">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <button
               key={item.key}
               onClick={() => setView(item.key)}
@@ -60,7 +70,7 @@ export default function B2BSalesCRM() {
 
       <div className="md:hidden shrink-0 bg-[#1A1A1A]">
         <nav className="flex overflow-x-auto no-scrollbar">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <button
               key={item.key}
               onClick={() => setView(item.key)}
@@ -79,14 +89,15 @@ export default function B2BSalesCRM() {
 
       <main className="flex-1 overflow-y-auto min-w-0">
         {view === 'dashboard' && <B2BDashboard />}
-        {view === 'inbound' && <InboundLeads />}
+        {view === 'inbound' && <InboundLeads team={team} viewer={viewer} />}
         {view === 'leads' && <LeadsTab />}
-        {view === 'outreach' && <OutreachLeads />}
-        {view === 'clients' && <ClientDatabase />}
-        {view === 'kams' && <KAMs />}
-        {view === 'leadership' && <LeadershipBoard />}
+        {view === 'outreach' && <OutreachLeads team={team} viewer={viewer} />}
+        {view === 'clients' && <ClientDatabase team={team} viewer={viewer} />}
+        {view === 'kams' && <KAMs team={team} viewer={viewer} />}
+        {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
         {view === 'targets' && <Targets />}
-        {view === 'content' && <PartnerContent />}
+        {view === 'studio' && <StudioSpace />}
+        {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}
       </main>
     </div>
   );

@@ -1,5 +1,4 @@
-import { KYLAS_API_KEY, KYLAS_API_URL, kylasFetch } from '../../core/kylas-client';
-import { CallOutcome } from './types';
+import { kylasFetch } from '../../core/kylas-client';
 import { formatKylasTs, pickName, stripHtml } from './utils';
 export async function fetchLeadNotes(
   leadId: string | number,
@@ -25,24 +24,6 @@ export async function fetchLeadNotes(
       .filter((n: import('../../../../components/b2b/models/mock-data').LeadNote) => n.text);
   } catch {
     return [];
-  }
-}
-
-export async function createLeadNote(
-  leadId: string | number,
-  text: string,
-): Promise<boolean> {
-  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const body = {
-    sourceEntity: { description: `<div>${escaped}</div>`, mentions: null },
-    targetEntityId: String(leadId),
-    targetEntityType: 'LEAD',
-  };
-  try {
-    await kylasFetch('/notes/relation', { method: 'POST', body: JSON.stringify(body) });
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -81,44 +62,4 @@ export async function fetchLeadCallLogs(
 export async function fetchCallLogSummary(callLogId: string | number): Promise<string> {
   const data = await kylasFetch(`/call-logs/${callLogId}?relatedToType=lead`);
   return stripHtml(data?.callSummary ?? data?.summary ?? data?.aiSummary ?? data?.transcriptSummary ?? '');
-}
-
-export async function createInboundCallLog(params: {
-  leadId: string | number;
-  leadName: string;
-  phoneId: string | number;
-  outcome: CallOutcome;
-  callType?: 'outgoing' | 'incoming';
-  callSummary?: string;
-  durationMinutes?: number;
-  startTime?: string;
-}): Promise<boolean> {
-  const { leadId, leadName, phoneId, outcome, callType = 'outgoing', callSummary = '', durationMinutes, startTime } = params;
-  const fd = new FormData();
-  fd.append('isManual', 'true');
-  fd.append('outcome', outcome);
-  fd.append('startTime', startTime || new Date().toISOString());
-  fd.append('phoneId', String(phoneId));
-  fd.append('callType', callType);
-  if (outcome === 'connected' && durationMinutes != null) {
-    fd.append('duration', String(durationMinutes));
-    fd.append('durationType', 'minutes');
-  }
-  fd.append('callSummary', callSummary);
-  fd.append('notes', '[]');
-  fd.append('relatedTo[id]', String(leadId));
-  fd.append('relatedTo[name]', leadName);
-  fd.append('relatedTo[entity]', 'lead');
-  fd.append('relatedTo[phoneId]', String(phoneId));
-  try {
-    const res = await fetch(`${KYLAS_API_URL}/call-logs/`, {
-      method: 'POST',
-      headers: { 'api-key': KYLAS_API_KEY },
-      body: fd,
-    });
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    return true;
-  } catch {
-    return false;
-  }
 }

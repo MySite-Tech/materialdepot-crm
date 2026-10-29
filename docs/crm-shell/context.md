@@ -30,7 +30,10 @@ Two ways to see a real dashboard without an OTP:
    accepts **only** `site_audit.admin` in `individualPermissions` — any other
    `site_audit.*` slug renders "This preview is limited to Site Audit oversight
    accounts." (hit 2026-09-23 with `site_audit.service_mgr`).
-2. **Stub the Django host only.** Monkey-patch `window.fetch` to intercept
+2. **Stub the Django host only.** (A person signing in for real needs none of
+   this, only the right port: `api-dev2` answers CORS for `localhost:3000`,
+   `:3001` and `:5173` only, verified 2026-10-28, so on `:3100` every call is
+   "Failed to fetch". `npm run dev` pins `:3001`.) Monkey-patch `window.fetch` to intercept
    `api-dev2.materialdepot.in` (return a token from `/verify-otp/`, a record
    from `/crm/user-profile/`, a roster from `/user-organisation/`, and `200 []`
    for everything else — never a 401, or `forceReLogin` fires), then drive the
@@ -48,7 +51,9 @@ React inputs here ignore synthetic `type` events; set values via the native
 1. If `user.individualPermissions` is **non-empty** it is the WHOLE answer —
    tabs come from `PERMISSION_TAB_ORDER`, and an absent slug means "no".
 2. Only if the list is empty/NULL: `ROLE_TABS[role]` (falling back to
-   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES`,
+   `DEFAULT_ROLE_TABS`) plus the force-add sets (`B2B_SALES_ROLES` — which
+   lives in `lib/b2b/team/constants.ts`, because `app/api/b2b/*` gates on the
+   same set and cannot import this module's `'use client'` files,
    `APPOINTMENT_TRACKER_ROLES`, `SITE_AUDIT_ROLES`, storeDisplay). This branch
    is a **bootstrap for un-migrated accounts only**.
 
@@ -157,6 +162,25 @@ leaked — the rows are still shown, because the stat cards above them are the
 backend's counts and silently dropping rows would make the two disagree. See
 `docs/landmines.md` for the full account and the Branch Access data fix that
 goes with it.
+
+**`b2b.manager`** (2026-10-28) is a sub-slug shown under B2B Sales in the Admin
+permission checklist, the same way Store Display's full-access slug is. It is
+additive to role: `isB2BManager` is true for `superadmin`/`admin`/`b2b_manager`
+**or** the slug, so an admin never has to tick it. It unlocks B2B Sales → Team
+and every rep's rows. `B2BSalesCRM` now receives `currentUser` from
+`tab-panels.tsx`; before that, nothing under `components/b2b/` knew who was
+logged in.
+
+**A B2B admin can also be made from B2B → Team (2026-10-29),** without any CRM
+role or slug: the per-member "B2B admin" switch (`b2b_team_member.is_admin`,
+b2b-backend migration 0021). The user's reason: some B2B people need to see
+the whole team's data without being admins of the CRM or of procurement. The
+B2B tab itself still comes from the role, as before. `viewerFor` splits the
+two powers: `isManager` (see every rep's data, assign work) is the role, the
+slug **or** that switch, while `canManageTeam` (the Team tab, and so the
+switch) stays with the role and slug only. A switched-on member therefore
+cannot make more admins. The route (`app/api/b2b/team` PUT) still checks
+`isB2BManager`, so the Team-tab rule holds on the server too.
 
 ## Ex-GST figures on the Leads tab are additive, and computed in Django
 

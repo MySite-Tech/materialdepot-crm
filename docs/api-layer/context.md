@@ -59,7 +59,8 @@ Error text for a non-OK response is taken in order:
 
 Tokens live in `localStorage` under `jwt_token` and `refresh_token`. `API_BASE_URL`
 is re-exported from `lib/api/core/config.ts`, which is the only place either
-backend's base URL is written — see `docs/backends.md`.
+backend's base URL is written — see `docs/backends.md`. The browser's Kylas base
+moves only with `NEXT_PUBLIC_KYLAS_API_BASE_URL`, which `docs/b2b/sandbox.md` sets.
 
 ## Server-side helpers (route handlers only)
 
@@ -114,10 +115,12 @@ Four things worth knowing before reusing it:
 `lib/server/b2b-backend.ts`, used by `app/api/b2b/[...path]`. The B2B tab's data
 lives in the FastAPI `b2b-backend` now, not Supabase (see `docs/backends.md`),
 and the browser must not reach it directly — that would be a fifth egress path.
-So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces the
-`admin`/`b2b_sales` gate, then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
-server-only `x-sync-key: B2B_BACKEND_SECRET` — the same server-to-server pattern
-`app/api/b2b/partner-content` uses. Three things it deliberately does:
+So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces
+`canUseB2B` (the tab's own rule — role set or the `crm.b2b_sales` slug; the
+original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
+then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
+server-only `x-sync-key: B2B_BACKEND_SECRET`, the same server-to-server pattern
+`app/api/b2b/waitlist` uses. Three things it deliberately does:
 
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`) so the
   catch-all is a defined surface, not an open proxy to the backend.
@@ -127,6 +130,23 @@ server-only `x-sync-key: B2B_BACKEND_SECRET` — the same server-to-server patte
   `{ error }` at 502, so a dropped upstream call can't read as data. The CRM
   client (`lib/b2b/data/backend.ts`) sends the bearer token and retries once on
   401 via `refreshSession()`, exactly as the store-checklist caller does.
+- The backend's errors arrive as `{ error }` (its global handler) or FastAPI's
+  `{ detail }`; both are read.
+
+`b2bBackendFetch` in the same file is the **server-only** sibling, for route
+handlers that talk to the backend themselves rather than relaying the browser:
+`lib/server/b2b-team/store.ts` (team roster, round-robin claims) uses it. It
+throws `B2BBackendError` with the upstream status, because the callers branch
+on it. A 409 on a round-robin claim means "already claimed", and a 404 means
+the backend predates migration 0020, which the store turns into
+`TeamTableMissing`. Those paths are deliberately **not** in the relay's allow
+list: the browser has no business writing assignment rows.
+
+The store sends `is_admin` only when the caller passed one. The backend's PUT
+leaves the column untouched when the key is absent, so a save from an older
+client, or one that only flips round robin, cannot clear someone's B2B admin
+flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
+reads as false.
 
 ### There is no scheduled route in this app, and no platform cron to run one
 
@@ -141,6 +161,31 @@ Either way the route itself has no caller to resolve, so `requireCaller` cannot
 help it. It would have to authorise on a shared secret in the `Authorization`
 header and **refuse when that secret is unset**, rather than defaulting to open —
 doubly so for anything holding the service-role key.
+
+This is why the B2B inbound round robin (`/api/b2b/inbound/assign`, 2026-10-28)
+runs **when someone opens Inbound Leads**, not on a timer. A lead that arrives
+overnight is assigned by the first rep to open the tab. It is idempotent, so
+being triggered from many browsers is safe. See `docs/b2b/inbound.md` §Who owns
+a lead.
+
+### `lib/server/b2b-team` talks to Kylas without `kylasFetch`
+
+Added 2026-10-28 for the B2B team routes. `kylasFetch` lives in a browser
+module that carries the Kylas key as a literal. This server-only module reads
+`process.env.KYLAS_API_KEY` and has its own small `fetch` wrapper instead, so
+the route works only where the env var is set. **Check the Azure application
+settings before deploying it**, along with `SUPABASE_SERVICE_ROLE_KEY`, which
+its Supabase half needs.
+
+Two things it does that `kylasFetch` callers do not:
+
+- **A PATCH is checked by reading the field back.** `setLeadOwner` compares the
+  returned `ownerId` with the one it asked for, and re-reads the lead if the
+  body has none. Kylas's API reference is not public, so a 200 alone was not
+  trusted.
+- **Kylas errors throw.** They are not swallowed into an empty list (the
+  `total: 0` trap in the request-budget skill). The route turns them into a
+  502 naming Kylas.
 
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 

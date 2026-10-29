@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-58 entries. They live in one file because they cross-reference each other —
+65 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -66,6 +66,15 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A revenue figure compared against Metabase must share Metabase's date basis, and one date param needs a second to mean anything
 - The Leads tab offered every salesperson in the org, so B2B reps' carts read as a retail branch's leads
 - `/crm/available-bms/?branch=` listed JP Nagar and HQ staff as Basaveshwara Nagar's BMs
+- A logged call recorded the lead's owner as the caller
+- A Kylas outage made B2B Inbound say every new lead had been called
+- The Outreach BM picker listed two people who held none of the leads
+- Custom range with no dates showed this month and called it a custom period
+- A Supabase table with an `Allow all access` anon policy is world-writable from the browser
+- A backend that decomposes a JSON blob into columns dropped every key it had no column for
+- Call duration typed in minutes showed as seconds
+- B2B calls and notes written to Kylas through the API key were credited to the key's owner
+- A rep with no team identity fell through to every rep's leads
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -671,8 +680,8 @@ grep for a term, then read around the line you hit rather than opening all of it
   precedent for a new one.
 
 - **A grid or flex item will not shrink below its content, so an `overflow-x-auto`
-  inside one never engages.** The B2B Inbound "Today" view is
-  `grid-cols-[1fr_320px]` with the call table in the first track. Each bucket
+  inside one never engages.** The B2B Inbound "Today" view was
+  `grid-cols-[1fr_320px]` (replaced 2026-10-28 by the lens table) with the call table in the first track. Each bucket
   card already wrapped its table in `overflow-x-auto`, which worked until two
   columns (Enq / Cart ID, Assisted at EC) were added — then the track's default
   `min-width: auto` grew to fit the table instead of letting it scroll, the page
@@ -927,6 +936,60 @@ grep for a term, then read around the line you hit rather than opening all of it
   defaults to `application/json`, so a plain-object PATCH fails with 415. The
   inbound drawer shipped that way and every Requirement/Selection push failed.
 
+- **A logged call recorded the lead's owner as the caller** (fixed
+  2026-10-28). The inbound drawer stamped `CallAttempt.by = draft.owner`. That
+  was harmless while each lead had one owner for life, and silently wrong the
+  moment leads could be reassigned: every call already on a lead would read as
+  the new owner's. "Calls per rep" (an Inbound Effort KPI) would then credit
+  calls to someone who never made them. The figure would look plausible from
+  the user's side, which is why nobody would catch it. `by` is now the
+  logged-in user's name. The general shape: **an actor field must be filled
+  from the session, never from the record being acted on.** Effort is
+  credited to the actor, output to the owner at the time of the outcome.
+
+- **A Kylas outage made B2B Inbound say every new lead had been called.**
+  Found 2026-10-28 by forcing the Kylas search to 500 in a browser.
+  `fetchB2BInboundLeads` caught the error into `{ leads: [], total: 0 }`.
+  `fetchInboundBoard` then went ahead with the CRM-database rows alone and
+  dropped every DB row still at `New` that Kylas had not returned, which was
+  all of them. The board rendered 884 leads with no error. First call read
+  "0 · all called" and the Kylas total vanished. A rep would read that as a
+  clean inbox. The database half had the same shape: its catch logged to the
+  console and returned `[]`. Both now return `ok`. The Inbound view treats
+  `ok: false` as a failed load: tiles say "Unknown", a retry panel replaces the
+  table, Load more raises an error, and Export fails rather than writing a
+  partial file. Same family as the "Every stats read carries an `ok`" note in
+  `docs/b2b/data-layer.md`: a catch behind a typed return is invisible at the
+  call site unless the type says so. **Other readers of `fetchB2BInboundLeads`
+  still ignore `ok`**: `fetchInboundOwnerTotals` and `leads/unified.ts`
+  (the Leads tab).
+
+- **The Outreach BM picker listed two people who held none of the leads**
+  (fixed 2026-10-28). Its options were `scope.reps`: the Outreach members of
+  `b2b_team_member`, or `B2B_ROSTER` while that table is missing, which it
+  still is. The roster names two BMs. On 2026-10-28 the 53 real Outreach rows
+  belonged to five others plus one of those two (who held a single lead). A
+  manager could not narrow the board to anyone who actually had leads, and the
+  KPI strip multiplied every team target by those 2 heads. Nothing errored; the
+  picker simply looked complete. Options now come from `bmOptions()`
+  (`views/outreach/utils.ts`): the team members plus every BM name found on the
+  leads, each with its lead count, and the head count is that list while the
+  team table is not live. The shape: **a filter's options must be read off the
+  data it filters, not off a list of who is supposed to be there.** Same family
+  as the Leads tab offering every salesperson in the org.
+
+- **Custom range with no dates showed this month and called it a custom
+  period** (fixed 2026-10-29). In the Outreach scorecard, picking "Custom range"
+  left both date inputs empty. `rangeFor('custom')` returned `null`, and the
+  page fell back to this month. The line beside the picker still read "1 Oct –
+  31 Oct · no monthly targets", and the tiles were this month's numbers with
+  the targets stripped off. The user saw a blank range that seemed to be doing
+  something. Picking Custom now seeds both dates from the period on screen,
+  with the end clamped to today. If a date is cleared, the line says in amber
+  that it is showing the fallback. The shape: **when a picker falls back, the
+  label must describe the fallback, not the option that was picked.** Same
+  family as presenting a failed request as data.
+
 - **A Supabase table with an `Allow all access` anon policy is world-writable
   from the browser.** The B2B `b2b_lead`/`b2b_target` tables were reached with
   the public `NEXT_PUBLIC_SUPABASE_ANON_KEY` under a `for all using(true) with
@@ -944,3 +1007,47 @@ grep for a term, then read around the line you hit rather than opening all of it
   ship it first: the frontend flip only works once `0018_b2b_crm` is applied and
   the tables are seeded (`scripts/seed_b2b_from_csv.py`), or `GET /api/b2b/rows`
   502s and the zero-caching rule turns that into a durable wrong number.
+
+- **A backend that decomposes a JSON blob into columns dropped every key it had no column for.** Found 2026-10-29 while merging `main` into the B2B revamp
+  branch. PR #27's `b2b_crm` router rebuilt `meta_data` from columns on read
+  and kept only the keys that matched a column on write. The branch had added
+  `invalid_reason`, `invalid_note`, `pi_shared_at`, `office_location` and
+  `outreach_referral` (and Outreach `alt_phone`, `contacts`). None of these
+  had a column. Every save returned 200, and on reload the Invalid reason, the
+  note and the whole Send to Outreach referral were blank. So no lead could
+  ever reach Outreach's pool. Fixed by backend migration `0020`: an `extra`
+  jsonb holds every key without a column (`docs/b2b/data-layer.md`). The shape:
+  **a translation layer that accepts a superset and stores a subset must say so
+  loudly or keep the remainder.** A 200 is not evidence the data landed; read
+  the row back.
+
+- **Call duration typed in minutes showed as seconds** (fixed 2026-10-29). The inbound call form asked for minutes
+  and posted `duration=N&durationType=minutes` to Kylas. Kylas ignored the unit
+  and stored N seconds, so the call records showed a 4-minute call as "0m 4s".
+  Nothing errored. Calls are now stored in the CRM as `durationMin` and no longer
+  posted to Kylas (next entry). The shape: **a unit passed as a separate field is
+  an assumption about the receiver;** check the read-back, not the request.
+
+- **B2B calls and notes written to Kylas through the API key were credited to the key's owner** (fixed 2026-10-29). The inbound drawer logged every call
+  attempt as a Kylas call log, and every note as a Kylas note, using the
+  browser's shared API key. Kylas records the creator as the key's user, so
+  every B2B call appeared as made by one Presales person, mixed in with real
+  Presales calls, and team notes looked written "by Kylas". Calls and notes now
+  stay in the CRM row with the session user as author, and Kylas data is shown
+  read-only in the From Presales card. Records written before the fix remain in
+  Kylas under the key owner's name. Same family as "A logged call recorded the
+  lead's owner as the caller": **the actor must come from the session, and a
+  shared credential has no session.**
+
+- **A rep with no team identity fell through to every rep's leads** (fixed
+  2026-10-29). Inbound scoped by `scope = choice ?? (myKylasId ? 'mine' :
+  'all')`, and Outreach showed every BM's leads whenever the team table was
+  missing or failed. So the people the scope could not identify (a rep not yet
+  added under B2B → Team, a rep without a linked Kylas user, everyone on a day
+  the team list failed to load) were exactly the ones who saw everyone's leads.
+  The user had asked from the start that a rep sees only their own data. Now an
+  unidentified non-manager gets an empty Inbound board with a notice naming the
+  fix, and Outreach falls back to matching by BM phone or name. The shape:
+  **when a scope cannot tell who someone is, it must narrow, not widen.**
+  "Show everything with a warning" is a fair soft gate for a missing feature, but
+  not for an access rule.

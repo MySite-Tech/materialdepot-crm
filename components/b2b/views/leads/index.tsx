@@ -1,14 +1,10 @@
 'use client';
 
 import { KAMS, fmtINR } from '../../models/mock-data';
-import { ExportFormat, ExportScope } from '../../types/export';
-import { ExportButton } from '../../ui/export-button';
-import { exportRowsCsv, exportRowsExcel, todayStr } from '../../utils/export';
 import { Empty, LeadName, Spinner, inputCls } from '../../ui/inbound-chips';
 import { ExpectedClosureCell, SourceChip, UnifiedStatusCell } from './cells';
-import { EXPORT_HEADERS, PAGE_SIZE } from './constants';
+import { PAGE_SIZE } from './constants';
 import { DetailDrawer } from './drawer';
-import { toExportRow } from './utils';
 import { LeadSource, UnifiedLead, UnifiedStatus, fetchUnifiedLeads } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -19,7 +15,6 @@ export default function LeadsTab() {
   const [failed, setFailed] = useState<LeadSource[]>([]);
   const [inboundTotal, setInboundTotal] = useState(0);
   const [inboundHasMore, setInboundHasMore] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const [source, setSource] = useState<'all' | LeadSource>('all');
   const [status, setStatus] = useState<'all' | UnifiedStatus>('all');
@@ -84,21 +79,6 @@ export default function LeadsTab() {
     value: filtered.reduce((a, l) => a + (Number(l.orderValue) || 0), 0),
   }), [filtered]);
 
-  const handleExport = async (format: ExportFormat, scope: ExportScope) => {
-    if (exporting) return;
-    const list = scope === 'all' ? leads : filtered;
-    if (!list.length) { setError('No leads matched — nothing to export.'); return; }
-    setExporting(true);
-    try {
-      const name = `b2b_leads_${scope}_${todayStr()}`;
-      const data = list.map(toExportRow);
-      if (format === 'csv') exportRowsCsv(EXPORT_HEADERS, data, name);
-      else await exportRowsExcel(EXPORT_HEADERS, data, name, 'Leads');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const clearFilters = () => {
     setSource('all'); setStatus('all'); setLostOnly(false); setHideLost(false);
     setKam('all'); setSearch(''); setCreatedFrom(''); setCreatedTo('');
@@ -121,7 +101,6 @@ export default function LeadsTab() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ExportButton onExport={handleExport} disabled={exporting} />
           <button
             onClick={load}
             disabled={loading}

@@ -1,5 +1,5 @@
 import { Selection } from '../types/inbound';
-import { ClientType, EnrichmentInput, FieldOwner, FollowUpBucket, InboundLocation, InboundStatus, LeadType, LegacyDecomposition, LegacyStage, PlacedUnder, Priority } from '../types/inbound';
+import { ClientType, ClosureReason, EnrichmentInput, FieldOwner, FollowUpBucket, InboundLocation, InboundStatus, LeadType, LegacyDecomposition, LegacyStage, PlacedUnder, Priority } from '../types/inbound';
 export const OWNER_LABEL: Record<FieldOwner, string> = {
   'kylas':       'From Presales',
   'kylas-write': 'Synced to Kylas',
@@ -19,7 +19,7 @@ export const OWNER_CHIP: Record<FieldOwner, string> = {
 export const INBOUND_NURTURE_STATUS: InboundStatus = 'Connected - Need nurturing';
 
 export const INBOUND_STATUSES: InboundStatus[] = [
-  'New', INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared', 'Closed', 'Lost',
+  'New', INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared', 'Closed', 'Lost', 'Invalid',
 ];
 
 export const INBOUND_STATUS_COLORS: Record<InboundStatus, string> = {
@@ -29,6 +29,7 @@ export const INBOUND_STATUS_COLORS: Record<InboundStatus, string> = {
   'PI Shared':                  '#8B5CF6',
   'Closed':                     '#22C55E',
   'Lost':                       '#EF4444',
+  'Invalid':                    '#6B7280',
 };
 
 export const INBOUND_STATUS_HINT: Record<InboundStatus, string> = {
@@ -36,9 +37,12 @@ export const INBOUND_STATUS_HINT: Record<InboundStatus, string> = {
   'Connected - Need nurturing': 'Spoke to them, no live requirement yet — keep warming',
   'Follow up':                  'Needs a next follow-up date',
   'PI Shared':                  'Enq ID raised; order value comes from the deal ticket',
-  'Closed':                     'Order placed — handed to a KAM',
-  'Lost':                       'Needs a lost reason',
+  'Closed':                     'Order placed. KAM takes over after Outreach, not from here',
+  'Lost':                       'A genuine enquiry that did not convert — needs a lost reason',
+  'Invalid':                    'Not a genuine enquiry — needs a logged call, a reason and a note',
 };
+
+export const INBOUND_CLOSED_STATUSES: InboundStatus[] = ['Closed', 'Lost', 'Invalid'];
 
 export const INBOUND_FOLLOW_UP_STATUSES: InboundStatus[] = [
   INBOUND_NURTURE_STATUS, 'Follow up', 'PI Shared',
@@ -54,7 +58,7 @@ export const isFollowUpStatus = (s: InboundStatus): boolean =>
 export const isOpenStatus = (s: InboundStatus): boolean =>
   INBOUND_OPEN_STATUSES.includes(s);
 
-const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
+export const INVALID_ENQUIRY_REASON = 'Enquiry invalid';
 
 export const LEGACY_STAGES: Record<LegacyStage, LegacyDecomposition> = {
   'New':               { status: 'New' },
@@ -65,7 +69,7 @@ export const LEGACY_STAGES: Record<LegacyStage, LegacyDecomposition> = {
   'PI Shared':         { status: 'PI Shared' },
   'Closed':            { status: 'Closed' },
   'Lost':              { status: 'Lost' },
-  'Enquiry Invalid':   { status: 'Lost', lostReason: INVALID_ENQUIRY_REASON },
+  'Enquiry Invalid':   { status: 'Invalid' },
 };
 
 export const INBOUND_LOCATIONS: InboundLocation[] = ['Bangalore', 'Hyderabad'];
@@ -111,7 +115,17 @@ export const SELECTION_KYLAS_LABEL: Partial<Record<Selection, string>> = {
   // 'Plywood' intentionally absent — no Kylas picklist option exists.
 };
 
-export const MAX_CALL_ATTEMPTS = 4;
+export const READY_RNR_COUNT = 5;
+
+export const READY_WINDOW_DAYS = 7;
+
+export const MIN_ATTEMPTS_BEFORE_CLOSE = 5;
+
+export const INBOUND_DAY_CUTOFF_HOUR = 17;
+
+export const NON_WORKING_WEEKDAYS = [0];
+
+export const DISCUSSION_NOTE_MIN = 10;
 
 export const PLACED_UNDER_FIELDS: { key: keyof PlacedUnder; label: string; owner: FieldOwner; hint?: string }[] = [
   { key: 'bmName',   label: 'BM name',    owner: 'deals', hint: 'Assignee on the matched deal ticket' },
@@ -132,6 +146,7 @@ export const PLACED_UNDER_SUBTITLE: Partial<Record<InboundStatus, string>> = {
 
 export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; filled: (l: EnrichmentInput) => boolean }[] = [
   { key: 'companyName',        label: 'Company name',   filled: (l) => !!String(l.companyName || '').trim() },
+  { key: 'primaryContactName', label: 'Primary person', filled: (l) => !!String(l.primaryContactName || '').trim() && !!String(l.primaryContactPhone || '').trim() },
   { key: 'gstNumber',          label: 'GST number',     filled: (l) => !!String(l.gstNumber || '').trim() },
   { key: 'segment',            label: 'Segment',        filled: (l) => !!l.segment },
   { key: 'clientType',         label: 'Client type',    filled: (l) => !!l.clientType },
@@ -139,6 +154,7 @@ export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; fil
   { key: 'priority',           label: 'Priority',       filled: (l) => !!l.priority },
   { key: 'selections',         label: 'Selection',      filled: (l) => !!(l.selections || []).length },
   { key: 'expectedOrderValue', label: 'Expected value', filled: (l) => Number(l.expectedOrderValue || 0) > 0 },
+  { key: 'location',           label: 'City',           filled: (l) => !!l.location },
 ];
 
 export const ENRICHMENT_FIELD_COUNT = ENRICHMENT_CHECKS.length;
@@ -157,10 +173,42 @@ export const FOLLOW_UP_COLORS: Record<FollowUpBucket, string> = {
   none:     '#9CA3AF',
 };
 
+export const LOST_UNREACHABLE = 'Unreachable — 5 RNRs in 7 days';
+
+export const LOST_STALLED = 'No progress in 7 days';
+
+export const LOST_REASON_NEEDS: Record<string, ClosureReason> = {
+  [LOST_UNREACHABLE]: 'unreachable',
+  [LOST_STALLED]: 'stalled',
+};
+
 export const INBOUND_LOST_REASONS = [
-  'Selection Not Liked',
+  LOST_UNREACHABLE,
+  LOST_STALLED,
   'Price Issue',
+  'Selection Not Liked',
   'Timeline/Delivery Delay',
-  'Unreachable (4 attempts)',
-  INVALID_ENQUIRY_REASON,
+  'Bought from another supplier',
+  'Project on hold or cancelled',
+  'Requirement too small',
+  'Product not in our range',
+  'Outside our delivery area',
 ] as const;
+
+export const INBOUND_INVALID_REASONS = [
+  'Wrong or not-in-service number',
+  'Not a B2B buyer (retail / one-off)',
+  'Homeowner, not a professional',
+  'Spam or test enquiry',
+  'Duplicate of another lead',
+  'Existing client already with a KAM',
+  'Outside our service area',
+  'Vendor or job seeker',
+  'Other',
+] as const;
+
+export const INVALID_NOTE_MIN = 15;
+
+export const DEAL_ORDER_STATUSES = [
+  'Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered',
+];

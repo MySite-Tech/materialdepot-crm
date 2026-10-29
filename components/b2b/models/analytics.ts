@@ -1,11 +1,11 @@
 import type { B2BData } from '@/lib/b2b';
 import {
-  INBOUND_STAGES, REP_TARGETS, B2B_ADMINS,
+  INBOUND_STAGES, REP_TARGETS,
   type InboundLead, type OutreachLead,
-  type InboundStage, type RepRole, type TargetStore,
+  type RepRole, type TargetStore,
 } from './mock-data';
 import {
-  clientStatus, istToday,
+  clientStatus, daysToLapse, istToday,
   type ClientEntity, type ClientOrderMetrics, type ClientStatus,
 } from './client';
 import { INBOUND_FOLLOW_UP_STATUSES, INBOUND_NURTURE_STATUS, isFollowUpStatus } from './inbound';
@@ -18,7 +18,7 @@ import {
   type KamFunnel, type KamPipelineSplit, type NewVsRepeat,
 } from './kam';
 
-const isInboundDead = (l: InboundLead) => l.stage === 'Lost';
+const isInboundDead = (l: InboundLead) => l.stage === 'Lost' || l.stage === 'Invalid';
 
 const inboundOpen = (l: InboundLead) => l.stage !== 'Closed' && !isInboundDead(l);
 const outreachOpen = (l: OutreachLead) => l.status !== 'Closed' && l.status !== 'Lost';
@@ -27,15 +27,6 @@ const kamOpen = (o: KamOrder) => KAM_OPEN_STATUSES.includes(o.status);
 const sum = (ns: (number | undefined)[]) => ns.reduce((a: number, b) => a + (Number(b) || 0), 0);
 
 export type ClientMetricsMap = Record<string, ClientOrderMetrics>;
-
-function repUniverse(data: B2BData): string[] {
-  const seen = new Set<string>(REP_TARGETS.map((r) => r.rep));
-  data.inbound.forEach((l) => l.owner && seen.add(l.owner));
-  data.outreach.forEach((l) => l.bm && seen.add(l.bm));
-  data.kam.forEach((o) => o.kam && seen.add(o.kam));
-  data.clients.forEach((c) => c.kam && seen.add(c.kam));
-  return [...seen].filter((r) => !B2B_ADMINS.includes(r));
-}
 
 function kamUniverse(data: B2BData): string[] {
   const seen = new Set<string>();
@@ -85,7 +76,7 @@ export function computeDashboard(
     kam.filter((o) => o.status === 'PI Shared').length;
   const wonCount = wonInbound.length + wonOutreach.length + wonKam.length;
 
-  const clientCounts: Record<ClientStatus, number> = { Active: 0, Inactive: 0, Unknown: 0 };
+  const clientCounts: Record<ClientStatus, number> = { Active: 0, 'Inactive 1 month': 0, Inactive: 0, Unknown: 0 };
   for (const c of clients) {
     clientCounts[clientStatus(clientMetrics[c.id] || { dateState: 'pending' }, today)]++;
   }
@@ -245,21 +236,8 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
 
   type AtRiskRow = { company: string; kam?: string; daysLeft: number; lastContact?: string };
   const atRisk: AtRiskRow[] = rows
-    .map((r): AtRiskRow | null => {
-      const metrics = r.metrics;
-      const last = String(metrics.lastOrderPlaced || '').slice(0, 10);
-      if (!last) return null;
-      const [ly, lm, ld] = last.split('-').map(Number);
-      const expiry = new Date(Date.UTC(ly, lm - 1 + 3, ld)).getTime();
-      const now = Date.parse(`${today}T00:00:00Z`);
-      const daysLeft = Number.isNaN(expiry) || Number.isNaN(now)
-        ? undefined
-        : Math.max(0, Math.round((expiry - now) / 86_400_000));
-      return isAtRisk(r, daysLeft)
-        ? { company: r.company, kam: r.client.kam, daysLeft: daysLeft as number, lastContact: r.lastInteraction?.date }
-        : null;
-    })
-    .filter((x): x is AtRiskRow => x !== null)
+    .filter(isAtRisk)
+    .map((r) => ({ company: r.company, kam: r.client.kam, daysLeft: daysToLapse(r.metrics, today) ?? 0, lastContact: r.lastInteraction?.date }))
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
   return {
@@ -294,99 +272,6 @@ export function computeKamDashboard(data: B2BData, opts: KamDashboardOptions = {
     newVsRepeat: newVsRepeat(rows, opts.firstOrderValueFor || (() => undefined)),
     unreadableClients: rows.filter((r) => r.status === 'Unknown').length,
   };
-}
-
-interface RepLeaderboardRow {
-  rep: string;
-  inbound: number;
-  outreach: number;
-  clients: number;
-  revenue: number;
-}
-
-export interface LeadershipData {
-  leaderboard: RepLeaderboardRow[];
-  closingThisWeek: { company: string; expected: string; value: number }[];
-  inboundFunnel: { label: InboundStage; count: number }[];
-  orderWonFunnel: { label: string; count: number }[];
-  topClientsByRevenue: { client: string; kam: string; value: number }[];
-  topClientsByOrders: { client: string; orders: number }[];
-}
-
-function withinDays(dateStr: string | undefined, from: Date, days: number): boolean {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const end = new Date(start);
-  end.setDate(end.getDate() + days);
-  return d >= start && d <= end;
-}
-
-export function computeLeadership(data: B2BData, now: Date): LeadershipData {
-  const { inbound, outreach, kam, clients } = data;
-
-  const leaderboard: RepLeaderboardRow[] = repUniverse(data)
-    .map((rep) => ({
-      rep,
-
-      inbound: (data.inboundOwnerTotals[rep] || 0) + inbound.filter((l) => l.owner === rep && l.stage !== 'New').length,
-      outreach: outreach.filter((l) => l.bm === rep).length,
-
-      clients: clients.filter((c) => c.kam === rep).length,
-      revenue:
-        sum(inbound.filter((l) => l.owner === rep && l.stage === 'Closed').map((l) => l.value)) +
-        sum(outreach.filter((l) => l.bm === rep && l.status === 'Closed').map((l) => l.value)) +
-        sum(kam.filter((o) => o.kam === rep && o.status === 'Closed').map((o) => o.value)),
-    }))
-    .sort((a, b) => b.revenue - a.revenue || b.clients - a.clients || b.inbound + b.outreach - (a.inbound + a.outreach));
-
-  const closing = [
-    ...inbound.filter((l) => inboundOpen(l) && withinDays(l.followUpDate, now, 7)).map((l) => ({ company: l.company, expected: l.followUpDate!, value: l.value })),
-    ...outreach.filter((l) => outreachOpen(l) && withinDays(l.expectedClosure, now, 7)).map((l) => ({ company: l.company, expected: l.expectedClosure!, value: l.orderValue || l.expectedOrderValue || 0 })),
-    ...kam.filter((o) => kamOpen(o) && withinDays(o.expectedClosure, now, 7)).map((o) => ({ company: o.company, expected: o.expectedClosure!, value: o.orderValue || o.estimatedValue || 0 })),
-  ].sort((a, b) => a.expected.localeCompare(b.expected));
-
-  const inboundFunnel = INBOUND_STAGES.map((label) => ({
-    label,
-    count: label === 'New' ? data.inboundTotal : inbound.filter((l) => l.stage === label).length,
-  }));
-
-  const nonNewLoaded = inbound.filter((l) => l.stage !== 'New').length;
-  const orderWonFunnel = [
-    { label: 'Total Leads', count: data.inboundTotal + nonNewLoaded },
-    { label: 'Follow-up', count: inbound.filter((l) => l.stage === 'Follow up' || l.stage === INBOUND_NURTURE_STATUS).length },
-    { label: 'PI Shared', count: inbound.filter((l) => l.stage === 'PI Shared').length },
-    { label: 'Order Won', count: inbound.filter((l) => l.stage === 'Closed').length },
-  ];
-
-  type Agg = { value: number; orders: number; owner: string };
-  const byCompany = new Map<string, Agg>();
-  const bump = (company: string, value: number, won: boolean, owner: string) => {
-    if (!company) return;
-    const a = byCompany.get(company) || { value: 0, orders: 0, owner };
-    a.value += value;
-    if (won) a.orders += 1;
-    if (!a.owner) a.owner = owner;
-    byCompany.set(company, a);
-  };
-  inbound.filter((l) => !isInboundDead(l)).forEach((l) => bump(l.company, l.value, l.stage === 'Closed', l.owner));
-  outreach.filter((l) => l.status !== 'Lost').forEach((l) => bump(l.company, l.value, l.status === 'Closed', l.bm));
-  kam.filter((o) => o.status !== 'Lost').forEach((o) => bump(o.company, o.value, o.status === 'Closed', o.kam));
-
-  const topClientsByRevenue = [...byCompany.entries()]
-    .filter(([, a]) => a.value > 0)
-    .map(([client, a]) => ({ client, kam: a.owner || '—', value: a.value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6);
-
-  const topClientsByOrders = [...byCompany.entries()]
-    .filter(([, a]) => a.orders > 0)
-    .map(([client, a]) => ({ client, orders: a.orders }))
-    .sort((a, b) => b.orders - a.orders)
-    .slice(0, 6);
-
-  return { leaderboard, closingThisWeek: closing, inboundFunnel, orderWonFunnel, topClientsByRevenue, topClientsByOrders };
 }
 
 export interface RepTargetRow {

@@ -1,6 +1,7 @@
 'use client';
 
-import { INBOUND_STATUS_HINT, InboundStatus, statusGateErrors } from '../../../models/inbound';
+import { INBOUND_STATUS_HINT, InboundStatus, closureReadiness, hasConnected, statusGateErrors } from '../../../models/inbound';
+import { INBOUND_INVALID_REASONS, INBOUND_LOST_REASONS, INVALID_NOTE_MIN } from '../../../constants/inbound';
 import { InboundLead } from '../../../models/mock-data';
 import { Field, GateErrors, LeadName, errorInputCls, inputCls } from '../../../ui/inbound-chips';
 import { useState } from 'react';
@@ -17,12 +18,19 @@ export function MoveModal({
   const [followUpTime, setFollowUpTime] = useState(lead.followUpTime || '');
   const [enqId, setEnqId] = useState(lead.enqId || '');
   const [lostReason, setLostReason] = useState(lead.lostReason || '');
+  const [invalidReason, setInvalidReason] = useState(lead.invalidReason || '');
+  const [invalidNote, setInvalidNote] = useState(lead.invalidNote || '');
   const [touched, setTouched] = useState(false);
 
-  const errors = statusGateErrors({ status: target, followUpDate, enqId, lostReason });
+  const calls = lead.callAttempts?.length || 0;
+  const errors = statusGateErrors({
+    status: target, followUpDate, enqId, lostReason, invalidReason, invalidNote, calls,
+    connected: hasConnected(lead.callAttempts), readiness: closureReadiness(lead),
+  });
   const needsFollowUp = target === 'Follow up' || target === 'PI Shared';
   const needsEnq = target === 'PI Shared';
   const needsReason = target === 'Lost';
+  const needsInvalid = target === 'Invalid';
 
   const commit = () => {
     if (errors.length) { setTouched(true); return; }
@@ -32,6 +40,8 @@ export function MoveModal({
       followUpTime: needsFollowUp ? followUpTime : lead.followUpTime,
       enqId: needsEnq ? enqId.trim() : lead.enqId,
       lostReason: needsReason ? lostReason : lead.lostReason,
+      invalidReason: needsInvalid ? invalidReason : lead.invalidReason,
+      invalidNote: needsInvalid ? invalidNote.trim() : lead.invalidNote,
     });
   };
 
@@ -82,17 +92,49 @@ export function MoveModal({
             </Field>
           )}
           {needsReason && (
-            <Field label="Lost reason" required error={touched ? errors.find((e) => e.includes('lost reason')) : undefined}>
+            <Field label="Lost reason" required error={touched ? errors.find((e) => /lost/i.test(e)) : undefined}>
               <select
                 value={lostReason}
                 onChange={(e) => setLostReason(e.target.value)}
                 className={touched && !lostReason ? errorInputCls : inputCls}
               >
                 <option value="">Select a reason…</option>
-                {['Selection Not Liked', 'Price Issue', 'Timeline/Delivery Delay', 'Unreachable (4 attempts)', 'Enquiry invalid']
-                  .map((r) => <option key={r} value={r}>{r}</option>)}
+                {INBOUND_LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </Field>
+          )}
+          {needsInvalid && !calls && (
+            <p className="text-[11.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 leading-snug">
+              No call is logged on this lead yet. Open it, call the number and log the attempt — a lead is only
+              marked Invalid after someone has tried to qualify it.
+            </p>
+          )}
+          {needsInvalid && calls > 0 && (
+            <>
+              <Field label="Why is it invalid?" required error={touched ? errors.find((e) => e.includes('invalid reason')) : undefined}>
+                <select
+                  value={invalidReason}
+                  onChange={(e) => setInvalidReason(e.target.value)}
+                  className={touched && !invalidReason ? errorInputCls : inputCls}
+                >
+                  <option value="">Select a reason…</option>
+                  {INBOUND_INVALID_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </Field>
+              <Field
+                label="What did you check?"
+                required
+                error={touched ? errors.find((e) => e.includes('invalid note')) : undefined}
+                hint={`At least ${INVALID_NOTE_MIN} characters — e.g. "Called twice, number belongs to a tile shop owner buying for his own flat".`}
+              >
+                <textarea
+                  value={invalidNote}
+                  onChange={(e) => setInvalidNote(e.target.value)}
+                  rows={3}
+                  className={touched && invalidNote.trim().length < INVALID_NOTE_MIN ? errorInputCls : inputCls}
+                />
+              </Field>
+            </>
           )}
           {target === 'Closed' && (
             <p className="text-[11px] text-gray-500 leading-snug">
@@ -106,7 +148,11 @@ export function MoveModal({
           <button onClick={onCancel} className="px-3.5 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-500 bg-white">
             Cancel
           </button>
-          <button onClick={commit} className="px-3.5 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">
+          <button
+            onClick={commit}
+            disabled={needsInvalid && !calls}
+            className="px-3.5 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white disabled:opacity-40"
+          >
             Move
           </button>
         </div>

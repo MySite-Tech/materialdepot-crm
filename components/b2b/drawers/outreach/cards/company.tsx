@@ -1,13 +1,50 @@
 'use client';
 
-import { MeetingStatus, OutreachMeeting } from '../../../models/mock-data';
-import { MAX_MEETINGS, MEETING_STATUSES, canScheduleMeeting, nextMeetingNumber } from '../../../models/outreach';
+import { MeetingStatus, OutreachLead, OutreachMeeting } from '../../../models/mock-data';
+import { MEETING_STATUSES, completedMeetings, nextMeetingNumber } from '../../../models/outreach';
+import { meetingGaps } from '../../../models/outreach/reminders';
 import { Empty, Field, ReadValue, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
-import { Dispatch, SetStateAction } from 'react';
+import { GeoPin, pinMapUrl } from '../../../models/outreach';
+import { Dispatch, SetStateAction, useState } from 'react';
 
-export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, mTime, meetings, open, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
+function PinButton({ pin, onPin }: { pin?: GeoPin; onPin: (p: GeoPin) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const capture = () => {
+    if (!navigator.geolocation) { setErr('This browser cannot share a location.'); return; }
+    setBusy(true);
+    setErr(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setBusy(false);
+        onPin({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), accuracy: Math.round(p.coords.accuracy), at: new Date().toISOString() });
+      },
+      (e) => { setBusy(false); setErr(e.code === 1 ? 'Location permission was refused — allow it for this site and try again.' : 'Could not get a location fix. Try again outdoors.'); },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+  return (
+    <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Live pin</span>
+      {pin ? (
+        <a href={pinMapUrl(pin)} target="_blank" rel="noreferrer" className="text-[#0F766E] hover:underline">
+          {`Pinned ${pin.at.slice(0, 10)}${pin.accuracy ? ` · ±${pin.accuracy}m` : ''} · open map`}
+        </a>
+      ) : <span className="text-amber-700">Not pinned — take it at the client&apos;s office</span>}
+      <button onClick={capture} disabled={busy} className="px-2 py-0.5 rounded-md border border-gray-200 bg-white text-gray-600 disabled:opacity-50">
+        {busy ? 'Locating…' : pin ? 'Re-pin' : 'Pin my location now'}
+      </button>
+      {err && <span className="text-red-600">{err}</span>}
+    </div>
+  );
+}
+
+export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, mDate, mError, mOffice, mTime, meetings, open, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
+  draft: OutreachLead;
+  set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
+  showGates: boolean;
   exhausted: boolean;
   mArea: string;
   mDate: string;
@@ -26,12 +63,22 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
   setMTime: Dispatch<SetStateAction<string>>;
   setScheduling: Dispatch<SetStateAction<boolean>>;
 }) {
+  const held = completedMeetings(meetings);
+  const lastHeld = held.length ? held[held.length - 1].n : undefined;
+  const openLead = draft.status !== 'Closed' && draft.status !== 'Lost';
+  const scheduledNext = meetings.some((m) => m.status === 'Scheduled');
+  const followUpError = showGates && !scheduledNext && !draft.followUpDate;
+  const people = [
+    draft.contactPerson ? `${draft.contactPerson}${draft.designation ? ` (${draft.designation})` : ''}` : '',
+    ...(draft.contacts || []).filter((c) => c.name.trim()).map((c) => `${c.name.trim()}${c.role ? ` (${c.role})` : ''}`),
+  ].filter(Boolean);
+  const contactList = `outreach-met-${draft.id}`;
   return (
     <SectionCard
-      title={`Meetings · ${meetings.length} of ${MAX_MEETINGS}`}
+      title={`Meetings · ${meetings.length}`}
       owner="crm"
       subtitle="Each logged Completed or Postponed"
-      right={canScheduleMeeting(meetings) && !open && (
+      right={!open && (
         <button
           onClick={() => setScheduling((v) => !v)}
           className="px-3 py-1 text-[11px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
@@ -42,9 +89,9 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
     >
       {exhausted && (
         <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800 leading-snug">
-          All {MAX_MEETINGS} meetings were postponed and none was held. The PRD&apos;s lifecycle
-          stops here: mark the lead <strong>Lost</strong> with reason &ldquo;Unable to meet (4 meetings)&rdquo;,
-          or park it on <strong>Follow up</strong> with a long-term date. Nothing is decided for you.
+          {meetings.length} meetings were postponed and none was held. Book another, mark the lead
+          {' '}<strong>Lost</strong> with reason &ldquo;Unable to meet (4 meetings)&rdquo;, or park it on
+          {' '}<strong>Follow up</strong> with a long-term date. Nothing is decided for you.
         </div>
       )}
     
@@ -72,6 +119,7 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
         </div>
       )}
     
+      <datalist id={contactList}>{people.map((p) => <option key={p} value={p} />)}</datalist>
       {meetings.length === 0 && !scheduling ? (
         <Empty>No meetings scheduled yet — the lead sits in &ldquo;Yet to Meet&rdquo; until one is held.</Empty>
       ) : (
@@ -107,15 +155,38 @@ export function OutreachCompanyCard({ exhausted, mArea, mDate, mError, mOffice, 
               </div>
     
               {m.status === 'Completed' ? (
-                <Field label="Meeting notes" className="mt-2.5">
-                  <textarea
-                    value={m.notes || ''}
-                    onChange={(e) => patchMeeting(m.n, { notes: e.target.value })}
-                    rows={2}
-                    placeholder="What was discussed, what they asked for…"
-                    className={inputCls + ' resize-none'}
-                  />
-                </Field>
+                <>
+                  <Field label="Who you met" required className="mt-2.5" error={showGates && meetingGaps(m).includes('who you met') ? 'Name the people in the room, with their roles.' : undefined}>
+                    <input
+                      value={m.metWith || ''}
+                      onChange={(e) => patchMeeting(m.n, { metWith: e.target.value })}
+                      list={contactList}
+                      placeholder="e.g. Asha (owner), Ravi (procurement)"
+                      className={showGates && meetingGaps(m).includes('who you met') ? errorInputCls : inputCls}
+                    />
+                  </Field>
+                  <Field label="Meeting notes" required className="mt-2.5" error={meetingGaps(m).includes('notes') ? 'A held meeting needs its notes before you can save.' : undefined}>
+                    <textarea
+                      value={m.notes || ''}
+                      onChange={(e) => patchMeeting(m.n, { notes: e.target.value })}
+                      rows={2}
+                      placeholder="What was discussed, what they asked for…"
+                      className={(String(m.notes || '').trim() ? inputCls : errorInputCls) + ' resize-none'}
+                    />
+                  </Field>
+                  {m.n === lastHeld && openLead && (
+                    <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+                      <Field label="Next follow-up date" required={!scheduledNext} hint={scheduledNext ? 'Optional — the next meeting is already booked' : undefined}
+                        error={followUpError ? 'Set when you will next follow up after this visit.' : undefined}>
+                        <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value)} className={followUpError ? errorInputCls : inputCls} />
+                      </Field>
+                      <Field label="Time" hint="Optional">
+                        <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value)} className={inputCls} />
+                      </Field>
+                    </div>
+                  )}
+                  <PinButton pin={m.pin} onPin={(pin) => patchMeeting(m.n, { pin })} />
+                </>
               ) : m.notes ? (
                 <Field label="Meeting notes" hint="Recorded when this meeting was marked Completed" className="mt-2.5">
                   <ReadValue v={m.notes} />

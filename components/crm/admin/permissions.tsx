@@ -1,6 +1,7 @@
 'use client';
 
 import { Branch } from '../../../types/crm';
+import { B2B_ACCESS_SLUG, B2B_MANAGER_SLUG } from '@/lib/b2b/team/constants';
 import { PERMISSION_TAB_ORDER, ROLE_OPTIONS, SITE_AUDIT_SUBROLES, SITE_AUDIT_SUBROLE_SLUGS, STORE_DISPLAY_ADMIN_SLUG, TAB_LABELS } from '../constants';
 import { roleLabel } from '../utils';
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -66,6 +67,10 @@ export function PermissionChecklist({ value, onChange, hideLabel }: { value: str
   };
   const hasSiteAudit = value.includes('crm.site_audit');
   const hasStoreDisplay = value.includes('crm.store_display');
+  const hasB2B = value.includes(B2B_ACCESS_SLUG);
+  const toggleB2B = () => onChange(
+    hasB2B ? value.filter((s) => s !== B2B_ACCESS_SLUG && s !== B2B_MANAGER_SLUG) : [...value, B2B_ACCESS_SLUG],
+  );
 
   const hasStoreDisplayFull = value.includes(STORE_DISPLAY_ADMIN_SLUG);
 
@@ -87,7 +92,7 @@ export function PermissionChecklist({ value, onChange, hideLabel }: { value: str
         <Fragment key={slug}>
           <CheckboxRow
             checked={value.includes(slug)}
-            onChange={() => (slug === 'crm.store_display' ? toggleStoreDisplay() : toggle(slug))}
+            onChange={() => (slug === 'crm.store_display' ? toggleStoreDisplay() : slug === B2B_ACCESS_SLUG ? toggleB2B() : toggle(slug))}
           >
             {TAB_LABELS[tab]}
           </CheckboxRow>
@@ -100,6 +105,13 @@ export function PermissionChecklist({ value, onChange, hideLabel }: { value: str
                   {label}
                 </label>
               ))}
+            </div>
+          )}
+          {slug === B2B_ACCESS_SLUG && hasB2B && (
+            <div className="my-1.5 py-1.5 border-y border-gray-100 pl-3 border-l-2 border-l-amber-200">
+              <CheckboxRow checked={value.includes(B2B_MANAGER_SLUG)} onChange={() => toggle(B2B_MANAGER_SLUG)}>
+                B2B manager — sees every rep, edits the B2B team
+              </CheckboxRow>
             </div>
           )}
           {slug === 'crm.site_audit' && hasSiteAudit && (

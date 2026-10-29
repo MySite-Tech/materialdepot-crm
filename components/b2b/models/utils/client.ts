@@ -54,16 +54,6 @@ export function gstCheckDigit(first14: string): string | null {
   return GST_ALPHABET[(36 - (sum % 36)) % 36];
 }
 
-export function monthsBefore(day: string, months: number): string {
-  const [y, m, d] = day.split('-').map(Number);
-  if (!y || !m || !d) return day;
-
-  const dt = new Date(Date.UTC(y, m - 1 - months, 1));
-  const lastOfMonth = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate();
-  dt.setUTCDate(Math.min(d, lastOfMonth));
-  return dt.toISOString().slice(0, 10);
-}
-
 export function normalizeCompanyName(v: string | undefined): string {
   return String(v || '')
     .toLowerCase()
