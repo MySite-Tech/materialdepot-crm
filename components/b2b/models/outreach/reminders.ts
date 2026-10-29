@@ -83,6 +83,9 @@ const needsNextStep = (l: OutreachLead) => l.status !== 'Closed' && l.status !==
 const altPhoneOk = (l: OutreachLead) => !String(l.altPhone || '').trim()
   || (isMobile(l.altPhone) && normalisePhone(l.altPhone) !== normalisePhone(l.phone));
 
+const altContactOk = (l: OutreachLead) => !String(l.altPhone || '').trim()
+  || (!!String(l.altName || '').trim() && !!String(l.altRole || '').trim());
+
 const CAPTURE: { label: string; ok: (l: OutreachLead) => boolean }[] = [
   { label: 'owner/designer',      ok: (l) => !!String(l.contactPerson || '').trim() },
   { label: 'their role',          ok: (l) => !!String(l.designation || '').trim() },
@@ -98,6 +101,7 @@ export function outreachCaptureErrors(l: OutreachLead): string[] {
     return g.length ? [`Meeting ${m.n} is marked held — add ${g.join(' and ')}.`] : [];
   });
   if (!altPhoneOk(l)) errs.push('The alternate number must be a different 10-digit mobile.');
+  if (!altContactOk(l)) errs.push('The alternate number needs the name and role of the person on it.');
   if ((l.contacts || []).some((c) => !c.name.trim() || !c.role.trim())) errs.push('Every extra contact needs a name and a role.');
   if (l.status === 'Lost' || !completedMeetings(l.meetings).length) return errs;
   const missing = CAPTURE.filter((c) => !c.ok(l)).map((c) => c.label);

@@ -169,6 +169,8 @@ export interface OutreachLead {
 
   bmPhone?: string;
   altPhone?: string;
+  altName?: string;
+  altRole?: string;
   contacts?: OutreachContact[];
   source?: OutreachSource;
   email?: string;

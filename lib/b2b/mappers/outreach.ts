@@ -42,6 +42,8 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   notes:              { col: 'notes',            read: (v) => arr<LeadNote>(v) },
   bmPhone:            { col: 'bm_phone',         read: str },
   altPhone:           { col: 'alt_phone',        read: str },
+  altName:            { col: 'alt_name',         read: str },
+  altRole:            { col: 'alt_role',         read: str },
   contacts:           { col: 'contacts',         read: (v) => arr<OutreachContact>(v) },
   source:             { col: 'source',           read: (v) => oneOf<OutreachSource>(OUTREACH_SOURCES)(v) },
   email:              { col: 'email',            read: str },

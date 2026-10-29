@@ -60,6 +60,7 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
     contactPerson: l.primaryContactName || l.contactName || '',
     phone: l.primaryContactPhone || l.phone || undefined,
     altPhone: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.phone : undefined,
+    altName: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.contactName || undefined : undefined,
     contacts: (l.additionalContacts || []).filter((c) => c.name || c.phone).map((c) => ({ name: c.name, role: '', phone: c.phone || undefined })),
     gstNumber: l.gstNumber || undefined,
     segment: l.segment,

@@ -131,6 +131,8 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
   const [designation, setDesignation] = useState('');
   const [phone, setPhone] = useState('');
   const [altPhone, setAltPhone] = useState('');
+  const [altName, setAltName] = useState('');
+  const [altRole, setAltRole] = useState('');
   const [contacts, setContacts] = useState<OutreachContact[]>([]);
   const [followUpDate, setFollowUpDate] = useState('');
   const [gstNumber, setGstNumber] = useState('');
@@ -152,12 +154,14 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
   const toggle = (s: Selection) =>
     setSelections((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
 
-  const errors: Partial<Record<'company' | 'contactPerson' | 'designation' | 'phone' | 'altPhone' | 'segment' | 'teamSize' | 'next' | 'contacts', string>> = {
+  const errors: Partial<Record<'company' | 'contactPerson' | 'designation' | 'phone' | 'altPhone' | 'altName' | 'altRole' | 'segment' | 'teamSize' | 'next' | 'contacts', string>> = {
     ...(!company.trim() && { company: 'A company name is required.' }),
     ...(!contactPerson.trim() && { contactPerson: 'Who is the owner or designer?' }),
     ...(!designation.trim() && { designation: 'What is their role?' }),
     ...(!isMobile(phone) && { phone: 'A 10-digit mobile is required.' }),
     ...(altPhone.trim() && (!isMobile(altPhone) || normalisePhone(altPhone) === normalisePhone(phone)) && { altPhone: 'Must be a different 10-digit mobile.' }),
+    ...(altPhone.trim() && !altName.trim() && { altName: 'Whose number is it?' }),
+    ...(altPhone.trim() && !altRole.trim() && { altRole: 'What is their role?' }),
     ...(!segment && { segment: 'Pick a segment.' }),
     ...(!teamSize && { teamSize: 'Pick a team size.' }),
     ...(!mDate && !followUpDate && { next: 'Book meeting 1 or set a next follow-up date — every lead needs a next step.' }),
@@ -182,6 +186,8 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
       designation: designation.trim() || undefined,
       phone: normalisePhone(phone),
       altPhone: altPhone.trim() ? normalisePhone(altPhone) : undefined,
+      altName: altPhone.trim() ? altName.trim() : undefined,
+      altRole: altPhone.trim() ? altRole.trim() : undefined,
       contacts: contacts.map((c) => ({ name: c.name.trim(), role: c.role.trim(), phone: c.phone?.trim() || undefined })),
       followUpDate: followUpDate || undefined,
       gstNumber: gstNumber.trim() || undefined,
@@ -241,6 +247,16 @@ export function CreateLeadModal({ reps, me, canPickBm, onClose, onCreate }: {
             <Field label="Alternate number" hint="Optional — a second mobile for the firm" error={err('altPhone')}>
               <input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} className={cls('altPhone')} />
             </Field>
+            {altPhone.trim() && (
+              <>
+                <Field label="Name on alternate" required error={err('altName')}>
+                  <input value={altName} onChange={(e) => setAltName(e.target.value)} className={cls('altName')} />
+                </Field>
+                <Field label="Their role" required error={err('altRole')}>
+                  <input value={altRole} onChange={(e) => setAltRole(e.target.value)} list="outreach-new-roles" className={cls('altRole')} />
+                </Field>
+              </>
+            )}
             <Field label="Email">
               <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
             </Field>

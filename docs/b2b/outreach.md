@@ -182,7 +182,13 @@ CRM adherence KPI cannot disagree:
   Shared, and again inside the latest held meeting. A held meeting is where
   the BM knows the next step.
 
-An alternate number must be a different 10-digit mobile. An extra person needs
+An alternate number must be a different 10-digit mobile, and since 2026-10-29
+it also needs the name and role of the person on it (`alt_name`, `alt_role`).
+The user asked for this because the second number usually belongs to someone
+other than the owner. The check runs on every save, not only after a visit,
+the same as an extra person's name and role. An Inbound intake fills
+`alt_name` with the enquirer's name when the alternate is their number, and
+leaves the role for the BM. An extra person needs
 both a name and a role.
 
 ### The journey log (`withJourney` in `models/outreach/reminders.ts`)

@@ -33,7 +33,7 @@ const OUTREACH_DEFAULTS = {
   designation: null, gst_number: null, segment: null, lead_type: null, company_type: null, company_type_other: null,
   meetings: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null, follow_up_time: null,
   quote_shared_at: null, enq_id: null, order_value: null, order_value_source: null, deal_status: null, expected_closure: null,
-  lost_reason: null, kam: null, ec_name: null, ec_bm_name: null, notes: [], alt_phone: null, contacts: [], email: null,
+  lost_reason: null, kam: null, ec_name: null, ec_bm_name: null, notes: [], alt_phone: null, alt_name: null, alt_role: null, contacts: [], email: null,
   city: 'Bangalore', office_address: null, team_size: null, whatsapp_group_link: null, converted_at: null,
   new_onboarding: null, intake: null, handover: null, journey: [],
 };
