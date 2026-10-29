@@ -1,8 +1,13 @@
 import { TargetStore, defaultTargetStore } from '@/components/b2b/models/mock-data';
-import { supabase } from '@/lib/supabase';
+import { b2bBackendGet, b2bBackendPost } from '../data/backend';
 import { invalidateB2BCache, withB2BCache } from '../data/cache';
-const TARGET_TABLE = 'b2b_target';
+
 const TARGET_ROW_ID = 'default';
+
+interface TargetRow {
+  monthly_target_l?: number;
+  reps?: TargetStore['reps'];
+}
 
 export interface TargetsResult {
   store: TargetStore;
@@ -17,33 +22,28 @@ export async function fetchTargets(): Promise<TargetsResult> {
 async function fetchTargetsUncached(): Promise<TargetsResult> {
   const base = defaultTargetStore();
   try {
-    const { data, error } = await supabase
-      .from(TARGET_TABLE)
-      .select('monthly_target_l, reps')
-      .eq('id', TARGET_ROW_ID)
-      .maybeSingle();
-    if (error) throw error;
+    const data = await b2bBackendGet<TargetRow | null>('/target');
     if (!data) return { store: base, ok: true };
     return {
       store: {
         monthlyTargetL: Number(data.monthly_target_l) || base.monthlyTargetL,
-        reps: { ...base.reps, ...((data.reps as TargetStore['reps']) || {}) },
+        reps: { ...base.reps, ...(data.reps || {}) },
       },
       ok: true,
     };
   } catch (e) {
-    console.error('[b2b] fetch targets failed (pre-migration?)', e);
+    console.error('[b2b] fetch targets failed', e);
     return { store: base, ok: false };
   }
 }
 
 export async function saveTargets(store: TargetStore): Promise<string | null> {
   try {
-    const { error } = await supabase.from(TARGET_TABLE).upsert(
-      { id: TARGET_ROW_ID, monthly_target_l: store.monthlyTargetL, reps: store.reps, updated_at: new Date().toISOString() },
-      { onConflict: 'id' },
-    );
-    if (error) throw error;
+    await b2bBackendPost('/target', {
+      id: TARGET_ROW_ID,
+      monthly_target_l: store.monthlyTargetL,
+      reps: store.reps,
+    });
     invalidateB2BCache();
     return null;
   } catch (e) {

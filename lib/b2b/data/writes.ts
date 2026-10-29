@@ -2,11 +2,11 @@ import { clientToRow } from '../mappers/client';
 import { inboundToRow } from '../mappers/inbound';
 import { kamOrderToRow } from '../mappers/kam';
 import { outreachToRow } from '../mappers/outreach';
-import { B2BLeadRow, TABLE } from './rows';
+import { B2BLeadRow, Pipeline } from './rows';
+import { b2bBackendDelete, b2bBackendPost } from './backend';
 import { ClientEntity } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
-import { supabase } from '@/lib/supabase';
 import { invalidateB2BCache } from './cache';
 
 function writeErrorMessage(e: unknown): string {
@@ -25,10 +25,9 @@ function writeErrorMessage(e: unknown): string {
   return String(e);
 }
 
-async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | null> {
+async function upsert(row: B2BLeadRow): Promise<string | null> {
   try {
-    const { error } = await supabase.from(TABLE).upsert(row, { onConflict });
-    if (error) throw error;
+    await b2bBackendPost('/rows', row);
     invalidateB2BCache();
     return null;
   } catch (e) {
@@ -38,18 +37,17 @@ async function upsert(row: B2BLeadRow, onConflict: string): Promise<string | nul
 }
 
 export function upsertInboundLead(l: InboundLead): Promise<string | null> {
-  return upsert(inboundToRow(l), 'kylas_lead_id');
+  return upsert(inboundToRow(l));
 }
 
 export function upsertOutreachLead(l: OutreachLead): Promise<string | null> {
-  return upsert(outreachToRow(l), 'id');
+  return upsert(outreachToRow(l));
 }
 
 export async function upsertOutreachLeads(list: OutreachLead[], opts?: { onlyNew?: boolean }): Promise<string | null> {
   if (!list.length) return null;
   try {
-    const { error } = await supabase.from(TABLE).upsert(list.map(outreachToRow), { onConflict: 'id', ignoreDuplicates: !!opts?.onlyNew });
-    if (error) throw error;
+    await b2bBackendPost('/rows/bulk', { rows: list.map(outreachToRow), only_new: !!opts?.onlyNew });
     invalidateB2BCache();
     return null;
   } catch (e) {
@@ -59,17 +57,16 @@ export async function upsertOutreachLeads(list: OutreachLead[], opts?: { onlyNew
 }
 
 export function upsertClient(c: ClientEntity): Promise<string | null> {
-  return upsert(clientToRow({ ...c, updatedAt: new Date().toISOString() }), 'id');
+  return upsert(clientToRow({ ...c, updatedAt: new Date().toISOString() }));
 }
 
 export function upsertKamOrder(o: KamOrder): Promise<string | null> {
-  return upsert(kamOrderToRow(o), 'id');
+  return upsert(kamOrderToRow(o));
 }
 
-export async function deleteB2BRow(id: string): Promise<string | null> {
+export async function deleteB2BRow(id: string, pipeline: Pipeline = 'client'): Promise<string | null> {
   try {
-    const { error } = await supabase.from(TABLE).delete().eq('id', id);
-    if (error) throw error;
+    await b2bBackendDelete(`/rows/${encodeURIComponent(id)}?pipeline=${pipeline}`);
     invalidateB2BCache();
     return null;
   } catch (e) {

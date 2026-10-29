@@ -10,6 +10,7 @@ export interface CRMLeadRow {
   branch: string;
   status: string;
   cartValue: number;
+  cartValueExclGst?: number;
   cartItems: string;
   clientType: string;
   propertyType: string;
@@ -62,8 +63,8 @@ export interface CRMLeadsQuery {
   priority?: string;
 }
 
-export interface CRMLeadsStatsBucket { count: number; value: number }
-export interface CRMLeadsStatsByStatus { status: string; count: number; value: number }
+export interface CRMLeadsStatsBucket { count: number; value: number; valueExclGst?: number }
+export interface CRMLeadsStatsByStatus { status: string; count: number; value: number; valueExclGst?: number }
 export interface CRMLeadsStats {
   total: CRMLeadsStatsBucket;
   active: CRMLeadsStatsBucket;

@@ -170,3 +170,42 @@ additive to role: `isB2BManager` is true for `superadmin`/`admin`/`b2b_manager`
 and every rep's rows. `B2BSalesCRM` now receives `currentUser` from
 `tab-panels.tsx`; before that, nothing under `components/b2b/` knew who was
 logged in.
+
+## Ex-GST figures on the Leads tab are additive, and computed in Django
+
+Added 2026-10-29. `cartValue` and every stats `value` stay GST-inclusive and
+unchanged; Django adds `cartValueExclGst` to each `/crm/leads/` row and
+`valueExclGst` to each `/crm/leads/stats/` bucket (`total`/`active`/`won`/`lost`
+and every `byStatus` entry). The ex-GST figure is the **headline** — the big
+number on the pipeline and status cards, the bold table column, the mobile card —
+and the inclusive one sits beside it in grey as "incl. GST". Data:
+
+| Figure | Endpoint | Field |
+|---|---|---|
+| Cart Value (excl. GST) column, mobile card value | `/crm/leads/` | `cartValueExclGst` |
+| Headline on the pipeline and status cards | `/crm/leads/stats/` | `valueExclGst` |
+| Grey "incl. GST" line, Cart Value (incl. GST) column | both | `value` / `cartValue` |
+
+- **Not `/ 1.18` in the browser.** GST is per line (`EstimateItem.tax_value`,
+  `Variant.gst`), and the stats are summed server-side, so only Django can be
+  exact. `_fetch_excl_gst_ratios` (`order/crm/leads/repository/leads_query.py`)
+  takes each estimate's, else the live Cart's, Σ line ÷ (1 + rate) over
+  Σ line and scales the cart value by it; a deal with neither assumes 18 %.
+  Discounts and additional charges are scaled with the lines rather than
+  taxed separately.
+- **Opt-in on the backend** (`include_excl_gst=True`) for only the list and
+  plain stats calls. The dashboard and order-lost summaries build 100k-row
+  lists through the same function and would pay two extra aggregates; the
+  `bm_groups=` stats do not carry the field either.
+- **A missing field never passes the inclusive figure off as ex-GST.** The
+  table column shows "—"; a card headline falls back to the inclusive value but
+  its grey line then reads a bare "incl. GST", so the label always says which
+  number it is. An older Django returns exactly that. Deploy Django first.
+- Only the incl. GST column sorts: `sort_by=cartValue` is server-side, and a
+  client-side sort of the ex-GST column would order one page of 25, not the set.
+- **Column visibility is persisted**, so `materialdepot_cols_seen` records which
+  columns existed when the picker last saved; a column added since is turned on
+  once. `COLUMNS_ADDED_SINCE_PICKER` covers browsers that saved before that key
+  existed — add a future column there too.
+- Not in the CSV export: `CSV_HEADERS` is shared with the import parser, so a
+  new column would shift every imported field.

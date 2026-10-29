@@ -1,6 +1,7 @@
 import { rowToOutreach } from '../mappers/outreach';
 import { withB2BCache } from './cache';
-import { B2BLeadRow, Pipeline, TABLE, floorToFreshStart } from './rows';
+import { B2BLeadRow, Pipeline, floorToFreshStart } from './rows';
+import { b2bBackendGet } from './backend';
 import { fetchB2BInboundLeads } from '@/lib/api';
 import { ClientEntity } from '@/components/b2b/models/client';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
@@ -8,7 +9,6 @@ import { KamOrder } from '@/components/b2b/models/kam';
 import { mergeKylasIntoRow, rowToInbound } from '../mappers/inbound';
 import { rowToClient } from '../mappers/client';
 import { rowToKamOrder } from '../mappers/kam';
-import { supabase } from '@/lib/supabase';
 
 function nextDay(day: string): string {
   const ms = Date.parse(`${day}T00:00:00Z`);
@@ -16,23 +16,8 @@ function nextDay(day: string): string {
   return new Date(ms + 86_400_000).toISOString().slice(0, 10);
 }
 
-const ROW_PAGE = 1000;
-
 function fetchAllRows(): Promise<B2BLeadRow[]> {
-  return withB2BCache('rows|all', async () => {
-    const all: B2BLeadRow[] = [];
-    for (let page = 0; ; page++) {
-      const { data, error } = await supabase
-        .from(TABLE)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(page * ROW_PAGE, page * ROW_PAGE + ROW_PAGE - 1);
-      if (error) throw error;
-      const rows = (data || []) as B2BLeadRow[];
-      all.push(...rows);
-      if (rows.length < ROW_PAGE) return all;
-    }
-  });
+  return withB2BCache('rows|all', () => b2bBackendGet<B2BLeadRow[]>('/rows'));
 }
 
 export async function fetchRows(

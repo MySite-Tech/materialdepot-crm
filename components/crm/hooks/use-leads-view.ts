@@ -3,6 +3,7 @@
 import { CRMLeadsStats } from '../../../lib/api/crm/leads';
 import { AppUser, Lead } from '../../../types/crm';
 import { STATUSES } from '../constants';
+import { PipelineExclGst } from '../types';
 import { bmsInBranchScope } from '../utils';
 import { useMemo } from 'react';
 
@@ -38,13 +39,19 @@ const pipelineLost = leadsStats?.lost.value ?? 0;
 const pctWon = pipelineTotal ? (pipelineWon / pipelineTotal) * 100 : 0;
 const pctActive = pipelineTotal ? (pipelineActive / pipelineTotal) * 100 : 0;
 const pctLost = pipelineTotal ? (pipelineLost / pipelineTotal) * 100 : 0;
+const pipelineExclGst: PipelineExclGst = {
+  total: leadsStats?.total.valueExclGst,
+  active: leadsStats?.active.valueExclGst,
+  won: leadsStats?.won.valueExclGst,
+  lost: leadsStats?.lost.valueExclGst,
+};
 
-const statsByStatus = new Map<string, { count: number; value: number }>(
-  (leadsStats?.byStatus || []).map((s) => [s.status, { count: s.count, value: s.value }]),
+const statsByStatus = new Map<string, { count: number; value: number; valueExclGst?: number }>(
+  (leadsStats?.byStatus || []).map((s) => [s.status, { count: s.count, value: s.value, valueExclGst: s.valueExclGst }]),
 );
 const stageSummary = STATUSES.map((status) => {
   const row = statsByStatus.get(status);
-  return { status, count: row?.count || 0, value: row?.value || 0 };
+  return { status, count: row?.count || 0, value: row?.value || 0, valueExclGst: row?.valueExclGst };
 });
 const activeCount = leadsStats?.active.count ?? 0;
 const wonCount = leadsStats?.won.count ?? 0;
@@ -73,5 +80,5 @@ const sorted = [...filtered].sort((a, b) => {
 });
 
 
-  return { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount };
+  return { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount };
 }

@@ -29,6 +29,7 @@ export interface Lead {
   status: string;
   lostReason?: string;
   cartValue?: number;
+  cartValueExclGst?: number;
   cartItems?: string | CartItem[];
   followUpDate?: string;
   closureDate?: string;

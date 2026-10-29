@@ -12,8 +12,6 @@ export interface B2BLeadRow {
   updated_at?: string;
 }
 
-export const TABLE = 'b2b_lead';
-
 export const B2B_FRESH_START = '2026-08-26';
 
 export function floorToFreshStart(day?: string): string {
