@@ -12,7 +12,8 @@ of it is committed on branch **`b2b-revamp-2026-10-28`** and pushed to
 | Inbound | **Built:** Team tab, CRM round robin, Mine/All scope, reassign, calls credited to the caller | §Inbound below; `inbound.md` §Who owns a lead | `b2b-team.sql` not applied; round-robin start date; first real Kylas owner change unverified |
 | Outreach | **Built:** scoped views, From Inbound pool with sign-off, CSV import, journey log, conversion check, KAM handover with WhatsApp gate; UI pass: clickable scorecard and work tiles over one table, period picker, BM chips from the data | §Outreach at the end; `outreach.md` | Same `b2b-team.sql`: until it runs there is no per-person scoping (everyone sees every BM's leads, amber notice) and the BM/KAM pickers use the old roster. Also the Studio Space waitlist read route upstream; until it exists waitlist reads Unknown |
 | KAM | **Partly built:** the shared Firm page (slice 1) and lens tiles over firm and order tables (slice 3, minus Tier and Studio Space). Slice 2 and the rest are design only | §KAM below; `kam.md` | The Django repo's location (GST matching); the Meeting Coverage denominator |
-| Client DB | **Built:** lens tiles (All · Active · Lapsing soon · Inactive · No KAM), filter chips, sortable columns, export scope honoured | `client-db.md` §The list | Nothing. Order dates come from Django `b2b-bulk`, and one live firm has a future last-order date |
+| Leadership / My performance | **Built 2026-10-28 (not committed):** date-range KPI cards per person and per team for all three teams, a sortable compare table, day by day. Reps see only their own card, under "My performance" | `leadership.md` | `b2b-team.sql` (until then people are matched by name); unconfirmed: monthly frequency of Inbound/KAM revenue and qualified targets, KAM call target 40 vs `DAILY_CALL_TARGET` 10, the KAM coverage denominator |
+| Client DB | **Built:** lens tiles (All · Active · Lapsing soon · Inactive · No KAM), filter chips, sortable columns, export scope honoured | `client-db.md` §The list | Nothing. Django: `b2b-bulk` serves a wrong `lastOrderDate` (future dates on many firms), which skews Active/Inactive. See `client-db.md` §The list |
 
 The shared identity layer every team builds on is `lib/b2b/team` (types and
 rules) plus `lib/server/b2b-team` (server only). Its source is the
@@ -472,9 +473,10 @@ Opening a firm adds 1.
 
 Progress: step 1 is done as `b2b.manager` only, with team membership in
 `b2b_team_member` instead of slugs. Step 2 is done for Inbound and Outreach;
-KAM lists, Targets and the Leaderboard still read `B2B_ROSTER`. Step 3 was
-built per team as each tab's own scope ("Mine", "My day") instead of a
-separate "My Dashboard". Steps 4–6 have not started.
+KAM lists and Targets still read `B2B_ROSTER`. Step 3 was
+built per team as each tab's own scope ("Mine", "My day"), and the
+cross-day view of it is "My performance" (step 4). Step 4 is built (see
+`leadership.md`). Steps 5–6 have not started.
 
 
 1. **Permission plumbing** — add `b2b.manager` + team sub-slugs under
@@ -487,9 +489,9 @@ separate "My Dashboard". Steps 4–6 have not started.
    This is a prerequisite for steps 3–5, not parallel work.
 3. **Individual view** — new "My Dashboard"-shaped sub-tab, hard-scoped to
    the logged-in user via the real identity from step 2.
-4. **Leadership Board rebuild** — blocked on the user's KPI/role/metric
-   definitions (see Open/blocking). Once received: rebuild as the
-   manager-facing performance view, gated to `b2b.manager`.
+4. **Leadership Board rebuild.** Built 2026-10-28 as `views/leadership/` over
+   `models/performance/`. Managers get every person, and reps get their own
+   card under the label "My performance". See `leadership.md`.
 5. **Dashboard tab rework** — shift toward business/revenue/pipeline
    numbers now that Leadership Board owns per-person/team performance;
    scope once step 4's shape is known so the two views don't re-overlap.
@@ -547,6 +549,16 @@ separate "My Dashboard". Steps 4–6 have not started.
   shared component, with chips, highlighted filters and sortable columns. Every
   tile's count matched its list in a browser, with Django stubbed and writes
   blocked. The whole day's work was pushed as `b2b-revamp-2026-10-28`.
+
+- **2026-10-28 (Leadership Board)**: The user asked for the board to be
+  rebuilt from scratch: a date-range summary of every person on KAM, Inbound
+  and Outreach, effort and output per day, a by-person comparison for admins,
+  and reps seeing only their own numbers under "My performance". Built one KPI
+  engine per team. Outreach wraps `outreachKpis`; Inbound and KAM are new, from
+  `kpi-definitions.md`. The old leaderboard, funnels and top-client lists are
+  gone. Checked in a browser as a manager, an Outreach BM and an unknown user,
+  on real Supabase and Kylas reads with Django stubbed and every write
+  blocked. No write was attempted.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

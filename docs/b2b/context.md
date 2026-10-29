@@ -3,7 +3,7 @@
 **Covers:** `components/b2b/** · lib/b2b/** · lib/api/b2b/**`
 
 ## Purpose
-B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, leadership board, dashboard and the partner-content composer (~13.6k lines of components + 1.6k of domain/data).
+B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, the leadership board (My performance for reps), dashboard and the partner-content composer (~13.6k lines of components + 1.6k of domain/data).
 
 ## Sub-documents
 
@@ -21,6 +21,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
+| [`leadership.md`](leadership.md) | Leadership Board (managers) / My performance (everyone else): one KPI engine per team over a date range, per person and per day; who the people are; targets and what is not scored yet | 125 |
 | [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (pushed, not merged): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 251 |
 
 ## Where the B2B work stands (2026-10-28)

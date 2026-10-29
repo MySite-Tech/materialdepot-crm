@@ -3,6 +3,7 @@
 import OutreachDrawer from '../../drawers/outreach/index';
 import { OutreachLead } from '../../models/mock-data';
 import { OutreachStatus, STUDIO_WAITLIST_URL, istToday, outreachGateErrors } from '../../models/outreach';
+import { repOwns } from '../../models/outreach/handover';
 import { inboundPool } from '../../models/outreach/intake';
 import { OUTREACH_KPIS, Period, monthPeriod, outreachKpis, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
 import { ExportFormat, ExportScope } from '../../types/export';
@@ -25,7 +26,7 @@ import { Scorecard } from './performance';
 import { PeriodPicker } from './performance/period';
 import { TeamTable } from './performance/team-table';
 import { Lens, OutreachFilters, RangeKey, WorkLens } from './types';
-import { bmOptions, fmtRange, matchesFilters, nowIso, rangeFor, repOwns, toExportRow } from './utils';
+import { bmOptions, fmtRange, matchesFilters, nowIso, rangeFor, toExportRow } from './utils';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 

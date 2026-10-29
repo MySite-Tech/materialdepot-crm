@@ -133,3 +133,8 @@ export function sameRep(a: string | undefined, b: string | undefined): boolean {
   const [short, long] = x.length < y.length ? [x, y] : [y, x];
   return long.startsWith(`${short} `);
 }
+
+export const repOwns = (rep: { name: string; phone?: string }) => (l: OutreachLead): boolean => {
+  const p = normalisePhone(l.bmPhone);
+  return p.length === 10 && rep.phone ? p === normalisePhone(rep.phone) : sameRep(l.bm, rep.name);
+};

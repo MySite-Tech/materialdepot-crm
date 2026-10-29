@@ -19,7 +19,7 @@ incidents behind each rule.
 **A page may issue at most ten requests on mount.** That is a budget, not an
 aspiration — the B2B Dashboard was at ~181 and the Kylas proxy was answering
 429s. Where the tabs stand now, counted by hand: B2B Dashboard 7 (8 on Last
-Month / All Time), KAM 3, Client Database 2, Leads 2, Inbound 2, Outreach 1,
+Month / All Time), KAM 3, Client Database 2, Leads 2, Inbound 2, Outreach 1, Leadership Board up to 9 (its Inbound team pays one Kylas count per person, capped at 6; an individual pays 1),
 Category Revenue 8 (5 once the surrounding tab has already fetched the shared
 lists). If a change pushes a page over ten, the change is wrong, not the budget.
 

@@ -25,7 +25,7 @@ Django deal tickets for the money. There is no Kylas leg, because nobody
 qualified the lead before the BM walked into the room.
 
 **The module is called Outreach everywhere a human reads it** (nav, headings,
-the Leads tab's Source column, `B2B_VERTICALS`, the Leaderboard column) and
+the Leads tab's Source column, `B2B_VERTICALS`, the Leadership Board's team switch) and
 `'outbound'` everywhere a machine does. `b2b_lead.pipeline` is still
 `'outbound'`: it is a stored enum whose allowed values are not tracked in this
 repo, and this file already records that DB CHECK constraints here have to be

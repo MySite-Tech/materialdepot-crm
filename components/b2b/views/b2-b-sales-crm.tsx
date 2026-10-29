@@ -7,7 +7,7 @@ import OutreachLeads from './outreach/index';
 import LeadsTab from './leads/index';
 import ClientDatabase from './client-db/index';
 import KAMs from './kams/index';
-import LeadershipBoard from './leadership-board';
+import Leadership from './leadership/index';
 import Targets from './targets';
 import PartnerContent from './partner-content/index';
 import TeamView from './team/index';
@@ -38,7 +38,9 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
   const [view, setView] = useState<B2BView>('dashboard');
   const team = useB2BTeam();
   const viewer = useMemo(() => viewerFor(currentUser, team.members), [currentUser, team.members]);
-  const nav = useMemo(() => NAV.filter((item) => !item.managerOnly || viewer.isManager), [viewer.isManager]);
+  const nav = useMemo(() => NAV
+    .filter((item) => !item.managerOnly || viewer.isManager)
+    .map((item) => (item.key === 'leadership' && !viewer.isManager ? { ...item, label: 'My performance' } : item)), [viewer.isManager]);
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-84px)] bg-[#FAFAFA]">
@@ -92,7 +94,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'outreach' && <OutreachLeads team={team} viewer={viewer} />}
         {view === 'clients' && <ClientDatabase />}
         {view === 'kams' && <KAMs />}
-        {view === 'leadership' && <LeadershipBoard />}
+        {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
         {view === 'targets' && <Targets />}
         {view === 'content' && <PartnerContent />}
         {view === 'team' && viewer.isManager && <TeamView team={team} viewer={viewer} />}

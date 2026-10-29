@@ -14,10 +14,10 @@ They live here now because the code cannot carry them.
   totals cannot be derived.** `fetchB2BInboundLeads` catches internally and
   returns `total: 0`. Deriving the last owner's count by subtracting from the
   board total would therefore let a single 429 move one rep's leads silently
-  onto another rep's card. `fetchInboundOwnerTotals` pays one call per owner
-  (`size=1`, only `totalElements` is read) and is **opt-in**, cached separately
-  from `fetchB2BData` — only `computeLeadership` reads it, so the Dashboard and
-  Targets tabs no longer pay two Kylas calls for a number they never render.
+  onto another rep's card. The Leadership Board's Inbound coverage pays one
+  call per person (`size=1`, `totalElements` only, checking `ok`) for this
+  reason, and caches only the counts it actually got (`leadership.md`). The old
+  `fetchInboundOwnerTotals` went with the old board on 2026-10-28.
 
 - **Only cache a zero you actually received.** A phone the backend has no deals
   for is a real zero and worth caching. A phone whose request failed is not —
@@ -151,7 +151,7 @@ They live here now because the code cannot carry them.
   is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
   data, not a bug to tune away.
 
-- **The Leaderboard and Targets are still a third number** — they sum the
+- **Targets is still a third number**: it sums the
   `value` field on closed Supabase rows, and will not reconcile with either
   Django figure. Do not "fix" a mismatch by making one read the other; check
   which source the panel is meant to speak for. Targets was compounding this by
@@ -166,7 +166,7 @@ They live here now because the code cannot carry them.
   every dropdown, filter and Targets card). `Jadhav` vs `Krishna Jadhav`,
   `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
   so they drove revenue on the Dashboard and appeared nowhere on Targets or the
-  Leaderboard. Everything now derives from `B2B_ROSTER`.
+  old leaderboard. Everything now derives from `B2B_ROSTER`.
   Two constraints on editing it:
   - **`name` is a stored value, not a label.** It is what sits in
     `meta_data.kam` and `owner` on existing `b2b_lead` rows, so renaming one
@@ -174,8 +174,7 @@ They live here now because the code cannot carry them.
     display/matching attributes; only `contact` may be corrected freely.
   - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
     Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
-    `DEFAULT_KAM`, but `repUniverse()` filters `B2B_ADMINS` off the Leaderboard
-    and he has no Targets card. That asymmetry is deliberate and predates this
+    `DEFAULT_KAM`, but he has no Targets card. That asymmetry is deliberate and predates this
     file; it was briefly "fixed" by making him unassignable and reverted the
     same day.
   - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
@@ -185,8 +184,9 @@ They live here now because the code cannot carry them.
     row as well as the role.
   - **Inbound ownership no longer reads this file** (2026-10-28). It reads the
     `b2b_team_member` table, which managers edit under B2B Sales → Team; see
-    `inbound.md` §Who owns a lead. KAM lists, Targets and the Leaderboard still
-    read `B2B_ROSTER` until the redesign retires it.
+    `inbound.md` §Who owns a lead. Nor does the Leadership Board, which reads
+    the team table and falls back to names in the data (`leadership.md`). KAM
+    lists and Targets still read `B2B_ROSTER` until the redesign retires it.
 
 - **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
   `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people
@@ -195,9 +195,6 @@ They live here now because the code cannot carry them.
 
 ### View-level decisions worth not re-litigating
 
-- **The rep leaderboard is the only place `inboundOwnerTotals` is rendered**, so
-  that tab asks for it and the other three do not. See the owner-totals note
-  above for why it cannot be derived instead.
 - **The KAM empty-state banner counts every order; the Open orders tile counts
   the open ones.** Both numbers are named on screen deliberately — that is what
   stops "30 orders exist" reading as a contradiction of a tile saying 4.

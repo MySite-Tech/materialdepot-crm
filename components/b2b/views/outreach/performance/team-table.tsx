@@ -4,7 +4,7 @@ import { OutreachLead } from '../../../models/mock-data';
 import { WaitlistSignup } from '../../../models/outreach';
 import { OUTREACH_KPIS, Period, kpiTarget, outreachKpis } from '../../../models/outreach/kpis';
 import { BmOption } from '../types';
-import { repOwns } from '../utils';
+import { repOwns } from '../../../models/outreach/handover';
 import { fmtTarget, fmtValue, paceFor, tone } from './utils';
 import { useMemo } from 'react';
 

@@ -1,7 +1,7 @@
 import { rowToOutreach } from '../mappers/outreach';
 import { withB2BCache } from './cache';
-import { B2BLeadRow, B2B_FRESH_START, Pipeline, TABLE, floorToFreshStart } from './rows';
-import { B2B_INBOUND_OWNER_LIST, fetchB2BInboundLeads } from '@/lib/api';
+import { B2BLeadRow, Pipeline, TABLE, floorToFreshStart } from './rows';
+import { fetchB2BInboundLeads } from '@/lib/api';
 import { ClientEntity } from '@/components/b2b/models/client';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { KamOrder } from '@/components/b2b/models/kam';
@@ -135,27 +135,8 @@ export interface B2BData {
 
   clients: ClientEntity[];
   inboundTotal: number;
-  inboundOwnerTotals: Record<string, number>;
 
   failed: ('inbound' | 'outreach' | 'kam' | 'clients')[];
-}
-
-export function fetchInboundOwnerTotals(): Promise<Record<string, number>> {
-  return withB2BCache('inbound-owner-totals', fetchInboundOwnerTotalsUncached);
-}
-
-async function fetchInboundOwnerTotalsUncached(): Promise<Record<string, number>> {
-  const since = new Date(`${B2B_FRESH_START}T00:00:00+05:30`).toISOString();
-  const entries: (readonly [string, number])[] = [];
-  for (const o of B2B_INBOUND_OWNER_LIST) {
-    try {
-      const res = await fetchB2BInboundLeads(0, [o.id], '', since, '', undefined, 1);
-      entries.push([o.name, res.total] as const);
-    } catch {
-      entries.push([o.name, 0] as const);
-    }
-  }
-  return Object.fromEntries(entries);
 }
 
 export async function fetchB2BData(): Promise<B2BData> {
@@ -179,7 +160,7 @@ async function fetchB2BDataUncached(): Promise<B2BData> {
   if (!inbound.leads.length && !inbound.total) failed.push('inbound');
   return {
     inbound: inbound.leads, outreach, kam, clients,
-    inboundTotal: inbound.total, inboundOwnerTotals: {}, failed,
+    inboundTotal: inbound.total, failed,
   };
 }
 

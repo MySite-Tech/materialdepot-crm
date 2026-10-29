@@ -2,7 +2,7 @@
 
 import { OutreachLead } from '../../models/mock-data';
 import { OUTREACH_STATUS_LABEL, WaitlistSignup, companyTypeLabel, meetingLocation, nextScheduledMeeting, outreachEnrichmentGaps } from '../../models/outreach';
-import { HANDOVER_STATE_LABEL, handoverState, sameRep } from '../../models/outreach/handover';
+import { HANDOVER_STATE_LABEL, handoverState, repOwns } from '../../models/outreach/handover';
 import { Rep } from '../../models/outreach/intake';
 import { Period, currentMonth, inPeriod, monthPeriod } from '../../models/outreach/kpis';
 import { BmOption, OutreachFilters, RangeKey } from './types';
@@ -89,11 +89,6 @@ export function rangeFor(key: RangeKey, today: string, custom: Period): Period |
 export const fmtRange = (p: Period): string => {
   const d = (s: string) => new Date(`${s}T00:00:00Z`).toLocaleString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   return p.from === p.to ? d(p.from) : `${d(p.from)} – ${d(p.to)}`;
-};
-
-export const repOwns = (rep: Rep) => (l: OutreachLead): boolean => {
-  const p = normalisePhone(l.bmPhone);
-  return p.length === 10 && rep.phone ? p === normalisePhone(rep.phone) : sameRep(l.bm, rep.name);
 };
 
 export function bmOptions(leads: OutreachLead[], reps: Rep[], teamLive: boolean): BmOption[] {
