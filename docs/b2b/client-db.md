@@ -154,27 +154,50 @@ and names the ask: a `gst=` filter on `/crm/leads/`. Do not join GST to
 enquiries by firm name or by PAN on the frontend. That is the name-merge
 mistake §Parent companies rules out.
 
-### Each number: classification and Studio Space access (2026-10-29)
+### Each number: classification, and Studio Space access read from Studio Space (2026-10-29)
 
 Every contact on a firm carries a **classification** in its existing `label`
 field (`CONTACT_CLASSES`: Owner, Partner, Designer, Purchase, Accounts, Site).
-It is a select now. A free-text label from before is kept as an extra option,
-not wiped. It also carries **`studioAccess`**: unset means not onboarded,
-`power` means the whole Studio Space dashboard, and `non-power` means Orders
-and Rewards only. `studioOnboardedAt` is stamped the first time it is set.
-The user's call was **per phone, not per firm**. The older per-firm "Power user
-/ Normal user" tier in `sales-tab-redesign.md` is superseded.
+It is a select. A free-text label from before is kept as an extra option, not
+wiped.
 
-Both persist with no migration. `contacts` is its own jsonb column on
-`b2b_client` in the deployed b2b-backend (`master`), and the mapper passes
-unknown contact keys through. This was verified on the sandbox: the change
-reached `.sandbox/state.json` through the normal `onSave`.
+**Studio Space access is read, never assigned.** The first cut of this stored
+`studioAccess` on each contact and let a KAM pick it. That was replaced the same
+day, at the user's call: the CRM fetches it. `fetchStudioLogins()`
+(`lib/b2b/studio-logins`, one call, cached 60 s so the Firm page, this list and
+the Studio Space tab share it) reads `GET /b2b/studio-access` on b2b-backend
+through the relay (`studio-access` is in `ALLOW`), which answers every Studio
+Space login that has a mobile. The CRM matches its own contact numbers against
+that map by the last ten digits.
 
-**It is a record, not a grant.** Studio Space's own access lives in
-`partner_user.visible_tabs` in b2b-backend, where `NULL` means unrestricted.
-Nothing writes that from here, and nothing reads it back. Making the marking
-real needs a `/sync` endpoint keyed by phone. It is not built. The Studio Space
-tab reads these fields; see `studio-space.md`.
+- **Power user** = the login's `partner_user.visible_tabs` is `NULL`, the whole
+  dashboard. **Normal user** = any restriction, which is how firms that use
+  Studio Space only for order tracking are given a login. The tooltip lists the
+  tabs left on. Do not read "Normal" as "Orders and Rewards only": the backend's
+  optional tabs are clients, projects, portfolio, inspiration, launches, rewards
+  and leads, and an owner can leave any of them on.
+- **A login's mobile has two homes** (`app/people.py` `login_phone`): the
+  studio's own `referral` row joined by `team_user_id` (source `self` or `team`),
+  else `partner_user.phone`. The endpoint reads both. A mobile that appears in
+  neither is "Not onboarded". If both name the same mobile and any is Power, it
+  is Power.
+- **Shown in two places.** The contact card has a read-only badge per number,
+  and the Client Database list has a **Studio Space** column, the firm's best
+  access across its numbers (Power, else Normal, else Not onboarded).
+- **A failed read says Unknown**, never "Not onboarded". The badge, the column
+  and the Studio Space tab all do. Not onboarded would be a confident claim
+  about every firm at once.
+- **Nothing is written.** `studioAccess` and `studioOnboardedAt` are gone from
+  `ClientContact`. Contacts saved earlier still carry them in the `contacts`
+  jsonb. They are ignored and harmless, and the mapper passes them through on
+  the next save.
+
+Needs b2b-backend branch `b2b-studio-access` (one read route in `b2b_crm.py`, no
+migration). Until it is deployed the route 404s and every surface above reads
+Unknown. It was only syntax-checked: no FastAPI or database was available when
+it was written, so run it against newdb before merging. The sandbox stub
+(`scripts/sandbox/routes/b2b-backend.mjs`) answers it with up to four logins
+taken from the seeded clients.
 
 ### The list: tiles are lenses, filters narrow them (2026-10-28)
 

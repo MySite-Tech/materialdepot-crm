@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from './session';
 import { canUseB2B } from '@/lib/b2b/team/utils';
 
-const ALLOW = new Set(['rows', 'kam-load', 'target']);
+const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access']);
 
 class AccessError extends Error {}
 

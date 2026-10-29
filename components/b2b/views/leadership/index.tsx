@@ -38,7 +38,8 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [lens, setLens] = useState<string | null>(null);
 
-  const { data, pending, reload } = usePerformanceData(teamKey, today);
+  const { data, pending, reload, targets, targetsOk } = usePerformanceData(teamKey, today);
+  const goals = useMemo(() => targets?.goals ?? {}, [targets]);
 
   const selves = useMemo(
     () => (!manager && data && !team.loading ? selfOn(data, viewer, team.members, live) : []),
@@ -111,6 +112,9 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
           <span className="font-semibold">Partly loaded.</span> {failed.join(', ')} could not be read, so every number that needs it reads Unknown.
         </Notice>
       )}
+      {!targetsOk && (
+        <Notice>Saved targets could not be read, so every target below is the KPI sheet default, not what was set on the Targets tab.</Notice>
+      )}
       {teamKey === 'inbound' && kylas.capped && (
         <Notice>Coverage reads Kylas once per person, so only the first {KYLAS_COUNT_CAP} linked inbound people get it. The rest read Unknown.</Notice>
       )}
@@ -132,7 +136,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
             </div>
           )}
 
-          <Scorecard defs={engine.defs} card={card} heads={focus.length} period={period} today={today}
+          <Scorecard defs={engine.defs} card={card} team={engine.team} people={focus} goals={goals} period={period} today={today}
             loading={loading} active={lens} onPick={(k) => setLens(lens === k ? null : k)} />
 
           {lensDef && <RowsPanel def={lensDef} k={card[lensDef.key]} who={who} onClose={() => setLens(null)} />}
@@ -140,11 +144,11 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
           {manager && !picked && (
             <>
               <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-2">Compare people · click a row to open their card</div>
-              <TeamTable defs={engine.defs} rows={rows} total={card} period={period} today={today} teamLive={live} loading={loading} onPick={(p) => setPickedKey(p.key)} />
+              <TeamTable defs={engine.defs} team={engine.team} goals={goals} rows={rows} total={card} people={people} period={period} today={today} teamLive={live} loading={loading} onPick={(p) => setPickedKey(p.key)} />
             </>
           )}
 
-          {daily && <DailyTable defs={engine.defs} days={daily.rows} clipped={daily.clipped} range={card} heads={focus.length} period={period} today={today} />}
+          {daily && <DailyTable defs={engine.defs} days={daily.rows} clipped={daily.clipped} range={card} team={engine.team} people={focus} goals={goals} period={period} today={today} />}
 
           {!!engine.notMeasured.length && (
             <p className="text-[11px] text-gray-400">

@@ -95,7 +95,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'clients' && <ClientDatabase team={team} viewer={viewer} />}
         {view === 'kams' && <KAMs team={team} viewer={viewer} />}
         {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
-        {view === 'targets' && <Targets />}
+        {view === 'targets' && <Targets team={team} viewer={viewer} />}
         {view === 'studio' && <StudioSpace />}
         {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}
       </main>

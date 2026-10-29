@@ -26,7 +26,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
-| [`leadership.md`](leadership.md) | Leadership Board (managers) / My performance (everyone else): one KPI engine per team over a date range, per person and per day; who the people are; targets and what is not scored yet | 137 |
+| [`leadership.md`](leadership.md) | Leadership Board (managers) / My performance (everyone else): one KPI engine per team over a date range, per person and per day; who the people are; targets and what is not scored yet. Also the Targets tab: per-person overrides of the sheet's targets, people from the Team tab | 184 |
 | [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (pushed, not merged): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 333 |
 | [`sandbox.md`](sandbox.md) | `npm run dev:sandbox`: the whole journey on dummy data with Django, the B2B backend and Kylas stubbed. Personas, what is still real, and which system answers each step in production vs here | 92 |
 
@@ -77,9 +77,9 @@ a new session knows what is live and what is being worked on.
   - Client DB has no export for anyone;
   - targets are monthly: KAM 500 calls and 35 meetings, Inbound 1,500 calls;
   - Partner Content is deleted and Studio Space replaced it (`studio-space.md`);
-  - on the Firm page, each enquiry expands to its cart, dates, visits and remarks, and each number has a classification and Studio Space access, Power or Non-power (`client-db.md`);
+  - on the Firm page, each enquiry expands to its cart, dates, visits and remarks, and each number has a classification and a Studio Space access read from Studio Space itself, Power or Normal (`client-db.md`, `studio-space.md`);
   - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin, and the assignee must accept or reject (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
-  - **Not done:** enquiries cannot be found by GSTIN (needs a Django `gst` filter on `/crm/leads/`), and the Power user marking does not yet change access on Studio Space (needs a b2b-backend `/sync` write to `partner_user.visible_tabs`).
+  - **Not done:** enquiries cannot be found by GSTIN (needs a Django `gst` filter on `/crm/leads/`), and the CRM cannot grant or change Studio Space access, it only reads it (the read needs b2b-backend `GET /b2b/studio-access`, branch `b2b-studio-access`, not yet deployed).
 - **Where it lives.** All of the above is on branch `b2b-revamp-2026-10-28`.
   It is pushed but not merged or deployed (see `CLAUDE.md` §Git). Several
   sessions worked one tree that day. Run `git status --short -- components/b2b

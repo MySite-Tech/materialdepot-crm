@@ -1,21 +1,24 @@
 'use client';
 
 import { Period } from '../../../models/outreach/kpis';
-import { DayRow, PerfCard, PerfKpiDef } from '../../../models/performance/types';
+import { DayRow, Goals, PerfCard, PerfKpiDef, Person } from '../../../models/performance/types';
 import { fmtNumber, fmtValue, targetFor, tone } from '../../../models/performance/utils';
 import { Pager } from '../../kams/ui';
 import { PAGE_SIZE } from '../constants';
 import { fmtDay } from '../utils';
+import type { B2BTeam } from '@/lib/b2b/team/types';
 import { useEffect, useState } from 'react';
 
 const th = 'px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap';
 
-export function DailyTable({ defs, days, clipped, range, heads, period, today }: {
+export function DailyTable({ defs, days, clipped, range, team, people, goals, period, today }: {
   defs: PerfKpiDef[];
   days: DayRow[];
   clipped: number;
   range: PerfCard;
-  heads: number;
+  team: B2BTeam;
+  people: Person[];
+  goals: Goals;
   period: Period;
   today: string;
 }) {
@@ -27,7 +30,7 @@ export function DailyTable({ defs, days, clipped, range, heads, period, today }:
 
   const cell = (d: PerfKpiDef, card: PerfCard, p: Period) => {
     const k = card[d.key];
-    const t = d.per === 'month' ? null : targetFor(d, heads, p, today);
+    const t = d.per === 'month' ? null : targetFor(d, team, people, goals, p, today);
     return <span title={k.sub} className={k.value === 0 && d.unit !== '%' ? 'text-gray-300' : tone(k.value, t, null).text}>{fmtValue(d, k)}</span>;
   };
 
@@ -48,7 +51,7 @@ export function DailyTable({ defs, days, clipped, range, heads, period, today }:
             <tr className="border-b border-gray-100 bg-gray-50/60">
               <th className={`${th} text-left`}>Day</th>
               {cols.map((d) => {
-                const t = d.per === 'month' ? null : targetFor(d, heads, { from: today, to: today }, today);
+                const t = d.per === 'month' ? null : targetFor(d, team, people, goals, { from: today, to: today }, today);
                 return (
                   <th key={d.key} title={d.rule} className={`${th} text-right`}>
                     {d.short}

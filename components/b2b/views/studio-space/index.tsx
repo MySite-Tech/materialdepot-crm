@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { ClientEntity, STUDIO_SPACE_URL, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, firmStudioState, istToday } from '../../models/client';
 import { FirmDrawer } from '../../drawers/firm';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
+import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { PAGE_SIZE, STUDIO_LENS } from './constants';
@@ -17,8 +18,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function StudioSpace() {
   const [clients, setClients] = useState<ClientEntity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const [clientsLoading, setLoading] = useState(true);
+  const [clientsError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [kam, setKam] = useState('all');
   const [lens, setLens] = useState<StudioLens>('all');
@@ -26,6 +27,8 @@ export default function StudioSpace() {
   const [openId, setOpenId] = useState<string | null>(null);
   const today = istToday();
   const { addPhones, metricsFor, historyFor } = useClientAggregates();
+  const studio = useStudioLogins();
+  const logins = studio.logins;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,8 +46,8 @@ export default function StudioSpace() {
   useEffect(() => { load(); }, [load]);
 
   const searched = useMemo<StudioRow[]>(
-    () => clients.filter((c) => clientMatchesSearch(c, search)).map((client) => ({ client, studio: firmStudioState(client) })),
-    [clients, search],
+    () => logins ? clients.filter((c) => clientMatchesSearch(c, search)).map((client) => ({ client, studio: firmStudioState(client, logins) })) : [],
+    [clients, search, logins],
   );
   const scoped = useMemo(() => searched.filter((r) => kam === 'all' || (kam === '' ? !r.client.kam : r.client.kam === kam)), [searched, kam]);
   const byLens = useMemo(() => rowsByLens(scoped), [scoped]);
@@ -53,6 +56,8 @@ export default function StudioSpace() {
 
   useEffect(() => { setPage(1); }, [search, kam, lens]);
 
+  const loading = clientsLoading || studio.loading;
+  const loadError = clientsError || studio.error;
   const rows = byLens[lens];
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
@@ -67,7 +72,7 @@ export default function StudioSpace() {
       case 'all':          return numbers(scoped.reduce((s, r) => s + r.studio.numbers, 0));
       case 'onboarded':    return `${numbers(scoped.reduce((s, r) => s + r.studio.onboarded, 0))} · ${share}`;
       case 'none':         return share;
-      case 'nopower':      return n ? 'Orders + Rewards only' : 'all have one';
+      case 'nopower':      return n ? 'normal users only' : 'all have one';
       case 'unclassified': return numbers(numbersUnclassified);
     }
   };
@@ -105,8 +110,8 @@ export default function StudioSpace() {
         <div>
           <h1 className="text-lg font-bold text-gray-800">Studio Space</h1>
           <p className="text-xs text-gray-400 mt-0.5 max-w-[620px]">
-            Which numbers at each firm are on the Studio Space dashboard, and with what access. Mark a number from the
-            firm&apos;s page: Power user sees the whole dashboard, Non-power user only Orders and Rewards.
+            Which numbers at each firm are on the Studio Space dashboard, and with what access, read from Studio Space
+            itself. A power user sees the whole dashboard. A normal user is restricted, for example to order tracking.
           </p>
         </div>
         <a
@@ -121,7 +126,7 @@ export default function StudioSpace() {
 
       {loadError && (
         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] text-red-800">
-          Could not load the Client Database: {loadError}.{' '}
+          Could not load this tab: {loadError}.{' '}
           <button onClick={load} className="font-semibold underline cursor-pointer">Retry</button>
         </div>
       )}
@@ -157,7 +162,7 @@ export default function StudioSpace() {
         {loading ? (
           <p className="text-sm text-gray-400 py-8 text-center">Loading firms…</p>
         ) : rows.length ? (
-          <StudioTable rows={pageRows} onOpen={open} />
+          <StudioTable rows={pageRows} logins={logins || {}} onOpen={open} />
         ) : (
           <p className="text-[13px] font-semibold text-gray-600 py-10 text-center">{STUDIO_LENS[lens].empty}</p>
         )}
@@ -175,7 +180,7 @@ export default function StudioSpace() {
       </div>
 
       <p className="text-[10px] text-gray-400 mt-3">
-        This is the CRM&apos;s record of who was onboarded. It is not read from Studio Space and does not change anyone&apos;s access there.
+        Read from Studio Space by mobile number. The CRM never changes anyone&apos;s access there. Access is granted on Studio Space, and it shows here within a minute.
       </p>
 
       {openRow && (

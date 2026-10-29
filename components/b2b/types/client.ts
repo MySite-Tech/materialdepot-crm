@@ -12,12 +12,19 @@ export interface ClientContact {
 
   label?: string;
   primary?: boolean;
-
-  studioAccess?: StudioAccess;
-  studioOnboardedAt?: string;
 }
 
 export type StudioAccess = 'power' | 'non-power';
+
+export interface StudioLogin {
+  phone: string;
+  firmName?: string;
+  role: string;
+  visibleTabs: string[] | null;
+  power: boolean;
+}
+
+export type StudioLogins = Record<string, StudioLogin>;
 
 export interface FirmStudioState {
   numbers: number;

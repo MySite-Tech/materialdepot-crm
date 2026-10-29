@@ -123,8 +123,12 @@ server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
 (`app/api/b2b/waitlist`, `ec-visits`) call `b2bBackendFetch` with the
 same credential instead. Three things the relay deliberately does:
 
-- **Allow-lists the first path segment** (`rows`, `kam-load`, `target`) so the
-  catch-all is a defined surface, not an open proxy to the backend.
+- **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
+  `studio-access`) so the catch-all is a defined surface, not an open proxy to
+  the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
+  Studio Space login's mobile and tab restriction, for the Firm page badge
+  (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
+  have their own handlers rather than being allow-listed here.
 - **503s when either env var is unset**, rather than defaulting to a reachable
   base — the same fail-closed rule the service-role routes follow.
 - **Never answers with the backend's raw body on failure**: a non-2xx becomes a

@@ -196,34 +196,7 @@ export {
 } from './roster';
 export type { RepRole, B2BRep } from './roster';
 
-import { TARGET_REPS } from './roster';
-
 export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATUS_COLORS;
-
-export const REP_TARGETS = TARGET_REPS
-  .map((r) => ({
-    rep: r.name,
-    role: r.role,
-    revenueTargetL: r.revenueTargetL,
-    clientsTarget: r.clientsTarget,
-    onboardingsTarget: r.onboardingsTarget,
-  }));
-
-const B2B_MONTHLY_TARGET_L = 120;
-
-export interface TargetStore {
-  monthlyTargetL: number;
-  reps: Record<string, { revenueTargetL: number; clientsTarget: number; onboardingsTarget: number }>;
-}
-
-export function defaultTargetStore(): TargetStore {
-  return {
-    monthlyTargetL: B2B_MONTHLY_TARGET_L,
-    reps: Object.fromEntries(REP_TARGETS.map((r) => [r.rep, {
-      revenueTargetL: r.revenueTargetL, clientsTarget: r.clientsTarget, onboardingsTarget: r.onboardingsTarget,
-    }])),
-  };
-}
 
 export const fmtL = (n: number): string => {
   if (n >= 1_00_00_000) return '₹' + (n / 1_00_00_000).toFixed(2) + ' Cr';
