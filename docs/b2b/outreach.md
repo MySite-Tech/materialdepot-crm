@@ -7,7 +7,7 @@
 | Call | Endpoint | Notes |
 |---|---|---|
 | `fetchOutreachLeads()` + `fetchInboundForOutreach()` | Supabase `b2b_lead` (`select *`, paged 1000) | **One read**: both go through the cached all-rows fetch (`withB2BCache('rows|all')`). The created-date filter is applied client-side, so changing it refetches nothing |
-| `fetchStudioWaitlist()` | `GET /api/b2b/waitlist` → `${PARTNER_APP_BASE_URL}/api/sync/waitlist` (`x-sync-key`) | One per mount. Behind `requireCaller` + `canUseB2B`. **The upstream route does not exist yet** — see *Studio Space waitlist* below |
+| `fetchStudioWaitlist()` | `GET /api/b2b/waitlist` → b2b-backend `GET /b2b/waitlist` (`b2bBackendFetch`, `x-sync-key`) | One per mount. Behind `requireCaller` + `canUseB2B`. Needs b2b-backend PR `b2b-crm-waitlist` deployed — see *Studio Space waitlist* below |
 | `upsertOutreachLead()` | `b2b_lead` upsert on `id` | Every single-lead write, always via `useOutreachData().save`, which runs `withJourney` first |
 | `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | Inbound intake only (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
 | `fetchLeadDeals(phone)` | Django `/crm/leads/?q=` | Drawer only, as before; now also feeds the 6-month new-onboarding check |
@@ -308,13 +308,19 @@ a manager, or anyone while the team table is not live.
 The waitlist is `waitlist_signup` in the Studio Space backend
 (`MySite-Tech/b2b-backend`, migration 0009): one row per 10-digit mobile,
 written by `studio.materialdepot.com/join`. That backend only exposes it to its
-own staff login (`GET /console/waitlist`), so the CRM needs a server-to-server
-read on the existing sync bridge: **`GET /api/sync/waitlist`** on the partner
-app (relayed to the backend's `/sync/waitlist`), `x-sync-key`, answering
-`{ signups: [{ phone, firm_name, contact_name, city, firm_type, team_size,
-status, created_at }] }`. **Neither half exists as of 2026-10-28**, so
-`/api/b2b/waitlist` answers 502 naming the missing route, the tab shows an amber
-banner, the KPI reads **Unknown**, and the drawer chip reads "Waitlist unknown".
+own staff login (`GET /console/waitlist`), so since 2026-10-29 the CRM reads
+it the way it reads its own B2B rows: **`GET /b2b/waitlist`** on the same
+backend, `x-sync-key: B2B_BACKEND_SECRET`, answering `{ signups: [{ phone,
+firm_name, contact_name, city, firm_type, team_size, status, created_at }] }`.
+No new env var, and no hop through the partner app: the 2026-10-28 design
+relayed it through a `GET /api/sync/waitlist` on the partner app, which was
+never built and needed `PARTNER_APP_BASE_URL` (set to the CRM's own port in
+local `.env.local`, so it could never have answered there). The backend route
+is unscoped by market; the CRM's `canUseB2B` gate is the scope, as for `/rows`.
+
+Until that backend route deploys, `/api/b2b/waitlist` answers 502 naming it,
+the tab shows the amber "unreachable" banner, the KPI reads **Unknown**, and the
+drawer chip reads "Waitlist unknown". That is the designed failure, not a bug.
 
 Matching is **exact on the 10-digit mobile** and nothing else, per the sheet
 ("contact number at waitlist and BM lead contact number should match"). A

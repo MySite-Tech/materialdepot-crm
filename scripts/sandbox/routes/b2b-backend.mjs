@@ -117,6 +117,7 @@ export function backendRoutes(db) {
       return { deleted: before - db.rows.length };
     }
     if (path === '/kam-load') return kamLoad(db);
+    if (path === '/waitlist') return { signups: db.waitlist ?? [] };
     if (path === '/target' && method === 'GET') return db.target;
     if (path === '/target' && method === 'POST') { db.target = { ...body, updated_at: new Date().toISOString() }; return db.target; }
 

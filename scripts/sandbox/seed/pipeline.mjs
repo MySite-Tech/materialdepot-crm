@@ -185,11 +185,22 @@ function seedEcVisits() {
   }];
 }
 
+function seedWaitlist() {
+  const signup = (phone, firm_name, contact_name, day, status = 'new') => ({
+    phone, firm_name, contact_name, city: 'Bengaluru', firm_type: 'architect', team_size: '2-5', status, created_at: istAt(day, 11),
+  });
+  return [
+    signup('9000020001', 'Mockup Interiors', 'Demo Owner A', -3),
+    signup('9000020099', 'Placeholder Atelier', 'Demo Walk-up', -1),
+  ];
+}
+
 export function seedPipeline() {
   return {
     rows: [...seedOutreach(), ...seedKam()],
     deals: seedDeals(),
     team: seedTeam(istAt(-30, 10)),
     ecVisits: seedEcVisits(),
+    waitlist: seedWaitlist(),
   };
 }

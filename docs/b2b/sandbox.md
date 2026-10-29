@@ -46,7 +46,7 @@ list, which is what keeps the tab gate and `requireCaller` in agreement.
 | Django | `NEXT_PUBLIC_API_BASE_URL`, `API_BASE_URL` | `/apiV1` |
 | FastAPI b2b-backend | `B2B_BACKEND_URL`, `B2B_BACKEND_SECRET=sandbox` | `/b2b-backend/b2b/...` |
 | Kylas (browser and server) | `NEXT_PUBLIC_KYLAS_API_BASE_URL`, `KYLAS_API_BASE_URL`, `KYLAS_API_KEY=sandbox` | `/kylas/v1` |
-| Studio Space partner app | `PARTNER_APP_BASE_URL`, `PARTNER_SYNC_SECRET=sandbox` | `/partner` |
+| Studio Space partner app (content sync only) | `PARTNER_APP_BASE_URL`, `PARTNER_SYNC_SECRET=sandbox` | `/partner` |
 
 `NEXT_PUBLIC_KYLAS_API_BASE_URL` exists for this: the browser's Kylas calls
 (`kylasFetch`) cannot see the server-only
@@ -75,7 +75,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | Enq ID and deal tickets | Django `/crm/leads/?enquiry_ids=` and `?q=<phone>` | Django stub, seven `ENQ-9001xx` tickets |
 | BM / EC pickers | Django `/crm/available-bms/`, `/orgainsation-branch/` | Django stub |
 | Outreach pool, accept, meetings, handover | backend rows (pipeline `outbound`, id `OR-IN-<kylas id>`) | backend stub |
-| Studio Space waitlist | partner app `/api/sync/waitlist` | `{ signups: [] }` |
+| Studio Space waitlist | backend `GET /b2b/waitlist` | backend stub, two sign-ups: one on Mockup Interiors' mobile (Waitlist tile 1), one matching no lead |
 | EC visits (Firm page, Appointment Tracker) | backend `GET/PUT /b2b/ec-visits` | backend stub |
 | KAM firms, orders, last-order status | backend rows (`client`, `kam`), `/b2b/kam-load`; Django `/crm/leads/b2b-bulk/`, `/client-order-history/` | backend and Django stubs |
 
