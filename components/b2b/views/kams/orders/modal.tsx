@@ -11,11 +11,12 @@ import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { lookupEnqId } from '@/lib/b2b';
 import { useState } from 'react';
 
-export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
+export function OrderModal({ order, isNew, clients, kam, actor, onClose, onSave }: {
   order: KamOrder;
   isNew?: boolean;
   clients: ClientEntity[];
   kam: string;
+  actor: string;
   onClose: () => void;
   onSave: (o: KamOrder) => Promise<string | null>;
 }) {
@@ -90,7 +91,7 @@ export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
       statusChangedAt: statusChanged || isNew ? at : draft.statusChangedAt,
       createdAt: draft.createdAt || at,
       kam: draft.kam || kam,
-    }, kam, at));
+    }, actor || kam, at));
     setSaving(false);
     if (err) setError(err); else onClose();
   };

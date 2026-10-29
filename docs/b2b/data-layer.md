@@ -242,7 +242,10 @@ against the last saved record, not wired to a button:
 - **Inbound:** the drawer keeps a `saved` ref, and both the Save button and the
   call log go through it. The call log writes the whole draft, so a requirement
   edited and then a call logged would otherwise skip the history.
-- **KAM:** per order, in the order modal's save. A new order has none.
+- **KAM:** per order, in the order modal's save. A new order has none. The
+  modal's `kam` prop is the KAM a new order defaults to (often the hardcoded
+  `DEFAULT_KAM`), not the editor, so the entry takes `actor`. The first
+  browser run recorded a roster name instead of the KAM who made the edit.
 
 Filling an empty requirement is not a change, clearing one keeps the old text,
 and an entry equal to the last one is skipped, so a stale baseline cannot
@@ -251,7 +254,8 @@ first (`ui/requirement-history.tsx`). Rows written before this have no history,
 so their first change starts it. `requirement_history` is a new meta key, so
 it is stored in the backend's `extra` and persists only once migration 0020 is
 live. Checked by compiling the helper and running the A→B→A→B, clear,
-whitespace and stale-baseline cases.
+whitespace and stale-baseline cases, then in the sandbox browser: two edits to
+a KAM order read "Previous requirements (2)", naming the KAM who made them.
 
 ### View-level decisions worth not re-litigating
 
