@@ -51,7 +51,7 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   ready: {
     title: 'Ready to close',
-    rule: '5 RNRs in the last 7 days, or 7+ days old with 4+ calls and still not at Follow up. Close them as Lost, or send them on.',
+    rule: '5 RNRs in the last 7 days, or 7+ days old with 5+ calls and still not at Follow up. Close them as Lost, or send them on.',
     empty: 'Nothing is ready to close.',
     accent: '#B45309',
   },
