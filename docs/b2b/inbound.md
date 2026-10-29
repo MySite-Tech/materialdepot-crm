@@ -141,7 +141,7 @@ rows, and lenses still overlap on purpose (a sent lead is open *and* an outcome)
 
 `inboundWorkDay(leadCreatedAt)` (`utils/inbound.ts`) is the day a lead counts
 for: its IST date, or the **next working day** if it arrived at or after 17:00,
-or on a non-working day. Working days are Mon–Sat (`NON_WORKING_WEEKDAYS`). A
+or on a non-working day. Working days are Mon–Sat, six a week, confirmed by the user on 2026-10-29 (`NON_WORKING_WEEKDAYS`). An RNR on Saturday books Monday. A
 lead that lands at 8 pm is tomorrow's first call: it is not in today's First
 call (the tile's subtitle says "+N after 5 pm, for tomorrow"), and Arrived today
 uses the same day. Kylas timestamps are untouched; only the counting moves.
