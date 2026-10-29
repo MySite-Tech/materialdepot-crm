@@ -1,6 +1,7 @@
 import { B2BLeadRow, MetaSpec, arr, num, str } from '../data/rows';
 import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbound';
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
+import { RequirementVersion } from '@/components/b2b/models/requirement';
 import {
   CompanyType, JourneyEvent, OUTREACH_SOURCES, OutreachContact, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
   TEAM_SIZES, TeamSize, normalizeOutreachStatus,
@@ -24,6 +25,7 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   meetings:           { col: 'meetings',         read: (v) => arr<OutreachMeeting>(v) },
   selections:         { col: 'selections',       read: (v) => arr<Selection>(v) },
   requirement:        { col: 'requirement',      read: str },
+  requirementHistory: { col: 'requirement_history', read: (v) => arr<RequirementVersion>(v) },
   expectedOrderValue: { col: 'expected_order_value', read: num },
   statusChangedAt:    { col: 'status_changed_at', read: str },
   followUpDate:       { col: 'follow_up_date',   read: str },

@@ -9,7 +9,12 @@ export interface ConnectedForm { durationMin: string; followUpDate: string; foll
 
 const EMPTY_FORM: ConnectedForm = { durationMin: '', followUpDate: '', followUpTime: '', note: '' };
 
-export function useCallLog(draft: InboundLead, actorName: string, commit: (next: InboundLead) => void) {
+export function useCallLog(
+  draft: InboundLead,
+  actorName: string,
+  prepare: (next: InboundLead) => InboundLead,
+  commit: (next: InboundLead) => void,
+) {
   const [form, setForm] = useState<ConnectedForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,9 +22,10 @@ export function useCallLog(draft: InboundLead, actorName: string, commit: (next:
   const today = istToday();
   const by = actorName || 'Unknown';
 
-  const persist = async (next: InboundLead, failMsg: string): Promise<boolean> => {
+  const persist = async (draftNext: InboundLead, failMsg: string): Promise<boolean> => {
     setBusy(true);
     setError(null);
+    const next = prepare(draftNext);
     const err = await upsertInboundLead(next);
     setBusy(false);
     if (err) { setError(`${failMsg}: ${err}`); return false; }

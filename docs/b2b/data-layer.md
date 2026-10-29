@@ -228,6 +228,31 @@ They live here now because the code cannot carry them.
   creating a client in the same millisecond silently overwrote one another.
   `models/ids.ts` appends a random suffix.
 
+### Requirement history: one diff, three pipelines (2026-10-29)
+
+The user asked that a client's requirement can change at any stage (Inbound,
+Outreach, KAM) and that every earlier version stays readable.
+`models/requirement` `withRequirementHistory(before, after, by, at)` appends
+the old text to `requirement_history` (`{text, replacedAt, replacedBy}[]`)
+whenever a non-empty requirement changes. It is applied at the write, diffed
+against the last saved record, not wired to a button:
+
+- **Outreach:** inside `withJourney`, which every Outreach save already goes
+  through. It also logs a `requirement-changed` journey event.
+- **Inbound:** the drawer keeps a `saved` ref, and both the Save button and the
+  call log go through it. The call log writes the whole draft, so a requirement
+  edited and then a call logged would otherwise skip the history.
+- **KAM:** per order, in the order modal's save. A new order has none.
+
+Filling an empty requirement is not a change, clearing one keeps the old text,
+and an entry equal to the last one is skipped, so a stale baseline cannot
+duplicate a version. Each editor shows "Previous requirements (n)", newest
+first (`ui/requirement-history.tsx`). Rows written before this have no history,
+so their first change starts it. `requirement_history` is a new meta key, so
+it is stored in the backend's `extra` and persists only once migration 0020 is
+live. Checked by compiling the helper and running the A→B→A→B, clear,
+whitespace and stale-baseline cases.
+
 ### View-level decisions worth not re-litigating
 
 - **The KAM empty-state banner counts every order; the Open orders tile counts

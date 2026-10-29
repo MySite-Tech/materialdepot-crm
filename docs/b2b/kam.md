@@ -96,6 +96,9 @@ about meetings. Outreach already hard-gated notes on a held meeting
 brings KAM level with it. Meetings logged before this have no minutes, and
 the KAM KPI rows still say "No notes" for them rather than hiding them.
 
+An order's requirement keeps its earlier versions when edited
+(`data-layer.md` §Requirement history).
+
 ### §4.3's "actioned" needs no new field
 
 A follow-up is actioned when a LATER interaction is logged, because

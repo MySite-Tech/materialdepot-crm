@@ -10,6 +10,7 @@ import { InboundOwnerCard } from './cards/owner';
 import type { TeamMember } from '@/lib/b2b/team/types';
 import { InboundPlacedUnderCard } from './cards/placed-under';
 import { InboundPresalesCard } from './cards/presales';
+import { withRequirementHistory } from '../../models/requirement';
 import { InboundRequirementCard } from './cards/requirement';
 import { GateField, InboundStatusCard } from './cards/status';
 import { InboundOutreachCard } from './cards/outreach';
@@ -59,8 +60,13 @@ export default function InboundDrawer({
   const detail = useInboundDetail(lead, setDraft);
   const today = istToday();
 
-  const commit = useCallback((next: InboundLead) => { setDraft(next); onSaved(next); }, [onSaved]);
-  const calls = useCallLog(draft, actorName, commit);
+  const saved = useRef(lead);
+  const withHistory = useCallback(
+    (next: InboundLead) => withRequirementHistory(saved.current, next, actorName, new Date().toISOString()),
+    [actorName],
+  );
+  const commit = useCallback((next: InboundLead) => { saved.current = next; setDraft(next); onSaved(next); }, [onSaved]);
+  const calls = useCallLog(draft, actorName, withHistory, commit);
 
   const connected = hasConnected(draft.callAttempts);
   const readiness = useMemo(() => closureReadiness(draft, today),
@@ -122,14 +128,15 @@ export default function InboundDrawer({
     if (gateErrors.length) { setShowGates(true); return; }
     setSave({ saving: true });
 
-    const toSave: InboundLead = withStatusStamps(lead, {
+    const at = new Date().toISOString();
+    const toSave: InboundLead = withRequirementHistory(saved.current, withStatusStamps(lead, {
       ...draft,
       ...extra,
       company: draft.companyName?.trim() || draft.company,
       value: Number(draft.orderValue) || 0,
       timeline: draft.urgency,
       requirementBrief: draft.leadSummary,
-    }, new Date().toISOString());
+    }, at), actorName, at);
 
     const [kylasRes, dbErr] = await Promise.all([
       updateInboundLeadKylas(lead.id, { requirement: toSave.requirement, selections: toSave.selections }),
@@ -148,6 +155,7 @@ export default function InboundDrawer({
     if (kylasRes.dropped?.length) {
       notes.push(`${kylasRes.dropped.join(', ')} — Kylas has no option for this, so it is stored in the CRM only.`);
     }
+    saved.current = toSave;
     setDraft(toSave);
     onSaved(toSave);
     setSave({ saving: false, warning: notes.length ? notes.join(' ') : undefined });

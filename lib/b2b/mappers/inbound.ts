@@ -27,6 +27,7 @@ const INBOUND_META: MetaField[] = [
 
   { ui: 'selections',         db: 'selections',           kind: 'array'  },
   { ui: 'requirement',        db: 'requirement',          kind: 'string' },
+  { ui: 'requirementHistory', db: 'requirement_history',  kind: 'array'  },
   { ui: 'expectedOrderValue', db: 'expected_order_value', kind: 'number' },
 
   { ui: 'followUpDate',       db: 'follow_up_date',       kind: 'string' },

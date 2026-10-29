@@ -1,5 +1,6 @@
 import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, InteractionType, TemperatureBand } from '../models/client';
 import { FollowUpBucket, Segment } from '../models/inbound';
+import type { RequirementVersion } from '../models/requirement';
 export type KamOrderStatus =
   | 'Requirement Logged' | 'Quote Shared' | 'PI Shared' | 'Closed' | 'Lost';
 
@@ -15,6 +16,7 @@ export interface KamOrder {
   phone?: string;
 
   requirement?: string;
+  requirementHistory?: RequirementVersion[];
 
   estimatedValue?: number;
   status: KamOrderStatus;

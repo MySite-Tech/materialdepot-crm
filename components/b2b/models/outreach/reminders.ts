@@ -1,4 +1,5 @@
 import { OutreachLead } from '../mock-data';
+import { withRequirementHistory } from '../requirement';
 import {
   FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings,
 } from '.';
@@ -44,6 +45,7 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
 
   const fu = String(after.followUpDate || '').slice(0, 10);
   if (fu && fu !== String(before.followUpDate || '').slice(0, 10)) push('follow-up-set', `Next follow-up set for ${fu}${after.followUpTime ? ` ${after.followUpTime}` : ''}`);
+  if ((after.requirementHistory || []).length > (before.requirementHistory || []).length) push('requirement-changed', `Requirement changed: ${String(after.requirement || '').trim() || 'cleared'}`);
   for (const n of (after.notes || []).slice((before.notes || []).length)) push('note-added', `Note: ${n.text}`);
   const known = new Set((before.contacts || []).map((c) => c.name.trim().toLowerCase()));
   for (const c of after.contacts || []) {
@@ -60,7 +62,8 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
   return ev;
 }
 
-export function withJourney(before: OutreachLead | null, after: OutreachLead, by: string, at: string): OutreachLead {
+export function withJourney(before: OutreachLead | null, latest: OutreachLead, by: string, at: string): OutreachLead {
+  const after = withRequirementHistory(before, latest, by, at);
   const events = journeyDiff(before, after, by, at);
   const convertedAt = after.status === 'Closed' && !after.convertedAt ? at : after.convertedAt;
   if (!events.length && convertedAt === after.convertedAt) return after;

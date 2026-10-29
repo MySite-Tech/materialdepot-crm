@@ -191,7 +191,8 @@ It feeds the Ready to close tile, a banner in the call log with a one-click
 readiness says so, and every other lost reason needs a Connected call.** A
 reason like "Price issue" can only come from someone who spoke to the client.
 `Unreachable (4 attempts)` is no longer offered; old rows keep it and show it as
-"previously recorded". **Confirmed by the user on 2026-10-29:** 5 calls before
+"previously recorded". The requirement keeps its earlier versions
+(`data-layer.md` §Requirement history). **Confirmed by the user on 2026-10-29:** 5 calls before
 a lead closes as no progress (it was 4), and Invalid needs only one logged call,
 because one call is enough to prove a wrong number. Calls and notes are never
 written to Kylas, also confirmed that day.

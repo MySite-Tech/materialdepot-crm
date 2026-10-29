@@ -202,7 +202,8 @@ written by each button**, so a new write path cannot forget to log. The drawer's
 Journey card merges in the waitlist sign-up from Studio Space. Rows written
 before 2026-10-28 have no journey; the card says so instead of showing nothing.
 Writes from the Leads tab drawer (`views/leads/drawer.tsx`) do not go through
-`withJourney` yet.
+`withJourney` yet. `withJourney` also keeps the requirement's earlier versions
+(`data-layer.md` §Requirement history).
 
 ### Reminders and the Action needed tile
 

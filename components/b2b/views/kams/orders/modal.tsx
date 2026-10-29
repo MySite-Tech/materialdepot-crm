@@ -1,6 +1,8 @@
 'use client';
 
 import { ClientEntity, primaryContact } from '../../../models/client';
+import { withRequirementHistory } from '../../../models/requirement';
+import { RequirementHistory } from '../../../ui/requirement-history';
 import { KAM_ORDER_LOST_REASONS, KAM_ORDER_STATUSES, KAM_ORDER_STATUS_HINT, KamOrder, KamOrderStatus, kamOrderGateErrors, kamOrderStatusPrompts } from '../../../models/kam';
 import { fmtINR } from '../../../models/mock-data';
 import { LostReasonSelect } from '../../../ui/lost-reason-select';
@@ -80,14 +82,15 @@ export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
     setSaving(true);
     setError('');
     const statusChanged = draft.status !== order.status;
-    const err = await onSave({
+    const at = new Date().toISOString();
+    const err = await onSave(withRequirementHistory(isNew ? null : order, {
       ...draft,
 
       value: Number(draft.orderValue) || 0,
-      statusChangedAt: statusChanged || isNew ? new Date().toISOString() : draft.statusChangedAt,
-      createdAt: draft.createdAt || new Date().toISOString(),
+      statusChangedAt: statusChanged || isNew ? at : draft.statusChangedAt,
+      createdAt: draft.createdAt || at,
       kam: draft.kam || kam,
-    });
+    }, kam, at));
     setSaving(false);
     if (err) setError(err); else onClose();
   };
@@ -129,6 +132,7 @@ export function OrderModal({ order, isNew, clients, kam, onClose, onSave }: {
 
           <Field label="Requirement details">
             <textarea value={draft.requirement || ''} onChange={(e) => set('requirement', e.target.value)} rows={3} className={inputCls + ' resize-none'} placeholder="What the client needs" />
+            <RequirementHistory history={draft.requirementHistory} />
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

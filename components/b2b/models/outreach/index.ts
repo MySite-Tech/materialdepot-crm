@@ -114,7 +114,7 @@ export type JourneyKind =
   | 'created' | 'imported' | 'intake' | 'intake-accepted' | 'intake-rejected'
   | 'status' | 'meeting-scheduled' | 'meeting-held' | 'meeting-postponed'
   | 'order-verified' | 'handover-sent' | 'handover-accepted' | 'handover-rejected' | 'bm-changed'
-  | 'follow-up-set' | 'note-added' | 'contact-added';
+  | 'follow-up-set' | 'note-added' | 'contact-added' | 'requirement-changed';
 
 export interface JourneyEvent {
   at: string;
