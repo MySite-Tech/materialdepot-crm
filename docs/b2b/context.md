@@ -5,6 +5,11 @@
 ## Purpose
 B2B sales CRM: inbound leads, outreach, the leads tab, client database, KAM module, targets, leadership board, dashboard and the partner-content composer (~13.6k lines of components + 1.6k of domain/data).
 
+Its data lives in the FastAPI `b2b-backend` (`newdb`), reached through
+`app/api/b2b/[...path]` — **not** Supabase anymore. The read/write shapes and why
+the mappers did not change are in [`data-layer.md`](data-layer.md); the backend
+wiring and env vars are in `docs/backends.md`.
+
 ## Sub-documents
 
 This module's detail is split by topic so a question costs one part, not the whole module. **Grep `docs/b2b/` first**, then read the part that matched.

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-57 entries. They live in one file because they cross-reference each other —
+58 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -926,3 +926,21 @@ grep for a term, then read around the line you hit rather than opening all of it
   accepts `application/json-patch+json` with an array of ops. `kylasFetch`
   defaults to `application/json`, so a plain-object PATCH fails with 415. The
   inbound drawer shipped that way and every Requirement/Selection push failed.
+
+- **A Supabase table with an `Allow all access` anon policy is world-writable
+  from the browser.** The B2B `b2b_lead`/`b2b_target` tables were reached with
+  the public `NEXT_PUBLIC_SUPABASE_ANON_KEY` under a `for all using(true) with
+  check(true)` RLS policy (see the retired `supabase-setup-b2b_lead.sql`), so
+  anyone who could load the CRM could read, insert, update or delete every B2B
+  lead — no token needed, the anon key is in the JS bundle. The anon key being
+  "just the anon key" is not a defence when the policy is open; RLS *is* the
+  auth there. Fixed 2026-10-29 by moving B2B to the FastAPI `b2b-backend`: the
+  browser now reaches it only through `app/api/b2b/[...path]`, which runs
+  `requireCaller` and the `admin`/`b2b_sales` gate before relaying with a
+  server-only `x-sync-key`. Same shape as the first entry in this file (a route
+  handler holding a privileged key IS the access check) — a backend that trusts
+  the caller needs the caller authenticated one layer out. See
+  `docs/b2b/data-layer.md` and `docs/backends.md`. When you migrate a backend,
+  ship it first: the frontend flip only works once `0018_b2b_crm` is applied and
+  the tables are seeded (`scripts/seed_b2b_from_csv.py`), or `GET /api/b2b/rows`
+  502s and the zero-caching rule turns that into a durable wrong number.

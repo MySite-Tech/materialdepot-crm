@@ -1,6 +1,6 @@
 # lib/api — the Django/Kylas client layer
 
-**Covers:** `lib/api/**` · `lib/server/**` · `lib/supabase.ts`
+**Covers:** `lib/api/**` · `lib/server/**`
 
 ## Purpose
 Every Django and Kylas call in the app goes through here. `lib/api/index.ts` is
@@ -108,6 +108,25 @@ Four things worth knowing before reusing it:
   strings. Coercing either with `Number()` yields `NaN` and 401s every caller.
 - **It fails closed.** Unreachable backend → `SessionError` at 502, not "allow".
   Pair it with `sessionErrorResponse(err)` to turn that into the response.
+
+### `relayB2B` — the route-handler bridge to the FastAPI b2b-backend
+
+`lib/server/b2b-backend.ts`, used by `app/api/b2b/[...path]`. The B2B tab's data
+lives in the FastAPI `b2b-backend` now, not Supabase (see `docs/backends.md`),
+and the browser must not reach it directly — that would be a fifth egress path.
+So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces the
+`admin`/`b2b_sales` gate, then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
+server-only `x-sync-key: B2B_BACKEND_SECRET` — the same server-to-server pattern
+`app/api/b2b/partner-content` uses. Three things it deliberately does:
+
+- **Allow-lists the first path segment** (`rows`, `kam-load`, `target`) so the
+  catch-all is a defined surface, not an open proxy to the backend.
+- **503s when either env var is unset**, rather than defaulting to a reachable
+  base — the same fail-closed rule the service-role routes follow.
+- **Never answers with the backend's raw body on failure**: a non-2xx becomes a
+  `{ error }` at 502, so a dropped upstream call can't read as data. The CRM
+  client (`lib/b2b/data/backend.ts`) sends the bearer token and retries once on
+  401 via `refreshSession()`, exactly as the store-checklist caller does.
 
 ### There is no scheduled route in this app, and no platform cron to run one
 

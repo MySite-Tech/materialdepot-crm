@@ -1,24 +1,12 @@
 
 import { B2BPipelineStats, EMPTY_BUCKET, StatsBasis, basisQuery } from '../stats/pipeline';
-import { TABLE } from '../data/rows';
+import { b2bBackendGet } from '../data/backend';
 import { B2B_VERTICALS } from '@/components/b2b/models/roster';
 import { CRMLeadsStats, CRMLeadsStatsBucket, fetchCRMLeadsStatsByBmGroup } from '@/lib/api';
-import { supabase } from '@/lib/supabase';
 
 export async function fetchKamLoad(): Promise<Record<string, number>> {
   try {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('meta_data')
-      .in('pipeline', ['inbound', 'outbound'])
-      .eq('stage', 'Closed');
-    if (error) throw error;
-    const load: Record<string, number> = {};
-    for (const row of (data || []) as { meta_data?: Record<string, any> }[]) {
-      const kam = String(row.meta_data?.kam || '').trim();
-      if (kam) load[kam] = (load[kam] || 0) + 1;
-    }
-    return load;
+    return await b2bBackendGet<Record<string, number>>('/kam-load');
   } catch (e) {
     console.error('[b2b] kam load fetch failed', e);
     return {};

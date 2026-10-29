@@ -5,10 +5,31 @@
 These constraints were previously recorded as inline comments in `lib/b2b/`.
 They live here now because the code cannot carry them.
 
-- **One paged read serves every board.** Each B2B view wants a different
-  pipeline out of the same table, which used to be four
-  `select=* where pipeline=…` round trips per dashboard load. `fetchAllRows`
-  pages the table once and narrows by pipeline and date in memory.
+- **The B2B data is no longer on Supabase.** It moved to the FastAPI
+  `b2b-backend` (`newdb` Postgres). The one Supabase `b2b_lead` table (one row
+  per lead, discriminated by `pipeline`, everything in a `meta_data` jsonb blob)
+  became four normalized tables there — `b2b_inbound_lead`, `b2b_outreach_lead`,
+  `b2b_client`, `b2b_kam_order` — with the scalars as real columns and only the
+  append-only logs (call attempts, notes, meetings, contacts…) left as jsonb.
+  **The CRM's mappers are unchanged**: the backend's `b2b_crm` router
+  reconstructs the old `{id, pipeline, stage, kylas_lead_id, owner, value,
+  meta_data}` wire shape on read and decomposes it on write, so `rowToInbound` /
+  `inboundToRow` and friends still see a `B2BLeadRow`. The browser never reaches
+  the backend directly (that would be a fifth egress): it goes
+  `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` (`requireCaller` + the
+  `admin`/`b2b_sales` gate) → FastAPI, trusted by `x-sync-key`. See
+  `docs/backends.md`. This also closed a hole: the old `b2b_lead` had an
+  `Allow all access` anon RLS policy, so the boards were writable by anyone who
+  could load the app — now every read and write is behind `requireCaller`.
+
+- **One read serves every board.** Each B2B view wants a different pipeline, but
+  `fetchAllRows` makes a single `GET /api/b2b/rows` (the backend runs the four
+  per-table selects and concatenates), cached 8s, and the views narrow by
+  pipeline and date in memory. Keep it one call — do not add a per-pipeline
+  endpoint and fetch four times; that is the budget regression this shape exists
+  to prevent. (On Supabase this was one paged `select=*`; same contract, new
+  source.) `client_id` on a KAM order is a **soft** reference, not a FK — the
+  source never enforced it and orphaned orders exist.
 
 - **A failed Kylas request is indistinguishable from a real zero, so owner
   totals cannot be derived.** `fetchB2BInboundLeads` catches internally and
