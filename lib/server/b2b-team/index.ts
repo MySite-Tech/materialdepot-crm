@@ -9,6 +9,7 @@ import {
 import type { MemberInput, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 import { intakePool, kylasUserForPhone, listKylasUsers, readLead, setLeadOwner } from './kylas';
+import { isCrmAddedLead } from '@/components/b2b/models/inbound/kylas';
 import {
   assignedLeadIdsSince,
   claimRoundRobin,
@@ -126,25 +127,31 @@ export async function reassignInboundLead(
   byName: string,
 ): Promise<TeamMember> {
   const id = String(leadId ?? '').trim();
-  if (!/^\d+$/.test(id)) throw new InputError('leadId must be a Kylas lead id');
+  const crmOnly = isCrmAddedLead({ id });
+  if (!crmOnly && !/^\d+$/.test(id)) throw new InputError('leadId must be a Kylas lead id or a CRM-added lead id');
 
   const { members, tableMissing } = await readMembers();
   if (tableMissing) throw new InputError('The B2B team tables are not set up yet');
   const target = memberForPhone(teamMembers(members, 'inbound'), toPhone);
   if (!target || !target.active) throw new InputError('Leads can only go to an active inbound team member');
 
-  const lead = await readLead(id);
-  if (lead.pipelineId !== B2B_INBOUND_PIPELINE) throw new InputError('That lead is not in the inbound pipeline');
-  if (lead.ownerId === target.kylasUserId) throw new InputError(`${target.name} already owns this lead`);
-
-  await setLeadOwner(id, target.kylasUserId as number);
+  let createdAt: string | null = null;
+  let fromId: number | null = null;
+  if (!crmOnly) {
+    const lead = await readLead(id);
+    if (lead.pipelineId !== B2B_INBOUND_PIPELINE) throw new InputError('That lead is not in the inbound pipeline');
+    if (lead.ownerId === target.kylasUserId) throw new InputError(`${target.name} already owns this lead`);
+    await setLeadOwner(id, target.kylasUserId as number);
+    createdAt = lead.createdAt;
+    fromId = lead.ownerId;
+  }
   await recordAssignment({
     lead_id: id,
-    lead_created_at: lead.createdAt,
+    lead_created_at: createdAt,
     kind: 'reassign',
     to_kylas_id: target.kylasUserId as number,
     to_name: target.name,
-    from_kylas_id: lead.ownerId,
+    from_kylas_id: fromId,
     reason: reason.trim().slice(0, 300) || null,
     by_name: byName,
   });

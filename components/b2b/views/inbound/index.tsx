@@ -7,7 +7,7 @@ import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS_KEYS, NO_FILTERS } from './constants';
-import { MoveModal } from './ui/modals';
+import { AddLeadModal, MoveModal } from './ui/modals';
 import { InboundBoard } from './ui/board';
 import { InboundFilterBar } from './ui/filters';
 import { LeadTable } from './ui/table';
@@ -44,6 +44,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const today = istToday();
 
@@ -59,6 +60,11 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const myKylasId = me?.kylasUserId ?? undefined;
   const unlinked = !viewer.isManager && !myKylasId;
   const scope = viewer.isManager ? scopeChoice ?? (myKylasId ? 'mine' : 'all') : 'mine';
+  const leadOwners = useMemo(
+    () => teamMembers(team.members, 'inbound').filter((m) => m.active && m.kylasUserId).map((m) => ({ id: m.kylasUserId as number, name: m.name })),
+    [team.members],
+  );
+  const canAdd = viewer.isManager ? leadOwners.length > 0 : !!myKylasId;
 
   const ownerId = useMemo(
     () => (scope === 'mine'
@@ -269,6 +275,14 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
               </button>
             ))}
           </div>
+          {canAdd && (
+            <button
+              onClick={() => setAdding(true)}
+              className="bg-white border border-gray-200 text-gray-700 hover:text-gray-900 px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap"
+            >
+              + Add lead
+            </button>
+          )}
           <button
             onClick={load}
             disabled={loading}
@@ -359,6 +373,24 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             </button>
           )}
         </div>
+      )}
+
+      {adding && (
+        <AddLeadModal
+          owners={leadOwners}
+          defaultOwner={myKylasId ? { id: myKylasId, name: me?.name || viewer.name } : undefined}
+          canPickOwner={viewer.isManager}
+          loaded={leads}
+          boardOwnerIds={boardOwnerIds}
+          actorName={viewer.name}
+          onCancel={() => setAdding(false)}
+          onCreated={(lead) => { setLeads((prev) => [lead, ...prev]); setAdding(false); setSelectedId(lead.id); }}
+          onOpenExisting={(lead) => {
+            setLeads((prev) => (prev.some((l) => l.id === lead.id) ? prev : [lead, ...prev]));
+            setAdding(false);
+            setSelectedId(lead.id);
+          }}
+        />
       )}
 
       {move && (

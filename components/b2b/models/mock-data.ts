@@ -53,6 +53,8 @@ export interface LeadDeal {
   lostReason?: string;
 }
 
+export type InboundSource = 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Phone call' | 'Email' | 'Event' | 'Google' | 'Other';
+
 export interface InboundLead {
   id: string;
 
@@ -69,7 +71,8 @@ export interface InboundLead {
   presalesClientType?: string;
   presalesMissedCalls?: number;
   kylasStage?: number;
-  source: 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Google' | 'Other';
+  source: InboundSource;
+  addedBy?: string;
 
   companyName?: string;
   primaryContactName?: string;

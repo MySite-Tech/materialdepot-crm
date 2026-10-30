@@ -196,6 +196,12 @@ Two things it does that `kylasFetch` callers do not:
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.
+- **A `crm-…` lead id never reaches Kylas (2026-10-30).** Inbound leads
+  added in the CRM have no Kylas record, so `reassignInboundLead` skips
+  `readLead` and `setLeadOwner` for them and only logs the assignment. The
+  caller saves the new owner onto the backend row (`docs/b2b/inbound.md`
+  §Leads added in the CRM). Any id that is neither all digits nor `crm-…` is
+  still refused.
 
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 

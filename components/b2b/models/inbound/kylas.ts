@@ -2,6 +2,12 @@ import { Selection } from '../../types/inbound';
 import { KYLAS_CLIENT_TYPE_MAP, SELECTION_KYLAS_LABEL } from '../../constants/inbound';
 import { ClientType, InboundLocation } from '../../types/inbound';
 
+export const CRM_INBOUND_ID_PREFIX = 'crm-';
+
+export function isCrmAddedLead(l: { id: string }): boolean {
+  return String(l.id).startsWith(CRM_INBOUND_ID_PREFIX);
+}
+
 export function locationFromPincode(pincode: string | undefined): InboundLocation | undefined {
   const head = Number(String(pincode || '').replace(/\D/g, '').slice(0, 3));
   if (!head) return undefined;

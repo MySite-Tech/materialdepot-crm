@@ -293,6 +293,52 @@ A user-picked "Lead date from" still applies. A lead owned by nobody the board
 knows maps to `owner: 'Unassigned'`. That means no team member or legacy owner
 has that Kylas id, not that Kylas left the lead unassigned.
 
+### Leads added in the CRM, outside Kylas (2026-10-30)
+
+**+ Add lead** on the Inbound header is for a lead that reached us some other
+way (WhatsApp, referral, walk-in, a direct call…). The user decided:
+
+- **CRM only, never Kylas.** This follows the no-Kylas-writes decision. The lead
+  is a `b2b_inbound_lead` row and nothing else.
+- **The owner is whoever adds it.** A manager picks from the active inbound
+  members who have a linked Kylas user. Ownership still means `ownerId` =
+  that member's Kylas user id, so Mine vs All and the board filter work
+  unchanged.
+- **Required fields:** contact name, 10-digit mobile, company, where it came
+  from (`INBOUND_ADD_SOURCES`) and the requirement. Selection is optional.
+- **Duplicates are refused.** The modal first checks the loaded leads, then runs
+  one board search by phone across Kylas and the CRM. If the search fails,
+  nothing is added.
+
+How it works without Kylas:
+
+- **The id is `crm-…`, and `kylas_lead_id` holds the same `crm-…` value.**
+  The backend's inbound upsert conflicts on `kylas_lead_id`, and a NULL there
+  never conflicts. So a NULL would let the first save insert the row and make
+  every later save fail on the primary key. Reusing the id keeps the existing
+  route working with no backend change. `isCrmAddedLead` (the prefix) is the
+  only test. Never read `kylas_lead_id` as "this is in Kylas".
+- **Every Kylas call is skipped for these leads.** That covers the Presales
+  detail, notes and call logs (the drawer shows an "Added in the CRM" card
+  instead), the requirement/selection push on Save, and on reassign the Kylas
+  read and owner PATCH. A reassign still validates the target and logs a
+  `b2b_lead_assignment` row (`from_kylas_id` null). The drawer then saves the
+  new owner onto the row itself, because the row is the only place ownership
+  lives.
+- **`fetchInboundBoard` keeps them at stage New.** Backend rows at New are
+  otherwise dropped unless Kylas returned them on this page. They load on
+  page 0 only, like every other backend row.
+- The list and board tag them **CRM**.
+- **Not counted in Leadership's "new leads assigned"**, which is a Kylas
+  total per owner (`use-inbound-assigned.ts`). The Leads tab does include
+  them, because it reads `fetchInboundBoard`.
+
+Verified 2026-10-30 in `npm run dev:sandbox`: add, the required-field errors,
+the duplicate refusal, Save (no Kylas warning), reassign (owner and
+`owner_kylas_id` updated on the row, assignment logged), the manager's owner
+picker, 390px. No request carrying a `crm-` id left for anywhere but the
+backend.
+
 ### Who owns a lead: the team table, round robin, and Mine vs All
 
 Built 2026-10-28; the design is in `sales-tab-redesign.md` §Inbound. **Inbound

@@ -94,3 +94,17 @@ export function InboundPresalesCard({ detailFailed, detailLoading, draft, presal
     </CollapsibleCard>
   );
 }
+
+export function InboundAddedCard({ draft }: { draft: InboundLead }) {
+  return (
+    <CollapsibleCard title="Added in the CRM" owner="crm" subtitle="Came from outside Kylas, so there is no Presales record" summary={[draft.source, draft.addedBy && `by ${draft.addedBy}`, fmtLeadDateTime(draft.leadCreatedAt)].filter(Boolean).join(' · ')}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Field label="Where it came from"><ReadValue v={draft.source} /></Field>
+        <Field label="Added by"><ReadValue v={draft.addedBy} /></Field>
+        <Field label="Added on"><ReadValue v={fmtLeadDateTime(draft.leadCreatedAt)} /></Field>
+        <Field label="Contact number"><ReadValue v={draft.phone} /></Field>
+        <Field label="Contact name"><ReadValue v={draft.contactName} /></Field>
+      </div>
+    </CollapsibleCard>
+  );
+}

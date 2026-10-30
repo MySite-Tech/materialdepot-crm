@@ -6,6 +6,7 @@ import { fetchB2BInboundLeads } from '@/lib/api';
 import { ClientEntity } from '@/components/b2b/models/client';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { KamOrder } from '@/components/b2b/models/kam';
+import { isCrmAddedLead } from '@/components/b2b/models/inbound';
 import { mergeKylasIntoRow, rowToInbound } from '../mappers/inbound';
 import { rowToClient } from '../mappers/client';
 import { rowToKamOrder } from '../mappers/kam';
@@ -100,7 +101,7 @@ export async function fetchInboundBoard(
   }
 
   const kylasIds = new Set(kylas.leads.map((k) => k.id));
-  dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id));
+  dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id) || isCrmAddedLead(l));
 
   const dbIds = new Set(dbLeads.map((l) => l.id));
   return {

@@ -182,6 +182,8 @@ export const LOST_REASON_NEEDS: Record<string, ClosureReason> = {
   [LOST_STALLED]: 'stalled',
 };
 
+export const INBOUND_ADD_SOURCES = ['WhatsApp', 'Referral', 'Walk-in', 'Phone call', 'Email', 'Event', 'Website form', 'Other'] as const;
+
 export const INBOUND_LOST_REASONS = [
   LOST_UNREACHABLE,
   LOST_STALLED,

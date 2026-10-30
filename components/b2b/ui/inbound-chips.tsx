@@ -3,7 +3,7 @@
 import {
   INBOUND_STATUS_COLORS, PRIORITY_COLORS, LEAD_TYPE_COLORS,
   FOLLOW_UP_COLORS, FOLLOW_UP_LABEL, OWNER_CHIP, OWNER_LABEL,
-  followUpBucket, daysUntil, nameIsJustThePhone,
+  followUpBucket, daysUntil, nameIsJustThePhone, isCrmAddedLead,
   type InboundStatus, type Priority, type LeadType, type FieldOwner,
 } from '../models/inbound';
 
@@ -48,6 +48,15 @@ export function LeadName({ lead }: {
     );
   }
   return <span>{String(lead.company || '').trim() || 'Unnamed lead'}</span>;
+}
+
+export function CrmAddedTag({ lead }: { lead: { id: string; source?: string } }) {
+  if (!isCrmAddedLead(lead)) return null;
+  return (
+    <span className="ml-1.5 align-middle text-[9.5px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 border border-teal-100 rounded px-1 py-px" title={`Added in the CRM${lead.source ? ` · ${lead.source}` : ''}. Not in Kylas.`}>
+      CRM
+    </span>
+  );
 }
 
 export function LeadTypeChip({ t }: { t?: LeadType }) {
