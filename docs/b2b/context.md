@@ -90,7 +90,8 @@ a new session knows what is live and what is being worked on.
 - **2026-10-30:** the Studio Space tab frames the Studio Space admin console and signs the KAM in by their CRM phone (`studio-space.md`; needs b2b-backend PR #15, migration 0022).
 - **Where it lives.** PR #29 (the revamp) is merged and deployed (2026-10-29).
   The branch `b2b-revamp-2026-10-28` kept taking commits after it (Studio Space
-  access read-only, Targets, Leadership "Set targets", Overview). Those are
+  access read-only, Targets, Leadership "Set targets", Overview, the Studio
+  Space console, Inbound + Add lead, the Outreach meetings timeline). Those are
   pushed but not on `main` and not deployed: they need a new PR (see `CLAUDE.md`
   §Git). They ship in PR #30, which needs b2b-backend PR #14 (waitlist and
   Studio Space access reads, no migration) and PR #15 (Studio Space sign-in

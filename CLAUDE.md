@@ -372,14 +372,16 @@ A teammate pushes to this branch regularly — **pull before starting.**
 **B2B Sales work is on `b2b-revamp-2026-10-28`**, not `Installation-Changes`.
 Its **PR #29 was merged to `main` and deployed on 2026-10-29** (`3483cc3`),
 together with b2b-backend PR #13 (migrations 0020 and 0021, live). **The branch
-has moved on since: four commits are on it but not on `main`,** so they are not
+has moved on since: these commits are on it but not on `main`,** so they are not
 deployed: Studio Space access read-only (`5402162`), per-person Targets
 (`aa86b0f`), the Leadership Board's "Set targets" replacing the Targets tab
 (`5af8bf2`), and Dashboard → **Overview** (`6309057`, `docs/b2b/overview.md`).
 They ship in **PR #30** (`studio-space-waitlist-2026-10-29`: the branch plus
 the Outreach waitlist fix, fast-forwarded into this branch on 2026-10-30),
 together with the Studio Space tab framing the console (`c7ea33e`) and signing
-the KAM in by their CRM phone (`e775d1d`). PR #30 needs **b2b-backend PR #14**
+the KAM in by their CRM phone (`e775d1d`), Inbound **+ Add lead** for leads
+outside Kylas (`c01406b`, `docs/b2b/inbound.md`) and Outreach meetings as a
+timeline (`ed23de6`). PR #30 needs **b2b-backend PR #14**
 (`GET /b2b/waitlist` and `GET /b2b/studio-access`, no migration) and **PR #15**
 (`studio-staff-handoff`, migration 0022). Without #14 the Waitlist KPI and the
 Numbers-by-firm pane read Unknown. Without #15 the console frame shows Studio
