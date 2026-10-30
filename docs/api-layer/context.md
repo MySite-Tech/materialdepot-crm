@@ -129,6 +129,11 @@ same credential instead. Three things the relay deliberately does:
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.
+- **`studio-handoff` is a handler of its own, never allow-listed** (2026-10-30).
+  It mints a Studio Space session, so the phone must come from `requireCaller`
+  and nothing the browser sends. `studioHandoffUrl` builds the link on
+  `B2B_BACKEND_URL`, which must therefore be the public API host whose cookies
+  Studio Space reads (`docs/b2b/studio-space.md` §One login).
 - **503s when either env var is unset**, rather than defaulting to a reachable
   base — the same fail-closed rule the service-role routes follow.
 - **Never answers with the backend's raw body on failure**: a non-2xx becomes a

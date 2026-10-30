@@ -4,6 +4,7 @@ import { RotateCw } from 'lucide-react';
 import { STUDIO_CONSOLE_URL } from './constants';
 import { StudioNumbers } from './numbers';
 import { ConsoleFrame } from './ui/console-frame';
+import { useStudioSignIn } from '../../hooks/use-studio-sign-in';
 import { useState } from 'react';
 
 type Pane = 'console' | 'numbers';
@@ -12,7 +13,7 @@ const PANES: [Pane, string][] = [['console', 'Studio Space admin'], ['numbers', 
 
 export default function StudioSpace() {
   const [pane, setPane] = useState<Pane>('console');
-  const [reloadKey, setReloadKey] = useState(0);
+  const signIn = useStudioSignIn(STUDIO_CONSOLE_URL);
 
   return (
     <div className="h-full flex flex-col">
@@ -27,13 +28,15 @@ export default function StudioSpace() {
           ))}
         </div>
         {pane === 'console' && (
-          <span className="text-[11px] text-gray-400">
-            Sign in with your Studio Space email. Blank or &ldquo;refused to connect&rdquo;? Open it in a new tab once, then reload.
+          <span className={`text-[11px] ${signIn.error ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
+            {signIn.error
+              ? `Not signed in automatically: ${signIn.error}. Sign in below.`
+              : 'Signed in by your CRM mobile. Blank? Open in a new tab once, then Reload.'}
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
           {pane === 'console' && (
-            <button onClick={() => setReloadKey((k) => k + 1)} title="Reload Studio Space"
+            <button onClick={signIn.reload} title="Reload Studio Space"
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-200 text-[12px] text-gray-600 hover:bg-gray-50 cursor-pointer">
               <RotateCw size={12} /> Reload
             </button>
@@ -44,7 +47,8 @@ export default function StudioSpace() {
           </a>
         </div>
       </div>
-      {pane === 'console' ? <ConsoleFrame reloadKey={reloadKey} /> : <div className="flex-1 overflow-y-auto"><StudioNumbers /></div>}
+      <ConsoleFrame src={signIn.src} hidden={pane !== 'console'} />
+      {pane === 'numbers' && <div className="flex-1 overflow-y-auto"><StudioNumbers /></div>}
     </div>
   );
 }

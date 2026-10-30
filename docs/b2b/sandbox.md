@@ -76,6 +76,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | BM / EC pickers | Django `/crm/available-bms/`, `/orgainsation-branch/` | Django stub |
 | Outreach pool, accept, meetings, handover | backend rows (pipeline `outbound`, id `OR-IN-<kylas id>`) | backend stub |
 | Studio Space waitlist | backend `GET /b2b/waitlist` | backend stub, two sign-ups: one on Mockup Interiors' mobile (Waitlist tile 1), one matching no lead |
+| Studio Space sign-in | backend `POST /b2b/staff-handoff`, `GET /auth/handoff` | backend stub: Kavya and Meera get a code, everyone else a 404. The frame shows a JSON line naming who would be signed in, not the console |
 | EC visits (Firm page, Appointment Tracker) | backend `GET/PUT /b2b/ec-visits` | backend stub |
 | KAM firms, orders, last-order status | backend rows (`client`, `kam`), `/b2b/kam-load`; Django `/crm/leads/b2b-bulk/`, `/client-order-history/` | backend and Django stubs |
 

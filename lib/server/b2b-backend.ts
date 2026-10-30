@@ -36,6 +36,12 @@ export async function b2bBackendFetch<T>(path: string, init?: { method?: string;
   return body as T;
 }
 
+export function studioHandoffUrl(code: string): string {
+  const target = endpoint();
+  if (target instanceof Response) throw new B2BBackendError(503, 'B2B_BACKEND_URL or B2B_BACKEND_SECRET is not set on this deployment');
+  return `${target.base}/auth/handoff?code=${encodeURIComponent(code)}`;
+}
+
 function errorDetail(body: unknown): string | undefined {
   const b = body as { error?: unknown; detail?: unknown } | null;
   const d = b?.error ?? b?.detail;

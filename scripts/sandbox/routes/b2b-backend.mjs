@@ -68,6 +68,8 @@ function putEcVisit(db, body) {
   return row;
 }
 
+const STUDIO_STAFF = { '9000000021': 'Kavya (KAM)', '9000000099': 'Meera (B2B Manager)' };
+
 function studioLogins(db) {
   const phones = db.rows.filter((r) => r.pipeline === 'client').flatMap((r) => (r.meta_data?.contacts ?? []).map((c) => String(c.number).replace(/\D/g, '').slice(-10)));
   return {
@@ -106,6 +108,12 @@ function lastRoundRobin(db) {
 
 export function backendRoutes(db) {
   return (req) => {
+    if (req.path === '/auth/handoff') {
+      const phone = db.handoffs?.[req.query.get('code')];
+      if (!phone) return reply(401, { sandbox: 'Studio Space would show its sign-in page: unknown or spent code' });
+      delete db.handoffs[req.query.get('code')];
+      return { sandbox: 'Studio Space would set its session cookies and open /console', signedInAs: STUDIO_STAFF[phone] };
+    }
     if (req.headers['x-sync-key'] !== SYNC_KEY) return reply(403, { error: 'x-sync-key does not match the sandbox key' });
     const path = req.path.replace(/^\/b2b/, '').replace(/\/+$/, '');
     const body = jsonOf(req.raw);
@@ -128,6 +136,12 @@ export function backendRoutes(db) {
     if (path === '/kam-load') return kamLoad(db);
     if (path === '/waitlist') return { signups: db.waitlist ?? [] };
     if (path === '/studio-access') return studioLogins(db);
+    if (path === '/staff-handoff' && method === 'POST') {
+      if (!STUDIO_STAFF[body?.phone]) return reply(404, { error: 'No active Studio Space team login has this mobile' });
+      const code = `sandbox-${Object.keys(db.handoffs ??= {}).length + 1}-${body.phone}`;
+      db.handoffs[code] = body.phone;
+      return { code, expires_in: 60 };
+    }
     if (path === '/target' && method === 'GET') return db.target;
     if (path === '/target' && method === 'POST') { db.target = { ...body, updated_at: new Date().toISOString() }; return db.target; }
 
