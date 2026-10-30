@@ -7,19 +7,21 @@ export const CLIENT_LENS: Record<ClientLens, ClientLensMeta> = {
   all:      { title: 'All firms', heading: 'All firms', rule: 'Every firm in the Client Database that matches the search and filters.', empty: 'No firm matches.', accent: '#1F2937' },
   active:   { title: 'Active', heading: 'Active firms', rule: `Last order placed within the last ${ACTIVE_DAYS} days, counted back from today.`, empty: `No firm has ordered in the last ${ACTIVE_DAYS} days.`, accent: '#22C55E' },
   lapsing:  { title: 'Inactive 1 month', heading: 'Inactive 1 month', rule: `No order in the last ${ACTIVE_DAYS} days, but one ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago. Closest to going fully inactive first.`, empty: 'No firm is in its first month without an order.', accent: '#F59E0B' },
-  inactive: { title: 'Inactive', heading: 'Inactive firms', rule: `Last order more than ${INACTIVE_DAYS} days ago, including firms that have never ordered. Most recently lapsed first.`, empty: 'No inactive firm.', accent: '#9CA3AF' },
-  unknown:  { title: 'Unread', heading: 'Orders not read', rule: 'Order dates could not be read for these firms, so they are neither Active nor Inactive.', empty: 'Every firm’s orders were read.', accent: '#3B82F6' },
+  inactive: { title: 'Inactive', heading: 'Inactive firms', rule: `Last order more than ${INACTIVE_DAYS} days ago. Firms that have never ordered are counted under Never ordered, not here. Most recently lapsed first.`, empty: 'No inactive firm.', accent: '#9CA3AF' },
+  never:    { title: 'Never ordered', heading: 'Never ordered', rule: 'No order on record for any of the firm’s numbers. A–Z.', empty: 'Every firm has ordered at least once.', accent: '#D1D5DB' },
+  unknown:  { title: 'Status unknown', heading: 'Status unknown', rule: 'Order dates could not be read, or Django served a last order date after today, which cannot be a real order. These firms are neither Active nor Inactive until the date is fixed.', empty: 'Every firm has a usable last order date.', accent: '#3B82F6' },
   nokam:    { title: 'No KAM', heading: 'Firms with no KAM', rule: 'No key account manager is assigned, including firms a KAM rejected (the KAM column says why). Highest revenue first.', empty: 'Every firm has a KAM.', accent: '#DC2626' },
   pending:  { title: 'Awaiting KAM', heading: 'Waiting for KAM sign-off', rule: 'Firms an admin assigned to a KAM who has not yet accepted or rejected them.', empty: 'No assignment is waiting on a KAM.', accent: '#7C3AED' },
 };
 
-export const STATUS_LENSES: ClientLens[] = ['all', 'active', 'lapsing', 'inactive'];
+export const STATUS_LENSES: ClientLens[] = ['all', 'active', 'lapsing', 'inactive', 'never'];
 
 export const LENS_DEFAULT_SORT: Record<ClientLens, SortState> = {
   all:      { key: 'lastOrder', dir: 'desc' },
   active:   { key: 'lastOrder', dir: 'desc' },
   lapsing:  { key: 'lastOrder', dir: 'asc' },
   inactive: { key: 'lastOrder', dir: 'desc' },
+  never:    { key: 'company', dir: 'asc' },
   unknown:  { key: 'company', dir: 'asc' },
   nokam:    { key: 'revenue', dir: 'desc' },
   pending:  { key: 'company', dir: 'asc' },

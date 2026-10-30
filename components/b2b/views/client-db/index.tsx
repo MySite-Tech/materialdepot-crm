@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, istToday, mergeClients } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { KAMS, fmtShortINR } from '../../models/mock-data';
 import { FirmDrawer } from '../../drawers/firm';
@@ -103,17 +103,18 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const pageRows = rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
 
   const unread = byLens.unknown.length;
-  const neverOrdered = byLens.inactive.filter((r) => r.metrics.dateState === 'no-orders').length;
+  const futureDated = byLens.unknown.filter((r) => lastOrderInFuture(r.metrics, today)).length;
   const tileValue = (k: ClientLens): { value: string; sub?: string; warn?: boolean } => {
     if (loading) return { value: '…', sub: 'loading' };
     if (loadError) return { value: 'Unknown', sub: 'did not load', warn: true };
     const n = byLens[k].length;
     switch (k) {
-      case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} unread` : ''}`, warn: !!unread };
+      case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} status unknown` : ''}`, warn: !!unread };
       case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_DAYS} days` };
       case 'lapsing':  return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
-      case 'inactive': return { value: String(n), sub: neverOrdered ? `${neverOrdered} never ordered` : `no order in ${INACTIVE_DAYS} days` };
-      case 'unknown':  return { value: String(n), sub: 'orders did not load', warn: true };
+      case 'inactive': return { value: String(n), sub: `last order over ${INACTIVE_DAYS} days ago` };
+      case 'never':    return { value: String(n), sub: 'no order on record' };
+      case 'unknown':  return { value: String(n), sub: futureDated ? `${futureDated} with a future order date` : 'orders did not load', warn: true };
       case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
       case 'pending':  return { value: String(n), sub: 'not accepted yet' };
     }

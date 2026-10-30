@@ -75,7 +75,7 @@ export function computeDashboard(
     kam.filter((o) => o.status === 'PI Shared').length;
   const wonCount = wonInbound.length + wonOutreach.length + wonKam.length;
 
-  const clientCounts: Record<ClientStatus, number> = { Active: 0, 'Inactive 1 month': 0, Inactive: 0, Unknown: 0 };
+  const clientCounts: Record<ClientStatus, number> = { Active: 0, 'Inactive 1 month': 0, Inactive: 0, 'Never ordered': 0, Unknown: 0 };
   for (const c of clients) {
     clientCounts[clientStatus(clientMetrics[c.id] || { dateState: 'pending' }, today)]++;
   }

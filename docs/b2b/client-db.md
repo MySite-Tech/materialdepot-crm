@@ -203,7 +203,7 @@ taken from the seeded clients.
 
 Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
 `clientLensMatches` (`views/client-db/utils.ts`) gives both a tile's count and
-the list it opens. Tiles: All firms · Active · Lapsing soon · Inactive, then
+the list it opens. Tiles: All firms · Active · Inactive 1 month · Inactive · Never ordered, then
 No KAM, plus Unread only when some firm's orders did not load.
 
 - **Why it changed.** The five tiles were `StatTile`s with no click handler, and
@@ -225,9 +225,25 @@ No KAM, plus Unread only when some firm's orders did not load.
   export a security issue and removed it for admins too. Do not bring it back
   behind a role check. The upload modal's "Download log" stays: it lists only
   row numbers, company names and the outcome of the file the user uploaded.
-- **A last-order date after today is flagged "future date"** in amber. The date
-  is Django's `lastOrderDate`, and `clientStatus` still counts the firm as
-  Active.
+- **Never ordered is not Inactive (2026-10-30).** Inactive is a last order
+  over 60 days ago. The Inactive tile used to fold in firms with no order on
+  record and said so in its subtitle ("20 never ordered"); the user corrected
+  the definition, so those firms are their own tile.
+- **A last-order date after today makes the firm Unknown (2026-10-30).** Until
+  then it was flagged amber and still counted as Active, which inflated the
+  Active tile; the user had taken the flag for a fix. `clientStatus` now returns
+  `Unknown` for it (`lastOrderInFuture` is the same test), so it sits under the
+  **Status unknown** tile with "future date, not counted" under the date, and
+  the Firm page says why. This is still not the fix: the real date is not in
+  any response the CRM gets. Every source was checked on 2026-10-30. `b2b-bulk`'s
+  `lastOrderDate` is the wrong one. The per-phone tickets carry only
+  `closureDate`, which is the same expected-closure date. b2b-backend holds
+  only Studio Space referral orders (`ordered_on`), not every order. The fix
+  is in Django: `b2b-bulk`'s `histories[phone].lastOrderDate` should be
+  `max(estimate.order_placed_time)` over that phone's non-deleted, placed
+  estimates. The CRM already takes the max across a firm's numbers, so no
+  frontend change is needed when it ships. Future dates then just stop
+  happening.
 - **`b2b-bulk`'s `lastOrderDate` is wrong at the source — a Django bug, open.**
   On 2026-10-28 the top seven rows of the list all showed future dates
   (30 Oct 2026 to 10 Feb 2027). In Metabase (`materialdepot_azure`), no estimate

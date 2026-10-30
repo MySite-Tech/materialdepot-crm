@@ -7,7 +7,7 @@ import { GstsCard } from './cards/gsts';
 import { OrdersCard } from './cards/orders';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, lastOrderInFuture } from '../../models/client';
 import { fmtShortINR } from '../../models/mock-data';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
 import { btnGhost } from '../../constants/ui';
@@ -74,6 +74,11 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             />
             <StatTile label="Open carts" value={<Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} />} />
           </div>
+          {lastOrderInFuture(metrics) && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              The last order date Django served is after today, so it cannot be a real order. The status is Unknown until Django serves the real order placed date.
+            </p>
+          )}
           {metrics.dateState === 'unavailable' && (
             <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
               Some of this firm&apos;s order figures could not be read, so the status is Unknown rather than a guess.
