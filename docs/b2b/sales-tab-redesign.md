@@ -457,11 +457,10 @@ Opening a firm adds 1.
 
 ## Open / blocking (as of 2026-10-28)
 
-- **B2B data off Supabase.** The user reports it now lives on the Django
-  backend, but every B2B read and write still goes to Supabase `b2b_lead`,
-  `b2b_target` and `b2b_team_member`. Blocked on the Django endpoints. The
-  table of what has to move, and the switch point (`lib/b2b/data/`), are in
-  `docs/backends.md` § Pending.
+- ~~B2B data off Supabase~~: done, and not on Django. Every B2B table lives in
+  the FastAPI b2b-backend (PR #27, then #13's migrations 0020 and 0021, live
+  2026-10-29). See `docs/backends.md`. What Django still owes is listed there
+  under §Owed by Django.
 - **Where the Django repo is, and who changes it** (KAM slice 7). The user
   says someone has it.
 - **Meeting Coverage denominator:** 3-month firm status or ordered-this-month

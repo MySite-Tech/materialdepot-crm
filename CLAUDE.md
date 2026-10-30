@@ -197,7 +197,7 @@ reading the module.
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
 | Shipped-and-fixed bugs | `docs/landmines.md` | 64 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
-| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; the **pending** B2B move off Supabase and the tables it still has to cover |
+| The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
 ### A code change is not done until its doc matches
@@ -377,10 +377,13 @@ deployed: Studio Space access read-only (`5402162`), per-person Targets
 (`aa86b0f`), the Leadership Board's "Set targets" replacing the Targets tab
 (`5af8bf2`), and Dashboard → **Overview** (`6309057`, `docs/b2b/overview.md`).
 They ship in **PR #30** (`studio-space-waitlist-2026-10-29`: the branch plus
-the Outreach waitlist fix, fast-forwarded into this branch on 2026-10-30), which
-needs **b2b-backend PR #14** (`GET /b2b/waitlist` and `GET /b2b/studio-access`,
-no migration). Without #14 the Waitlist KPI and the Studio Space tab read
-Unknown. Check `git log origin/main..HEAD` before claiming anything is live.
+the Outreach waitlist fix, fast-forwarded into this branch on 2026-10-30),
+together with the Studio Space tab framing the console (`c7ea33e`) and signing
+the KAM in by their CRM phone (`e775d1d`). PR #30 needs **b2b-backend PR #14**
+(`GET /b2b/waitlist` and `GET /b2b/studio-access`, no migration) and **PR #15**
+(`studio-staff-handoff`, migration 0022). Without #14 the Waitlist KPI and the
+Numbers-by-firm pane read Unknown. Without #15 the console frame shows Studio
+Space's own sign-in page. Check `git log origin/main..HEAD` before claiming anything is live.
 **The tech team merges, not a session**, unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart. While `npm run dev:sandbox` is
@@ -400,6 +403,11 @@ Push both with `dhruv-md`. Only `main`/`staging` (dashboard) and `master`
 Space on 2026-10-29 got the backend, hosting and waitlist all wrong. Its local
 dev stack is `~/Projects/ss-local-stack` (`status.sh`, dashboard on
 `127.0.0.1:3700`, backend :8700, Postgres :54700).
+**The CRM shows Studio Space by framing its console, not by copying it**
+(`docs/b2b/studio-space.md`). Dhruv rejected a CRM-side rebuild of its firm list
+on 2026-10-30. Test a backend migration on a `CREATE DATABASE … TEMPLATE newdb`
+copy of that Postgres, never on `newdb` itself: the stack's `start.sh` migrates
+from `dhruv-changes` and fails on a revision it does not know.
 
 **Branching while other sessions edit this tree: use a `git worktree`.**
 Switching branches here drags every session's uncommitted files along.

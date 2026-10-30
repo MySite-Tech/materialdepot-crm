@@ -91,3 +91,29 @@ branch `b2b-crm-extra-and-team`, pushed 2026-10-29) adds `b2b_team_member.is_adm
 `GET/PUT /b2b/ec-visits`. The CRM reads both gracefully without it: a missing
 `is_admin` reads as false. **Neither 0020 nor 0021 has ever run against
 Postgres.** There was none on this machine to try them on.
+
+## Owed by Django (2026-10-30)
+
+Collected from every module doc on 2026-10-30. None of it is checked against
+Django's code: the repo (`MaterialDepotDjangoBackend`) is not on this machine,
+and who changes it is still open. Each row names the doc with the detail.
+
+| # | Change | Wrong or missing until then | Detail |
+|---|---|---|---|
+| 1 | `b2b-bulk` `histories[phone].lastOrderDate` = `max(estimate.order_placed_time)` over placed, non-deleted estimates (revenue from the same call disagrees with Metabase too) | Active/Inactive, lens counts and KAM revenue for any firm with an open deal; the CRM shows those as Status unknown | `b2b/client-db.md` §The list |
+| 2 | `b2b-bulk` GST matching: `gsts=` (exact, never `icontains`), `include=tickets`, GST keys in `histories` | Orders billed to a firm's GSTIN from a number not on the firm (253 GSTINs span several accounts); one request per phone on a firm open | `b2b/sales-tab-redesign.md` §Django contract |
+| 3 | `gst=` filter on `/crm/leads/` (covered by 2 if built as specced) | Enquiries cannot be found by GSTIN | `b2b/client-db.md` §GST |
+| 4 | Order detail by enquiry id: qty, rate, PI, payment, delivery (as Procurement shows) | An expanded enquiry shows item names only. Not yet asked of the Django team | `b2b/client-db.md` §One enquiry |
+| 5 | `/crm/leads/` drops `branch` on some requests (likely when `bm=` is also sent) | A B2B-only rep's carts read as a retail branch's leads; the CRM shows an amber notice | `landmines.md` (the Leads-tab BM entry) |
+| 6 | `/crm/available-bms/?branch=` returns anyone linked to the branch, not people homed there | Nothing on screen (the CRM reconciles against the roster); wrong for any other caller | `weekly-funnel/context.md` |
+| 7 | Permission rows for `team_leader`, `asst_store_manager`, `cluster_head`, `area_manager` | Those rungs of the store ladder stay empty | `org-hierarchy/context.md` |
+
+Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
+Users), and backfilling `crm.remarks_quality` on existing permission lists.
+Optional: a store code on each branch would retire the hand-kept maps in
+`store-display` and `store-checklist`.
+
+Studio Space sign-in from the CRM needs **no** Django change: the CRM verifies
+its own session against Django and b2b-backend issues the Studio Space one
+(`b2b/studio-space.md` §One login).
+
