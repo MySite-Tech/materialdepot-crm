@@ -273,6 +273,24 @@ names. The **live pin** (`navigator.geolocation`, stored on
 the meeting with accuracy and time) is asked for and counted, never required: a
 BM logging a meeting after leaving the office cannot produce one honestly.
 
+### Meetings read as a timeline, newest first (2026-10-30)
+
+The drawer used to render every meeting as a full form, so a lead with a few
+held meetings was a wall of inputs and the context of the notes was lost. The
+user asked for the notes to be kept organised **in the UI only**: no new
+fields, no tags, no AI summary, and no counting. Quantifying meetings was
+explicitly deferred.
+
+`drawers/outreach/meetings/` renders a timeline. A past meeting is a read-only
+entry: date, days since the previous meeting, place, who was met, pin, the full
+notes, and the next follow-up on the latest held one. **Edit** opens the same
+form as before. A meeting stays a form while it is Scheduled, while it has a
+gate gap (`meetingGaps`) after a failed save, or while it is the latest held
+one and the follow-up date is missing. It also stays open once anything in it
+is edited, so a meeting marked Completed does not collapse while its notes are
+typed. **Done** appears only when it has no gaps. The data and the save gates
+are unchanged.
+
 ### Converted = first order, and only a fetched order counts
 
 `Closed` is still the stored stage (see above on renaming stored values); it is
