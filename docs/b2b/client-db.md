@@ -96,6 +96,39 @@ not visible in the code's shape:
 - The list and the order tabs page at 25 rows. The tiles and the strip
   count the full filtered set.
 
+### Four SPoCs on every firm, and sales by SPoC (2026-10-31)
+
+The user: every firm has an EC, Inbound, Outreach and KAM SPoC, none compulsory,
+filled as the firm moves along, so we can see what each SPoC sold and whether
+sales drop after a move. A firm joining at Outreach has no Inbound SPoC, and
+that is not a gap.
+
+- **A slot fills itself where a link exists, and a manager can log one.**
+  `firmSpocs` reads Inbound and Outreach from the leads on the firm's numbers,
+  KAM from `client.kam`, EC from the BM on the last order. An entry in
+  `spoc_log` beats the derived value. The KAM slot has no log of its own:
+  `assignments` already is one, so it changes under Account.
+- **Most firms will show empty slots, and that is correct.** Measured on real
+  rows 2026-10-31: of 69 firms, 60 had a KAM, 8 linked to an Outreach lead, 2 to
+  an Inbound lead and none to both, because 62 are `Existing` accounts loaded in
+  rather than walked through the journey. A blank slot says no lead was found on
+  these numbers, never that the firm skipped the team, which we cannot know.
+- **`spoc_log` needs no migration.** It is an unmapped meta key, so the backend
+  keeps it in `b2b_client.extra` (0020). It is append-only with a `from` date,
+  because a replaced SPoC has to stay a stage in the sales table. `from` is typed
+  in, since a mid-journey firm's real start is often in the past.
+- **Sales by SPoC splits orders by who held the firm when the order was created**
+  (`spocSales`). Every order lands in exactly one row, including "Before the
+  first SPoC on record" for firms loaded with a history. Per month is what shows
+  a drop after a move. EC BMs are a separate line and never added, the same rule
+  as assisted revenue.
+- **The date is Created, not placement**, because `order_placed_time` is owed by
+  Django (`backends.md` §Owed by Django #8).
+- **The table is per firm, on purpose.** It reads the ticket list the Firm page
+  already loaded, so it costs no extra order request. Across all firms it would be
+  one request per phone, which the request budget forbids. That roll-up waits on
+  #8. Opening the drawer adds no request when the all-rows read is cached.
+
 ### EC visits from the Firm page (2026-10-29)
 
 Firms also order through the Experience Centres, not only through the B2B
@@ -136,8 +169,13 @@ turn an outage into "no remarks".
 **Round robin only shares out firms with no KAM (2026-10-30).** The user:
 after one round robin, the next one should take the new, unassigned firms, not
 the database again. `useFirmAssign` drops every selected firm that has a KAM
-before planning, and says how many stayed put. Picking a name still moves any
-selected firm, because that is how a manager changes a firm's owner.
+before planning, and says how many stayed put.
+
+**An owned firm moves one at a time (2026-10-31).** The user: a firm with an owner
+never takes part in bulk assignment. One person takes an owned firm only when it
+is the single selected row. In a larger selection owned firms are skipped, whether
+the choice is One person or Round robin. This replaces the 2026-10-30 line that
+let picking a name move every selected firm.
 
 **The Orders sub-tab has no "Placed on" column (2026-10-30).** It showed the
 ticket's `closureDate`, which is the deal's hand-set expected closure, so
@@ -286,7 +324,11 @@ scroll at 390px and no page errors.
 ### Assigning firms to KAMs (managers only, 2026-10-29)
 
 Managers get a checkbox column and an assign bar (`ui/assign-bar.tsx`, shared
-with Outreach's pool). Picking a KAM or Round robin writes a pending handover
+with Outreach's pool and the Leads tab). The bar picks the team first; only KAM is enabled here, because a firm's owner is
+its `kam` field and sign-off is on the KAM tab. One person lists every active KAM.
+Round robin starts from the in-rotation KAMs, and the manager ticks the set for
+that assignment (2026-10-31). Select all takes the whole lens, not just the
+page. Either choice writes a pending handover
 that the KAM signs off on the KAM tab. The rules (where the state is stored,
 why it is book size and not `/kam-load`, what rejection does) are in `kam.md`
 §Admin assigns firms. The checkbox column renders only when `picked` is passed,

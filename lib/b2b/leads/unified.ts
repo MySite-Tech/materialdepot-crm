@@ -31,7 +31,7 @@ export interface UnifiedLead {
   outreach?: OutreachLead;
 }
 
-function inboundToUnified(l: InboundLead): UnifiedLead {
+export function inboundToUnified(l: InboundLead): UnifiedLead {
   return {
     key: `inbound:${l.id}`,
     id: l.id,
@@ -55,7 +55,7 @@ function inboundToUnified(l: InboundLead): UnifiedLead {
   };
 }
 
-function outreachToUnified(l: OutreachLead): UnifiedLead {
+export function outreachToUnified(l: OutreachLead): UnifiedLead {
   return {
     key: `outreach:${l.id}`,
     id: l.id,

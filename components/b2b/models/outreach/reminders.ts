@@ -1,7 +1,7 @@
 import { OutreachLead } from '../mock-data';
 import { withRequirementHistory } from '../requirement';
 import {
-  FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting,
+  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting,
 } from '.';
 import { normalisePhone } from '@/lib/org/utils';
 import { HANDOVER_TAT_HOURS, handoverState, hoursSince, isMobile, orderVerified } from './handover';
@@ -174,10 +174,10 @@ export function outreachReminders(
     if (!m.pin) add(`p${m.n}`, 'todo', `Meeting ${m.n} has no live location pin`);
   }
 
-  if (open && l.source && ['Inbound', 'EC referral'].includes(l.source) && !held.length && !scheduled.length && !intakePending(l)) {
+  if (open && l.source && COVERAGE_SOURCES.includes(l.source) && !held.length && !scheduled.length && !intakePending(l)) {
     add('cover', 'today', `${l.source} lead with no meeting booked — schedule the in-person visit`);
   }
-  if (open && !held.length && !scheduled.length && l.source && !['Inbound', 'EC referral'].includes(l.source)) {
+  if (open && !held.length && !scheduled.length && l.source && !COVERAGE_SOURCES.includes(l.source)) {
     add('first', 'todo', 'No meeting booked yet');
   }
 

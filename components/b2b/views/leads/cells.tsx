@@ -1,10 +1,12 @@
 'use client';
 
 import { Pill, fmtDay } from '../../ui/inbound-chips';
+import { EC_B2B_REFERRAL } from '../../models/outreach';
 import { SOURCE_COLORS, STATUS_COLORS } from './constants';
-import { LeadSource, UnifiedLead } from '@/lib/b2b';
+import { UnifiedLead } from '@/lib/b2b';
 
-export function SourceChip({ s }: { s: LeadSource }) {
+export function SourceChip({ lead }: { lead: UnifiedLead }) {
+  const s = lead.outreach?.source === EC_B2B_REFERRAL ? EC_B2B_REFERRAL : lead.source;
   return <Pill color={SOURCE_COLORS[s]}>{s}</Pill>;
 }
 

@@ -5,6 +5,8 @@ import { ContactsCard } from './cards/contacts';
 import { EcVisitsCard } from './cards/ec-visits';
 import { GstsCard } from './cards/gsts';
 import { OrdersCard } from './cards/orders';
+import { SpocsCard } from './cards/spocs';
+import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
 import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, lastOrderInFuture } from '../../models/client';
@@ -31,6 +33,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
 }) {
   const phones = useMemo(() => contactNumbers(client.contacts), [client.contacts]);
   const orders = useFirmOrders(phones);
+  const links = useFirmLinks(client);
   const [via, setVia] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,6 +87,18 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
               Some of this firm&apos;s order figures could not be read, so the status is Unknown rather than a guess.
             </p>
           )}
+
+          <SpocsCard
+            client={client}
+            links={links.links}
+            linksLoading={links.loading}
+            linksFailed={links.failed}
+            orders={orders.details?.rows ?? []}
+            ordersLoading={orders.loading}
+            ordersFailed={orders.failed}
+            assignAs={assignAs}
+            onSave={onSave}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <ContactsCard client={client} clients={clients} historyFor={historyFor} via={via} onVia={setVia} onSave={onSave} />

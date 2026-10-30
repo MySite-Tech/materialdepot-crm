@@ -570,6 +570,18 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   on real Supabase and Kylas reads with Django stubbed and every write
   blocked. No write was attempted.
 
+- **2026-10-31 (EC B2B Referral and assignment)**: New top-level tab for store
+  staff, feeding Outreach's Unassigned pool as source `EC B2B Referral`
+  (`ec-referral.md`). The assign bar is now one shape on Leads, Client Database and
+  Outreach's pool: team first, then One person or Round robin over a chosen set.
+  Bulk takes only unowned records, an owned one moves alone (`leads.md`,
+  `client-db.md`), and a firm moved from another KAM cannot be rejected (`kam.md`).
+  Tested in the sandbox on dummy data, stubbed Kylas. **Open, for the user:** the
+  Firm page's KAM picker uses the hardcoded `KAMS` list, not the live team (it
+  offered Hardi and not a newly added KAM). Whether Reject should also go for
+  firms with no KAM: the user's words covered moved firms, and it was built that
+  way. Real Kylas owner change from `reassign-many` is unproven.
+
 ## Outreach: the brief (2026-10-28) and what was built
 
 Source: the user's message plus `kpi-definitions.md` §Outreach (sheet rows

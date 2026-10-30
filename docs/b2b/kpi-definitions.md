@@ -30,7 +30,7 @@ How each KPI is computed from CRM data is in `outreach.md` §KPIs.
 | New Leads Meetings (unique clients) | Effort | 50 | Leads | Per month |
 | Follow-up Meetings (unique clients) | Effort | 30 | Leads converted | Per month |
 | CRM Adherence | Effort | 100% | Data input | Real time |
-| Coverage of Inbound-converted leads & EC referrals | Effort | 100% | Meetings | — |
+| Coverage of Inbound-converted leads & EC referrals (both EC sources count, see `ec-referral.md`) | Effort | 100% | Meetings | — |
 | New Lead Conversion | Output | 15 | Leads converted | Per month |
 | Studio Space Waitlist | Output | 30 | Sign-ups | Per month |
 | Handover of Converted Clients (to KAM) | Output | 100% | Round-robin, KAM sign-off required | — |

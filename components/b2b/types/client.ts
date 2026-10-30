@@ -79,6 +79,17 @@ export interface KamAssignment {
   respondedBy?: string;
   rejectReason?: string;
   reason?: string;
+  movedFrom?: string;
+}
+
+export type SpocRole = 'inbound' | 'outreach' | 'kam' | 'ec';
+
+export interface SpocLogEntry {
+  role: Exclude<SpocRole, 'kam'>;
+  name: string;
+  from: string;
+  at: string;
+  by?: string;
 }
 
 export interface ClientEntity {
@@ -96,6 +107,7 @@ export interface ClientEntity {
   kam?: string;
 
   assignments?: KamAssignment[];
+  spocLog?: SpocLogEntry[];
   remarks?: string;
 
   interactions?: ClientInteraction[];

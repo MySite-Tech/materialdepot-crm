@@ -90,7 +90,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
       <main className="flex-1 overflow-y-auto min-w-0">
         {view === 'overview' && <B2BOverview team={team} onNavigate={setView} />}
         {view === 'inbound' && <InboundLeads team={team} viewer={viewer} />}
-        {view === 'leads' && <LeadsTab />}
+        {view === 'leads' && <LeadsTab team={team} viewer={viewer} />}
         {view === 'outreach' && <OutreachLeads team={team} viewer={viewer} />}
         {view === 'clients' && <ClientDatabase team={team} viewer={viewer} />}
         {view === 'kams' && <KAMs team={team} viewer={viewer} />}

@@ -1,6 +1,6 @@
 import { InboundLead, LeadNote, OutreachLead } from '../mock-data';
 import { InboundStatus, sentToOutreach } from '../inbound';
-import { AssignHow, COMPANY_TYPES, CompanyType } from '.';
+import { AssignHow, COMPANY_TYPES, CompanyType, EC_B2B_REFERRAL } from '.';
 import { sameRep } from './handover';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -92,6 +92,42 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
       how,
       acceptedAt: how === 'self' ? at : undefined,
     },
+  };
+}
+
+export interface EcReferralInput {
+  company: string;
+  contactPerson: string;
+  phone: string;
+  companyType: CompanyType;
+  designation?: string;
+  city?: string;
+  requirement?: string;
+  ec: string;
+}
+
+export function leadFromEcReferral(f: EcReferralInput, by: Rep, id: string, at: string): OutreachLead {
+  return {
+    id,
+    company: f.company,
+    contactPerson: f.contactPerson,
+    designation: f.designation,
+    phone: f.phone,
+    companyType: f.companyType,
+    city: f.city,
+    selections: [],
+    requirement: [`Referred by ${by.name} at ${f.ec}`, f.requirement ? `Requirement: ${f.requirement}` : ''].filter(Boolean).join('\n'),
+    bm: '',
+    source: EC_B2B_REFERRAL,
+    ecReferral: { ec: f.ec, by: by.name, byPhone: by.phone || '', at },
+    ecName: f.ec,
+    ecBmName: by.name,
+    createdAt: at,
+    status: 'Yet to Meet',
+    statusChangedAt: at,
+    meetings: [],
+    notes: [],
+    value: 0,
   };
 }
 

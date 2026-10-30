@@ -48,6 +48,11 @@ export interface RotationOutcome {
   skipped?: string;
 }
 
+export interface ReassignOutcome {
+  moved: { leadId: string; name: string; kylasUserId: number }[];
+  failed: { leadId: string; error: string }[];
+}
+
 export interface B2BUser {
   name: string;
   phone: string;

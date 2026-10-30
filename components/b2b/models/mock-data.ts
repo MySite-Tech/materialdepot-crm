@@ -5,7 +5,7 @@ import {
 } from './inbound';
 import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
-  type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
+  type EcReferral, type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
 } from './outreach';
 import type { RevenueCredit } from './credit';
 import type { RequirementVersion } from './requirement';
@@ -181,6 +181,7 @@ export interface OutreachLead {
   altRole?: string;
   contacts?: OutreachContact[];
   source?: OutreachSource;
+  ecReferral?: EcReferral;
   email?: string;
   city?: string;
   officeAddress?: string;

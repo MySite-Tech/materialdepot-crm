@@ -1,5 +1,5 @@
 export { B2B_FRESH_START } from './data/rows';
-export { fetchB2BData, fetchClients, fetchInboundBoard, fetchKamOrders, fetchOutreachLeads } from './data/reads';
+export { fetchB2BData, fetchClients, fetchInboundBoard, fetchInboundLinks, fetchKamOrders, fetchOutreachLeads } from './data/reads';
 export type { B2BData } from './data/reads';
 export { B2B_STATS_BRANCH, fetchB2BPipelineStats, istToday } from './stats/pipeline';
 export type { B2BPipelineStats, StatsBasis } from './stats/pipeline';
@@ -13,8 +13,8 @@ export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClient
 export type { CartLine, ClientOrderDetails, ClientOrderRow } from './orders/details';
 export { clientFromSeed, planClientSeed } from './leads/client-seed';
 export type { ClientSeedPlan } from './leads/client-seed';
-export { deleteB2BRow, upsertClient, upsertClients, upsertInboundLead, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
+export { deleteB2BRow, upsertClient, upsertClients, upsertInboundLead, upsertInboundLeads, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
 export { fetchTargets, saveTargets } from './stats/targets';
 export { uploadCheckInPhoto } from './data/check-in';
-export { fetchUnifiedLeads } from './leads/unified';
+export { fetchUnifiedLeads, inboundToUnified, outreachToUnified } from './leads/unified';
 export type { LeadSource, UnifiedLead, UnifiedStatus } from './leads/unified';

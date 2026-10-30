@@ -130,6 +130,16 @@ Four things the stub must get right, each of which has cost a debugging round:
 So a local CRM shows **real Supabase data and empty Django data** — say which
 half was stubbed when reporting anything from it.
 
+**Both modes at once, on the latest backend: `~/Projects/ss-local-stack/crm-local.sh
+up|down|status|reclone`** (its `README.md`, set up 2026-10-30). Real data on
+:3001 reads a GET-only copy of production B2B rows in local `crm_real` (backend
+:8802, refreshed by `refresh-crm-real.py`), with real Django and Kylas behind
+`crm-guard.mjs` on :8803, which refuses their writes. Dummy data on :3100 runs
+from the snapshot `~/Projects/crm-dummy` (`reclone` refreshes and reseeds it)
+against `crm_dummy` (:8801). Opening Inbound runs round robin with no click, so
+`in_rotation` stays false in `crm_real`. A 403 "Blocked" there is the guard.
+**Supabase is not guarded:** saves on its tabs are production writes.
+
 **For B2B, use `npm run dev:sandbox` instead** (`docs/b2b/sandbox.md`). It runs
 the same Django stub plus a stubbed FastAPI b2b-backend and Kylas, seeded with
 dummy leads across the whole Inbound → Outreach → KAM journey, on the same
@@ -181,8 +191,8 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups; the meeting check-in, built 2026-10-30) · `ec-directed` (leads sent to an EC, and the assisted revenue they bring) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
-| App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 15-tab permission gate |
+| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups; the meeting check-in, built 2026-10-30) · `ec-directed` (leads sent to an EC, and the assisted revenue they bring) · `ec-referral` (the store form that hands a walk-in B2B client to Outreach) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
+| App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 16-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
 | Retail overview + Order Lost + Category Revenue | `docs/dashboard/context.md` | `/crm/dashboard/`, reason buckets, the 3,000-row detail cap, the Core/Non-Core/Special registry and why its rows are stores |
@@ -376,16 +386,22 @@ has moved on since: these commits are on it but not on `main`,** so they are not
 deployed: Studio Space access read-only (`5402162`), per-person Targets
 (`aa86b0f`), the Leadership Board's "Set targets" replacing the Targets tab
 (`5af8bf2`), and Dashboard → **Overview** (`6309057`, `docs/b2b/overview.md`).
-They ship in **PR #30** (`studio-space-waitlist-2026-10-29`: the branch plus
-the Outreach waitlist fix, fast-forwarded into this branch on 2026-10-30),
-together with the Studio Space tab framing the console (`c7ea33e`) and signing
-the KAM in by their CRM phone (`e775d1d`), Inbound **+ Add lead** for leads
-outside Kylas (`c01406b`, `docs/b2b/inbound.md`) and Outreach meetings as a
-timeline (`ed23de6`). PR #30 needs **b2b-backend PR #14**
-(`GET /b2b/waitlist` and `GET /b2b/studio-access`, no migration) and **PR #15**
-(`studio-staff-handoff`, migration 0022). Without #14 the Waitlist KPI and the
-Numbers-by-firm pane read Unknown. Without #15 the console frame shows Studio
-Space's own sign-in page. Check `git log origin/main..HEAD` before claiming anything is live.
+They ship in **PR #32** (this branch, supersedes #30, which is fully inside it
+and can be closed). PR #32 needs **b2b-backend, merged in this order: #15, then
+#16** (migrations 0022 and 0023; #16 also needs `MD_SNAPSHOT_API_KEY` on the
+deployment). **#16 must first carry the conflict fix from local branch
+`local-crm-latest` (`6e5d037`, a fast-forward of its branch); #14 is then inside
+#16 and closes unmerged.** Merging #14 before #15 conflicts in `b2b_crm.py`,
+which GitHub only shows once one lands. Without #14's code the Waitlist KPI and
+Numbers-by-firm read Unknown. Without #15 the console frame shows Studio Space's
+own sign-in page. Without #16 a held meeting cannot be saved. Check `git log origin/main..HEAD` before claiming anything is live.
+**PR #32 (2026-10-30) supersedes #30** and carries everything on this branch. On
+2026-10-31 the branch gained the EC B2B Referral tab (`docs/b2b/ec-referral.md`),
+the shared assign bar (team, then One person or Round robin, `docs/b2b/leads.md`)
+and the no-reject rule for moved firms (`docs/b2b/kam.md`). None of those needs a
+new backend migration, and they are not live until #32 merges. **The tab reaches
+nobody until `crm.ec_b2b_referral` is ticked under Admin > Users**, because nearly
+every account has a permission list.
 **The tech team merges, not a session**, unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart. While `npm run dev:sandbox` is
@@ -599,6 +615,11 @@ for it.
   than after being seen to break, because the trigger is not predictable. The
   quick check is to render the panel and grep its `innerText` for a digit jammed
   against a word.
+
+- **Assignment has one shape in B2B (2026-10-31).** `ui/assign-bar.tsx`: team
+  first, then One person or Round robin over a chosen set. Bulk takes only records
+  with no owner; an owned record moves only as the single selected row. Do not add
+  a second assign control. A team stays greyed out where no data path exists.
 
 - **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
   removed it from Client Database, Leads and Inbound for every role, admins

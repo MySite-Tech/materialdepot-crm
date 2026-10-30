@@ -128,10 +128,12 @@ a focus aid, not confidentiality (same caveat as Inbound).
 
 ### Lead sources
 
-`Inbound | EC referral | Dormant form | Own research`. "Dormant form" is the
+`Inbound | EC B2B Referral | EC referral | Dormant form | Own research`.
+**EC B2B Referral** comes only from the store form (`ec-referral.md`) and cannot
+be picked in + New lead. "Dormant form" is the
 user's "existing forms that are inactive": there is no integration for those
 forms, so a BM enters each one by hand with `Source` set.
-Inbound and EC referral are the two the **coverage** KPI is measured on.
+Inbound and both EC sources are what the **coverage** KPI is measured on.
 
 **Inbound → Outreach** (`intake/`): since 2026-10-29 the pool is **only the
 inbound leads an Inbound rep sent** with "Send to Outreach" (`sentToOutreach`, a
@@ -186,7 +188,11 @@ and the Inbound pool.
   is one `POST /rows/bulk` through `saveMany`, not one write per lead. That
   endpoint ships with b2b-backend `b2b-crm-extra-and-team`, as `createMany`
   already needed.
-- **Round robin skips people switched off for Outreach** (`rotationReps`, 2026-10-30).
+- **The assigner chooses who is in a round robin (2026-10-31).** `AssignBar` starts
+  from `rotationReps` and any active member can be ticked in or out, so the set is
+  per assignment. `AssignTarget` is `Rep | { among: Rep[] }`. "Assign all N
+  round-robin" uses the default set.
+- **Round robin skips people switched off for Outreach** by default (`rotationReps`, 2026-10-30).
   The BM picker still lists every active Outreach member. Before, every member
   was in the Outreach round robin, and the switch only existed on Inbound.
 - **Only managers assign.** `scope.isManager` gates the pool and the bulk bar.

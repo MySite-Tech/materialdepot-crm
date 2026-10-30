@@ -3,7 +3,7 @@
 **Covers:** `components/crm/** · lib/api/core/auth.ts · types/crm.ts`
 
 ## Purpose
-The app shell: login, session restore, and the tab permission gate that decides which of the 15 main tabs a role can see.
+The app shell: login, session restore, and the tab permission gate that decides which of the 16 main tabs a role can see.
 
 `remarksQuality` (2026-10-23) is the second tab whose slug is also enforced
 outside the browser — Django checks `crm.remarks_quality` on its endpoints and
@@ -98,6 +98,11 @@ UI only, and hiding a tab hides nothing on the wire. The slug is exported as
 into `PERMISSION_TAB_ORDER` rather than written twice, because a rename in one
 place would leave the route denying everyone. A tab whose backend must enforce
 the same rule should follow that shape; see `docs/api-layer/context.md`.
+
+`crm.ec_b2b_referral` (`ecB2bReferral`, 2026-10-31) is enforced the same way, in
+`app/api/b2b/ec-referral/route.ts` through `canReferToB2B`. The slug and
+`EC_REFERRAL_ROLES` live in `lib/b2b/ec-referral/constants.ts`. Everyone with a
+permission list needs it ticked under Admin > Users. See `docs/b2b/ec-referral.md`.
 
 `siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
 which is fetched async — so that tab can appear a beat after the others. That is

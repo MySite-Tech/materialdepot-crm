@@ -224,6 +224,15 @@ from the **Waiting for sign-off** tile here (`panels/signoff.tsx`).
   book by leaving it unanswered. Rejecting clears `kam`. The firm then lands in
   Client DB's **No KAM** lens, with "X rejected: reason" under the KAM column.
   Client DB also gets an **Awaiting KAM** tile while any firm is pending.
+- **A firm moved from another KAM cannot be rejected (2026-10-31).** The user's
+  call, after a test showed that a rejected move left an active client with no KAM.
+  `assignFirm` stores the outgoing owner as `movedFrom` on the assignment entry,
+  from both the assign bar and the Firm page. With it set, only Accept is offered,
+  to anyone including managers, and `respondFirmHandover` ignores a rejection. If
+  the wrong KAM was picked, a manager moves the firm again. Re-moving a pending firm
+  keeps the original `movedFrom` (the pending KAM never owned it), and a firm that
+  had no KAM has none, so it can still be rejected. Entries pending from before
+  this have no `movedFrom` and stay rejectable.
 - **Round robin uses book size, not `fetchKamLoad`.** It picks the active,
   in-rotation KAM holding the fewest firms right now, ignoring the firms being
   moved, and ties go by name. `/kam-load` counts converted Inbound and Outreach

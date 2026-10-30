@@ -3,7 +3,7 @@
 import { InboundLead, OutreachLead } from '../../../models/mock-data';
 import { PoolLead, Rep, assignLead, intakePending, leadFromInbound, planRoundRobin, rejectIntake } from '../../../models/outreach/intake';
 import { currentMonth } from '../../../models/outreach/kpis';
-import { AssignTarget } from '../../../ui/assign-bar';
+import { AssignTarget, isRoundRobin } from '../../../ui/assign-bar';
 import { OutreachScope, SaveLead } from '../types';
 import { nowIso } from '../utils';
 import { InboundPool } from './inbound-pool';
@@ -11,7 +11,7 @@ import { PendingSection } from './pending';
 import { UnassignedPool } from './unassigned';
 import { useMemo, useState } from 'react';
 
-const RR_RULE = 'Round robin gives each lead to the active Outreach BM with the fewest leads assigned this month, Inbound and admin assignments together.';
+const RR_RULE = 'Gives each lead to whichever of these BMs has the fewest leads assigned this month, Inbound and admin assignments together.';
 
 export function Assignments({ leads, allLeads, pool, unassigned, scope, today, save, saveMany, createMany, onOpen }: {
   leads: OutreachLead[];
@@ -50,10 +50,10 @@ export function Assignments({ leads, allLeads, pool, unassigned, scope, today, s
 
   const assignPool = (list: OutreachLead[], to: AssignTarget) => {
     const at = nowIso();
-    const plan = to === 'round-robin'
-      ? planRoundRobin(list, scope.rotationReps, allLeads, month)
+    const plan = isRoundRobin(to)
+      ? planRoundRobin(list, to.among, allLeads, month)
       : list.map((item) => ({ item, rep: to }));
-    const how = to === 'round-robin' ? 'round-robin' : 'manual';
+    const how = isRoundRobin(to) ? 'round-robin' : 'manual';
     return run(() => saveMany(plan.map(({ item, rep }) => ({ before: item, after: assignLead(item, rep, scope.me.name, at, how) }))));
   };
 
@@ -70,7 +70,7 @@ export function Assignments({ leads, allLeads, pool, unassigned, scope, today, s
         onReject={(l, reason) => run(() => save(l, rejectIntake(l, reason, nowIso(), scope.me.name)))}
       />
       {assigner && (
-        <UnassignedPool leads={unassigned} reps={scope.reps} assigner={assigner} busy={busy} rrRule={RR_RULE}
+        <UnassignedPool leads={unassigned} reps={scope.reps} rotation={scope.rotationReps} assigner={assigner} busy={busy} rrRule={RR_RULE}
           onAssign={assignPool} onOpen={onOpen} />
       )}
       <InboundPool pool={pool} reps={scope.reps} me={scope.me} assigner={assigner} busy={busy}

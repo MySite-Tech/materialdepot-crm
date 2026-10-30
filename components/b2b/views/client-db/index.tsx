@@ -43,8 +43,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
-  const { kams } = useB2BReps(team);
-  const assigner = useFirmAssign(clients, kams, viewer.member?.name || viewer.name, (list) => {
+  const { kams, allKams } = useB2BReps(team);
+  const assigner = useFirmAssign(clients, viewer.member?.name || viewer.name, (list) => {
     const byId = new Map(list.map((c) => [c.id, c]));
     setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
   });
@@ -267,9 +267,11 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             <AssignBar
               count={assigner.picked.size}
               noun="firm"
-              reps={kams}
+              teams={{ kam: { reps: allKams, rotation: kams } }}
               busy={assigner.busy}
-              rule="Round robin shares out only the selected firms with no KAM, each to the active, in-rotation KAM holding the fewest. Firms that have a KAM stay put. The KAM must accept or reject."
+              rule="Bulk assignment takes only firms with no KAM, and round robin gives each to whichever of these people holds the fewest. To move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to. A firm moved from another KAM can only be accepted."
+              total={rows.length}
+              onPickAll={() => assigner.pickAll(rows.map((r) => r.client.id))}
               onAssign={assigner.assign}
               onClear={assigner.clear}
             />

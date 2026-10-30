@@ -27,6 +27,8 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
 | [`ec-directed.md`](ec-directed.md) | EC Directed (2026-10-30): any team sends a client to an EC, kept as `kind='redirect'` EC visits; assisted revenue checked per redirect on click and saved, never added to a total | — |
+| Firm SPoCs | Four optional SPoCs on every firm and sales by SPoC (2026-10-31): [`client-db.md`](client-db.md) §Four SPoCs on every firm | — |
+| [`ec-referral.md`](ec-referral.md) | EC B2B Referral (2026-10-31): the top-level form store staff use to hand a walk-in B2B client to Outreach, its own route and slug, the duplicate check | 44 |
 | [`overview.md`](overview.md) | The Overview sub-tab (ex-Dashboard, rebuilt 2026-10-30): five sections, what was dropped and why, KAM's win rate vs a cumulative funnel, the validated team colours | 70 |
 | [`leadership.md`](leadership.md) | Leadership Board (managers) / My performance (everyone else): one KPI engine per team over a date range, per person and per day; who the people are; targets and what is not scored yet. Also Set targets: per-person overrides of the sheet's targets, the B2B target as their sum, and who gets credited for a call a manager logs | 182 |
 | [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (pushed, not merged): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 333 |
@@ -77,6 +79,7 @@ a new session knows what is live and what is being worked on.
   revenue target (`leadership.md`); Dashboard became **Overview**, with five
   sections and no duplicate panels (`overview.md`). These need a new PR to
   `main` to deploy.
+- **2026-10-31:** EC B2B Referral is a new top-level tab and Outreach source (`ec-referral.md`). The shared assign bar is now One person or Round robin over a chosen set of people, on Client Database, Outreach's pool and the Leads tab (`leads.md`).
 - **2026-10-30, evening (the user's second list):**
   - a meeting is checked in with a photo and an exact pin before it can be held, for Outreach and KAM (`kam.md` §A meeting starts with a check-in);
   - one person can be on several teams, with a round-robin switch per team (`leadership.md` §Who the people are);

@@ -92,7 +92,7 @@ branch `b2b-crm-extra-and-team`, pushed 2026-10-29) adds `b2b_team_member.is_adm
 `is_admin` reads as false. 0020 and 0021 are live since 2026-10-29.
 
 **Migration `0023_b2b_teams_and_ec_redirect`** (b2b-backend branch
-`b2b-team-ownership-checkin`, based on PR #15's `studio-staff-handoff` because
+`b2b-team-ownership-checkin` (merge #15 then #16; #14 goes inside #16, see `CLAUDE.md` §Git), based on PR #15's `studio-staff-handoff` because
 it chains after 0022):
 - It moves `b2b_team_member`'s key to `(phone, team)`, so one person can be on
   several teams.
@@ -124,7 +124,7 @@ and who changes it is still open. Each row names the doc with the detail.
 | 5 | `/crm/leads/` drops `branch` on some requests (likely when `bm=` is also sent) | A B2B-only rep's carts read as a retail branch's leads; the CRM shows an amber notice | `landmines.md` (the Leads-tab BM entry) |
 | 6 | `/crm/available-bms/?branch=` returns anyone linked to the branch, not people homed there | Nothing on screen (the CRM reconciles against the roster); wrong for any other caller | `weekly-funnel/context.md` |
 | 7 | Permission rows for `team_leader`, `asst_store_manager`, `cluster_head`, `area_manager` | Those rungs of the store ladder stay empty | `org-hierarchy/context.md` |
-| 8 | Per-phone orders in bulk with `orderPlacedAt` (`estimate.order_placed_time`) and the booked-at branch (`estimate.branch_id`), e.g. `b2b-bulk?include=orders` with an `echo` | The Firm page shows Created instead of a placement date; EC-directed revenue is checked per redirect on click and matched on the cart owner's branch | `b2b/ec-directed.md`, `b2b/client-db.md` §One enquiry |
+| 8 | Per-phone orders in bulk with `orderPlacedAt` (`estimate.order_placed_time`) and the booked-at branch (`estimate.branch_id`), e.g. `b2b-bulk?include=orders` with an `echo` | Sales by SPoC exists per firm only, split by Created, with no all-firms roll-up; the Firm page shows Created instead of a placement date; EC-directed revenue is checked per redirect on click and matched on the cart owner's branch | `b2b/ec-directed.md`, `b2b/client-db.md` §One enquiry |
 | 9 | A per-customer footfall read: `contacts=` on `/footfall-record/` returning `{phone, branch, visitedAt}` | EC redirects are marked Visited by hand | `b2b/ec-directed.md` |
 
 Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >

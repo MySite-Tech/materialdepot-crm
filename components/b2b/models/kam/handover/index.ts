@@ -29,17 +29,25 @@ export function firmHandoverState(c: ClientEntity, nowMs: number): FirmHandoverS
 
 export const firmHandoverPending = (c: ClientEntity): boolean => firmHandover(c)?.status === 'Pending';
 
-export function assignFirm(c: ClientEntity, rep: Rep, by: string, at: string, how: 'manual' | 'round-robin'): ClientEntity {
+export const canRejectFirm = (c: ClientEntity): boolean => !firmHandover(c)?.movedFrom;
+
+const heldBy = (c: ClientEntity): string | undefined => {
+  const h = firmHandover(c);
+  return h?.status === 'Pending' ? h.movedFrom : c.kam;
+};
+
+export function assignFirm(c: ClientEntity, rep: Rep, by: string, at: string, how: 'manual' | 'round-robin', reason?: string): ClientEntity {
   const entry: KamAssignment = {
     kam: rep.name, kamPhone: rep.phone, at, by, how, status: 'Pending',
-    reason: how === 'round-robin' ? 'Assigned round robin by an admin' : 'Assigned by an admin',
+    reason: reason ?? (how === 'round-robin' ? 'Assigned round robin by an admin' : 'Assigned by an admin'),
+    movedFrom: heldBy(c),
   };
   return { ...c, kam: rep.name, assignments: [...(c.assignments || []), entry] };
 }
 
 export function respondFirmHandover(c: ClientEntity, by: string, at: string, rejectReason?: string): ClientEntity {
   const h = firmHandover(c);
-  if (!h || h.status !== 'Pending') return c;
+  if (!h || h.status !== 'Pending' || (rejectReason && h.movedFrom)) return c;
   const answered: KamAssignment = rejectReason
     ? { ...h, status: 'Rejected', respondedAt: at, respondedBy: by, rejectReason }
     : { ...h, status: 'Accepted', respondedAt: at, respondedBy: by };

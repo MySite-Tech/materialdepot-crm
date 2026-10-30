@@ -1,6 +1,6 @@
 import { B2BLeadRow, MetaSpec, arr, str } from '../data/rows';
 import { Escalation } from '@/components/b2b/models/account-health';
-import { ClientContact, ClientEntity, ClientEntityType, ClientGst, ClientInteraction, ClientMergeRecord, ClientSource, KamAssignment, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
+import { ClientContact, ClientEntity, ClientEntityType, ClientGst, ClientInteraction, ClientMergeRecord, ClientSource, SpocLogEntry, KamAssignment, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
 import { Segment } from '@/components/b2b/models/inbound';
 
 const CLIENT_STAGE = 'Client';
@@ -14,6 +14,7 @@ const CLIENT_META: MetaSpec<ClientEntity> = {
   clientTypeRaw: { col: 'client_type_raw', read: str },
   source:        { col: 'source',          read: (v) => (str(v) as ClientSource | undefined) || 'Existing' },
   assignments:   { col: 'assignments',     read: (v) => arr<KamAssignment>(v) },
+  spocLog:       { col: 'spoc_log',        read: (v) => arr<SpocLogEntry>(v) },
   remarks:       { col: 'remarks',         read: str },
   interactions:  { col: 'interactions',    read: (v) => arr<ClientInteraction>(v) },
   escalations:   { col: 'escalations',     read: (v) => arr<Escalation>(v) },

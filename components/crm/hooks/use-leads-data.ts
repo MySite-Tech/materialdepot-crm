@@ -48,7 +48,7 @@ export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, prio
 }) {
 useEffect(() => {
   if (!currentUser) return;
-  const needsBranches = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'appointmentTracker'].includes(mainTab);
+  const needsBranches = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'appointmentTracker', 'ecB2bReferral'].includes(mainTab);
   const needsUsers = effectiveTab === 'leads';
   if (!needsBranches && !needsUsers) return;
   let cancelled = false;

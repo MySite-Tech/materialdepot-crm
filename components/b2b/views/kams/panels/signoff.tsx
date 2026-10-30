@@ -1,7 +1,7 @@
 'use client';
 
 import { ClientEntity } from '../../../models/client';
-import { FIRM_HANDOVER_REJECT_REASONS, KAM_LENS, KAM_LIST_PAGE_SIZE, firmHandover, firmHandoverState } from '../../../models/kam';
+import { FIRM_HANDOVER_REJECT_REASONS, KAM_LENS, KAM_LIST_PAGE_SIZE, canRejectFirm, firmHandover, firmHandoverState } from '../../../models/kam';
 import { fmtL } from '../../../models/mock-data';
 import { HANDOVER_TAT_HOURS, hoursSince } from '../../../models/outreach/handover';
 import { AssignedClientRow } from '../../../types/kam';
@@ -44,9 +44,10 @@ function Respond({ client, canAct, onRespond }: {
       ) : (
         <div className="flex items-center gap-1.5">
           <button disabled={busy} onClick={() => go()} className={`${btn} bg-[#0F766E] text-white`}>Accept</button>
-          <button disabled={busy} onClick={() => setRejecting(true)} className={`${btn} border border-gray-200 text-gray-600`}>Reject…</button>
+          {canRejectFirm(client) && <button disabled={busy} onClick={() => setRejecting(true)} className={`${btn} border border-gray-200 text-gray-600`}>Reject…</button>}
         </div>
       )}
+      {!canRejectFirm(client) && <span className="text-[10.5px] text-gray-400">Moved from {firmHandover(client)?.movedFrom}, so it cannot be rejected</span>}
       {error && <span className="text-[10.5px] text-red-700">Not saved: {error}</span>}
     </div>
   );

@@ -4,7 +4,7 @@ import { ContactsEditor } from '../../drawers/outreach/cards/client';
 import { RoleOptions } from '../../ui/outreach-chips';
 import { OutreachLead } from '../../models/mock-data';
 import {
-  COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT,
+  COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_ENTRY_SOURCES, OUTREACH_LOST_REASONS, OUTREACH_SOURCE_HINT,
   OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachContact, OutreachMeeting, OutreachSource, OutreachStatus, SEGMENTS,
   SELECTIONS, Segment, Selection, TEAM_SIZES, TeamSize, istToday, outreachGateErrors,
 } from '../../models/outreach';
@@ -300,7 +300,7 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
             )}
             <Field label="Source" hint={OUTREACH_SOURCE_HINT[source]}>
               <select value={source} onChange={(e) => setSource(e.target.value as OutreachSource)} className={inputCls}>
-                {OUTREACH_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {OUTREACH_ENTRY_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
             <Field label="BM (owner)" hint={assigner ? (toPool ? 'Goes to the unassigned pool under Assignments' : assignedByAdmin ? 'They must accept it before it counts as theirs' : undefined) : undefined}>

@@ -4,6 +4,7 @@ import type { ReadonlyURLSearchParams } from 'next/navigation';
 
 import AppointmentTrackerClient from '../../appointment-tracker/tracker';
 import B2BSalesCRM from '../../b2b/views/b2-b-sales-crm';
+import EcB2bReferral from '../../b2b/views/ec-referral';
 import Dashboard from '../../dashboard/overview';
 import FootfallTab from '../../footfall/footfall-tab';
 import NPSDashboard from '../../nps/dashboard';
@@ -63,6 +64,10 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
         role={currentUser?.role ?? ''}
         allowedBranches={userAllowedBranches}
       />
+    )}
+    
+    {effectiveTab === 'ecB2bReferral' && (
+      <EcB2bReferral currentUser={currentUser} branches={branchesLoaded ? branches : undefined} />
     )}
     
     {effectiveTab === 'nps' && (

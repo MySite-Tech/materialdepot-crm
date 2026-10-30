@@ -9,9 +9,10 @@ import { useEffect, useMemo, useState } from 'react';
 const PAGE_SIZE = 25;
 const th = 'px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap';
 
-export function UnassignedPool({ leads, reps, assigner, busy, rrRule, onAssign, onOpen }: {
+export function UnassignedPool({ leads, reps, rotation, assigner, busy, rrRule, onAssign, onOpen }: {
   leads: OutreachLead[];
   reps: Rep[];
+  rotation: Rep[];
   assigner: boolean;
   busy: boolean;
   rrRule: string;
@@ -46,13 +47,13 @@ export function UnassignedPool({ leads, reps, assigner, busy, rrRule, onAssign, 
         <span className="text-[11px] font-semibold text-gray-400">{leads.length}</span>
         <span className="text-[10.5px] text-gray-400 hidden sm:inline">Any source · no BM yet</span>
         {assigner && leads.length > 0 && !picked.size && (
-          <button disabled={busy || !reps.length} onClick={() => onAssign(leads, 'round-robin')}
+          <button disabled={busy || !reps.length} onClick={() => onAssign(leads, { among: rotation })}
             className="ml-auto px-2.5 py-1 text-[11px] font-semibold rounded-md bg-[#0F766E] text-white disabled:opacity-50">
             {busy ? 'Assigning…' : `Assign all ${leads.length} round-robin`}
           </button>
         )}
       </div>
-      {assigner && <AssignBar count={picked.size} noun="lead" reps={reps} busy={busy} rule={rrRule} onAssign={assign} onClear={() => setPicked(new Set())} />}
+      {assigner && <AssignBar count={picked.size} noun="lead" teams={{ outreach: { reps, rotation } }} busy={busy} rule={rrRule} onAssign={assign} onClear={() => setPicked(new Set())} />}
       {!leads.length ? <div className="py-6"><Empty>No unassigned lead. An admin can add one with + New lead and BM set to Unassigned.</Empty></div> : (
         <>
           <div className="overflow-x-auto">
@@ -67,7 +68,10 @@ export function UnassignedPool({ leads, reps, assigner, busy, rrRule, onAssign, 
                     {assigner && <td className="px-3 py-2"><input type="checkbox" checked={picked.has(l.id)} onChange={() => toggle(l.id)} aria-label={`Select ${l.company}`} /></td>}
                     <td className="px-3 py-2 font-semibold text-gray-900 max-w-[220px] truncate cursor-pointer hover:underline" onClick={() => onOpen(l.id)}>{l.company}</td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.contactPerson || '—'}</td>
-                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.source || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                      {l.source || '—'}
+                      {l.ecReferral && <div className="text-[10.5px] text-gray-400">{l.ecReferral.ec} · {l.ecReferral.by}</div>}
+                    </td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.segment || '—'}</td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.city || '—'}</td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDay(l.createdAt)}</td>

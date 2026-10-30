@@ -47,17 +47,22 @@ export const OUTREACH_STATUS_LABEL: Record<OutreachStatus, string> = {
 
 export const OUTREACH_OPEN_STATUSES: OutreachStatus[] = ['Yet to Meet', 'Follow up', 'Quote Share', 'PI Shared'];
 
-export const OUTREACH_SOURCES = ['Inbound', 'EC referral', 'Dormant form', 'Own research'] as const;
+export const EC_B2B_REFERRAL = 'EC B2B Referral';
+
+export const OUTREACH_SOURCES = ['Inbound', EC_B2B_REFERRAL, 'EC referral', 'Dormant form', 'Own research'] as const;
 export type OutreachSource = typeof OUTREACH_SOURCES[number];
+
+export const OUTREACH_ENTRY_SOURCES = OUTREACH_SOURCES.filter((s) => s !== EC_B2B_REFERRAL);
 
 export const OUTREACH_SOURCE_HINT: Record<OutreachSource, string> = {
   'Inbound':      'Handed over by the Inbound team for an in-person meeting',
+  [EC_B2B_REFERRAL]: 'Sent by EC staff through the EC B2B Referral form',
   'EC referral':  'Referred by an Experience Centre',
   'Dormant form': 'From an older lead form that is no longer worked',
   'Own research': 'Found by the BM — field visit, directory, Instagram',
 };
 
-export const COVERAGE_SOURCES: OutreachSource[] = ['Inbound', 'EC referral'];
+export const COVERAGE_SOURCES: OutreachSource[] = ['Inbound', EC_B2B_REFERRAL, 'EC referral'];
 
 export const TEAM_SIZES = ['1', '2-5', '6-15', '16-50', '50+'] as const;
 export type TeamSize = typeof TEAM_SIZES[number];
@@ -106,6 +111,13 @@ export interface OutreachIntake {
   rejectedAt?: string;
   rejectReason?: string;
   rejectedBy?: string;
+}
+
+export interface EcReferral {
+  ec: string;
+  by: string;
+  byPhone: string;
+  at: string;
 }
 
 export type HandoverStatus = 'Pending' | 'Accepted' | 'Rejected';

@@ -36,7 +36,7 @@ Log in with the phone and any four-digit OTP. Any other phone logs in as a local
 
 Kylas also has Hardi (`81181`, the intake owner), and Django has three EC BMs
 (`9000000031–33`, JP Nagar / Whitefield / HSR) for the BM pickers and deal
-tickets. `/crm/user-profile/` and `/user-organisation/` answer from the same
+tickets. They can log in too, which is how to try the EC B2B Referral form. `/crm/user-profile/` and `/user-organisation/` answer from the same
 list, which is what keeps the tab gate and `requireCaller` in agreement.
 
 ## What is stubbed, and what is still real

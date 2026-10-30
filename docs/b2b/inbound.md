@@ -301,7 +301,8 @@ The drawer's first card, **People on this client**, shows four SPoCs, derived by
 
 The Outreach row comes from the cached all-rows read, so it costs no extra
 request when the board has just loaded. The backend's `client_master` has
-`inbound_spoc`/`outbound_spoc`/`kam_spoc` columns. Nothing writes them yet.
+`inbound_spoc`/`outbound_spoc`/`kam_spoc` columns. Nothing writes them yet. The
+firm-level version of this card is `client-db.md` §Four SPoCs on every firm.
 
 ### Enq ID is picked from the client's deal tickets
 

@@ -4,7 +4,7 @@ import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
 import { RevenueCredit } from '@/components/b2b/models/credit';
 import { RequirementVersion } from '@/components/b2b/models/requirement';
 import {
-  CompanyType, JourneyEvent, OUTREACH_SOURCES, OutreachContact, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
+  CompanyType, EcReferral, JourneyEvent, OUTREACH_SOURCES, OutreachContact, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
   TEAM_SIZES, TeamSize, normalizeOutreachStatus,
 } from '@/components/b2b/models/outreach';
 
@@ -48,6 +48,7 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   altRole:            { col: 'alt_role',         read: str },
   contacts:           { col: 'contacts',         read: (v) => arr<OutreachContact>(v) },
   source:             { col: 'source',           read: (v) => oneOf<OutreachSource>(OUTREACH_SOURCES)(v) },
+  ecReferral:         { col: 'ec_referral',      read: (v) => obj<EcReferral>(v) },
   email:              { col: 'email',            read: str },
   city:               { col: 'city',             read: str },
   officeAddress:      { col: 'office_address',   read: str },
