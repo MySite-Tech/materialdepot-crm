@@ -1,7 +1,7 @@
 'use client';
 
-import { fmtPhone } from '../../../drawers/firm/utils';
-import { ClientEntity, STUDIO_ACCESS, StudioLogins, normalizeContactNumber, studioAccessOf, studioLoginOf } from '../../../models/client';
+import { fmtPhone } from '../../../../drawers/firm/utils';
+import { ClientEntity, STUDIO_ACCESS, StudioLogins, normalizeContactNumber, studioAccessOf, studioLoginOf } from '../../../../models/client';
 import { StudioRow } from '../types';
 
 export function StudioTable({ rows, logins, onOpen }: { rows: StudioRow[]; logins: StudioLogins; onOpen: (c: ClientEntity) => void }) {
