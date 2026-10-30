@@ -54,12 +54,13 @@ export const ACTIVE_DAYS = 30;
 export const INACTIVE_DAYS = 60;
 
 export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {
-  colors: { Active: '#22C55E', 'Inactive 1 month': '#F59E0B', Inactive: '#9CA3AF', Unknown: '#3B82F6' },
+  colors: { Active: '#22C55E', 'Inactive 1 month': '#F59E0B', Inactive: '#9CA3AF', 'Never ordered': '#D1D5DB', Unknown: '#3B82F6' },
   hint: {
     Active: `Ordered within the last ${ACTIVE_DAYS} days`,
     'Inactive 1 month': `Last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago`,
-    Inactive: `No order in the last ${INACTIVE_DAYS} days`,
-    Unknown: 'Order dates could not be read for this client',
+    Inactive: `Last order more than ${INACTIVE_DAYS} days ago`,
+    'Never ordered': 'No order on record for any of the firm’s numbers',
+    Unknown: 'Order dates could not be read, or the last order date is after today',
   },
 };
 

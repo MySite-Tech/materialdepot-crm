@@ -184,10 +184,11 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       case 'overdue':  return { value: String(n), sub: 'date passed' };
       case 'due':      return { value: String(n), sub: 'for today' };
       case 'nofollow': return { value: String(n), sub: 'none booked' };
-      case 'assigned': return { value: String(n), sub: unread ? `${unread} orders unread` : 'firms in scope', warn: !!unread };
-      case 'active':   return { value: String(n), sub: unread ? `${unread} not read yet` : `last ${ACTIVE_DAYS} days`, warn: !!unread };
+      case 'assigned': return { value: String(n), sub: unread ? `${unread} status unknown` : 'firms in scope', warn: !!unread };
+      case 'active':   return { value: String(n), sub: unread ? `${unread} status unknown` : `last ${ACTIVE_DAYS} days`, warn: !!unread };
       case 'lapsing':  return { value: String(n), sub: `${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
-      case 'inactive': return { value: String(n), sub: `${INACTIVE_DAYS}+ days or never` };
+      case 'inactive': return { value: String(n), sub: `over ${INACTIVE_DAYS} days ago` };
+      case 'never':    return { value: String(n), sub: 'no order on record' };
       case 'pipeline': return { value: fmtL(pipeline.pipeline), sub: pipeline.estimatedPipeline ? `${fmtL(pipeline.estimatedPipeline)} est.` : `${n} at Quote/PI` };
       default:         return { value: String(n), sub: 'not closed' };
     }

@@ -81,7 +81,7 @@ export function ListHead({ lens, shown, total, revenue, unread, f, search, onLen
           <span className="text-[12px] text-gray-500 tabular-nums">
             {shown}{shown !== total && ` of ${total}`} firm{total === 1 ? '' : 's'}
             {revenue > 0 && <> · <span className="font-semibold text-gray-700">{fmtShortINR(revenue)}</span> lifetime</>}
-            {unread > 0 && <span className="text-blue-500"> · {unread} unread</span>}
+            {unread > 0 && <span className="text-blue-500"> · {unread} status unknown</span>}
           </span>
         </div>
         <p className="text-[11px] text-gray-400 mt-0.5">{meta.rule}</p>

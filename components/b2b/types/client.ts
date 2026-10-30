@@ -133,7 +133,7 @@ export interface ClientOrderMetrics {
   dateState: 'ok' | 'pending' | 'unavailable' | 'no-phone' | 'no-orders';
 }
 
-export type ClientStatus = 'Active' | 'Inactive 1 month' | 'Inactive' | 'Unknown';
+export type ClientStatus = 'Active' | 'Inactive 1 month' | 'Inactive' | 'Never ordered' | 'Unknown';
 
 export interface StatusScale {
   colors: Record<string, string>;

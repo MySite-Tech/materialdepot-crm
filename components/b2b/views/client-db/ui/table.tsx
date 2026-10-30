@@ -144,8 +144,8 @@ export function ClientTable({ rows, today, sort, onSort, onOpen, picked, onPick,
                         <div className="text-gray-700"><Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} /></div>
                         {since && (
                           <div
-                            className={`text-[10.5px] mt-0.5 ${since === 'future date' ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}
-                            title={since === 'future date' ? 'This date is after today, so a ticket is probably mis-dated in Django. It still counts the firm as Active.' : undefined}
+                            className={`text-[10.5px] mt-0.5 ${since === 'future date, not counted' ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}
+                            title={since === 'future date, not counted' ? 'Django served a last order date after today, which cannot be a real order. The firm reads Status unknown until Django serves the real order placed date.' : undefined}
                           >
                             {since}
                           </div>
