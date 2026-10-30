@@ -269,10 +269,16 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
               noun="firm"
               reps={kams}
               busy={assigner.busy}
-              rule="Round robin gives each firm to the active, in-rotation KAM holding the fewest firms. The KAM must accept or reject it."
+              rule="Round robin shares out only the selected firms with no KAM, each to the active, in-rotation KAM holding the fewest. Firms that have a KAM stay put. The KAM must accept or reject."
               onAssign={assigner.assign}
               onClear={assigner.clear}
             />
+          )}
+          {assigner.note && (
+            <div className="px-4 py-2 text-[12px] text-teal-900 bg-teal-50 border-b border-teal-100 flex items-start justify-between gap-3">
+              <span>{assigner.note}</span>
+              <button onClick={() => assigner.setNote(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
+            </div>
           )}
           {assigner.error && (
             <div className="px-4 py-2 text-[12px] text-red-700 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">

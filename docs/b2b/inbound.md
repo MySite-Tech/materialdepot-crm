@@ -141,13 +141,13 @@ rows, and lenses still overlap on purpose (a sent lead is open *and* an outcome)
   `New` with **no** call.
 - Tiles show "…" while loading and "Unknown" on a failed load, never 0, as before.
 
-### The working day ends at 5 pm (2026-10-29)
+### The working day ends at 7 pm (5 pm until 2026-10-30)
 
 `inboundWorkDay(leadCreatedAt)` (`utils/inbound.ts`) is the day a lead counts
-for: its IST date, or the **next working day** if it arrived at or after 17:00,
+for: its IST date, or the **next working day** if it arrived at or after 19:00 (`INBOUND_DAY_CUTOFF_HOUR`; the user moved it from 17:00 on 2026-10-30),
 or on a non-working day. Working days are Mon–Sat, six a week, confirmed by the user on 2026-10-29 (`NON_WORKING_WEEKDAYS`). An RNR on Saturday books Monday. A
 lead that lands at 8 pm is tomorrow's first call: it is not in today's First
-call (the tile's subtitle says "+N after 5 pm, for tomorrow"), and Arrived today
+call (the tile's subtitle says "+N after 7 pm, for tomorrow"), and Arrived today
 uses the same day. Kylas timestamps are untouched; only the counting moves.
 Public holidays are not modelled.
 
@@ -180,6 +180,19 @@ written to Kylas**.
   never mix. Calls the CRM already wrote to Kylas before this change remain
   there under the key owner's name.
 
+
+- **No follow-up time anywhere (2026-10-30).** The user said the time of a
+  call is not needed, so the optional time beside every next-follow-up date is
+  gone: the call log, the Move modal, the Outreach status card and the meeting
+  editor. `followUpTime` is out of the types and both mappers, so
+  `follow_up_time` is no longer read or written. Meeting times stay, because a
+  meeting is an appointment.
+- **Each call stores the caller's phone (`byPhone`, 2026-10-30)** as well as
+  the name. Leadership credits a call by that phone first (`leadership.md`).
+- **Reassigning a lead in the drawer saves the last saved copy** (`saved.current`),
+  not the `lead` prop the drawer opened with. The prop has none of the calls
+  logged since it opened, and the whole row is replaced on write, so reassigning
+  a CRM-added lead used to delete those calls (`docs/landmines.md`).
 ### Ready to close (2026-10-29)
 
 `closureReadiness` decides when a lead may be closed for lack of response:
@@ -232,14 +245,34 @@ drawer opens. They are stored as `primary_contact_*` and `additional_contacts`,
 because Kylas's `contact_name` is a snapshot that every sync overwrites. Office
 location is no longer an enrichment field; primary person and City are.
 
+**Each person has a designation (2026-10-30).** The primary person and every
+additional person at the firm carry a designation (`primaryContactRole`, and
+`role` on each `additionalContacts` entry), from the same suggestion list
+Outreach uses. Both go across to Outreach on hand-off. Before this the extra
+people went across with an empty role, which Outreach's capture gate then
+refused to save. A Closed lead's revenue can be credited to someone other than
+the owner by a manager (`leadership.md`). A lead can be sent to an EC from its
+drawer (`ec-directed.md`).
+
+**An End Consumer is not asked for firm fields (2026-10-30).** Company name,
+primary person, GST and segment carry `firmOnly` in `ENRICHMENT_CHECKS`, and
+`enrichmentGaps` skips them when the client type is End Consumer. So a home
+owner no longer sits in Needs enrichment, and the drawer header counts 6
+fields for them, not 10. The CRM-adherence KPI (`performance/teams/inbound.ts`)
+waives firm name and segment by the same `isEndConsumer`. Contractor, Others
+and the rest are asked for everything. A lead with no client type yet is asked
+for everything too, because client type is itself the first gap.
+
 **Inbound pushes to Outreach; Outreach does not just read a pool.** The Outreach
 card sends an `outreachReferral`. It needs a **Connected** call first, plus a
 status other than New, Lost or Invalid. The form asks for the decision maker,
-the project, the preferred meeting date (time optional), the **meeting location**,
+the preferred meeting date (time optional), the **meeting location**,
 "agreed to meet", and a **summary for Outreach**. The summary is pre-filled from
 the Connected calls' notes. The meeting location replaced office location, which
 was being asked twice. Old referrals carry `note` instead of `summary`, and both
-readers fall back to it.
+readers fall back to it. **Active / upcoming project was dropped from this form
+on 2026-10-30** at the user's request. Old referrals still show theirs, and
+the Outreach brief prints it only when present.
 
 - **Test `sentToOutreach(l)` (`outreachReferral?.at`), never the object.** An
   `object`-kind meta field writes `{}` when empty and reads `{}` back.

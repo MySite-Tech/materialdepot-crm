@@ -7,6 +7,7 @@ import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
   type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
 } from './outreach';
+import type { RevenueCredit } from './credit';
 import type { RequirementVersion } from './requirement';
 
 type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
@@ -76,6 +77,7 @@ export interface InboundLead {
 
   companyName?: string;
   primaryContactName?: string;
+  primaryContactRole?: string;
   primaryContactPhone?: string;
   additionalContacts?: ContactPerson[];
   gstNumber?: string;
@@ -95,10 +97,10 @@ export interface InboundLead {
 
   statusChangedAt?: string;
   followUpDate?: string;
-  followUpTime?: string;
   enqId?: string;
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
+  revenueCredit?: RevenueCredit;
   lostReason?: string;
   invalidReason?: string;
   invalidNote?: string;
@@ -156,12 +158,12 @@ export interface OutreachLead {
 
   statusChangedAt?: string;
   followUpDate?: string;
-  followUpTime?: string;
   quoteSharedAt?: string;
   enqId?: string;
 
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
+  revenueCredit?: RevenueCredit;
   dealStatus?: string;
   expectedClosure?: string;
   lostReason?: string;

@@ -29,7 +29,7 @@ export function InboundCallsCard({ draft, calls, readiness, onClose }: {
         <div className="text-[12px]">
           <span className="text-gray-400">Next follow-up </span>
           {draft.followUpDate
-            ? <strong className={draft.followUpDate < today ? 'text-red-600' : 'text-gray-800'}>{fmtDay(draft.followUpDate)}{draft.followUpTime ? ` · ${draft.followUpTime}` : ''}</strong>
+            ? <strong className={draft.followUpDate < today ? 'text-red-600' : 'text-gray-800'}>{fmtDay(draft.followUpDate)}</strong>
             : <strong className="text-gray-500">not set</strong>}
           <span className="text-gray-400"> · set by the last call, with {draft.owner || 'the owner'}</span>
         </div>
@@ -74,7 +74,7 @@ export function InboundCallsCard({ draft, calls, readiness, onClose }: {
             <span className="text-[11px] font-bold text-gray-700">Connected call {attempts.length + 1}</span>
             <button onClick={calls.closeForm} className="text-gray-400 hover:text-gray-700 text-lg leading-none">×</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <Field label="Duration (minutes)" required>
               <input type="number" min={1} step={1} value={form.durationMin} onChange={(e) => calls.patchForm({ durationMin: e.target.value })}
                 className={error && !(Number(form.durationMin) > 0) ? errorInputCls : inputCls} />
@@ -82,9 +82,6 @@ export function InboundCallsCard({ draft, calls, readiness, onClose }: {
             <Field label="Next follow-up" required>
               <input type="date" min={today} value={form.followUpDate} onChange={(e) => calls.patchForm({ followUpDate: e.target.value })}
                 className={error && !form.followUpDate ? errorInputCls : inputCls} />
-            </Field>
-            <Field label="Time" hint="Optional">
-              <input type="time" value={form.followUpTime} onChange={(e) => calls.patchForm({ followUpTime: e.target.value })} className={inputCls} />
             </Field>
           </div>
           <Field label="What was discussed" required hint="Outreach and the KAM read this later — write it for them.">

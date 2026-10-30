@@ -20,7 +20,6 @@ export function MoveModal({
   onDone: (patch: Partial<InboundLead>) => void;
 }) {
   const [followUpDate, setFollowUpDate] = useState(lead.followUpDate || '');
-  const [followUpTime, setFollowUpTime] = useState(lead.followUpTime || '');
   const [enqId, setEnqId] = useState(lead.enqId || '');
   const [lostReason, setLostReason] = useState(lead.lostReason || '');
   const [invalidReason, setInvalidReason] = useState(lead.invalidReason || '');
@@ -42,7 +41,6 @@ export function MoveModal({
     onDone({
       stage: target,
       followUpDate: needsFollowUp ? followUpDate : lead.followUpDate,
-      followUpTime: needsFollowUp ? followUpTime : lead.followUpTime,
       enqId: needsEnq ? enqId.trim() : lead.enqId,
       lostReason: needsReason ? lostReason : lead.lostReason,
       invalidReason: needsInvalid ? invalidReason : lead.invalidReason,
@@ -75,9 +73,6 @@ export function MoveModal({
                   onChange={(e) => setFollowUpDate(e.target.value)}
                   className={touched && !followUpDate ? errorInputCls : inputCls}
                 />
-              </Field>
-              <Field label="Time" hint="Optional">
-                <input type="time" value={followUpTime} onChange={(e) => setFollowUpTime(e.target.value)} className={inputCls} />
               </Field>
             </div>
           )}

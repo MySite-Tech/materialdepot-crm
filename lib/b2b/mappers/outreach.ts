@@ -1,6 +1,7 @@
 import { B2BLeadRow, MetaSpec, arr, num, str } from '../data/rows';
 import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbound';
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
+import { RevenueCredit } from '@/components/b2b/models/credit';
 import { RequirementVersion } from '@/components/b2b/models/requirement';
 import {
   CompanyType, JourneyEvent, OUTREACH_SOURCES, OutreachContact, OutreachHandover, OutreachIntake, OutreachMeeting, OutreachSource,
@@ -29,7 +30,6 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   expectedOrderValue: { col: 'expected_order_value', read: num },
   statusChangedAt:    { col: 'status_changed_at', read: str },
   followUpDate:       { col: 'follow_up_date',   read: str },
-  followUpTime:       { col: 'follow_up_time',   read: str },
   quoteSharedAt:      { col: 'quote_shared_at',  read: str },
   enqId:              { col: 'enq_id',           read: str },
   orderValue:         { col: 'order_value',      read: num },
@@ -57,6 +57,7 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   newOnboarding:      { col: 'new_onboarding',   read: (v) => (typeof v === 'boolean' ? v : undefined) },
   intake:             { col: 'intake',           read: (v) => obj<OutreachIntake>(v) },
   handover:           { col: 'handover',         read: (v) => obj<OutreachHandover>(v) },
+  revenueCredit:      { col: 'revenue_credit',   read: (v) => obj<RevenueCredit>(v) },
   journey:            { col: 'journey',          read: (v) => arr<JourneyEvent>(v) },
 };
 

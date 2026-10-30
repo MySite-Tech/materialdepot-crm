@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchUsers } from '@/lib/api';
 import { fetchKylasUsers, saveTeamMember } from '@/lib/b2b/team';
-import { B2B_TEAMS } from '@/lib/b2b/team/constants';
+import { B2B_TEAM_LABEL, B2B_TEAMS } from '@/lib/b2b/team/constants';
 import type { B2BTeam, B2BTeamLoad, KylasUser, TeamMember, Viewer } from '@/lib/b2b/team/types';
 import { canUseB2B, rotationOrder } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
@@ -11,13 +11,15 @@ import type { AppUser } from '@/types/crm';
 import { MemberRow } from './ui/member-row';
 import { RotationPanel } from './ui/rotation-panel';
 
+const memberKey = (m: Pick<TeamMember, 'phone' | 'team'>) => `${m.phone}|${m.team}`;
+
 export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [kylasUsers, setKylasUsers] = useState<KylasUser[] | null>(null);
   const [pickPhone, setPickPhone] = useState('');
   const [pickTeam, setPickTeam] = useState<B2BTeam>('inbound');
-  const [busyPhone, setBusyPhone] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'warn' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -33,17 +35,25 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Could not load Kylas users' }));
   };
 
-  const memberPhones = useMemo(() => new Set(team.members.map((m) => m.phone)), [team.members]);
+  const onPickedTeam = useMemo(
+    () => new Set(team.members.filter((m) => m.team === pickTeam).map((m) => m.phone)),
+    [team.members, pickTeam],
+  );
   const candidates = useMemo(
     () => (users ?? [])
-      .filter((u) => u.active !== false && canUseB2B(u) && !memberPhones.has(normalisePhone(u.phone)))
+      .filter((u) => u.active !== false && canUseB2B(u) && !onPickedTeam.has(normalisePhone(u.phone)))
       .sort((a, b) => a.name.localeCompare(b.name)),
-    [users, memberPhones],
+    [users, onPickedTeam],
   );
+  const teamsOf = useMemo(() => {
+    const out = new Map<string, B2BTeam[]>();
+    for (const m of team.members) if (m.active) out.set(m.phone, [...(out.get(m.phone) || []), m.team]);
+    return out;
+  }, [team.members]);
   const rotationSize = useMemo(() => rotationOrder(team.members).length, [team.members]);
 
   const save = (m: Pick<TeamMember, 'phone' | 'name' | 'team' | 'inRotation' | 'active'> & { kylasUserId?: number | null; isAdmin?: boolean }) => {
-    setBusyPhone(m.phone);
+    setBusyKey(memberKey(m));
     setNotice(null);
     saveTeamMember(m)
       .then((r) => {
@@ -51,7 +61,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
         team.reload();
       })
       .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Save failed' }))
-      .finally(() => setBusyPhone(null));
+      .finally(() => setBusyKey(null));
   };
 
   const add = () => {
@@ -66,7 +76,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       <div>
         <h2 className="text-[18px] font-bold text-gray-900">B2B team</h2>
         <p className="text-[12.5px] text-gray-500 mt-0.5">
-          Who is on Inbound, Outreach and KAM. Each person sees their own leads and accounts. Admins, B2B managers and anyone marked B2B admin here see everyone.
+          Who is on Inbound, Outreach and KAM. One person can be on several teams; add them once per team, and switch each team&apos;s round robin on or off separately.
+          Each person sees their own leads and accounts. Admins, B2B managers and anyone marked B2B admin here see everyone.
           People are added from the existing CRM users. Their Kylas user is found by phone number.
         </p>
       </div>
@@ -93,24 +104,25 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
             disabled={!users || team.tableMissing}
             className="border border-gray-200 rounded px-2 py-1.5 text-[13px] font-normal normal-case tracking-normal text-gray-800"
           >
-            <option value="">{users ? `${candidates.length} CRM users with B2B access` : usersError ? 'Could not load CRM users' : 'Loading CRM users…'}</option>
-            {candidates.map((u) => (
-              <option key={u.id} value={normalisePhone(u.phone)}>{u.name} · {u.role}</option>
-            ))}
+            <option value="">{users ? `${candidates.length} CRM users not on ${B2B_TEAM_LABEL[pickTeam]}` : usersError ? 'Could not load CRM users' : 'Loading CRM users…'}</option>
+            {candidates.map((u) => {
+              const on = teamsOf.get(normalisePhone(u.phone));
+              return <option key={u.id} value={normalisePhone(u.phone)}>{u.name} · {u.role}{on ? ` · on ${on.map((t) => B2B_TEAM_LABEL[t]).join(', ')}` : ''}</option>;
+            })}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
           Team
           <select
             value={pickTeam}
-            onChange={(e) => setPickTeam(e.target.value as B2BTeam)}
+            onChange={(e) => { setPickTeam(e.target.value as B2BTeam); setPickPhone(''); }}
             className="border border-gray-200 rounded px-2 py-1.5 text-[13px] font-normal normal-case tracking-normal text-gray-800"
           >
             {B2B_TEAMS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
         </label>
         <button
-          disabled={!pickPhone || !!busyPhone}
+          disabled={!pickPhone || !!busyKey}
           onClick={add}
           className="px-4 py-1.5 text-[13px] font-semibold rounded bg-[#EAB308] text-[#1A1A1A] disabled:opacity-40"
         >
@@ -151,7 +163,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                       <MemberRow
                         key={m.phone}
                         member={m}
-                        busy={busyPhone === m.phone}
+                        otherTeams={(teamsOf.get(m.phone) || []).filter((x) => x !== m.team)}
+                        busy={busyKey === memberKey(m)}
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}
                         onChange={(patch) => save({ ...m, ...patch })}

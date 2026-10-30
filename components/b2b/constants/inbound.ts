@@ -121,7 +121,7 @@ export const READY_WINDOW_DAYS = 7;
 
 export const MIN_ATTEMPTS_BEFORE_CLOSE = 5;
 
-export const INBOUND_DAY_CUTOFF_HOUR = 17;
+export const INBOUND_DAY_CUTOFF_HOUR = 19;
 
 export const NON_WORKING_WEEKDAYS = [0];
 
@@ -144,20 +144,23 @@ export const PLACED_UNDER_SUBTITLE: Partial<Record<InboundStatus, string>> = {
   'Closed':    '§3.5 — captured on order won',
 };
 
-export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; filled: (l: EnrichmentInput) => boolean }[] = [
-  { key: 'companyName',        label: 'Company name',   filled: (l) => !!String(l.companyName || '').trim() },
-  { key: 'primaryContactName', label: 'Primary person', filled: (l) => !!String(l.primaryContactName || '').trim() && !!String(l.primaryContactPhone || '').trim() },
-  { key: 'gstNumber',          label: 'GST number',     filled: (l) => !!String(l.gstNumber || '').trim() },
-  { key: 'segment',            label: 'Segment',        filled: (l) => !!l.segment },
-  { key: 'clientType',         label: 'Client type',    filled: (l) => !!l.clientType },
-  { key: 'leadType',           label: 'Lead type',      filled: (l) => !!l.leadType },
-  { key: 'priority',           label: 'Priority',       filled: (l) => !!l.priority },
-  { key: 'selections',         label: 'Selection',      filled: (l) => !!(l.selections || []).length },
-  { key: 'expectedOrderValue', label: 'Expected value', filled: (l) => Number(l.expectedOrderValue || 0) > 0 },
-  { key: 'location',           label: 'City',           filled: (l) => !!l.location },
+export const isEndConsumer = (clientType: string | undefined) => clientType === 'End Consumer';
+
+export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; firmOnly?: true; filled: (l: EnrichmentInput) => boolean }[] = [
+  { key: 'companyName',        label: 'Company name',   firmOnly: true, filled: (l) => !!String(l.companyName || '').trim() },
+  { key: 'primaryContactName', label: 'Primary person', firmOnly: true, filled: (l) => !!String(l.primaryContactName || '').trim() && !!String(l.primaryContactPhone || '').trim() },
+  { key: 'gstNumber',          label: 'GST number',     firmOnly: true, filled: (l) => !!String(l.gstNumber || '').trim() },
+  { key: 'segment',            label: 'Segment',        firmOnly: true, filled: (l) => !!l.segment },
+  { key: 'clientType',         label: 'Client type',                   filled: (l) => !!l.clientType },
+  { key: 'leadType',           label: 'Lead type',                     filled: (l) => !!l.leadType },
+  { key: 'priority',           label: 'Priority',                      filled: (l) => !!l.priority },
+  { key: 'selections',         label: 'Selection',                     filled: (l) => !!(l.selections || []).length },
+  { key: 'expectedOrderValue', label: 'Expected value',                filled: (l) => Number(l.expectedOrderValue || 0) > 0 },
+  { key: 'location',           label: 'City',                          filled: (l) => !!l.location },
 ];
 
-export const ENRICHMENT_FIELD_COUNT = ENRICHMENT_CHECKS.length;
+export const enrichmentFieldCount = (clientType: string | undefined) =>
+  ENRICHMENT_CHECKS.filter((c) => !(isEndConsumer(clientType) && c.firmOnly)).length;
 
 export const FOLLOW_UP_LABEL: Record<FollowUpBucket, string> = {
   overdue:  'Overdue',

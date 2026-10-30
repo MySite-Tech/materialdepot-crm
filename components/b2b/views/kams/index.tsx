@@ -5,7 +5,7 @@ import { KamSignoffTable } from './panels/signoff';
 import { KamOrdersView } from './orders';
 import { KamOrderTable } from './orders/table';
 
-import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, contactNumbers, istToday, primaryContact } from '../../models/client';
+import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, InteractionType, contactNumbers, istToday, openCheckIn, primaryContact, withInteraction } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
 import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, respondFirmHandover, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
@@ -19,6 +19,8 @@ import { LensPills, LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
 import { HANDOVER_TAT_HOURS } from '../../models/outreach/handover';
+import { istDay } from '../../models/outreach/reminders';
+import { CheckInCapture } from '../../ui/check-in-capture';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -42,11 +44,12 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | KamOrderStatus>('all');
 
   const [drawerId, setDrawerId] = useState<string | null>(null);
-  const [loggingFor, setLoggingFor] = useState<string | null>(null);
+  const [loggingFor, setLoggingFor] = useState<{ id: string; type: InteractionType } | null>(null);
+  const [checkingInFor, setCheckingInFor] = useState<string | null>(null);
   const [orderModal, setOrderModal] = useState<{ order: KamOrder; isNew: boolean } | null>(null);
 
   const today = istToday();
-  const { live } = useB2BReps(team);
+  const { live, kams } = useB2BReps(team);
   const me = useMemo(() => ({ name: viewer.member?.name || viewer.name, phone: viewer.phone }), [viewer.member, viewer.name, viewer.phone]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const boardScroll = useDragAutoScroll<HTMLDivElement>();
@@ -208,7 +211,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const unlinkedOrders = useMemo(() => orders.filter((o) => !o.clientId).length, [orders]);
 
   const drawerRow = useMemo(() => rows.find((r) => r.client.id === drawerId) || null, [rows, drawerId]);
-  const loggingClient = useMemo(() => clients.find((c) => c.id === loggingFor) || null, [clients, loggingFor]);
+  const loggingClient = useMemo(() => clients.find((c) => c.id === loggingFor?.id) || null, [clients, loggingFor]);
+  const checkingInClient = useMemo(() => clients.find((c) => c.id === checkingInFor) || null, [clients, checkingInFor]);
 
   const saveClient = async (c: ClientEntity): Promise<string | null> => {
     const err = await upsertClient(c);
@@ -357,7 +361,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
           orders={orders.filter((o) => o.clientId === drawerRow.client.id)}
           today={today}
           onClose={() => setDrawerId(null)}
-          onLogInteraction={() => setLoggingFor(drawerRow.client.id)}
+          onLogInteraction={(type) => setLoggingFor({ id: drawerRow.client.id, type })}
+          onCheckIn={() => setCheckingInFor(drawerRow.client.id)}
           onSaveClient={saveClient}
           onOpenOrder={(o) => setOrderModal({ order: o, isNew: false })}
           onAddOrder={() => setOrderModal({ order: blankOrder(drawerRow.client), isNew: true })}
@@ -367,10 +372,27 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       {loggingClient && (
         <InteractionModal
           client={loggingClient}
-          kam={loggingClient.kam || (kamFilter !== 'all' ? kamFilter : DEFAULT_KAM)}
+          loggedBy={me.name}
           today={today}
+          open={openCheckIn(loggingClient.interactions)}
+          initialType={loggingFor?.type ?? 'Call'}
           onClose={() => setLoggingFor(null)}
-          onSave={(i) => saveClient({ ...loggingClient, interactions: [...(loggingClient.interactions || []), i] })}
+          onSave={(i) => saveClient({ ...loggingClient, interactions: withInteraction(loggingClient.interactions, i) })}
+        />
+      )}
+
+      {checkingInClient && (
+        <CheckInCapture
+          title={checkingInClient.company}
+          refId={`${checkingInClient.id}-meeting`}
+          by={me.name}
+          onClose={() => setCheckingInFor(null)}
+          onDone={(checkIn) => saveClient({
+            ...checkingInClient,
+            interactions: [...(checkingInClient.interactions || []), {
+              id: newB2BId('INT'), type: 'Meeting', date: istDay(checkIn.at), loggedBy: me.name, checkIn, createdAt: checkIn.at,
+            }],
+          })}
         />
       )}
 
@@ -381,6 +403,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
           clients={kamFilter === 'all' ? clients : scopedClients}
           kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : DEFAULT_KAM}
           actor={me.name}
+          creditPeople={kams}
+          canCredit={viewer.isManager}
           onClose={() => setOrderModal(null)}
           onSave={saveOrder}
         />

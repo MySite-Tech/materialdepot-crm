@@ -1,7 +1,7 @@
 import { OutreachLead } from '../mock-data';
 import { withRequirementHistory } from '../requirement';
 import {
-  FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings,
+  FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting,
 } from '.';
 import { normalisePhone } from '@/lib/org/utils';
 import { HANDOVER_TAT_HOURS, handoverState, hoursSince, isMobile, orderVerified } from './handover';
@@ -46,7 +46,7 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
   }
 
   const fu = String(after.followUpDate || '').slice(0, 10);
-  if (fu && fu !== String(before.followUpDate || '').slice(0, 10)) push('follow-up-set', `Next follow-up set for ${fu}${after.followUpTime ? ` ${after.followUpTime}` : ''}`);
+  if (fu && fu !== String(before.followUpDate || '').slice(0, 10)) push('follow-up-set', `Next follow-up set for ${fu}`);
   if ((after.requirementHistory || []).length > (before.requirementHistory || []).length) push('requirement-changed', `Requirement changed: ${String(after.requirement || '').trim() || 'cleared'}`);
   for (const n of (after.notes || []).slice((before.notes || []).length)) push('note-added', `Note: ${n.text}`);
   const known = new Set((before.contacts || []).map((c) => c.name.trim().toLowerCase()));
@@ -77,9 +77,18 @@ export const MET_WITH_FROM = '2026-10-29';
 export function meetingGaps(m: OutreachMeeting): string[] {
   if (m.status !== 'Completed') return [];
   return [
+    !m.checkIn && needsCheckIn(m.date) ? 'check-in' : '',
     !String(m.metWith || '').trim() && String(m.date || '') >= MET_WITH_FROM ? 'who you met' : '',
     !String(m.notes || '').trim() ? 'notes' : '',
   ].filter(Boolean);
+}
+
+export function nextMeetingBlocker(meetings: OutreachMeeting[] | undefined): string | null {
+  const open = openMeeting(meetings);
+  if (open) return `Meeting ${open.n} is still scheduled — mark it held or postponed first.`;
+  const unfinished = (meetings || []).find((m) => meetingGaps(m).length);
+  if (unfinished) return `Meeting ${unfinished.n} is marked held — add its ${meetingGaps(unfinished).join(' and ')} first.`;
+  return null;
 }
 
 const needsNextStep = (l: OutreachLead) => l.status !== 'Closed' && l.status !== 'Lost' && completedMeetings(l.meetings).length > 0

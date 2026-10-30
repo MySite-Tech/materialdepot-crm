@@ -8,8 +8,11 @@ import { MeetingEditor } from './editor';
 import { MeetingEntry } from './entry';
 import { gapLabel, meetingsNewestFirst, startsExpanded } from './utils';
 
-export function MeetingTimeline({ meetings, draft, set, patchMeeting, showGates, lastHeld, openLead, scheduledNext, followUpError, contactList }: {
+export function MeetingTimeline({ meetings, locked, stored, onCheckIn, draft, set, patchMeeting, showGates, lastHeld, openLead, scheduledNext, followUpError, contactList }: {
   meetings: OutreachMeeting[];
+  locked: Set<number>;
+  stored: Set<number>;
+  onCheckIn: (n: number) => void;
   draft: OutreachLead;
   set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
   patchMeeting: (n: number, patch: Partial<OutreachMeeting>) => void;
@@ -46,6 +49,8 @@ export function MeetingTimeline({ meetings, draft, set, patchMeeting, showGates,
               {open ? (
                 <MeetingEditor
                   m={m}
+                  locked={locked.has(m.n)}
+                  onCheckIn={stored.has(m.n) ? () => onCheckIn(m.n) : null}
                   draft={draft}
                   set={set}
                   patchMeeting={patch}

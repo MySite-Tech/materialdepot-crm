@@ -9,14 +9,18 @@ import { LostReasonSelect } from '../../../ui/lost-reason-select';
 import { Field } from '../ui';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { lookupEnqId } from '@/lib/b2b';
+import { CreditPicker } from '../../../ui/credit-picker';
+import { Creditable, creditOf } from '../../../models/credit';
 import { useState } from 'react';
 
-export function OrderModal({ order, isNew, clients, kam, actor, onClose, onSave }: {
+export function OrderModal({ order, isNew, clients, kam, actor, creditPeople, canCredit, onClose, onSave }: {
   order: KamOrder;
   isNew?: boolean;
   clients: ClientEntity[];
   kam: string;
   actor: string;
+  creditPeople: Creditable[];
+  canCredit: boolean;
   onClose: () => void;
   onSave: (o: KamOrder) => Promise<string | null>;
 }) {
@@ -202,6 +206,17 @@ export function OrderModal({ order, isNew, clients, kam, actor, onClose, onSave 
                 className={inputCls}
               />
             </Field>
+          )}
+
+          {draft.status === 'Closed' && (
+            <CreditPicker
+              owner={draft.kam}
+              credit={creditOf(draft.revenueCredit)}
+              people={creditPeople}
+              canEdit={canCredit}
+              actor={actor}
+              onChange={(c) => set('revenueCredit', c)}
+            />
           )}
 
           {!!errors.length && (

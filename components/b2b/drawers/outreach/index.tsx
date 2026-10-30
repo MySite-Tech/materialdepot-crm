@@ -16,8 +16,8 @@ import { nowIso } from './utils';
 import { LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
 import { dealIsOrder } from '../../models/client';
 import {
-  OutreachMeeting, Selection, WaitlistSignup, hasMet, istToday,
-  meetingsStalled, nextKamRoundRobin, nextMeetingNumber, openMeeting, outreachEnrichmentGaps, outreachGateErrors,
+  MeetingCheckIn, OutreachMeeting, Selection, WaitlistSignup, hasMet, istToday,
+  meetingsStalled, nextKamRoundRobin, nextMeetingNumber, outreachEnrichmentGaps, outreachGateErrors,
   outreachStatusPrompts,
 } from '../../models/outreach';
 import { isHandoverKam, respondToHandover, sameRep, sendHandover } from '../../models/outreach/handover';
@@ -27,6 +27,10 @@ import { outreachCaptureErrors } from '../../models/outreach/reminders';
 import { OutreachScope, SaveLead } from '../../views/outreach/types';
 import { EnqLookup, fetchKamLoad, lookupEnqId } from '@/lib/b2b';
 import { fetchLeadDeals } from '@/lib/api';
+import { CheckInCapture } from '../../ui/check-in-capture';
+import { CreditPicker } from '../../ui/credit-picker';
+import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
+import { creditOf } from '../../models/credit';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function OutreachDrawer({
@@ -120,8 +124,17 @@ export default function OutreachDrawer({
   }, [draft.enqId]);
 
   const meetings = draft.meetings || [];
-  const open = openMeeting(meetings);
   const exhausted = meetingsStalled(meetings);
+  const locked = useMemo(() => new Set((lead.meetings || []).filter((m) => m.status !== 'Scheduled').map((m) => m.n)), [lead.meetings]);
+  const stored = useMemo(() => new Set((lead.meetings || []).map((m) => m.n)), [lead.meetings]);
+  const [checkingIn, setCheckingIn] = useState<number | null>(null);
+  const recordCheckIn = async (n: number, c: MeetingCheckIn): Promise<string | null> => {
+    const after = { ...lead, meetings: (lead.meetings || []).map((m) => (m.n === n ? { ...m, checkIn: c, updatedAt: nowIso() } : m)) };
+    const err = await onSave(lead, after);
+    if (err) return `The check-in was not saved: ${err}`;
+    patchMeeting(n, { checkIn: c });
+    return null;
+  };
   const met = hasMet(meetings);
 
   const [scheduling, setScheduling] = useState(false);
@@ -236,18 +249,28 @@ export default function OutreachDrawer({
             onPickBm={(r) => setDraft((d) => (scope.isManager ? assignLead(d, r, scope.me.name, nowIso(), sameRep(r.name, scope.me.name) ? 'self' : 'manual') : { ...d, bm: r.name, bmPhone: r.phone }))}
           />
 
+          <RedirectToEc
+            firm={draft.company}
+            contactName={draft.contactPerson}
+            phones={uniquePhones([draft.phone, draft.altPhone, ...(draft.contacts || []).map((c) => c.phone)])}
+            sourceTeam="outreach"
+            leadRef={draft.id}
+          />
+
           <OutreachCompanyCard
             draft={draft}
             set={set}
             showGates={showGates}
             exhausted={exhausted}
+            locked={locked}
+            stored={stored}
+            onCheckIn={setCheckingIn}
             mArea={mArea}
             mDate={mDate}
             mError={mError}
             mOffice={mOffice}
             mTime={mTime}
             meetings={meetings}
-            open={open}
             patchMeeting={patchMeeting}
             scheduleMeeting={scheduleMeeting}
             scheduling={scheduling}
@@ -290,6 +313,17 @@ export default function OutreachDrawer({
             setDraft={setDraft}
           />
 
+          {draft.status === 'Closed' && (
+            <CreditPicker
+              owner={draft.bm}
+              credit={creditOf(draft.revenueCredit)}
+              people={scope.reps}
+              canEdit={scope.isManager}
+              actor={scope.me.name}
+              onChange={(c) => set('revenueCredit', c)}
+            />
+          )}
+
           <OutreachNotesCard addNote={addNote} draft={draft} noteText={noteText} setNoteText={setNoteText} />
 
           <OutreachDealsCard checkEnq={checkEnq} deals={deals} dealsFailed={dealsFailed} draft={draft} set={set} />
@@ -299,6 +333,15 @@ export default function OutreachDrawer({
 
         <OutreachFooter handleSave={handleSave} meetings={meetings} met={met} onClose={onClose} save={save} />
       </div>
+      {checkingIn != null && (
+        <CheckInCapture
+          title={`${draft.company || 'Meeting'} · meeting ${checkingIn}`}
+          refId={`${lead.id}-m${checkingIn}`}
+          by={scope.me.name}
+          onClose={() => setCheckingIn(null)}
+          onDone={(c) => recordCheckIn(checkingIn, c)}
+        />
+      )}
     </div>
   );
 }

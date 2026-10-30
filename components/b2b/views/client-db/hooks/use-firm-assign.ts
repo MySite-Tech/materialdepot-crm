@@ -11,6 +11,7 @@ export function useFirmAssign(clients: ClientEntity[], kams: Rep[], by: string, 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const toggle = useCallback((id: string) => setPicked((p) => {
     const n = new Set(p);
@@ -28,8 +29,14 @@ export function useFirmAssign(clients: ClientEntity[], kams: Rep[], by: string, 
   const clear = useCallback(() => setPicked(new Set()), []);
 
   const assign = async (to: AssignTarget) => {
-    const firms = clients.filter((c) => picked.has(c.id));
-    if (!firms.length) return;
+    const selected = clients.filter((c) => picked.has(c.id));
+    const firms = to === 'round-robin' ? selected.filter((c) => !c.kam) : selected;
+    const skipped = selected.length - firms.length;
+    setNote(null);
+    if (!firms.length) {
+      setError('Every selected firm already has a KAM. Round robin only shares out firms with no KAM — pick a name to move one.');
+      return;
+    }
     const at = new Date().toISOString();
     const how = to === 'round-robin' ? 'round-robin' : 'manual';
     const plan = to === 'round-robin' ? planFirmRoundRobin(firms, kams, clients) : firms.map((item) => ({ item, rep: to }));
@@ -44,7 +51,8 @@ export function useFirmAssign(clients: ClientEntity[], kams: Rep[], by: string, 
     }
     onSaved(next);
     setPicked(new Set());
+    if (skipped) setNote(`${firms.length} firm${firms.length === 1 ? '' : 's'} shared out. ${skipped} already had a KAM and stayed where they were.`);
   };
 
-  return { picked, toggle, togglePage, clear, assign, busy, error, setError };
+  return { picked, toggle, togglePage, clear, assign, busy, error, setError, note, setNote };
 }

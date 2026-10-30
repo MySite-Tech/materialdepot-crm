@@ -16,7 +16,7 @@ This module's detail is split by topic so a question costs one part, not the who
 
 | Part | Covers | Lines |
 |---|---|---|
-| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the one-tab lens tiles, the 5 pm work day, the call log and Ready to close, client details and SPoCs, Invalid as a status, Send to Outreach, the widened search, the Enq-ID resolve | 435 |
+| [`inbound.md`](inbound.md) | The PRD, the three systems that hold one lead, Kylas field names, stages and gates, the page-0 merge, the one-tab lens tiles, the 7 pm work day, the call log and Ready to close, client details and SPoCs, Invalid as a status, Send to Outreach, the widened search, the Enq-ID resolve | 435 |
 | [`outreach.md`](outreach.md) | The field half, meetings as an uncapped loop, KAM rotation; the 2026-10-28 rebuild — scope, Inbound pool, no bulk import, the capture gate (role, team size, people, who was met, next follow-up), journey log, reminders, conversion rules, KAM handover, Studio Space waitlist, KPIs with their rows and periods; the tile-lens page layout | 379 |
 | [`leads.md`](leads.md) | One row per lead, three states in one column | 49 |
 | [`client-db.md`](client-db.md) | One row per business; every order figure is derived; the shared Firm page and inline number/GST edits; the list's lens tiles, chips and per-lens sort; parent-company grouping and why name is never a merge key | 293 |
@@ -26,6 +26,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`partner-bridge.md`](partner-bridge.md) | **Design only, not built.** The Outreach→KAM handoff PRD against this repo, and the push contract that feeds the partner dashboard | 149 |
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
+| [`ec-directed.md`](ec-directed.md) | EC Directed (2026-10-30): any team sends a client to an EC, kept as `kind='redirect'` EC visits; assisted revenue checked per redirect on click and saved, never added to a total | — |
 | [`overview.md`](overview.md) | The Overview sub-tab (ex-Dashboard, rebuilt 2026-10-30): five sections, what was dropped and why, KAM's win rate vs a cumulative funnel, the validated team colours | 70 |
 | [`leadership.md`](leadership.md) | Leadership Board (managers) / My performance (everyone else): one KPI engine per team over a date range, per person and per day; who the people are; targets and what is not scored yet. Also Set targets: per-person overrides of the sheet's targets, the B2B target as their sum, and who gets credited for a call a manager logs | 182 |
 | [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (pushed, not merged): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 333 |
@@ -38,7 +39,7 @@ a new session knows what is live and what is being worked on.
 
 - **Inbound: one tab (2026-10-29, evening),** with three tile groups: Call
   today, Pipeline and Outcomes. One predicate (`lensMatches`) gives both a
-  tile's count and the list it opens. Leads after 5 pm count for the next
+  tile's count and the list it opens. Leads after 7 pm count for the next
   working day. RNR is one click and books the next working day. Calls and notes
   are the B2B team's own record, kept out of Kylas. Ready to close (5 RNRs in 7
   days, or 7 days without progress) gates the no-response Lost reasons. Inbound
@@ -76,9 +77,14 @@ a new session knows what is live and what is being worked on.
   revenue target (`leadership.md`); Dashboard became **Overview**, with five
   sections and no duplicate panels (`overview.md`). These need a new PR to
   `main` to deploy.
-- **KAM, still to build:** the location plus photo-in-uniform check-in before
-  every offline meeting, for Outreach and KAM. Decisions are in `kam.md` §Not
-  built yet.
+- **2026-10-30, evening (the user's second list):**
+  - a meeting is checked in with a photo and an exact pin before it can be held, for Outreach and KAM (`kam.md` §A meeting starts with a check-in);
+  - one person can be on several teams, with a round-robin switch per team (`leadership.md` §Who the people are);
+  - revenue goes to the owner at close unless a manager credits someone else;
+  - Client DB round robin takes only firms with no KAM;
+  - EC Directed is a new sub-tab (`ec-directed.md`);
+  - Inbound people carry a designation.
+  - These need b2b-backend migration 0023 and `/check-in-photo` (`docs/backends.md`).
 - **2026-10-29, evening (the user's eight-point list):**
   - every firm is on the 30/60-day status;
   - Client DB has no export for anyone;

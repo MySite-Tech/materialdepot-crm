@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from '@/lib/server/session';
 import { InputError, readMembers, reassignInboundLead, rotateInbound, TeamTableMissing } from '@/lib/server/b2b-team';
-import { canUseB2B, isB2BManager, memberForPhone } from '@/lib/b2b/team/utils';
+import { canUseB2B, isB2BManager, membershipsForPhone } from '@/lib/b2b/team/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
     }
     if (body.mode === 'reassign') {
       if (!isB2BManager(c)) {
-        const me = memberForPhone((await readMembers()).members, c.phone);
-        if (me?.team !== 'inbound' || !me.active) {
+        const mine = membershipsForPhone((await readMembers()).members, c.phone);
+        if (!mine.some((m) => m.team === 'inbound')) {
           return bad('Only the inbound team or a B2B manager can reassign inbound leads', 403);
         }
       }

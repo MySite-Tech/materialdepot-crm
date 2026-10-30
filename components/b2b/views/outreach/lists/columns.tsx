@@ -5,7 +5,8 @@ import { OUTREACH_OPEN_STATUSES, companyTypeLabel, meetingLocation, nextSchedule
 import { HANDOVER_STATE_COLOR, HANDOVER_STATE_LABEL, handoverState, orderVerified } from '../../../models/outreach/handover';
 import { Reminder, ReminderLevel } from '../../../models/outreach/reminders';
 import { Pill, fmtDay } from '../../../ui/inbound-chips';
-import { MeetingDots, OutreachStatusBadge } from '../../../ui/outreach-chips';
+import { MeetingDots, OutreachStatusBadge, WaitlistChip } from '../../../ui/outreach-chips';
+import { WaitlistIndex, waitlistFor } from '../../../models/outreach/kpis';
 import { LENS_STATUS } from '../constants';
 import { Lens, LensRow } from '../types';
 import { gapsFor } from '../utils';
@@ -63,7 +64,7 @@ function NextStep({ l, today }: { l: OutreachLead; today: string }) {
   }
   return (
     <div className="leading-tight">
-      <When date={useMeeting ? day(m!.date) : f} time={useMeeting ? m!.time : l.followUpTime} today={today} />
+      <When date={useMeeting ? day(m!.date) : f} time={useMeeting ? m!.time : undefined} today={today} />
       <div className="text-[10.5px] text-gray-400 whitespace-nowrap">{useMeeting ? `Meeting ${m!.n}` : 'Follow-up'}</div>
     </div>
   );
@@ -95,7 +96,7 @@ const value = (l: OutreachLead) => (l.orderValue
   ? <span className="font-mono text-gray-700 whitespace-nowrap">{fmtINR(l.orderValue)}</span>
   : l.expectedOrderValue ? <span className="font-mono text-gray-400 whitespace-nowrap" title="The BM's estimate">~{fmtINR(l.expectedOrderValue)}</span> : dash);
 
-export function columnsFor(lens: Lens, { today, nowMs, showBm }: { today: string; nowMs: number; showBm: boolean }): Col[] {
+export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { today: string; nowMs: number; showBm: boolean; waitlist: WaitlistIndex }): Col[] {
   const firm: Col = { head: 'Firm', cell: (r) => <Firm l={r.lead} /> };
   const stage: Col = { head: 'Stage', cell: (r) => <OutreachStatusBadge s={r.lead.status} /> };
   const meetings: Col = { head: 'Meetings', cell: (r) => <MeetingDots meetings={r.lead.meetings} /> };
@@ -105,6 +106,7 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm }: { today: string
     head: 'Handover',
     cell: (r) => { const hs = handoverState(r.lead, nowMs); return <Pill color={HANDOVER_STATE_COLOR[hs]}>{HANDOVER_STATE_LABEL[hs]}</Pill>; },
   };
+  const onWaitlist: Col = { head: 'Waitlist', cell: (r) => <WaitlistChip w={waitlistFor(r.lead, waitlist)} short /> };
   const converted: Col = { head: 'Converted', cell: (r) => muted(fmtDay(r.lead.convertedAt || r.lead.statusChangedAt)) };
 
   if (lens.startsWith('kpi:')) {
@@ -137,15 +139,15 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm }: { today: string
           head: 'Meeting',
           cell: (r) => {
             const m = (r.lead.meetings || []).find((x) => x.status === 'Scheduled' && day(x.date) === today);
-            return <div className="leading-tight"><div className="text-gray-700 whitespace-nowrap">Meeting {m?.n} of 4</div><div className="text-[10.5px] text-gray-400 truncate max-w-[200px]">{meetingLocation(m) || 'No location'}</div></div>;
+            return <div className="leading-tight"><div className="text-gray-700 whitespace-nowrap">Meeting {m?.n}</div><div className="text-[10.5px] text-gray-400 truncate max-w-[200px]">{meetingLocation(m) || 'No location'}</div></div>;
           },
         },
         stage, ...bm,
       ];
     case 'followups':
-      return [firm, { head: 'Follow-up', cell: (r) => <When date={day(r.lead.followUpDate)} time={r.lead.followUpTime} today={today} /> }, stage, meetings, ...bm];
+      return [firm, { head: 'Follow-up', cell: (r) => <When date={day(r.lead.followUpDate)} today={today} /> }, stage, meetings, ...bm];
     case 'handoff': case 'won':
-      return [firm, converted, { head: 'First order', cell: (r) => <FirstOrder l={r.lead} /> }, handover, { head: 'KAM', cell: (r) => muted(r.lead.handover?.kam || r.lead.kam) }, ...bm];
+      return [firm, converted, { head: 'First order', cell: (r) => <FirstOrder l={r.lead} /> }, handover, onWaitlist, { head: 'KAM', cell: (r) => muted(r.lead.handover?.kam || r.lead.kam) }, ...bm];
     case 'lost':
       return [firm, { head: 'Lost reason', cell: (r) => r.lead.lostReason || <span className="text-amber-600 text-[11px]">No reason recorded</span> }, meetings, { head: 'Lost on', cell: (r) => muted(fmtDay(r.lead.statusChangedAt)) }, ...bm];
     case 'quote': case 'pi':
@@ -170,7 +172,7 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm }: { today: string
       return [
         firm,
         ...(LENS_STATUS[lens as keyof typeof LENS_STATUS] ? [] : [stage]),
-        meetings, next,
+        meetings, next, onWaitlist,
         { head: 'Client type', cell: (r) => muted(companyTypeLabel(r.lead.companyType, r.lead.companyTypeOther)) },
         ...bm,
       ];

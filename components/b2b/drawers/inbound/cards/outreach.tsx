@@ -9,7 +9,6 @@ import { Field, GateErrors, SectionCard, errorInputCls, fmtDay, inputCls } from 
 
 interface Draft {
   decisionMaker: string;
-  project: string;
   meetingDate: string;
   meetingTime: string;
   meetingLocation: string;
@@ -17,12 +16,11 @@ interface Draft {
   interest: boolean;
 }
 
-const EMPTY: Draft = { decisionMaker: '', project: '', meetingDate: '', meetingTime: '', meetingLocation: '', summary: '', interest: false };
+const EMPTY: Draft = { decisionMaker: '', meetingDate: '', meetingTime: '', meetingLocation: '', summary: '', interest: false };
 
 function referralErrors(d: Draft, today: string): string[] {
   const errs: string[] = [];
   if (!d.decisionMaker.trim()) errs.push('Name the decision maker and their role.');
-  if (!d.project.trim()) errs.push('Describe the active or upcoming project.');
   if (!d.meetingLocation.trim()) errs.push('Say where Outreach should meet them.');
   if (!d.meetingDate) errs.push('Pick the meeting date the client prefers.');
   else if (d.meetingDate < today) errs.push('The preferred meeting date is in the past.');
@@ -57,7 +55,7 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
           <p><span className="text-gray-400">Decision maker</span> {r.decisionMaker}</p>
           <p><span className="text-gray-400">Meeting</span> {fmtDay(r.meetingDate)}{r.meetingTime ? ` · ${r.meetingTime}` : ''}</p>
           {r.meetingLocation && <p className="sm:col-span-2"><span className="text-gray-400">Where</span> {r.meetingLocation}</p>}
-          <p className="sm:col-span-2"><span className="text-gray-400">Project</span> {r.project}</p>
+          {r.project && <p className="sm:col-span-2"><span className="text-gray-400">Project</span> {r.project}</p>}
           <p className="sm:col-span-2 text-gray-600 whitespace-pre-wrap">{r.summary || r.note}</p>
         </div>
         <p className="text-[10.5px] text-gray-400 mt-2">
@@ -73,7 +71,7 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
   const send = () => {
     if (errors.length) { setTouched(true); return; }
     onSend({
-      decisionMaker: d.decisionMaker.trim(), project: d.project.trim(),
+      decisionMaker: d.decisionMaker.trim(),
       meetingDate: d.meetingDate, meetingTime: d.meetingTime || undefined,
       meetingLocation: d.meetingLocation.trim(), summary: d.summary.trim(),
       at: new Date().toISOString(), by: actorName,
@@ -100,10 +98,6 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
           <Field label="Meeting location" required hint="Where to meet — their office address lives under Client details">
             <input value={d.meetingLocation} onChange={(e) => setD({ ...d, meetingLocation: e.target.value })}
               placeholder="e.g. Their site in Whitefield" className={touched && !d.meetingLocation.trim() ? errorInputCls : inputCls} />
-          </Field>
-          <Field label="Active / upcoming project" required className="sm:col-span-2">
-            <input value={d.project} onChange={(e) => setD({ ...d, project: e.target.value })}
-              placeholder="e.g. 3 villas in Whitefield, flooring from Dec" className={touched && !d.project.trim() ? errorInputCls : inputCls} />
           </Field>
           <Field label="Preferred meeting date" required>
             <input type="date" min={today} value={d.meetingDate} onChange={(e) => setD({ ...d, meetingDate: e.target.value })}

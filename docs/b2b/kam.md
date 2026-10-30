@@ -87,6 +87,16 @@ because §4.1 says one "is required … before it can be saved". Scoped to a cal
 which is the word the document uses; a meeting is prompted instead, since a site
 visit ending in "we'll call when the drawings land" has no honest date to give.
 
+**Revenue credit (2026-10-30).** A Closed KAM order's revenue goes to its KAM by
+default. A manager or B2B admin can credit someone else, with a reason, from the
+order modal (`ui/credit-picker.tsx`, `revenueCredit` on the order, see
+`leadership.md`).
+
+**Enquiry is a third interaction type (2026-10-30).** It is the client asking
+for something. It needs what they asked for and a next follow-up date, the same
+as a call. KPIs count interactions by exact type, so an Enquiry adds to neither
+Calls nor Meetings. Interactions are a JSON column, so no migration was needed.
+
 **A Meeting needs its minutes (2026-10-29).** The user asked that every
 meeting a KAM or an Outreach BM has with a client carries a summary/MOM, so a
 `Meeting` with an empty summary is refused and the field reads "Minutes of
@@ -243,15 +253,33 @@ overdue date is visible in the orders table, not yet in the tiles. A PI Shared
 order saved before this has neither date and is refused on its next save until
 both are filled. That is intended.
 
-### Not built yet: check-in before an offline visit
+### A meeting starts with a check-in (built 2026-10-30)
 
-- **Check-in before an offline visit (Outreach and KAM):** location permission,
-  plus a photo in a Material Depot T-shirt with location on, taken before the
-  meeting. `components/site-audit/apps/field/camera.tsx` already captures a
-  photo with `navigator.geolocation`. **Decided 2026-10-29:** photos go to our
-  own storage (the b2b-backend already uploads to Material Depot's R2 file
-  service for partner content), a missing check-in never blocks the meeting
-  but is flagged to admins, and admins review the photos.
+The user, 2026-10-30: a rep checks in on arrival with a photo and their exact
+location, and only then fills in what was discussed. **It is compulsory now.**
+That reverses the 2026-10-29 decision that a missing check-in would only be
+flagged.
+
+- **The flow:** "Check in at a meeting" on the firm drawer opens
+  `ui/check-in-capture.tsx`, which takes a live camera photo and a
+  high-accuracy GPS fix together. It uploads the photo (`POST
+  /b2b/check-in-photo`, R2 through Material Depot's file service, the same
+  uploader the partner content sync uses) and saves a `Meeting` interaction with
+  `checkIn {lat, lng, accuracy, at, photoUrl, by}` and no minutes. The drawer
+  then shows "Meeting in progress". **Add minutes** opens Log interaction on
+  Meeting, which completes that same interaction (`withInteraction` replaces it
+  by id) instead of adding a second one.
+- **The gate:** `interactionGateErrors` refuses a Meeting with no check-in when
+  its date is on or after `CHECK_IN_REQUIRED_FROM` (2026-10-31), so meetings
+  logged before the rule are not retro-blocked. A Call or Enquiry needs none.
+- **The upload must succeed.** If the photo is not stored, nothing is checked
+  in and the modal says so. The Site Audit arrival camera was not reused: it
+  uploads to Site Audit Supabase and passes the raw image on when the upload
+  fails.
+- **KPIs skip an open check-in** (`inProgress` in `performance/teams/kam.ts`)
+  until it has minutes, and the firm's next follow-up ignores it.
+- **Not built:** the admin review screen for photos, and a check-in on the
+  Client Database firm page (KAM's own drawer has it).
 
 ### Calls are deduped per client per day
 

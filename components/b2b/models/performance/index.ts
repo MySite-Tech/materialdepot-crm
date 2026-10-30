@@ -17,8 +17,11 @@ export const ENGINES: Record<B2BTeam, TeamEngine> = {
 export const TEAM_ORDER: B2BTeam[] = ['inbound', 'outreach', 'kam'];
 
 export function selfOn(data: PerfData, viewer: Viewer, members: TeamMember[], live: boolean): { team: B2BTeam; person: Person }[] {
-  const m = viewer.member;
-  if (m) return [{ team: m.team, person: { key: personKey(m.name, m.phone), name: m.name, phone: m.phone, kylasUserId: m.kylasUserId, onTeam: true } }];
+  if (viewer.memberships.length) {
+    return TEAM_ORDER.flatMap((team) => viewer.memberships.filter((m) => m.team === team)).map((m) => ({
+      team: m.team, person: { key: personKey(m.name, m.phone), name: m.name, phone: m.phone, kylasUserId: m.kylasUserId, onTeam: true },
+    }));
+  }
   if (!viewer.name) return [];
   return TEAM_ORDER.flatMap((team) => {
     const hit = ENGINES[team].people(data, members, live).find((p) => (

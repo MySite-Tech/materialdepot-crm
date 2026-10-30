@@ -19,7 +19,7 @@ import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
 import { runInboundRotation } from '@/lib/b2b/team';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
-import { rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
+import { membershipIn, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [view, setView] = useState<View>('list');
@@ -56,7 +56,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const boardOwnerIds = useMemo(() => boardOwnerKey.split(',').map(Number), [boardOwnerKey]);
   const ownerName = useMemo(() => new Map(inboundOwners.map((o) => [o.id, o.name])), [inboundOwners]);
 
-  const me = viewer.member?.team === 'inbound' && viewer.member.active ? viewer.member : null;
+  const me = membershipIn(viewer, 'inbound');
   const myKylasId = me?.kylasUserId ?? undefined;
   const unlinked = !viewer.isManager && !myKylasId;
   const scope = viewer.isManager ? scopeChoice ?? (myKylasId ? 'mine' : 'all') : 'mine';
@@ -293,7 +293,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </div>
       </div>
 
-      {viewer.member?.team === 'inbound' && !myKylasId && (
+      {me && !myKylasId && (
         <p className="text-[12px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-3">
           You are on the inbound team but your Kylas user is not linked, so no lead can be yours yet. A B2B manager
           links it under <strong>Team</strong>.
@@ -407,8 +407,10 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           lead={selected}
           onClose={() => setSelectedId(null)}
           actorName={viewer.name}
+          actorPhone={viewer.phone}
           members={teamMembers(team.members, 'inbound')}
           canReassign={viewer.isManager || !!me}
+          canCredit={viewer.isManager}
           onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}
         />
       )}

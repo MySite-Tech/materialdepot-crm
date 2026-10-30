@@ -20,7 +20,6 @@ export interface ClientOrderRow {
   lost: boolean;
   open: boolean;
 
-  orderPlacedDate?: string;
 
   createdAt?: string;
 
@@ -189,7 +188,6 @@ function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
     ordered,
     lost: !ordered && !dealIsOpen(t.status),
     open: dealIsOpen(t.status),
-    orderPlacedDate: ordered ? (String(t.closureDate || '').slice(0, 10) || undefined) : undefined,
     createdAt: String(t.createdAt || '').slice(0, 10) || undefined,
     spoc: String(t.assignedTo || '').trim() || undefined,
     branch: String(t.branch || '').trim() || undefined,
@@ -227,7 +225,7 @@ export async function fetchClientOrderRows(phones: string[]): Promise<ClientOrde
   }
 
   rows.sort((a, b) =>
-    String(b.orderPlacedDate || b.createdAt || '').localeCompare(String(a.orderPlacedDate || a.createdAt || '')));
+    String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   return { rows, failedPhones, rejected };
 }
 

@@ -2,46 +2,17 @@
 
 import { useState } from 'react';
 import { MeetingStatus, OutreachLead, OutreachMeeting } from '../../../models/mock-data';
-import { GeoPin, MEETING_STATUSES, pinMapUrl } from '../../../models/outreach';
+import { CHECK_IN_REQUIRED_FROM, MEETING_STATUSES, needsCheckIn } from '../../../models/outreach';
 import { meetingGaps } from '../../../models/outreach/reminders';
 import { Field, ReadValue, errorInputCls } from '../../../ui/inbound-chips';
+import { CheckInLine } from '../../../ui/check-in-capture';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
+import { fmtMeetingDay } from './utils';
 
-function PinButton({ pin, onPin }: { pin?: GeoPin; onPin: (p: GeoPin) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const capture = () => {
-    if (!navigator.geolocation) { setErr('This browser cannot share a location.'); return; }
-    setBusy(true);
-    setErr(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setBusy(false);
-        onPin({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), accuracy: Math.round(p.coords.accuracy), at: new Date().toISOString() });
-      },
-      (e) => { setBusy(false); setErr(e.code === 1 ? 'Location permission was refused — allow it for this site and try again.' : 'Could not get a location fix. Try again outdoors.'); },
-      { enableHighAccuracy: true, timeout: 15000 },
-    );
-  };
-  return (
-    <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Live pin</span>
-      {pin ? (
-        <a href={pinMapUrl(pin)} target="_blank" rel="noreferrer" className="text-[#0F766E] hover:underline">
-          {`Pinned ${pin.at.slice(0, 10)}${pin.accuracy ? ` · ±${pin.accuracy}m` : ''} · open map`}
-        </a>
-      ) : <span className="text-amber-700">Not pinned — take it at the client&apos;s office</span>}
-      <button onClick={capture} disabled={busy} className="px-2 py-0.5 rounded-md border border-gray-200 bg-white text-gray-600 disabled:opacity-50">
-        {busy ? 'Locating…' : pin ? 'Re-pin' : 'Pin my location now'}
-      </button>
-      {err && <span className="text-red-600">{err}</span>}
-    </div>
-  );
-}
-
-export function MeetingEditor({ m, draft, set, patchMeeting, showGates, isLastHeld, scheduledNext, followUpError, contactList, onDone }: {
+export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, isLastHeld, scheduledNext, followUpError, contactList, onCheckIn, onDone }: {
   m: OutreachMeeting;
+  locked: boolean;
   draft: OutreachLead;
   set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
   patchMeeting: (n: number, patch: Partial<OutreachMeeting>) => void;
@@ -50,9 +21,11 @@ export function MeetingEditor({ m, draft, set, patchMeeting, showGates, isLastHe
   scheduledNext: boolean;
   followUpError: boolean;
   contactList: string;
+  onCheckIn: (() => void) | null;
   onDone?: () => void;
 }) {
   const gaps = meetingGaps(m);
+  const mustCheckIn = needsCheckIn(m.date) && !m.checkIn;
   return (
     <div>
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -61,31 +34,57 @@ export function MeetingEditor({ m, draft, set, patchMeeting, showGates, isLastHe
           <MeetingStatusChip s={m.status} />
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={m.status}
-            onChange={(e) => patchMeeting(m.n, { status: e.target.value as MeetingStatus })}
-            className="px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white outline-none"
-          >
-            {MEETING_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          {!locked && (
+            <select
+              value={m.status}
+              onChange={(e) => patchMeeting(m.n, { status: e.target.value as MeetingStatus })}
+              className="px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white outline-none"
+            >
+              {MEETING_STATUSES.map((s) => (
+                <option key={s} value={s} disabled={s === 'Completed' && mustCheckIn && m.status !== 'Completed'}>
+                  {s === 'Completed' && mustCheckIn ? 'Completed — check in first' : s}
+                </option>
+              ))}
+            </select>
+          )}
           {onDone && !gaps.length && (
             <button onClick={onDone} className="px-2 py-1 text-[11px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900">Done</button>
           )}
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2.5">
-        <Field label="Date">
-          <input type="date" value={m.date || ''} onChange={(e) => patchMeeting(m.n, { date: e.target.value })} className={inputCls} />
-        </Field>
-        <Field label="Time">
-          <input type="time" value={m.time || ''} onChange={(e) => patchMeeting(m.n, { time: e.target.value })} className={inputCls} />
-        </Field>
-        <Field label="Area">
-          <input value={m.area || ''} onChange={(e) => patchMeeting(m.n, { area: e.target.value })} className={inputCls} />
-        </Field>
-        <Field label="Office location">
-          <input value={m.officeLocation || ''} onChange={(e) => patchMeeting(m.n, { officeLocation: e.target.value })} className={inputCls} />
-        </Field>
+      {locked ? (
+        <p className="text-[11.5px] text-gray-600 mt-1.5">
+          {[fmtMeetingDay(m.date), m.time, m.area, m.officeLocation].filter(Boolean).join(' · ') || 'No date or place recorded'}
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2.5">
+          <Field label="Date">
+            <input type="date" value={m.date || ''} onChange={(e) => patchMeeting(m.n, { date: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Time">
+            <input type="time" value={m.time || ''} onChange={(e) => patchMeeting(m.n, { time: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Area">
+            <input value={m.area || ''} onChange={(e) => patchMeeting(m.n, { area: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Office location">
+            <input value={m.officeLocation || ''} onChange={(e) => patchMeeting(m.n, { officeLocation: e.target.value })} className={inputCls} />
+          </Field>
+        </div>
+      )}
+
+      <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[11px]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Check-in</span>
+        {m.checkIn ? <CheckInLine c={m.checkIn} /> : m.status === 'Scheduled' ? (
+          onCheckIn ? (
+            <>
+              <button onClick={onCheckIn} className="px-2.5 py-1 rounded-md bg-[#0F766E] text-white font-semibold">Check in at the meeting</button>
+              <span className="text-gray-500">On arrival: a photo and your exact location. Needed before it can be marked held.</span>
+            </>
+          ) : <span className="text-amber-700">Save this meeting first, then check in when you arrive.</span>
+        ) : needsCheckIn(m.date)
+          ? <span className={gaps.includes('check-in') ? 'text-red-600' : 'text-amber-700'}>No check-in. Set it back to Scheduled and check in, or it cannot be saved as held.</span>
+          : <span className="text-gray-400">Not required for meetings before {fmtMeetingDay(CHECK_IN_REQUIRED_FROM)}</span>}
       </div>
 
       {m.status === 'Completed' ? (
@@ -114,12 +113,8 @@ export function MeetingEditor({ m, draft, set, patchMeeting, showGates, isLastHe
                 error={followUpError ? 'Set when you will next follow up after this visit.' : undefined}>
                 <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value)} className={followUpError ? errorInputCls : inputCls} />
               </Field>
-              <Field label="Time" hint="Optional">
-                <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value)} className={inputCls} />
-              </Field>
             </div>
           )}
-          <PinButton pin={m.pin} onPin={(pin) => patchMeeting(m.n, { pin })} />
         </>
       ) : m.notes ? (
         <Field label="Meeting notes" hint="Recorded when this meeting was marked Completed" className="mt-2.5">

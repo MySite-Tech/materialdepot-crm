@@ -1,5 +1,6 @@
 import { ACTIVE_DAYS, ClientEntity, ClientInteraction, clientStatus } from '../../client';
-import { KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET } from '../../kam';
+import { creditMatches, creditNote, creditOf } from '../../credit';
+import { KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET, KamOrder } from '../../kam';
 import { fmtINR } from '../../mock-data';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
@@ -16,6 +17,8 @@ const DEFS: PerfKpiDef[] = [
   { key: 'ordering',  kind: 'Output', label: 'Accounts ordering',       short: 'Ordering',       unit: '%',     target: 60,                daily: false, rule: 'Firms assigned to them that placed an order in the period (a Closed KAM order, or a last order date in the period) ÷ firms assigned whose order history loaded.' },
 ];
 
+const inProgress = (i: ClientInteraction) => i.type === 'Meeting' && !!i.checkIn && !String(i.summary || '').trim();
+
 const actor = (data: PerfData, c: ClientEntity, i: ClientInteraction) => (i.loggedBy && onTeamList(data, 'kam', i.loggedBy) ? i.loggedBy : c.kam);
 
 function loggedRows(data: PerfData, people: Person[], period: Period, type: ClientInteraction['type']): PerfRow[] {
@@ -23,7 +26,7 @@ function loggedRows(data: PerfData, people: Person[], period: Period, type: Clie
   const rows: PerfRow[] = [];
   for (const c of data.clients) {
     for (const i of c.interactions || []) {
-      if (i.type !== type || !inPeriod(i.date, period) || !isPerson(people, actor(data, c, i))) continue;
+      if (i.type !== type || inProgress(i) || !inPeriod(i.date, period) || !isPerson(people, actor(data, c, i))) continue;
       const k = `${c.id}|${istDay(i.date)}`;
       if (seen.has(k)) continue;
       seen.add(k);
@@ -47,18 +50,19 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
     .map(({ c }) => ({ id: c.id, title: c.company, counts: metFirms.has(c.id), note: metFirms.has(c.id) ? 'Met in the period' : 'Not met in the period' }));
 
   const adherence: PerfRow[] = data.clients.flatMap((c) => (c.interactions || [])
-    .filter((i) => inPeriod(i.date, period) && isPerson(people, actor(data, c, i)))
+    .filter((i) => !inProgress(i) && inPeriod(i.date, period) && isPerson(people, actor(data, c, i)))
     .map((i) => {
       const gaps = [!String(i.summary || '').trim() && 'notes', !i.nextFollowUpDate && 'next follow-up'].filter(Boolean);
       return { id: `${c.id}:${i.id}`, title: `${c.company} · ${i.type}`, at: i.date, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : 'Complete' };
     }));
 
-  const closed = data.kamOrders.filter((o) => o.status === 'Closed' && isPerson(people, o.kam) && inPeriod(o.statusChangedAt, period));
+  const credited = (o: KamOrder) => { const c = creditOf(o.revenueCredit); return c ? people.some((p) => creditMatches(c, p)) : isPerson(people, o.kam); };
+  const closed = data.kamOrders.filter((o) => o.status === 'Closed' && credited(o) && inPeriod(o.statusChangedAt, period));
   const revenue: PerfRow[] = closed.map((o) => {
     const fetched = o.orderValueSource === 'deal' && Number(o.orderValue) > 0;
     return {
       id: o.id, title: o.company, at: o.statusChangedAt, counts: fetched,
-      note: fetched ? `${fmtINR(Number(o.orderValue))} · ${o.enqId || ''}`.trim() : o.enqId ? `Enq ID ${o.enqId} not fetched — typed value not counted` : 'No Enq ID yet',
+      note: (fetched ? `${fmtINR(Number(o.orderValue))} · ${o.enqId || ''}`.trim() : o.enqId ? `Enq ID ${o.enqId} not fetched — typed value not counted` : 'No Enq ID yet') + creditNote(o.revenueCredit),
     };
   });
   const revenueSum = closed.filter((o, i) => revenue[i].counts).reduce((a, o) => a + Number(o.orderValue), 0);

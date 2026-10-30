@@ -1,3 +1,4 @@
+import type { RevenueCredit } from '../models/credit';
 import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, ClientStatus, InteractionType, TemperatureBand } from '../models/client';
 import { FollowUpBucket, Segment } from '../models/inbound';
 import type { RequirementVersion } from '../models/requirement';
@@ -29,6 +30,7 @@ export interface KamOrder {
 
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
+  revenueCredit?: RevenueCredit;
 
   dealStatus?: string;
 
@@ -61,6 +63,7 @@ export interface InteractionGateInput {
   date?: string;
   nextFollowUpDate?: string;
   summary?: string;
+  checkIn?: unknown;
 }
 
 export interface CallCompliance {

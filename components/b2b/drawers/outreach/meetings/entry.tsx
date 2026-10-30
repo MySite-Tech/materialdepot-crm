@@ -2,6 +2,7 @@
 
 import { OutreachMeeting } from '../../../models/mock-data';
 import { meetingLocation, pinMapUrl } from '../../../models/outreach';
+import { CheckInLine } from '../../../ui/check-in-capture';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { fmtMeetingDay } from './utils';
 
@@ -32,8 +33,9 @@ export function MeetingEntry({ m, gap, followUp, onEdit }: {
       <div className="mt-1 flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-gray-500">
         {where && <span>{where}</span>}
         {m.status === 'Completed' && <span>Met: {String(m.metWith || '').trim() || <span className="text-gray-400">not recorded</span>}</span>}
-        {m.pin && <a href={pinMapUrl(m.pin)} target="_blank" rel="noreferrer" className="text-[#0F766E] hover:underline">pinned</a>}
+        {!m.checkIn && m.pin && <a href={pinMapUrl(m.pin)} target="_blank" rel="noreferrer" className="text-[#0F766E] hover:underline">pinned</a>}
       </div>
+      {m.checkIn && <div className="mt-1.5"><CheckInLine c={m.checkIn} /></div>}
       {notes
         ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-gray-800 whitespace-pre-wrap break-words">{notes}</p>
         : m.status !== 'Completed' && <p className="mt-1.5 text-[11.5px] text-gray-400">No notes.</p>}

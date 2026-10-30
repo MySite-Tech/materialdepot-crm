@@ -19,17 +19,26 @@ export const memberForPhone = (members: TeamMember[], phone: string): TeamMember
   return members.find((m) => m.phone === want) ?? null;
 };
 
+export const membershipsForPhone = (members: TeamMember[], phone: string): TeamMember[] => {
+  const want = normalisePhone(phone);
+  return want.length === 10 ? members.filter((m) => m.phone === want && m.active) : [];
+};
+
 export const viewerFor = (user: B2BUser | null, members: TeamMember[]): Viewer => {
-  const member = user ? memberForPhone(members, user.phone) : null;
+  const memberships = user ? membershipsForPhone(members, user.phone) : [];
   const canManageTeam = user ? isB2BManager(user) : false;
   return {
     name: user?.name ?? '',
     phone: normalisePhone(user?.phone),
-    isManager: canManageTeam || !!(member?.active && member.isAdmin),
+    isManager: canManageTeam || memberships.some((m) => m.isAdmin),
     canManageTeam,
-    member,
+    member: memberships[0] ?? null,
+    memberships,
   };
 };
+
+export const membershipIn = (viewer: Viewer, team: B2BTeam): TeamMember | null =>
+  viewer.memberships.find((m) => m.team === team) ?? null;
 
 export const teamMembers = (members: TeamMember[], team: B2BTeam): TeamMember[] =>
   members

@@ -1,6 +1,7 @@
 'use client';
 
-import { ContactsEditor, RoleOptions } from '../../drawers/outreach/cards/client';
+import { ContactsEditor } from '../../drawers/outreach/cards/client';
+import { RoleOptions } from '../../ui/outreach-chips';
 import { OutreachLead } from '../../models/mock-data';
 import {
   COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT,
@@ -23,7 +24,6 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
   onDone: (patch: Partial<OutreachLead>) => void;
 }) {
   const [followUpDate, setFollowUpDate] = useState(lead.followUpDate || '');
-  const [followUpTime, setFollowUpTime] = useState(lead.followUpTime || '');
   const [enqId, setEnqId] = useState(lead.enqId || '');
   const [lostReason, setLostReason] = useState(lead.lostReason || '');
   const [touched, setTouched] = useState(false);
@@ -38,7 +38,6 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
     onDone({
       status: target,
       followUpDate: needsFollowUp ? followUpDate : lead.followUpDate,
-      followUpTime: needsFollowUp ? followUpTime : lead.followUpTime,
       enqId: wantsEnq ? enqId.trim() || undefined : lead.enqId,
       lostReason: needsReason ? lostReason : lead.lostReason,
     });
@@ -65,9 +64,6 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
               <Field label="Next follow-up date" required error={touched ? errors.find((e) => e.includes('follow-up')) : undefined}>
                 <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)}
                   className={touched && !followUpDate ? errorInputCls : inputCls} />
-              </Field>
-              <Field label="Time" hint="Optional">
-                <input type="time" value={followUpTime} onChange={(e) => setFollowUpTime(e.target.value)} className={inputCls} />
               </Field>
             </div>
           )}

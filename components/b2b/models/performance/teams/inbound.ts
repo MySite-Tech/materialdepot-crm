@@ -1,10 +1,13 @@
+import { isEndConsumer } from '../../../constants/inbound';
+import { creditMatches, creditNote, creditOf } from '../../credit';
+import { CallAttempt } from '../../../types/inbound';
 import { InboundLead, fmtINR } from '../../mock-data';
 import { FOLLOW_UPS_REQUIRED, followUpMeetings } from '../../outreach';
 import { isMobile, sameRep } from '../../outreach/handover';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
 import { PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, isPlaceholderName, lakhs, memberPeople, onTeamList, pct, personKey } from '../utils';
+import { countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, lakhs, memberPeople, onTeamList, pct, personKey, teamMemberByPhone } from '../utils';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
 
@@ -24,8 +27,8 @@ const filled = (v: string | undefined) => !!String(v || '').trim();
 const FIELDS: [string, (l: InboundLead) => boolean][] = [
   ['contact name', (l) => filled(l.contactName)],
   ['mobile', (l) => isMobile(l.phone)],
-  ['firm name', (l) => filled(l.companyName)],
-  ['segment', (l) => !!l.segment],
+  ['firm name', (l) => isEndConsumer(l.clientType) || filled(l.companyName)],
+  ['segment', (l) => isEndConsumer(l.clientType) || !!l.segment],
   ['client type', (l) => !!l.clientType],
   ['city', (l) => !!l.location],
   ['status', (l) => l.stage !== 'New'],
@@ -54,10 +57,13 @@ function assignedTotal(data: PerfData, people: Person[]): number | null {
 function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const owns = ownsLead(people);
   const mine = data.inbound.filter(owns);
-  const byThem = (l: InboundLead, by: string | undefined) => (by && onTeamList(data, 'inbound', by) ? isPerson(people, by) : owns(l));
+  const byThem = (l: InboundLead, a: CallAttempt) => {
+    if (a.byPhone && teamMemberByPhone(data, 'inbound', a.byPhone)) return isPersonByPhone(people, a.byPhone);
+    return a.by && onTeamList(data, 'inbound', a.by) ? isPerson(people, a.by) : owns(l);
+  };
 
   const calls: PerfRow[] = data.inbound.flatMap((l) => (l.callAttempts || [])
-    .filter((a) => inPeriod(a.at, period) && byThem(l, a.by))
+    .filter((a) => inPeriod(a.at, period) && byThem(l, a))
     .map((a) => ({ id: `${l.id}:${a.n}:${a.at}`, title: title(l), at: a.at, counts: true, note: `${a.outcome}${filled(a.note) ? '' : ' · no note'}` })));
   const connected = calls.filter((r) => r.note.startsWith('Connected')).length;
 
@@ -77,7 +83,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const sameDay = coverageRows.filter((r) => r.note.startsWith('Called the day')).length;
 
   const handled = data.inbound
-    .map((l) => ({ l, theirs: (l.callAttempts || []).filter((a) => inPeriod(a.at, period) && byThem(l, a.by)) }))
+    .map((l) => ({ l, theirs: (l.callAttempts || []).filter((a) => inPeriod(a.at, period) && byThem(l, a)) }))
     .filter(({ theirs }) => theirs.length);
   const adherence: PerfRow[] = handled.map(({ l, theirs }) => {
     const gaps = FIELDS.filter(([, ok]) => !ok(l)).map(([label]) => label);
@@ -85,12 +91,13 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
     return { id: l.id, title: title(l), at: theirs[theirs.length - 1].at, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : 'Complete' };
   });
 
-  const closed = mine.filter((l) => l.stage === 'Closed' && inPeriod(l.statusChangedAt, period));
+  const credited = (l: InboundLead) => { const c = creditOf(l.revenueCredit); return c ? people.some((p) => creditMatches(c, p)) : owns(l); };
+  const closed = data.inbound.filter((l) => l.stage === 'Closed' && inPeriod(l.statusChangedAt, period) && credited(l));
   const revenue: PerfRow[] = closed.map((l) => {
     const fetched = l.orderValueSource === 'deal' && Number(l.orderValue) > 0;
     return {
       id: l.id, title: title(l), at: l.statusChangedAt, counts: fetched,
-      note: fetched ? `${fmtINR(Number(l.orderValue))} · ${l.enqId || ''}`.trim() : filled(l.enqId) ? `Enq ID ${l.enqId} not fetched — typed value not counted` : 'No Enq ID yet',
+      note: (fetched ? `${fmtINR(Number(l.orderValue))} · ${l.enqId || ''}`.trim() : filled(l.enqId) ? `Enq ID ${l.enqId} not fetched — typed value not counted` : 'No Enq ID yet') + creditNote(l.revenueCredit),
     };
   });
   const revenueSum = closed.filter((l, i) => revenue[i].counts).reduce((a, l) => a + Number(l.orderValue), 0);

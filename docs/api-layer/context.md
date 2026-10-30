@@ -127,7 +127,11 @@ same credential instead. Three things the relay deliberately does:
   `studio-access`) so the catch-all is a defined surface, not an open proxy to
   the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
-  (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
+  (`docs/b2b/client-db.md`). `check-in-photo` (2026-10-30) is POST-only and
+  takes one inline image for a meeting check-in (`docs/b2b/kam.md` §A meeting
+  starts with a check-in). It is allow-listed rather than given a handler
+  because the B2B role gate is all it needs: the photo carries no caller
+  identity. Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.
 - **`studio-handoff` is a handler of its own, never allow-listed** (2026-10-30).
   It mints a Studio Space session, so the phone must come from `requireCaller`

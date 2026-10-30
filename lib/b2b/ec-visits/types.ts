@@ -1,4 +1,15 @@
-export type EcVisitStatus = 'Scheduled' | 'Visited' | 'Cancelled' | 'No show';
+import type { B2BTeam } from '../team/types';
+
+export type EcVisitStatus = 'Scheduled' | 'Directed' | 'Visited' | 'Cancelled' | 'No show';
+
+export type EcVisitKind = 'visit' | 'redirect';
+
+export interface EcAssisted {
+  value: number;
+  orders: number;
+  enqIds: string[];
+  checkedAt: string;
+}
 
 export interface EcVisit {
   id: string;
@@ -7,7 +18,13 @@ export interface EcVisit {
   contactName?: string;
   phone?: string;
   branch: string;
-  visitDate: string;
+  kind: EcVisitKind;
+  sourceTeam?: B2BTeam;
+  leadRef?: string;
+  phones: string[];
+  note?: string;
+  assisted?: EcAssisted;
+  visitDate?: string;
   visitTime?: string;
   purpose?: string;
   status: EcVisitStatus;
@@ -27,7 +44,13 @@ export interface EcVisitRow {
   contact_name: string | null;
   phone: string | null;
   branch: string;
-  visit_date: string;
+  kind: EcVisitKind;
+  source_team: B2BTeam | null;
+  lead_ref: string | null;
+  phones: string[];
+  note: string | null;
+  assisted: EcAssisted | null;
+  visit_date: string | null;
   visit_time: string | null;
   purpose: string | null;
   status: EcVisitStatus;
@@ -44,4 +67,5 @@ export interface EcVisitQuery {
   clientId?: string;
   from?: string;
   to?: string;
+  kind?: EcVisitKind;
 }

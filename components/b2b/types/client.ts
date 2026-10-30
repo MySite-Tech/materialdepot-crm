@@ -1,5 +1,6 @@
 import { Escalation } from '../models/account-health';
 import { Segment } from '../models/inbound';
+import type { MeetingCheckIn } from '../models/outreach';
 import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_BANDS } from '../constants/client';
 export type ClientEntityType = typeof CLIENT_ENTITY_TYPES[number];
 
@@ -119,6 +120,7 @@ export interface ClientInteraction {
 
   nextFollowUpDate?: string;
   loggedBy?: string;
+  checkIn?: MeetingCheckIn;
 
   createdAt?: string;
 }

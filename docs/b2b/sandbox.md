@@ -18,7 +18,7 @@ described in `CLAUDE.md` (§Looking at a screen). State is kept in
 every non-GET request rewrites it, so a restart keeps your clicks. The stub
 still answers Kylas `POST /call-logs/` and `POST /notes/relation`, which the CRM
 no longer sends. The seed is
-relative to the moment it runs: "today", "after 5 pm" and "6 days ago" are
+relative to the moment it runs: "today", "after 7 pm" and "6 days ago" are
 recomputed on `--reset`.
 
 ## Personas
@@ -83,7 +83,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 ## The seed
 
 Seventeen Kylas leads (`7000101–7000117`, phones `90000100xx`): three still on
-Hardi (before 5 pm today, after 5 pm, and earlier today) for the round robin; one
+Hardi (before 7 pm today, after 7 pm, and earlier today) for the round robin; one
 freshly assigned; RNR runs of 1, 2, 3 and 5 over the last week; one Connected
 with team and Presales notes; Follow up; PI Shared on `ENQ-900101`; Closed on
 `ENQ-900102`; Lost; Invalid; one sent to Outreach and still in the pool; one

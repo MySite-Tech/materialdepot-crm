@@ -79,6 +79,15 @@ export interface GeoPin {
   at: string;
 }
 
+export interface MeetingCheckIn extends GeoPin {
+  photoUrl: string;
+  by: string;
+}
+
+export const CHECK_IN_REQUIRED_FROM = '2026-10-31';
+
+export const needsCheckIn = (date: string | undefined): boolean => String(date || '').slice(0, 10) >= CHECK_IN_REQUIRED_FROM;
+
 export const pinMapUrl = (p: GeoPin): string => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
 
 export const STUDIO_WAITLIST_URL = 'https://studio.materialdepot.com/join';
@@ -194,6 +203,7 @@ export interface OutreachMeeting {
   metWith?: string;
   notes?: string;
   pin?: GeoPin;
+  checkIn?: MeetingCheckIn;
   loggedBy?: string;
   updatedAt?: string;
 }

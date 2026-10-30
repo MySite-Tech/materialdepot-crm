@@ -14,6 +14,8 @@ export const B2B_TEAMS: { key: B2BTeam; label: string }[] = [
   { key: 'kam', label: 'KAM' },
 ];
 
+export const B2B_TEAM_LABEL = Object.fromEntries(B2B_TEAMS.map((t) => [t.key, t.label])) as Record<B2BTeam, string>;
+
 // Kylas user (Hardi) that every Presales-qualified B2B lead is created under.
 export const INBOUND_INTAKE_KYLAS_ID = 81181;
 

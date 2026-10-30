@@ -98,6 +98,15 @@ export function withDataPeople(people: Person[], names: (string | undefined)[], 
   return out;
 }
 
+export function teamMemberByPhone(data: PerfData, team: B2BTeam, phone: string | undefined): TeamMember | undefined {
+  const p = phone ? normalisePhone(phone) : '';
+  if (!p) return undefined;
+  return (data.members || []).find((m) => m.team === team && m.active && normalisePhone(m.phone) === p);
+}
+
+export const isPersonByPhone = (people: Person[], phone: string): boolean =>
+  people.some((p) => !!p.phone && normalisePhone(p.phone) === normalisePhone(phone));
+
 export function onTeamList(data: PerfData, team: B2BTeam, name: string | undefined): boolean {
   const list = (data.members || []).filter((m) => m.team === team && m.active);
   return !list.length || list.some((m) => sameRep(name, m.name));

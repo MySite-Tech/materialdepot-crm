@@ -123,12 +123,26 @@ migration 0020 deploys) the list comes from the data: Inbound uses the
 legacy `B2B_INBOUND_OWNER_LIST` plus lead owners, Outreach uses `bm`, and KAM
 uses firm and order `kam`. Placeholder names ("Unassigned") are dropped.
 
-An individual is `viewer.member` when they are on the list. Otherwise they are
+**One person can be on several teams (2026-10-30).** The roster is one row per
+person per team (b2b-backend migration 0023, primary key `(phone, team)`), each
+with its own `in_rotation`. So someone on Inbound and Outreach gets a card for
+each on My performance. `viewer.memberships` holds every active row and
+`membershipIn(viewer, team)` picks one. `viewer.member` is the first, kept for
+the display name. The B2B admin flag is written to every row of that person.
+
+An individual is matched through `viewer.memberships` when they are on the list. Otherwise they are
 matched by phone, or by name, against each team's people (`selfOn`). Someone who
 matches nothing sees a notice, not an empty card.
 
 ## KPI rules that are not obvious from the defs
 
+- **A call carrying `byPhone` is credited by phone first (2026-10-30).** If that
+  phone is an active Inbound team member, the call counts for whoever has that
+  phone and nobody else. Otherwise the name rule below applies. Names come from
+  two Django sources (the profile's `name` at write time, the roster's
+  `f_name l_name` frozen into the team list), and `sameRep` only tolerates case
+  and a whole-word prefix. So a rep whose two names differ never saw their own
+  calls count. Calls logged before this carry no phone and still go by name.
 - **Inbound calls are credited to `CallAttempt.by`, the caller — unless the
   caller is not on the Inbound team list, then to the lead's owner**
   (`onTeamList`, 2026-10-30). Before that, a call a manager logged on Asha's
@@ -151,12 +165,25 @@ matches nothing sees a notice, not an empty card.
 - **Inbound qualified** credits `intake.inboundOwner` (the owner at hand-off)
   once Outreach accepted *and* the lead converted or had 2 follow-ups. Rejected
   and waiting rows are listed and not counted.
+- **Revenue goes to the owner at close, unless a manager credits someone else**
+  (2026-10-30, the user's rule). `revenueCredit {name, phone, kylasUserId,
+  reason, by, at}` on the inbound lead, Outreach lead or KAM order is set from
+  `ui/credit-picker.tsx` by a manager or B2B admin only, with a reason. All three
+  engines read it through `creditOf`, matching phone, then Kylas id, then name.
+  The row note says who changed it and why. Work done before a reassignment is
+  never moved: calls, meetings and interactions are credited to whoever logged
+  them. **Test `creditOf(x)`, never the object.** Inbound stores it as an
+  object meta field, which reads back `{}` when cleared.
 - **Revenue (Inbound and KAM) counts only Enq-fetched values**
   (`orderValueSource === 'deal'`). Typed values are listed as "not counted".
 - **KAM meetings and calls are one per firm per day**, credited to
   `interaction.loggedBy` when that person is on the KAM team list, otherwise
   (or when empty) to the firm's KAM. Same rule as Inbound calls, same reason. Same dedupe as
   `callsLoggedOn`.
+  **`loggedBy` is the viewer since 2026-10-30.** Before that the Log an
+  interaction modal wrote the firm's KAM (or `KAMS[0]` when the firm had none),
+  so a call was never credited to whoever actually made it. An `Enquiry`
+  interaction counts toward neither calls nor meetings.
 - **KAM coverage** uses Active (`clientStatus`: an order in the last 30 days,
   as of today) as its denominator, since 2026-10-29. It was a 3-month window
   before. `kpi-definitions.md` requires one meaning of

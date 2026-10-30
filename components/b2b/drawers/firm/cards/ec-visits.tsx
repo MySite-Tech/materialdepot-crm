@@ -13,6 +13,7 @@ import { useState } from 'react';
 
 const STATUS_COLOR: Record<EcVisitStatus, string> = {
   Scheduled: 'text-blue-700 bg-blue-50 border-blue-200',
+  Directed: 'text-violet-700 bg-violet-50 border-violet-200',
   Visited: 'text-teal-700 bg-teal-50 border-teal-200',
   Cancelled: 'text-gray-500 bg-gray-50 border-gray-200',
   'No show': 'text-amber-700 bg-amber-50 border-amber-200',
@@ -22,7 +23,7 @@ export function EcVisitsCard({ client }: { client: ClientEntity }) {
   const { visits, loading, error, save } = useEcVisits(client.id);
   const [scheduling, setScheduling] = useState(false);
   const today = istToday();
-  const upcoming = visits.filter((v) => v.status === 'Scheduled' && v.visitDate >= today).length;
+  const upcoming = visits.filter((v) => v.status === 'Scheduled' && (v.visitDate || '') >= today).length;
 
   return (
     <SectionCard
@@ -71,6 +72,8 @@ function ScheduleForm({ client, today, onCancel, onSave }: {
     setError('');
     const err = await onSave({
       id: newB2BId('ECV'),
+      kind: 'visit',
+      phones: [],
       clientId: client.id,
       firm: client.company || 'Unnamed firm',
       contactName: who.trim() || undefined,

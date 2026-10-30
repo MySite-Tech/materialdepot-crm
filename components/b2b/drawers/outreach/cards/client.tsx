@@ -3,15 +3,12 @@
 import { LEAD_TYPES } from '../../../constants/inbound';
 import { SEGMENTS } from '../../../models/kam';
 import { CompanyType, OutreachLead } from '../../../models/mock-data';
-import { COMPANY_TYPES, CONTACT_ROLES, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT, OutreachContact, OutreachSource, TEAM_SIZES, TeamSize } from '../../../models/outreach';
+import { COMPANY_TYPES, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT, OutreachContact, OutreachSource, TEAM_SIZES, TeamSize } from '../../../models/outreach';
 import { Rep } from '../../../models/outreach/intake';
 import { LeadType, Segment } from '../../../types/inbound';
 import { Field, SectionCard } from '../../../ui/inbound-chips';
+import { RoleOptions } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
-
-export const RoleOptions = ({ id }: { id: string }) => (
-  <datalist id={id}>{CONTACT_ROLES.map((r) => <option key={r} value={r} />)}</datalist>
-);
 
 export function ContactsEditor({ contacts, onChange }: { contacts: OutreachContact[]; onChange: (next: OutreachContact[]) => void }) {
   const patch = (i: number, p: Partial<OutreachContact>) => onChange(contacts.map((c, j) => (j === i ? { ...c, ...p } : c)));

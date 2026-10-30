@@ -31,7 +31,7 @@ function seedDeals() {
 
 const OUTREACH_DEFAULTS = {
   designation: null, gst_number: null, segment: null, lead_type: null, company_type: null, company_type_other: null,
-  meetings: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null, follow_up_time: null,
+  meetings: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null,
   quote_shared_at: null, enq_id: null, order_value: null, order_value_source: null, deal_status: null, expected_closure: null,
   lost_reason: null, kam: null, ec_name: null, ec_bm_name: null, notes: [], alt_phone: null, alt_name: null, alt_role: null, contacts: [], email: null,
   city: 'Bangalore', office_address: null, team_size: null, whatsapp_group_link: null, converted_at: null,
@@ -170,10 +170,12 @@ function seedKam() {
 }
 
 function seedTeam(at) {
-  return PERSONAS.filter((p) => p.team).map((p) => ({
-    phone: p.phone, name: p.name, team: p.team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
-    in_rotation: true, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
-  }));
+  const row = (p, team, inRotation) => ({
+    phone: p.phone, name: p.name, team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
+    in_rotation: inRotation, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
+  });
+  const bharat = PERSONAS.find((p) => p.phone === '9000000002');
+  return [...PERSONAS.filter((p) => p.team).map((p) => row(p, p.team, true)), row(bharat, 'outreach', false)];
 }
 
 function seedEcVisits() {

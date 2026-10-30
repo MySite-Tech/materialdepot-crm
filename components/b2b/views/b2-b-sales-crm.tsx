@@ -7,6 +7,7 @@ import OutreachLeads from './outreach/index';
 import LeadsTab from './leads/index';
 import ClientDatabase from './client-db/index';
 import KAMs from './kams/index';
+import EcDirected from './ec-directed/index';
 import Leadership from './leadership/index';
 import StudioSpace from './studio-space/index';
 import TeamView from './team/index';
@@ -15,7 +16,7 @@ import { viewerFor } from '@/lib/b2b/team/utils';
 import type { AppUser } from '@/types/crm';
 
 type B2BView =
-  | 'overview' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams'
+  | 'overview' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'ec'
   | 'leadership' | 'studio' | 'team';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean }> = [
@@ -26,6 +27,7 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly
 
   { key: 'clients',    label: 'Client Database',  ready: true },
   { key: 'kams',       label: 'KAM',              ready: true },
+  { key: 'ec',         label: 'EC Directed',      ready: true },
   { key: 'leadership', label: 'Leadership Board', ready: true },
 
   { key: 'studio',     label: 'Studio Space',     ready: true },
@@ -92,6 +94,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'outreach' && <OutreachLeads team={team} viewer={viewer} />}
         {view === 'clients' && <ClientDatabase team={team} viewer={viewer} />}
         {view === 'kams' && <KAMs team={team} viewer={viewer} />}
+        {view === 'ec' && <EcDirected viewer={viewer} />}
         {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
         {view === 'studio' && <StudioSpace />}
         {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}

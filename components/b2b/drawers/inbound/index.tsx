@@ -23,6 +23,9 @@ import { Spinner } from '../../ui/inbound-chips';
 import { SaveState } from '../../types/inbound-drawer';
 import { EnqLookup, lookupEnqId, upsertInboundLead } from '@/lib/b2b';
 import { updateInboundLeadKylas } from '@/lib/api';
+import { CreditPicker } from '../../ui/credit-picker';
+import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
+import { creditOf } from '../../models/credit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const GATE_TEXT: Record<GateField, string> = {
@@ -41,13 +44,15 @@ const withContactDefaults = (l: InboundLead): InboundLead => ({
 });
 
 export default function InboundDrawer({
-  lead, onClose, onSaved, actorName, members, canReassign,
+  lead, onClose, onSaved, actorName, actorPhone, members, canReassign, canCredit,
 }: {
   lead: InboundLead;
   onClose: () => void;
   actorName: string;
+  actorPhone: string;
   members: TeamMember[];
   canReassign: boolean;
+  canCredit: boolean;
   onSaved: (updated: InboundLead) => void;
 }) {
   const [draft, setDraft] = useState<InboundLead>(() => withContactDefaults(lead));
@@ -67,7 +72,7 @@ export default function InboundDrawer({
     [actorName],
   );
   const commit = useCallback((next: InboundLead) => { saved.current = next; setDraft(next); onSaved(next); }, [onSaved]);
-  const calls = useCallLog(draft, actorName, withHistory, commit);
+  const calls = useCallLog(draft, actorName, actorPhone, withHistory, commit);
 
   const connected = hasConnected(draft.callAttempts);
   const readiness = useMemo(() => closureReadiness(draft, today),
@@ -195,12 +200,14 @@ export default function InboundDrawer({
             canReassign={canReassign}
             onReassigned={async (to) => {
               const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
+              const next = { ...saved.current, ...owned };
               if (crmOnly) {
-                const err = await upsertInboundLead({ ...lead, ...owned });
+                const err = await upsertInboundLead(next);
                 if (err) return `Logged, but the new owner was not saved: ${err}. Try again.`;
               }
+              saved.current = next;
               setDraft((d) => ({ ...d, ...owned }));
-              onSaved({ ...lead, ...owned });
+              onSaved(next);
             }}
           />
 
@@ -233,12 +240,31 @@ export default function InboundDrawer({
             <InboundPlacedUnderCard draft={draft} setPlaced={setPlaced} />
           )}
 
+          {draft.stage === 'Closed' && (
+            <CreditPicker
+              owner={draft.owner}
+              credit={creditOf(draft.revenueCredit)}
+              people={members.filter((m) => m.active)}
+              canEdit={canCredit}
+              actor={actorName}
+              onChange={(c) => set('revenueCredit', c)}
+            />
+          )}
+
           <InboundOutreachCard
             draft={draft}
             actorName={actorName}
             today={today}
             saving={save.saving}
             onSend={(referral: OutreachReferral) => handleSave({ outreachReferral: referral })}
+          />
+
+          <RedirectToEc
+            firm={draft.companyName || draft.company}
+            contactName={draft.primaryContactName || draft.contactName}
+            phones={uniquePhones([draft.primaryContactPhone, draft.phone, ...(draft.additionalContacts || []).map((c) => c.phone)])}
+            sourceTeam="inbound"
+            leadRef={draft.id}
           />
 
           <InboundNotesCard draft={draft} calls={calls} />

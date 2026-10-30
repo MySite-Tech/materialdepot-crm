@@ -2,23 +2,26 @@
 
 import { OutreachLead, OutreachMeeting } from '../../../models/mock-data';
 import { completedMeetings, nextMeetingNumber } from '../../../models/outreach';
+import { nextMeetingBlocker } from '../../../models/outreach/reminders';
 import { Empty, Field, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { inputCls } from '../../../constants/ui';
 import { Dispatch, SetStateAction } from 'react';
 import { MeetingTimeline } from '../meetings';
 
-export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, mDate, mError, mOffice, mTime, meetings, open, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
+export function OutreachCompanyCard({ draft, set, showGates, exhausted, locked, stored, onCheckIn, mArea, mDate, mError, mOffice, mTime, meetings, patchMeeting, scheduleMeeting, scheduling, setMArea, setMDate, setMError, setMOffice, setMTime, setScheduling }: {
   draft: OutreachLead;
   set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
   showGates: boolean;
   exhausted: boolean;
+  locked: Set<number>;
+  stored: Set<number>;
+  onCheckIn: (n: number) => void;
   mArea: string;
   mDate: string;
   mError: string | null;
   mOffice: string;
   mTime: string;
   meetings: OutreachMeeting[];
-  open: OutreachMeeting | undefined;
   patchMeeting: (n: number, patch: Partial<OutreachMeeting>) => void;
   scheduleMeeting: () => void;
   scheduling: boolean;
@@ -39,19 +42,22 @@ export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, m
     ...(draft.contacts || []).filter((c) => c.name.trim()).map((c) => `${c.name.trim()}${c.role ? ` (${c.role})` : ''}`),
   ].filter(Boolean);
   const contactList = `outreach-met-${draft.id}`;
+  const blocker = nextMeetingBlocker(meetings);
   return (
     <SectionCard
       title={`Meetings · ${meetings.length}`}
       owner="crm"
       subtitle="Newest first. Past meetings read as notes; Edit opens one"
-      right={!open && (
-        <button
-          onClick={() => setScheduling((v) => !v)}
-          className="px-3 py-1 text-[11px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
-        >
-          + Schedule meeting {nextMeetingNumber(meetings)}
-        </button>
-      )}
+      right={blocker
+        ? <span className="text-[11px] text-gray-400 max-w-[260px] text-right leading-snug">{blocker}</span>
+        : (
+          <button
+            onClick={() => setScheduling((v) => !v)}
+            className="px-3 py-1 text-[11px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
+          >
+            + Schedule meeting {nextMeetingNumber(meetings)}
+          </button>
+        )}
     >
       {exhausted && (
         <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800 leading-snug">
@@ -92,6 +98,9 @@ export function OutreachCompanyCard({ draft, set, showGates, exhausted, mArea, m
         <MeetingTimeline
           key={draft.id}
           meetings={meetings}
+          locked={locked}
+          stored={stored}
+          onCheckIn={onCheckIn}
           draft={draft}
           set={set}
           patchMeeting={patchMeeting}

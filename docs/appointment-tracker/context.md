@@ -24,6 +24,13 @@ the exact branch name. Cancelled ones are hidden. A failed read shows an amber
 line instead of an empty list. Nothing in the tracker writes to them: the B2B
 team updates the outcome.
 
+**Since 2026-10-30 the same list carries EC redirects** (`docs/b2b/ec-directed.md`).
+A redirect is a `b2b_ec_visit` row with status `Directed`. It appears here only
+when the rep gave an expected visit date: the tracker reads by date range, and
+a redirect without a date never matches one. So the store sees the walk-ins it
+should expect, and nothing it cannot plan for. `visitDate` is optional on the
+type for this reason, and a dateless row renders "No date" rather than throwing.
+
 `fetchApptFeed(force)` hits the route handler, not Kylas directly; the handler
 holds the `KYLAS_API_KEY` and a server-side cache. The response carries
 `fetchedAt`, `cached` and `stale`, and `?refresh=1` forces a refetch — so

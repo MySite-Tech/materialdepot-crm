@@ -13,7 +13,7 @@ export function pastIstAt(dayOffset, hour, minute = 0) {
   return Date.parse(at) <= Date.now() ? at : new Date(Date.now() - 10 * 60_000).toISOString();
 }
 
-export function lastEveningAfterFive() {
-  const today = istAt(0, 17, 30);
-  return Date.parse(today) <= Date.now() ? today : istAt(-1, 18, 30);
+export function lastEveningAfterCutoff() {
+  const today = istAt(0, 19, 30);
+  return Date.parse(today) <= Date.now() ? today : istAt(-1, 20, 30);
 }

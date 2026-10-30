@@ -133,6 +133,23 @@ them. The remarks shown are the ones on the ticket. `/crm/lead-remarks/` is
 not called, because `fetchLeadRemarks` swallows failures into `[]` and would
 turn an outage into "no remarks".
 
+**Round robin only shares out firms with no KAM (2026-10-30).** The user:
+after one round robin, the next one should take the new, unassigned firms, not
+the database again. `useFirmAssign` drops every selected firm that has a KAM
+before planning, and says how many stayed put. Picking a name still moves any
+selected firm, because that is how a manager changes a firm's owner.
+
+**The Orders sub-tab has no "Placed on" column (2026-10-30).** It showed the
+ticket's `closureDate`, which is the deal's hand-set expected closure, so
+orders read "placed on 14 Nov 2026" on 30 Oct. Every tab now shows Created and
+sorts by it, and the expanded row labels the closure date as hand-set. A real
+placement date needs Django to add `estimate.order_placed_time` to each
+`/crm/leads/` row. **Branch · SPOC is the cart owner, not where it was
+booked.** `branch` is the owner's store and `spoc` is `assignedTo`, both
+passed through untouched. The doubled surname ("Tanmay Jagtap Jagtap") comes
+from Django's name join, not from the CRM. The booked-at branch is on the
+estimate, which `/crm/leads/` also does not return.
+
 - **`cartItems` arrives as a string or as `CartItem[]`** (the Sales CRM's leads
   table handles both). `String()` on the array gave "[object Object]", so
   `cartLines` reads either shape. A string is split on newlines only. A comma

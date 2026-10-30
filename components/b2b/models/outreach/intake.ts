@@ -34,7 +34,7 @@ function referralBrief(l: InboundLead): string {
   const slot = `${r.meetingDate}${r.meetingTime ? ` ${r.meetingTime}` : ''}`;
   return [
     `Decision maker: ${r.decisionMaker}`,
-    `Project: ${r.project}`,
+    r.project ? `Project: ${r.project}` : '',
     `Wants to meet: ${slot}${r.meetingLocation ? ` at ${r.meetingLocation}` : ''}`,
     l.requirement ? `Requirement: ${l.requirement}` : '',
     `From ${r.by} (Inbound): ${r.summary || r.note || ''}`,
@@ -58,10 +58,11 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
     id: intakeLeadId(l.id),
     company: String(l.companyName || l.company || l.contactName || '').trim() || 'Unnamed lead',
     contactPerson: l.primaryContactName || l.contactName || '',
+    designation: l.primaryContactRole || undefined,
     phone: l.primaryContactPhone || l.phone || undefined,
     altPhone: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.phone : undefined,
     altName: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.contactName || undefined : undefined,
-    contacts: (l.additionalContacts || []).filter((c) => c.name || c.phone).map((c) => ({ name: c.name, role: '', phone: c.phone || undefined })),
+    contacts: (l.additionalContacts || []).filter((c) => c.name || c.phone).map((c) => ({ name: c.name, role: c.role || '', phone: c.phone || undefined })),
     gstNumber: l.gstNumber || undefined,
     segment: l.segment,
     leadType: l.leadType,

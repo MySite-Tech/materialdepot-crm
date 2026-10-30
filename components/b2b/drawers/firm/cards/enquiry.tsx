@@ -27,7 +27,7 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
         <Fact label="Raised on" value={fmtPhone(r.contactNumber) + (r.contactName ? ` · ${r.contactName}` : '')} />
         <Fact label="Created" value={fmtDate(r.createdAt)} />
         <Fact label="Follow-up" value={fmtDate(r.followUpDate)} />
-        <Fact label={r.ordered ? 'Order placed' : 'Expected closure'} value={fmtDate(r.closureDate)} />
+        <Fact label="Closure date (set by hand on the deal)" value={fmtDate(r.closureDate)} />
         <Fact label="Marked lost" value={fmtDate(r.lostMarkDate)} />
         <Fact label="Branch" value={r.branch} />
         <Fact label="Assigned to" value={r.spoc} />

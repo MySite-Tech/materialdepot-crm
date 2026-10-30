@@ -186,6 +186,9 @@ and the Inbound pool.
   is one `POST /rows/bulk` through `saveMany`, not one write per lead. That
   endpoint ships with b2b-backend `b2b-crm-extra-and-team`, as `createMany`
   already needed.
+- **Round robin skips people switched off for Outreach** (`rotationReps`, 2026-10-30).
+  The BM picker still lists every active Outreach member. Before, every member
+  was in the Outreach round robin, and the switch only existed on Inbound.
 - **Only managers assign.** `scope.isManager` gates the pool and the bulk bar.
   It is no longer `mode !== 'mine'`, which also let everyone assign while the
   team table was missing.
@@ -291,7 +294,36 @@ is edited, so a meeting marked Completed does not collapse while its notes are
 typed. **Done** appears only when it has no gaps. The data and the save gates
 are unchanged.
 
+**A meeting is checked in before it is held (2026-10-30).** The user's flow:
+book it, check in on arrival with a photo and a pin, then write what was
+discussed. A saved Scheduled meeting shows **Check in at the meeting**
+(`ui/check-in-capture.tsx`, shared with KAM, see `kam.md` §A meeting starts
+with a check-in). The check-in is written straight away onto the **saved**
+lead through `onSave(lead, …)`, not left in the draft, so closing the drawer
+does not lose it. `meetingGaps` adds `check-in` to a held meeting dated on or
+after `CHECK_IN_REQUIRED_FROM` (2026-10-31), so it blocks the save, the next
+booking and the timeline. The status dropdown shows "Completed — check in
+first" until then. It replaced the optional "Pin my location now", which was
+taken at the Completed step. Old pins still show as "pinned".
+
+**Meetings run in order (2026-10-30).** `nextMeetingBlocker` (`reminders.ts`)
+hides "+ Schedule meeting N" while meeting N−1 is still Scheduled, or is held
+without its notes or who was met, and says which one to finish. A meeting that
+is held or postponed **in the saved copy** has no status dropdown, and its date
+and place read as text. Only its notes and who was met stay editable. The lock
+reads the saved lead, not the draft, so a status set by mistake can still be
+changed back before Save. The user had seen a held Meeting 2 with no notes
+forced open as a full form, next to "Schedule meeting 3", and read it as being
+asked to book meeting 2 again. Unlocking a saved meeting is not built.
+
 ### Converted = first order, and only a fetched order counts
+
+A Converted lead's revenue goes to its BM, unless a manager credits someone else
+with a reason (`ui/credit-picker.tsx`, `revenueCredit`, 2026-10-30). The
+Leadership Board honours the credit. The Outreach tab's own scorecard still
+counts by BM. A lead also carries a **Redirect to an EC** card
+(`ec-directed.md`).
+
 
 `Closed` is still the stored stage (see above on renaming stored values); it is
 labelled **Converted** everywhere via `OUTREACH_STATUS_LABEL`. `converted_at` is
@@ -339,6 +371,9 @@ is unscoped by market; the CRM's `canUseB2B` gate is the scope, as for `/rows`.
 Until that backend route deploys, `/api/b2b/waitlist` answers 502 naming it,
 the tab shows the amber "unreachable" banner, the KPI reads **Unknown**, and the
 drawer chip reads "Waitlist unknown". That is the designed failure, not a bug.
+The list has a **Waitlist** column too (2026-10-30), on the default lenses and
+Converted/Handoff. It uses the same `WaitlistChip` (`ui/outreach-chips.tsx`) and
+`waitlistFor` as the drawer, short labels: Joined / Not yet / Unknown.
 
 Matching is **exact on the 10-digit mobile** and nothing else, per the sheet
 ("contact number at waitlist and BM lead contact number should match"). A

@@ -61,6 +61,7 @@ export interface Viewer {
   isManager: boolean;
   canManageTeam: boolean;
   member: TeamMember | null;
+  memberships: TeamMember[];
 }
 
 export interface B2BTeamLoad extends TeamState {

@@ -18,7 +18,7 @@ function When({ lead, today }: { lead: InboundLead; today: string }) {
   if (lead.stage === 'New' && !(lead.callAttempts || []).length) {
     const day = inboundWorkDay(lead.leadCreatedAt);
     if (!day) return <span className="text-gray-600">—</span>;
-    if (day > today) return <span className="text-gray-500" title={fmtLeadDateTime(lead.leadCreatedAt)}>After 5 pm · counts {fmtDay(day)}</span>;
+    if (day > today) return <span className="text-gray-500" title={fmtLeadDateTime(lead.leadCreatedAt)}>After 7 pm · counts {fmtDay(day)}</span>;
     return <span className="text-gray-600" title={fmtLeadDateTime(lead.leadCreatedAt)}>{day === today ? 'For today' : `Since ${fmtDay(day)}`}</span>;
   }
   if (isOpenStatus(lead.stage)) {
@@ -26,7 +26,7 @@ function When({ lead, today }: { lead: InboundLead; today: string }) {
       <div className="flex flex-col items-start gap-0.5">
         <FollowUpChip date={lead.followUpDate} today={today} />
         {lead.followUpDate && (
-          <span className="text-[10.5px] text-gray-400">{fmtDay(lead.followUpDate)}{lead.followUpTime ? ` · ${lead.followUpTime}` : ''}</span>
+          <span className="text-[10.5px] text-gray-400">{fmtDay(lead.followUpDate)}</span>
         )}
       </div>
     );
