@@ -56,7 +56,7 @@ a new session knows what is live and what is being worked on.
   tidy-up, so that all four tabs share one tile shape.
 - **KAM: its own 30 / 60-day status, and no header buttons (2026-10-29).**
   Active = ordered in the last 30 days, Inactive 1 month = 31–60 days,
-  Inactive = more than 60 days or none. **Since that evening it is every
+  Inactive = more than 60 days, Never ordered = none (split out 2026-10-30). **Since that evening it is every
   firm's rule** (`clientStatus`), Client Database included, so the two tabs
   agree again. Export, Upload Orders and + Add Order are gone from the tab header
   (orders are added from a firm's page). See `kam.md` §Account status.

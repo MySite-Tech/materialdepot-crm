@@ -6,7 +6,7 @@ export { clientMatchesSearch } from './derived/search';
 export { dealIsOrder, dealIsOpen, averageOrderValue } from './derived/deals';
 export { isOnboarded, firmStudioState } from './derived/studio';
 export { sortedInteractions, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './derived/interactions';
-export { clientStatus, daysToLapse } from './rules/status';
+export { clientStatus, daysToLapse, lastOrderInFuture } from './rules/status';
 export { findDuplicates } from './rules/duplicates';
 export { groupIntoParents, parentSubjectFromClient } from './parents';
 export type { ParentSubject, ParentCompany, ParentGrouping, NameOnlyCandidate } from './parents';

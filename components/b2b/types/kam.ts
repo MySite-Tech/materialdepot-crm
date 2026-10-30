@@ -143,7 +143,7 @@ export interface NewVsRepeat {
 }
 
 
-export type KamFirmLens = 'signoff' | 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'lapsing' | 'inactive';
+export type KamFirmLens = 'signoff' | 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'lapsing' | 'inactive' | 'never';
 
 export type KamOrderLens = 'open' | 'pipeline' | 'orders';
 

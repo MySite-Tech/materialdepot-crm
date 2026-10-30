@@ -12,8 +12,14 @@ function daysSinceLastOrder(m: ClientOrderMetrics, today: string): number | unde
 export function clientStatus(m: ClientOrderMetrics, today: string = istToday()): ClientStatus {
   if (m.dateState === 'pending' || m.dateState === 'unavailable' || m.dateState === 'no-phone') return 'Unknown';
   const days = daysSinceLastOrder(m, today);
-  if (days === undefined || days > INACTIVE_DAYS) return 'Inactive';
+  if (days === undefined) return 'Never ordered';
+  if (days < 0) return 'Unknown';
+  if (days > INACTIVE_DAYS) return 'Inactive';
   return days <= ACTIVE_DAYS ? 'Active' : 'Inactive 1 month';
+}
+
+export function lastOrderInFuture(m: ClientOrderMetrics, today: string = istToday()): boolean {
+  return (daysSinceLastOrder(m, today) ?? 0) < 0;
 }
 
 export function daysToLapse(m: ClientOrderMetrics, today: string = istToday()): number | undefined {

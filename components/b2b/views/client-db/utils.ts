@@ -9,6 +9,7 @@ export function clientLensMatches(lens: ClientLens, r: ClientListRow): boolean {
     case 'active':   return r.status === 'Active';
     case 'lapsing':  return r.status === 'Inactive 1 month';
     case 'inactive': return r.status === 'Inactive';
+    case 'never':    return r.status === 'Never ordered';
     case 'unknown':  return r.status === 'Unknown';
     case 'nokam':    return !r.client.kam;
     case 'pending':  return firmHandoverPending(r.client);
@@ -59,7 +60,7 @@ export function sinceLabel(date: string | undefined, today: string): string | un
   if (!date) return undefined;
   const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
   if (Number.isNaN(days)) return undefined;
-  if (days < 0) return 'future date';
+  if (days < 0) return 'future date, not counted';
   if (days === 0) return 'today';
   if (days < 31) return `${days} day${days === 1 ? '' : 's'} ago`;
   if (days < 365) return `${Math.round(days / 30.4)} mo ago`;

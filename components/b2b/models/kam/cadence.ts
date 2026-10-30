@@ -117,6 +117,7 @@ export function firmLensMatches(lens: KamFirmLens, r: AssignedClientRow, today: 
     case 'active':   return r.status === 'Active';
     case 'lapsing':  return r.status === 'Inactive 1 month';
     case 'inactive': return r.status === 'Inactive';
+    case 'never':    return r.status === 'Never ordered';
   }
 }
 

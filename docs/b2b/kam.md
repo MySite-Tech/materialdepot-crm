@@ -165,8 +165,12 @@ gone; its middle tile is now Inactive 1 month, the same set as KAM's.
 
 `clientStatus` counts days since
 `lastOrderPlaced`. **Active** is 0–30 days, **Inactive 1 month** is 31–60 days,
-and **Inactive** is more than 60 days or no order on record. **Unknown** means
-the history was not read. Checked at each boundary in Node.
+**Inactive** is more than 60 days, and **Never ordered** is no order on record
+for any of the firm's numbers. **Unknown** means the history was not read.
+Never ordered was split out of Inactive on 2026-10-30: the user's definition
+of Inactive is a firm whose last order is over two months old, and 20 of 35
+"Inactive" Client DB firms had never ordered at all. It has its own tile on
+KAM and Client Database, and its own segment on the Dashboard status chart. Checked at each boundary in Node.
 `daysToLapse` gives the days left before a firm drops to the next bucket. It
 drives the "Lapses in" column and the pill's "Nd left".
 
@@ -177,7 +181,7 @@ follow-up or an overdue one**, counted in days to 60. It also feeds the
 Leadership Board's KAM coverage denominator (`leadership.md`). The old At risk
 tile is gone: it was "Active, within 30 days of the 3-month cutoff", and the
 middle bucket replaced it. A future-dated `lastOrderPlaced`, from the b2b-bulk
-bug, reads Active.
+bug, reads Unknown since 2026-10-30 (it read Active before; `client-db.md`).
 
 ### No header actions (2026-10-29)
 
