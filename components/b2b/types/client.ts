@@ -27,11 +27,41 @@ export interface StudioLogin {
 
 export type StudioLogins = Record<string, StudioLogin>;
 
+export interface StudioOrder {
+  enqId: string;
+  phone: string | null;
+  source: string;
+  value: number;
+  orderedOn: string | null;
+  status: string | null;
+}
+
+export interface StudioReferral {
+  name: string;
+  phone: string;
+  status: string;
+  referredOn: string | null;
+  orders: number;
+  value: number;
+}
+
+export interface StudioFirm {
+  partnerId: string;
+  firmName: string;
+  phones: string[];
+  gsts: string[];
+  logins: number;
+  power: boolean;
+  orders: StudioOrder[];
+  referrals: StudioReferral[];
+}
+
 export interface FirmStudioState {
   numbers: number;
   onboarded: number;
   power: number;
   unclassified: number;
+  firm: StudioFirm | null;
 }
 
 type GstCheck = 'valid' | 'bad-format' | 'bad-checksum' | 'unknown-state' | 'empty';
@@ -149,6 +179,9 @@ export interface ClientOrderMetrics {
   openValue?: number;
 
   lastOrderPlaced?: string;
+
+  studioOrders?: number;
+  studioRevenue?: number;
 
   dateState: 'ok' | 'pending' | 'unavailable' | 'no-phone' | 'no-orders';
 }

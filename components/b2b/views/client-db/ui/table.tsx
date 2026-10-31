@@ -68,7 +68,7 @@ function KamCell({ client }: { client: ClientEntity }) {
 function StudioCell({ client, studio }: { client: ClientEntity; studio: ReturnType<typeof useStudioLogins> }) {
   if (studio.loading) return <span className="text-gray-300">…</span>;
   if (!studio.logins) return <span className="text-[11px] text-amber-700" title={`Studio Space could not be read: ${studio.error}`}>Unknown</span>;
-  const access = firmStudioAccess(client, studio.logins);
+  const access = firmStudioAccess(client, studio.logins, studio.firms);
   if (!access) return <span className="text-gray-300">Not onboarded</span>;
   return (
     <span title={STUDIO_ACCESS[access].hint}

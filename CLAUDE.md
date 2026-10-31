@@ -206,7 +206,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 70 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 71 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -285,7 +285,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 70 titles, so grep a title and read around the line you
+**Contents** list of all 71 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -463,6 +463,18 @@ Kylas's feed does not record owner changes, so it cannot prove what moved a lead
 the CRM's assignment sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees
 which firm). Never match a staff login by name. The CRM's team list creates no
 Studio Space login. The CRM keeps screen-only rep scoping by the user's decision.
+
+**Studio and CRM sync (2026-10-31), not live.** The CRM half is on
+`b2b-revamp-2026-10-28`, so it rides PR #33. The backend half is
+b2b-backend branch `studio-access-all-numbers` (`b6d9513`, migration 0024), pushed
+with no PR yet. It needs `gh pr create` and should merge first; #17 also edits
+`b2b_crm.py`, so expect a conflict on the second one in. The CRM runs without it:
+`firms` is absent, the old per-number answer applies and "Add to Studio Space" does
+not appear. Only managers and admins add, merge or delete firms, which applies as
+soon as #33 merges. A firm's Studio status is per firm, by phone, GST or exact name
+(`docs/b2b/studio-space.md` §What is shared). **Do not change Studio's Cancelled
+status:** Studio is right and `estimate_status` lags. **Check a firm on the real
+CRM screen and against `estimate` before reporting on it.**
 
 **b2b-backend is a sibling repo** (`~/Projects/b2b-backend`,
 `MySite-Tech/b2b-backend`, production is `origin/master`). Its checkout has

@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from './session';
-import { canUseB2B } from '@/lib/b2b/team/utils';
+import { canUseB2B, isB2BManager } from '@/lib/b2b/team/utils';
 
-const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access']);
+const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access', 'studio-number']);
 
 class AccessError extends Error {}
 
@@ -10,6 +10,11 @@ function authorise(caller: Caller): void {
   if (!canUseB2B(caller)) {
     throw new AccessError('Only the B2B team can use this data');
   }
+}
+
+function managersOnly(path: string[], method: string, search: URLSearchParams): boolean {
+  if (path[0] === 'studio-number') return true;
+  return path[0] === 'rows' && method === 'DELETE' && (search.get('pipeline') ?? 'client') === 'client';
 }
 
 const accessErrorResponse = (err: unknown) =>
@@ -71,7 +76,11 @@ export async function relayB2B(
   init?: { method?: string; body?: unknown },
 ): Promise<Response> {
   try {
-    authorise(await requireCaller(request));
+    const caller = await requireCaller(request);
+    authorise(caller);
+    if (managersOnly(path, init?.method ?? 'GET', new URL(request.url).searchParams) && !isB2BManager(caller)) {
+      throw new AccessError('Only a B2B manager or an admin can do this');
+    }
   } catch (err) {
     return sessionErrorResponse(err) ?? accessErrorResponse(err) ?? Response.json({ error: 'Not authenticated' }, { status: 401 });
   }

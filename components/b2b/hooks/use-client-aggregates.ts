@@ -1,6 +1,7 @@
 'use client';
 
-import { ClientEntity, ClientOrderMetrics, normalizeContactNumber } from '../models/client';
+import { ClientEntity, ClientOrderMetrics, normalizeContactNumber, withStudioOrders } from '../models/client';
+import { useStudioLogins } from './use-studio-logins';
 import { ClientOrderHistory, clientMetricsFrom, fetchB2BBulk, orderDatesFromAggregates } from '@/lib/b2b';
 import { useCallback, useState } from 'react';
 
@@ -9,6 +10,7 @@ type OrderDates = ReturnType<typeof orderDatesFromAggregates>;
 export function useClientAggregates() {
   const [aggregates, setAggregates] = useState<Record<string, ClientOrderHistory>>({});
   const [dates, setDates] = useState<OrderDates | null>(null);
+  const { firms } = useStudioLogins();
 
   const load = useCallback(async (phones: string[], enquiryIds: string[] = []) => {
     const bulk = await fetchB2BBulk(phones, enquiryIds);
@@ -26,8 +28,8 @@ export function useClientAggregates() {
   }, [dates]);
 
   const metricsFor = useCallback(
-    (c: ClientEntity): ClientOrderMetrics => clientMetricsFrom(c.contacts, aggregates, dates || undefined),
-    [aggregates, dates],
+    (c: ClientEntity): ClientOrderMetrics => withStudioOrders(clientMetricsFrom(c.contacts, aggregates, dates || undefined), c, firms),
+    [aggregates, dates, firms],
   );
 
   const historyFor = useCallback(

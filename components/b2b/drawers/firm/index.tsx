@@ -4,7 +4,9 @@ import { AccountCard } from './cards/account';
 import { ContactsCard } from './cards/contacts';
 import { EcVisitsCard } from './cards/ec-visits';
 import { GstsCard } from './cards/gsts';
+import { DeleteFirm } from './cards/delete-firm';
 import { OrdersCard } from './cards/orders';
+import { ReferredClientsCard } from './cards/referred-clients';
 import { SpocsCard } from './cards/spocs';
 import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
@@ -17,7 +19,7 @@ import { btnGhost } from '../../constants/ui';
 import { ClientOrderHistory } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
-export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], onClose, onSave, onEdit, children }: {
+export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], onClose, onSave, onEdit, onDelete, canAddStudioNumber, children }: {
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
@@ -31,6 +33,8 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   onClose: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
   onEdit?: () => void;
+  onDelete?: (c: ClientEntity) => Promise<string | null>;
+  canAddStudioNumber?: boolean;
   children?: React.ReactNode;
 }) {
   const phones = useMemo(() => contactNumbers(client.contacts), [client.contacts]);
@@ -103,7 +107,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            <ContactsCard client={client} clients={clients} historyFor={historyFor} via={via} onVia={setVia} onSave={onSave} />
+            <ContactsCard client={client} clients={clients} canAddStudioNumber={canAddStudioNumber} historyFor={historyFor} via={via} onVia={setVia} onSave={onSave} />
             <GstsCard client={client} clients={clients} onSave={onSave} />
           </div>
 
@@ -117,11 +121,15 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             onRecheck={orders.recheck}
           />
 
+          <ReferredClientsCard client={client} metrics={metrics} />
+
           <EcVisitsCard client={client} />
 
           {children}
 
           <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} kams={kams} onSave={onSave} />
+
+          {onDelete && <DeleteFirm client={client} onDelete={onDelete} />}
         </div>
       </div>
     </div>

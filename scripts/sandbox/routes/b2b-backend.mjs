@@ -82,8 +82,12 @@ function studioLogins(db) {
   const phones = db.rows.filter((r) => r.pipeline === 'client').flatMap((r) => (r.meta_data?.contacts ?? []).map((c) => String(c.number).replace(/\D/g, '').slice(-10)));
   return {
     logins: phones.slice(0, 4).map((phone, i) => ({
-      phone, firm_name: 'Sandbox Studio', role: 'principal', visible_tabs: i % 2 ? ['rewards'] : null, power: i % 2 === 0,
+      phone, partner_id: `sandbox-${i}`, firm_name: 'Sandbox Studio', role: 'principal', visible_tabs: i % 2 ? ['rewards'] : null, power: i % 2 === 0,
     })),
+    firms: [
+      ...phones.slice(0, 4).map((phone, i) => ({ partner_id: `sandbox-${i}`, firm_name: 'Sandbox Studio', phones: [phone], gsts: [], logins: 1, power: i % 2 === 0, orders: i ? [] : [{ enq_id: 'ENQ-STUDIO-1', phone: '9000099998', source: 'team', value: 25000, ordered_on: '2026-10-20', status: 'Delivered' }], referrals: i ? [] : [{ name: 'Sandbox Referred Client', phone: '9000099997', status: 'approved', referred_on: '2026-10-01', orders: 0, value: 0 }] })),
+      { partner_id: 'sandbox-unmatched', firm_name: 'Sandbox Unmatched Studio', phones: ['9000099999'], gsts: [], logins: 3, power: true, orders: [], referrals: [] },
+    ],
   };
 }
 
@@ -156,6 +160,7 @@ export function backendRoutes(db) {
     if (path === '/kam-load') return kamLoad(db);
     if (path === '/waitlist') return { signups: db.waitlist ?? [] };
     if (path === '/studio-access') return studioLogins(db);
+    if (path === '/studio-number' && method === 'POST') return { phone: body?.phone, partner_id: body?.partner_id };
     if (path === '/staff-handoff' && method === 'POST') {
       if (!STUDIO_STAFF[body?.phone]) return reply(404, { error: 'No active Studio Space team login has this mobile' });
       const code = `sandbox-${Object.keys(db.handoffs ??= {}).length + 1}-${body.phone}`;

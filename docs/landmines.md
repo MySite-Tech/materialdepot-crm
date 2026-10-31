@@ -7,10 +7,11 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-70 entries. They live in one file because they cross-reference each other —
+71 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
+- An inner join on an optional key reads as "not onboarded"
 - A grid item's `min-width: auto` defeats `overflow-x-auto` inside it
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
 - A booking's date must come from the sub-job, not from its assignment
@@ -1105,3 +1106,16 @@ grep for a term, then read around the line you hit rather than opening all of it
   performance read the raw rows, so 5 closed orders counted ₹0 there until someone
   happened to open the KAM tab. The shape: **when a value is filled in after
   loading, every reader needs the step, not only the first two.**
+
+### An inner join on an optional key reads as "not onboarded" (2026-10-31)
+
+A firm with 8 logins on Studio Space showed "Not onboarded" in the CRM. Its
+registered number had lost its login link, as Studio does when a login's mobile
+changes and the old number has orders, and `GET /b2b/studio-access` inner-joined
+that link, so the row vanished with no error: a missing row is what "not on Studio
+Space" looks like. The deeper fault was asking a per-number question to get a
+per-firm answer. Fixing only the join left firms the CRM holds under another
+number, and a first pass here called one of them absent from the CRM because a
+name search missed a spelling, when its GSTIN matched. When a list means
+"everything X holds", check which rows the join key can drop, and reconcile against
+the source's own count by every key you have (`docs/b2b/studio-space.md`).

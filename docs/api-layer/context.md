@@ -121,10 +121,15 @@ original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
 then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
 server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
 (`app/api/b2b/waitlist`, `ec-visits`) call `b2bBackendFetch` with the
-same credential instead. Three things the relay deliberately does:
+same credential instead. Four things the relay deliberately does:
 
+- **Refuses two things to anyone but a manager or admin (2026-10-31).**
+  `managersOnly` covers `studio-number` and a client-row `DELETE`, so hiding the
+  buttons is not the only check. Adding a client row is not on the list, because
+  Outreach's handover creates firms through the same call
+  (`docs/b2b/client-db.md` §Who can add, merge and delete).
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`) so the catch-all is a defined surface, not an open proxy to
+  `studio-access`, `studio-number`) so the catch-all is a defined surface, not an open proxy to
   the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
