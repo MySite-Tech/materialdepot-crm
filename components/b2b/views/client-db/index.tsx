@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { fmtShortINR } from '../../models/mock-data';
 import { repNames } from '../../models/outreach/handover';
@@ -9,7 +9,9 @@ import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { AssignBar } from '../../ui/assign-bar';
+import { useClientColumns } from './hooks/use-client-columns';
 import { useFirmAssign } from './hooks/use-firm-assign';
+import { useSpocSources } from './hooks/use-spoc-sources';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
@@ -51,6 +53,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   });
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
   const studio = useStudioLogins();
+  const spocSource = useSpocSources();
+  const { visible, setVisible } = useClientColumns();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,7 +105,11 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
-  const pageRows = rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const pageRows = useMemo(() => rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE), [rows, curPage]);
+  const pageSpocs = useMemo(
+    () => new Map(pageRows.map(({ client }) => [client.id, firmSpocs(client, firmLinks(client, spocSource.inbound, spocSource.outreach), [])])),
+    [pageRows, spocSource.inbound, spocSource.outreach],
+  );
 
   const unread = byLens.unknown.length;
   const futureDated = byLens.unknown.filter((r) => lastOrderInFuture(r.metrics, today)).length;
@@ -238,6 +246,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           setSearch={setSearch}
           kamOptions={kamOptions}
           onClear={clearAll}
+          visible={visible}
+          onColumns={setVisible}
         />
       )}
 
@@ -308,6 +318,9 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
               picked={viewer.isManager ? assigner.picked : undefined}
               onPick={assigner.toggle}
               onPickPage={() => assigner.togglePage(pageRows.map((r) => r.client.id))}
+              visible={visible}
+              spocs={pageSpocs}
+              spocSource={spocSource}
             />
           ) : (
             <div className="py-12 px-6 text-center">

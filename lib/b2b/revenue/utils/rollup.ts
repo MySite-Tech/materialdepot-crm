@@ -1,5 +1,5 @@
 import { REVENUE_CHANNELS } from '../constants';
-import type { ChannelSplit, OrderBucket, RevenueChannel, RevenueFilter, RevenueOrder, RollupRow } from '../types';
+import type { BridgeCell, BridgeRow, ChannelSplit, OrderBucket, RevenueChannel, RevenueFilter, RevenueOrder, RollupRow } from '../types';
 
 export const isCounted = (o: RevenueOrder): boolean => (REVENUE_CHANNELS as string[]).includes(o.bucket);
 
@@ -13,7 +13,7 @@ export const matchesFilter = (o: RevenueOrder, f: RevenueFilter): boolean => {
   if (f.person !== 'all' && o.person !== f.person) return false;
   if (f.store !== 'all' && o.store !== f.store) return false;
   const q = f.search.trim().toLowerCase();
-  return !q || `${o.firm} ${o.client} ${o.person} ${o.placedBy}`.toLowerCase().includes(q);
+  return !q || `${o.id} ${o.phone} ${o.firm} ${o.client} ${o.person} ${o.placedBy}`.toLowerCase().includes(q);
 };
 
 export function bucketSplit(orders: RevenueOrder[], bucket: OrderBucket): ChannelSplit {
@@ -36,10 +36,26 @@ export function channelSplits(orders: RevenueOrder[]): Record<RevenueChannel, Ch
   };
 }
 
+const cell = (orders: RevenueOrder[]): BridgeCell => ({ value: orders.reduce((s, o) => s + o.value, 0), orders });
+
+export const bridgeRows = (orders: RevenueOrder[]): BridgeRow[] =>
+  (['direct', 'ec', 'referred', 'unowned', 'untraced'] as OrderBucket[]).map((bucket) => {
+    const rows = orders.filter((o) => o.bucket === bucket).sort((a, b) => b.value - a.value);
+    return { bucket, branch: cell(rows.filter((o) => o.bookedOnB2B)), store: cell(rows.filter((o) => !o.bookedOnB2B)) };
+  });
+
+export const bridgeTotal = (rows: BridgeRow[], side: 'branch' | 'store', keep: (r: BridgeRow) => boolean): BridgeCell =>
+  cell(rows.filter(keep).flatMap((r) => r[side].orders));
+
+const rollupKey = (o: RevenueOrder, keyOf: (o: RevenueOrder) => string): string => keyOf(o) || 'Not assigned';
+
+export const rollupOrders = (orders: RevenueOrder[], keyOf: (o: RevenueOrder) => string, key: string): RevenueOrder[] =>
+  orders.filter((o) => rollupKey(o, keyOf) === key).sort((a, b) => b.value - a.value);
+
 export function rollupBy(orders: RevenueOrder[], keyOf: (o: RevenueOrder) => string, detailOf: (o: RevenueOrder) => string): RollupRow[] {
   const rows = new Map<string, RollupRow & { details: Set<string> }>();
   for (const o of orders) {
-    const key = keyOf(o) || 'Not assigned';
+    const key = rollupKey(o, keyOf);
     const row = rows.get(key) ?? { key, value: 0, orders: 0, direct: 0, ec: 0, referred: 0, uncounted: 0, detail: '', details: new Set<string>() };
     row.value += o.value;
     row.orders += 1;

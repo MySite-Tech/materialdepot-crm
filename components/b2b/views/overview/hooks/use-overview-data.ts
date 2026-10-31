@@ -6,7 +6,7 @@ import { ClientEntity, contactNumbers } from '../../../models/client';
 import { BaseData, RangeData, RangeKey } from '../types';
 import { rangeFor } from '../utils';
 import { B2B_STATS_BRANCH, StatsBasis, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 async function readBase(): Promise<BaseData> {
   const now = new Date();
@@ -73,7 +73,8 @@ async function readRange(range: RangeKey, basis: StatsBasis): Promise<RangeData>
 }
 
 export function useOverviewData() {
-  const [range, setRange] = useState<RangeKey>('month');
+  const [range, setRangeState] = useState<RangeKey>('month');
+  const rangePicked = useRef(false);
   const [basis, setBasis] = useState<StatsBasis>('order');
   const [base, setBase] = useState<BaseData | null>(null);
   const [ranged, setRanged] = useState<RangeData | null>(null);
@@ -108,6 +109,15 @@ export function useOverviewData() {
 
   useEffect(() => { loadBase(); }, [loadBase]);
   useEffect(() => { loadRange(); }, [loadRange]);
+
+  useEffect(() => {
+    if (!rangePicked.current && range === 'month' && ranged?.statsOk && !ranged.stats.total.count) setRangeState('lastMonth');
+  }, [ranged, range]);
+
+  const setRange = useCallback((r: RangeKey) => {
+    rangePicked.current = true;
+    setRangeState(r);
+  }, []);
 
   return {
     base, ranged, range, setRange, basis, setBasis, updatedAt, reload,

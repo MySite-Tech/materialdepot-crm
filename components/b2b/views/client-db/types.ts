@@ -23,6 +23,8 @@ export interface ClientFilters {
   kam: string;
 }
 
+export type ClientColumn = 'contact' | 'gst' | 'orders' | 'enquiries' | 'revenue' | 'avgOrder' | 'openCarts' | 'lastOrder' | 'status' | 'studio' | 'kam' | 'inboundSpoc' | 'outreachSpoc' | 'ecSpoc' | 'clientType' | 'segment' | 'source';
+
 export type SortKey = 'company' | 'orders' | 'revenue' | 'lastOrder';
 
 export interface SortState {

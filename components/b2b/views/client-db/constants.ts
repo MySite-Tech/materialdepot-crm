@@ -1,7 +1,31 @@
 import { ACTIVE_DAYS, INACTIVE_DAYS } from '../../models/client';
-import { ClientFilters, ClientLens, ClientLensMeta, SortKey, SortState } from './types';
+import { ClientColumn, ClientFilters, ClientLens, ClientLensMeta, SortKey, SortState } from './types';
 
 export const PAGE_SIZE = 25;
+
+export const CLIENT_COLUMNS: { key: ClientColumn; label: string }[] = [
+  { key: 'contact', label: 'Primary contact' },
+  { key: 'gst', label: 'GST' },
+  { key: 'orders', label: 'Orders' },
+  { key: 'enquiries', label: 'Enquiries' },
+  { key: 'revenue', label: 'Revenue' },
+  { key: 'avgOrder', label: 'Avg order' },
+  { key: 'openCarts', label: 'Open carts' },
+  { key: 'lastOrder', label: 'Last order' },
+  { key: 'status', label: 'Status' },
+  { key: 'studio', label: 'Studio Space' },
+  { key: 'kam', label: 'KAM SPoC' },
+  { key: 'inboundSpoc', label: 'Inbound SPoC' },
+  { key: 'outreachSpoc', label: 'Outreach SPoC' },
+  { key: 'ecSpoc', label: 'EC SPoC' },
+  { key: 'clientType', label: 'Client type' },
+  { key: 'segment', label: 'Segment' },
+  { key: 'source', label: 'Source' },
+];
+
+export const COLUMNS_HIDDEN_AT_FIRST: ClientColumn[] = ['enquiries', 'avgOrder', 'openCarts', 'clientType', 'segment', 'source'];
+
+export const COLUMNS_STORAGE_KEY = 'b2b_client_hidden_columns';
 
 export const CLIENT_LENS: Record<ClientLens, ClientLensMeta> = {
   all:      { title: 'All firms', heading: 'All firms', rule: 'Every firm in the Client Database that matches the search and filters.', empty: 'No firm matches.', accent: '#1F2937' },

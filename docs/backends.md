@@ -128,6 +128,7 @@ and who changes it is still open. Each row names the doc with the detail.
 | 10 | `/crm/leads/` rows gain `orderPlacedAt`, `bookedBranch` and `clientGst` | Single-enquiry views show Created instead of a placement date, and the cart owner's branch instead of the booked one | `b2b/client-db.md` §One enquiry |
 | 11 | The name join in `/crm/leads/` doubles surnames in `assignedTo` | Reps show as "First Last Last" | `b2b/client-db.md` §One enquiry |
 | 12 | Find what spends the shared Kylas key on a 14s cycle, and throttle it or give it its own key | Kylas answers only 429 for about 7s in every 14s, so CRM calls wait up to 15s and can fail. Also check whether a separate key gets a separate budget | `api-layer/context.md` §`lib/server/b2b-team` |
+| 13 | `/crm/leads/b2b-bulk/` histories gain `lastOrderBm` per phone | Client Database's EC SPoC column reads "Not logged" unless a manager logged one, although the Firm page can show the BM | `b2b/client-db.md` §Choosing the list's columns |
 
 Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
 Users), and backfilling `crm.remarks_quality` on existing permission lists.

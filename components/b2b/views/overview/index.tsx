@@ -85,6 +85,7 @@ export default function B2BOverview({ team, onNavigate }: {
           stats={ranged.stats}
           open={ranged.open}
           range={o.range}
+          period={selected}
           basis={o.basis}
           busy={o.rangeBusy}
           onRange={o.setRange}

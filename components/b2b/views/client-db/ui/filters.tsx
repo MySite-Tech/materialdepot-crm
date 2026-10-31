@@ -3,20 +3,23 @@
 import { Search } from 'lucide-react';
 import { CLIENT_ENTITY_TYPES, SEGMENTS } from '../../../models/client';
 import { fmtShortINR } from '../../../models/mock-data';
-import { CLIENT_LENS } from '../constants';
-import { ClientFilters, ClientLens } from '../types';
+import { MultiSelect } from '../../../../crm/ui/inputs';
+import { CLIENT_COLUMNS, CLIENT_LENS } from '../constants';
+import { ClientColumn, ClientFilters, ClientLens } from '../types';
 import { filterChips } from '../utils';
 
 const selectCls = (on: boolean) =>
   `pl-2.5 pr-7 py-1.5 text-[12px] rounded-md border cursor-pointer outline-none ${on ? 'border-[#0F766E] bg-teal-50 text-[#0F766E] font-semibold' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'}`;
 
-export function ClientFilterBar({ f, set, search, setSearch, kamOptions, onClear }: {
+export function ClientFilterBar({ f, set, search, setSearch, kamOptions, onClear, visible, onColumns }: {
   f: ClientFilters;
   set: (patch: Partial<ClientFilters>) => void;
   search: string;
   setSearch: (v: string) => void;
   kamOptions: string[];
   onClear: () => void;
+  visible: Set<ClientColumn>;
+  onColumns: (keys: ClientColumn[]) => void;
 }) {
   const dirty = !!search.trim() || filterChips(f).length > 0;
   return (
@@ -48,6 +51,15 @@ export function ClientFilterBar({ f, set, search, setSearch, kamOptions, onClear
       {dirty && (
         <button onClick={onClear} className="text-[12px] font-semibold text-gray-500 hover:text-gray-900 px-1">Clear all</button>
       )}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] text-gray-400">Columns</span>
+        <MultiSelect
+          options={CLIENT_COLUMNS.map((c) => c.label)}
+          selected={CLIENT_COLUMNS.filter((c) => visible.has(c.key)).map((c) => c.label)}
+          onChange={(labels) => onColumns(CLIENT_COLUMNS.filter((c) => labels.includes(c.label)).map((c) => c.key))}
+          label="Firm only"
+        />
+      </div>
     </div>
   );
 }

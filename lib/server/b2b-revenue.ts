@@ -5,7 +5,7 @@ import type { EcVisitRow } from '../b2b/ec-visits/types';
 import { buildNumberBook, buildRepTeams } from '../b2b/revenue/utils/book';
 import { classifyOrder } from '../b2b/revenue/utils/classify';
 import { B2B_BRANCH } from '../b2b/revenue/constants';
-import type { B2BSourceRow, OrderInput, RevenueOrder, RevenueReport, StudioFirm } from '../b2b/revenue/types';
+import type { B2BSourceRow, BranchLedger, LedgerBasis, OrderInput, RevenueOrder, RevenueReport, StudioFirm } from '../b2b/revenue/types';
 import { b2bBackendFetch } from './b2b-backend';
 import { readMembers } from './b2b-team';
 
@@ -40,19 +40,44 @@ async function allOrders(query: string, auth: string): Promise<{ orders: OrderIn
   };
 }
 
-export async function buildRevenueReport(from: string, to: string, auth: string): Promise<RevenueReport> {
-  const window = `order_from=${from}&order_to=${to}&branch_basis=estimate`;
-  const [all, booked, rows, studio, redirects, team] = await Promise.all([
-    allOrders(window, auth),
-    allOrders(`${window}&branch=${B2B_BRANCH}`, auth),
+async function readHolders() {
+  const [rows, studio, redirects, team] = await Promise.all([
     b2bBackendFetch<B2BSourceRow[]>('/rows'),
     b2bBackendFetch<{ firms?: StudioFirm[] }>('/studio-access').then((r) => r.firms ?? null).catch(() => null),
     b2bBackendFetch<{ visits: EcVisitRow[] }>('/ec-visits?kind=redirect').catch(() => null),
     readMembers().catch(() => null),
   ]);
+  return {
+    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit)),
+    reps: buildRepTeams(team?.members ?? []),
+    studioOk: !!studio,
+    redirectsOk: !!redirects,
+    teamOk: !!team,
+  };
+}
 
-  const book = buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit));
-  const reps = buildRepTeams(team?.members ?? []);
+export async function buildBranchLedger(from: string, to: string, basis: LedgerBasis, auth: string): Promise<BranchLedger> {
+  const dates = !from ? '' : basis === 'order'
+    ? `order_from=${from}&order_to=${to}&branch_basis=estimate&`
+    : `created_from=${from}&created_to=${to}&`;
+  const [booked, holders] = await Promise.all([allOrders(`${dates}branch=${B2B_BRANCH}`, auth), readHolders()]);
+  return {
+    orders: booked.orders
+      .map((o) => classifyOrder(o, true, holders.book, holders.reps))
+      .filter((o): o is RevenueOrder => !!o),
+    truncated: booked.truncated,
+    studioOk: holders.studioOk,
+  };
+}
+
+export async function buildRevenueReport(from: string, to: string, auth: string): Promise<RevenueReport> {
+  const window = `order_from=${from}&order_to=${to}&branch_basis=estimate`;
+  const [all, booked, { book, reps, studioOk, redirectsOk, teamOk }] = await Promise.all([
+    allOrders(window, auth),
+    allOrders(`${window}&branch=${B2B_BRANCH}`, auth),
+    readHolders(),
+  ]);
+
   const bookedIds = new Set(booked.orders.map((o) => o.id));
   const unique = new Map([...all.orders, ...booked.orders].map((o) => [o.id, o]));
 
@@ -64,9 +89,9 @@ export async function buildRevenueReport(from: string, to: string, auth: string)
       .map((o) => classifyOrder(o, bookedIds.has(o.id), book, reps))
       .filter((o): o is RevenueOrder => !!o),
     truncated: all.truncated || booked.truncated,
-    studioOk: !!studio,
-    redirectsOk: !!redirects,
-    teamOk: !!team,
+    studioOk,
+    redirectsOk,
+    teamOk,
     generatedAt: new Date().toISOString(),
   };
 }
