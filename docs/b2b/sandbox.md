@@ -77,7 +77,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | Outreach pool, accept, meetings, handover | backend rows (pipeline `outbound`, id `OR-IN-<kylas id>`) | backend stub |
 | Studio Space waitlist | backend `GET /b2b/waitlist` | backend stub, two sign-ups: one on Mockup Interiors' mobile (Waitlist tile 1), one matching no lead |
 | Studio Space access | backend `GET /b2b/studio-access` | backend stub: up to four logins from the seeded clients, plus one studio matching no client, which raises the amber notice on Numbers by firm. The first studio carries one order and one referred client. `POST /b2b/studio-number` is accepted and stores nothing |
-| Overview revenue channels | `/api/b2b/revenue` → `/crm/leads/`, backend `/sync/pull-numbers` | stub filters by `order_from`, `order_to` and `branch` when `branch_basis=estimate`; seeded with one Direct KAM, one Direct Inbound, one referred and one partner-team order |
+| Overview revenue channels | `/api/b2b/revenue` → `/crm/leads/`, backend `GET /b2b/studio-access` | stub filters by `order_from`, `order_to` and `branch` when `branch_basis=estimate`; seeded with one Direct KAM, one Direct Inbound, one referred and one partner-team order |
 | Studio Space sign-in | backend `POST /b2b/staff-handoff`, `GET /auth/handoff` | backend stub: Kavya and Meera get a code, everyone else a 404. The frame shows a JSON line naming who would be signed in, not the console |
 | EC visits (Firm page, Appointment Tracker) | backend `GET/PUT /b2b/ec-visits` | backend stub |
 | KAM firms, orders, last-order status | backend rows (`client`, `kam`), `/b2b/kam-load`; Django `/crm/leads/b2b-bulk/`, `/client-order-history/` | backend and Django stubs |

@@ -66,19 +66,11 @@ export interface B2BSourceRow {
   meta_data?: Record<string, unknown> | null;
 }
 
-export interface StudioReferral {
-  id: string;
-  md_phone: string | null;
-  status: string | null;
-  source: string | null;
-  firm_name?: string | null;
-  partner_phone?: string | null;
-  referred_on?: string | null;
-}
-
-export interface StudioNumbers {
-  referrals: StudioReferral[];
-  linked: { phone: string | null; referral_id: string }[];
+export interface StudioFirm {
+  firm_name: string;
+  phones: string[];
+  orders: { phone: string | null; source: string | null }[];
+  referrals: { phone: string | null; status: string | null; referred_on: string | null }[];
 }
 
 export interface RedirectInput {
