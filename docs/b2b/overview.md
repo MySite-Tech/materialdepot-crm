@@ -59,7 +59,7 @@ they are worth.
   whole target. A line under the cards states the filtered share.
 - **Referred uses `/sync/pull-numbers`,** which holds `source`. It has no firm name,
   referral date or partner phone yet: until the b2b-backend change that adds them
-  deploys (branch `pull-numbers-firm-name`, no PR yet), the firm reads "Studio Space
+  deploys (b2b-backend PR #19, open), the firm reads "Studio Space
   firm", the credited person is blank and the date gate is off. A failed read shows
   Unknown, never ₹0. Decide on that branch after checking whether `studio-access`
   `firms[]` referrals (`studio-space.md`) already carry what this needs.
