@@ -387,6 +387,13 @@ per-person Targets, Overview, the check-in, multi-team people, EC Directed, the
 assign bar, firm SPoCs and the EC B2B Referral tab. Sales, retail, manager and admin
 get that tab by role; any other role with a permission list needs
 `crm.ec_b2b_referral` ticked under Admin > Users.
+**PR #33 is open and carries everything since #32 (2026-10-31):** no check-in photo,
+a KAM can only accept a firm, live KAM pickers, one rep name through `sameRep`,
+My performance resolving order values, and the EC tab by role. It needs no backend
+change. **A session cannot merge it:** the auto mode classifier refuses a merge to
+`main` as a production deploy, so a person merges, and that is the deploy. A failed
+`Build and Deploy Job` on a PR is Azure's preview limit when the log says "maximum
+number of staging environments" after "Compiled successfully".
 **A merge to b2b-backend `master` runs its migrations by itself.** Seen on
 2026-10-31: 0022 was live about four minutes after #15 merged. To test that without
 writing, open `/auth/handoff?code=x` in real Chrome, because Cloudflare challenges
@@ -610,6 +617,11 @@ for it.
   first, then One person or Round robin over a chosen set. Bulk takes only records
   with no owner; an owned record moves only as the single selected row. Do not add
   a second assign control. A team stays greyed out where no data path exists.
+
+- **A rep's name is not a key (2026-10-31).** Rows hold roster short names and the
+  team table full ones. Compare with `sameRep`, build lists with `repNames`, and
+  never `===` two rep names or fill a picker from `roster.ts`. `useB2BReps` is the
+  live team, with the roster only as its fallback.
 
 - **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
   removed it from Client Database, Leads and Inbound for every role, admins

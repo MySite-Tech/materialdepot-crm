@@ -31,7 +31,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`ec-referral.md`](ec-referral.md) | EC B2B Referral (2026-10-31): the top-level form store staff use to hand a walk-in B2B client to Outreach, its own route and slug, the duplicate check | 44 |
 | [`overview.md`](overview.md) | The Overview sub-tab (ex-Dashboard, rebuilt 2026-10-30): five sections, what was dropped and why, KAM's win rate vs a cumulative funnel, the validated team colours | 70 |
 | [`leadership.md`](leadership.md) | Leadership Board (managers) / My performance (everyone else): one KPI engine per team over a date range, per person and per day; who the people are; targets and what is not scored yet. Also Set targets: per-person overrides of the sheet's targets, the B2B target as their sum, and who gets credited for a call a manager logs | 182 |
-| [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (pushed, not merged): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 333 |
+| [`revamp-2026-10-28.md`](revamp-2026-10-28.md) | Engineer-facing change summary for branch `b2b-revamp-2026-10-28` (PR #29 and #32 merged, #33 open): the team identity layer, Inbound round robin, Outreach rebuild, deploy prerequisites (migration, Azure env vars), how it was verified and known gaps | 333 |
 | [`sandbox.md`](sandbox.md) | `npm run dev:sandbox`: the whole journey on dummy data with Django, the B2B backend and Kylas stubbed. Personas, what is still real, and which system answers each step in production vs here | 92 |
 
 ## Where the B2B work stands (2026-10-28)
@@ -79,6 +79,7 @@ a new session knows what is live and what is being worked on.
   revenue target (`leadership.md`); Dashboard became **Overview**, with five
   sections and no duplicate panels (`overview.md`). These need a new PR to
   `main` to deploy.
+- **2026-10-31, after PR #32, in open PR #33 and not on `main`:** the check-in is location only (`kam.md`); a KAM can only accept a firm (`kam.md`); pickers and filters use the live team and rep names match through `sameRep` (`data-layer.md`); My performance resolves KAM order values like Overview (`kam.md`); sales, retail, manager and admin get EC B2B Referral by role (`ec-referral.md`). A person must merge it.
 - **2026-10-31:** EC B2B Referral is a new top-level tab and Outreach source (`ec-referral.md`). The shared assign bar is now One person or Round robin over a chosen set of people, on Client Database, Outreach's pool and the Leads tab (`leads.md`).
 - **2026-10-30, evening (the user's second list):**
   - a meeting is checked in with an exact pin before it can be held, for Outreach and KAM (`kam.md` §A meeting starts with a check-in);
