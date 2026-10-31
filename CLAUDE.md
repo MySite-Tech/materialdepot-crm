@@ -454,15 +454,10 @@ a staff login by name. The CRM's team list creates no Studio Space login, so an
 admin still has to add the new people. The CRM keeps screen-only rep scoping by the
 user's decision.
 
-**Studio and CRM sync (2026-10-31), not live.** The CRM half is on
-`b2b-revamp-2026-10-28`, so it rides PR #33. The backend half is
-b2b-backend branch `studio-access-all-numbers` (`b6d9513`, migration 0024), pushed
-as PR #18, open. It must merge first; #17 also edits
-`b2b_crm.py` but merged cleanly on it in a trial. The CRM runs without it:
-`firms` is absent, the old per-number answer applies and "Add to Studio Space" does
-not appear. Only managers and admins add, merge or delete firms, which applies as
-soon as #33 merges. A firm's Studio status is per firm, by phone, GST or exact name
-(`docs/b2b/studio-space.md` §What is shared). **Do not change Studio's Cancelled
+**Studio and CRM sync (live 2026-10-31, `34e85b9`, backend #18).** A firm's Studio
+status is per firm, by phone, GST or exact name (`docs/b2b/studio-space.md` §What is
+shared). Only managers and admins add, merge or delete firms. Four approved numbers
+still need a manager's Add to Studio Space click. **Do not change Studio's Cancelled
 status:** Studio is right and `estimate_status` lags. **Check a firm on the real
 CRM screen and against `estimate` before reporting on it.**
 
