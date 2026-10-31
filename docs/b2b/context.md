@@ -27,6 +27,7 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`sales-tab-redesign.md`](sales-tab-redesign.md) | **Planning, in progress across sessions.** Manager-vs-individual effort/output visibility redesign — read before touching any `components/b2b/**` file for this initiative, and update every session | — |
 | [`kpi-definitions.md`](kpi-definitions.md) | The user's Studio Team KPI sheet, transcribed — Outreach/Inbound/KAM effort vs. output targets and the CRM-field rules behind each one. Feeds the redesign above | — |
 | [`ec-directed.md`](ec-directed.md) | EC Directed (2026-10-30): any team sends a client to an EC, kept as `kind='redirect'` EC visits; assisted revenue checked per redirect on click and saved, never added to a total | — |
+| client_master import | The 1,000+ firms copied into the Client Database on 2026-10-31: [`client-db.md`](client-db.md) §The client_master import | — |
 | Firm SPoCs | Four optional SPoCs on every firm and sales by SPoC (2026-10-31): [`client-db.md`](client-db.md) §Four SPoCs on every firm | — |
 | [`ec-referral.md`](ec-referral.md) | EC B2B Referral (2026-10-31): the top-level form store staff use to hand a walk-in B2B client to Outreach, its own route and slug, the duplicate check | 44 |
 | [`overview.md`](overview.md) | The Overview sub-tab (ex-Dashboard, rebuilt 2026-10-30): five sections, what was dropped and why, KAM's win rate vs a cumulative funnel, the validated team colours | 70 |

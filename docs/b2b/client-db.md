@@ -481,3 +481,24 @@ Inbound leads, closed Outreach leads and the `pipeline='kam'` rows (24 distinct
 phones live today). It never runs automatically, matches EXACTLY on the
 normalised phone, and a candidate with no usable 10-digit number is reported as
 unusable rather than created — nothing could ever link an order to it.
+
+## The client_master import (2026-10-31)
+
+The firms uploaded on 2026-10-29 were in the backend's `client_master`, which no
+CRM code reads, so they appeared nowhere. It holds 1,280 parent entities, with
+blank SPoC, segment and client type. The user wanted them here, not in Leads.
+
+- **1,208 were copied into `b2b_client`, and 72 skipped.** A firm was skipped when
+  its phone, GSTIN or exact name was already on a client row. A firm known only to
+  KAM, Outreach or Inbound was still added. Skipped firms were not edited.
+- **Ids are `CLI-CM-<client_master id>`,** so the batch can be found or removed.
+  Rows have no owner, `source` Existing, and `import_batch` in `extra`. GSTINs that
+  fail `GSTIN_SHAPE` were left off.
+- **It was a one-time copy.** Later edits to `client_master` do not reach this tab.
+  Four names differ only by case or spacing and were kept, because their phones
+  differ. Use Merge.
+- **Reading it:** `/client-master` is staff-only and Cloudflare challenges curl. A
+  real browser signed in through the Studio handoff gets through. The write was
+  `POST /b2b/rows/bulk` with `only_new`, tested first with fake rows on :3100.
+- **Verified on production:** the tab reads 1,278 firms, all loading their order
+  status through the batched history calls.

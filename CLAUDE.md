@@ -399,6 +399,14 @@ number of staging environments" after "Compiled successfully".
 writing, open `/auth/handoff?code=x` in real Chrome, because Cloudflare challenges
 `/auth/*` from curl and lets `/b2b/*` through. A redirect to `/login` means the
 table exists. Check `git log origin/main..HEAD` before claiming anything is live.
+**PR #33 is open and unmerged (2026-10-31).** It carries the location-only check-in,
+KAM accept-only sign-off, live KAM pickers, one rep name via `sameRep`, and EC B2B
+Referral by role. Until it merges, production still asks for a check-in photo. It
+waits on the user's go-ahead because it also changes KAM sign-off and per-person
+numbers. Its only failing check is Azure's preview slot limit. Don't re-add the
+photo: the user scrapped it on 2026-10-31, along with the 3-day retention plan.
+**The 1,000+ firms are in the Client Database (2026-10-31).** See
+`docs/b2b/client-db.md` §The client_master import.
 **The tech team merges, not a session**, unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart. While `npm run dev:sandbox` is
