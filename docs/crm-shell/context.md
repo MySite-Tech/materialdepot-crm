@@ -101,8 +101,10 @@ the same rule should follow that shape; see `docs/api-layer/context.md`.
 
 `crm.ec_b2b_referral` (`ecB2bReferral`, 2026-10-31) is enforced the same way, in
 `app/api/b2b/ec-referral/route.ts` through `canReferToB2B`. The slug and
-`EC_REFERRAL_ROLES` live in `lib/b2b/ec-referral/constants.ts`. Everyone with a
-permission list needs it ticked under Admin > Users. See `docs/b2b/ec-referral.md`.
+`EC_REFERRAL_ROLES` live in `lib/b2b/ec-referral/constants.ts`, with
+`EC_STAFF_ROLES`, the roles that get the tab whatever their list says
+(`docs/b2b/ec-referral.md`). Any other role with a permission list needs it ticked
+under Admin > Users.
 
 `siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
 which is fetched async — so that tab can appear a beat after the others. That is

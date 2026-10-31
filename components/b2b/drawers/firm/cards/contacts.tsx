@@ -1,8 +1,9 @@
 'use client';
 
 import { firmHolding, fmtPhone } from '../utils';
-import { CONTACT_CLASSES, ClientContact, ClientEntity, STUDIO_ACCESS, isValidContactNumber, normalizeContactNumber, StudioLogin, studioLoginOf } from '../../../models/client';
+import { CONTACT_CLASSES, ClientContact, ClientEntity, STUDIO_ACCESS, isValidContactNumber, normalizeContactNumber, StudioFirm, StudioLogin, studioFirmOf, studioLoginOf } from '../../../models/client';
 import { useStudioLogins } from '../../../hooks/use-studio-logins';
+import { addStudioNumber } from '@/lib/b2b/studio-logins';
 import { fmtShortINR } from '../../../models/mock-data';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
@@ -11,10 +12,11 @@ import { useState } from 'react';
 
 const selectCls = 'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-[11px] cursor-pointer disabled:opacity-60';
 
-function StudioBadge({ login, loading, failed }: { login?: StudioLogin; loading: boolean; failed: boolean }) {
+function StudioBadge({ login, firm, loading, failed }: { login?: StudioLogin; firm: StudioFirm | null; loading: boolean; failed: boolean }) {
   const base = 'w-full rounded-md border px-1.5 py-1 text-[11px] truncate';
   if (loading) return <div className={`${base} border-gray-100 text-gray-300`}>Studio Space: reading…</div>;
   if (failed) return <div className={`${base} border-amber-200 text-amber-700`} title="Studio Space could not be reached, so access is unknown">Studio Space: unknown</div>;
+  if (!login && firm) return <div className={`${base} border-gray-200 text-gray-600`} title={`${firm.firmName} is on Studio Space with ${firm.logins} login${firm.logins === 1 ? '' : 's'}. This number is not one of its numbers there.`}>Studio Space: firm on, number not</div>;
   if (!login) return <div className={`${base} border-gray-100 text-gray-400`} title="No Studio Space login uses this number">Studio Space: not onboarded</div>;
   const access = STUDIO_ACCESS[login.power ? 'power' : 'non-power'];
   const tabs = login.visibleTabs?.length ? `Tabs on: ${login.visibleTabs.join(', ')}` : login.visibleTabs ? 'No optional tabs on' : '';
@@ -25,9 +27,29 @@ function StudioBadge({ login, loading, failed }: { login?: StudioLogin; loading:
   );
 }
 
-export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }: {
+function AddToStudio({ firm, contact, onDone }: { firm: StudioFirm; contact: ClientContact; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const add = async () => {
+    setBusy(true);
+    const err = await addStudioNumber(firm.partnerId, normalizeContactNumber(contact.number), contact.name || firm.firmName);
+    setBusy(false);
+    if (err) setError(err); else onDone();
+  };
+  return (
+    <>
+      <button onClick={add} disabled={busy} title={`Adds this number to ${firm.firmName}, approved, so its orders count there`} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer disabled:opacity-50 text-left">
+        {busy ? 'Adding…' : 'Add to Studio Space'}
+      </button>
+      {error && <div className="text-[10px] text-red-600">{error}</div>}
+    </>
+  );
+}
+
+export function ContactsCard({ client, clients, canAddStudioNumber, historyFor, via, onVia, onSave }: {
   client: ClientEntity;
   clients: ClientEntity[];
+  canAddStudioNumber?: boolean;
   historyFor: (phone: string) => ClientOrderHistory | undefined;
   via: string | null;
   onVia: (phone: string | null) => void;
@@ -125,7 +147,10 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
                   {c.label && !(CONTACT_CLASSES as readonly string[]).includes(c.label) && <option value={c.label}>{c.label}</option>}
                   {CONTACT_CLASSES.map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
-                <StudioBadge login={studio.logins ? studioLoginOf(c, studio.logins) : undefined} loading={studio.loading} failed={!!studio.error} />
+                <StudioBadge login={studio.logins ? studioLoginOf(c, studio.logins) : undefined} firm={studioFirmOf(client, studio.firms)} loading={studio.loading} failed={!!studio.error} />
+                {canAddStudioNumber && studio.logins && !studioLoginOf(c, studio.logins) && studioFirmOf(client, studio.firms) && (
+                  <AddToStudio firm={studioFirmOf(client, studio.firms)!} contact={c} onDone={studio.reload} />
+                )}
               </div>
               {removing === c.number ? (
                 <div className="flex items-center gap-2 mt-1.5 text-[11px]">

@@ -121,17 +121,18 @@ original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
 then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
 server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
 (`app/api/b2b/waitlist`, `ec-visits`) call `b2bBackendFetch` with the
-same credential instead. Three things the relay deliberately does:
+same credential instead. Four things the relay deliberately does:
 
+- **Refuses two things to anyone but a manager or admin (2026-10-31).**
+  `managersOnly` covers `studio-number` and a client-row `DELETE`, so hiding the
+  buttons is not the only check. Adding a client row is not on the list, because
+  Outreach's handover creates firms through the same call
+  (`docs/b2b/client-db.md` §Who can add, merge and delete).
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`) so the catch-all is a defined surface, not an open proxy to
+  `studio-access`, `studio-number`) so the catch-all is a defined surface, not an open proxy to
   the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
-  (`docs/b2b/client-db.md`). `check-in-photo` (2026-10-30) is POST-only and
-  takes one inline image for a meeting check-in (`docs/b2b/kam.md` §A meeting
-  starts with a check-in). It is allow-listed rather than given a handler
-  because the B2B role gate is all it needs: the photo carries no caller
-  identity. Other `/b2b` routes such as `team` and `ec-visits`
+  (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.
 - **`studio-handoff` is a handler of its own, never allow-listed** (2026-10-30).
   It mints a Studio Space session, so the phone must come from `requireCaller`
@@ -162,6 +163,13 @@ client, or one that only flips round robin, cannot clear someone's B2B admin
 flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
 reads as false.
 
+`b2bSyncRead` reads the backend's `/sync/*` routes with the same key, and only
+`lib/server/b2b-revenue.ts` uses it. That builder pages Django's `/crm/leads/`
+server-side because a month is 5+ requests, which a page may not spend on mount. It
+caches 5 minutes per caller, because Django scopes rows to the caller's token, and a
+Studio, redirect or team failure sets a flag rather than reading as zero
+(`docs/b2b/overview.md` §Three revenue channels).
+
 ### There is no scheduled route in this app, and no platform cron to run one
 
 Worth knowing before someone adds one: this app deploys to **Azure Static Web
@@ -186,7 +194,8 @@ reports `moved` and `failed` separately rather than failing the whole batch.
 See `docs/b2b/ec-referral.md` and `docs/b2b/leads.md`.
 
 This is why the B2B inbound round robin (`/api/b2b/inbound/assign`, 2026-10-28)
-runs **when someone opens Inbound Leads**, not on a timer. A lead that arrives
+runs **while someone has Inbound Leads open**: on open, then every 5 minutes
+when the tab is visible. There is no server timer, so a lead that arrives
 overnight is assigned by the first rep to open the tab. It is idempotent, so
 being triggered from many browsers is safe. See `docs/b2b/inbound.md` §Who owns
 a lead.
@@ -209,6 +218,17 @@ Two things it does that `kylasFetch` callers do not:
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.
+- **It retries 429 and 503 on its own (2026-10-31).** It waits 1s, 2s, 4s, then
+  8s, or `Retry-After` capped at 8s, then throws `KylasBusy`. Kylas's headers
+  read `x-ratelimit-replenish-rate: 5` and `x-ratelimit-burst-capacity: 10`, but
+  the budget is shared with whatever else uses the key. Sampled about once a
+  second on 2026-10-31 from a machine with no other Kylas traffic, it cycled
+  about 7s clear, 7s of only 429. People do not click on a timer, so something
+  automated outside this repo is spending it. Lead edits showed Kylas's
+  "Universal API Key" as the top non-workflow writer, but that is this same key,
+  so it cannot name the caller. `docs/backends.md` §Owed by Django row 12 has the
+  ask. The 15s total exists to outlast the cycle. `kylasFetch` now retries five
+  times (15.5s) for the same reason.
 - **A `crm-…` lead id never reaches Kylas (2026-10-30).** Inbound leads
   added in the CRM have no Kylas record, so `reassignInboundLead` skips
   `readLead` and `setLeadOwner` for them and only logs the assignment. The

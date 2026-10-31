@@ -48,7 +48,7 @@ function KamCell({ client }: { client: ClientEntity }) {
       <>
         <span className="text-gray-700">{client.kam}</span>
         {h?.status === 'Pending' && (
-          <div className="text-[10px] font-semibold text-violet-700 mt-0.5" title={`Assigned by ${h.by || 'an admin'}. Counts as theirs, and waits for them to accept or reject.`}>waiting for sign-off</div>
+          <div className="text-[10px] font-semibold text-violet-700 mt-0.5" title={`Assigned by ${h.by || 'an admin'}. Counts as theirs, and waits for them to accept.`}>waiting for sign-off</div>
         )}
       </>
     );
@@ -68,7 +68,7 @@ function KamCell({ client }: { client: ClientEntity }) {
 function StudioCell({ client, studio }: { client: ClientEntity; studio: ReturnType<typeof useStudioLogins> }) {
   if (studio.loading) return <span className="text-gray-300">…</span>;
   if (!studio.logins) return <span className="text-[11px] text-amber-700" title={`Studio Space could not be read: ${studio.error}`}>Unknown</span>;
-  const access = firmStudioAccess(client, studio.logins);
+  const access = firmStudioAccess(client, studio.logins, studio.firms);
   if (!access) return <span className="text-gray-300">Not onboarded</span>;
   return (
     <span title={STUDIO_ACCESS[access].hint}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useB2BReps } from '../../hooks/use-b2b-reps';
-import { KAMS, fmtINR } from '../../models/mock-data';
+import { fmtINR } from '../../models/mock-data';
+import { repNames, sameRep } from '../../models/outreach/handover';
 import { EC_B2B_REFERRAL } from '../../models/outreach';
 import { AssignBar } from '../../ui/assign-bar';
 import { Empty, LeadName, Spinner, inputCls } from '../../ui/inbound-chips';
@@ -50,11 +51,10 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
 
   useEffect(() => { load(); }, [createdFrom, createdTo]);
 
+  const { reps, rotationReps, allKams } = useB2BReps(team);
   const kamOptions = useMemo(() => {
-    const seen = new Set<string>(KAMS);
-    leads.forEach((l) => l.kam && seen.add(l.kam));
-    return [...seen].sort();
-  }, [leads]);
+    return repNames(allKams, leads.map((l) => l.kam));
+  }, [allKams, leads]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -64,7 +64,7 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
       if (lostOnly && !l.lost) return false;
       if (hideLost && l.lost) return false;
       if (unassignedOnly && l.spok) return false;
-      if (kam !== 'all' && l.kam !== kam) return false;
+      if (kam !== 'all' && !sameRep(l.kam, kam)) return false;
       if (q) {
         const hay = [l.companyName, l.contactPerson, l.phone, l.enqId, l.spok, l.kam]
           .filter(Boolean).join(' ').toLowerCase();
@@ -97,7 +97,6 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
 
   const selected = leads.find((l) => l.key === selectedKey) || null;
 
-  const { reps, rotationReps } = useB2BReps(team);
   const assigner = useLeadAssign({
     leads, members: team.members, reps, rotationReps, by: viewer.member?.name || viewer.name,
     onSaved: (list) => {

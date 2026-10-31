@@ -121,7 +121,8 @@ to everyone, and the user ruled that a rep only ever sees their own.
 
 A lead is "mine" by `bm_phone` (exact 10 digits) when it has one, else by name
 with `sameRep`: equal, or one is a **whole-word** prefix of the other ("Vilok" ↔
-"Vilok Reddy", never "Vil" ↔ "Vilok"). Old rows carry only a roster first name,
+"Vilok Reddy", never "Vil" ↔ "Vilok"), and roster names count as their
+`fullName` first ("Jadhav" ↔ "Krishna Jadhav", "Praful" ↔ "Prafful Bhati"). Old rows carry only a roster first name,
 which is why the name rule exists; every write path now stamps `bm_phone`.
 **This scope is client-side** — `b2b_lead` is read with the anon key, so it is
 a focus aid, not confidentiality (same caveat as Inbound).
@@ -301,7 +302,7 @@ typed. **Done** appears only when it has no gaps. The data and the save gates
 are unchanged.
 
 **A meeting is checked in before it is held (2026-10-30).** The user's flow:
-book it, check in on arrival with a photo and a pin, then write what was
+book it, check in on arrival with a pin, then write what was
 discussed. A saved Scheduled meeting shows **Check in at the meeting**
 (`ui/check-in-capture.tsx`, shared with KAM, see `kam.md` §A meeting starts
 with a check-in). The check-in is written straight away onto the **saved**

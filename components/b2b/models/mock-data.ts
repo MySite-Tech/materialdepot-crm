@@ -197,8 +197,7 @@ export interface OutreachLead {
 }
 
 export {
-  B2B_ROSTER, B2B_ADMINS, ASSIGNABLE_REPS, KAMS, B2B_REPS,
-  DEFAULT_ASSIGNEE, DEFAULT_KAM, B2B_VERTICALS, REP_ROLE_COLORS,
+  B2B_ROSTER, B2B_VERTICALS, REP_ROLE_COLORS,
 } from './roster';
 export type { RepRole, B2BRep } from './roster';
 

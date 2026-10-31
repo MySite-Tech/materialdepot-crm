@@ -5,6 +5,7 @@ import InboundDrawer from '../../drawers/inbound/index';
 import { InboundStatus, closureReadiness, hasConnected, statusGateErrors, istToday, withStatusStamps } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
+import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS_KEYS, NO_FILTERS } from './constants';
 import { AddLeadModal, MoveModal } from './ui/modals';
@@ -17,15 +18,15 @@ import { activeFilterCount, byNewestLeadFirst, countsTomorrow, lensMatches, lens
 import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
-import { runInboundRotation } from '@/lib/b2b/team';
+import { useInboundRotation } from '../../hooks/use-inbound-rotation';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { membershipIn, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
+  const { everyone } = useB2BReps(team);
   const [view, setView] = useState<View>('list');
   const [lens, setLens] = useState<Lens>('today');
   const [scopeChoice, setScopeChoice] = useState<'mine' | 'all' | null>(null);
-  const [rotationNote, setRotationNote] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
   const [f, setF] = useState<InboundFilters>(NO_FILTERS);
   const [search, setSearch] = useState('');
@@ -105,20 +106,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
 
   useEffect(() => { if (!team.loading) load(); }, [serverOpts, team.loading, unlinked]);
 
-  const rotationReady = !team.loading && rotationOrder(team.members).length > 0;
-  useEffect(() => {
-    if (!rotationReady) return;
-    runInboundRotation()
-      .then((r) => {
-        if (r.failed.length) {
-          setRotationNote({ tone: 'warn', text: `Round robin could not assign ${r.failed.length} lead${r.failed.length === 1 ? '' : 's'}: ${r.failed[0].error}` });
-        } else if (r.assigned.length) {
-          setRotationNote({ tone: 'ok', text: `${r.assigned.length} new lead${r.assigned.length === 1 ? '' : 's'} shared out round robin just now.` });
-        }
-        if (r.assigned.length) load();
-      })
-      .catch((e) => setRotationNote({ tone: 'warn', text: `Round robin did not run: ${e instanceof Error ? e.message : String(e)}` }));
-  }, [rotationReady]);
+  const rotationNote = useInboundRotation(!team.loading && rotationOrder(team.members).length > 0, load);
 
   const named = useMemo(() => leads.map((l) => {
     const n = l.ownerId != null ? ownerName.get(l.ownerId) : undefined;
@@ -409,6 +397,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           actorName={viewer.name}
           actorPhone={viewer.phone}
           members={teamMembers(team.members, 'inbound')}
+          people={everyone}
           canReassign={viewer.isManager || !!me}
           canCredit={viewer.isManager}
           onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}

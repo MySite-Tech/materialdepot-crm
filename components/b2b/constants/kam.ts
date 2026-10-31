@@ -60,7 +60,7 @@ export const STATUS_RANK: Record<KamOrderStatus, number> = {
 };
 
 export const KAM_LENS: Record<KamLens, KamLensMeta> = {
-  signoff:  { title: 'Waiting for sign-off', rule: 'Firms an admin assigned to a KAM, waiting for that KAM to accept or reject, oldest first. The tile flags those past the sign-off window. A rejected firm goes back to the Client Database with no KAM.', empty: 'No firm is waiting for a KAM to sign off.', accent: '#7C3AED' },
+  signoff:  { title: 'Waiting for sign-off', rule: 'Firms an admin assigned to a KAM, waiting for that KAM to accept, oldest first. The tile flags those past the sign-off window.', empty: 'No firm is waiting for a KAM to sign off.', accent: '#7C3AED' },
   assigned: { title: 'Assigned', rule: 'Every firm in scope, with lifetime order metrics from the deal tickets (§2).', empty: 'No firm is assigned.', accent: '#6B7280' },
   overdue:  { title: 'Overdue', rule: 'The follow-up date on the latest interaction is before today. Oldest first (§4.3). A firm leaves the moment you log the call.', empty: 'No follow-up is overdue.', accent: '#DC2626' },
   due:      { title: 'Due today', rule: 'The follow-up date on the latest interaction is today (§4.2).', empty: 'No follow-up is due today.', accent: '#EA580C' },

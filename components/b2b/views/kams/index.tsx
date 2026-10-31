@@ -7,9 +7,10 @@ import { KamOrderTable } from './orders/table';
 
 import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, InteractionType, contactNumbers, istToday, openCheckIn, primaryContact, withInteraction } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, respondFirmHandover, sortFirmsForLens } from '../../models/kam';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, acceptFirmHandover, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
-import { DEFAULT_KAM, KAMS, fmtL } from '../../models/mock-data';
+import { fmtL } from '../../models/mock-data';
+import { repNames, sameRep } from '../../models/outreach/handover';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ClientDrawer } from './drawer';
@@ -49,7 +50,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const [orderModal, setOrderModal] = useState<{ order: KamOrder; isNew: boolean } | null>(null);
 
   const today = istToday();
-  const { live, kams } = useB2BReps(team);
+  const { live, allKams } = useB2BReps(team);
   const me = useMemo(() => ({ name: viewer.member?.name || viewer.name, phone: viewer.phone }), [viewer.member, viewer.name, viewer.phone]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const boardScroll = useDragAutoScroll<HTMLDivElement>();
@@ -105,18 +106,15 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   useEffect(() => { setNowMs(Date.now()); }, [clients]);
 
   const kamOptions = useMemo(() => {
-    const seen = new Set<string>(KAMS);
-    clients.forEach((c) => c.kam && seen.add(c.kam));
-    orders.forEach((o) => o.kam && seen.add(o.kam));
-    return [...seen].sort();
-  }, [clients, orders]);
+    return repNames(allKams, [...clients.map((c) => c.kam), ...orders.map((o) => o.kam)]);
+  }, [allKams, clients, orders]);
 
   const scopedClients = useMemo(
-    () => (kamFilter === 'all' ? clients : clients.filter((c) => (c.kam || '') === (kamFilter === 'unassigned' ? '' : kamFilter))),
+    () => (kamFilter === 'all' ? clients : clients.filter((c) => (kamFilter === 'unassigned' ? !c.kam : sameRep(c.kam, kamFilter)))),
     [clients, kamFilter],
   );
   const scopedOrders = useMemo(
-    () => (kamFilter === 'all' ? orders : orders.filter((o) => o.kam === kamFilter)),
+    () => (kamFilter === 'all' ? orders : orders.filter((o) => sameRep(o.kam, kamFilter))),
     [orders, kamFilter],
   );
 
@@ -162,7 +160,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const countOf = (k: KamLens) => (isOrderLens(k) ? ordersBy[k].length : firmsBy[k].length);
 
   const callTarget = kamFilter === 'all'
-    ? [...new Set(clients.map((c) => c.kam).filter(Boolean))].length * DAILY_CALL_TARGET
+    ? repNames([], clients.map((c) => c.kam)).length * DAILY_CALL_TARGET
     : DAILY_CALL_TARGET;
 
   const firmRows = useMemo(
@@ -182,7 +180,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
     if (isOrderLens(k) ? ordersFailed : clientsFailed) return { value: 'Unknown', sub: 'did not load', warn: true };
     const n = countOf(k);
     switch (k) {
-      case 'signoff':  return { value: String(n), sub: lateSignoffs ? `${lateSignoffs} past ${HANDOVER_TAT_HOURS}h` : 'to accept or reject', warn: lateSignoffs > 0 };
+      case 'signoff':  return { value: String(n), sub: lateSignoffs ? `${lateSignoffs} past ${HANDOVER_TAT_HOURS}h` : 'to accept', warn: lateSignoffs > 0 };
       case 'called':   return { value: `${n}/${callTarget}`, sub: n >= callTarget ? 'target met' : `${callTarget - n} to go` };
       case 'overdue':  return { value: String(n), sub: 'date passed' };
       case 'due':      return { value: String(n), sub: 'for today' };
@@ -238,7 +236,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       contactName: primary?.name,
       phone: primary?.number,
       status: 'Requirement Logged',
-      kam: client?.kam || (kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : DEFAULT_KAM),
+      kam: client?.kam || (kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name),
       source: client?.source || 'Existing',
       value: 0,
       notes: [],
@@ -280,7 +278,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
         <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
           <option value="all">All KAMs ({clients.length} firms)</option>
           <option value="unassigned">Unassigned</option>
-          {kamOptions.map((k) => <option key={k} value={k}>{k} ({clients.filter((c) => c.kam === k).length})</option>)}
+          {kamOptions.map((k) => <option key={k} value={k}>{k} ({clients.filter((c) => sameRep(c.kam, k)).length})</option>)}
         </select>
         <select value={segment} onChange={(e) => setSegment(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
           <option value="all">All segments</option>
@@ -335,7 +333,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
             page={listPage}
             setPage={setListPage}
             canRespond={(c) => canRespondToFirm(c, me, viewer.isManager, live)}
-            onRespond={(c, reason) => saveClient(respondFirmHandover(c, me.name, new Date().toISOString(), reason))}
+            onRespond={(c) => saveClient(acceptFirmHandover(c, me.name, new Date().toISOString()))}
             onOpen={setDrawerId}
           />
         ) : (
@@ -356,6 +354,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
         <ClientDrawer
           row={drawerRow}
           assignAs={viewer.isManager ? me.name : undefined}
+          kams={allKams}
           clients={clients}
           historyFor={historyFor}
           orders={orders.filter((o) => o.clientId === drawerRow.client.id)}
@@ -384,7 +383,6 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       {checkingInClient && (
         <CheckInCapture
           title={checkingInClient.company}
-          refId={`${checkingInClient.id}-meeting`}
           by={me.name}
           onClose={() => setCheckingInFor(null)}
           onDone={(checkIn) => saveClient({
@@ -401,9 +399,9 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
           order={orderModal.order}
           isNew={orderModal.isNew}
           clients={kamFilter === 'all' ? clients : scopedClients}
-          kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : DEFAULT_KAM}
+          kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name}
           actor={me.name}
-          creditPeople={kams}
+          creditPeople={allKams}
           canCredit={viewer.isManager}
           onClose={() => setOrderModal(null)}
           onSave={saveOrder}

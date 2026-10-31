@@ -50,9 +50,10 @@ figure into `value`.** That is what makes collapsing `Order Placed` into
 
 **Consequence worth knowing before someone reports it as a bug:** a closed order
 whose Enq ID has not resolved contributes ₹0 revenue. On the KAM tab
-`resolveKamOrders` fetches and PERSISTS the values on load; the Dashboard
-resolves for DISPLAY only and states how many are unresolved beside the revenue
-tile. One writer, two readers — deliberately, because two surfaces writing the
+`resolveKamOrders` fetches and PERSISTS the values on load; Overview resolves
+for DISPLAY only and states how many are unresolved beside the revenue tile, and
+My performance resolves for display too (2026-10-31). One writer, two readers —
+deliberately, because two surfaces writing the
 same rows on load is how the duplicate auto-advance note below got written.
 
 ### Auto-advance now keys on the order's own ticket
@@ -206,11 +207,11 @@ delimiter parsing that the Client Database import still uses.
 ### Admin assigns firms, the KAM signs off (2026-10-29)
 
 An admin selects firms in the Client Database (one or many) and assigns them to
-a KAM, either by name or round robin. The KAM accepts, or rejects with a reason,
-from the **Waiting for sign-off** tile here (`panels/signoff.tsx`).
+a KAM, either by name or round robin. The KAM accepts from the **Waiting for
+sign-off** tile here (`panels/signoff.tsx`).
 
 - **The handover lives on the latest `assignments` entry**, as `status`,
-  `how`, `kamPhone`, `respondedAt/By` and `rejectReason`. There is no new meta
+  `how`, `kamPhone` and `respondedAt/By`. There is no new meta
   key. `assignments` is a real `b2b_client` jsonb column on the deployed
   backend. A new key would only persist once migration 0020's `extra` column
   ships, and until then it would be dropped silently. `firmHandover()` reads the
@@ -221,18 +222,20 @@ from the **Waiting for sign-off** tile here (`panels/signoff.tsx`).
   its page and skip the sign-off entirely.
 - **A pending firm already has `kam` set.** It counts in that KAM's book, tiles
   and coverage from the moment it is assigned, so a KAM cannot shrink their
-  book by leaving it unanswered. Rejecting clears `kam`. The firm then lands in
-  Client DB's **No KAM** lens, with "X rejected: reason" under the KAM column.
-  Client DB also gets an **Awaiting KAM** tile while any firm is pending.
-- **A firm moved from another KAM cannot be rejected (2026-10-31).** The user's
-  call, after a test showed that a rejected move left an active client with no KAM.
-  `assignFirm` stores the outgoing owner as `movedFrom` on the assignment entry,
-  from both the assign bar and the Firm page. With it set, only Accept is offered,
-  to anyone including managers, and `respondFirmHandover` ignores a rejection. If
-  the wrong KAM was picked, a manager moves the firm again. Re-moving a pending firm
-  keeps the original `movedFrom` (the pending KAM never owned it), and a firm that
-  had no KAM has none, so it can still be rejected. Entries pending from before
-  this have no `movedFrom` and stay rejectable.
+  book by leaving it unanswered. Client DB also gets an **Awaiting KAM** tile while any firm is pending.
+- **A KAM cannot reject a firm (2026-10-31).** The user: a manager assigned it, so
+  the KAM gets Accept and nothing else. This replaced a same-day rule that only
+  barred rejecting a firm moved from another KAM, after a test showed a rejected
+  move left an active client with no KAM, so `movedFrom` and
+  `respondFirmHandover` are gone. If the wrong KAM was picked, a manager moves the
+  firm. Stored `Rejected` entries stay readable as history, which is why
+  `status` keeps the value and Client DB can still say "X rejected". **The
+  Outreach-to-KAM handover keeps its Reject**: a BM sends that, and it is a quality
+  check on the handover, not a manager's assignment.
+- **Assigning a firm to the KAM who already holds it is refused.** It used to write
+  a pending entry and put the firm back in sign-off for nothing. The bar says it is
+  already with them, and the Firm page closes the picker. Both compare with
+  `sameRep`, so "Jadhav" and "Krishna Jadhav" count as one person.
 - **Round robin uses book size, not `fetchKamLoad`.** It picks the active,
   in-rotation KAM holding the fewest firms right now, ignoring the firms being
   moved, and ties go by name. `/kam-load` counts converted Inbound and Outreach
@@ -264,31 +267,28 @@ both are filled. That is intended.
 
 ### A meeting starts with a check-in (built 2026-10-30)
 
-The user, 2026-10-30: a rep checks in on arrival with a photo and their exact
-location, and only then fills in what was discussed. **It is compulsory now.**
+The user, 2026-10-30: a rep checks in on arrival with their exact location, and
+only then fills in what was discussed. **It is compulsory now.**
 That reverses the 2026-10-29 decision that a missing check-in would only be
 flagged.
 
 - **The flow:** "Check in at a meeting" on the firm drawer opens
-  `ui/check-in-capture.tsx`, which takes a live camera photo and a
-  high-accuracy GPS fix together. It uploads the photo (`POST
-  /b2b/check-in-photo`, R2 through Material Depot's file service, the same
-  uploader the partner content sync uses) and saves a `Meeting` interaction with
-  `checkIn {lat, lng, accuracy, at, photoUrl, by}` and no minutes. The drawer
+  `ui/check-in-capture.tsx`, which takes a high-accuracy GPS fix and saves a
+  `Meeting` interaction with `checkIn {lat, lng, accuracy, at, by}` and no
+  minutes. The drawer
   then shows "Meeting in progress". **Add minutes** opens Log interaction on
   Meeting, which completes that same interaction (`withInteraction` replaces it
   by id) instead of adding a second one.
 - **The gate:** `interactionGateErrors` refuses a Meeting with no check-in when
   its date is on or after `CHECK_IN_REQUIRED_FROM` (2026-10-31), so meetings
   logged before the rule are not retro-blocked. A Call or Enquiry needs none.
-- **The upload must succeed.** If the photo is not stored, nothing is checked
-  in and the modal says so. The Site Audit arrival camera was not reused: it
-  uploads to Site Audit Supabase and passes the raw image on when the upload
-  fails.
+- **The photo was removed on 2026-10-31, the day it shipped.** The user dropped
+  it. The location is now the whole check-in. Rows saved while it existed may
+  still hold `photoUrl` in their meta; nothing reads it. Backend `POST
+  /b2b/check-in-photo` still exists and the CRM no longer relays to it.
 - **KPIs skip an open check-in** (`inProgress` in `performance/teams/kam.ts`)
   until it has minutes, and the firm's next follow-up ignores it.
-- **Not built:** the admin review screen for photos, and a check-in on the
-  Client Database firm page (KAM's own drawer has it).
+- **Not built:** a check-in on the Client Database firm page (KAM's own drawer has it).
 
 ### Calls are deduped per client per day
 

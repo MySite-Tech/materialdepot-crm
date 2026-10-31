@@ -97,9 +97,8 @@ it chains after 0022):
 - It moves `b2b_team_member`'s key to `(phone, team)`, so one person can be on
   several teams.
 - It adds the redirect columns to `b2b_ec_visit` (`b2b/ec-directed.md`).
-- The same branch adds `POST /b2b/check-in-photo`. It uploads through
-  `_r2_upload_sync`, so it needs `MD_SNAPSHOT_API_KEY` on the deployment, which
-  the content sync already uses.
+- The same branch adds `POST /b2b/check-in-photo`. The CRM stopped calling it on
+  2026-10-31, when the check-in photo was removed (`b2b/kam.md`), so it is unused.
 
 0001→0023 and a 0023 downgrade/upgrade round trip were run on 2026-10-30 against
 a throwaway embedded Postgres (the `ss-bill-rig` binaries). The new routes were
@@ -117,15 +116,18 @@ and who changes it is still open. Each row names the doc with the detail.
 
 | # | Change | Wrong or missing until then | Detail |
 |---|---|---|---|
-| 1 | `b2b-bulk` `histories[phone].lastOrderDate` = `max(estimate.order_placed_time)` over placed, non-deleted estimates (revenue from the same call disagrees with Metabase too) | Active/Inactive, lens counts and KAM revenue for any firm with an open deal; the CRM shows those as Status unknown | `b2b/client-db.md` §The list |
+| 1 | `b2b-bulk` and `client-order-history`: `lastOrderDate` = `max(estimate.order_placed_time)` over placed, non-deleted estimates, with `orders` and `lifetimeValue` from the same set. Re-read 2026-10-31 on the top seven Client Database rows: all seven dates wrong, no estimate has a future `order_placed_time`, counts low on five, revenue low on four | Active/Inactive, lens counts and KAM revenue; the CRM shows future dates as Status unknown, but a wrong past date or a low count shows no warning | `b2b/client-db.md` §The list |
 | 2 | `b2b-bulk` GST matching: `gsts=` (exact, never `icontains`), `include=tickets`, GST keys in `histories` | Orders billed to a firm's GSTIN from a number not on the firm (253 GSTINs span several accounts); one request per phone on a firm open | `b2b/sales-tab-redesign.md` §Django contract |
 | 3 | `gst=` filter on `/crm/leads/` (covered by 2 if built as specced) | Enquiries cannot be found by GSTIN | `b2b/client-db.md` §GST |
 | 4 | Order detail by enquiry id: qty, rate, PI, payment, delivery (as Procurement shows) | An expanded enquiry shows item names only. Not yet asked of the Django team | `b2b/client-db.md` §One enquiry |
 | 5 | `/crm/leads/` drops `branch` on some requests (likely when `bm=` is also sent) | A B2B-only rep's carts read as a retail branch's leads; the CRM shows an amber notice | `landmines.md` (the Leads-tab BM entry) |
 | 6 | `/crm/available-bms/?branch=` returns anyone linked to the branch, not people homed there | Nothing on screen (the CRM reconciles against the roster); wrong for any other caller | `weekly-funnel/context.md` |
 | 7 | Permission rows for `team_leader`, `asst_store_manager`, `cluster_head`, `area_manager` | Those rungs of the store ladder stay empty | `org-hierarchy/context.md` |
-| 8 | Per-phone orders in bulk with `orderPlacedAt` (`estimate.order_placed_time`) and the booked-at branch (`estimate.branch_id`), e.g. `b2b-bulk?include=orders` with an `echo` | Sales by SPoC exists per firm only, split by Created, with no all-firms roll-up; the Firm page shows Created instead of a placement date; EC-directed revenue is checked per redirect on click and matched on the cart owner's branch | `b2b/ec-directed.md`, `b2b/client-db.md` §One enquiry |
+| 8 | Per-phone orders in bulk with `orderPlacedAt` (`estimate.order_placed_time`) and the booked-at branch (`estimate.branch_id`), e.g. `b2b-bulk?include=orders` with an `echo` | Sales by SPoC exists per firm only, split by Created, with no all-firms roll-up; the Firm page shows Created instead of a placement date; EC-directed revenue is checked per redirect on click and matched on the cart owner's branch. The Overview gets per-order rows without this (`b2b/overview.md` §Three revenue channels), by cart date and rep branch | `b2b/ec-directed.md`, `b2b/client-db.md` §One enquiry |
 | 9 | A per-customer footfall read: `contacts=` on `/footfall-record/` returning `{phone, branch, visitedAt}` | EC redirects are marked Visited by hand | `b2b/ec-directed.md` |
+| 10 | `/crm/leads/` rows gain `orderPlacedAt`, `bookedBranch` and `clientGst` | Single-enquiry views show Created instead of a placement date, and the cart owner's branch instead of the booked one | `b2b/client-db.md` §One enquiry |
+| 11 | The name join in `/crm/leads/` doubles surnames in `assignedTo` | Reps show as "First Last Last" | `b2b/client-db.md` §One enquiry |
+| 12 | Find what spends the shared Kylas key on a 14s cycle, and throttle it or give it its own key | Kylas answers only 429 for about 7s in every 14s, so CRM calls wait up to 15s and can fail. Also check whether a separate key gets a separate budget | `api-layer/context.md` §`lib/server/b2b-team` |
 
 Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
 Users), and backfilling `crm.remarks_quality` on existing permission lists.

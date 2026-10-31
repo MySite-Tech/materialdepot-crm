@@ -3,6 +3,7 @@ import { daysUntil, followUpBucket, istToday } from '../inbound';
 import { DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, TEMPERATURE_SILENCE_DAYS } from '../../constants/kam';
 import { AssignedClientRow, CallCompliance, KamFirmLens, KamOrder, KamOrderLens, TemperatureMismatch } from '../../types/kam';
 import { firmHandover, firmHandoverPending } from './handover';
+import { sameRep } from '../outreach/handover';
 
 export const calledOn = (c: ClientEntity, day: string): boolean =>
   (c.interactions || []).some((i) => i.type === 'Call' && String(i.date || '').slice(0, 10) === day);
@@ -14,7 +15,7 @@ export function callsLoggedOn(
   kam: string,
   day: string,
 ): number {
-  return clients.filter((c) => c.kam === kam && calledOn(c, day)).length;
+  return clients.filter((c) => sameRep(c.kam, kam) && calledOn(c, day)).length;
 }
 
 export function callCompliance(
@@ -23,7 +24,7 @@ export function callCompliance(
   today: string = istToday(),
 ): CallCompliance[] {
   return kams.map((kam) => {
-    const mine = clients.filter((c) => c.kam === kam);
+    const mine = clients.filter((c) => sameRep(c.kam, kam));
     return {
       kam,
       logged: callsLoggedOn(clients, kam, today),

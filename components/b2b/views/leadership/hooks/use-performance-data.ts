@@ -7,7 +7,7 @@ import { InboundLead, OutreachLead } from '../../../models/mock-data';
 import { WaitlistSignup } from '../../../models/outreach';
 import { waitlistIndex } from '../../../models/outreach/kpis';
 import { PerfData, Source, TargetStore } from '../../../models/performance/types';
-import { fetchClients, fetchKamOrders, fetchOutreachLeads, fetchTargets } from '@/lib/b2b';
+import { fetchClients, fetchKamOrders, fetchOutreachLeads, fetchTargets, kamEnquiryIdsToResolve, resolveKamOrders } from '@/lib/b2b';
 import { fetchInboundForOutreach, fetchStudioWaitlist } from '@/lib/b2b/outreach';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -63,7 +63,14 @@ export function usePerformanceData(team: B2BTeam | null, today: string) {
   useEffect(() => {
     if (team !== 'kam' || !base || historyState !== 'idle') return;
     setHistoryState('loading');
-    loadHistories(base.clients.flatMap((c) => contactNumbers(c.contacts))).finally(() => setHistoryState('ready'));
+    const orders = base.kamOrders;
+    loadHistories(base.clients.flatMap((c) => contactNumbers(c.contacts)), kamEnquiryIdsToResolve(orders))
+      .then(({ deals }) => resolveKamOrders(orders, deals))
+      .then(({ resolutions }) => {
+        const resolved = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
+        setBase((b) => b && { ...b, kamOrders: b.kamOrders.map((o) => resolved.get(o.id) ?? o) });
+      })
+      .finally(() => setHistoryState('ready'));
   }, [team, base, historyState, loadHistories]);
 
   const data = useMemo<PerfData | null>(() => base && {

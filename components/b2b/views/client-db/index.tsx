@@ -2,7 +2,8 @@
 
 import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
-import { KAMS, fmtShortINR } from '../../models/mock-data';
+import { fmtShortINR } from '../../models/mock-data';
+import { repNames } from '../../models/outreach/handover';
 import { FirmDrawer } from '../../drawers/firm';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
@@ -136,10 +137,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   }, [clients, openId, metricsFor, today]);
 
   const kamOptions = useMemo(() => {
-    const seen = new Set<string>(KAMS);
-    clients.forEach((c) => c.kam && seen.add(c.kam));
-    return [...seen].sort();
-  }, [clients]);
+    return repNames(allKams, clients.map((c) => c.kam));
+  }, [allKams, clients]);
 
   const saveClient = async (c: ClientEntity): Promise<string | null> => {
     const err = await upsertClient(c);
@@ -177,6 +176,14 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       : null;
   };
 
+  const deleteFirm = async (c: ClientEntity): Promise<string | null> => {
+    const err = await deleteB2BRow(c.id);
+    if (err) return err;
+    setOpenId(null);
+    setClients((prev) => prev.filter((x) => x.id !== c.id));
+    return null;
+  };
+
   const blank = (): ClientEntity => ({
     id: newB2BId('CLI'),
     company: '',
@@ -200,17 +207,17 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>
-          <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>
-          <button
+          {viewer.canManageTeam && <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>}
+          {viewer.canManageTeam && <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>}
+          {viewer.canManageTeam && <button
             onClick={() => setMerging(true)}
             className={btnGhost}
             title={exactSuggestions.length ? `${exactSuggestions.length} pair${exactSuggestions.length === 1 ? '' : 's'} of firms share a number, GST or PAN and are probably one business` : 'Find and merge duplicate firms'}
           >
             Merge
             {!!exactSuggestions.length && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">{exactSuggestions.length}</span>}
-          </button>
-          <button onClick={() => setAddingNew(true)} className={btnPrimary}>+ Add Client</button>
+          </button>}
+          {viewer.canManageTeam && <button onClick={() => setAddingNew(true)} className={btnPrimary}>+ Add Client</button>}
         </div>
       </div>
 
@@ -243,10 +250,12 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             Seed it from the closed Inbound / Outreach leads and the KAM board, upload the §7 template, or add a
             client by hand. Nothing about this list is guessed: a client exists once somebody says it does.
           </p>
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <button onClick={() => setSeeding(true)} className={btnPrimary}>Seed from leads</button>
-            <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>
-          </div>
+          {viewer.canManageTeam && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button onClick={() => setSeeding(true)} className={btnPrimary}>Seed from leads</button>
+              <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -330,7 +339,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       </p>
 
       {addingNew && (
-        <ClientModal client={blank()} isNew onClose={() => setAddingNew(false)} onSave={saveClient} />
+        <ClientModal client={blank()} isNew kams={allKams} onClose={() => setAddingNew(false)} onSave={saveClient} />
       )}
       {openRow && (
         <FirmDrawer
@@ -343,13 +352,16 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           badges={openRow.temp && <TemperatureChip value={openRow.temp.value} at={openRow.temp.at} />}
           reassignReason="Reassigned in the Client Database"
           assignAs={viewer.isManager ? viewer.member?.name || viewer.name : undefined}
+          kams={allKams}
           onClose={() => setOpenId(null)}
           onSave={saveClient}
           onEdit={() => setEditing(openRow.client)}
+          onDelete={viewer.canManageTeam ? deleteFirm : undefined}
+          canAddStudioNumber={viewer.canManageTeam}
         />
       )}
       {editing && (
-        <ClientModal client={editing} onClose={() => setEditing(null)} onSave={saveClient} />
+        <ClientModal client={editing} kams={allKams} onClose={() => setEditing(null)} onSave={saveClient} />
       )}
       {merging && (
         <MergeModal clients={clients} suggestions={suggestions} onClose={() => setMerging(false)} onMerge={runMerge} />

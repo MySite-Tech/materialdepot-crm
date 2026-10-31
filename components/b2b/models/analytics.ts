@@ -1,4 +1,5 @@
 import type { B2BData } from '@/lib/b2b';
+import { repNames } from './outreach/handover';
 import {
   INBOUND_STAGES,
   type InboundLead, type OutreachLead,
@@ -28,10 +29,7 @@ const sum = (ns: (number | undefined)[]) => ns.reduce((a: number, b) => a + (Num
 export type ClientMetricsMap = Record<string, ClientOrderMetrics>;
 
 function kamUniverse(data: B2BData): string[] {
-  const seen = new Set<string>();
-  data.kam.forEach((o) => o.kam && seen.add(o.kam));
-  data.clients.forEach((c) => c.kam && seen.add(c.kam));
-  return [...seen].sort();
+  return repNames([], [...data.kam.map((o) => o.kam), ...data.clients.map((c) => c.kam)]);
 }
 
 export interface DashboardMetrics {

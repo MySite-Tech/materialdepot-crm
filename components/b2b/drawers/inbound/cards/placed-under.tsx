@@ -3,7 +3,8 @@
 import EcPicker from '../../../ui/ec-picker';
 
 import { PLACED_UNDER_FIELDS, PLACED_UNDER_SUBTITLE, PLACED_UNDER_TITLE } from '../../../constants/inbound';
-import { ASSIGNABLE_REPS } from '../../../models/roster';
+import { liveRepName, repNames } from '../../../models/outreach/handover';
+import { Rep } from '../../../models/outreach/intake';
 import { InboundLead } from '../../../models/mock-data';
 import { PlacedUnder } from '../../../types/inbound';
 import { Field, SectionCard, inputCls } from '../../../ui/inbound-chips';
@@ -21,8 +22,9 @@ const META = Object.fromEntries(PLACED_UNDER_FIELDS.map((f) => [f.key, f])) as
 const withStored = (names: string[], stored?: string): string[] =>
   (stored && !names.includes(stored) ? [...names, stored] : names);
 
-export function InboundPlacedUnderCard({ draft, setPlaced }: {
+export function InboundPlacedUnderCard({ draft, people, setPlaced }: {
   draft: InboundLead;
+  people: Rep[];
   setPlaced: (patch: Partial<PlacedUnder>) => void;
 }) {
   const [bms, setBms] = useState<BmRoster>({ kind: 'loading' });
@@ -73,12 +75,12 @@ export function InboundPlacedUnderCard({ draft, setPlaced }: {
 
         <Field label={META.spok.label} owner={META.spok.owner} hint={META.spok.hint}>
           <select
-            value={placed.spok || ''}
+            value={placed.spok ? liveRepName(placed.spok, people) : ''}
             onChange={(e) => setPlaced({ spok: e.target.value || undefined })}
             className={inputCls}
           >
             <option value="">—</option>
-            {withStored(ASSIGNABLE_REPS, placed.spok).map((n) => <option key={n} value={n}>{n}</option>)}
+            {repNames(people, [placed.spok]).map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </Field>
       </div>

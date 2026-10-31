@@ -1,12 +1,15 @@
+import { repNames, sameRep } from '../../../models/outreach/handover';
 import { STUDIO_LENS_ORDER } from './constants';
 import { KamOnboarding, StudioLens, StudioRow } from './types';
+
+const onStudio = (r: StudioRow) => !!r.studio.firm || r.studio.onboarded > 0;
 
 export function studioLensMatches(lens: StudioLens, r: StudioRow): boolean {
   switch (lens) {
     case 'all':          return true;
-    case 'onboarded':    return r.studio.onboarded > 0;
-    case 'none':         return r.studio.onboarded === 0;
-    case 'nopower':      return r.studio.onboarded > 0 && r.studio.power === 0;
+    case 'onboarded':    return onStudio(r);
+    case 'none':         return !onStudio(r);
+    case 'nopower':      return onStudio(r) && !r.studio.firm?.power && r.studio.power === 0;
     case 'unclassified': return r.studio.unclassified > 0;
   }
 }
@@ -18,9 +21,10 @@ export function rowsByLens(rows: StudioRow[]): Record<StudioLens, StudioRow[]> {
 }
 
 export function kamOnboarding(rows: StudioRow[]): KamOnboarding[] {
+  const names = repNames([], rows.map((r) => r.client.kam));
   const byKam = new Map<string, StudioRow[]>();
   for (const r of rows) {
-    const kam = r.client.kam || '';
+    const kam = names.find((n) => sameRep(n, r.client.kam)) ?? '';
     byKam.set(kam, [...(byKam.get(kam) || []), r]);
   }
   return [...byKam.entries()]

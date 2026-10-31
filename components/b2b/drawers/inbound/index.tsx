@@ -9,6 +9,7 @@ import { InboundNotesCard } from './cards/notes';
 import { InboundOwnerCard } from './cards/owner';
 import type { TeamMember } from '@/lib/b2b/team/types';
 import { InboundPlacedUnderCard } from './cards/placed-under';
+import { Rep } from '../../models/outreach/intake';
 import { InboundAddedCard, InboundPresalesCard } from './cards/presales';
 import { withRequirementHistory } from '../../models/requirement';
 import { InboundRequirementCard } from './cards/requirement';
@@ -44,13 +45,14 @@ const withContactDefaults = (l: InboundLead): InboundLead => ({
 });
 
 export default function InboundDrawer({
-  lead, onClose, onSaved, actorName, actorPhone, members, canReassign, canCredit,
+  lead, onClose, onSaved, actorName, actorPhone, members, people, canReassign, canCredit,
 }: {
   lead: InboundLead;
   onClose: () => void;
   actorName: string;
   actorPhone: string;
   members: TeamMember[];
+  people: Rep[];
   canReassign: boolean;
   canCredit: boolean;
   onSaved: (updated: InboundLead) => void;
@@ -237,7 +239,7 @@ export default function InboundDrawer({
           />
 
           {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
-            <InboundPlacedUnderCard draft={draft} setPlaced={setPlaced} />
+            <InboundPlacedUnderCard draft={draft} people={people} setPlaced={setPlaced} />
           )}
 
           {draft.stage === 'Closed' && (

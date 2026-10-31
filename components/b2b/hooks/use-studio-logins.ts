@@ -1,19 +1,21 @@
 'use client';
 
-import { StudioLogins } from '../models/client';
-import { fetchStudioLogins } from '@/lib/b2b/studio-logins';
-import { useEffect, useState } from 'react';
+import { StudioFirm, StudioLogins } from '../models/client';
+import { fetchStudioAccess } from '@/lib/b2b/studio-logins';
+import { useCallback, useEffect, useState } from 'react';
 
 export function useStudioLogins() {
-  const [state, setState] = useState<{ logins: StudioLogins | null; error: string }>({ logins: null, error: '' });
+  const [state, setState] = useState<{ logins: StudioLogins | null; firms: StudioFirm[]; error: string }>({ logins: null, firms: [], error: '' });
 
-  useEffect(() => {
+  const read = useCallback(() => {
     let live = true;
-    fetchStudioLogins()
-      .then((logins) => live && setState({ logins, error: '' }))
-      .catch((e) => live && setState({ logins: null, error: e instanceof Error ? e.message : String(e) }));
+    fetchStudioAccess()
+      .then(({ logins, firms }) => live && setState({ logins, firms, error: '' }))
+      .catch((e) => live && setState({ logins: null, firms: [], error: e instanceof Error ? e.message : String(e) }));
     return () => { live = false; };
   }, []);
 
-  return { logins: state.logins, error: state.error, loading: !state.logins && !state.error };
+  useEffect(() => read(), [read]);
+
+  return { logins: state.logins, firms: state.firms, error: state.error, loading: !state.logins && !state.error, reload: read };
 }

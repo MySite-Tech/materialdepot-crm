@@ -27,7 +27,7 @@ export function OrdersSection({ stats, open, range, basis, busy, onRange, onBasi
   return (
     <Card className={busy ? 'opacity-70 transition-opacity' : 'transition-opacity'}>
       <SectionHead
-        title="Orders"
+        title="Orders on the B2B branch"
         hint={`${BASIS_HINT[basis]} Open carts are always counted by cart date — an open cart has no order date yet.`}
         right={(
           <div className="flex items-center gap-2 flex-wrap">

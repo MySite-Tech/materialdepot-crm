@@ -65,7 +65,11 @@ function filterDeals(deals, query) {
 function leadsPage(deals, query) {
   const size = Number(query.get('page_size')) || 25;
   const n = Math.max(1, Number(query.get('page')) || 1);
-  const rows = filterDeals(deals, query).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const onEstimate = query.get('branch_basis') === 'estimate';
+  const rows = filterDeals(deals, query)
+    .filter((d) => !onEstimate || ((!query.get('branch') || d.branch === query.get('branch'))
+      && orderDay(d) >= (query.get('order_from') || '') && orderDay(d) <= (query.get('order_to') || '9')))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return { results: rows.slice((n - 1) * size, n * size), count: rows.length, page: n, pageSize: size, totalPages: Math.max(1, Math.ceil(rows.length / size)) };
 }
 

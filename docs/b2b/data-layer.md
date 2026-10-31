@@ -106,8 +106,8 @@ They live here now because the code cannot carry them.
   overall B2B pipeline via `total_branch`, so switching range costs one call.
   `loadRange` keys on `[range, basis]` and costs **two** calls on mount, because
   the default basis is `order` and the created-basis call is still needed for
-  open pipeline. A non-month range adds a third for the month-scoped revenue.
-  Three is the ceiling.
+  open pipeline. Two is the ceiling. The revenue section loads on its own
+  (`use-revenue-report.ts`) and keys on its own month, not on this range.
 
 - **The Overview has a date basis and a branch basis, and they are not
   independent.** `StatsBasis` (`lib/b2b/stats/pipeline.ts`) is `created` or
@@ -179,22 +179,26 @@ They live here now because the code cannot carry them.
   Those are different numbers and the screen showed both: `branchTotal.won` was
   ₹13,44,897 ("Order Won") while the verticals summed to ₹10,08,823 ("Revenue
   Generated"), because `bm_groups` keys on rep phone and the branch total does
-  not. Both now read `pipeline.won.value`. The difference has to go somewhere,
-  so `revenueSources` (`views/overview/utils.ts`) appends a grey
-  `No B2B rep on cart` slice for the remainder — on the order basis that slice
-  is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
-  data, not a bug to tune away.
+  not. The Orders section reads `pipeline.won.value`. The old grey `No B2B rep on
+  cart` slice went with the donut on 2026-10-31: `overview.md` §Three revenue
+  channels now places those orders by rep and number.
 
 - **The B2B target is the sum of every team member's revenue target**
   (`b2bTargetL`, `leadership.md` §Set targets), not a typed 120L. Achieved on
-  the Overview is still Django's figure, so achieved and target come from
+  the Overview is the three-channel total, so achieved and target come from
   different places by design.
 
 - **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**
   It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`
   (full names + phone numbers, keying the Dashboard's per-vertical stats) and
   `KAMS`/`B2B_REPS` in `models/mock-data.ts` (short names, keying
-  every dropdown and filter). Targets no longer reads the roster (`leadership.md`). `Jadhav` vs `Krishna Jadhav`,
+  every dropdown and filter). **Since 2026-10-31 no picker or filter reads it:**
+  `useB2BReps` gives the live team, with the roster only as the fallback when the
+  table cannot be read, and `repNames` adds stored names that match nobody live,
+  so a firm held by someone off the team still filters. `KAMS` was every assignable
+  rep, not the KAMs, and is deleted with `DEFAULT_KAM` and `ASSIGNABLE_REPS`.
+  Compare rep names with `sameRep`, never `===`: stored rows say "Jadhav" and the
+  team says "Krishna Jadhav". Targets no longer reads the roster (`leadership.md`). `Jadhav` vs `Krishna Jadhav`,
   `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
   so they drove revenue on the Dashboard and appeared nowhere on Targets or the
   old leaderboard. Everything now derives from `B2B_ROSTER`.
@@ -203,11 +207,6 @@ They live here now because the code cannot carry them.
     `meta_data.kam` and `owner` on existing `b2b_lead` rows, so renaming one
     orphans those rows from the dropdown. `fullName` and `contact` are the
     display/matching attributes; only `contact` may be corrected freely.
-  - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
-    Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
-    `DEFAULT_KAM`, but he had no Targets card (the tab is gone since 2026-10-30). That asymmetry is deliberate and predates this
-    file; it was briefly "fixed" by making him unassignable and reverted the
-    same day.
   - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
     only grants the tab; every KAM list and dropdown reads this
     file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
@@ -239,8 +238,7 @@ against the last saved record, not wired to a button:
   call log go through it. The call log writes the whole draft, so a requirement
   edited and then a call logged would otherwise skip the history.
 - **KAM:** per order, in the order modal's save. A new order has none. The
-  modal's `kam` prop is the KAM a new order defaults to (often the hardcoded
-  `DEFAULT_KAM`), not the editor, so the entry takes `actor`. The first
+  modal's `kam` prop is the KAM a new order defaults to, not always the editor, so the entry takes `actor`. The first
   browser run recorded a roster name instead of the KAM who made the edit.
 
 Filling an empty requirement is not a change, clearing one keeps the old text,

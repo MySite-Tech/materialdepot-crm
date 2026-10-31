@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from '@/lib/server/session';
-import { InputError, readMembers, reassignInboundLead, reassignInboundLeads, rotateInbound, TeamTableMissing } from '@/lib/server/b2b-team';
+import { InputError, KylasBusy, readMembers, reassignInboundLead, reassignInboundLeads, rotateInbound, TeamTableMissing } from '@/lib/server/b2b-team';
 import { canUseB2B, isB2BManager, membershipsForPhone } from '@/lib/b2b/team/utils';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof InputError) return bad(err.message);
     if (err instanceof TeamTableMissing) return bad(err.message, 503);
+    if (err instanceof KylasBusy) {
+      return bad(body.mode === 'rotate' ? err.message : `${err.message}, so the reassign did not finish. Try again in a minute.`, 503);
+    }
     return bad(err instanceof Error ? err.message : 'Assignment failed', 502);
   }
 }

@@ -5,7 +5,7 @@ export const KYLAS_API_KEY = "84ff1db2-99bf-4634-9e24-1930c1cfcd6a:20007";
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function kylasFetch(path: string, init?: RequestInit, maxRetries = 4) {
+export async function kylasFetch(path: string, init?: RequestInit, maxRetries = 5) {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${KYLAS_API_URL}${path}`, {
       ...init,

@@ -55,25 +55,20 @@ async function readBase(): Promise<BaseData> {
 async function readRange(range: RangeKey, basis: StatsBasis): Promise<RangeData> {
   const now = new Date();
   const selected = rangeFor(range, now);
-  const month = rangeFor('month', now);
   const onOrder = basis === 'order';
 
-  const [createdStats, orderStats, revenueMonthStats] = await Promise.all([
+  const [createdStats, orderStats] = await Promise.all([
     fetchVerticalStats(selected, B2B_STATS_BRANCH),
     onOrder ? fetchVerticalStats(selected, B2B_STATS_BRANCH, 'order') : Promise.resolve(null),
-    range === 'month' ? Promise.resolve(null) : fetchVerticalStats(month, B2B_STATS_BRANCH, basis),
   ]);
   const revenueSelected = orderStats ?? createdStats;
-  const revenueMonth = revenueMonthStats ?? revenueSelected;
   const pipeline = revenueSelected.pipeline ?? await fetchB2BPipelineStats(selected, basis);
 
   return {
     stats: pipeline,
-    statsOk: createdStats.ok && pipeline.ok && revenueSelected.ok && revenueMonth.ok,
-    basisApplied: revenueSelected.basisApplied && revenueMonth.basisApplied,
+    statsOk: createdStats.ok && pipeline.ok && revenueSelected.ok,
+    basisApplied: revenueSelected.basisApplied,
     open: createdStats.pipeline?.active ?? { count: 0, value: 0 },
-    monthRevenue: revenueMonth.pipeline?.won.value ?? 0,
-    monthVerticals: revenueMonth.verticals,
   };
 }
 

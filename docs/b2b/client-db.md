@@ -218,7 +218,7 @@ wiped.
 
 **Studio Space access is read, never assigned.** The first cut of this stored
 `studioAccess` on each contact and let a KAM pick it. That was replaced the same
-day, at the user's call: the CRM fetches it. `fetchStudioLogins()`
+day, at the user's call: the CRM fetches it. `fetchStudioAccess()`
 (`lib/b2b/studio-logins`, one call, cached 60 s so the Firm page, this list and
 the Studio Space tab share it) reads `GET /b2b/studio-access` on b2b-backend
 through the relay (`studio-access` is in `ALLOW`), which answers every Studio
@@ -233,12 +233,15 @@ that map by the last ten digits.
   and leads, and an owner can leave any of them on.
 - **A login's mobile has two homes** (`app/people.py` `login_phone`): the
   studio's own `referral` row joined by `team_user_id` (source `self` or `team`),
-  else `partner_user.phone`. The endpoint reads both. A mobile that appears in
-  neither is "Not onboarded". If both name the same mobile and any is Power, it
+  else `partner_user.phone`. The endpoint reads both, and since 2026-10-31 also
+  `partner.phone` and `self`/`team` rows with no login, at the owner's access
+  (`studio-space.md` §Read from Studio Space). A mobile that appears in none
+  of these is "Not onboarded". If both name the same mobile and any is Power, it
   is Power.
 - **Shown in two places.** The contact card has a read-only badge per number,
-  and the Client Database list has a **Studio Space** column, the firm's best
-  access across its numbers (Power, else Normal, else Not onboarded).
+  and the Client Database list has a **Studio Space** column, decided per firm
+  by `studioFirmOf`: Power if any login at the matched studio is, else Normal,
+  else Not onboarded (`studio-space.md` §Read from Studio Space).
 - **A failed read says Unknown**, never "Not onboarded". The badge, the column
   and the Studio Space tab all do. Not onboarded would be a confident claim
   about every firm at once.
@@ -330,7 +333,7 @@ Round robin starts from the in-rotation KAMs, and the manager ticks the set for
 that assignment (2026-10-31). Select all takes the whole lens, not just the
 page. Either choice writes a pending handover
 that the KAM signs off on the KAM tab. The rules (where the state is stored,
-why it is book size and not `/kam-load`, what rejection does) are in `kam.md`
+why it is book size and not `/kam-load`, why a KAM cannot reject) are in `kam.md`
 §Admin assigns firms. The checkbox column renders only when `picked` is passed,
 so non-managers get the old table unchanged.
 
@@ -428,6 +431,23 @@ why the 44-order parent above carries the firm's name rather than the individual
 despite the individual's appearing on 39 of the rows — and reports which rule
 chose it in `nameFrom`.
 
+### Who can add, merge and delete (2026-10-31)
+
+Add Client, Bulk Upload, Seed from leads, Merge and Delete show only for
+`viewer.canManageTeam`: admin, superadmin, `b2b_manager`, or the `b2b.manager`
+permission. A team roster `is_admin` is not enough, on purpose: the server check has
+only the caller's role. **`relayB2B` refuses a client-row DELETE and
+`studio-number` from anyone else**, so a merge is covered too, because it deletes.
+Adding is gated on screen only: `POST rows` cannot be refused for a new client,
+because the Outreach handover and every KAM's edit use the same write.
+
+Delete asks for the firm's name typed out. It removes the Client Database row, not
+order history, which was never stored there.
+
+**A parent company is a merge with a name.** The Merge window takes any firms found
+by search, and an optional parent company name that replaces the name conflict. The
+merged row keeps every number and GST, so their orders roll up.
+
 ### Merge: the system never merges
 
 §4 is a manual action and stays one. `findDuplicates` ranks pairs by evidence
@@ -481,3 +501,24 @@ Inbound leads, closed Outreach leads and the `pipeline='kam'` rows (24 distinct
 phones live today). It never runs automatically, matches EXACTLY on the
 normalised phone, and a candidate with no usable 10-digit number is reported as
 unusable rather than created — nothing could ever link an order to it.
+
+## The client_master import (2026-10-31)
+
+The firms uploaded on 2026-10-29 were in the backend's `client_master`, which no
+CRM code reads, so they appeared nowhere. It holds 1,280 parent entities, with
+blank SPoC, segment and client type. The user wanted them here, not in Leads.
+
+- **1,208 were copied into `b2b_client`, and 72 skipped.** A firm was skipped when
+  its phone, GSTIN or exact name was already on a client row. A firm known only to
+  KAM, Outreach or Inbound was still added. Skipped firms were not edited.
+- **Ids are `CLI-CM-<client_master id>`,** so the batch can be found or removed.
+  Rows have no owner, `source` Existing, and `import_batch` in `extra`. GSTINs that
+  fail `GSTIN_SHAPE` were left off.
+- **It was a one-time copy.** Later edits to `client_master` do not reach this tab.
+  Four names differ only by case or spacing and were kept, because their phones
+  differ. Use Merge.
+- **Reading it:** `/client-master` is staff-only and Cloudflare challenges curl. A
+  real browser signed in through the Studio handoff gets through. The write was
+  `POST /b2b/rows/bulk` with `only_new`, tested first with fake rows on :3100.
+- **Verified on production:** the tab reads 1,278 firms, all loading their order
+  status through the batched history calls.

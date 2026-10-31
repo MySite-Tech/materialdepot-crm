@@ -7,11 +7,10 @@ import { SectionCard } from '../../../ui/inbound-chips';
 import { btnPrimary, inputCls } from '../../../constants/ui';
 import type { ClientOrderRow } from '@/lib/b2b';
 import { useMemo, useState } from 'react';
+import { istToday } from '../../../models/inbound';
 
 const LABEL: Record<SpocRole, string> = { inbound: 'Inbound SPoC', outreach: 'Outreach SPoC', kam: 'KAM SPoC', ec: 'EC SPoC' };
 const STAGE: Record<string, string> = { inbound: 'Inbound', outreach: 'Outreach', kam: 'KAM' };
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function SpocsCard({ client, links, linksLoading, linksFailed, orders, ordersLoading, ordersFailed, assignAs, onSave }: {
   client: ClientEntity;
@@ -26,7 +25,7 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
 }) {
   const [editing, setEditing] = useState<SpocLogEntry['role'] | null>(null);
   const [name, setName] = useState('');
-  const [from, setFrom] = useState(today());
+  const [from, setFrom] = useState(istToday());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,7 +35,7 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
   const open = (role: SpocLogEntry['role'], current?: string) => {
     setEditing(role);
     setName(current || '');
-    setFrom(today());
+    setFrom(istToday());
     setError('');
   };
 
@@ -81,7 +80,7 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
             <input value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} block mt-0.5`} />
           </label>
           <label className="text-[11px] text-gray-600">Since
-            <input type="date" value={from} max={today()} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} block mt-0.5`} />
+            <input type="date" value={from} max={istToday()} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} block mt-0.5`} />
           </label>
           <button onClick={save} disabled={busy || !name.trim() || !from} className={btnPrimary}>{busy ? 'Saving…' : 'Save'}</button>
           <button onClick={() => setEditing(null)} className="text-[11px] text-gray-500">Cancel</button>

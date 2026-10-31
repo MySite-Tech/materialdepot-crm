@@ -79,7 +79,7 @@ export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, 
           onCheckIn ? (
             <>
               <button onClick={onCheckIn} className="px-2.5 py-1 rounded-md bg-[#0F766E] text-white font-semibold">Check in at the meeting</button>
-              <span className="text-gray-500">On arrival: a photo and your exact location. Needed before it can be marked held.</span>
+              <span className="text-gray-500">On arrival: your exact location. Needed before it can be marked held.</span>
             </>
           ) : <span className="text-amber-700">Save this meeting first, then check in when you arrive.</span>
         ) : needsCheckIn(m.date)

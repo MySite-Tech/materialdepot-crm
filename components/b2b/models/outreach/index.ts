@@ -85,7 +85,6 @@ export interface GeoPin {
 }
 
 export interface MeetingCheckIn extends GeoPin {
-  photoUrl: string;
   by: string;
 }
 

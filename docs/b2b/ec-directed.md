@@ -26,6 +26,9 @@ what those numbers then ordered at that EC is **assisted revenue**.
 - **Assisted revenue never adds to a total.** The same order is already in the
   EC's revenue. The user: "we won't be counting it twice". It is shown as B2B's
   contribution only.
+  The Overview's EC-directed channel (`overview.md`) is wider than this tab: it
+  needs no logged redirect and no click, and sits in B2B's influence total, which
+  is compared with the B2B target and is never added to company revenue.
 - **What counts:** an order (`dealIsOrder`) on any of the redirect's phones,
   whose cart's branch canonicalises (`apptBranchesFromCrm`) to the redirect's EC,
   created on or after the redirect day. The user said the timing does not

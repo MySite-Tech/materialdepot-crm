@@ -1,5 +1,6 @@
 import { jsonOf, reply } from '../../stub/http.mjs';
 import { SYNC_KEY } from '../constants.mjs';
+import { istDay } from '../seed/time.mjs';
 
 const ROW_KEYS = ['id', 'pipeline', 'stage', 'kylas_lead_id', 'owner', 'value', 'created_at', 'updated_at', 'meta_data'];
 
@@ -81,8 +82,12 @@ function studioLogins(db) {
   const phones = db.rows.filter((r) => r.pipeline === 'client').flatMap((r) => (r.meta_data?.contacts ?? []).map((c) => String(c.number).replace(/\D/g, '').slice(-10)));
   return {
     logins: phones.slice(0, 4).map((phone, i) => ({
-      phone, firm_name: 'Sandbox Studio', role: 'principal', visible_tabs: i % 2 ? ['rewards'] : null, power: i % 2 === 0,
+      phone, partner_id: `sandbox-${i}`, firm_name: 'Sandbox Studio', role: 'principal', visible_tabs: i % 2 ? ['rewards'] : null, power: i % 2 === 0,
     })),
+    firms: [
+      ...phones.slice(0, 4).map((phone, i) => ({ partner_id: `sandbox-${i}`, firm_name: 'Sandbox Studio', phones: [phone], gsts: [], logins: 1, power: i % 2 === 0, orders: i ? [] : [{ enq_id: 'ENQ-STUDIO-1', phone: '9000099998', source: 'team', value: 25000, ordered_on: '2026-10-20', status: 'Delivered' }], referrals: i ? [] : [{ name: 'Sandbox Referred Client', phone: '9000099997', status: 'approved', referred_on: '2026-10-01', orders: 0, value: 0 }] })),
+      { partner_id: 'sandbox-unmatched', firm_name: 'Sandbox Unmatched Studio', phones: ['9000099999'], gsts: [], logins: 3, power: true, orders: [], referrals: [] },
+    ],
   };
 }
 
@@ -117,6 +122,16 @@ function lastRoundRobin(db) {
 
 export function backendRoutes(db) {
   return (req) => {
+    if (req.path === '/sync/pull-numbers') {
+      return {
+        partner_id: null,
+        referrals: [
+          { id: 'ref-1', md_phone: '9000020009', status: 'approved', source: 'client', firm_name: 'Mockup Interiors', partner_phone: '9000020001', referred_on: istDay(-20) },
+          { id: 'ref-2', md_phone: '9000020010', status: 'approved', source: 'team', firm_name: 'Mockup Interiors', partner_phone: '9000020001', referred_on: istDay(-20) },
+        ],
+        linked: [],
+      };
+    }
     if (req.path === '/auth/handoff') {
       const phone = db.handoffs?.[req.query.get('code')];
       if (!phone) return reply(401, { sandbox: 'Studio Space would show its sign-in page: unknown or spent code' });
@@ -145,6 +160,7 @@ export function backendRoutes(db) {
     if (path === '/kam-load') return kamLoad(db);
     if (path === '/waitlist') return { signups: db.waitlist ?? [] };
     if (path === '/studio-access') return studioLogins(db);
+    if (path === '/studio-number' && method === 'POST') return { phone: body?.phone, partner_id: body?.partner_id };
     if (path === '/staff-handoff' && method === 'POST') {
       if (!STUDIO_STAFF[body?.phone]) return reply(404, { error: 'No active Studio Space team login has this mobile' });
       const code = `sandbox-${Object.keys(db.handoffs ??= {}).length + 1}-${body.phone}`;
@@ -160,10 +176,6 @@ export function backendRoutes(db) {
     if (path === '/team' && method === 'PUT') return putMember(db, body);
     if (path === '/ec-visits' && method === 'GET') return listEcVisits(db, query);
     if (path === '/ec-visits' && method === 'PUT') return putEcVisit(db, body);
-    if (path === '/check-in-photo' && method === 'POST') {
-      if (!/^data:image\//.test(String(body?.image_data ?? ''))) return reply(400, { error: 'image_data must be an image' });
-      return { url: body.image_data };
-    }
     if (path === '/assignments/last-round-robin') return lastRoundRobin(db);
     if (path === '/assignments/lead-ids') {
       const since = query.get('since') || '';

@@ -13,6 +13,7 @@ export function MergeModal({ clients, suggestions, onClose, onMerge }: {
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [choices, setChoices] = useState<MergeChoices>({});
+  const [parentName, setParentName] = useState('');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +23,8 @@ export function MergeModal({ clients, suggestions, onClose, onMerge }: {
     [selected, clients],
   );
   const conflicts = useMemo(() => (sources.length >= 2 ? mergeConflicts(sources) : []), [sources]);
-  const unresolved = conflicts.filter((c) => !(choices as Record<string, string | undefined>)[c.field]);
+  const parent = parentName.trim();
+  const unresolved = conflicts.filter((c) => !(c.field === 'company' && parent) && !(choices as Record<string, string | undefined>)[c.field]);
 
   const toggle = (id: string) => {
     setChoices({});
@@ -42,7 +44,7 @@ export function MergeModal({ clients, suggestions, onClose, onMerge }: {
   const run = async () => {
     setBusy(true);
     setError('');
-    const err = await onMerge(sources, choices);
+    const err = await onMerge(sources, parent ? { ...choices, company: parent } : choices);
     setBusy(false);
     if (err) setError(err); else onClose();
   };
@@ -53,9 +55,9 @@ export function MergeModal({ clients, suggestions, onClose, onMerge }: {
       <div className="relative w-full max-w-[760px] bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-base font-bold text-gray-800">Merge Clients</h2>
+            <h2 className="text-base font-bold text-gray-800">Merge into one parent company</h2>
             <p className="text-[11px] text-gray-400">
-              One real client that has ordered under more than one number or GST · §4
+              One company with several firms, numbers or GSTs. It keeps every number and GST, and all their orders roll up.
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none cursor-pointer">×</button>
@@ -138,6 +140,10 @@ export function MergeModal({ clients, suggestions, onClose, onMerge }: {
                 from those numbers and was never stored on the record.
               </div>
 
+              <Field label="Parent company name (optional)">
+                <input value={parentName} onChange={(e) => setParentName(e.target.value)} placeholder="Leave blank to keep one of the names below" className={`${inputCls} mb-3`} />
+              </Field>
+
               {!conflicts.length ? (
                 <p className="text-[11px] text-[#0F766E]">These records agree on everything — nothing to choose.</p>
               ) : (
@@ -147,7 +153,7 @@ export function MergeModal({ clients, suggestions, onClose, onMerge }: {
                     you, because a segment chosen by a machine changes how the account is targeted and nobody would
                     know it was guessed.
                   </p>
-                  {conflicts.map((c) => (
+                  {conflicts.filter((c) => !(c.field === 'company' && parent)).map((c) => (
                     <div key={c.field} className="flex items-start gap-2 flex-wrap">
                       <span className="text-[11px] font-semibold text-gray-500 w-24 shrink-0 pt-1">{MERGE_FIELD_LABEL[c.field]}</span>
                       <div className="flex gap-1.5 flex-wrap">

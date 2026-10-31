@@ -1,10 +1,11 @@
 'use client';
 
 import { Search } from 'lucide-react';
-import { ClientEntity, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, firmStudioState, istToday } from '../../../models/client';
+import { ClientEntity, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, firmStudioState, istToday, studioFirmsNotInCrm } from '../../../models/client';
 import { FirmDrawer } from '../../../drawers/firm';
 import { useClientAggregates } from '../../../hooks/use-client-aggregates';
 import { useStudioLogins } from '../../../hooks/use-studio-logins';
+import { repNames, sameRep } from '../../../models/outreach/handover';
 import { TemperatureChip } from '../../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../../ui/lens-tiles';
 import { PAGE_SIZE, STUDIO_LENS } from './constants';
@@ -46,13 +47,14 @@ export function StudioNumbers() {
   useEffect(() => { load(); }, [load]);
 
   const searched = useMemo<StudioRow[]>(
-    () => logins ? clients.filter((c) => clientMatchesSearch(c, search)).map((client) => ({ client, studio: firmStudioState(client, logins) })) : [],
-    [clients, search, logins],
+    () => logins ? clients.filter((c) => clientMatchesSearch(c, search)).map((client) => ({ client, studio: firmStudioState(client, logins, studio.firms) })) : [],
+    [clients, search, logins, studio.firms],
   );
-  const scoped = useMemo(() => searched.filter((r) => kam === 'all' || (kam === '' ? !r.client.kam : r.client.kam === kam)), [searched, kam]);
+  const scoped = useMemo(() => searched.filter((r) => kam === 'all' || (kam === '' ? !r.client.kam : sameRep(r.client.kam, kam))), [searched, kam]);
   const byLens = useMemo(() => rowsByLens(scoped), [scoped]);
   const perKam = useMemo(() => kamOnboarding(searched), [searched]);
-  const kamOptions = useMemo(() => [...new Set(clients.map((c) => c.kam).filter((k): k is string => !!k))].sort(), [clients]);
+  const kamOptions = useMemo(() => repNames([], clients.map((c) => c.kam)), [clients]);
+  const unmatched = useMemo(() => studioFirmsNotInCrm(clients, studio.firms), [clients, studio.firms]);
 
   useEffect(() => { setPage(1); }, [search, kam, lens]);
 
@@ -118,6 +120,14 @@ export function StudioNumbers() {
         </div>
       )}
 
+      {!loading && !loadError && unmatched.length > 0 && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-900">
+          <span className="font-semibold">{`${unmatched.length} ${unmatched.length === 1 ? 'firm is' : 'firms are'} on Studio Space with no match in the Client Database by number, GST or name:`}</span>{' '}
+          {unmatched.map((f) => f.firmName).join(', ')}.{' '}
+          The tiles below leave them out. The KAM adds the firm&apos;s number or GST to its row, or creates the firm.
+        </div>
+      )}
+
       <LensTiles groups={tileGroups} active={lens} onPick={setLens} />
 
       <KamOnboardingTable rows={loading || loadError ? [] : perKam} onPickKam={(k) => { setKam(k); setLens('all'); }} />
@@ -167,7 +177,7 @@ export function StudioNumbers() {
       </div>
 
       <p className="text-[10px] text-gray-400 mt-3">
-        Read from Studio Space by mobile number. The CRM never changes anyone&apos;s access there. Access is granted on Studio Space, and it shows here within a minute.
+        Read from Studio Space and matched by number, GST or exact firm name. The CRM never changes anyone&apos;s access there. Access is granted on Studio Space, and it shows here within a minute.
       </p>
 
       {openRow && (

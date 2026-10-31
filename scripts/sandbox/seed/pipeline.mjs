@@ -26,6 +26,10 @@ function seedDeals() {
     deal('ENQ-900105', '9000020003', 'Exemplar Interiors', 'Delivered', 180000, RAVI, 'JP Nagar', -50, { closureDate: istDay(-45) }),
     deal('ENQ-900106', leadPhone(9), 'Fictional Spaces', 'Cart Created', 90000, RAVI, 'JP Nagar', -1),
     deal('ENQ-900107', leadPhone(16), 'Specimen Studio', 'Estimate Shared', 150000, IMRAN, 'HSR', -2, { followUpDate: istDay(3) }),
+    deal('ENQ-900108', '9000020001', 'Mockup Interiors', 'Order Confirmed', 340000, { name: 'Kavya (KAM)', phone: '9000000021' }, 'B2B', -7, { closureDate: istDay(-3) }),
+    deal('ENQ-900109', leadPhone(12), 'Sandbox Studio', 'Delivered', 125000, { name: 'Asha (Inbound)', phone: '9000000001' }, 'B2B', -9, { closureDate: istDay(-6) }),
+    deal('ENQ-900110', '9000020009', 'A client of Mockup Interiors', 'Order Placed', 215000, SNEHA, 'Whitefield', -4, { closureDate: istDay(-2) }),
+    deal('ENQ-900111', '9000020010', 'Mockup team member', 'Delivered', 90000, RAVI, 'JP Nagar', -5, { closureDate: istDay(-3) }),
   ];
 }
 

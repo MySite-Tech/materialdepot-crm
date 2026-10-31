@@ -1,4 +1,5 @@
 import { OutreachLead } from '../mock-data';
+import { B2B_ROSTER } from '../roster';
 import { OutreachHandover, completedMeetings } from '.';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -125,13 +126,29 @@ export const isHandoverKam = (l: OutreachLead, viewer: { name: string; phone: st
 
 const normName = (s: string | undefined) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
+const FULL_NAMES = new Map(B2B_ROSTER.map((r) => [normName(r.name), normName(r.fullName)]));
+
+const fullName = (s: string | undefined) => {
+  const n = normName(s);
+  return FULL_NAMES.get(n) ?? n;
+};
+
 export function sameRep(a: string | undefined, b: string | undefined): boolean {
-  const x = normName(a);
-  const y = normName(b);
+  const x = fullName(a);
+  const y = fullName(b);
   if (!x || !y) return false;
   if (x === y) return true;
   const [short, long] = x.length < y.length ? [x, y] : [y, x];
   return long.startsWith(`${short} `);
+}
+
+export const liveRepName = (name: string, live: { name: string }[]): string =>
+  live.find((r) => sameRep(r.name, name))?.name ?? name;
+
+export function repNames(live: { name: string }[], stored: (string | undefined)[]): string[] {
+  const names = live.map((r) => r.name);
+  for (const n of stored) if (n && !names.some((x) => sameRep(x, n))) names.push(n);
+  return [...new Set(names)].sort();
 }
 
 export const repOwns = (rep: { name: string; phone?: string }) => (l: OutreachLead): boolean => {

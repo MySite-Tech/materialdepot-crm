@@ -206,7 +206,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 64 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 71 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -285,7 +285,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 64 titles, so grep a title and read around the line you
+**Contents** list of all 71 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -384,16 +384,29 @@ Its **PR #29 shipped on 2026-10-29** with b2b-backend #13 (migrations 0020 and
 0021). **PR #32 shipped on 2026-10-31** with b2b-backend #15 then #16 (#14 went in
 inside #16; migrations 0022 and 0023): Studio Space framing and read-only access,
 per-person Targets, Overview, the check-in, multi-team people, EC Directed, the
-assign bar, firm SPoCs and the EC B2B Referral tab. **That tab reaches nobody until
-`crm.ec_b2b_referral` is ticked under Admin > Users**, because nearly every account
-has a permission list. Check-in photos need `MD_SNAPSHOT_API_KEY` on the backend
-deployment; nothing in either repo shows whether it is set, and proving it means a
-real upload, which the file service cannot delete.
+assign bar, firm SPoCs and the EC B2B Referral tab. Sales, retail, manager and admin
+get that tab by role; any other role with a permission list needs
+`crm.ec_b2b_referral` ticked under Admin > Users.
+**PR #33 is open and carries everything since #32 (2026-10-31):** no check-in photo,
+a KAM can only accept a firm, live KAM pickers, one rep name through `sameRep`,
+My performance resolving order values, and the EC tab by role. It needs no backend
+change. **A session cannot merge it:** the auto mode classifier refuses a merge to
+`main` as a production deploy, so a person merges, and that is the deploy. A failed
+`Build and Deploy Job` on a PR is Azure's preview limit when the log says "maximum
+number of staging environments" after "Compiled successfully".
 **A merge to b2b-backend `master` runs its migrations by itself.** Seen on
 2026-10-31: 0022 was live about four minutes after #15 merged. To test that without
 writing, open `/auth/handoff?code=x` in real Chrome, because Cloudflare challenges
 `/auth/*` from curl and lets `/b2b/*` through. A redirect to `/login` means the
 table exists. Check `git log origin/main..HEAD` before claiming anything is live.
+**PR #33 is open and unmerged (2026-10-31).** It carries the location-only check-in,
+KAM accept-only sign-off, live KAM pickers, one rep name via `sameRep`, and EC B2B
+Referral by role. Until it merges, production still asks for a check-in photo. It
+waits on the user's go-ahead because it also changes KAM sign-off and per-person
+numbers. Its only failing check is Azure's preview slot limit. Don't re-add the
+photo: the user scrapped it on 2026-10-31, along with the 3-day retention plan.
+**The 1,000+ firms are in the Client Database (2026-10-31).** See
+`docs/b2b/client-db.md` §The client_master import.
 **The tech team merges, not a session**, unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart. While `npm run dev:sandbox` is
@@ -428,6 +441,42 @@ are not yours. Symlink `node_modules` in for `tsc` and filter `RouteContext`
 out of its output. `next dev` rejects a symlinked `node_modules` ("points out of the
 filesystem root"), so `cp -cR` it instead to run a server. Either way, keep it
 out of the commit.
+
+**Overview revenue is three channels (2026-10-31):** Direct, EC-directed and
+Referred, from per-order rows through `/api/b2b/revenue` (`docs/b2b/overview.md`
+§Three revenue channels). It rides PR #33. The rep on the cart decides Direct, not
+the booking branch. Match that rep exactly, never with `sameRep`, or a team member
+absorbs a store rep with the same first name. The total is B2B influence and is
+never added to company revenue.
+Run that route on real data and a non-admin token first: neither has been done.
+
+**Kylas rate limit and the inbound round robin (2026-10-31).** Every Kylas caller
+shares one budget of 5 requests a second, and something outside this repo spends
+it on a cycle of about 7s clear, 7s of only 429. Who is still unknown
+(`docs/backends.md` §Owed by Django row 12). Kylas still delivers every qualified
+lead to Hardi and the CRM re-owns them, keyed on qualification time
+(`expectedClosureOn`), not `createdAt`. See `docs/b2b/inbound.md` §Who owns a lead.
+Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
+
+**Live on Studio Space (2026-10-31): b2b-backend #17 and #18 (migration 0024) and
+b2b-dashboard #35.** Only admins see every firm there, and the CRM's assignment
+sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees which firm). Never match
+a staff login by name. The CRM's team list creates no Studio Space login, so an
+admin still has to add the new people. The CRM keeps screen-only rep scoping by the
+user's decision. Backend #19 and CRM #33 were not merged when the classifier
+refused them; check before assuming either is live.
+
+**Studio and CRM sync (2026-10-31), not live.** The CRM half is on
+`b2b-revamp-2026-10-28`, so it rides PR #33. The backend half is
+b2b-backend branch `studio-access-all-numbers` (`b6d9513`, migration 0024), pushed
+as PR #18, open. It must merge first; #17 also edits
+`b2b_crm.py` but merged cleanly on it in a trial. The CRM runs without it:
+`firms` is absent, the old per-number answer applies and "Add to Studio Space" does
+not appear. Only managers and admins add, merge or delete firms, which applies as
+soon as #33 merges. A firm's Studio status is per firm, by phone, GST or exact name
+(`docs/b2b/studio-space.md` §What is shared). **Do not change Studio's Cancelled
+status:** Studio is right and `estimate_status` lags. **Check a firm on the real
+CRM screen and against `estimate` before reporting on it.**
 
 **b2b-backend is a sibling repo** (`~/Projects/b2b-backend`,
 `MySite-Tech/b2b-backend`, production is `origin/master`). Its checkout has
@@ -612,6 +661,11 @@ for it.
   first, then One person or Round robin over a chosen set. Bulk takes only records
   with no owner; an owned record moves only as the single selected row. Do not add
   a second assign control. A team stays greyed out where no data path exists.
+
+- **A rep's name is not a key (2026-10-31).** Rows hold roster short names and the
+  team table full ones. Compare with `sameRep`, build lists with `repNames`, and
+  never `===` two rep names or fill a picker from `roster.ts`. `useB2BReps` is the
+  live team, with the roster only as its fallback.
 
 - **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
   removed it from Client Database, Leads and Inbound for every role, admins

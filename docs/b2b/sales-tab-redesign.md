@@ -195,7 +195,10 @@ The user answered the open questions:
 - **Nothing hardcoded.** Managers put existing CRM users onto teams, and people
   will keep joining and leaving.
 - **Calls target is 1,500 a month per head** (user, 2026-10-29; was 90/day).
-- **Outreach/KAM get a scoped view, not a server-side block.**
+- **Outreach/KAM get a scoped view, not a server-side block.** Reconfirmed by
+  the user on 2026-10-31, after it was explained that every firm still reaches a
+  rep's browser and is hidden only on screen. Do not re-propose the server-side
+  block.
 
 That changed one earlier decision. **Team membership is a CRM-Supabase table,
 `b2b_team_member`, not `individualPermissions` sub-slugs.** Two reasons:
@@ -575,12 +578,9 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   (`ec-referral.md`). The assign bar is now one shape on Leads, Client Database and
   Outreach's pool: team first, then One person or Round robin over a chosen set.
   Bulk takes only unowned records, an owned one moves alone (`leads.md`,
-  `client-db.md`), and a firm moved from another KAM cannot be rejected (`kam.md`).
-  Tested in the sandbox on dummy data, stubbed Kylas. **Open, for the user:** the
-  Firm page's KAM picker uses the hardcoded `KAMS` list, not the live team (it
-  offered Hardi and not a newly added KAM). Whether Reject should also go for
-  firms with no KAM: the user's words covered moved firms, and it was built that
-  way. Real Kylas owner change from `reassign-many` is unproven.
+  `client-db.md`). A KAM cannot reject a firm at all (`kam.md`, the user's call the
+  same day). Tested in the sandbox on dummy data, stubbed Kylas. **Open:** real
+  Kylas owner change from `reassign-many` is unproven.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

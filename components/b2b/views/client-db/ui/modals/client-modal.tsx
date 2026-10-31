@@ -1,6 +1,7 @@
 'use client';
 
-import { KAMS } from '../../../../models/mock-data';
+import { liveRepName, repNames } from '../../../../models/outreach/handover';
+import { Rep } from '../../../../models/outreach/intake';
 
 import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, ClientEntity, ClientEntityType, ClientSource, SEGMENTS, Segment, clientEnrichmentGaps, clientGateErrors, normalizeContactNumber, normalizeGst } from '../../../../models/client';
 import { useState } from 'react';
@@ -8,9 +9,10 @@ import { useState } from 'react';
 import { ContactRows, Field, GstRows } from './rows';
 import { btnGhost, btnPrimary, inputCls } from '../../../../constants/ui';
 
-export function ClientModal({ client, isNew, onClose, onSave }: {
+export function ClientModal({ client, isNew, kams, onClose, onSave }: {
   client: ClientEntity;
   isNew?: boolean;
+  kams: Rep[];
   onClose: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
 }) {
@@ -93,9 +95,9 @@ export function ClientModal({ client, isNew, onClose, onSave }: {
           )}
 
           <Field label="KAM" hint="Reassignable — every change is recorded on the account.">
-            <select value={draft.kam || ''} onChange={(e) => set('kam', e.target.value || undefined)} className={inputCls}>
+            <select value={draft.kam ? liveRepName(draft.kam, kams) : ''} onChange={(e) => set('kam', e.target.value || undefined)} className={inputCls}>
               <option value="">Unassigned</option>
-              {[...new Set([...KAMS, ...(draft.kam ? [draft.kam] : [])])].sort().map((k) => <option key={k} value={k}>{k}</option>)}
+              {repNames(kams, [draft.kam]).map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
           </Field>
 

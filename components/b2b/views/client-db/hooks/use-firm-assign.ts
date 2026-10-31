@@ -2,6 +2,7 @@
 
 import { ClientEntity } from '../../../models/client';
 import { assignFirm, planFirmRoundRobin } from '../../../models/kam';
+import { sameRep } from '../../../models/outreach/handover';
 import { usePicked } from '../../../hooks/use-picked';
 import { AssignTarget, isRoundRobin } from '../../../ui/assign-bar';
 import { upsertClients } from '@/lib/b2b';
@@ -15,6 +16,11 @@ export function useFirmAssign(clients: ClientEntity[], by: string, onSaved: (lis
 
   const assign = async (to: AssignTarget) => {
     const selected = clients.filter((c) => picked.has(c.id));
+    if (!isRoundRobin(to) && selected.length === 1 && sameRep(selected[0].kam, to.name)) {
+      setNote(null);
+      setError(`${selected[0].company} is already with ${to.name}.`);
+      return;
+    }
     const firms = !isRoundRobin(to) && selected.length === 1 ? selected : selected.filter((c) => !c.kam);
     const skipped = selected.length - firms.length;
     setNote(null);

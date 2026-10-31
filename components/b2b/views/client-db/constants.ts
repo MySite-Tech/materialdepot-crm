@@ -10,8 +10,8 @@ export const CLIENT_LENS: Record<ClientLens, ClientLensMeta> = {
   inactive: { title: 'Inactive', heading: 'Inactive firms', rule: `Last order more than ${INACTIVE_DAYS} days ago. Firms that have never ordered are counted under Never ordered, not here. Most recently lapsed first.`, empty: 'No inactive firm.', accent: '#9CA3AF' },
   never:    { title: 'Never ordered', heading: 'Never ordered', rule: 'No order on record for any of the firm’s numbers. A–Z.', empty: 'Every firm has ordered at least once.', accent: '#D1D5DB' },
   unknown:  { title: 'Status unknown', heading: 'Status unknown', rule: 'Order dates could not be read, or Django served a last order date after today, which cannot be a real order. These firms are neither Active nor Inactive until the date is fixed.', empty: 'Every firm has a usable last order date.', accent: '#3B82F6' },
-  nokam:    { title: 'No KAM', heading: 'Firms with no KAM', rule: 'No key account manager is assigned, including firms a KAM rejected (the KAM column says why). Highest revenue first.', empty: 'Every firm has a KAM.', accent: '#DC2626' },
-  pending:  { title: 'Awaiting KAM', heading: 'Waiting for KAM sign-off', rule: 'Firms an admin assigned to a KAM who has not yet accepted or rejected them.', empty: 'No assignment is waiting on a KAM.', accent: '#7C3AED' },
+  nokam:    { title: 'No KAM', heading: 'Firms with no KAM', rule: 'No key account manager is assigned. Highest revenue first.', empty: 'Every firm has a KAM.', accent: '#DC2626' },
+  pending:  { title: 'Awaiting KAM', heading: 'Waiting for KAM sign-off', rule: 'Firms an admin assigned to a KAM who has not yet accepted them.', empty: 'No assignment is waiting on a KAM.', accent: '#7C3AED' },
 };
 
 export const STATUS_LENSES: ClientLens[] = ['all', 'active', 'lapsing', 'inactive', 'never'];
