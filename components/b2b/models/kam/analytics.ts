@@ -1,5 +1,6 @@
 import { ClientEntity } from '../client';
 import { istToday } from '../inbound';
+import { sameRep } from '../outreach/handover';
 import { KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, STATUS_RANK } from '../../constants/kam';
 import { AssignedClientRow, CohortMonth, KamAccountSplit, KamFunnel, KamOrder, KamPipelineSplit, NewVsRepeat } from '../../types/kam';
 import { sum } from '../utils/kam';
@@ -103,8 +104,8 @@ export function kamAccountSplit(
   kams: string[],
 ): KamAccountSplit[] {
   return kams.map((kam) => {
-    const mine = rows.filter((r) => r.client.kam === kam);
-    const myOrders = orders.filter((o) => o.kam === kam);
+    const mine = rows.filter((r) => sameRep(r.client.kam, kam));
+    const myOrders = orders.filter((o) => sameRep(o.kam, kam));
     const p = kamPipeline(myOrders);
     return {
       kam,

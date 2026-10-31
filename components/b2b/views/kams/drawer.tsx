@@ -9,9 +9,10 @@ import { fmtINR } from '../../models/mock-data';
 import { SectionCard } from '../../ui/inbound-chips';
 import { TemperatureChip } from '../../ui/client-chips';
 import { EscalationSection } from './panels/escalations';
+import { Rep } from '../../models/outreach/intake';
 import { ClientOrderHistory } from '@/lib/b2b';
 
-export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, onClose, onLogInteraction, onCheckIn, onSaveClient, onOpenOrder, onAddOrder }: {
+export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, kams, onClose, onLogInteraction, onCheckIn, onSaveClient, onOpenOrder, onAddOrder }: {
   row: AssignedClientRow;
   clients: ClientEntity[];
   orders: KamOrder[];
@@ -22,6 +23,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
   onCheckIn: () => void;
   onSaveClient: (c: ClientEntity) => Promise<string | null>;
   assignAs?: string;
+  kams: Rep[];
   onOpenOrder: (o: KamOrder) => void;
   onAddOrder: () => void;
 }) {
@@ -44,6 +46,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
       onClose={onClose}
       onSave={onSaveClient}
       assignAs={assignAs}
+      kams={kams}
     >
       {mismatch && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">

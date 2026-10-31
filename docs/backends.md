@@ -97,9 +97,8 @@ it chains after 0022):
 - It moves `b2b_team_member`'s key to `(phone, team)`, so one person can be on
   several teams.
 - It adds the redirect columns to `b2b_ec_visit` (`b2b/ec-directed.md`).
-- The same branch adds `POST /b2b/check-in-photo`. It uploads through
-  `_r2_upload_sync`, so it needs `MD_SNAPSHOT_API_KEY` on the deployment, which
-  the content sync already uses.
+- The same branch adds `POST /b2b/check-in-photo`. The CRM stopped calling it on
+  2026-10-31, when the check-in photo was removed (`b2b/kam.md`), so it is unused.
 
 0001→0023 and a 0023 downgrade/upgrade round trip were run on 2026-10-30 against
 a throwaway embedded Postgres (the `ss-bill-rig` binaries). The new routes were

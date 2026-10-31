@@ -1,7 +1,7 @@
 'use client';
 
 import { ClientEntity } from '../../../models/client';
-import { FIRM_HANDOVER_REJECT_REASONS, KAM_LENS, KAM_LIST_PAGE_SIZE, canRejectFirm, firmHandover, firmHandoverState } from '../../../models/kam';
+import { KAM_LENS, KAM_LIST_PAGE_SIZE, firmHandover, firmHandoverState } from '../../../models/kam';
 import { fmtL } from '../../../models/mock-data';
 import { HANDOVER_TAT_HOURS, hoursSince } from '../../../models/outreach/handover';
 import { AssignedClientRow } from '../../../types/kam';
@@ -16,38 +16,21 @@ const btn = 'px-2.5 py-1 text-[11px] font-semibold rounded-md whitespace-nowrap 
 function Respond({ client, canAct, onRespond }: {
   client: ClientEntity;
   canAct: boolean;
-  onRespond: (c: ClientEntity, rejectReason?: string) => Promise<string | null>;
+  onRespond: (c: ClientEntity) => Promise<string | null>;
 }) {
-  const [rejecting, setRejecting] = useState(false);
-  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const go = async (rejectReason?: string) => {
+  const accept = async () => {
     setBusy(true);
     setError(null);
-    const err = await onRespond(client, rejectReason);
+    const err = await onRespond(client);
     if (err) setError(err);
     setBusy(false);
   };
   if (!canAct) return <span className="text-[11px] text-gray-400">Waiting on {client.kam}</span>;
   return (
     <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-      {rejecting ? (
-        <div className="flex items-center gap-1.5">
-          <select value={reason} onChange={(e) => setReason(e.target.value)} className="px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white">
-            <option value="">Why?</option>
-            {FIRM_HANDOVER_REJECT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <button disabled={!reason || busy} onClick={() => go(reason)} className={`${btn} bg-red-600 text-white`}>Reject</button>
-          <button onClick={() => setRejecting(false)} className={`${btn} border border-gray-200 text-gray-500`}>Cancel</button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5">
-          <button disabled={busy} onClick={() => go()} className={`${btn} bg-[#0F766E] text-white`}>Accept</button>
-          {canRejectFirm(client) && <button disabled={busy} onClick={() => setRejecting(true)} className={`${btn} border border-gray-200 text-gray-600`}>Reject…</button>}
-        </div>
-      )}
-      {!canRejectFirm(client) && <span className="text-[10.5px] text-gray-400">Moved from {firmHandover(client)?.movedFrom}, so it cannot be rejected</span>}
+      <button disabled={busy} onClick={accept} className={`${btn} bg-[#0F766E] text-white self-start`}>Accept</button>
       {error && <span className="text-[10.5px] text-red-700">Not saved: {error}</span>}
     </div>
   );
@@ -59,7 +42,7 @@ export function KamSignoffTable({ rows, nowMs, page, setPage, canRespond, onResp
   page: number;
   setPage: (p: number) => void;
   canRespond: (c: ClientEntity) => boolean;
-  onRespond: (c: ClientEntity, rejectReason?: string) => Promise<string | null>;
+  onRespond: (c: ClientEntity) => Promise<string | null>;
   onOpen: (clientId: string) => void;
 }) {
   const meta = KAM_LENS.signoff;

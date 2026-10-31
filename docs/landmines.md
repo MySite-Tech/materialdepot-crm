@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-68 entries. They live in one file because they cross-reference each other —
+70 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -78,6 +78,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Work a manager logged on a rep's lead counted for nobody
 - Reassigning a lead saved the copy the drawer opened with, deleting the calls logged since
 - A logged interaction was credited to the firm's KAM, not to whoever logged it
+- The same KAM was two people because stored rows and the team spelled the name differently
+- Performance showed less KAM revenue than Overview for the same orders
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1086,3 +1088,20 @@ grep for a term, then read around the line you hit rather than opening all of it
   none. So the Leadership Board's "credit the logger" rule never saw a logger.
   Now it is the viewer. The shape: **an actor field is filled from the session,
   never from the record being acted on.**
+- **The same KAM was two people because stored rows and the team spelled the name
+  differently** (fixed 2026-10-31). Rows hold the roster's short name ("Jadhav")
+  and the team table the full one ("Krishna Jadhav"). `sameRep` only allowed a
+  whole-word prefix, and several views compared with `===`. On a read-only copy of
+  production that person held 20 firms and 15 orders under the short name and 0
+  under the full one, so their own numbers, round robin's book size and any
+  filter built from the team disagreed with each other. `Vilok`/`Vilok Reddy`
+  and `Praful`/`Prafful Bhati` were the same. Now `sameRep` reads the roster's
+  `name`/`fullName` pair and every grouping uses it. The shape: **a person's name
+  is not a key. Compare through the one matcher, and build lists with `repNames`
+  so one person cannot appear twice.**
+- **Performance showed less KAM revenue than Overview for the same orders** (fixed
+  2026-10-31). A closed order imported with only an Enq ID has no value until
+  `resolveKamOrders` reads its ticket. Overview and the KAM tab did that; My
+  performance read the raw rows, so 5 closed orders counted ₹0 there until someone
+  happened to open the KAM tab. The shape: **when a value is filled in after
+  loading, every reader needs the step, not only the first two.**

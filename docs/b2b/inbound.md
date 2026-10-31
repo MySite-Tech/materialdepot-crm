@@ -489,7 +489,7 @@ All four are **dropdowns now, not free text**:
 - `bmName` and `ecBmName` come from Django. `EcPicker` already loaded the EC list
   and the BMs at the chosen EC; `bmName` is the unscoped `fetchAvailableBMs()`,
   the same unbranched call the footfall and dashboard tabs already make.
-- `spok` is `ASSIGNABLE_REPS` from `models/roster.ts`, not a fetch.
+- `spok` is the active B2B team (`useB2BReps().everyone`), already loaded by the tab, so it costs no fetch.
 - **Every one of them keeps a stored value that the roster no longer lists.**
   These were free text for months, so live rows hold names and spellings no
   roster contains, and dropping one from the options would blank the field on the

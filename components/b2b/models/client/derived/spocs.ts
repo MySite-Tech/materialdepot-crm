@@ -1,6 +1,7 @@
 import { contactNumbers, normalizeContactNumber } from '../../utils/client';
 import { ClientEntity, SpocLogEntry, SpocRole } from '../../../types/client';
 import { dealIsOrder } from './deals';
+import { sameRep } from '../../outreach/handover';
 
 export interface InboundLink { id: string; owner?: string; createdAt?: string; phones: string[] }
 
@@ -69,7 +70,7 @@ export function firmSpocs(client: ClientEntity, links: FirmLinks, orders: SalesO
       ? { role: 'outreach', name: outBm, since: links.outreach?.intake?.acceptedAt || links.outreach?.intake?.assignedAt || links.outreach?.createdAt, detail: 'From the Outreach lead' }
       : { role: 'outreach', detail: 'No Outreach lead on these numbers' };
 
-  const held = (client.assignments || []).filter((a) => a.kam === client.kam && a.status !== 'Rejected').slice(-1)[0];
+  const held = (client.assignments || []).filter((a) => sameRep(a.kam, client.kam) && a.status !== 'Rejected').slice(-1)[0];
   const kam: FirmSpoc = client.kam
     ? { role: 'kam', name: client.kam, since: held?.at, detail: held?.status === 'Pending' ? 'Waiting for KAM sign-off' : 'Owns the firm' }
     : { role: 'kam', detail: 'No KAM yet' };

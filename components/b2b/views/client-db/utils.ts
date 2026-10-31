@@ -1,5 +1,6 @@
 import { ClientEntity } from '../../models/client';
 import { firmHandoverPending } from '../../models/kam';
+import { sameRep } from '../../models/outreach/handover';
 import { NO_FILTERS } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
 
@@ -19,7 +20,7 @@ export function clientLensMatches(lens: ClientLens, r: ClientListRow): boolean {
 export function matchesFilters(c: ClientEntity, f: ClientFilters): boolean {
   return (f.segment === 'all' || c.segment === f.segment)
     && (f.type === 'all' || c.clientType === f.type)
-    && (f.kam === 'all' || c.kam === f.kam);
+    && (f.kam === 'all' || sameRep(c.kam, f.kam));
 }
 
 export function filterChips(f: ClientFilters): { key: keyof ClientFilters; label: string }[] {

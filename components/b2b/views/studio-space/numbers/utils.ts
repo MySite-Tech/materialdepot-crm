@@ -1,3 +1,4 @@
+import { repNames, sameRep } from '../../../models/outreach/handover';
 import { STUDIO_LENS_ORDER } from './constants';
 import { KamOnboarding, StudioLens, StudioRow } from './types';
 
@@ -18,9 +19,10 @@ export function rowsByLens(rows: StudioRow[]): Record<StudioLens, StudioRow[]> {
 }
 
 export function kamOnboarding(rows: StudioRow[]): KamOnboarding[] {
+  const names = repNames([], rows.map((r) => r.client.kam));
   const byKam = new Map<string, StudioRow[]>();
   for (const r of rows) {
-    const kam = r.client.kam || '';
+    const kam = names.find((n) => sameRep(n, r.client.kam)) ?? '';
     byKam.set(kam, [...(byKam.get(kam) || []), r]);
   }
   return [...byKam.entries()]

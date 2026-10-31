@@ -5,6 +5,7 @@ import { ClientEntity, clientMatchesSearch, clientStatus, contactNumbers, curren
 import { FirmDrawer } from '../../../drawers/firm';
 import { useClientAggregates } from '../../../hooks/use-client-aggregates';
 import { useStudioLogins } from '../../../hooks/use-studio-logins';
+import { repNames, sameRep } from '../../../models/outreach/handover';
 import { TemperatureChip } from '../../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../../ui/lens-tiles';
 import { PAGE_SIZE, STUDIO_LENS } from './constants';
@@ -49,10 +50,10 @@ export function StudioNumbers() {
     () => logins ? clients.filter((c) => clientMatchesSearch(c, search)).map((client) => ({ client, studio: firmStudioState(client, logins) })) : [],
     [clients, search, logins],
   );
-  const scoped = useMemo(() => searched.filter((r) => kam === 'all' || (kam === '' ? !r.client.kam : r.client.kam === kam)), [searched, kam]);
+  const scoped = useMemo(() => searched.filter((r) => kam === 'all' || (kam === '' ? !r.client.kam : sameRep(r.client.kam, kam))), [searched, kam]);
   const byLens = useMemo(() => rowsByLens(scoped), [scoped]);
   const perKam = useMemo(() => kamOnboarding(searched), [searched]);
-  const kamOptions = useMemo(() => [...new Set(clients.map((c) => c.kam).filter((k): k is string => !!k))].sort(), [clients]);
+  const kamOptions = useMemo(() => repNames([], clients.map((c) => c.kam)), [clients]);
 
   useEffect(() => { setPage(1); }, [search, kam, lens]);
 

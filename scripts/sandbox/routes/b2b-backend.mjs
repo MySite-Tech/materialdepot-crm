@@ -160,10 +160,6 @@ export function backendRoutes(db) {
     if (path === '/team' && method === 'PUT') return putMember(db, body);
     if (path === '/ec-visits' && method === 'GET') return listEcVisits(db, query);
     if (path === '/ec-visits' && method === 'PUT') return putEcVisit(db, body);
-    if (path === '/check-in-photo' && method === 'POST') {
-      if (!/^data:image\//.test(String(body?.image_data ?? ''))) return reply(400, { error: 'image_data must be an image' });
-      return { url: body.image_data };
-    }
     if (path === '/assignments/last-round-robin') return lastRoundRobin(db);
     if (path === '/assignments/lead-ids') {
       const since = query.get('since') || '';

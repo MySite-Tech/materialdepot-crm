@@ -194,7 +194,13 @@ They live here now because the code cannot carry them.
   It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`
   (full names + phone numbers, keying the Dashboard's per-vertical stats) and
   `KAMS`/`B2B_REPS` in `models/mock-data.ts` (short names, keying
-  every dropdown and filter). Targets no longer reads the roster (`leadership.md`). `Jadhav` vs `Krishna Jadhav`,
+  every dropdown and filter). **Since 2026-10-31 no picker or filter reads it:**
+  `useB2BReps` gives the live team, with the roster only as the fallback when the
+  table cannot be read, and `repNames` adds stored names that match nobody live,
+  so a firm held by someone off the team still filters. `KAMS` was every assignable
+  rep, not the KAMs, and is deleted with `DEFAULT_KAM` and `ASSIGNABLE_REPS`.
+  Compare rep names with `sameRep`, never `===`: stored rows say "Jadhav" and the
+  team says "Krishna Jadhav". Targets no longer reads the roster (`leadership.md`). `Jadhav` vs `Krishna Jadhav`,
   `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
   so they drove revenue on the Dashboard and appeared nowhere on Targets or the
   old leaderboard. Everything now derives from `B2B_ROSTER`.
@@ -203,11 +209,6 @@ They live here now because the code cannot carry them.
     `meta_data.kam` and `owner` on existing `b2b_lead` rows, so renaming one
     orphans those rows from the dropdown. `fullName` and `contact` are the
     display/matching attributes; only `contact` may be corrected freely.
-  - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
-    Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
-    `DEFAULT_KAM`, but he had no Targets card (the tab is gone since 2026-10-30). That asymmetry is deliberate and predates this
-    file; it was briefly "fixed" by making him unassignable and reverted the
-    same day.
   - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
     only grants the tab; every KAM list and dropdown reads this
     file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
@@ -239,8 +240,7 @@ against the last saved record, not wired to a button:
   call log go through it. The call log writes the whole draft, so a requirement
   edited and then a call logged would otherwise skip the history.
 - **KAM:** per order, in the order modal's save. A new order has none. The
-  modal's `kam` prop is the KAM a new order defaults to (often the hardcoded
-  `DEFAULT_KAM`), not the editor, so the entry takes `actor`. The first
+  modal's `kam` prop is the KAM a new order defaults to, not always the editor, so the entry takes `actor`. The first
   browser run recorded a roster name instead of the KAM who made the edit.
 
 Filling an empty requirement is not a change, clearing one keeps the old text,

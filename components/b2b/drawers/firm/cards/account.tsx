@@ -3,30 +3,33 @@
 import { fmtDate } from '../utils';
 import { ClientEntity } from '../../../models/client';
 import { assignFirm } from '../../../models/kam';
-import { KAMS } from '../../../models/mock-data';
+import { liveRepName, repNames, sameRep } from '../../../models/outreach/handover';
+import { Rep } from '../../../models/outreach/intake';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnPrimary } from '../../../constants/ui';
 import { useState } from 'react';
 
-export function AccountCard({ client, reassignReason, assignAs, onSave }: {
+export function AccountCard({ client, reassignReason, assignAs, kams, onSave }: {
   client: ClientEntity;
   reassignReason: string;
   assignAs?: string;
+  kams: Rep[];
   onSave: (c: ClientEntity) => Promise<string | null>;
 }) {
   const [reassigning, setReassigning] = useState(false);
-  const [nextKam, setNextKam] = useState(client.kam || '');
+  const held = client.kam ? liveRepName(client.kam, kams) : '';
+  const [nextKam, setNextKam] = useState(held);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const history = [...(client.assignments || [])].reverse();
 
   const reassign = async () => {
-    if ((nextKam || undefined) === client.kam) { setReassigning(false); return; }
+    if (nextKam ? sameRep(nextKam, client.kam) : !client.kam) { setReassigning(false); return; }
     setBusy(true);
     setError('');
     const at = new Date().toISOString();
     const err = await onSave(nextKam
-      ? assignFirm(client, { name: nextKam }, assignAs ?? '', at, 'manual', reassignReason)
+      ? assignFirm(client, kams.find((k) => k.name === nextKam) ?? { name: nextKam }, assignAs ?? '', at, 'manual', reassignReason)
       : { ...client, kam: undefined, assignments: [...(client.assignments || []), { kam: '', at, by: assignAs, reason: reassignReason }] });
     setBusy(false);
     if (err) setError(err); else setReassigning(false);
@@ -48,10 +51,10 @@ export function AccountCard({ client, reassignReason, assignAs, onSave }: {
           <div className="flex items-center gap-1.5">
             <select value={nextKam} onChange={(e) => setNextKam(e.target.value)} className="px-2 py-1 text-[12px] border border-gray-200 rounded-md bg-white">
               <option value="">Unassigned</option>
-              {[...new Set([...KAMS, ...(client.kam ? [client.kam] : [])])].sort().map((k) => <option key={k} value={k}>{k}</option>)}
+              {repNames(kams, [client.kam]).map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
             <button onClick={reassign} disabled={busy} className={btnPrimary}>{busy ? 'Saving…' : 'Save'}</button>
-            <button onClick={() => { setReassigning(false); setNextKam(client.kam || ''); }} className="text-[11px] text-gray-400 cursor-pointer">Cancel</button>
+            <button onClick={() => { setReassigning(false); setNextKam(held); }} className="text-[11px] text-gray-400 cursor-pointer">Cancel</button>
           </div>
         ) : assignAs !== undefined && (
           <button onClick={() => setReassigning(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer">

@@ -140,8 +140,8 @@ matches nothing sees a notice, not an empty card.
   phone is an active Inbound team member, the call counts for whoever has that
   phone and nobody else. Otherwise the name rule below applies. Names come from
   two Django sources (the profile's `name` at write time, the roster's
-  `f_name l_name` frozen into the team list), and `sameRep` only tolerates case
-  and a whole-word prefix. So a rep whose two names differ never saw their own
+  `f_name l_name` frozen into the team list), and `sameRep` only tolerates case,
+  a whole-word prefix and a roster `name`/`fullName` pair. So a rep whose two names differ never saw their own
   calls count. Calls logged before this carry no phone and still go by name.
 - **Inbound calls are credited to `CallAttempt.by`, the caller — unless the
   caller is not on the Inbound team list, then to the lead's owner**

@@ -330,7 +330,7 @@ Round robin starts from the in-rotation KAMs, and the manager ticks the set for
 that assignment (2026-10-31). Select all takes the whole lens, not just the
 page. Either choice writes a pending handover
 that the KAM signs off on the KAM tab. The rules (where the state is stored,
-why it is book size and not `/kam-load`, what rejection does) are in `kam.md`
+why it is book size and not `/kam-load`, why a KAM cannot reject) are in `kam.md`
 §Admin assigns firms. The checkbox column renders only when `picked` is passed,
 so non-managers get the old table unchanged.
 

@@ -2,7 +2,8 @@
 
 import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
-import { KAMS, fmtShortINR } from '../../models/mock-data';
+import { fmtShortINR } from '../../models/mock-data';
+import { repNames } from '../../models/outreach/handover';
 import { FirmDrawer } from '../../drawers/firm';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
@@ -136,10 +137,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   }, [clients, openId, metricsFor, today]);
 
   const kamOptions = useMemo(() => {
-    const seen = new Set<string>(KAMS);
-    clients.forEach((c) => c.kam && seen.add(c.kam));
-    return [...seen].sort();
-  }, [clients]);
+    return repNames(allKams, clients.map((c) => c.kam));
+  }, [allKams, clients]);
 
   const saveClient = async (c: ClientEntity): Promise<string | null> => {
     const err = await upsertClient(c);
@@ -330,7 +329,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       </p>
 
       {addingNew && (
-        <ClientModal client={blank()} isNew onClose={() => setAddingNew(false)} onSave={saveClient} />
+        <ClientModal client={blank()} isNew kams={allKams} onClose={() => setAddingNew(false)} onSave={saveClient} />
       )}
       {openRow && (
         <FirmDrawer
@@ -343,13 +342,14 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           badges={openRow.temp && <TemperatureChip value={openRow.temp.value} at={openRow.temp.at} />}
           reassignReason="Reassigned in the Client Database"
           assignAs={viewer.isManager ? viewer.member?.name || viewer.name : undefined}
+          kams={allKams}
           onClose={() => setOpenId(null)}
           onSave={saveClient}
           onEdit={() => setEditing(openRow.client)}
         />
       )}
       {editing && (
-        <ClientModal client={editing} onClose={() => setEditing(null)} onSave={saveClient} />
+        <ClientModal client={editing} kams={allKams} onClose={() => setEditing(null)} onSave={saveClient} />
       )}
       {merging && (
         <MergeModal clients={clients} suggestions={suggestions} onClose={() => setMerging(false)} onMerge={runMerge} />

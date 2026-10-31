@@ -79,7 +79,6 @@ export interface KamAssignment {
   respondedBy?: string;
   rejectReason?: string;
   reason?: string;
-  movedFrom?: string;
 }
 
 export type SpocRole = 'inbound' | 'outreach' | 'kam' | 'ec';

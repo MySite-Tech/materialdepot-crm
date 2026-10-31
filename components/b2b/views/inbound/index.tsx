@@ -5,6 +5,7 @@ import InboundDrawer from '../../drawers/inbound/index';
 import { InboundStatus, closureReadiness, hasConnected, statusGateErrors, istToday, withStatusStamps } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
+import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS_KEYS, NO_FILTERS } from './constants';
 import { AddLeadModal, MoveModal } from './ui/modals';
@@ -22,6 +23,7 @@ import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { membershipIn, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
+  const { everyone } = useB2BReps(team);
   const [view, setView] = useState<View>('list');
   const [lens, setLens] = useState<Lens>('today');
   const [scopeChoice, setScopeChoice] = useState<'mine' | 'all' | null>(null);
@@ -409,6 +411,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           actorName={viewer.name}
           actorPhone={viewer.phone}
           members={teamMembers(team.members, 'inbound')}
+          people={everyone}
           canReassign={viewer.isManager || !!me}
           canCredit={viewer.isManager}
           onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}

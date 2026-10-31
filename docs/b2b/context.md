@@ -81,20 +81,20 @@ a new session knows what is live and what is being worked on.
   `main` to deploy.
 - **2026-10-31:** EC B2B Referral is a new top-level tab and Outreach source (`ec-referral.md`). The shared assign bar is now One person or Round robin over a chosen set of people, on Client Database, Outreach's pool and the Leads tab (`leads.md`).
 - **2026-10-30, evening (the user's second list):**
-  - a meeting is checked in with a photo and an exact pin before it can be held, for Outreach and KAM (`kam.md` §A meeting starts with a check-in);
+  - a meeting is checked in with an exact pin before it can be held, for Outreach and KAM (`kam.md` §A meeting starts with a check-in);
   - one person can be on several teams, with a round-robin switch per team (`leadership.md` §Who the people are);
   - revenue goes to the owner at close unless a manager credits someone else;
   - Client DB round robin takes only firms with no KAM;
   - EC Directed is a new sub-tab (`ec-directed.md`);
   - Inbound people carry a designation.
-  - These need b2b-backend migration 0023 and `/check-in-photo` (`docs/backends.md`).
+  - These need b2b-backend migration 0023 (`docs/backends.md`).
 - **2026-10-29, evening (the user's eight-point list):**
   - every firm is on the 30/60-day status;
   - Client DB has no export for anyone;
   - targets are monthly: KAM 500 calls and 35 meetings, Inbound 1,500 calls;
   - Partner Content is deleted and Studio Space replaced it (`studio-space.md`);
   - on the Firm page, each enquiry expands to its cart, dates, visits and remarks, and each number has a classification and a Studio Space access read from Studio Space itself, Power or Normal (`client-db.md`, `studio-space.md`);
-  - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin, and the assignee must accept or reject (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
+  - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin. An Outreach assignee accepts or rejects; a KAM only accepts (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
   - **Not done:** enquiries cannot be found by GSTIN (needs a Django `gst` filter on `/crm/leads/`; the full list of Django asks is `docs/backends.md` §Owed by Django), and the CRM cannot grant or change Studio Space access, it only reads it (the read needs b2b-backend `GET /b2b/studio-access`, PR #14, not yet deployed).
 - **2026-10-30:** the Studio Space tab frames the Studio Space admin console and signs the KAM in by their CRM phone (`studio-space.md`; needs b2b-backend PR #15, migration 0022).
 - **Where it lives.** PR #29 (the revamp) is merged and deployed (2026-10-29).

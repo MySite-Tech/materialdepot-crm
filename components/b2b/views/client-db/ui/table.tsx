@@ -48,7 +48,7 @@ function KamCell({ client }: { client: ClientEntity }) {
       <>
         <span className="text-gray-700">{client.kam}</span>
         {h?.status === 'Pending' && (
-          <div className="text-[10px] font-semibold text-violet-700 mt-0.5" title={`Assigned by ${h.by || 'an admin'}. Counts as theirs, and waits for them to accept or reject.`}>waiting for sign-off</div>
+          <div className="text-[10px] font-semibold text-violet-700 mt-0.5" title={`Assigned by ${h.by || 'an admin'}. Counts as theirs, and waits for them to accept.`}>waiting for sign-off</div>
         )}
       </>
     );

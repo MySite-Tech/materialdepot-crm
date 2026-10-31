@@ -11,12 +11,13 @@ import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
 import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, lastOrderInFuture } from '../../models/client';
 import { fmtShortINR } from '../../models/mock-data';
+import { Rep } from '../../models/outreach/intake';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
 import { btnGhost } from '../../constants/ui';
 import { ClientOrderHistory } from '@/lib/b2b';
 import { useEffect, useMemo, useState } from 'react';
 
-export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, onClose, onSave, onEdit, children }: {
+export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], onClose, onSave, onEdit, children }: {
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
@@ -26,6 +27,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   badges?: React.ReactNode;
   reassignReason: string;
   assignAs?: string;
+  kams?: Rep[];
   onClose: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
   onEdit?: () => void;
@@ -119,7 +121,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
 
           {children}
 
-          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} onSave={onSave} />
+          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} kams={kams} onSave={onSave} />
         </div>
       </div>
     </div>

@@ -31,18 +31,6 @@ export const B2B_ROSTER: B2BRep[] = [
   { name: 'Shahrukh',  fullName: 'Shahrukh Irshad Ali', contact: '9187200815', role: 'KAM',      vertical: 'HYD',           assignable: true },
 ];
 
-export const B2B_ADMINS: string[] = B2B_ROSTER.filter((r) => r.role === 'Admin').map((r) => r.name);
-
-export const ASSIGNABLE_REPS: string[] = B2B_ROSTER.filter((r) => r.assignable).map((r) => r.name);
-
-export const KAMS: string[] = ASSIGNABLE_REPS;
-
-export const B2B_REPS: string[] = ASSIGNABLE_REPS;
-
-export const DEFAULT_ASSIGNEE = ASSIGNABLE_REPS[0];
-
-export const DEFAULT_KAM = KAMS[0];
-
 export const B2B_VERTICALS: { label: string; reps: { name: string; contact: string }[] }[] = [
   ...new Map(
     B2B_ROSTER

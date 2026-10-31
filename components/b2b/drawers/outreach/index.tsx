@@ -336,7 +336,6 @@ export default function OutreachDrawer({
       {checkingIn != null && (
         <CheckInCapture
           title={`${draft.company || 'Meeting'} · meeting ${checkingIn}`}
-          refId={`${lead.id}-m${checkingIn}`}
           by={scope.me.name}
           onClose={() => setCheckingIn(null)}
           onDone={(c) => recordCheckIn(checkingIn, c)}
