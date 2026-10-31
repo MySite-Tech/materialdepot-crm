@@ -387,24 +387,13 @@ per-person Targets, Overview, the check-in, multi-team people, EC Directed, the
 assign bar, firm SPoCs and the EC B2B Referral tab. Sales, retail, manager and admin
 get that tab by role; any other role with a permission list needs
 `crm.ec_b2b_referral` ticked under Admin > Users.
-**PR #33 is open and carries everything since #32 (2026-10-31):** no check-in photo,
-a KAM can only accept a firm, live KAM pickers, one rep name through `sameRep`,
-My performance resolving order values, and the EC tab by role. It needs no backend
-change. **A session cannot merge it:** the auto mode classifier refuses a merge to
-`main` as a production deploy, so a person merges, and that is the deploy. A failed
+**PR #33 shipped on 2026-10-31** (`34e85b9`) with b2b-backend #17, #18 (migration
+0024) and #19, and b2b-dashboard #35: location-only check-in, a KAM can only accept
+a firm, live KAM pickers, one rep name through `sameRep`, EC B2B Referral by role,
+the Overview revenue channels and the Studio sync. Don't re-add the check-in photo:
+the user scrapped it on 2026-10-31. Later work needs a new PR to `main`. A failed
 `Build and Deploy Job` on a PR is Azure's preview limit when the log says "maximum
 number of staging environments" after "Compiled successfully".
-**A merge to b2b-backend `master` runs its migrations by itself.** Seen on
-2026-10-31: 0022 was live about four minutes after #15 merged. To test that without
-writing, open `/auth/handoff?code=x` in real Chrome, because Cloudflare challenges
-`/auth/*` from curl and lets `/b2b/*` through. A redirect to `/login` means the
-table exists. Check `git log origin/main..HEAD` before claiming anything is live.
-**PR #33 is open and unmerged (2026-10-31).** It carries the location-only check-in,
-KAM accept-only sign-off, live KAM pickers, one rep name via `sameRep`, and EC B2B
-Referral by role. Until it merges, production still asks for a check-in photo. It
-waits on the user's go-ahead because it also changes KAM sign-off and per-person
-numbers. Its only failing check is Azure's preview slot limit. Don't re-add the
-photo: the user scrapped it on 2026-10-31, along with the 3-day retention plan.
 **The 1,000+ firms are in the Client Database (2026-10-31).** See
 `docs/b2b/client-db.md` §The client_master import.
 **The tech team merges, not a session**, unless Dhruv asks.
@@ -458,13 +447,12 @@ lead to Hardi and the CRM re-owns them, keyed on qualification time
 (`expectedClosureOn`), not `createdAt`. See `docs/b2b/inbound.md` §Who owns a lead.
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
 
-**Live on Studio Space (2026-10-31): b2b-backend #17 and #18 (migration 0024) and
-b2b-dashboard #35.** Only admins see every firm there, and the CRM's assignment
+**Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
+#35.** Only admins see every firm there, and the CRM's assignment
 sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees which firm). Never match
 a staff login by name. The CRM's team list creates no Studio Space login, so an
 admin still has to add the new people. The CRM keeps screen-only rep scoping by the
-user's decision. Backend #19 and CRM #33 were not merged when the classifier
-refused them; check before assuming either is live.
+user's decision.
 
 **Studio and CRM sync (2026-10-31), not live.** The CRM half is on
 `b2b-revamp-2026-10-28`, so it rides PR #33. The backend half is
