@@ -458,14 +458,13 @@ lead to Hardi and the CRM re-owns them, keyed on qualification time
 (`expectedClosureOn`), not `createdAt`. See `docs/b2b/inbound.md` §Who owns a lead.
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
 
-**Open on Studio Space (2026-10-31): b2b-backend PR #17, then b2b-dashboard PR
-#35, both draft and not live.** After #17 only admins see every firm there, and
-the CRM's assignment sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees
-which firm). Never match a staff login by name. The CRM's team list creates no
-Studio Space login. The CRM keeps screen-only rep scoping by the user's decision.
-A person marks them ready, because the classifier refused a session doing it.
-Backend `studio-access-all-numbers` (migration 0024) has no PR yet. It merges
-cleanly with #17 in a trial merge, but the two were never run together.
+**Live on Studio Space (2026-10-31): b2b-backend #17 and #18 (migration 0024) and
+b2b-dashboard #35.** Only admins see every firm there, and the CRM's assignment
+sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees which firm). Never match
+a staff login by name. The CRM's team list creates no Studio Space login, so an
+admin still has to add the new people. The CRM keeps screen-only rep scoping by the
+user's decision. Backend #19 and CRM #33 were not merged when the classifier
+refused them; check before assuming either is live.
 
 **Studio and CRM sync (2026-10-31), not live.** The CRM half is on
 `b2b-revamp-2026-10-28`, so it rides PR #33. The backend half is

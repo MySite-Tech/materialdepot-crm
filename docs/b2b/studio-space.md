@@ -173,7 +173,7 @@ Checked against production: Studio's Postgres (Metabase 38) against
 |---|---|---|
 | Access (Power / Normal) | CRM reads `studio-access` | See above |
 | Firm identity | Matched by phone, GST or exact name; `partner.md_client_id` is never set | No durable link |
-| KAM | See the KAM section above (b2b-backend PR #17, draft). It finds a firm by any number, then GST, then exact name | 21 of 28 studios had no KAM on 2026-10-31 |
+| KAM | See the KAM section above (b2b-backend PR #17). It finds a firm by any number, then GST, then exact name | 21 of 28 studios had no KAM on 2026-10-31 |
 | Referred clients | `firms[].referrals` on `studio-access`, shown read-only on the Firm page. `GET /sync/outbox` is still unused, and `client_master.referred_clients` is empty on every row | Read from Studio, never copied |
 | Orders into Studio | The dashboard asks the order service about every approved number, on page views and approvals, and files what it returns in `referral_order` | Complete for registered numbers |
 | Orders into the CRM | Django `b2b-bulk` over the firm's CRM contacts, plus `firms[].orders` for numbers the firm does not list (below) | Django's figures are still wrong (below) |
