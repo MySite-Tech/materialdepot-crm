@@ -93,8 +93,9 @@ an assignment across.
   to them. Outreach and inbound are held to it because their firms are not
   onboarded on Studio Space. Prospects, onboarding forms and the waitlist stay on
   market, because they are not assigned firms.
-- **The CRM drives the KAM** (`app/firm_kam.py`, no migration): firm by phone,
-  person by `kamPhone` on the latest assignment or one roster name that fits, login
+- **The CRM drives the KAM** (`app/firm_kam.py`, no migration): firm by any number
+  it holds, then GSTIN, then exact name, and a value two studios share matches
+  neither; person by `kamPhone` on the latest assignment or one roster name that fits, login
   by phone. **Never a name to a login:** two different people share a first name
   across the CRM roster and Studio Space's staff, so a name match would hand one
   person's firms to the other. It runs after a CRM firm save, a roster change, a
