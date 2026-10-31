@@ -416,8 +416,8 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   2026-10-28**: the first real run is the verification.
 - **It repeats (2026-10-31).** `useInboundRotation` runs on open and then every
   5 minutes while a tab is visible, so a failed run recovers without a reload.
-- **Hardi's share is half, not everything, and Kylas still delivers to her.**
-  She is a rotation member, so with Vikas she gets every second lead. On
+- **Hardi's share is half, not everything, and Kylas still delivers to Hardi.**
+  Hardi is a rotation member, so with Vikas every second lead stays put. On
   2026-10-31 the log held 75 leads: Hardi 39, Vikas 19, Vilok 17. That excess
   over an even split fits 429s: a lead for Hardi needs no PATCH and always
   sticks, while a PATCH for anyone else failed and was released. Inferred, since
