@@ -384,9 +384,9 @@ Its **PR #29 shipped on 2026-10-29** with b2b-backend #13 (migrations 0020 and
 0021). **PR #32 shipped on 2026-10-31** with b2b-backend #15 then #16 (#14 went in
 inside #16; migrations 0022 and 0023): Studio Space framing and read-only access,
 per-person Targets, Overview, the check-in, multi-team people, EC Directed, the
-assign bar, firm SPoCs and the EC B2B Referral tab. **That tab reaches nobody until
-`crm.ec_b2b_referral` is ticked under Admin > Users**, because nearly every account
-has a permission list.
+assign bar, firm SPoCs and the EC B2B Referral tab. Sales, retail, manager and admin
+get that tab by role; any other role with a permission list needs
+`crm.ec_b2b_referral` ticked under Admin > Users.
 **A merge to b2b-backend `master` runs its migrations by itself.** Seen on
 2026-10-31: 0022 was live about four minutes after #15 merged. To test that without
 writing, open `/auth/handoff?code=x` in real Chrome, because Cloudflare challenges

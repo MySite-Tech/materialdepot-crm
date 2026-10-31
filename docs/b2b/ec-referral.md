@@ -22,10 +22,12 @@ or rejects as for any assigned lead (`outreach.md` §Admin assignment).
   whitelisted fields, so a caller cannot set `bm`, `source` or the referrer, and
   `GET` returns a summary of their own rows and nothing else.
 - **Who may use it is `canReferToB2B`, checked in the route as well as the tab.**
-  The slug `crm.ec_b2b_referral` when the account has a permission list, else
-  `EC_REFERRAL_ROLES`. **Nearly every account has a list, so the tab reaches
-  nobody until the slug is ticked under Admin > Users** (or the list is
-  backfilled). The role set only reaches accounts with an empty list.
+  The user, 2026-10-31: every EC person gets it, so `EC_STAFF_ROLES` (sales,
+  retail, manager, admin) always pass, permission list or not. Nearly every account
+  has a list, and ticking 150-odd accounts by hand was the alternative. **Unticking
+  the slug does not remove the tab from those roles.** Any other role still goes by
+  the slug when the account has a list, else `EC_REFERRAL_ROLES`. The tab is
+  appended after a list's own tabs, so an account's landing tab does not change.
 - **A number already held is refused, 409, naming who holds it:** any Outreach
   lead that is not Lost, or any firm in the Client Database, on the same 10-digit
   mobile. If the check cannot read `/rows`, nothing is written. A number whose

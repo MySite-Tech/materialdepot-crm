@@ -5,6 +5,7 @@ import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MA
 import { MainTab } from './types';
 import { B2B_SALES_ROLES } from '@/lib/b2b/team/constants';
 import { EC_REFERRAL_ROLES } from '@/lib/b2b/ec-referral/constants';
+import { canReferToB2B } from '@/lib/b2b/ec-referral/utils';
 
 // `id` is the lead's business key (cart number, or the estimate's ENQ id) and the
 // APIs take it as such — but it is NOT unique per row: a client with several deal
@@ -59,7 +60,8 @@ export const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
-    return PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
+    const tabs = PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
+    return user && canReferToB2B(user) && !tabs.includes('ecB2bReferral') ? [...tabs, 'ecB2bReferral'] : tabs;
   }
 
   return defaultTabsForRole(user?.role ?? '');
