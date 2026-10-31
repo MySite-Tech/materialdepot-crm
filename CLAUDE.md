@@ -470,8 +470,8 @@ cleanly with #17 in a trial merge, but the two were never run together.
 **Studio and CRM sync (2026-10-31), not live.** The CRM half is on
 `b2b-revamp-2026-10-28`, so it rides PR #33. The backend half is
 b2b-backend branch `studio-access-all-numbers` (`b6d9513`, migration 0024), pushed
-with no PR yet. It needs `gh pr create` and should merge first; #17 also edits
-`b2b_crm.py`, so expect a conflict on the second one in. The CRM runs without it:
+as PR #18, open. It must merge first; #17 also edits
+`b2b_crm.py` but merged cleanly on it in a trial. The CRM runs without it:
 `firms` is absent, the old per-number answer applies and "Add to Studio Space" does
 not appear. Only managers and admins add, merge or delete firms, which applies as
 soon as #33 merges. A firm's Studio status is per firm, by phone, GST or exact name
