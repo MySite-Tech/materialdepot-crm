@@ -1,3 +1,4 @@
+import { creditMatches, creditOf } from '../../credit';
 import { repOwns } from '../../outreach/handover';
 import { OUTREACH_KPIS, Period, outreachKpis } from '../../outreach/kpis';
 import { PerfCard, PerfData, PerfKpiDef, Person, TeamEngine } from '../types';
@@ -21,7 +22,11 @@ const DEFS: PerfKpiDef[] = OUTREACH_KPIS.map((d) => ({
 function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const owners = people.map((p) => repOwns({ name: p.name, phone: p.phone }));
   const leads = data.outreach.filter((l) => owners.some((own) => own(l)));
-  const k = outreachKpis(leads, period, data.waitlist);
+  const credited = data.outreach.filter((l) => {
+    const c = creditOf(l.revenueCredit);
+    return c ? people.some((p) => creditMatches(c, p)) : owners.some((own) => own(l));
+  });
+  const k = { ...outreachKpis(leads, period, data.waitlist), revenue: outreachKpis(credited, period, data.waitlist).revenue };
   return Object.fromEntries(OUTREACH_KPIS.map((d) => [d.key, {
     value: k[d.key].value,
     unknown: d.key === 'waitlist' && k[d.key].value === null,

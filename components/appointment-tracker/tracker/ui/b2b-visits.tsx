@@ -30,7 +30,7 @@ export function B2BVisits({ state, branch }: { state: B2BVisitsState; branch: st
           <li key={v.id} className="px-4 py-2 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[12px] font-semibold text-gray-800">
-                {shortDate(v.visitDate)}{v.visitTime ? ` · ${v.visitTime}` : ''} · {v.firm}
+                {v.visitDate ? shortDate(v.visitDate) : 'No date'}{v.visitTime ? ` · ${v.visitTime}` : ''} · {v.firm}
               </div>
               <div className="text-[11px] text-gray-500 mt-0.5">
                 {[v.contactName, v.phone, v.bmName && `BM ${v.bmName}`, v.scheduledBy && `B2B: ${v.scheduledBy}`].filter(Boolean).join(' · ')}

@@ -1,10 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import type { KylasUser, TeamMember } from '@/lib/b2b/team/types';
+import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
+import type { B2BTeam, KylasUser, TeamMember } from '@/lib/b2b/team/types';
 
-export function MemberRow({ member, busy, kylasUsers, onLoadKylasUsers, onChange }: {
+const ROTATION_ON: Record<B2BTeam, string> = { inbound: 'Gets new leads', outreach: 'Gets assigned leads', kam: 'Gets new firms' };
+
+export function MemberRow({ member, otherTeams, busy, kylasUsers, onLoadKylasUsers, onChange }: {
   member: TeamMember;
+  otherTeams: B2BTeam[];
   busy: boolean;
   kylasUsers: KylasUser[] | null;
   onLoadKylasUsers: () => void;
@@ -15,7 +19,10 @@ export function MemberRow({ member, busy, kylasUsers, onLoadKylasUsers, onChange
 
   return (
     <tr className={`border-t border-gray-100 ${member.active ? '' : 'opacity-50'}`}>
-      <td className="px-3 py-2 text-[13px] font-medium text-gray-900">{member.name}</td>
+      <td className="px-3 py-2 text-[13px] font-medium text-gray-900">
+        {member.name}
+        {otherTeams.length > 0 && <span className="block text-[10.5px] font-normal text-gray-400">also on {otherTeams.map((t) => B2B_TEAM_LABEL[t]).join(', ')}</span>}
+      </td>
       <td className="px-3 py-2 text-[12px] font-mono text-gray-500">{member.phone}</td>
       <td className="px-3 py-2 text-[12px]">
         {linking ? (
@@ -52,7 +59,7 @@ export function MemberRow({ member, busy, kylasUsers, onLoadKylasUsers, onChange
       <td className="px-3 py-2 text-[12px]">
         {isInbound && member.active && !member.kylasUserId ? (
           <span className="text-amber-700">Skipped until linked</span>
-        ) : isInbound ? (
+        ) : (
           <label className="inline-flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
@@ -61,9 +68,9 @@ export function MemberRow({ member, busy, kylasUsers, onLoadKylasUsers, onChange
               checked={member.inRotation && member.active}
               onChange={() => onChange({ inRotation: !member.inRotation })}
             />
-            {member.inRotation && member.active ? 'Gets new leads' : 'Paused'}
+            {member.inRotation && member.active ? ROTATION_ON[member.team] : 'Paused'}
           </label>
-        ) : <span className="text-gray-300">—</span>}
+        )}
       </td>
       <td className="px-3 py-2 text-[12px]">
         <label className="inline-flex items-center gap-1.5 cursor-pointer" title="Sees every rep's B2B data and can assign work. Cannot change this team list.">

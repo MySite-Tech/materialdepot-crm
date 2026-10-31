@@ -3,6 +3,7 @@
 import { CallLogEntry, InboundLead, LeadDeal, LeadNote, OutreachLead } from '../../../models/mock-data';
 import { fetchCallLogSummary, fetchInboundLeadDetail, fetchLeadCallLogs, fetchLeadDeals, fetchLeadNotes } from '@/lib/api';
 import { fetchOutreachLeads } from '@/lib/b2b';
+import { isCrmAddedLead } from '../../../models/inbound';
 import { normalisePhone } from '@/lib/org/utils';
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 
@@ -18,8 +19,9 @@ export function useInboundDetail(lead: InboundLead, setDraft: Dispatch<SetStateA
 
   useEffect(() => {
     let alive = true;
-    setDetailLoading(true);
     setDetailFailed(false);
+    if (isCrmAddedLead(lead)) { setDetailLoading(false); return; }
+    setDetailLoading(true);
     fetchInboundLeadDetail(lead.id)
       .then((d) => {
         if (!alive) return;
@@ -47,6 +49,11 @@ export function useInboundDetail(lead: InboundLead, setDraft: Dispatch<SetStateA
 
   useEffect(() => {
     let alive = true;
+    if (isCrmAddedLead(lead)) {
+      setPresalesNotes({ loading: false, data: [] });
+      setPresalesCalls({ loading: false, data: [] });
+      return;
+    }
     setPresalesNotes({ loading: true, data: [] });
     setPresalesCalls({ loading: true, data: [] });
     fetchLeadNotes(lead.id, lead.ownerId).then((n) => { if (alive) setPresalesNotes({ loading: false, data: n }); });

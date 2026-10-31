@@ -1,7 +1,7 @@
 import {
   INBOUND_PIPELINE, INTAKE_KYLAS_ID, KYLAS_CATEGORY, KYLAS_USERS, PERSONAS, PRESALES, STAGE_QUALIFIED, STAGE_WON,
 } from '../constants.mjs';
-import { istAt, istDay, lastEveningAfterFive, pastIstAt } from './time.mjs';
+import { istAt, istDay, lastEveningAfterCutoff, pastIstAt } from './time.mjs';
 
 const ASHA = PERSONAS[0];
 const BHARAT = PERSONAS[1];
@@ -22,7 +22,7 @@ const referral = (day, by, extra) => ({
 const LEADS = [
   { n: 1, first: 'Aarav', last: 'Demo', at: () => pastIstAt(0, 10, 15), owner: null, summary: 'Office fit-out, 2,000 sq ft', cats: ['Laminates', 'Panels'] },
   { n: 2, first: 'Diya', last: 'Sample', at: () => pastIstAt(0, 15, 40), owner: null, summary: 'Villa interiors, flooring first', cats: ['Flooring'], source: 502 },
-  { n: 3, first: 'Kabir', last: 'Placeholder', at: lastEveningAfterFive, owner: null, summary: 'Cafe refurbishment', cats: ['Tiles', 'Wallpaper'] },
+  { n: 3, first: 'Kabir', last: 'Placeholder', at: lastEveningAfterCutoff, owner: null, summary: 'Cafe refurbishment', cats: ['Tiles', 'Wallpaper'] },
   { n: 4, first: 'Meher', last: 'Test', at: () => istAt(-1, 11), owner: ASHA, summary: 'Two 3BHK flats', cats: ['Laminates'] },
   {
     n: 5, first: 'Neel', last: 'Example', at: () => istAt(-2, 12), owner: ASHA, summary: 'Clinic interiors', cats: ['Tiles'],
@@ -61,7 +61,7 @@ const LEADS = [
     n: 10, first: 'Tara', last: 'Prototype', at: () => istAt(-6, 11), owner: BHARAT, summary: 'Office floor, 4,500 sq ft', cats: ['Flooring', 'Tiles'],
     crm: {
       stage: 'Follow up', company_name: 'Trial Interiors', client_type: 'Contractor', segment: '2', lead_type: 'Hot', priority: 'P1',
-      requirement: 'Vinyl flooring quote', follow_up_date: istDay(1), follow_up_time: '11:00',
+      requirement: 'Vinyl flooring quote', follow_up_date: istDay(1),
       call_attempts: [rnr(1, -6, 15, BHARAT), connected(2, -5, 12, BHARAT, 'Asked for a quote by Friday.', { followUpDate: istDay(1) })],
     },
   },
@@ -164,7 +164,7 @@ function kylasLead(s) {
 
 const CRM_DEFAULTS = {
   company_name: '', gst_number: '', segment: '', client_type: '', lead_type: '', priority: '', location: '',
-  call_attempts: [], selections: [], requirement: '', expected_order_value: 0, follow_up_date: '', follow_up_time: '',
+  call_attempts: [], selections: [], requirement: '', expected_order_value: 0, follow_up_date: '',
   enq_id: '', order_value: 0, order_value_source: '', lost_reason: '', invalid_reason: '', invalid_note: '',
   status_changed_at: '', pi_shared_at: '', office_location: '', outreach_referral: {}, placed_under: {}, kam: '',
   notes: [], primary_contact_name: '', primary_contact_phone: '', additional_contacts: [],

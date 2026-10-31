@@ -9,7 +9,13 @@ export const rowToEcVisit = (r: EcVisitRow): EcVisit => ({
   contactName: opt(r.contact_name),
   phone: opt(r.phone),
   branch: r.branch,
-  visitDate: String(r.visit_date).slice(0, 10),
+  kind: r.kind || 'visit',
+  sourceTeam: r.source_team ?? undefined,
+  leadRef: opt(r.lead_ref),
+  phones: Array.isArray(r.phones) ? r.phones : [],
+  note: opt(r.note),
+  assisted: r.assisted ?? undefined,
+  visitDate: r.visit_date ? String(r.visit_date).slice(0, 10) : undefined,
   visitTime: opt(r.visit_time),
   purpose: opt(r.purpose),
   status: r.status,
@@ -29,7 +35,13 @@ export const ecVisitToRow = (v: EcVisit): Omit<EcVisitRow, 'scheduled_by' | 'cre
   contact_name: v.contactName ?? null,
   phone: v.phone ?? null,
   branch: v.branch,
-  visit_date: v.visitDate,
+  kind: v.kind,
+  source_team: v.sourceTeam ?? null,
+  lead_ref: v.leadRef ?? null,
+  phones: v.phones,
+  note: v.note ?? null,
+  assisted: v.assisted ?? null,
+  visit_date: v.visitDate ?? null,
   visit_time: v.visitTime ?? null,
   purpose: v.purpose ?? null,
   status: v.status,
@@ -43,6 +55,7 @@ export function ecVisitQueryString(q: EcVisitQuery): string {
   if (q.clientId) p.set('client_id', q.clientId);
   if (q.from) p.set('from', q.from);
   if (q.to) p.set('to', q.to);
+  if (q.kind) p.set('kind', q.kind);
   const s = p.toString();
   return s ? `?${s}` : '';
 }

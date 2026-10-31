@@ -42,7 +42,7 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
         {isFollowUpStatus(draft.stage) && (
           <Field label="Next follow-up" error={gateFor('followUpDate')} hint="Set from the call log — log a call to change it.">
             <div className="px-3 py-2 rounded-md bg-gray-50 text-[13px] text-gray-700">
-              {draft.followUpDate ? `${fmtDay(draft.followUpDate)}${draft.followUpTime ? ` · ${draft.followUpTime}` : ''}` : '—'}
+              {draft.followUpDate ? fmtDay(draft.followUpDate) : '—'}
             </div>
           </Field>
         )}

@@ -1,7 +1,8 @@
 'use client';
 
 import { fmtDate, fmtGst, fmtPhone } from '../../../drawers/firm/utils';
-import { ClientEntity, contactLabel, contactNumbers, currentTemperature, gstNumbers, primaryContact } from '../../../models/client';
+import { ClientEntity, STUDIO_ACCESS, contactLabel, contactNumbers, currentTemperature, firmStudioAccess, gstNumbers, primaryContact } from '../../../models/client';
+import { useStudioLogins } from '../../../hooks/use-studio-logins';
 import { firmHandover } from '../../../models/kam';
 import { fmtShortINR } from '../../../models/mock-data';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
@@ -64,9 +65,23 @@ function KamCell({ client }: { client: ClientEntity }) {
   );
 }
 
-export function ClientTable({ rows, today, sort, onSort, onOpen, picked, onPick, onPickPage }: {
+function StudioCell({ client, studio }: { client: ClientEntity; studio: ReturnType<typeof useStudioLogins> }) {
+  if (studio.loading) return <span className="text-gray-300">…</span>;
+  if (!studio.logins) return <span className="text-[11px] text-amber-700" title={`Studio Space could not be read: ${studio.error}`}>Unknown</span>;
+  const access = firmStudioAccess(client, studio.logins);
+  if (!access) return <span className="text-gray-300">Not onboarded</span>;
+  return (
+    <span title={STUDIO_ACCESS[access].hint}
+      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${access === 'power' ? 'bg-teal-50 text-[#0F766E]' : 'bg-gray-100 text-gray-600'}`}>
+      {STUDIO_ACCESS[access].label}
+    </span>
+  );
+}
+
+export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked, onPick, onPickPage }: {
   rows: ClientListRow[];
   today: string;
+  studio: ReturnType<typeof useStudioLogins>;
   sort: SortState;
   onSort: (s: SortState) => void;
   onOpen: (c: ClientEntity) => void;
@@ -77,7 +92,7 @@ export function ClientTable({ rows, today, sort, onSort, onOpen, picked, onPick,
   const allOnPage = !!picked && rows.length > 0 && rows.every((r) => picked.has(r.client.id));
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[12px] min-w-[1000px]">
+      <table className="w-full text-[12px] min-w-[1100px]">
         <thead>
           <tr className="group/th bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider border-b border-gray-200">
             {picked && (
@@ -90,6 +105,7 @@ export function ClientTable({ rows, today, sort, onSort, onOpen, picked, onPick,
             <SortTh label="Revenue" k="revenue" sort={sort} onSort={onSort} align="right" className="px-3" />
             <SortTh label="Last order" k="lastOrder" sort={sort} onSort={onSort} className="px-3 pl-5" />
             <th className="text-left font-semibold px-3 py-2.5">Status</th>
+            <th className="text-left font-semibold px-3 py-2.5">Studio Space</th>
             <th className="text-left font-semibold px-3 py-2.5">KAM</th>
             <th className="w-6" />
           </tr>
@@ -156,6 +172,7 @@ export function ClientTable({ rows, today, sort, onSort, onOpen, picked, onPick,
                 <td className="px-3 py-2.5">
                   <StatusPill status={status} days={days} />
                 </td>
+                <td className="px-3 py-2.5 whitespace-nowrap"><StudioCell client={client} studio={studio} /></td>
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   <KamCell client={client} />
                 </td>

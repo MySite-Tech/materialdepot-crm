@@ -47,17 +47,22 @@ export const OUTREACH_STATUS_LABEL: Record<OutreachStatus, string> = {
 
 export const OUTREACH_OPEN_STATUSES: OutreachStatus[] = ['Yet to Meet', 'Follow up', 'Quote Share', 'PI Shared'];
 
-export const OUTREACH_SOURCES = ['Inbound', 'EC referral', 'Dormant form', 'Own research'] as const;
+export const EC_B2B_REFERRAL = 'EC B2B Referral';
+
+export const OUTREACH_SOURCES = ['Inbound', EC_B2B_REFERRAL, 'EC referral', 'Dormant form', 'Own research'] as const;
 export type OutreachSource = typeof OUTREACH_SOURCES[number];
+
+export const OUTREACH_ENTRY_SOURCES = OUTREACH_SOURCES.filter((s) => s !== EC_B2B_REFERRAL);
 
 export const OUTREACH_SOURCE_HINT: Record<OutreachSource, string> = {
   'Inbound':      'Handed over by the Inbound team for an in-person meeting',
+  [EC_B2B_REFERRAL]: 'Sent by EC staff through the EC B2B Referral form',
   'EC referral':  'Referred by an Experience Centre',
   'Dormant form': 'From an older lead form that is no longer worked',
   'Own research': 'Found by the BM — field visit, directory, Instagram',
 };
 
-export const COVERAGE_SOURCES: OutreachSource[] = ['Inbound', 'EC referral'];
+export const COVERAGE_SOURCES: OutreachSource[] = ['Inbound', EC_B2B_REFERRAL, 'EC referral'];
 
 export const TEAM_SIZES = ['1', '2-5', '6-15', '16-50', '50+'] as const;
 export type TeamSize = typeof TEAM_SIZES[number];
@@ -79,6 +84,15 @@ export interface GeoPin {
   at: string;
 }
 
+export interface MeetingCheckIn extends GeoPin {
+  photoUrl: string;
+  by: string;
+}
+
+export const CHECK_IN_REQUIRED_FROM = '2026-10-31';
+
+export const needsCheckIn = (date: string | undefined): boolean => String(date || '').slice(0, 10) >= CHECK_IN_REQUIRED_FROM;
+
 export const pinMapUrl = (p: GeoPin): string => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
 
 export const STUDIO_WAITLIST_URL = 'https://studio.materialdepot.com/join';
@@ -97,6 +111,13 @@ export interface OutreachIntake {
   rejectedAt?: string;
   rejectReason?: string;
   rejectedBy?: string;
+}
+
+export interface EcReferral {
+  ec: string;
+  by: string;
+  byPhone: string;
+  at: string;
 }
 
 export type HandoverStatus = 'Pending' | 'Accepted' | 'Rejected';
@@ -194,6 +215,7 @@ export interface OutreachMeeting {
   metWith?: string;
   notes?: string;
   pin?: GeoPin;
+  checkIn?: MeetingCheckIn;
   loggedBy?: string;
   updatedAt?: string;
 }

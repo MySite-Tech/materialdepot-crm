@@ -5,8 +5,9 @@ import {
 } from './inbound';
 import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
-  type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
+  type EcReferral, type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
 } from './outreach';
+import type { RevenueCredit } from './credit';
 import type { RequirementVersion } from './requirement';
 
 type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
@@ -53,6 +54,8 @@ export interface LeadDeal {
   lostReason?: string;
 }
 
+export type InboundSource = 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Phone call' | 'Email' | 'Event' | 'Google' | 'Other';
+
 export interface InboundLead {
   id: string;
 
@@ -69,10 +72,12 @@ export interface InboundLead {
   presalesClientType?: string;
   presalesMissedCalls?: number;
   kylasStage?: number;
-  source: 'Website form' | 'WhatsApp' | 'Referral' | 'Walk-in' | 'Google' | 'Other';
+  source: InboundSource;
+  addedBy?: string;
 
   companyName?: string;
   primaryContactName?: string;
+  primaryContactRole?: string;
   primaryContactPhone?: string;
   additionalContacts?: ContactPerson[];
   gstNumber?: string;
@@ -92,10 +97,10 @@ export interface InboundLead {
 
   statusChangedAt?: string;
   followUpDate?: string;
-  followUpTime?: string;
   enqId?: string;
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
+  revenueCredit?: RevenueCredit;
   lostReason?: string;
   invalidReason?: string;
   invalidNote?: string;
@@ -153,12 +158,12 @@ export interface OutreachLead {
 
   statusChangedAt?: string;
   followUpDate?: string;
-  followUpTime?: string;
   quoteSharedAt?: string;
   enqId?: string;
 
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
+  revenueCredit?: RevenueCredit;
   dealStatus?: string;
   expectedClosure?: string;
   lostReason?: string;
@@ -176,6 +181,7 @@ export interface OutreachLead {
   altRole?: string;
   contacts?: OutreachContact[];
   source?: OutreachSource;
+  ecReferral?: EcReferral;
   email?: string;
   city?: string;
   officeAddress?: string;
@@ -196,34 +202,7 @@ export {
 } from './roster';
 export type { RepRole, B2BRep } from './roster';
 
-import { TARGET_REPS } from './roster';
-
 export const INBOUND_STAGE_COLORS: Record<InboundStatus, string> = INBOUND_STATUS_COLORS;
-
-export const REP_TARGETS = TARGET_REPS
-  .map((r) => ({
-    rep: r.name,
-    role: r.role,
-    revenueTargetL: r.revenueTargetL,
-    clientsTarget: r.clientsTarget,
-    onboardingsTarget: r.onboardingsTarget,
-  }));
-
-const B2B_MONTHLY_TARGET_L = 120;
-
-export interface TargetStore {
-  monthlyTargetL: number;
-  reps: Record<string, { revenueTargetL: number; clientsTarget: number; onboardingsTarget: number }>;
-}
-
-export function defaultTargetStore(): TargetStore {
-  return {
-    monthlyTargetL: B2B_MONTHLY_TARGET_L,
-    reps: Object.fromEntries(REP_TARGETS.map((r) => [r.rep, {
-      revenueTargetL: r.revenueTargetL, clientsTarget: r.clientsTarget, onboardingsTarget: r.onboardingsTarget,
-    }])),
-  };
-}
 
 export const fmtL = (n: number): string => {
   if (n >= 1_00_00_000) return '₹' + (n / 1_00_00_000).toFixed(2) + ' Cr';

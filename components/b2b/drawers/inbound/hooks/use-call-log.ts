@@ -5,13 +5,14 @@ import { InboundLead, LeadNote } from '../../../models/mock-data';
 import { upsertInboundLead } from '@/lib/b2b';
 import { useState } from 'react';
 
-export interface ConnectedForm { durationMin: string; followUpDate: string; followUpTime: string; note: string }
+export interface ConnectedForm { durationMin: string; followUpDate: string; note: string }
 
-const EMPTY_FORM: ConnectedForm = { durationMin: '', followUpDate: '', followUpTime: '', note: '' };
+const EMPTY_FORM: ConnectedForm = { durationMin: '', followUpDate: '', note: '' };
 
 export function useCallLog(
   draft: InboundLead,
   actorName: string,
+  actorPhone: string,
   prepare: (next: InboundLead) => InboundLead,
   commit: (next: InboundLead) => void,
 ) {
@@ -21,6 +22,7 @@ export function useCallLog(
   const [noteText, setNoteText] = useState('');
   const today = istToday();
   const by = actorName || 'Unknown';
+  const byPhone = actorPhone || undefined;
 
   const persist = async (draftNext: InboundLead, failMsg: string): Promise<boolean> => {
     setBusy(true);
@@ -33,11 +35,10 @@ export function useCallLog(
     return true;
   };
 
-  const withAttempt = (attempt: CallAttempt, stage: InboundStatus, followUpDate: string, followUpTime?: string): InboundLead => ({
+  const withAttempt = (attempt: CallAttempt, stage: InboundStatus, followUpDate: string): InboundLead => ({
     ...draft,
     callAttempts: [...(draft.callAttempts || []), attempt],
     followUpDate,
-    followUpTime,
     stage,
     statusChangedAt: stage !== draft.stage ? attempt.at : draft.statusChangedAt,
   });
@@ -46,7 +47,7 @@ export function useCallLog(
     if (busy) return;
     const at = new Date().toISOString();
     const followUpDate = nextWorkingDay(today);
-    const attempt: CallAttempt = { n: nextAttemptNumber(draft.callAttempts), outcome: 'RNR', at, by, followUpDate };
+    const attempt: CallAttempt = { n: nextAttemptNumber(draft.callAttempts), outcome: 'RNR', at, by, byPhone, followUpDate };
     await persist(withAttempt(attempt, draft.stage, followUpDate), 'Could not save the RNR');
   };
 
@@ -57,11 +58,11 @@ export function useCallLog(
     if (formErrors.length) { setError(formErrors[0]); return; }
     const at = new Date().toISOString();
     const attempt: CallAttempt = {
-      n: nextAttemptNumber(draft.callAttempts), outcome: 'Connected', at, by,
+      n: nextAttemptNumber(draft.callAttempts), outcome: 'Connected', at, by, byPhone,
       note: form.note.trim(), durationMin: Number(form.durationMin), followUpDate: form.followUpDate,
     };
     const stage: InboundStatus = draft.stage === 'New' ? 'Connected - Need nurturing' : draft.stage;
-    if (await persist(withAttempt(attempt, stage, form.followUpDate, form.followUpTime || undefined), 'Could not save the call')) {
+    if (await persist(withAttempt(attempt, stage, form.followUpDate), 'Could not save the call')) {
       setForm(null);
     }
   };

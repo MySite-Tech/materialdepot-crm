@@ -6,9 +6,10 @@ import {
   INBOUND_ROTATION_START,
   INBOUND_ROTATION_WINDOW_DAYS,
 } from '@/lib/b2b/team/constants';
-import type { MemberInput, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
+import type { MemberInput, ReassignOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 import { intakePool, kylasUserForPhone, listKylasUsers, readLead, setLeadOwner } from './kylas';
+import { isCrmAddedLead } from '@/components/b2b/models/inbound/kylas';
 import {
   assignedLeadIdsSince,
   claimRoundRobin,
@@ -119,32 +120,63 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
   return outcome;
 }
 
+async function inboundTarget(toPhone: string, read: Awaited<ReturnType<typeof readMembers>>): Promise<TeamMember> {
+  if (read.tableMissing) throw new InputError('The B2B team tables are not set up yet');
+  const target = memberForPhone(teamMembers(read.members, 'inbound'), toPhone);
+  if (!target || !target.active) throw new InputError('Leads can only go to an active inbound team member');
+  return target;
+}
+
 export async function reassignInboundLead(
   leadId: string,
   toPhone: string,
   reason: string,
   byName: string,
 ): Promise<TeamMember> {
+  return moveInboundLead(leadId, await inboundTarget(toPhone, await readMembers()), reason, byName);
+}
+
+export async function reassignInboundLeads(
+  items: { leadId: string; toPhone: string }[],
+  reason: string,
+  byName: string,
+): Promise<ReassignOutcome> {
+  if (items.length > INBOUND_ROTATION_BATCH) throw new InputError(`Inbound leads move ${INBOUND_ROTATION_BATCH} at a time`);
+  const read = await readMembers();
+  const outcome: ReassignOutcome = { moved: [], failed: [] };
+  for (const { leadId, toPhone } of items) {
+    try {
+      const to = await moveInboundLead(leadId, await inboundTarget(toPhone, read), reason, byName);
+      outcome.moved.push({ leadId, name: to.name, kylasUserId: to.kylasUserId as number });
+    } catch (e) {
+      outcome.failed.push({ leadId, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return outcome;
+}
+
+async function moveInboundLead(leadId: string, target: TeamMember, reason: string, byName: string): Promise<TeamMember> {
   const id = String(leadId ?? '').trim();
-  if (!/^\d+$/.test(id)) throw new InputError('leadId must be a Kylas lead id');
+  const crmOnly = isCrmAddedLead({ id });
+  if (!crmOnly && !/^\d+$/.test(id)) throw new InputError('leadId must be a Kylas lead id or a CRM-added lead id');
 
-  const { members, tableMissing } = await readMembers();
-  if (tableMissing) throw new InputError('The B2B team tables are not set up yet');
-  const target = memberForPhone(teamMembers(members, 'inbound'), toPhone);
-  if (!target || !target.active) throw new InputError('Leads can only go to an active inbound team member');
-
-  const lead = await readLead(id);
-  if (lead.pipelineId !== B2B_INBOUND_PIPELINE) throw new InputError('That lead is not in the inbound pipeline');
-  if (lead.ownerId === target.kylasUserId) throw new InputError(`${target.name} already owns this lead`);
-
-  await setLeadOwner(id, target.kylasUserId as number);
+  let createdAt: string | null = null;
+  let fromId: number | null = null;
+  if (!crmOnly) {
+    const lead = await readLead(id);
+    if (lead.pipelineId !== B2B_INBOUND_PIPELINE) throw new InputError('That lead is not in the inbound pipeline');
+    if (lead.ownerId === target.kylasUserId) throw new InputError(`${target.name} already owns this lead`);
+    await setLeadOwner(id, target.kylasUserId as number);
+    createdAt = lead.createdAt;
+    fromId = lead.ownerId;
+  }
   await recordAssignment({
     lead_id: id,
-    lead_created_at: lead.createdAt,
+    lead_created_at: createdAt,
     kind: 'reassign',
     to_kylas_id: target.kylasUserId as number,
     to_name: target.name,
-    from_kylas_id: lead.ownerId,
+    from_kylas_id: fromId,
     reason: reason.trim().slice(0, 300) || null,
     by_name: byName,
   });

@@ -86,7 +86,7 @@ They live here now because the code cannot carry them.
   returns `defaultTargetStore()` — the built-in 120L — which is indistinguishable
   from a team that genuinely set 120L. `saveTargets` likewise returned `void`
   and swallowed its error, so a target edit looked saved and was not; it now
-  returns the message and the Targets tab renders it.
+  returns the message and Set targets (Leadership Board) renders it.
 
 - **Enquiry-id matching is case-insensitive on both sides, but the id sent to
   the backend keeps its original case** so the indexed `__in` lookup hits
@@ -99,7 +99,7 @@ They live here now because the code cannot carry them.
   names the wrong slice (HYD's revenue once read as Outreach's). `revenueBySource`
   carries a `color` per row and both the `<Cell>` and the legend swatch read it.
 
-- **The Dashboard splits its load by dependency.** Only the pipeline and vertical
+- **The Overview (ex-Dashboard, `overview.md`) splits its load by dependency.** Only the pipeline and vertical
   stats depend on the range selector, so `loadBase` (board data, KAM resolution,
   client histories) runs once and survives a range switch, while `loadRange`
   re-runs alone. One stats request carries both the per-vertical groups and the
@@ -109,7 +109,7 @@ They live here now because the code cannot carry them.
   open pipeline. A non-month range adds a third for the month-scoped revenue.
   Three is the ceiling.
 
-- **The Dashboard has a date basis and a branch basis, and they are not
+- **The Overview has a date basis and a branch basis, and they are not
   independent.** `StatsBasis` (`lib/b2b/stats/pipeline.ts`) is `created` or
   `order`; `basisQuery` turns it into either `created_from/to` on the ticket, or
   `order_from/to` on `estimate.order_placed_time` **plus**
@@ -121,7 +121,7 @@ They live here now because the code cannot carry them.
   ₹13.44L to only ₹14.10L; adding the estimate branch moved it to ₹47.36L. Do
   not offer one without the other.
 
-- **The Dashboard checks that Django honoured the basis.** `/crm/leads/stats/`
+- **The Overview checks that Django honoured the basis.** `/crm/leads/stats/`
   echoes `basis`, `fetchVerticalStats` compares it to what it asked for and
   returns `basisApplied`, and the tab shows an amber notice when it is false.
   This is deliberately not cosmetic: the backend half deploys separately, and an
@@ -130,11 +130,10 @@ They live here now because the code cannot carry them.
   outright — that case is already `ok: false`, and two banners for one problem
   reads as two problems.
 
-- **The basis toggle governs the whole page except open pipeline, and defaults
-  to `order`.** The top panel, its status tiles, Order Won, Order Lost, Revenue
-  Generated, Target Achieved, Month Projection and Revenue by Source all follow
-  it. Two things do not and cannot: the **Open Pipeline** card and the
-  **Pipeline by Vertical** panel, both of which read `active` off the
+- **The basis toggle governs the whole page except open carts, and defaults
+  to `order`.** The Orders section, its status tiles, the month's revenue,
+  projection and "Where it came from" all follow it. One thing does not and
+  cannot: the **Open carts** card, which reads `active` off the
   created-basis call — a cart that is still open has no `order_placed_time` to
   be counted by, so under an order filter `active` comes back structurally 0.
   That zero is arithmetic, not a dropped call, which is why the Active Pipeline
@@ -181,24 +180,21 @@ They live here now because the code cannot carry them.
   ₹13,44,897 ("Order Won") while the verticals summed to ₹10,08,823 ("Revenue
   Generated"), because `bm_groups` keys on rep phone and the branch total does
   not. Both now read `pipeline.won.value`. The difference has to go somewhere,
-  so `revenueSources` (`views/dashboard/utils.ts`) appends a grey
+  so `revenueSources` (`views/overview/utils.ts`) appends a grey
   `No B2B rep on cart` slice for the remainder — on the order basis that slice
   is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
   data, not a bug to tune away.
 
-- **Targets is still a third number**: it sums the
-  `value` field on closed Supabase rows, and will not reconcile with either
-  Django figure. Do not "fix" a mismatch by making one read the other; check
-  which source the panel is meant to speak for. Targets was compounding this by
-  comparing an **all-time** sum against a **monthly** goal, so its percentage
-  only ever climbed; `computeTargets` now takes a range and the tab passes the
-  current month.
+- **The B2B target is the sum of every team member's revenue target**
+  (`b2bTargetL`, `leadership.md` §Set targets), not a typed 120L. Achieved on
+  the Overview is still Django's figure, so achieved and target come from
+  different places by design.
 
 - **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**
   It used to be two that disagreed: `B2B_VERTICALS` in `lib/b2b/leads/kam-load.ts`
   (full names + phone numbers, keying the Dashboard's per-vertical stats) and
-  `KAMS`/`B2B_REPS`/`REP_TARGETS` in `models/mock-data.ts` (short names, keying
-  every dropdown, filter and Targets card). `Jadhav` vs `Krishna Jadhav`,
+  `KAMS`/`B2B_REPS` in `models/mock-data.ts` (short names, keying
+  every dropdown and filter). Targets no longer reads the roster (`leadership.md`). `Jadhav` vs `Krishna Jadhav`,
   `Praful` vs `Prafful Bhati`, and the two HYD reps existed only in the first —
   so they drove revenue on the Dashboard and appeared nowhere on Targets or the
   old leaderboard. Everything now derives from `B2B_ROSTER`.
@@ -209,11 +205,11 @@ They live here now because the code cannot carry them.
     display/matching attributes; only `contact` may be corrected freely.
   - **`TARGET_REPS` excludes admins, `ASSIGNABLE_REPS` does not.** Krishna
     Bhagavatula is `role: 'Admin'` *and* assignable — he takes work and is
-    `DEFAULT_KAM`, but he has no Targets card. That asymmetry is deliberate and predates this
+    `DEFAULT_KAM`, but he had no Targets card (the tab is gone since 2026-10-30). That asymmetry is deliberate and predates this
     file; it was briefly "fixed" by making him unassignable and reverted the
     same day.
   - **A `b2b_KAM` role in Django does not put anyone on the B2B tab.** The role
-    only grants the tab; every KAM list, dropdown and Targets card reads this
+    only grants the tab; every KAM list and dropdown reads this
     file. Sai Suresh (9187953228) had `b2b_KAM` since Aug 2026 and appeared
     nowhere until he was added here (Oct 2026). A new B2B hire needs a roster
     row as well as the role.
@@ -221,7 +217,7 @@ They live here now because the code cannot carry them.
     `b2b_team_member` table, which managers edit under B2B Sales → Team; see
     `inbound.md` §Who owns a lead. Nor does the Leadership Board, which reads
     the team table and falls back to names in the data (`leadership.md`). KAM
-    lists and Targets still read `B2B_ROSTER` until the redesign retires it.
+    lists still read `B2B_ROSTER` until the redesign retires it.
 
 - **A new-record id is `newB2BId(prefix)`, never `` `X-${Date.now()}` ``.**
   `CLI-` and `KAM-` ids are Supabase upsert conflict targets, so two people

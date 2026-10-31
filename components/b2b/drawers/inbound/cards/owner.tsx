@@ -21,7 +21,7 @@ export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReass
   spocsLoading: boolean;
   members: TeamMember[];
   canReassign: boolean;
-  onReassigned: (to: TeamMember) => void;
+  onReassigned: (to: TeamMember) => Promise<string | undefined>;
 }) {
   const [toPhone, setToPhone] = useState('');
   const [reason, setReason] = useState('');
@@ -36,7 +36,8 @@ export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReass
     setSaving(true);
     setError(null);
     reassignInboundLead(draft.id, to.phone, reason)
-      .then(() => { onReassigned(to); setToPhone(''); setReason(''); })
+      .then(() => onReassigned(to))
+      .then((failed) => { if (failed) { setError(failed); return; } setToPhone(''); setReason(''); })
       .catch((e) => setError(e instanceof Error ? e.message : 'Reassign failed'))
       .finally(() => setSaving(false));
   };

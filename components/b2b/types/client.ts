@@ -1,5 +1,6 @@
 import { Escalation } from '../models/account-health';
 import { Segment } from '../models/inbound';
+import type { MeetingCheckIn } from '../models/outreach';
 import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_BANDS } from '../constants/client';
 export type ClientEntityType = typeof CLIENT_ENTITY_TYPES[number];
 
@@ -12,12 +13,19 @@ export interface ClientContact {
 
   label?: string;
   primary?: boolean;
-
-  studioAccess?: StudioAccess;
-  studioOnboardedAt?: string;
 }
 
 export type StudioAccess = 'power' | 'non-power';
+
+export interface StudioLogin {
+  phone: string;
+  firmName?: string;
+  role: string;
+  visibleTabs: string[] | null;
+  power: boolean;
+}
+
+export type StudioLogins = Record<string, StudioLogin>;
 
 export interface FirmStudioState {
   numbers: number;
@@ -71,6 +79,17 @@ export interface KamAssignment {
   respondedBy?: string;
   rejectReason?: string;
   reason?: string;
+  movedFrom?: string;
+}
+
+export type SpocRole = 'inbound' | 'outreach' | 'kam' | 'ec';
+
+export interface SpocLogEntry {
+  role: Exclude<SpocRole, 'kam'>;
+  name: string;
+  from: string;
+  at: string;
+  by?: string;
 }
 
 export interface ClientEntity {
@@ -88,6 +107,7 @@ export interface ClientEntity {
   kam?: string;
 
   assignments?: KamAssignment[];
+  spocLog?: SpocLogEntry[];
   remarks?: string;
 
   interactions?: ClientInteraction[];
@@ -112,6 +132,7 @@ export interface ClientInteraction {
 
   nextFollowUpDate?: string;
   loggedBy?: string;
+  checkIn?: MeetingCheckIn;
 
   createdAt?: string;
 }

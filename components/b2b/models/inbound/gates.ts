@@ -1,4 +1,4 @@
-import { DISCUSSION_NOTE_MIN, ENRICHMENT_CHECKS, INVALID_NOTE_MIN, LOST_REASON_NEEDS, MIN_ATTEMPTS_BEFORE_CLOSE, READY_RNR_COUNT, READY_WINDOW_DAYS } from '../../constants/inbound';
+import { DISCUSSION_NOTE_MIN, ENRICHMENT_CHECKS, INVALID_NOTE_MIN, isEndConsumer, LOST_REASON_NEEDS, MIN_ATTEMPTS_BEFORE_CLOSE, READY_RNR_COUNT, READY_WINDOW_DAYS } from '../../constants/inbound';
 import { EnrichmentGap, EnrichmentInput, StatusGateInput } from '../../types/inbound';
 
 export function statusGateErrors(l: StatusGateInput): string[] {
@@ -42,5 +42,8 @@ export function connectedCallErrors(c: { note: string; durationMin: string; foll
 }
 
 export function enrichmentGaps(l: EnrichmentInput): EnrichmentGap[] {
-  return ENRICHMENT_CHECKS.filter((c) => !c.filled(l)).map(({ key, label }) => ({ key, label }));
+  const consumer = isEndConsumer(l.clientType);
+  return ENRICHMENT_CHECKS
+    .filter((c) => !(consumer && c.firmOnly) && !c.filled(l))
+    .map(({ key, label }) => ({ key, label }));
 }

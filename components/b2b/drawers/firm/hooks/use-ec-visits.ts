@@ -24,7 +24,7 @@ export function useEcVisits(clientId: string) {
       const saved = await saveEcVisit(v);
       setVisits((cur) => {
         const rest = cur.filter((x) => x.id !== saved.id);
-        return [...rest, saved].sort((a, b) => a.visitDate.localeCompare(b.visitDate) || String(a.visitTime || '').localeCompare(String(b.visitTime || '')));
+        return [...rest, saved].sort((a, b) => (a.visitDate || '').localeCompare(b.visitDate || '') || String(a.visitTime || '').localeCompare(String(b.visitTime || '')));
       });
       return null;
     } catch (e) {

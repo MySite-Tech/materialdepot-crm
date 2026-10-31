@@ -11,6 +11,7 @@ export function seed() {
       rows: [...inbound.rows, ...pipeline.rows],
       team: pipeline.team,
       ecVisits: pipeline.ecVisits,
+      waitlist: pipeline.waitlist,
       assignments: inbound.assignments,
       nextAssignmentId: inbound.assignments.length + 1,
       target: null,

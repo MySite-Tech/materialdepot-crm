@@ -2,15 +2,16 @@
 
 import { istToday } from '../../models/outreach';
 import { Period } from '../../models/outreach/kpis';
-import { ENGINES, TEAM_ORDER, dailyCards, failedSources, scoreCard, selfOn } from '../../models/performance';
+import { ENGINES, TEAM_ORDER, dailyCards, failedSources, revenueTargetL, scoreCard, selfOn } from '../../models/performance';
 import { Person } from '../../models/performance/types';
-import { addDays } from '../../models/performance/utils';
+import { addDays, memberPeople } from '../../models/performance/utils';
 import { KYLAS_COUNT_CAP } from './constants';
 import { useInboundAssigned } from './hooks/use-inbound-assigned';
 import { usePerformanceData } from './hooks/use-performance-data';
 import { DailyTable } from './ui/daily';
 import { PeriodPicker } from './ui/period';
 import { RowsPanel, Scorecard } from './ui/scorecard';
+import { TargetsEditor } from './ui/targets-editor';
 import { TeamTable } from './ui/team-table';
 import { fmtPeriod, periodFor } from './utils';
 import type { B2BTeam, B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
@@ -37,8 +38,11 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
   const [teamKey, setTeamKey] = useState<B2BTeam | null>(manager ? viewer.member?.team ?? 'inbound' : viewer.member?.team ?? null);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [lens, setLens] = useState<string | null>(null);
+  const [mode, setMode] = useState<'performance' | 'targets'>('performance');
+  const setting = manager && mode === 'targets';
 
-  const { data, pending, reload } = usePerformanceData(teamKey, today);
+  const { data, pending, reload, targets, targetsOk, setTargets } = usePerformanceData(teamKey, today);
+  const goals = useMemo(() => targets?.goals ?? {}, [targets]);
 
   const selves = useMemo(
     () => (!manager && data && !team.loading ? selfOn(data, viewer, team.members, live) : []),
@@ -59,7 +63,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
   const focus = useMemo(() => (picked ? [picked] : people), [picked, people]);
 
   const kylas = useInboundAssigned(people, period, teamKey === 'inbound' && !!data);
-  const full = useMemo(() => data && { ...data, assigned: kylas.assigned }, [data, kylas.assigned]);
+  const full = useMemo(() => data && { ...data, assigned: kylas.assigned, members: live ? team.members : undefined }, [data, kylas.assigned, live, team.members]);
   const loading = (key: string) => pending || (teamKey === 'inbound' && key === 'coverage' && kylas.loading);
 
   const card = useMemo(() => (engine && full && focus.length ? scoreCard(engine, full, focus, period) : null), [engine, full, focus, period]);
@@ -76,17 +80,39 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
   const lensDef = engine?.defs.find((d) => d.key === lens);
   const who = picked ? picked.name : engine ? `Whole ${engine.label} team` : '';
 
+  const listed = useMemo(
+    () => (engine ? (live ? memberPeople(team.members, engine.team) : people.filter((p) => p.onTeam)) : []),
+    [engine, live, team.members, people],
+  );
+  const totals = useMemo(() => (targets ? TEAM_ORDER.map((t) => {
+    const heads = live ? memberPeople(team.members, t) : t === teamKey ? listed : [];
+    return { team: t, label: ENGINES[t].label, heads: heads.length, revenueL: revenueTargetL(t, heads, targets) };
+  }) : []), [targets, live, team.members, teamKey, listed]);
+
   return (
     <div className="p-4 sm:p-6 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-gray-800">{manager ? 'Leadership Board' : 'My performance'}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {manager ? 'Effort and output for every person on Inbound, Outreach and KAM' : 'Your own effort and output, worked out from what you log'}
-            {' · '}{fmtPeriod(period)}
+            {setting
+              ? 'Monthly targets per person. Every number on the Performance view is measured against these'
+              : <>{manager ? 'Effort and output for every person on Inbound, Outreach and KAM' : 'Your own effort and output, worked out from what you log'}{' · '}{fmtPeriod(period)}</>}
           </p>
         </div>
-        <PeriodPicker value={preset} onChange={setPreset} custom={custom} setCustom={setCustom} today={today} />
+        <div className="flex items-center gap-2 flex-wrap">
+          {manager && (
+            <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5">
+              {(['performance', 'targets'] as const).map((m) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`px-3 py-1 text-[12px] font-semibold rounded ${mode === m ? 'bg-[#1A1A1A] text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                  {m === 'performance' ? 'Performance' : 'Set targets'}
+                </button>
+              ))}
+            </div>
+          )}
+          {!setting && <PeriodPicker value={preset} onChange={setPreset} custom={custom} setCustom={setCustom} today={today} />}
+        </div>
       </div>
 
       {teams.length > 1 && (
@@ -106,12 +132,15 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
           {' '}whoever holds work in the data, matched by name. Add them under B2B → Team to match them by phone and Kylas user.
         </Notice>
       )}
-      {!!failed.length && (
+      {!setting && !!failed.length && (
         <Notice action={<button onClick={reload} className="shrink-0 font-semibold underline">Retry</button>}>
           <span className="font-semibold">Partly loaded.</span> {failed.join(', ')} could not be read, so every number that needs it reads Unknown.
         </Notice>
       )}
-      {teamKey === 'inbound' && kylas.capped && (
+      {!targetsOk && (
+        <Notice>Saved targets could not be read, so every target below is the KPI sheet default, not what was set on the Targets tab.</Notice>
+      )}
+      {!setting && teamKey === 'inbound' && kylas.capped && (
         <Notice>Coverage reads Kylas once per person, so only the first {KYLAS_COUNT_CAP} linked inbound people get it. The rest read Unknown.</Notice>
       )}
       {!manager && data && !team.loading && !selves.length && (
@@ -120,7 +149,11 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
         </Notice>
       )}
 
-      {(pending && !card) || team.loading ? (
+      {setting ? (
+        !targets || team.loading || !engine ? <div className="text-sm text-gray-400 py-6">Loading targets…</div> : (
+          <TargetsEditor engine={engine} people={listed} store={targets} totals={totals} onSaved={setTargets} />
+        )
+      ) : (pending && !card) || team.loading ? (
         <div className="text-sm text-gray-400 py-6">Loading performance…</div>
       ) : engine && card && (
         <>
@@ -132,7 +165,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
             </div>
           )}
 
-          <Scorecard defs={engine.defs} card={card} heads={focus.length} period={period} today={today}
+          <Scorecard defs={engine.defs} card={card} team={engine.team} people={focus} goals={goals} period={period} today={today}
             loading={loading} active={lens} onPick={(k) => setLens(lens === k ? null : k)} />
 
           {lensDef && <RowsPanel def={lensDef} k={card[lensDef.key]} who={who} onClose={() => setLens(null)} />}
@@ -140,11 +173,11 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
           {manager && !picked && (
             <>
               <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-2">Compare people · click a row to open their card</div>
-              <TeamTable defs={engine.defs} rows={rows} total={card} period={period} today={today} teamLive={live} loading={loading} onPick={(p) => setPickedKey(p.key)} />
+              <TeamTable defs={engine.defs} team={engine.team} goals={goals} rows={rows} total={card} people={people} period={period} today={today} teamLive={live} loading={loading} onPick={(p) => setPickedKey(p.key)} />
             </>
           )}
 
-          {daily && <DailyTable defs={engine.defs} days={daily.rows} clipped={daily.clipped} range={card} heads={focus.length} period={period} today={today} />}
+          {daily && <DailyTable defs={engine.defs} days={daily.rows} clipped={daily.clipped} range={card} team={engine.team} people={focus} goals={goals} period={period} today={today} />}
 
           {!!engine.notMeasured.length && (
             <p className="text-[11px] text-gray-400">

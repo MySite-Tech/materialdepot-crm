@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 
 import { callTally, inboundWorkDay, isOpenStatus, istDay, lastAttempt } from '../../../models/inbound';
 import { InboundLead, fmtINR } from '../../../models/mock-data';
-import { Empty, FollowUpChip, LeadName, PriorityChip, StatusBadge, fmtDay, fmtLeadDateTime } from '../../../ui/inbound-chips';
+import { CrmAddedTag, Empty, FollowUpChip, LeadName, PriorityChip, StatusBadge, fmtDay, fmtLeadDateTime } from '../../../ui/inbound-chips';
 import { LENS, LIST_PAGE_SIZE, OUTCOME_LENSES } from '../constants';
 import { Lens } from '../types';
 import { gapsFor } from '../utils';
@@ -18,7 +18,7 @@ function When({ lead, today }: { lead: InboundLead; today: string }) {
   if (lead.stage === 'New' && !(lead.callAttempts || []).length) {
     const day = inboundWorkDay(lead.leadCreatedAt);
     if (!day) return <span className="text-gray-600">—</span>;
-    if (day > today) return <span className="text-gray-500" title={fmtLeadDateTime(lead.leadCreatedAt)}>After 5 pm · counts {fmtDay(day)}</span>;
+    if (day > today) return <span className="text-gray-500" title={fmtLeadDateTime(lead.leadCreatedAt)}>After 7 pm · counts {fmtDay(day)}</span>;
     return <span className="text-gray-600" title={fmtLeadDateTime(lead.leadCreatedAt)}>{day === today ? 'For today' : `Since ${fmtDay(day)}`}</span>;
   }
   if (isOpenStatus(lead.stage)) {
@@ -26,7 +26,7 @@ function When({ lead, today }: { lead: InboundLead; today: string }) {
       <div className="flex flex-col items-start gap-0.5">
         <FollowUpChip date={lead.followUpDate} today={today} />
         {lead.followUpDate && (
-          <span className="text-[10.5px] text-gray-400">{fmtDay(lead.followUpDate)}{lead.followUpTime ? ` · ${lead.followUpTime}` : ''}</span>
+          <span className="text-[10.5px] text-gray-400">{fmtDay(lead.followUpDate)}</span>
         )}
       </div>
     );
@@ -160,7 +160,7 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
                   <tr key={l.id} onClick={() => onOpen(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
                     <td className={td}><PriorityChip p={l.priority} /></td>
                     <td className={`${td} max-w-[260px]`}>
-                      <div className="font-semibold text-gray-900 truncate"><LeadName lead={l} /></div>
+                      <div className="font-semibold text-gray-900 truncate"><LeadName lead={l} /><CrmAddedTag lead={l} /></div>
                       <div className="text-[11px] text-gray-500 truncate">
                         {l.phone
                           ? <a href={`tel:${l.phone}`} onClick={(e) => e.stopPropagation()} className="font-mono hover:text-[#0F766E] hover:underline">{l.phone}</a>

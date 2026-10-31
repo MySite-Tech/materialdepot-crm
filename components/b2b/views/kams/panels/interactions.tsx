@@ -1,21 +1,26 @@
 'use client';
 
-import { ClientEntity, ClientInteraction, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, currentTemperature, temperatureColor } from '../../../models/client';
+import { ClientEntity, ClientInteraction, INTERACTION_SUMMARY, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, currentTemperature, temperatureColor } from '../../../models/client';
 import { interactionGateErrors, interactionPrompts } from '../../../models/kam';
 import { newB2BId } from '../../../models/ids';
 import { Field } from '../ui';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
+import { CheckInLine } from '../../../ui/check-in-capture';
 import { useState } from 'react';
 
-export function InteractionModal({ client, kam, today, onClose, onSave }: {
+export function InteractionModal({ client, loggedBy, today, open, initialType, onClose, onSave }: {
   client: ClientEntity;
-  kam: string;
+  loggedBy: string;
   today: string;
+  open: ClientInteraction | undefined;
+  initialType: InteractionType;
   onClose: () => void;
   onSave: (i: ClientInteraction) => Promise<string | null>;
 }) {
-  const [type, setType] = useState<InteractionType>('Call');
-  const [date, setDate] = useState(today);
+  const [type, setType] = useState<InteractionType>(initialType);
+  const [picked, setDate] = useState(today);
+  const completing = type === 'Meeting' ? open : undefined;
+  const date = completing ? completing.date : picked;
   const [summary, setSummary] = useState('');
   const [temperature, setTemperature] = useState<string>('');
   const [upcomingProject, setUpcomingProject] = useState('');
@@ -23,7 +28,7 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const draft = { type, date, nextFollowUpDate, summary, temperature: temperature === '' ? undefined : Number(temperature) };
+  const draft = { type, date, nextFollowUpDate, summary, checkIn: completing?.checkIn, temperature: temperature === '' ? undefined : Number(temperature) };
   const errors = interactionGateErrors(draft, today);
   const prompts = interactionPrompts(draft);
   const previous = currentTemperature(client.interactions);
@@ -33,15 +38,16 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
     setSaving(true);
     setError('');
     const err = await onSave({
-      id: newB2BId('INT'),
+      id: completing?.id || newB2BId('INT'),
       type,
       date,
       summary: summary.trim() || undefined,
       temperature: temperature === '' ? undefined : clampTemperature(temperature),
       upcomingProject: upcomingProject.trim() || undefined,
       nextFollowUpDate: nextFollowUpDate || undefined,
-      loggedBy: kam,
-      createdAt: new Date().toISOString(),
+      loggedBy,
+      checkIn: completing?.checkIn,
+      createdAt: completing?.createdAt || new Date().toISOString(),
     });
     setSaving(false);
     if (err) setError(err); else onClose();
@@ -72,13 +78,17 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
               </div>
             </Field>
             <Field label="Date">
-              <input type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+              <input type="date" max={today} value={date} disabled={!!completing} onChange={(e) => setDate(e.target.value)} className={inputCls} />
             </Field>
           </div>
 
-          <Field label={type === 'Meeting' ? 'Minutes of meeting *' : 'Summary'}>
+          {type === 'Meeting' && (completing?.checkIn
+            ? <div className="rounded-md border border-teal-100 bg-teal-50/60 px-3 py-2"><CheckInLine c={completing.checkIn} /></div>
+            : <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">No check-in for this firm. Close this, use <strong>Check in at a meeting</strong> when you arrive, then add the minutes here.</p>)}
+
+          <Field label={INTERACTION_SUMMARY[type].label}>
             <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} className={inputCls + ' resize-none'}
-              placeholder={type === 'Meeting' ? 'Who was there, what was discussed, what was agreed' : 'What was discussed'} />
+              placeholder={INTERACTION_SUMMARY[type].placeholder} />
           </Field>
 
           <Field
@@ -112,10 +122,10 @@ export function InteractionModal({ client, kam, today, onClose, onSave }: {
           </Field>
 
           <Field
-            label={`Next follow-up date${type === 'Call' ? ' *' : ''}`}
-            hint={type === 'Call'
-              ? '§4.1 requires this on a logged call — it is what fills Today’s Calls and the Follow-up Queue.'
-              : 'Optional on a meeting. §4.1 only requires it on a call.'}
+            label={`Next follow-up date${type !== 'Meeting' ? ' *' : ''}`}
+            hint={type !== 'Meeting'
+              ? `Required on a logged ${type.toLowerCase()} — it is what fills Today’s Calls and the Follow-up Queue.`
+              : 'Optional on a meeting.'}
           >
             <input type="date" min={date} value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} className={inputCls} />
           </Field>

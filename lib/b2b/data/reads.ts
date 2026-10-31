@@ -3,9 +3,10 @@ import { withB2BCache } from './cache';
 import { B2BLeadRow, Pipeline, floorToFreshStart } from './rows';
 import { b2bBackendGet } from './backend';
 import { fetchB2BInboundLeads } from '@/lib/api';
-import { ClientEntity } from '@/components/b2b/models/client';
+import { ClientEntity, InboundLink } from '@/components/b2b/models/client';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { KamOrder } from '@/components/b2b/models/kam';
+import { isCrmAddedLead } from '@/components/b2b/models/inbound';
 import { mergeKylasIntoRow, rowToInbound } from '../mappers/inbound';
 import { rowToClient } from '../mappers/client';
 import { rowToKamOrder } from '../mappers/kam';
@@ -100,7 +101,7 @@ export async function fetchInboundBoard(
   }
 
   const kylasIds = new Set(kylas.leads.map((k) => k.id));
-  dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id));
+  dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id) || isCrmAddedLead(l));
 
   const dbIds = new Set(dbLeads.map((l) => l.id));
   return {
@@ -152,6 +153,16 @@ async function fetchB2BDataUncached(): Promise<B2BData> {
 export async function fetchClients(): Promise<ClientEntity[]> {
   const rows = await fetchRows('client');
   return rows.map(rowToClient);
+}
+
+export async function fetchInboundLinks(): Promise<InboundLink[]> {
+  const rows = await fetchRows('inbound');
+  return rows.map((r) => ({
+    id: String(r.kylas_lead_id ?? r.id),
+    owner: r.owner || undefined,
+    createdAt: r.created_at ? String(r.created_at) : undefined,
+    phones: [r.meta_data?.phone, r.meta_data?.primary_contact_phone].filter(Boolean).map(String),
+  }));
 }
 
 export async function fetchKamOrders(): Promise<KamOrder[]> {

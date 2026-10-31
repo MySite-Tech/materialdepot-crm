@@ -17,13 +17,13 @@ const CALL_RULE = 'Open leads already called at least once';
 export const LENS: Record<Lens, LensMeta> = {
   today: {
     title: 'Call today',
-    rule: "First calls, then today's follow-ups, then overdue ones. A lead that arrives after 5 pm counts from the next working day.",
+    rule: "First calls, then today's follow-ups, then overdue ones. A lead that arrives after 7 pm counts from the next working day.",
     empty: 'Nothing to call today.',
     accent: '#1A1A1A',
   },
   new: {
     title: 'First call',
-    rule: 'Status New and never called, arrived by 5 pm today or earlier. Aim to have none left by end of day.',
+    rule: 'Status New and never called, arrived by 7 pm today or earlier. Aim to have none left by end of day.',
     empty: 'Every lead due today has had its first call.',
     accent: INBOUND_STATUS_COLORS.New,
   },
@@ -101,7 +101,7 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   arrived: {
     title: 'Arrived today',
-    rule: 'Counted for today: arrived after 5 pm on the last working day, or by 5 pm today.',
+    rule: 'Counted for today: arrived after 7 pm on the last working day, or by 7 pm today.',
     empty: 'No lead counted for today.',
     accent: INBOUND_STATUS_COLORS.New,
   },
@@ -125,7 +125,7 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   gaps: {
     title: 'Needs enrichment',
-    rule: 'Missing one or more of: company name, primary person, GST, segment, client type, lead type, priority, city, selection, expected value.',
+    rule: 'Missing one or more of: company name, primary person, GST, segment, client type, lead type, priority, city, selection, expected value. An End Consumer is not asked for the first four.',
     empty: 'Every lead is fully filled in.',
     accent: '#F59E0B',
   },

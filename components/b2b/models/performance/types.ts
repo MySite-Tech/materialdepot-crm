@@ -55,6 +55,7 @@ export interface PerfData {
   waitlist: Map<string, WaitlistSignup> | null;
   metricsFor: (c: ClientEntity) => ClientOrderMetrics;
   assigned?: Record<string, number | null>;
+  members?: TeamMember[];
   today: string;
 }
 
@@ -66,6 +67,13 @@ export interface TeamEngine {
   notMeasured: string[];
   people: (data: PerfData, members: TeamMember[], live: boolean) => Person[];
   card: (data: PerfData, people: Person[], period: Period) => PerfCard;
+}
+
+export type Goals = Record<string, Record<string, number>>;
+
+export interface TargetStore {
+  monthlyTargetL: number;
+  goals: Goals;
 }
 
 export interface DayRow {

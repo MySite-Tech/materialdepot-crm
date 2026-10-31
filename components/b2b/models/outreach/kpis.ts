@@ -2,6 +2,7 @@ import { OutreachLead, fmtINR } from '../mock-data';
 import { COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, WaitlistSignup, completedMeetings, followUpMeetings } from '.';
 import { isMobile, orderVerified, signedOffWithinTat } from './handover';
 import { istDay, outreachAdherence } from './reminders';
+import { creditNote } from '../credit';
 import { normalisePhone } from '@/lib/org/utils';
 
 export type OutreachKpiKey =
@@ -70,7 +71,9 @@ function touchedIn(l: OutreachLead, p: Period): boolean {
   return (l.journey || []).some((e) => inPeriod(e.at, p));
 }
 
-export function waitlistIndex(signups: WaitlistSignup[] | null): Map<string, WaitlistSignup> | null {
+export type WaitlistIndex = Map<string, WaitlistSignup> | null;
+
+export function waitlistIndex(signups: WaitlistSignup[] | null): WaitlistIndex {
   if (!signups) return null;
   return new Map(signups.map((s) => [normalisePhone(s.phone), s]));
 }
@@ -143,7 +146,7 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
   const revenue: KpiRow[] = converted.filter(orderVerified).map((l) => ({
     lead: l, counts: l.newOnboarding !== false, at: l.convertedAt || l.statusChangedAt,
     note: l.newOnboarding === false ? 'Repeat client — ordered in the 6 months before'
-      : `${fmtINR(Number(l.orderValue) || 0)}${l.newOnboarding === undefined ? ' · prior orders not checked' : ''}`,
+      : `${fmtINR(Number(l.orderValue) || 0)}${l.newOnboarding === undefined ? ' · prior orders not checked' : ''}${creditNote(l.revenueCredit)}`,
   }));
   const revenueSum = revenue.filter((r) => r.counts).reduce((a, r) => a + (Number(r.lead.orderValue) || 0), 0);
   const repeat = revenue.length - counted(revenue);

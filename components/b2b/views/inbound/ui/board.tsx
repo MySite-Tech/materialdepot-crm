@@ -7,7 +7,7 @@ import { INBOUND_STATUSES, INBOUND_STATUS_COLORS, INBOUND_STATUS_HINT } from '..
 import { isFollowUpStatus, lastAttempt } from '../../../models/inbound';
 import { InboundLead, fmtINR } from '../../../models/mock-data';
 import { InboundStatus } from '../../../types/inbound';
-import { FollowUpChip, LeadName, LeadTypeChip, PriorityChip } from '../../../ui/inbound-chips';
+import { CrmAddedTag, FollowUpChip, LeadName, LeadTypeChip, PriorityChip } from '../../../ui/inbound-chips';
 import { gapsFor } from '../utils';
 import { EnqIdChip } from '.';
 
@@ -26,7 +26,7 @@ function LeadCard({ lead, today, onClick, onDragStart }: {
     >
       <div className="flex items-start justify-between gap-1.5">
         <div className="text-[12.5px] font-semibold text-gray-900 leading-tight min-w-0 truncate">
-          <LeadName lead={lead} />
+          <LeadName lead={lead} /><CrmAddedTag lead={lead} />
         </div>
         <PriorityChip p={lead.priority} />
       </div>

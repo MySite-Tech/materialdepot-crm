@@ -7,7 +7,7 @@ import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS_KEYS, NO_FILTERS } from './constants';
-import { MoveModal } from './ui/modals';
+import { AddLeadModal, MoveModal } from './ui/modals';
 import { InboundBoard } from './ui/board';
 import { InboundFilterBar } from './ui/filters';
 import { LeadTable } from './ui/table';
@@ -19,7 +19,7 @@ import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useState } from 'react';
 import { runInboundRotation } from '@/lib/b2b/team';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
-import { rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
+import { membershipIn, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [view, setView] = useState<View>('list');
@@ -44,6 +44,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const today = istToday();
 
@@ -55,10 +56,15 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const boardOwnerIds = useMemo(() => boardOwnerKey.split(',').map(Number), [boardOwnerKey]);
   const ownerName = useMemo(() => new Map(inboundOwners.map((o) => [o.id, o.name])), [inboundOwners]);
 
-  const me = viewer.member?.team === 'inbound' && viewer.member.active ? viewer.member : null;
+  const me = membershipIn(viewer, 'inbound');
   const myKylasId = me?.kylasUserId ?? undefined;
   const unlinked = !viewer.isManager && !myKylasId;
   const scope = viewer.isManager ? scopeChoice ?? (myKylasId ? 'mine' : 'all') : 'mine';
+  const leadOwners = useMemo(
+    () => teamMembers(team.members, 'inbound').filter((m) => m.active && m.kylasUserId).map((m) => ({ id: m.kylasUserId as number, name: m.name })),
+    [team.members],
+  );
+  const canAdd = viewer.isManager ? leadOwners.length > 0 : !!myKylasId;
 
   const ownerId = useMemo(
     () => (scope === 'mine'
@@ -269,6 +275,14 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
               </button>
             ))}
           </div>
+          {canAdd && (
+            <button
+              onClick={() => setAdding(true)}
+              className="bg-white border border-gray-200 text-gray-700 hover:text-gray-900 px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap"
+            >
+              + Add lead
+            </button>
+          )}
           <button
             onClick={load}
             disabled={loading}
@@ -279,7 +293,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </div>
       </div>
 
-      {viewer.member?.team === 'inbound' && !myKylasId && (
+      {me && !myKylasId && (
         <p className="text-[12px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-3">
           You are on the inbound team but your Kylas user is not linked, so no lead can be yours yet. A B2B manager
           links it under <strong>Team</strong>.
@@ -361,6 +375,24 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </div>
       )}
 
+      {adding && (
+        <AddLeadModal
+          owners={leadOwners}
+          defaultOwner={myKylasId ? { id: myKylasId, name: me?.name || viewer.name } : undefined}
+          canPickOwner={viewer.isManager}
+          loaded={leads}
+          boardOwnerIds={boardOwnerIds}
+          actorName={viewer.name}
+          onCancel={() => setAdding(false)}
+          onCreated={(lead) => { setLeads((prev) => [lead, ...prev]); setAdding(false); setSelectedId(lead.id); }}
+          onOpenExisting={(lead) => {
+            setLeads((prev) => (prev.some((l) => l.id === lead.id) ? prev : [lead, ...prev]));
+            setAdding(false);
+            setSelectedId(lead.id);
+          }}
+        />
+      )}
+
       {move && (
         <MoveModal
           lead={move.lead}
@@ -375,8 +407,10 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           lead={selected}
           onClose={() => setSelectedId(null)}
           actorName={viewer.name}
+          actorPhone={viewer.phone}
           members={teamMembers(team.members, 'inbound')}
           canReassign={viewer.isManager || !!me}
+          canCredit={viewer.isManager}
           onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}
         />
       )}

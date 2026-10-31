@@ -40,6 +40,18 @@ export function upsertInboundLead(l: InboundLead): Promise<string | null> {
   return upsert(inboundToRow(l));
 }
 
+export async function upsertInboundLeads(list: InboundLead[]): Promise<string | null> {
+  if (!list.length) return null;
+  try {
+    await b2bBackendPost('/rows/bulk', { rows: list.map(inboundToRow) });
+    invalidateB2BCache();
+    return null;
+  } catch (e) {
+    console.error('[b2b] bulk inbound upsert failed', e);
+    return writeErrorMessage(e);
+  }
+}
+
 export function upsertOutreachLead(l: OutreachLead): Promise<string | null> {
   return upsert(outreachToRow(l));
 }

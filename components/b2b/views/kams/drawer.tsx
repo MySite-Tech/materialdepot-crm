@@ -1,7 +1,9 @@
 'use client';
 
 import { FirmDrawer } from '../../drawers/firm';
-import { ClientEntity, currentUpcomingProject, sortedInteractions } from '../../models/client';
+import { ClientEntity, InteractionType, contactNumbers, currentUpcomingProject, openCheckIn, primaryContact, sortedInteractions } from '../../models/client';
+import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
+import { CheckInLine } from '../../ui/check-in-capture';
 import { AssignedClientRow, KAM_ORDER_STATUS_COLORS, KamOrder, temperatureMismatch } from '../../models/kam';
 import { fmtINR } from '../../models/mock-data';
 import { SectionCard } from '../../ui/inbound-chips';
@@ -9,14 +11,15 @@ import { TemperatureChip } from '../../ui/client-chips';
 import { EscalationSection } from './panels/escalations';
 import { ClientOrderHistory } from '@/lib/b2b';
 
-export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, onClose, onLogInteraction, onSaveClient, onOpenOrder, onAddOrder }: {
+export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, onClose, onLogInteraction, onCheckIn, onSaveClient, onOpenOrder, onAddOrder }: {
   row: AssignedClientRow;
   clients: ClientEntity[];
   orders: KamOrder[];
   today: string;
   historyFor: (phone: string) => ClientOrderHistory | undefined;
   onClose: () => void;
-  onLogInteraction: () => void;
+  onLogInteraction: (type: InteractionType) => void;
+  onCheckIn: () => void;
   onSaveClient: (c: ClientEntity) => Promise<string | null>;
   assignAs?: string;
   onOpenOrder: (o: KamOrder) => void;
@@ -25,6 +28,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
   const { client, metrics } = row;
   const log = sortedInteractions(client.interactions);
   const upcoming = currentUpcomingProject(client.interactions);
+  const inProgress = openCheckIn(client.interactions);
   const mismatch = temperatureMismatch(row);
   const link = 'text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap';
 
@@ -48,12 +52,33 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
         </p>
       )}
 
+      <RedirectToEc
+        firm={client.company}
+        contactName={primaryContact(client.contacts)?.name}
+        phones={uniquePhones(contactNumbers(client.contacts))}
+        sourceTeam="kam"
+        leadRef={client.id}
+        clientId={client.id}
+      />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         <SectionCard
           title="Calls & meetings"
           subtitle={`${log.length} logged`}
-          right={<button onClick={onLogInteraction} className={link}>+ Log call / meeting</button>}
+          right={(
+            <span className="flex items-center gap-3">
+              {!inProgress && <button onClick={onCheckIn} className={link}>Check in at a meeting</button>}
+              <button onClick={() => onLogInteraction('Call')} className={link}>+ Log interaction</button>
+            </span>
+          )}
         >
+          {inProgress?.checkIn && (
+            <div className="mb-2 rounded-md border border-teal-100 bg-teal-50/60 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[11px] text-teal-900 font-semibold">Meeting in progress</span>
+              <CheckInLine c={inProgress.checkIn} />
+              <button onClick={() => onLogInteraction('Meeting')} className="px-2.5 py-1 rounded-md bg-[#0F766E] text-white text-[11px] font-semibold">Add minutes</button>
+            </div>
+          )}
           <div className="text-[11px] text-gray-500 mb-2">
             <span className="text-gray-400">Upcoming project:</span>{' '}
             {upcoming ? <>{upcoming.text} <span className="text-gray-400">· noted {upcoming.at}</span></> : <span className="text-gray-300">nothing on file</span>}
@@ -71,6 +96,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
                     </span>
                     <TemperatureChip value={i.temperature} />
                   </div>
+                  {i.checkIn && <div className="mt-1"><CheckInLine c={i.checkIn} /></div>}
                   {i.summary && <p className="text-[12px] text-gray-600 mt-1 break-words">{i.summary}</p>}
                   {i.upcomingProject && <p className="text-[11px] text-gray-500 mt-1"><span className="text-gray-400">Upcoming:</span> {i.upcomingProject}</p>}
                   <p className="text-[10px] text-gray-400 mt-1">{i.nextFollowUpDate ? `Next follow-up ${i.nextFollowUpDate}` : 'No next follow-up set'}</p>

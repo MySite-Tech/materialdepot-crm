@@ -6,6 +6,7 @@ import { KAMS, fmtShortINR } from '../../models/mock-data';
 import { FirmDrawer } from '../../drawers/firm';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { useClientAggregates } from '../../hooks/use-client-aggregates';
+import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { AssignBar } from '../../ui/assign-bar';
 import { useFirmAssign } from './hooks/use-firm-assign';
 import { TemperatureChip } from '../../ui/client-chips';
@@ -42,12 +43,13 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
-  const { kams } = useB2BReps(team);
-  const assigner = useFirmAssign(clients, kams, viewer.member?.name || viewer.name, (list) => {
+  const { kams, allKams } = useB2BReps(team);
+  const assigner = useFirmAssign(clients, viewer.member?.name || viewer.name, (list) => {
     const byId = new Map(list.map((c) => [c.id, c]));
     setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
   });
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
+  const studio = useStudioLogins();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -265,12 +267,20 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             <AssignBar
               count={assigner.picked.size}
               noun="firm"
-              reps={kams}
+              teams={{ kam: { reps: allKams, rotation: kams } }}
               busy={assigner.busy}
-              rule="Round robin gives each firm to the active, in-rotation KAM holding the fewest firms. The KAM must accept or reject it."
+              rule="Bulk assignment takes only firms with no KAM, and round robin gives each to whichever of these people holds the fewest. To move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to. A firm moved from another KAM can only be accepted."
+              total={rows.length}
+              onPickAll={() => assigner.pickAll(rows.map((r) => r.client.id))}
               onAssign={assigner.assign}
               onClear={assigner.clear}
             />
+          )}
+          {assigner.note && (
+            <div className="px-4 py-2 text-[12px] text-teal-900 bg-teal-50 border-b border-teal-100 flex items-start justify-between gap-3">
+              <span>{assigner.note}</span>
+              <button onClick={() => assigner.setNote(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
+            </div>
           )}
           {assigner.error && (
             <div className="px-4 py-2 text-[12px] text-red-700 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">
@@ -282,6 +292,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             <ClientTable
               rows={pageRows}
               today={today}
+              studio={studio}
               sort={sort}
               onSort={setSortPick}
               onOpen={(c) => setOpenId(c.id)}

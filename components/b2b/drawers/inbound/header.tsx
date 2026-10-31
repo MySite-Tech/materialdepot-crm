@@ -1,6 +1,6 @@
 'use client';
 
-import { ENRICHMENT_FIELD_COUNT, isOpenStatus } from '../../constants/inbound';
+import { enrichmentFieldCount, isOpenStatus } from '../../constants/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { EnrichmentGap } from '../../types/inbound';
 import { FollowUpChip, LeadTypeChip, PriorityChip, StatusBadge } from '../../ui/inbound-chips';
@@ -48,7 +48,7 @@ export function InboundDrawerHeader({ draft, gaps, onClose, today }: {
       </div>
       {gaps.length > 0 && (
         <p className="text-[11px] text-gray-500 mt-2.5">
-          <span className="font-semibold text-amber-700">{gaps.length} of {ENRICHMENT_FIELD_COUNT} enrichment fields empty</span>
+          <span className="font-semibold text-amber-700">{gaps.length} of {enrichmentFieldCount(draft.clientType)} enrichment fields empty</span>
           {' — '}{gaps.map((g) => g.label).join(', ')}. These do not block a save.
         </p>
       )}

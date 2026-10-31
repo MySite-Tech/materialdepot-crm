@@ -4,6 +4,7 @@ import { ClientSource } from '@/components/b2b/models/client';
 import { KamOrder, isLegacyKamStage, normalizeKamOrderStatus } from '@/components/b2b/models/kam';
 import { LeadNote } from '@/components/b2b/models/mock-data';
 import { RequirementVersion } from '@/components/b2b/models/requirement';
+import { RevenueCredit } from '@/components/b2b/models/credit';
 
 const KAM_ORDER_META: MetaSpec<KamOrder> = {
   clientId:         { col: 'client_id',          read: str },
@@ -12,6 +13,7 @@ const KAM_ORDER_META: MetaSpec<KamOrder> = {
   phone:            { col: 'phone',              read: str },
   requirement:      { col: 'requirement',        read: str },
   requirementHistory: { col: 'requirement_history', read: (v) => arr<RequirementVersion>(v) },
+  revenueCredit:    { col: 'revenue_credit',     read: (v) => (v && typeof v === 'object' && !Array.isArray(v) ? (v as RevenueCredit) : undefined) },
   enqId:            { col: 'enq_id',             read: str },
   orderValue:       { col: 'order_value',        read: num },
   orderValueSource: { col: 'order_value_source', read: (v) => (v === 'deal' || v === 'manual' ? v : undefined) },

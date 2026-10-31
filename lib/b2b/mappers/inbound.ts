@@ -15,6 +15,7 @@ const INBOUND_META: MetaField[] = [
 
   { ui: 'companyName',        db: 'company_name',         kind: 'string' },
   { ui: 'primaryContactName', db: 'primary_contact_name', kind: 'string' },
+  { ui: 'primaryContactRole', db: 'primary_contact_role',  kind: 'string' },
   { ui: 'primaryContactPhone', db: 'primary_contact_phone', kind: 'string' },
   { ui: 'additionalContacts', db: 'additional_contacts',  kind: 'array'  },
   { ui: 'gstNumber',          db: 'gst_number',           kind: 'string' },
@@ -31,7 +32,6 @@ const INBOUND_META: MetaField[] = [
   { ui: 'expectedOrderValue', db: 'expected_order_value', kind: 'number' },
 
   { ui: 'followUpDate',       db: 'follow_up_date',       kind: 'string' },
-  { ui: 'followUpTime',       db: 'follow_up_time',       kind: 'string' },
   { ui: 'enqId',              db: 'enq_id',               kind: 'string' },
   { ui: 'orderValue',         db: 'order_value',          kind: 'number' },
   { ui: 'orderValueSource',   db: 'order_value_source',   kind: 'string' },
@@ -45,7 +45,9 @@ const INBOUND_META: MetaField[] = [
   { ui: 'outreachReferral',   db: 'outreach_referral',    kind: 'object' },
 
   { ui: 'placedUnder',        db: 'placed_under',         kind: 'object' },
+  { ui: 'revenueCredit',      db: 'revenue_credit',       kind: 'object' },
   { ui: 'kam',                db: 'kam',                  kind: 'string' },
+  { ui: 'addedBy',            db: 'added_by',             kind: 'string' },
 
   { ui: 'notes',              db: 'notes',                kind: 'array'  },
 ];

@@ -1,7 +1,8 @@
 'use client';
 
 import { firmHolding, fmtPhone } from '../utils';
-import { CONTACT_CLASSES, ClientContact, ClientEntity, STUDIO_ACCESS, StudioAccess, isValidContactNumber, normalizeContactNumber } from '../../../models/client';
+import { CONTACT_CLASSES, ClientContact, ClientEntity, STUDIO_ACCESS, isValidContactNumber, normalizeContactNumber, StudioLogin, studioLoginOf } from '../../../models/client';
+import { useStudioLogins } from '../../../hooks/use-studio-logins';
 import { fmtShortINR } from '../../../models/mock-data';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
@@ -9,6 +10,20 @@ import { ClientOrderHistory } from '@/lib/b2b';
 import { useState } from 'react';
 
 const selectCls = 'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-[11px] cursor-pointer disabled:opacity-60';
+
+function StudioBadge({ login, loading, failed }: { login?: StudioLogin; loading: boolean; failed: boolean }) {
+  const base = 'w-full rounded-md border px-1.5 py-1 text-[11px] truncate';
+  if (loading) return <div className={`${base} border-gray-100 text-gray-300`}>Studio Space: reading…</div>;
+  if (failed) return <div className={`${base} border-amber-200 text-amber-700`} title="Studio Space could not be reached, so access is unknown">Studio Space: unknown</div>;
+  if (!login) return <div className={`${base} border-gray-100 text-gray-400`} title="No Studio Space login uses this number">Studio Space: not onboarded</div>;
+  const access = STUDIO_ACCESS[login.power ? 'power' : 'non-power'];
+  const tabs = login.visibleTabs?.length ? `Tabs on: ${login.visibleTabs.join(', ')}` : login.visibleTabs ? 'No optional tabs on' : '';
+  return (
+    <div className={`${base} ${login.power ? 'border-teal-300 text-[#0F766E] font-semibold' : 'border-gray-200 text-gray-700'}`} title={[access.hint, tabs].filter(Boolean).join('. ')}>
+      Studio Space · {access.label}
+    </div>
+  );
+}
 
 export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }: {
   client: ClientEntity;
@@ -23,6 +38,7 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const studio = useStudioLogins();
 
   const contacts = (client.contacts || []).filter((c) => normalizeContactNumber(c.number));
   const typed = normalizeContactNumber(draft.number);
@@ -61,14 +77,6 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
 
   const patch = (number: string, change: Partial<ClientContact>) =>
     write(contacts.map((x) => (x.number === number ? { ...x, ...change } : x)));
-
-  const setAccess = (c: ClientContact, value: string) => {
-    const access = (value || undefined) as StudioAccess | undefined;
-    patch(c.number, {
-      studioAccess: access,
-      studioOnboardedAt: access ? c.studioOnboardedAt || new Date().toISOString().slice(0, 10) : undefined,
-    });
-  };
 
   return (
     <SectionCard
@@ -117,16 +125,7 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
                   {c.label && !(CONTACT_CLASSES as readonly string[]).includes(c.label) && <option value={c.label}>{c.label}</option>}
                   {CONTACT_CLASSES.map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
-                <select
-                  value={c.studioAccess || ''}
-                  onChange={(e) => setAccess(c, e.target.value)}
-                  disabled={busy}
-                  title={c.studioAccess ? `${STUDIO_ACCESS[c.studioAccess].hint}. Onboarded ${c.studioOnboardedAt || ''}`.trim() : 'Not onboarded on Studio Space'}
-                  className={`${selectCls} ${c.studioAccess === 'power' ? 'text-[#0F766E] border-teal-300' : c.studioAccess ? 'text-gray-700' : 'text-gray-400'}`}
-                >
-                  <option value="">Studio Space: not onboarded</option>
-                  {(Object.keys(STUDIO_ACCESS) as StudioAccess[]).map((k) => <option key={k} value={k}>Onboarded · {STUDIO_ACCESS[k].label}</option>)}
-                </select>
+                <StudioBadge login={studio.logins ? studioLoginOf(c, studio.logins) : undefined} loading={studio.loading} failed={!!studio.error} />
               </div>
               {removing === c.number ? (
                 <div className="flex items-center gap-2 mt-1.5 text-[11px]">
@@ -177,7 +176,7 @@ export function ContactsCard({ client, clients, historyFor, via, onVia, onSave }
         </div>
       )}
       <p className="text-[10px] text-gray-400 mt-2">
-        Power user: the whole Studio Space dashboard. Non-power user: Orders and Rewards only. This is the CRM&apos;s record; it does not change anyone&apos;s access on Studio Space.
+        Studio Space access is read from Studio Space itself, by this number. Power user: the whole dashboard. Normal user: a login restricted to some tabs, such as order tracking.
       </p>
       {error && <p className="text-[11px] text-red-600 mt-2">Could not save: {error}</p>}
     </SectionCard>

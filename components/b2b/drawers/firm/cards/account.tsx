@@ -2,6 +2,7 @@
 
 import { fmtDate } from '../utils';
 import { ClientEntity } from '../../../models/client';
+import { assignFirm } from '../../../models/kam';
 import { KAMS } from '../../../models/mock-data';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnPrimary } from '../../../constants/ui';
@@ -23,13 +24,10 @@ export function AccountCard({ client, reassignReason, assignAs, onSave }: {
     if ((nextKam || undefined) === client.kam) { setReassigning(false); return; }
     setBusy(true);
     setError('');
-    const err = await onSave({
-      ...client,
-      kam: nextKam || undefined,
-      assignments: [...(client.assignments || []), nextKam
-        ? { kam: nextKam, at: new Date().toISOString(), by: assignAs, how: 'manual', status: 'Pending', reason: reassignReason }
-        : { kam: '', at: new Date().toISOString(), by: assignAs, reason: reassignReason }],
-    });
+    const at = new Date().toISOString();
+    const err = await onSave(nextKam
+      ? assignFirm(client, { name: nextKam }, assignAs ?? '', at, 'manual', reassignReason)
+      : { ...client, kam: undefined, assignments: [...(client.assignments || []), { kam: '', at, by: assignAs, reason: reassignReason }] });
     setBusy(false);
     if (err) setError(err); else setReassigning(false);
   };

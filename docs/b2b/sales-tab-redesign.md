@@ -457,11 +457,10 @@ Opening a firm adds 1.
 
 ## Open / blocking (as of 2026-10-28)
 
-- **B2B data off Supabase.** The user reports it now lives on the Django
-  backend, but every B2B read and write still goes to Supabase `b2b_lead`,
-  `b2b_target` and `b2b_team_member`. Blocked on the Django endpoints. The
-  table of what has to move, and the switch point (`lib/b2b/data/`), are in
-  `docs/backends.md` § Pending.
+- ~~B2B data off Supabase~~: done, and not on Django. Every B2B table lives in
+  the FastAPI b2b-backend (PR #27, then #13's migrations 0020 and 0021, live
+  2026-10-29). See `docs/backends.md`. What Django still owes is listed there
+  under §Owed by Django.
 - **Where the Django repo is, and who changes it** (KAM slice 7). The user
   says someone has it.
 - **Meeting Coverage denominator:** 3-month firm status or ordered-this-month
@@ -483,7 +482,7 @@ Opening a firm adds 1.
 
 Progress: step 1 is done as `b2b.manager` only, with team membership in
 `b2b_team_member` instead of slugs. Step 2 is done for Inbound and Outreach;
-KAM lists and Targets still read `B2B_ROSTER`. Step 3 was
+KAM lists still read `B2B_ROSTER`; Targets moved to the team list on 2026-10-29. Step 3 was
 built per team as each tab's own scope ("Mine", "My day"), and the
 cross-day view of it is "My performance" (step 4). Step 4 is built (see
 `leadership.md`). Steps 5–6 have not started.
@@ -502,7 +501,8 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
 4. **Leadership Board rebuild.** Built 2026-10-28 as `views/leadership/` over
    `models/performance/`. Managers get every person, and reps get their own
    card under the label "My performance". See `leadership.md`.
-5. **Dashboard tab rework** — shift toward business/revenue/pipeline
+5. **Dashboard tab rework** — done 2026-10-30 as **Overview** (`overview.md`).
+   Shift toward business/revenue/pipeline
    numbers now that Leadership Board owns per-person/team performance;
    scope once step 4's shape is known so the two views don't re-overlap.
 6. **Lifecycle view** — one client/lead across inbound→outreach→KAM.
@@ -569,6 +569,18 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   gone. Checked in a browser as a manager, an Outreach BM and an unknown user,
   on real Supabase and Kylas reads with Django stubbed and every write
   blocked. No write was attempted.
+
+- **2026-10-31 (EC B2B Referral and assignment)**: New top-level tab for store
+  staff, feeding Outreach's Unassigned pool as source `EC B2B Referral`
+  (`ec-referral.md`). The assign bar is now one shape on Leads, Client Database and
+  Outreach's pool: team first, then One person or Round robin over a chosen set.
+  Bulk takes only unowned records, an owned one moves alone (`leads.md`,
+  `client-db.md`), and a firm moved from another KAM cannot be rejected (`kam.md`).
+  Tested in the sandbox on dummy data, stubbed Kylas. **Open, for the user:** the
+  Firm page's KAM picker uses the hardcoded `KAMS` list, not the live team (it
+  offered Hardi and not a newly added KAM). Whether Reject should also go for
+  firms with no KAM: the user's words covered moved firms, and it was built that
+  way. Real Kylas owner change from `reassign-many` is unproven.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

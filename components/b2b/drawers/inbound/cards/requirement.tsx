@@ -6,13 +6,14 @@ import { InboundLead } from '../../../models/mock-data';
 import { Field, SectionCard } from '../../../ui/inbound-chips';
 import { inputCls } from '../../../constants/ui';
 
-export function InboundRequirementCard({ draft, droppedSelections, set }: {
+export function InboundRequirementCard({ draft, crmOnly, droppedSelections, set }: {
   draft: InboundLead;
+  crmOnly: boolean;
   droppedSelections: string[];
   set: <K extends keyof InboundLead>(k: K, v: InboundLead[K]) => void;
 }) {
   return (
-    <SectionCard title="Requirement" owner="kylas-write" subtitle="§3.3 — Requirement summary and Selection sync to Kylas">
+    <SectionCard title="Requirement" owner={crmOnly ? 'crm' : 'kylas-write'} subtitle={crmOnly ? '§3.3 — Requirement summary and Selection, kept in the CRM (this lead is not in Kylas)' : '§3.3 — Requirement summary and Selection sync to Kylas'}>
       <Field label="Selection">
         <div className="flex flex-wrap gap-1.5">
           {SELECTIONS.map((c) => {

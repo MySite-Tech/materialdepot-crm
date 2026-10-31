@@ -86,8 +86,7 @@ export function sortForLens(lens: Lens, leads: InboundLead[], today: string): In
     const p = (PRIORITY_RANK[a.priority || ''] ?? 3) - (PRIORITY_RANK[b.priority || ''] ?? 3);
     if (p !== 0) return p;
     const d = (a.followUpDate || '').localeCompare(b.followUpDate || '');
-    if (d !== 0) return followUpBucket(a.followUpDate, today) === 'overdue' ? -d : d;
-    return (a.followUpTime || '').localeCompare(b.followUpTime || '');
+    return followUpBucket(a.followUpDate, today) === 'overdue' ? -d : d;
   });
 }
 
@@ -116,7 +115,7 @@ export function tileFigures(
 ): Partial<Record<Lens, TileFigure>> {
   const n = (k: Lens) => String(counts[k]);
   return {
-    new: { value: n('new'), sub: v.tomorrow ? `+${v.tomorrow} after 5 pm, for tomorrow` : counts.new ? 'not called yet' : 'all called' },
+    new: { value: n('new'), sub: v.tomorrow ? `+${v.tomorrow} after 7 pm, for tomorrow` : counts.new ? 'not called yet' : 'all called' },
     due: { value: n('due'), sub: 'booked for today' },
     overdue: { value: n('overdue'), sub: 'date passed', warn: counts.overdue > 0 },
     ready: { value: n('ready'), sub: counts.ready ? 'close or send on' : 'none yet', warn: counts.ready > 0 },

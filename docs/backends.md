@@ -89,5 +89,50 @@ Hardi, which is what the user saw on 2026-10-29.
 **Migration `0021_b2b_admin_and_ec_visit`** (in b2b-backend PR #13 with 0020,
 branch `b2b-crm-extra-and-team`, pushed 2026-10-29) adds `b2b_team_member.is_admin` and the `b2b_ec_visit` table with
 `GET/PUT /b2b/ec-visits`. The CRM reads both gracefully without it: a missing
-`is_admin` reads as false. **Neither 0020 nor 0021 has ever run against
-Postgres.** There was none on this machine to try them on.
+`is_admin` reads as false. 0020 and 0021 are live since 2026-10-29.
+
+**Migration `0023_b2b_teams_and_ec_redirect`** (b2b-backend branch
+`b2b-team-ownership-checkin` (merge #15 then #16; #14 goes inside #16, see `CLAUDE.md` §Git), based on PR #15's `studio-staff-handoff` because
+it chains after 0022):
+- It moves `b2b_team_member`'s key to `(phone, team)`, so one person can be on
+  several teams.
+- It adds the redirect columns to `b2b_ec_visit` (`b2b/ec-directed.md`).
+- The same branch adds `POST /b2b/check-in-photo`. It uploads through
+  `_r2_upload_sync`, so it needs `MD_SNAPSHOT_API_KEY` on the deployment, which
+  the content sync already uses.
+
+0001→0023 and a 0023 downgrade/upgrade round trip were run on 2026-10-30 against
+a throwaway embedded Postgres (the `ss-bill-rig` binaries). The new routes were
+exercised over HTTP there. Without 0023:
+- the Team tab cannot put one person on a second team: the upsert conflicts on
+  `phone`;
+- EC Directed reads Unknown;
+- check-in uploads fail, so a held meeting cannot be saved.
+
+## Owed by Django (2026-10-30)
+
+Collected from every module doc on 2026-10-30. None of it is checked against
+Django's code: the repo (`MaterialDepotDjangoBackend`) is not on this machine,
+and who changes it is still open. Each row names the doc with the detail.
+
+| # | Change | Wrong or missing until then | Detail |
+|---|---|---|---|
+| 1 | `b2b-bulk` `histories[phone].lastOrderDate` = `max(estimate.order_placed_time)` over placed, non-deleted estimates (revenue from the same call disagrees with Metabase too) | Active/Inactive, lens counts and KAM revenue for any firm with an open deal; the CRM shows those as Status unknown | `b2b/client-db.md` §The list |
+| 2 | `b2b-bulk` GST matching: `gsts=` (exact, never `icontains`), `include=tickets`, GST keys in `histories` | Orders billed to a firm's GSTIN from a number not on the firm (253 GSTINs span several accounts); one request per phone on a firm open | `b2b/sales-tab-redesign.md` §Django contract |
+| 3 | `gst=` filter on `/crm/leads/` (covered by 2 if built as specced) | Enquiries cannot be found by GSTIN | `b2b/client-db.md` §GST |
+| 4 | Order detail by enquiry id: qty, rate, PI, payment, delivery (as Procurement shows) | An expanded enquiry shows item names only. Not yet asked of the Django team | `b2b/client-db.md` §One enquiry |
+| 5 | `/crm/leads/` drops `branch` on some requests (likely when `bm=` is also sent) | A B2B-only rep's carts read as a retail branch's leads; the CRM shows an amber notice | `landmines.md` (the Leads-tab BM entry) |
+| 6 | `/crm/available-bms/?branch=` returns anyone linked to the branch, not people homed there | Nothing on screen (the CRM reconciles against the roster); wrong for any other caller | `weekly-funnel/context.md` |
+| 7 | Permission rows for `team_leader`, `asst_store_manager`, `cluster_head`, `area_manager` | Those rungs of the store ladder stay empty | `org-hierarchy/context.md` |
+| 8 | Per-phone orders in bulk with `orderPlacedAt` (`estimate.order_placed_time`) and the booked-at branch (`estimate.branch_id`), e.g. `b2b-bulk?include=orders` with an `echo` | Sales by SPoC exists per firm only, split by Created, with no all-firms roll-up; the Firm page shows Created instead of a placement date; EC-directed revenue is checked per redirect on click and matched on the cart owner's branch | `b2b/ec-directed.md`, `b2b/client-db.md` §One enquiry |
+| 9 | A per-customer footfall read: `contacts=` on `/footfall-record/` returning `{phone, branch, visitedAt}` | EC redirects are marked Visited by hand | `b2b/ec-directed.md` |
+
+Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
+Users), and backfilling `crm.remarks_quality` on existing permission lists.
+Optional: a store code on each branch would retire the hand-kept maps in
+`store-display` and `store-checklist`.
+
+Studio Space sign-in from the CRM needs **no** Django change: the CRM verifies
+its own session against Django and b2b-backend issues the Studio Space one
+(`b2b/studio-space.md` §One login).
+

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from './session';
 import { canUseB2B } from '@/lib/b2b/team/utils';
 
-const ALLOW = new Set(['rows', 'kam-load', 'target']);
+const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access', 'check-in-photo']);
 
 class AccessError extends Error {}
 
@@ -34,6 +34,12 @@ export async function b2bBackendFetch<T>(path: string, init?: { method?: string;
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new B2BBackendError(res.status, errorDetail(body) ?? `B2B backend answered ${res.status}`);
   return body as T;
+}
+
+export function studioHandoffUrl(code: string): string {
+  const target = endpoint();
+  if (target instanceof Response) throw new B2BBackendError(503, 'B2B_BACKEND_URL or B2B_BACKEND_SECRET is not set on this deployment');
+  return `${target.base}/auth/handoff?code=${encodeURIComponent(code)}`;
 }
 
 function errorDetail(body: unknown): string | undefined {

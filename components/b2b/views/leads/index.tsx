@@ -1,14 +1,19 @@
 'use client';
 
+import { useB2BReps } from '../../hooks/use-b2b-reps';
 import { KAMS, fmtINR } from '../../models/mock-data';
+import { EC_B2B_REFERRAL } from '../../models/outreach';
+import { AssignBar } from '../../ui/assign-bar';
 import { Empty, LeadName, Spinner, inputCls } from '../../ui/inbound-chips';
 import { ExpectedClosureCell, SourceChip, UnifiedStatusCell } from './cells';
-import { PAGE_SIZE } from './constants';
+import { LeadSourceLabel, PAGE_SIZE } from './constants';
 import { DetailDrawer } from './drawer';
+import { useLeadAssign } from './hooks/use-lead-assign';
 import { LeadSource, UnifiedLead, UnifiedStatus, fetchUnifiedLeads } from '@/lib/b2b';
+import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { useEffect, useMemo, useState } from 'react';
 
-export default function LeadsTab() {
+export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [leads, setLeads] = useState<UnifiedLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,10 +21,11 @@ export default function LeadsTab() {
   const [inboundTotal, setInboundTotal] = useState(0);
   const [inboundHasMore, setInboundHasMore] = useState(false);
 
-  const [source, setSource] = useState<'all' | LeadSource>('all');
+  const [source, setSource] = useState<'all' | LeadSourceLabel>('all');
   const [status, setStatus] = useState<'all' | UnifiedStatus>('all');
   const [lostOnly, setLostOnly] = useState(false);
   const [hideLost, setHideLost] = useState(false);
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [kam, setKam] = useState('all');
   const [search, setSearch] = useState('');
   const [createdFrom, setCreatedFrom] = useState('');
@@ -53,10 +59,11 @@ export default function LeadsTab() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return leads.filter((l) => {
-      if (source !== 'all' && l.source !== source) return false;
+      if (source !== 'all' && l.source !== source && l.outreach?.source !== source) return false;
       if (status !== 'all' && l.status !== status) return false;
       if (lostOnly && !l.lost) return false;
       if (hideLost && l.lost) return false;
+      if (unassignedOnly && l.spok) return false;
       if (kam !== 'all' && l.kam !== kam) return false;
       if (q) {
         const hay = [l.companyName, l.contactPerson, l.phone, l.enqId, l.spok, l.kam]
@@ -65,7 +72,7 @@ export default function LeadsTab() {
       }
       return true;
     });
-  }, [leads, source, status, lostOnly, hideLost, kam, search]);
+  }, [leads, source, status, lostOnly, hideLost, unassignedOnly, kam, search]);
 
   useEffect(() => { setPage(0); }, [filtered.length]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -80,15 +87,25 @@ export default function LeadsTab() {
   }), [filtered]);
 
   const clearFilters = () => {
-    setSource('all'); setStatus('all'); setLostOnly(false); setHideLost(false);
+    setSource('all'); setStatus('all'); setLostOnly(false); setHideLost(false); setUnassignedOnly(false);
     setKam('all'); setSearch(''); setCreatedFrom(''); setCreatedTo('');
   };
   const activeFilters = [
-    source !== 'all', status !== 'all', lostOnly, hideLost, kam !== 'all',
+    source !== 'all', status !== 'all', lostOnly, hideLost, unassignedOnly, kam !== 'all',
     !!search.trim(), !!createdFrom, !!createdTo,
   ].filter(Boolean).length;
 
   const selected = leads.find((l) => l.key === selectedKey) || null;
+
+  const { reps, rotationReps } = useB2BReps(team);
+  const assigner = useLeadAssign({
+    leads, members: team.members, reps, rotationReps, by: viewer.member?.name || viewer.name,
+    onSaved: (list) => {
+      const byKey = new Map(list.map((l) => [l.key, l]));
+      setLeads((prev) => prev.map((l) => byKey.get(l.key) ?? l));
+    },
+  });
+  const allOnPage = rows.length > 0 && rows.every((l) => assigner.picked.has(l.key));
 
   return (
     <div className="p-4 sm:p-6">
@@ -136,7 +153,7 @@ export default function LeadsTab() {
             />
           </div>
           {([
-            ['Source', 'Both sources', source, setSource, ['all', 'Inbound', 'Outreach']],
+            ['Source', 'All sources', source, setSource, ['all', 'Inbound', 'Outreach', EC_B2B_REFERRAL]],
             ['Status', 'All statuses', status, setStatus, ['all', 'Closed', 'Yet to Close']],
             ['KAM', 'All KAMs', kam, setKam, ['all', ...kamOptions]],
           ] as const).map(([label, allLabel, val, setter, opts]) => (
@@ -177,6 +194,14 @@ export default function LeadsTab() {
           >
             Hide lost
           </button>
+          <button
+            onClick={() => setUnassignedOnly((v) => !v)}
+            className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border whitespace-nowrap ${
+              unassignedOnly ? 'bg-[#0F766E] text-white border-[#0F766E]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+            }`}
+          >
+            Unassigned
+          </button>
           {activeFilters > 0 && (
             <button onClick={clearFilters} className="px-3 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white text-gray-500 whitespace-nowrap">
               Clear {activeFilters}
@@ -196,10 +221,38 @@ export default function LeadsTab() {
             <span className="text-[11.5px] text-gray-500">{counts.withEnq} with an Enquiry ID</span>
             <span className="text-[11.5px] text-gray-700 font-mono">{fmtINR(counts.value)} order value</span>
           </div>
+          {viewer.isManager && (
+            <AssignBar
+              count={assigner.picked.size}
+              noun="lead"
+              teams={assigner.teams}
+              busy={assigner.busy}
+              rule="Bulk assignment takes only open leads with no owner on the chosen team, and round robin gives each to whichever of these people holds the fewest. To move a lead that has an owner, select it on its own. Outreach BMs must accept or reject."
+              total={filtered.length}
+              onPickAll={() => assigner.pickAll(filtered.map((l) => l.key))}
+              onAssign={assigner.assign}
+              onClear={assigner.clear}
+            />
+          )}
+          {assigner.note && (
+            <div className="px-4 py-2 text-[12px] text-teal-900 bg-teal-50 border-b border-teal-100 flex items-start justify-between gap-3">
+              <span>{assigner.note}</span>
+              <button onClick={() => assigner.setNote(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
+            </div>
+          )}
+          {assigner.error && (
+            <div className="px-4 py-2 text-[12px] text-red-700 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">
+              <span>{assigner.error}</span>
+              <button onClick={() => assigner.setError(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60">
+                  {viewer.isManager && (
+                    <th className="pl-3 w-6"><input type="checkbox" checked={allOnPage} onChange={() => assigner.togglePage(rows.map((l) => l.key))} aria-label="Select this page" /></th>
+                  )}
                   {['Company Name', 'GST', 'Contact Number', 'Enquiry ID', 'Order Value',
                     'Expected Closure', 'KAM', 'Source', 'Spok', 'Status'].map((h, i) => (
                     <th key={i} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
@@ -209,6 +262,11 @@ export default function LeadsTab() {
               <tbody>
                 {rows.map((l) => (
                   <tr key={l.key} onClick={() => setSelectedKey(l.key)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
+                    {viewer.isManager && (
+                      <td className="pl-3" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={assigner.picked.has(l.key)} onChange={() => assigner.toggle(l.key)} aria-label={`Select ${l.companyName || l.phone || 'lead'}`} />
+                      </td>
+                    )}
                     <td className="px-3 py-2 font-semibold text-gray-900 max-w-[220px] truncate">
                       {l.companyName || <LeadName lead={{ company: l.inbound?.company, phone: l.phone }} />}
                     </td>
@@ -220,7 +278,7 @@ export default function LeadsTab() {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap"><ExpectedClosureCell lead={l} /></td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.kam || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-3 py-2"><SourceChip s={l.source} /></td>
+                    <td className="px-3 py-2"><SourceChip lead={l} /></td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.spok || <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2"><UnifiedStatusCell lead={l} /></td>
                   </tr>

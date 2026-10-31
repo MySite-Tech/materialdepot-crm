@@ -7,6 +7,15 @@ export function sortedInteractions(list: ClientInteraction[] | undefined): Clien
     || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
+export function withInteraction(list: ClientInteraction[] | undefined, i: ClientInteraction): ClientInteraction[] {
+  const all = list || [];
+  return all.some((x) => x.id === i.id) ? all.map((x) => (x.id === i.id ? i : x)) : [...all, i];
+}
+
+export function openCheckIn(list: ClientInteraction[] | undefined): ClientInteraction | undefined {
+  return sortedInteractions(list).find((i) => i.type === 'Meeting' && i.checkIn && !String(i.summary || '').trim());
+}
+
 export function latestInteraction(list: ClientInteraction[] | undefined): ClientInteraction | undefined {
   return sortedInteractions(list)[0];
 }
@@ -37,7 +46,8 @@ export function currentUpcomingProject(list: ClientInteraction[] | undefined): {
 }
 
 export function nextFollowUp(list: ClientInteraction[] | undefined): { date: string; from: ClientInteraction } | undefined {
-  const latest = latestInteraction(list);
+  const open = openCheckIn(list);
+  const latest = latestInteraction((list || []).filter((i) => i !== open));
   const date = String(latest?.nextFollowUpDate || '').slice(0, 10);
   return latest && date ? { date, from: latest } : undefined;
 }

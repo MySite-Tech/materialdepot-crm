@@ -1,7 +1,7 @@
 import { sameRep } from '../outreach/handover';
 import { Period, isWholeMonth } from '../outreach/kpis';
-import { PerfCard, PerfKpiDef, PerfRow, PerfValue, Person } from './types';
-import type { TeamMember } from '@/lib/b2b/team/types';
+import { Goals, PerfCard, PerfData, PerfKpiDef, PerfRow, PerfValue, Person } from './types';
+import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
 import { normalisePhone } from '@/lib/org/utils';
 
 const DAY_MS = 86_400_000;
@@ -18,15 +18,24 @@ export function elapsedDays(p: Period, today: string): string[] {
   return out;
 }
 
-export function targetFor(def: PerfKpiDef, heads: number, period: Period, today: string): number | null {
+export const goalKey = (team: B2BTeam, person: Person): string => `${team}|${person.key}`;
+
+export function goalFor(def: PerfKpiDef, team: B2BTeam, person: Person, goals: Goals): number | null {
   if (def.target === null) return null;
-  if (def.unit === '%') return def.target;
-  const n = Math.max(1, heads);
+  const set = goals[goalKey(team, person)]?.[def.key];
+  return typeof set === 'number' && Number.isFinite(set) ? set : def.target;
+}
+
+export function targetFor(def: PerfKpiDef, team: B2BTeam, people: Person[], goals: Goals, period: Period, today: string): number | null {
+  if (def.target === null) return null;
+  const each = people.length ? people.map((p) => goalFor(def, team, p, goals) as number) : [def.target];
+  const total = each.reduce((a, b) => a + b, 0);
+  if (def.unit === '%') return Math.round(total / each.length);
   if (def.per === 'day') {
     const days = elapsedDays(period, today).length;
-    return days ? def.target * n * days : null;
+    return days ? total * days : null;
   }
-  return isWholeMonth(period) ? def.target * n : null;
+  return isWholeMonth(period) ? Math.round(total * 100) / 100 : null;
 }
 
 export function paceFor(def: PerfKpiDef, period: Period, today: string): number | null {
@@ -87,4 +96,18 @@ export function withDataPeople(people: Person[], names: (string | undefined)[], 
     out.push({ key: personKey(name), name, onTeam });
   }
   return out;
+}
+
+export function teamMemberByPhone(data: PerfData, team: B2BTeam, phone: string | undefined): TeamMember | undefined {
+  const p = phone ? normalisePhone(phone) : '';
+  if (!p) return undefined;
+  return (data.members || []).find((m) => m.team === team && m.active && normalisePhone(m.phone) === p);
+}
+
+export const isPersonByPhone = (people: Person[], phone: string): boolean =>
+  people.some((p) => !!p.phone && normalisePhone(p.phone) === normalisePhone(phone));
+
+export function onTeamList(data: PerfData, team: B2BTeam, name: string | undefined): boolean {
+  const list = (data.members || []).filter((m) => m.team === team && m.active);
+  return !list.length || list.some((m) => sameRep(name, m.name));
 }

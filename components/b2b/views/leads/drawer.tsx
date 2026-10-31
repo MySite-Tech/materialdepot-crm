@@ -83,7 +83,7 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                 {lead.phone && <span className="text-[12px] font-mono text-gray-500">{lead.phone}</span>}
                 <span className="text-gray-300">·</span>
-                <SourceChip s={lead.source} />
+                <SourceChip lead={lead} />
                 <UnifiedStatusCell lead={lead} />
                 {inbound && <StatusBadge s={inbound.stage} />}
                 {outreach && <OutreachStatusBadge s={outreach.status} />}

@@ -2,7 +2,7 @@
 
 ## Leadership Board / My performance (rebuilt 2026-10-28)
 
-**Covers:** `components/b2b/views/leadership/**` · `components/b2b/models/performance/**`
+**Covers:** `components/b2b/views/leadership/**` · `components/b2b/models/performance/**` · `lib/b2b/stats/targets.ts`
 
 ## Data
 
@@ -12,11 +12,13 @@
 | `fetchB2BInboundLeads(…, size=1)`, once per linked inbound person, **one at a time** | Kylas `POST /search/lead` (two inbound stages, `createdAt` in the period) | Inbound team only, per period. Capped at `KYLAS_COUNT_CAP` (6). Successful counts are cached per person and period |
 | `fetchStudioWaitlist` | `GET /api/b2b/waitlist` | Outreach team only, once |
 | `fetchB2BBulk` via `useClientAggregates` | Django `/crm/leads/b2b-bulk/` | KAM team only, once |
+| `fetchTargets` | backend `GET /target` (one `b2b_target` row), shared through the B2B cache | On open |
+| `saveTargets` | backend `POST /target` | Set targets, a manager pressing Save targets |
 
 Opening the Inbound board as a manager on 2026-10-28 took 6 Kylas counts plus
 one automatic 429 retry and the waitlist call. The Supabase read was a cache hit
 from the Dashboard; a cold open adds 1–2 more. An individual pays 1 Kylas call.
-**Nothing on this tab writes.**
+**Only Set targets writes**, the one target row, on Save.
 
 ## What it is
 
@@ -64,8 +66,22 @@ with `counts` and a reason, the same contract as `outreachKpis`.
 
 ### Targets
 
-`targetFor` scales by head count. Every count target is now `per: 'month'`
-and shows only for a whole calendar month, with pace inside the current one.
+The KPI sheet's numbers are the **defaults** in each engine's defs (`target`).
+A manager overrides any of them per person under **Leadership Board → Set targets**. Overrides
+are stored in `b2b_target.reps` (free JSONB, no migration needed) as
+`{ "<team>|<personKey>": { "<kpiKey>": n } }`. `personKey` is the 10-digit
+phone, or `name:<lowercased>` for someone with no phone. A value equal to the
+sheet default is not stored, so an untouched person follows the sheet when it
+changes. The old `{ "<rep name>": { revenueTargetL, … } }` entries are dropped
+on read. They belonged to the hardcoded roster and went away on the first save.
+
+`targetFor(def, team, people, goals, …)` is the one function every tile, table
+cell and the editor's team total reads. For counts and lakhs it **sums each person's goal**
+(override or sheet), so a team total follows the overrides. For % it averages
+them. Every count target is `per: 'month'` and shows only for a whole calendar
+month, with pace inside the current one. The compare-table header reads "set per
+person" once anyone on the team has an override for that KPI, instead of "/ n
+each".
 **Calls are monthly since 2026-10-29, at the user's instruction:** Inbound
 1,500 a month per head, KAM 500 a month per head, KAM meetings 35 (the earlier
 90 a day and 40 a day are gone). A partial-month or single-day period shows the
@@ -73,9 +89,30 @@ count with no target. `per: 'day'` still exists in `targetFor` but no KPI uses i
 (25 L), Inbound qualified (30) and KAM revenue (50 L) have no frequency in the
 sheet. They are treated as monthly here; that is an assumption to confirm.**
 
-`DAILY_CALL_TARGET` (the KAM tab's and Dashboard's "calls today" bar) is
-derived from the monthly 500 over 26 Mon–Sat working days, rounded up: 20. The
-two can no longer disagree.
+## Set targets (2026-10-30; replaced the Targets tab)
+
+The user's call: targets are set by leadership and the results already live on
+the Performance view, so a separate tab showing results again was noise. The
+Targets tab (`views/targets/`, built 2026-10-29) is deleted and its nav entry
+gone. Managers get a **Performance | Set targets** toggle on this board;
+reps never see it.
+
+- **One table per team**: a row per active member of that team on the Team tab,
+  a column per KPI that has a sheet target, and a Team row (sum, or average
+  for %). A blank cell shows the sheet default in grey; a set cell is amber.
+  Edits are a draft until **Save targets**, with Discard. One write, not one
+  per keystroke.
+- **The B2B monthly revenue target is the sum of every member's revenue
+  target** across the three teams (`b2bTargetL`, `models/performance`). There
+  is no separate number to set any more. The Overview (ex-Dashboard) target
+  reads the same function. `monthly_target_l` is still stored but is read only
+  while the team table is missing or failed to load.
+- People with work but not on the team list get no row; add them on Team.
+
+Checked 2026-10-30 in `npm run dev:sandbox` as Meera: Asha calls 1,200 and
+revenue 30 saved as `inbound|9000000001 → {calls: 1200, revenue: 30}`, the B2B
+target read ₹110L (Inbound 55 + Outreach 5 + KAM 50), and the Dashboard read
+"of ₹1.10 Cr target".
 
 ## Who the people are
 
@@ -86,15 +123,34 @@ migration 0020 deploys) the list comes from the data: Inbound uses the
 legacy `B2B_INBOUND_OWNER_LIST` plus lead owners, Outreach uses `bm`, and KAM
 uses firm and order `kam`. Placeholder names ("Unassigned") are dropped.
 
-An individual is `viewer.member` when they are on the list. Otherwise they are
+**One person can be on several teams (2026-10-30).** The roster is one row per
+person per team (b2b-backend migration 0023, primary key `(phone, team)`), each
+with its own `in_rotation`. So someone on Inbound and Outreach gets a card for
+each on My performance. `viewer.memberships` holds every active row and
+`membershipIn(viewer, team)` picks one. `viewer.member` is the first, kept for
+the display name. The B2B admin flag is written to every row of that person.
+
+An individual is matched through `viewer.memberships` when they are on the list. Otherwise they are
 matched by phone, or by name, against each team's people (`selfOn`). Someone who
 matches nothing sees a notice, not an empty card.
 
 ## KPI rules that are not obvious from the defs
 
-- **Inbound calls are credited to `CallAttempt.by`, the caller.** Rows before
-  2026-10-28 hold the owner there, and every intake lead is created under Hardi,
-  so on 2026-10-28 all 311 October calls were credited to Hardi.
+- **A call carrying `byPhone` is credited by phone first (2026-10-30).** If that
+  phone is an active Inbound team member, the call counts for whoever has that
+  phone and nobody else. Otherwise the name rule below applies. Names come from
+  two Django sources (the profile's `name` at write time, the roster's
+  `f_name l_name` frozen into the team list), and `sameRep` only tolerates case
+  and a whole-word prefix. So a rep whose two names differ never saw their own
+  calls count. Calls logged before this carry no phone and still go by name.
+- **Inbound calls are credited to `CallAttempt.by`, the caller — unless the
+  caller is not on the Inbound team list, then to the lead's owner**
+  (`onTeamList`, 2026-10-30). Before that, a call a manager logged on Asha's
+  lead counted for the manager, who is on no team, so it counted for nobody:
+  the user logged one as Meera and saw Asha's Calls not move. With no team
+  list (table missing) the caller is always credited. Rows before 2026-10-28
+  hold the owner in `by`, and every intake lead is created under Hardi, so on
+  2026-10-28 all 311 October calls were credited to Hardi.
 - **Inbound coverage** = leads created in the period and *now* owned by the
   person with at least one call ÷ Kylas's count of their leads created in the
   period. The Kylas count is stage-filtered (the two inbound stages), so the
@@ -109,11 +165,25 @@ matches nothing sees a notice, not an empty card.
 - **Inbound qualified** credits `intake.inboundOwner` (the owner at hand-off)
   once Outreach accepted *and* the lead converted or had 2 follow-ups. Rejected
   and waiting rows are listed and not counted.
+- **Revenue goes to the owner at close, unless a manager credits someone else**
+  (2026-10-30, the user's rule). `revenueCredit {name, phone, kylasUserId,
+  reason, by, at}` on the inbound lead, Outreach lead or KAM order is set from
+  `ui/credit-picker.tsx` by a manager or B2B admin only, with a reason. All three
+  engines read it through `creditOf`, matching phone, then Kylas id, then name.
+  The row note says who changed it and why. Work done before a reassignment is
+  never moved: calls, meetings and interactions are credited to whoever logged
+  them. **Test `creditOf(x)`, never the object.** Inbound stores it as an
+  object meta field, which reads back `{}` when cleared.
 - **Revenue (Inbound and KAM) counts only Enq-fetched values**
   (`orderValueSource === 'deal'`). Typed values are listed as "not counted".
 - **KAM meetings and calls are one per firm per day**, credited to
-  `interaction.loggedBy`, falling back to the firm's KAM. Same dedupe as
+  `interaction.loggedBy` when that person is on the KAM team list, otherwise
+  (or when empty) to the firm's KAM. Same rule as Inbound calls, same reason. Same dedupe as
   `callsLoggedOn`.
+  **`loggedBy` is the viewer since 2026-10-30.** Before that the Log an
+  interaction modal wrote the firm's KAM (or `KAMS[0]` when the firm had none),
+  so a call was never credited to whoever actually made it. An `Enquiry`
+  interaction counts toward neither calls nor meetings.
 - **KAM coverage** uses Active (`clientStatus`: an order in the last 30 days,
   as of today) as its denominator, since 2026-10-29. It was a 3-month window
   before. `kpi-definitions.md` requires one meaning of

@@ -1,4 +1,4 @@
-import { ClientEntity, FirmStudioState } from '../../models/client';
+import { ClientEntity, FirmStudioState } from '../../../models/client';
 
 export type StudioLens = 'all' | 'onboarded' | 'none' | 'nopower' | 'unclassified';
 

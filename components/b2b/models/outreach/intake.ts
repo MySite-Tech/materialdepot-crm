@@ -1,6 +1,6 @@
 import { InboundLead, LeadNote, OutreachLead } from '../mock-data';
 import { InboundStatus, sentToOutreach } from '../inbound';
-import { AssignHow, COMPANY_TYPES, CompanyType } from '.';
+import { AssignHow, COMPANY_TYPES, CompanyType, EC_B2B_REFERRAL } from '.';
 import { sameRep } from './handover';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -34,7 +34,7 @@ function referralBrief(l: InboundLead): string {
   const slot = `${r.meetingDate}${r.meetingTime ? ` ${r.meetingTime}` : ''}`;
   return [
     `Decision maker: ${r.decisionMaker}`,
-    `Project: ${r.project}`,
+    r.project ? `Project: ${r.project}` : '',
     `Wants to meet: ${slot}${r.meetingLocation ? ` at ${r.meetingLocation}` : ''}`,
     l.requirement ? `Requirement: ${l.requirement}` : '',
     `From ${r.by} (Inbound): ${r.summary || r.note || ''}`,
@@ -58,10 +58,11 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
     id: intakeLeadId(l.id),
     company: String(l.companyName || l.company || l.contactName || '').trim() || 'Unnamed lead',
     contactPerson: l.primaryContactName || l.contactName || '',
+    designation: l.primaryContactRole || undefined,
     phone: l.primaryContactPhone || l.phone || undefined,
     altPhone: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.phone : undefined,
     altName: l.primaryContactPhone && l.phone && l.primaryContactPhone !== l.phone ? l.contactName || undefined : undefined,
-    contacts: (l.additionalContacts || []).filter((c) => c.name || c.phone).map((c) => ({ name: c.name, role: '', phone: c.phone || undefined })),
+    contacts: (l.additionalContacts || []).filter((c) => c.name || c.phone).map((c) => ({ name: c.name, role: c.role || '', phone: c.phone || undefined })),
     gstNumber: l.gstNumber || undefined,
     segment: l.segment,
     leadType: l.leadType,
@@ -91,6 +92,42 @@ export function leadFromInbound(l: InboundLead, rep: Rep, by: string, at: string
       how,
       acceptedAt: how === 'self' ? at : undefined,
     },
+  };
+}
+
+export interface EcReferralInput {
+  company: string;
+  contactPerson: string;
+  phone: string;
+  companyType: CompanyType;
+  designation?: string;
+  city?: string;
+  requirement?: string;
+  ec: string;
+}
+
+export function leadFromEcReferral(f: EcReferralInput, by: Rep, id: string, at: string): OutreachLead {
+  return {
+    id,
+    company: f.company,
+    contactPerson: f.contactPerson,
+    designation: f.designation,
+    phone: f.phone,
+    companyType: f.companyType,
+    city: f.city,
+    selections: [],
+    requirement: [`Referred by ${by.name} at ${f.ec}`, f.requirement ? `Requirement: ${f.requirement}` : ''].filter(Boolean).join('\n'),
+    bm: '',
+    source: EC_B2B_REFERRAL,
+    ecReferral: { ec: f.ec, by: by.name, byPhone: by.phone || '', at },
+    ecName: f.ec,
+    ecBmName: by.name,
+    createdAt: at,
+    status: 'Yet to Meet',
+    statusChangedAt: at,
+    meetings: [],
+    notes: [],
+    value: 0,
   };
 }
 

@@ -96,6 +96,39 @@ not visible in the code's shape:
 - The list and the order tabs page at 25 rows. The tiles and the strip
   count the full filtered set.
 
+### Four SPoCs on every firm, and sales by SPoC (2026-10-31)
+
+The user: every firm has an EC, Inbound, Outreach and KAM SPoC, none compulsory,
+filled as the firm moves along, so we can see what each SPoC sold and whether
+sales drop after a move. A firm joining at Outreach has no Inbound SPoC, and
+that is not a gap.
+
+- **A slot fills itself where a link exists, and a manager can log one.**
+  `firmSpocs` reads Inbound and Outreach from the leads on the firm's numbers,
+  KAM from `client.kam`, EC from the BM on the last order. An entry in
+  `spoc_log` beats the derived value. The KAM slot has no log of its own:
+  `assignments` already is one, so it changes under Account.
+- **Most firms will show empty slots, and that is correct.** Measured on real
+  rows 2026-10-31: of 69 firms, 60 had a KAM, 8 linked to an Outreach lead, 2 to
+  an Inbound lead and none to both, because 62 are `Existing` accounts loaded in
+  rather than walked through the journey. A blank slot says no lead was found on
+  these numbers, never that the firm skipped the team, which we cannot know.
+- **`spoc_log` needs no migration.** It is an unmapped meta key, so the backend
+  keeps it in `b2b_client.extra` (0020). It is append-only with a `from` date,
+  because a replaced SPoC has to stay a stage in the sales table. `from` is typed
+  in, since a mid-journey firm's real start is often in the past.
+- **Sales by SPoC splits orders by who held the firm when the order was created**
+  (`spocSales`). Every order lands in exactly one row, including "Before the
+  first SPoC on record" for firms loaded with a history. Per month is what shows
+  a drop after a move. EC BMs are a separate line and never added, the same rule
+  as assisted revenue.
+- **The date is Created, not placement**, because `order_placed_time` is owed by
+  Django (`backends.md` §Owed by Django #8).
+- **The table is per firm, on purpose.** It reads the ticket list the Firm page
+  already loaded, so it costs no extra order request. Across all firms it would be
+  one request per phone, which the request budget forbids. That roll-up waits on
+  #8. Opening the drawer adds no request when the all-rows read is cached.
+
 ### EC visits from the Firm page (2026-10-29)
 
 Firms also order through the Experience Centres, not only through the B2B
@@ -133,6 +166,28 @@ them. The remarks shown are the ones on the ticket. `/crm/lead-remarks/` is
 not called, because `fetchLeadRemarks` swallows failures into `[]` and would
 turn an outage into "no remarks".
 
+**Round robin only shares out firms with no KAM (2026-10-30).** The user:
+after one round robin, the next one should take the new, unassigned firms, not
+the database again. `useFirmAssign` drops every selected firm that has a KAM
+before planning, and says how many stayed put.
+
+**An owned firm moves one at a time (2026-10-31).** The user: a firm with an owner
+never takes part in bulk assignment. One person takes an owned firm only when it
+is the single selected row. In a larger selection owned firms are skipped, whether
+the choice is One person or Round robin. This replaces the 2026-10-30 line that
+let picking a name move every selected firm.
+
+**The Orders sub-tab has no "Placed on" column (2026-10-30).** It showed the
+ticket's `closureDate`, which is the deal's hand-set expected closure, so
+orders read "placed on 14 Nov 2026" on 30 Oct. Every tab now shows Created and
+sorts by it, and the expanded row labels the closure date as hand-set. A real
+placement date needs Django to add `estimate.order_placed_time` to each
+`/crm/leads/` row. **Branch · SPOC is the cart owner, not where it was
+booked.** `branch` is the owner's store and `spoc` is `assignedTo`, both
+passed through untouched. The doubled surname ("Tanmay Jagtap Jagtap") comes
+from Django's name join, not from the CRM. The booked-at branch is on the
+estimate, which `/crm/leads/` also does not return.
+
 - **`cartItems` arrives as a string or as `CartItem[]`** (the Sales CRM's leads
   table handles both). `String()` on the array gave "[object Object]", so
   `cartLines` reads either shape. A string is split on newlines only. A comma
@@ -154,27 +209,50 @@ and names the ask: a `gst=` filter on `/crm/leads/`. Do not join GST to
 enquiries by firm name or by PAN on the frontend. That is the name-merge
 mistake §Parent companies rules out.
 
-### Each number: classification and Studio Space access (2026-10-29)
+### Each number: classification, and Studio Space access read from Studio Space (2026-10-29)
 
 Every contact on a firm carries a **classification** in its existing `label`
 field (`CONTACT_CLASSES`: Owner, Partner, Designer, Purchase, Accounts, Site).
-It is a select now. A free-text label from before is kept as an extra option,
-not wiped. It also carries **`studioAccess`**: unset means not onboarded,
-`power` means the whole Studio Space dashboard, and `non-power` means Orders
-and Rewards only. `studioOnboardedAt` is stamped the first time it is set.
-The user's call was **per phone, not per firm**. The older per-firm "Power user
-/ Normal user" tier in `sales-tab-redesign.md` is superseded.
+It is a select. A free-text label from before is kept as an extra option, not
+wiped.
 
-Both persist with no migration. `contacts` is its own jsonb column on
-`b2b_client` in the deployed b2b-backend (`master`), and the mapper passes
-unknown contact keys through. This was verified on the sandbox: the change
-reached `.sandbox/state.json` through the normal `onSave`.
+**Studio Space access is read, never assigned.** The first cut of this stored
+`studioAccess` on each contact and let a KAM pick it. That was replaced the same
+day, at the user's call: the CRM fetches it. `fetchStudioLogins()`
+(`lib/b2b/studio-logins`, one call, cached 60 s so the Firm page, this list and
+the Studio Space tab share it) reads `GET /b2b/studio-access` on b2b-backend
+through the relay (`studio-access` is in `ALLOW`), which answers every Studio
+Space login that has a mobile. The CRM matches its own contact numbers against
+that map by the last ten digits.
 
-**It is a record, not a grant.** Studio Space's own access lives in
-`partner_user.visible_tabs` in b2b-backend, where `NULL` means unrestricted.
-Nothing writes that from here, and nothing reads it back. Making the marking
-real needs a `/sync` endpoint keyed by phone. It is not built. The Studio Space
-tab reads these fields; see `studio-space.md`.
+- **Power user** = the login's `partner_user.visible_tabs` is `NULL`, the whole
+  dashboard. **Normal user** = any restriction, which is how firms that use
+  Studio Space only for order tracking are given a login. The tooltip lists the
+  tabs left on. Do not read "Normal" as "Orders and Rewards only": the backend's
+  optional tabs are clients, projects, portfolio, inspiration, launches, rewards
+  and leads, and an owner can leave any of them on.
+- **A login's mobile has two homes** (`app/people.py` `login_phone`): the
+  studio's own `referral` row joined by `team_user_id` (source `self` or `team`),
+  else `partner_user.phone`. The endpoint reads both. A mobile that appears in
+  neither is "Not onboarded". If both name the same mobile and any is Power, it
+  is Power.
+- **Shown in two places.** The contact card has a read-only badge per number,
+  and the Client Database list has a **Studio Space** column, the firm's best
+  access across its numbers (Power, else Normal, else Not onboarded).
+- **A failed read says Unknown**, never "Not onboarded". The badge, the column
+  and the Studio Space tab all do. Not onboarded would be a confident claim
+  about every firm at once.
+- **Nothing is written.** `studioAccess` and `studioOnboardedAt` are gone from
+  `ClientContact`. Contacts saved earlier still carry them in the `contacts`
+  jsonb. They are ignored and harmless, and the mapper passes them through on
+  the next save.
+
+Needs b2b-backend branch `b2b-studio-access` (one read route in `b2b_crm.py`, no
+migration). Until it is deployed the route 404s and every surface above reads
+Unknown. It was only syntax-checked: no FastAPI or database was available when
+it was written, so run it against newdb before merging. The sandbox stub
+(`scripts/sandbox/routes/b2b-backend.mjs`) answers it with up to four logins
+taken from the seeded clients.
 
 ### The list: tiles are lenses, filters narrow them (2026-10-28)
 
@@ -246,7 +324,11 @@ scroll at 390px and no page errors.
 ### Assigning firms to KAMs (managers only, 2026-10-29)
 
 Managers get a checkbox column and an assign bar (`ui/assign-bar.tsx`, shared
-with Outreach's pool). Picking a KAM or Round robin writes a pending handover
+with Outreach's pool and the Leads tab). The bar picks the team first; only KAM is enabled here, because a firm's owner is
+its `kam` field and sign-off is on the KAM tab. One person lists every active KAM.
+Round robin starts from the in-rotation KAMs, and the manager ticks the set for
+that assignment (2026-10-31). Select all takes the whole lens, not just the
+page. Either choice writes a pending handover
 that the KAM signs off on the KAM tab. The rules (where the state is stored,
 why it is book size and not `/kam-load`, what rejection does) are in `kam.md`
 §Admin assigns firms. The checkbox column renders only when `picked` is passed,

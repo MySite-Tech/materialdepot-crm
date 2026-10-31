@@ -1,9 +1,10 @@
 'use client';
 
-import { ContactsEditor, RoleOptions } from '../../drawers/outreach/cards/client';
+import { ContactsEditor } from '../../drawers/outreach/cards/client';
+import { RoleOptions } from '../../ui/outreach-chips';
 import { OutreachLead } from '../../models/mock-data';
 import {
-  COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_LOST_REASONS, OUTREACH_SOURCES, OUTREACH_SOURCE_HINT,
+  COMPANY_TYPES, CompanyType, LEAD_TYPES, LeadType, OUTREACH_ENTRY_SOURCES, OUTREACH_LOST_REASONS, OUTREACH_SOURCE_HINT,
   OUTREACH_STATUS_HINT, OUTREACH_STATUS_LABEL, OutreachContact, OutreachMeeting, OutreachSource, OutreachStatus, SEGMENTS,
   SELECTIONS, Segment, Selection, TEAM_SIZES, TeamSize, istToday, outreachGateErrors,
 } from '../../models/outreach';
@@ -23,7 +24,6 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
   onDone: (patch: Partial<OutreachLead>) => void;
 }) {
   const [followUpDate, setFollowUpDate] = useState(lead.followUpDate || '');
-  const [followUpTime, setFollowUpTime] = useState(lead.followUpTime || '');
   const [enqId, setEnqId] = useState(lead.enqId || '');
   const [lostReason, setLostReason] = useState(lead.lostReason || '');
   const [touched, setTouched] = useState(false);
@@ -38,7 +38,6 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
     onDone({
       status: target,
       followUpDate: needsFollowUp ? followUpDate : lead.followUpDate,
-      followUpTime: needsFollowUp ? followUpTime : lead.followUpTime,
       enqId: wantsEnq ? enqId.trim() || undefined : lead.enqId,
       lostReason: needsReason ? lostReason : lead.lostReason,
     });
@@ -65,9 +64,6 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
               <Field label="Next follow-up date" required error={touched ? errors.find((e) => e.includes('follow-up')) : undefined}>
                 <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)}
                   className={touched && !followUpDate ? errorInputCls : inputCls} />
-              </Field>
-              <Field label="Time" hint="Optional">
-                <input type="time" value={followUpTime} onChange={(e) => setFollowUpTime(e.target.value)} className={inputCls} />
               </Field>
             </div>
           )}
@@ -304,7 +300,7 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
             )}
             <Field label="Source" hint={OUTREACH_SOURCE_HINT[source]}>
               <select value={source} onChange={(e) => setSource(e.target.value as OutreachSource)} className={inputCls}>
-                {OUTREACH_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {OUTREACH_ENTRY_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
             <Field label="BM (owner)" hint={assigner ? (toPool ? 'Goes to the unassigned pool under Assignments' : assignedByAdmin ? 'They must accept it before it counts as theirs' : undefined) : undefined}>

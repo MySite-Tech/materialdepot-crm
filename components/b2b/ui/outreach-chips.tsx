@@ -2,9 +2,9 @@
 
 import { Pill } from './inbound-chips';
 import {
-  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, LEAD_TYPE_COLORS, meetingLocation,
+  OUTREACH_STATUS_COLORS, OUTREACH_STATUS_LABEL, MEETING_STATUS_COLORS, CONTACT_ROLES, LEAD_TYPE_COLORS, STUDIO_WAITLIST_URL, meetingLocation,
   type OutreachStatus, type MeetingStatus, type OutreachMeeting,
-  type LeadType,
+  type LeadType, type WaitlistSignup,
 } from '../models/outreach';
 
 export function OutreachStatusBadge({ s }: { s: OutreachStatus }) {
@@ -65,3 +65,17 @@ export function MeetingDots({ meetings }: { meetings?: OutreachMeeting[] }) {
     </span>
   );
 }
+
+export function WaitlistChip({ w, error, short }: { w: WaitlistSignup | null | undefined; error?: string | null; short?: boolean }) {
+  if (w === undefined) return <span title={error || 'Studio Space waitlist did not load'}><Pill color="#9CA3AF">{short ? 'Unknown' : 'Waitlist unknown'}</Pill></span>;
+  if (w) return <span title={`Joined ${w.createdAt.slice(0, 10)} as ${w.firmName} · Studio Space status ${w.status}`}><Pill color="#8B5CF6">{short ? 'Joined' : 'On Studio Space waitlist'}</Pill></span>;
+  return (
+    <a href={STUDIO_WAITLIST_URL} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="No waitlist sign-up on this mobile. Share this link with them.">
+      <Pill color="#F59E0B">{short ? 'Not yet' : 'Not on waitlist'}</Pill>
+    </a>
+  );
+}
+
+export const RoleOptions = ({ id }: { id: string }) => (
+  <datalist id={id}>{CONTACT_ROLES.map((r) => <option key={r} value={r} />)}</datalist>
+);

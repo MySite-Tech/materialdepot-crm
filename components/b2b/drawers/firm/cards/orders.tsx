@@ -103,7 +103,7 @@ export function OrdersCard({ details, loading, failed, numbers, via, onClearVia,
               <thead>
                 <tr className="text-gray-400 text-[9px] uppercase tracking-wider">
                   <th className="text-left font-semibold px-1 py-1.5">Enquiry ID</th>
-                  <th className="text-left font-semibold px-1 py-1.5">{tab === 'placed' ? 'Placed on' : 'Created'}</th>
+                  <th className="text-left font-semibold px-1 py-1.5">Created</th>
                   <th className="text-right font-semibold px-1 py-1.5">Value</th>
                   <th className="text-left font-semibold px-1 py-1.5 pl-3">Status</th>
                   {showVia && <th className="text-left font-semibold px-1 py-1.5">Via</th>}
@@ -124,9 +124,7 @@ export function OrdersCard({ details, loading, failed, numbers, via, onClearVia,
                   >
                     <td className="px-1 py-1.5"><EnqChip id={r.enqId} /></td>
                     <td className="px-1 py-1.5 text-gray-600 whitespace-nowrap">
-                      {tab === 'placed'
-                        ? (r.orderPlacedDate ? fmtDate(r.orderPlacedDate) : <span className="text-gray-400" title="Ordered, but the ticket carries no closure date">no closure date</span>)
-                        : (fmtDate(r.createdAt) || <span className="text-gray-300">—</span>)}
+                      {fmtDate(r.createdAt) || <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-1 py-1.5 text-right font-mono font-semibold text-gray-800 whitespace-nowrap">{fmtINR(r.orderValue)}</td>
                     <td className="px-1 py-1.5 pl-3">

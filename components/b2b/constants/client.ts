@@ -37,7 +37,13 @@ export const ORDER_SET = new Set<string>(DEAL_ORDER_STATUSES);
 
 export const LOST_SET = new Set<string>(DEAL_LOST_STATUSES);
 
-export const INTERACTION_TYPES = ['Call', 'Meeting'] as const;
+export const INTERACTION_TYPES = ['Call', 'Meeting', 'Enquiry'] as const;
+
+export const INTERACTION_SUMMARY: Record<typeof INTERACTION_TYPES[number], { label: string; placeholder: string }> = {
+  Call:    { label: 'Summary',               placeholder: 'What was discussed' },
+  Meeting: { label: 'Minutes of meeting *',  placeholder: 'Who was there, what was discussed, what was agreed' },
+  Enquiry: { label: 'What they asked for *', placeholder: 'Products, quantities, site, by when' },
+};
 
 export const TEMPERATURE_MIN = 0;
 
@@ -67,8 +73,8 @@ export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, s
 export const STUDIO_SPACE_URL = 'https://studio.materialdepot.com';
 
 export const STUDIO_ACCESS: Record<StudioAccess, { label: string; hint: string }> = {
-  power:       { label: 'Power user',     hint: 'Sees the whole Studio Space dashboard' },
-  'non-power': { label: 'Non-power user', hint: 'Sees only the Orders and Rewards tabs' },
+  power:       { label: 'Power user',  hint: 'Sees the whole Studio Space dashboard' },
+  'non-power': { label: 'Normal user', hint: 'Restricted: Studio Space has switched some tabs off for this login' },
 };
 
 export const CONTACT_CLASSES = ['Owner', 'Partner', 'Designer', 'Purchase', 'Accounts', 'Site'] as const;

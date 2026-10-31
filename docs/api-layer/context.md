@@ -119,11 +119,25 @@ So `relayB2B` is the fourth-path proxy: it runs `requireCaller`, enforces
 `canUseB2B` (the tab's own rule — role set or the `crm.b2b_sales` slug; the
 original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
 then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
-server-only `x-sync-key: B2B_BACKEND_SECRET`, the same server-to-server pattern
-`app/api/b2b/waitlist` uses. Three things it deliberately does:
+server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
+(`app/api/b2b/waitlist`, `ec-visits`) call `b2bBackendFetch` with the
+same credential instead. Three things the relay deliberately does:
 
-- **Allow-lists the first path segment** (`rows`, `kam-load`, `target`) so the
-  catch-all is a defined surface, not an open proxy to the backend.
+- **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
+  `studio-access`) so the catch-all is a defined surface, not an open proxy to
+  the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
+  Studio Space login's mobile and tab restriction, for the Firm page badge
+  (`docs/b2b/client-db.md`). `check-in-photo` (2026-10-30) is POST-only and
+  takes one inline image for a meeting check-in (`docs/b2b/kam.md` §A meeting
+  starts with a check-in). It is allow-listed rather than given a handler
+  because the B2B role gate is all it needs: the photo carries no caller
+  identity. Other `/b2b` routes such as `team` and `ec-visits`
+  have their own handlers rather than being allow-listed here.
+- **`studio-handoff` is a handler of its own, never allow-listed** (2026-10-30).
+  It mints a Studio Space session, so the phone must come from `requireCaller`
+  and nothing the browser sends. `studioHandoffUrl` builds the link on
+  `B2B_BACKEND_URL`, which must therefore be the public API host whose cookies
+  Studio Space reads (`docs/b2b/studio-space.md` §One login).
 - **503s when either env var is unset**, rather than defaulting to a reachable
   base — the same fail-closed rule the service-role routes follow.
 - **Never answers with the backend's raw body on failure**: a non-2xx becomes a
@@ -162,6 +176,15 @@ help it. It would have to authorise on a shared secret in the `Authorization`
 header and **refuse when that secret is unset**, rather than defaulting to open —
 doubly so for anything holding the service-role key.
 
+**`/api/b2b/ec-referral` (2026-10-31) is a B2B route that non-B2B users may call.**
+It holds `B2B_BACKEND_SECRET` and answers store staff, so it does not use
+`relayB2B`, whose `canUseB2B` gate would refuse them and whose passthrough would
+hand them every row. It runs `canReferToB2B` and writes only a lead it built from
+whitelisted fields. `reassign-many` on `/api/b2b/inbound/assign` is capped at
+`INBOUND_ROTATION_BATCH` because each lead is a Kylas read and write, and it
+reports `moved` and `failed` separately rather than failing the whole batch.
+See `docs/b2b/ec-referral.md` and `docs/b2b/leads.md`.
+
 This is why the B2B inbound round robin (`/api/b2b/inbound/assign`, 2026-10-28)
 runs **when someone opens Inbound Leads**, not on a timer. A lead that arrives
 overnight is assigned by the first rep to open the tab. It is idempotent, so
@@ -186,6 +209,12 @@ Two things it does that `kylasFetch` callers do not:
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.
+- **A `crm-…` lead id never reaches Kylas (2026-10-30).** Inbound leads
+  added in the CRM have no Kylas record, so `reassignInboundLead` skips
+  `readLead` and `setLeadOwner` for them and only logs the assignment. The
+  caller saves the new owner onto the backend row (`docs/b2b/inbound.md`
+  §Leads added in the CRM). Any id that is neither all digits nor `crm-…` is
+  still refused.
 
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 

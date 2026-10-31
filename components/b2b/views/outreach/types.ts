@@ -9,6 +9,7 @@ export interface OutreachScope {
   isManager: boolean;
   isKam: boolean;
   reps: Rep[];
+  rotationReps: Rep[];
   kams: Rep[];
   notice: string | null;
   owns: (l: OutreachLead) => boolean;

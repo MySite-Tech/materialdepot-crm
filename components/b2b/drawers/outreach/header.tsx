@@ -4,19 +4,9 @@ import { OutreachLead } from '../../models/mock-data';
 import { OUTREACH_ENRICHMENT_FIELD_COUNT } from '../../models/outreach';
 import { EnrichmentGap } from '../../models/outreach';
 import { FollowUpChip, Pill } from '../../ui/inbound-chips';
-import { STUDIO_WAITLIST_URL, WaitlistSignup } from '../../models/outreach';
+import { WaitlistSignup } from '../../models/outreach';
 import { HANDOVER_STATE_COLOR, HANDOVER_STATE_LABEL, handoverState } from '../../models/outreach/handover';
-import { OutreachLeadTypeChip, OutreachStatusBadge } from '../../ui/outreach-chips';
-
-function WaitlistChip({ w, error }: { w: WaitlistSignup | null | undefined; error: string | null }) {
-  if (w === undefined) return <span title={error || undefined}><Pill color="#9CA3AF">Waitlist unknown</Pill></span>;
-  if (w) return <span title={`Joined ${w.createdAt.slice(0, 10)} as ${w.firmName} · Studio Space status ${w.status}`}><Pill color="#8B5CF6">On Studio Space waitlist</Pill></span>;
-  return (
-    <a href={STUDIO_WAITLIST_URL} target="_blank" rel="noreferrer" title="No waitlist sign-up on this mobile. Share this link with them.">
-      <Pill color="#F59E0B">Not on waitlist</Pill>
-    </a>
-  );
-}
+import { OutreachLeadTypeChip, OutreachStatusBadge, WaitlistChip } from '../../ui/outreach-chips';
 
 export function OutreachHeader({ draft, gaps, onClose, today, waitlist, waitlistError, nowMs }: {
   draft: OutreachLead;

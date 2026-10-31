@@ -1,6 +1,7 @@
 import { DEAL_ORDER_STATUSES, INBOUND_CLOSED_STATUSES } from '../../constants/inbound';
 import { CallAttempt, FollowUpBucket, InboundStatus, OutreachReferral } from '../../types/inbound';
 import { istToday } from '../../utils/inbound';
+import { isCrmAddedLead } from './kylas';
 
 export function followUpBucket(date: string | undefined, today = istToday()): FollowUpBucket {
   const d = String(date || '').slice(0, 10);
@@ -77,11 +78,11 @@ interface SpocOutreachRow {
 interface SpocDeal { status: string; assignedTo?: string; branch?: string; createdAt?: string; id: string }
 
 export function clientSpocs(
-  l: { owner?: string; outreachReferral?: Partial<OutreachReferral> },
+  l: { id: string; owner?: string; outreachReferral?: Partial<OutreachReferral> },
   outreach: SpocOutreachRow | null,
   deals: SpocDeal[],
 ): ClientSpocs {
-  const inbound: Spoc = { name: l.owner || undefined, detail: 'Owns the lead in Kylas' };
+  const inbound: Spoc = { name: l.owner || undefined, detail: isCrmAddedLead(l) ? 'Owns the lead (added in the CRM)' : 'Owns the lead in Kylas' };
   let out: Spoc = { detail: l.outreachReferral?.at ? 'Sent — waiting in the Outreach pool' : 'Not sent to Outreach' };
   if (outreach?.bm) {
     out = {

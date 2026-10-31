@@ -2,6 +2,7 @@
 
 import { MainTab } from './types';
 import { CHECKLIST_PERMISSION_SLUG } from '@/lib/store-checklist/constants';
+import { EC_REFERRAL_SLUG } from '@/lib/b2b/ec-referral/constants';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/site-audit/shared';
 
 export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'Electronic City', 'HQ'];
@@ -118,6 +119,7 @@ export const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.remarks_quality', 'remarksQuality'],
   ['crm.store_visit', 'storeVisit'],
   [CHECKLIST_PERMISSION_SLUG, 'storeChecklist'],
+  [EC_REFERRAL_SLUG, 'ecB2bReferral'],
   ['crm.sales', 'sales'],
   ['crm.b2b_sales', 'b2bSales'],
   ['crm.admin', 'admin'],
@@ -141,7 +143,7 @@ export const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
 
 export const TAB_LABELS: Record<MainTab, string> = {
   leads: 'Leads', dashboard: 'Dashboard', footfall: 'Footfall', weeklyFunnel: 'Weekly Funnel',
-  reportCard: 'Report Card', remarksQuality: 'Remarks Quality', storeVisit: 'Store Visit Form', storeChecklist: 'Store Checklist',
+  reportCard: 'Report Card', remarksQuality: 'Remarks Quality', storeVisit: 'Store Visit Form', storeChecklist: 'Store Checklist', ecB2bReferral: 'EC B2B Referral',
   sales: 'Escalation visibility', b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
   appointmentTracker: 'Appointment Tracker', storeDisplay: 'Store Display',
 };

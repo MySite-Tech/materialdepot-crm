@@ -44,9 +44,6 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
                 className={gateFor('followUpDate') ? errorInputCls : inputCls}
               />
             </Field>
-            <Field label="Time" hint="Optional">
-              <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value)} className={inputCls} />
-            </Field>
           </>
         )}
       </div>

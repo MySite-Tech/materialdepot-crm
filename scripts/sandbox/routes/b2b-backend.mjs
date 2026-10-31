@@ -46,35 +46,55 @@ const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in
 function putMember(db, body) {
   const phone = String(body?.phone ?? '').replace(/\D/g, '').slice(-10);
   if (phone.length !== 10) return reply(422, { error: 'phone must be 10 digits' });
-  const i = db.team.findIndex((m) => m.phone === phone);
+  const i = db.team.findIndex((m) => m.phone === phone && m.team === body.team);
   const row = Object.fromEntries(MEMBER_KEYS.map((k) => [k, body[k] ?? null]));
   row.phone = phone;
   row.is_admin = typeof body.is_admin === 'boolean' ? body.is_admin : i >= 0 && db.team[i].is_admin === true;
   row.updated_at = new Date().toISOString();
   if (i >= 0) db.team[i] = row; else db.team.push(row);
+  if (typeof body.is_admin === 'boolean') for (const m of db.team) if (m.phone === phone) m.is_admin = body.is_admin;
   return row;
 }
 
 const EC_VISIT_KEYS = ['id', 'client_id', 'firm', 'contact_name', 'phone', 'branch', 'visit_date', 'visit_time', 'purpose',
-  'status', 'bm_name', 'outcome', 'enq_id', 'scheduled_by', 'updated_by'];
+  'status', 'bm_name', 'outcome', 'enq_id', 'scheduled_by', 'updated_by', 'source_team', 'lead_ref', 'note', 'assisted'];
 
 function putEcVisit(db, body) {
   if (!body?.id || !body?.firm || !body?.branch || !body?.scheduled_by) return reply(400, { error: 'id, firm, branch and scheduled_by are required' });
   db.ecVisits ??= [];
   const i = db.ecVisits.findIndex((v) => v.id === body.id);
   const now = new Date().toISOString();
-  const row = { ...Object.fromEntries(EC_VISIT_KEYS.map((k) => [k, body[k] ?? null])), created_at: i >= 0 ? db.ecVisits[i].created_at : now, updated_at: now };
+  const kind = body.kind || 'visit';
+  if (kind === 'visit' && !body.visit_date) return reply(400, { error: 'visit_date is required on a visit' });
+  const row = {
+    ...Object.fromEntries(EC_VISIT_KEYS.map((k) => [k, body[k] ?? null])),
+    kind, phones: body.phones ?? [], status: body.status || (kind === 'redirect' ? 'Directed' : 'Scheduled'),
+    created_at: i >= 0 ? db.ecVisits[i].created_at : now, updated_at: now,
+  };
   if (i >= 0) { row.scheduled_by = db.ecVisits[i].scheduled_by; db.ecVisits[i] = row; } else db.ecVisits.push(row);
   return row;
+}
+
+const STUDIO_STAFF = { '9000000021': 'Kavya (KAM)', '9000000099': 'Meera (B2B Manager)' };
+
+function studioLogins(db) {
+  const phones = db.rows.filter((r) => r.pipeline === 'client').flatMap((r) => (r.meta_data?.contacts ?? []).map((c) => String(c.number).replace(/\D/g, '').slice(-10)));
+  return {
+    logins: phones.slice(0, 4).map((phone, i) => ({
+      phone, firm_name: 'Sandbox Studio', role: 'principal', visible_tabs: i % 2 ? ['rewards'] : null, power: i % 2 === 0,
+    })),
+  };
 }
 
 function listEcVisits(db, query) {
   const clientId = query.get('client_id');
   const from = query.get('from');
   const to = query.get('to');
+  const kind = query.get('kind');
   const visits = (db.ecVisits ?? [])
-    .filter((v) => (!clientId || v.client_id === clientId) && (!from || v.visit_date >= from) && (!to || v.visit_date <= to))
-    .sort((a, b) => a.visit_date.localeCompare(b.visit_date) || String(a.visit_time ?? '').localeCompare(String(b.visit_time ?? '')));
+    .filter((v) => (!kind || (v.kind || 'visit') === kind) && (!clientId || v.client_id === clientId)
+      && (!from || (v.visit_date && v.visit_date >= from)) && (!to || (v.visit_date && v.visit_date <= to)))
+    .sort((a, b) => String(a.visit_date ?? '').localeCompare(String(b.visit_date ?? '')) || String(a.visit_time ?? '').localeCompare(String(b.visit_time ?? '')));
   return { visits };
 }
 
@@ -97,6 +117,12 @@ function lastRoundRobin(db) {
 
 export function backendRoutes(db) {
   return (req) => {
+    if (req.path === '/auth/handoff') {
+      const phone = db.handoffs?.[req.query.get('code')];
+      if (!phone) return reply(401, { sandbox: 'Studio Space would show its sign-in page: unknown or spent code' });
+      delete db.handoffs[req.query.get('code')];
+      return { sandbox: 'Studio Space would set its session cookies and open /console', signedInAs: STUDIO_STAFF[phone] };
+    }
     if (req.headers['x-sync-key'] !== SYNC_KEY) return reply(403, { error: 'x-sync-key does not match the sandbox key' });
     const path = req.path.replace(/^\/b2b/, '').replace(/\/+$/, '');
     const body = jsonOf(req.raw);
@@ -117,6 +143,14 @@ export function backendRoutes(db) {
       return { deleted: before - db.rows.length };
     }
     if (path === '/kam-load') return kamLoad(db);
+    if (path === '/waitlist') return { signups: db.waitlist ?? [] };
+    if (path === '/studio-access') return studioLogins(db);
+    if (path === '/staff-handoff' && method === 'POST') {
+      if (!STUDIO_STAFF[body?.phone]) return reply(404, { error: 'No active Studio Space team login has this mobile' });
+      const code = `sandbox-${Object.keys(db.handoffs ??= {}).length + 1}-${body.phone}`;
+      db.handoffs[code] = body.phone;
+      return { code, expires_in: 60 };
+    }
     if (path === '/target' && method === 'GET') return db.target;
     if (path === '/target' && method === 'POST') { db.target = { ...body, updated_at: new Date().toISOString() }; return db.target; }
 
@@ -126,6 +160,10 @@ export function backendRoutes(db) {
     if (path === '/team' && method === 'PUT') return putMember(db, body);
     if (path === '/ec-visits' && method === 'GET') return listEcVisits(db, query);
     if (path === '/ec-visits' && method === 'PUT') return putEcVisit(db, body);
+    if (path === '/check-in-photo' && method === 'POST') {
+      if (!/^data:image\//.test(String(body?.image_data ?? ''))) return reply(400, { error: 'image_data must be an image' });
+      return { url: body.image_data };
+    }
     if (path === '/assignments/last-round-robin') return lastRoundRobin(db);
     if (path === '/assignments/lead-ids') {
       const since = query.get('since') || '';

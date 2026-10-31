@@ -48,6 +48,11 @@ export interface RotationOutcome {
   skipped?: string;
 }
 
+export interface ReassignOutcome {
+  moved: { leadId: string; name: string; kylasUserId: number }[];
+  failed: { leadId: string; error: string }[];
+}
+
 export interface B2BUser {
   name: string;
   phone: string;
@@ -61,6 +66,7 @@ export interface Viewer {
   isManager: boolean;
   canManageTeam: boolean;
   member: TeamMember | null;
+  memberships: TeamMember[];
 }
 
 export interface B2BTeamLoad extends TeamState {

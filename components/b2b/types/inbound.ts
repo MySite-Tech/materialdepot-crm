@@ -41,6 +41,7 @@ export interface CallAttempt {
   outcome: CallAttemptOutcome;
   at: string;
   by?: string;
+  byPhone?: string;
   note?: string;
   durationMin?: number;
   followUpDate?: string;
@@ -48,6 +49,7 @@ export interface CallAttempt {
 
 export interface ContactPerson {
   name: string;
+  role?: string;
   phone: string;
 }
 
@@ -83,7 +85,7 @@ export interface OutreachReferral {
   at: string;
   by: string;
   decisionMaker: string;
-  project: string;
+  project?: string;
   meetingDate: string;
   meetingTime?: string;
   meetingLocation?: string;

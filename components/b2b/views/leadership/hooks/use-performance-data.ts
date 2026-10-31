@@ -6,8 +6,8 @@ import { KamOrder } from '../../../models/kam';
 import { InboundLead, OutreachLead } from '../../../models/mock-data';
 import { WaitlistSignup } from '../../../models/outreach';
 import { waitlistIndex } from '../../../models/outreach/kpis';
-import { PerfData, Source } from '../../../models/performance/types';
-import { fetchClients, fetchKamOrders, fetchOutreachLeads } from '@/lib/b2b';
+import { PerfData, Source, TargetStore } from '../../../models/performance/types';
+import { fetchClients, fetchKamOrders, fetchOutreachLeads, fetchTargets } from '@/lib/b2b';
 import { fetchInboundForOutreach, fetchStudioWaitlist } from '@/lib/b2b/outreach';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,6 +25,8 @@ export type LoadState = 'loading' | 'ready';
 export function usePerformanceData(team: B2BTeam | null, today: string) {
   const [base, setBase] = useState<Base | null>(null);
   const [waitlist, setWaitlist] = useState<WaitlistSignup[] | null | undefined>(undefined);
+  const [targets, setTargets] = useState<TargetStore | null>(null);
+  const [targetsOk, setTargetsOk] = useState(true);
   const [historyState, setHistoryState] = useState<'idle' | LoadState>('idle');
   const { load: loadHistories, metricsFor } = useClientAggregates();
 
@@ -48,6 +50,12 @@ export function usePerformanceData(team: B2BTeam | null, today: string) {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    let alive = true;
+    fetchTargets().then((t) => { if (alive) { setTargets(t.store); setTargetsOk(t.ok); } });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
     if (team !== 'outreach' || waitlist !== undefined) return;
     fetchStudioWaitlist().then(setWaitlist).catch(() => setWaitlist(null));
   }, [team, waitlist]);
@@ -69,5 +77,5 @@ export function usePerformanceData(team: B2BTeam | null, today: string) {
     || (team === 'outreach' && waitlist === undefined)
     || (team === 'kam' && historyState !== 'ready');
 
-  return { data, pending, reload: load };
+  return { data, pending, reload: load, targets, targetsOk, setTargets };
 }

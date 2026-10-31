@@ -14,7 +14,6 @@ const { state, fresh } = loadState({ reset: process.argv.includes('--reset') });
 
 function partnerRoutes(db) {
   return ({ method, path, raw }) => {
-    if (path === '/api/sync/waitlist') return { signups: [] };
     if (path !== '/api/sync/content') return [];
     if (method !== 'POST') return db;
     const body = jsonOf(raw) ?? {};

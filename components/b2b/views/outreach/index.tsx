@@ -256,7 +256,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
             accent="#1A1A1A"
             rule={`${kpiDef.rule} ${fmtRange(period)}.`}
             count={kpiCount()}
-            cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep })}
+            cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep, waitlist: waitIdx })}
             rows={rows}
             resetKey={`${lens}|${kpiShow}|${rows.length}|${period.from}`}
             empty={hidden ? 'Filters or search hide every lead here.' : kpiDef.key === 'waitlist' && kpis.waitlist.value === null ? 'Studio Space did not answer, so sign-ups are unknown.' : 'Nothing counts toward this yet in this period.'}
@@ -285,7 +285,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
             accent={LENS[lens as WorkLens].accent}
             rule={LENS[lens as WorkLens].rule}
             count={`${rows.length} lead${rows.length === 1 ? '' : 's'}`}
-            cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep })}
+            cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep, waitlist: waitIdx })}
             rows={rows}
             resetKey={`${lens}|${rows.length}|${f.search}`}
             empty={f.search ? `Nothing matches “${f.search}”.` : lens === 'action' ? 'Nothing due — every lead is up to date.' : lens === 'meetings' ? 'No meetings scheduled for today.' : lens === 'signoff' ? 'No handover is waiting for your sign-off.' : 'No leads here.'}

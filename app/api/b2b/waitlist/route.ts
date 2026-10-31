@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse } from '@/lib/server/session';
+import { B2BBackendError, b2bBackendFetch } from '@/lib/server/b2b-backend';
 import { canUseB2B } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -20,22 +21,16 @@ export async function GET(request: NextRequest) {
     return sessionErrorResponse(err) ?? bad('Not authenticated', 401);
   }
 
-  const base = (process.env.PARTNER_APP_BASE_URL ?? '').replace(/\/+$/, '');
-  const secret = process.env.PARTNER_SYNC_SECRET ?? '';
-  if (!base) return bad('PARTNER_APP_BASE_URL is not set on this deployment', 503);
-  if (!secret) return bad('PARTNER_SYNC_SECRET is not set on this deployment', 503);
-
-  let res: Response;
+  let body: { signups?: unknown };
   try {
-    res = await fetch(`${base}/api/sync/waitlist`, { headers: { 'x-sync-key': secret }, cache: 'no-store' });
-  } catch {
-    return bad('Could not reach Studio Space', 502);
+    body = await b2bBackendFetch<{ signups?: unknown }>('/waitlist');
+  } catch (err) {
+    if (err instanceof B2BBackendError && err.status === 404) {
+      return bad('The B2B backend has no waitlist route yet (GET /b2b/waitlist)', 502);
+    }
+    return bad(err instanceof Error ? err.message : 'Could not reach the B2B backend', 502);
   }
-  const body = (await res.json().catch(() => null)) as { signups?: unknown; error?: unknown } | null;
-  if (res.status === 404) return bad('Studio Space has no waitlist sync route yet (GET /api/sync/waitlist)', 502);
-  if (!res.ok || !Array.isArray(body?.signups)) {
-    return bad(typeof body?.error === 'string' ? body.error : `Studio Space answered ${res.status}`, 502);
-  }
+  if (!Array.isArray(body?.signups)) return bad('The B2B backend answered without a signups list', 502);
 
   const signups = (body.signups as Record<string, unknown>[])
     .map((r) => ({
