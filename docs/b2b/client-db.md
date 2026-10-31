@@ -129,6 +129,22 @@ that is not a gap.
   one request per phone, which the request budget forbids. That roll-up waits on
   #8. Opening the drawer adds no request when the all-rows read is cached.
 
+### Choosing the list's columns (2026-10-31)
+
+The user asked for the Leads tab's column picker here, with a column per SPoC. It is
+the same `MultiSelect`, kept beside the filters because its menu opens rightward: at
+the far right it ran off the page and scrolled the whole screen sideways. The choice
+is per browser, stored as the hidden keys so a column added later shows up by itself.
+
+- **Inbound and Outreach SPoC use `firmLinks` and `firmSpocs`**, the Firm page's own
+  rule, so the list and the page cannot disagree. They run on the visible page only,
+  because each is a scan of every lead. This adds two reads on open.
+- **EC SPoC shows only a logged name here, else "Not logged".** The Firm page's
+  fallback, the BM on the last order, needs ticket rows, and the list would need one
+  request per firm. `/crm/leads/b2b-bulk/` could return that BM (`backends.md`
+  §Owed by Django row 13). Never read `firmSpocs`'s "No order at an EC yet" in the
+  list: it is passed no orders, so that text would be false.
+
 ### EC visits from the Firm page (2026-10-29)
 
 Firms also order through the Experience Centres, not only through the B2B

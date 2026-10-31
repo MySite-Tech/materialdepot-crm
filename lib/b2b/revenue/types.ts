@@ -1,3 +1,5 @@
+import type { CRMLeadRow } from '../../api/crm/leads';
+import type { ClientOrderRow } from '../orders/ticket';
 import type { B2BTeam } from '../team/types';
 
 export type RevenueChannel = 'direct' | 'ec' | 'referred';
@@ -20,16 +22,7 @@ export type NumberBook = Map<string, Holder[]>;
 
 export type RepTeams = Map<string, B2BTeam[]>;
 
-export interface OrderInput {
-  id: string;
-  clientName: string | null;
-  clientPhone: string | null;
-  assignedTo: string;
-  branch: string;
-  status: string;
-  cartValue: number;
-  createdAt: string;
-}
+export type OrderInput = CRMLeadRow;
 
 export interface RevenueOrder {
   id: string;
@@ -38,6 +31,9 @@ export interface RevenueOrder {
   person: string;
   firm: string;
   client: string;
+  phone: string;
+  heldBy: HolderKind | null;
+  ticket: ClientOrderRow;
   placedBy: string;
   store: string;
   bookedOnB2B: boolean;
@@ -56,6 +52,25 @@ export interface RevenueReport {
   redirectsOk: boolean;
   teamOk: boolean;
   generatedAt: string;
+}
+
+export type LedgerBasis = 'order' | 'created';
+
+export interface BranchLedger {
+  orders: RevenueOrder[];
+  truncated: boolean;
+  studioOk: boolean;
+}
+
+export interface BridgeCell {
+  value: number;
+  orders: RevenueOrder[];
+}
+
+export interface BridgeRow {
+  bucket: OrderBucket;
+  branch: BridgeCell;
+  store: BridgeCell;
 }
 
 export interface B2BSourceRow {

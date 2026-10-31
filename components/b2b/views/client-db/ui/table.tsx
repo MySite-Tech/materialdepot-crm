@@ -1,13 +1,14 @@
 'use client';
 
 import { fmtDate, fmtGst, fmtPhone } from '../../../drawers/firm/utils';
-import { ClientEntity, STUDIO_ACCESS, contactLabel, contactNumbers, currentTemperature, firmStudioAccess, gstNumbers, primaryContact } from '../../../models/client';
+import { ClientEntity, FirmSpoc, SpocRole, STUDIO_ACCESS, contactLabel, contactNumbers, currentTemperature, firmStudioAccess, gstNumbers, primaryContact } from '../../../models/client';
 import { useStudioLogins } from '../../../hooks/use-studio-logins';
 import { firmHandover } from '../../../models/kam';
 import { fmtShortINR } from '../../../models/mock-data';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
 import { SORT_FIRST_DIR } from '../constants';
-import { ClientListRow, SortKey, SortState } from '../types';
+import { SpocSources } from '../hooks/use-spoc-sources';
+import { ClientColumn, ClientListRow, SortKey, SortState } from '../types';
 import { sinceLabel } from '../utils';
 
 function More({ n }: { n: number }) {
@@ -78,7 +79,16 @@ function StudioCell({ client, studio }: { client: ClientEntity; studio: ReturnTy
   );
 }
 
-export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked, onPick, onPickPage }: {
+function SpocCell({ role, spocs, source }: { role: SpocRole; spocs?: FirmSpoc[]; source: SpocSources }) {
+  const logged = spocs?.find((s) => s.role === role);
+  if (logged?.name) return <span className="text-gray-700" title={logged.detail}>{logged.name}</span>;
+  if (role === 'ec') return <span className="text-gray-300" title="Nobody is logged. The BM on the last order shows on the Firm page: the list has no order rows, and reading them here would be one request per firm.">Not logged</span>;
+  if (source.loading) return <span className="text-gray-300">…</span>;
+  if (source.failed) return <span className="text-[11px] text-amber-700" title="The Inbound and Outreach leads could not be read">Unknown</span>;
+  return <span className="text-gray-300" title={logged?.detail}>—</span>;
+}
+
+export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked, onPick, onPickPage, visible, spocs, spocSource }: {
   rows: ClientListRow[];
   today: string;
   studio: ReturnType<typeof useStudioLogins>;
@@ -88,25 +98,40 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
   picked?: Set<string>;
   onPick?: (id: string) => void;
   onPickPage?: () => void;
+  visible: Set<ClientColumn>;
+  spocs: Map<string, FirmSpoc[]>;
+  spocSource: SpocSources;
 }) {
+  const show = (c: ClientColumn) => visible.has(c);
+  const TH = 'text-left font-semibold px-3 py-2.5';
+  const TEXT = 'px-3 py-2.5 whitespace-nowrap text-gray-700';
   const allOnPage = !!picked && rows.length > 0 && rows.every((r) => picked.has(r.client.id));
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[12px] min-w-[1100px]">
+      <table className="w-full text-[12px]" style={{ minWidth: 360 + visible.size * 105 }}>
         <thead>
           <tr className="group/th bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider border-b border-gray-200">
             {picked && (
               <th className="pl-4 w-6"><input type="checkbox" checked={allOnPage} onChange={onPickPage} aria-label="Select this page" /></th>
             )}
             <SortTh label="Firm" k="company" sort={sort} onSort={onSort} className="px-4" />
-            <th className="text-left font-semibold px-3 py-2.5">Primary contact</th>
-            <th className="text-left font-semibold px-3 py-2.5">GST</th>
-            <SortTh label="Orders" k="orders" sort={sort} onSort={onSort} align="right" className="px-3" />
-            <SortTh label="Revenue" k="revenue" sort={sort} onSort={onSort} align="right" className="px-3" />
-            <SortTh label="Last order" k="lastOrder" sort={sort} onSort={onSort} className="px-3 pl-5" />
-            <th className="text-left font-semibold px-3 py-2.5">Status</th>
-            <th className="text-left font-semibold px-3 py-2.5">Studio Space</th>
-            <th className="text-left font-semibold px-3 py-2.5">KAM</th>
+            {show('contact') && <th className={TH}>Primary contact</th>}
+            {show('gst') && <th className={TH}>GST</th>}
+            {show('orders') && <SortTh label="Orders" k="orders" sort={sort} onSort={onSort} align="right" className="px-3" />}
+            {show('enquiries') && <th className={`${TH} text-right`}>Enquiries</th>}
+            {show('revenue') && <SortTh label="Revenue" k="revenue" sort={sort} onSort={onSort} align="right" className="px-3" />}
+            {show('avgOrder') && <th className={`${TH} text-right`}>Avg order</th>}
+            {show('openCarts') && <th className={`${TH} text-right`}>Open carts</th>}
+            {show('lastOrder') && <SortTh label="Last order" k="lastOrder" sort={sort} onSort={onSort} className="px-3 pl-5" />}
+            {show('status') && <th className={TH}>Status</th>}
+            {show('studio') && <th className={TH}>Studio Space</th>}
+            {show('kam') && <th className={TH}>KAM SPoC</th>}
+            {show('inboundSpoc') && <th className={TH}>Inbound SPoC</th>}
+            {show('outreachSpoc') && <th className={TH}>Outreach SPoC</th>}
+            {show('ecSpoc') && <th className={TH}>EC SPoC</th>}
+            {show('clientType') && <th className={TH}>Client type</th>}
+            {show('segment') && <th className={TH}>Segment</th>}
+            {show('source') && <th className={TH}>Source</th>}
             <th className="w-6" />
           </tr>
         </thead>
@@ -138,21 +163,24 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
                     {[client.clientType, client.segment && `Segment ${client.segment}`].filter(Boolean).join(' · ') || 'Type and segment not set'}
                   </div>
                 </td>
-                <td className="px-3 py-2.5">
+                {show('contact') && <td className="px-3 py-2.5">
                   <div className="text-gray-700 truncate max-w-[220px]">{contactLabel(primary) || <span className="text-gray-300">No name</span>}</div>
                   <div className="font-mono text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">
                     {primary?.number ? fmtPhone(primary.number) : <span className="text-amber-600 font-sans">no number</span>}
                     <More n={numbers.length - 1} />
                   </div>
-                </td>
-                <td className="px-3 py-2.5 whitespace-nowrap">
+                </td>}
+                {show('gst') && <td className="px-3 py-2.5 whitespace-nowrap">
                   {gsts.length
                     ? <span className="font-mono text-[11px] text-gray-600">{fmtGst(gsts[0])}<More n={gsts.length - 1} /></span>
                     : <span className="text-[11px] text-gray-300">No GST</span>}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono text-gray-700"><Metric value={metrics.orders} state={metrics.dateState} /></td>
-                <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900 whitespace-nowrap"><Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtShortINR} /></td>
-                <td className="px-3 pl-5 py-2.5 whitespace-nowrap">
+                </td>}
+                {show('orders') && <td className="px-3 py-2.5 text-right font-mono text-gray-700"><Metric value={metrics.orders} state={metrics.dateState} /></td>}
+                {show('enquiries') && <td className="px-3 py-2.5 text-right font-mono text-gray-700"><Metric value={metrics.enquiries} state={metrics.dateState} /></td>}
+                {show('revenue') && <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900 whitespace-nowrap"><Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtShortINR} /></td>}
+                {show('avgOrder') && <td className="px-3 py-2.5 text-right font-mono text-gray-700 whitespace-nowrap"><Metric value={metrics.averageOrderValue} state={metrics.dateState} format={fmtShortINR} /></td>}
+                {show('openCarts') && <td className="px-3 py-2.5 text-right font-mono text-gray-700 whitespace-nowrap"><Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} /></td>}
+                {show('lastOrder') && <td className="px-3 pl-5 py-2.5 whitespace-nowrap">
                   {metrics.dateState === 'no-orders'
                     ? <span className="text-gray-400">Never ordered</span>
                     : (
@@ -168,14 +196,20 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
                         )}
                       </>
                     )}
-                </td>
-                <td className="px-3 py-2.5">
+                </td>}
+                {show('status') && <td className="px-3 py-2.5">
                   <StatusPill status={status} days={days} />
-                </td>
-                <td className="px-3 py-2.5 whitespace-nowrap"><StudioCell client={client} studio={studio} /></td>
-                <td className="px-3 py-2.5 whitespace-nowrap">
+                </td>}
+                {show('studio') && <td className="px-3 py-2.5 whitespace-nowrap"><StudioCell client={client} studio={studio} /></td>}
+                {show('kam') && <td className="px-3 py-2.5 whitespace-nowrap">
                   <KamCell client={client} />
-                </td>
+                </td>}
+                {show('inboundSpoc') && <td className={TEXT}><SpocCell role="inbound" spocs={spocs.get(client.id)} source={spocSource} /></td>}
+                {show('outreachSpoc') && <td className={TEXT}><SpocCell role="outreach" spocs={spocs.get(client.id)} source={spocSource} /></td>}
+                {show('ecSpoc') && <td className={TEXT}><SpocCell role="ec" spocs={spocs.get(client.id)} source={spocSource} /></td>}
+                {show('clientType') && <td className={TEXT}>{client.clientType || <span className="text-gray-300">—</span>}</td>}
+                {show('segment') && <td className={TEXT}>{client.segment || <span className="text-gray-300">—</span>}</td>}
+                {show('source') && <td className={TEXT}>{client.source || <span className="text-gray-300">—</span>}</td>}
                 <td className="pr-3 text-gray-300 group-hover:text-[#0F766E] text-[14px]">›</td>
               </tr>
             );

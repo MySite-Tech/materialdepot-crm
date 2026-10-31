@@ -2,11 +2,12 @@
 
 import { fmtL } from '../../../../models/mock-data';
 import { OrderBucket, REVENUE_CHANNELS, RevenueFilter, bucketSplit, channelSplits, countedValue, matchesFilter } from '@/lib/b2b/revenue';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRevenueReport } from '../../hooks/use-revenue-report';
 import { Card, Hint, Notice, Pill, Segmented, Stat } from '../../ui';
 import { monthPace } from '../../utils';
 import { TEAM_OPTIONS } from './constants';
+import { BranchBridge } from './ui/branch-bridge';
 import { Breakdown } from './ui/breakdown';
 import { ChannelCard } from './ui/channel-card';
 import { TargetBar } from './ui/target-bar';
@@ -19,12 +20,22 @@ const NO_FILTER: Omit<RevenueFilter, 'bucket'> = { team: 'all', person: 'all', s
 export function RevenueSection({ target, refreshKey }: { target: number; refreshKey: number }) {
   const months = useMemo(() => monthOptions(new Date()), []);
   const [monthKey, setMonthKey] = useState(months[0].key);
+  const [fellBack, setFellBack] = useState(false);
+  const monthPicked = useRef(false);
   const month = months.find((m) => m.key === monthKey) ?? months[0];
   const { report, error, busy, reload } = useRevenueReport(month.from, month.to, refreshKey);
   const [bucket, setBucket] = useState<OrderBucket | 'all'>('all');
   const [filter, setFilter] = useState(NO_FILTER);
 
   useEffect(() => { setBucket('all'); setFilter(NO_FILTER); }, [monthKey]);
+
+  useEffect(() => {
+    if (monthPicked.current || monthKey !== months[0].key) return;
+    if (report?.from === months[0].from && !report.orders.length) {
+      setMonthKey(months[1].key);
+      setFellBack(true);
+    }
+  }, [report, monthKey, months]);
 
   const orders = useMemo(() => report?.orders ?? [], [report]);
   const isCurrent = monthKey === months[0].key;
@@ -63,7 +74,7 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <select aria-label="Month" value={monthKey} onChange={(e) => setMonthKey(e.target.value)} className={SELECT}>
+          <select aria-label="Month" value={monthKey} onChange={(e) => { monthPicked.current = true; setFellBack(false); setMonthKey(e.target.value); }} className={SELECT}>
             {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
           <Segmented options={TEAM_OPTIONS} value={filter.team} onChange={(team) => set({ team, person: 'all' })} />
@@ -76,15 +87,18 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
             {stores.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <input
-            aria-label="Search firm or person"
+            aria-label="Search firm, person, number or enquiry ID"
             value={filter.search}
             onChange={(e) => set({ search: e.target.value })}
-            placeholder="Search firm or person"
+            placeholder="Firm, person, number, enquiry"
             className="px-2 py-1 text-[11px] border border-gray-200 rounded-lg bg-white w-[160px]"
           />
         </div>
       </div>
 
+      {fellBack && (
+        <p className="text-[11px] text-gray-500 mt-2">{months[0].label} has no orders yet, so this opens on {month.label}.</p>
+      )}
       {error && (
         <div className="mt-4">
           <Notice title="Revenue could not be read.">{error}. Nothing below is a zero. <button onClick={reload} className="underline cursor-pointer">Retry</button></Notice>
@@ -147,6 +161,8 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
             </button>
             <Hint text="Nobody at B2B is on record for these. Assigning a KAM moves a firm's orders into EC-directed. Booked on B2B means the B2B branch, a store rep on the cart, and a number no firm or lead holds." />
           </div>
+
+          <BranchBridge orders={orders} />
 
           <Breakdown orders={shown} />
         </>

@@ -1,27 +1,32 @@
 'use client';
 
 import { fmtL } from '../../../models/mock-data';
+import { dealIsOpen, dealIsOrder } from '../../../models/client';
 import { BASIS_HINT, BASIS_LABELS, RANGE_LABELS } from '../constants';
 import { RangeKey } from '../types';
 import { Card, SectionHead, Segmented, StackBar } from '../ui';
+import { BranchOrders, BranchTile } from '../ui/branch-orders';
 import { B2BPipelineStats, StatsBasis } from '@/lib/b2b';
+import { useState } from 'react';
 
-export function OrdersSection({ stats, open, range, basis, busy, onRange, onBasis, onOpenPipeline }: {
+export function OrdersSection({ stats, open, range, period, basis, busy, onRange, onBasis, onOpenPipeline }: {
   stats: B2BPipelineStats;
   open: { count: number; value: number };
   range: RangeKey;
+  period: { from?: string; to?: string };
   basis: StatsBasis;
   busy: boolean;
   onRange: (k: RangeKey) => void;
   onBasis: (k: StatsBasis) => void;
   onOpenPipeline: () => void;
 }) {
+  const [tile, setTile] = useState<BranchTile | null>(null);
   const unit = basis === 'order' ? 'orders' : 'carts';
   const headline = [
-    { key: 'total', label: basis === 'order' ? 'Booked' : 'Carts raised', b: stats.total, color: '#111827' },
-    { key: 'won', label: 'Won', b: stats.won, color: '#15803D' },
-    ...(basis === 'order' ? [] : [{ key: 'active', label: 'Still open', b: stats.active, color: '#B45309' }]),
-    { key: 'lost', label: 'Lost / refunded', b: stats.lost, color: '#9CA3AF' },
+    { key: 'total', label: basis === 'order' ? 'Booked' : 'Carts raised', b: stats.total, color: '#111827', keep: () => true },
+    { key: 'won', label: 'Won', b: stats.won, color: '#15803D', keep: (s: string) => dealIsOrder(s) },
+    ...(basis === 'order' ? [] : [{ key: 'active', label: 'Still open', b: stats.active, color: '#B45309', keep: (s: string) => dealIsOpen(s) }]),
+    { key: 'lost', label: 'Lost / refunded', b: stats.lost, color: '#9CA3AF', keep: (s: string) => !dealIsOrder(s) && !dealIsOpen(s) },
   ];
 
   return (
@@ -41,11 +46,11 @@ export function OrdersSection({ stats, open, range, basis, busy, onRange, onBasi
         <div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {headline.map((h) => (
-              <div key={h.key}>
+              <button key={h.key} onClick={() => setTile({ title: h.label, count: h.b.count, keep: h.keep })} className="text-left rounded-lg -m-1.5 p-1.5 cursor-pointer hover:bg-teal-50/60 transition-colors">
                 <div className="text-[11px] text-gray-500">{h.label}</div>
                 <div className="tabular-nums text-xl font-bold mt-0.5" style={{ color: h.color }}>{fmtL(h.b.value)}</div>
                 <div className="text-[11px] text-gray-400">{h.b.count} {unit}</div>
-              </div>
+              </button>
             ))}
           </div>
           <div className="mt-4">
@@ -72,17 +77,18 @@ export function OrdersSection({ stats, open, range, basis, busy, onRange, onBasi
           <div className="text-[11px] text-gray-500 mb-2">Where these {unit} stand now</div>
           <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
             {[...stats.byStatus].sort((a, b) => b.value - a.value).map((s) => (
-              <div key={s.status} className="shrink-0">
-                <div className="rounded-lg bg-gray-50 px-3 py-2 min-w-[118px]">
+              <button key={s.status} onClick={() => setTile({ title: s.status, count: s.count, keep: (x) => x === s.status })} className="shrink-0 text-left cursor-pointer">
+                <div className="rounded-lg bg-gray-50 hover:bg-teal-50/60 transition-colors px-3 py-2 min-w-[118px]">
                   <div className="tabular-nums text-lg font-bold text-gray-900 leading-tight">{s.count}</div>
                   <div className="text-[10px] font-semibold text-gray-500 truncate" title={s.status}>{s.status}</div>
                   <div className="tabular-nums text-[11px] text-gray-400 mt-0.5">{fmtL(s.value)}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
+      {tile && <BranchOrders tile={tile} period={period} basis={basis} onClose={() => setTile(null)} />}
     </Card>
   );
 }

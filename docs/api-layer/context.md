@@ -171,6 +171,13 @@ caches 5 minutes per caller, because Django scopes rows to the caller's token, a
 Studio, redirect or team failure sets a flag rather than reading as zero
 (`docs/b2b/overview.md` §Three revenue channels).
 
+The same file serves `app/api/b2b/revenue/ledger` (2026-11-01), which reads only the
+`B2B` branch for one Orders tile. It is keyed by caller, basis and dates, and runs only
+on a click. The report and the ledger share `readHolders`, so an order cannot land in
+one channel on a card and another in a tile. Each call rebuilds the whole number book
+from `/rows`, so keep this cached rather than calling it per row. All time stops at
+`MAX_PAGES` and returns `truncated`, which the drawer must show.
+
 ### There is no scheduled route in this app, and no platform cron to run one
 
 Worth knowing before someone adds one: this app deploys to **Azure Static Web

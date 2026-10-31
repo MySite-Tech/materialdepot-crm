@@ -1,3 +1,4 @@
+import { ticketToOrderRow } from '../../orders/ticket';
 import { B2B_BRANCH } from '../constants';
 import type { B2BTeam } from '../../team/types';
 import type { Holder, NumberBook, OrderBucket, OrderInput, RepTeams, RevenueOrder } from '../types';
@@ -16,7 +17,8 @@ export function classifyOrder(
   reps: RepTeams,
 ): RevenueOrder | null {
   const day = String(o.createdAt || '').slice(0, 10);
-  const held = (book.get(phoneOf(o.clientPhone)) ?? []).filter((h) => placedBefore(h, day));
+  const phone = phoneOf(o.clientPhone);
+  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, day));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
   const repTeams = teamsOfRep(o.assignedTo, reps);
   const byB2BRep = o.branch === B2B_BRANCH || repTeams.length > 0;
@@ -29,6 +31,9 @@ export function classifyOrder(
     person,
     firm: from?.firm || held.find((h) => h.firm)?.firm || String(o.clientName || '').trim(),
     client: String(o.clientName || '').trim(),
+    phone,
+    heldBy: from?.kind ?? null,
+    ticket: ticketToOrderRow(o, phone),
     placedBy: repName(o.assignedTo),
     store: o.branch || 'Unknown',
     bookedOnB2B,

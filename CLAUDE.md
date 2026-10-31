@@ -437,7 +437,17 @@ Referred, from per-order rows through `/api/b2b/revenue` (`docs/b2b/overview.md`
 the booking branch. Match that rep exactly, never with `sameRep`, or a team member
 absorbs a store rep with the same first name. The total is B2B influence and is
 never added to company revenue.
-Run that route on real data and a non-admin token first: neither has been done.
+The route has run on real data signed in as an admin. A non-admin token still has not.
+
+**Overview drill-down (2026-11-01).** Every Firms, People and Orders row and every
+Orders tile opens its enquiries, and each enquiry says why it landed in its channel.
+"How this ties to Orders on the B2B branch" crosses channel with booking place, so
+the two totals reconcile on screen. An empty current month opens on last month. The
+order is `docs/b2b/overview.md` §Every figure opens down to the enquiry.
+**To explain or audit a revenue figure, run the real classifier** on real orders and
+tie it out before quoting anything: §Checking a figure against production.
+Client Database has a Columns picker with Inbound, Outreach and EC SPoC columns
+(`docs/b2b/client-db.md` §Choosing the list's columns). EC SPoC waits on Django row 13.
 
 **Kylas rate limit and the inbound round robin (2026-10-31).** Every Kylas caller
 shares one budget of 5 requests a second, and something outside this repo spends
