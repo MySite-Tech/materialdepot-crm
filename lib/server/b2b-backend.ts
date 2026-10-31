@@ -36,6 +36,15 @@ export async function b2bBackendFetch<T>(path: string, init?: { method?: string;
   return body as T;
 }
 
+export async function b2bSyncRead<T>(path: string): Promise<T> {
+  const target = endpoint();
+  if (target instanceof Response) throw new B2BBackendError(503, 'B2B_BACKEND_URL or B2B_BACKEND_SECRET is not set on this deployment');
+  const res = await fetch(`${target.base}/sync${path}`, { headers: { 'x-sync-key': target.secret }, cache: 'no-store' });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new B2BBackendError(res.status, errorDetail(body) ?? `B2B backend answered ${res.status}`);
+  return body as T;
+}
+
 export function studioHandoffUrl(code: string): string {
   const target = endpoint();
   if (target instanceof Response) throw new B2BBackendError(503, 'B2B_BACKEND_URL or B2B_BACKEND_SECRET is not set on this deployment');

@@ -1,5 +1,6 @@
 import { jsonOf, reply } from '../../stub/http.mjs';
 import { SYNC_KEY } from '../constants.mjs';
+import { istDay } from '../seed/time.mjs';
 
 const ROW_KEYS = ['id', 'pipeline', 'stage', 'kylas_lead_id', 'owner', 'value', 'created_at', 'updated_at', 'meta_data'];
 
@@ -117,6 +118,16 @@ function lastRoundRobin(db) {
 
 export function backendRoutes(db) {
   return (req) => {
+    if (req.path === '/sync/pull-numbers') {
+      return {
+        partner_id: null,
+        referrals: [
+          { id: 'ref-1', md_phone: '9000020009', status: 'approved', source: 'client', firm_name: 'Mockup Interiors', partner_phone: '9000020001', referred_on: istDay(-20) },
+          { id: 'ref-2', md_phone: '9000020010', status: 'approved', source: 'team', firm_name: 'Mockup Interiors', partner_phone: '9000020001', referred_on: istDay(-20) },
+        ],
+        linked: [],
+      };
+    }
     if (req.path === '/auth/handoff') {
       const phone = db.handoffs?.[req.query.get('code')];
       if (!phone) return reply(401, { sandbox: 'Studio Space would show its sign-in page: unknown or spent code' });

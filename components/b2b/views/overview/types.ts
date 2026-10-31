@@ -4,7 +4,7 @@ import type { HealthOverview } from '../../models/account-health';
 import type { DashboardMetrics, KamDashboard } from '../../models/analytics';
 import type { ClientEntity } from '../../models/client';
 import type { TargetStore } from '../../models/performance/types';
-import type { B2BData, B2BPipelineStats, VerticalStats } from '@/lib/b2b';
+import type { B2BData, B2BPipelineStats } from '@/lib/b2b';
 
 export type RangeKey = 'month' | 'lastMonth' | 'all';
 
@@ -26,8 +26,6 @@ export interface RangeData {
   statsOk: boolean;
   basisApplied: boolean;
   open: { count: number; value: number };
-  monthRevenue: number;
-  monthVerticals: VerticalStats[];
 }
 
 export interface MonthPace {

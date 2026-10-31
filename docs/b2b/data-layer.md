@@ -106,8 +106,8 @@ They live here now because the code cannot carry them.
   overall B2B pipeline via `total_branch`, so switching range costs one call.
   `loadRange` keys on `[range, basis]` and costs **two** calls on mount, because
   the default basis is `order` and the created-basis call is still needed for
-  open pipeline. A non-month range adds a third for the month-scoped revenue.
-  Three is the ceiling.
+  open pipeline. Two is the ceiling. The revenue section loads on its own
+  (`use-revenue-report.ts`) and keys on its own month, not on this range.
 
 - **The Overview has a date basis and a branch basis, and they are not
   independent.** `StatsBasis` (`lib/b2b/stats/pipeline.ts`) is `created` or
@@ -179,15 +179,13 @@ They live here now because the code cannot carry them.
   Those are different numbers and the screen showed both: `branchTotal.won` was
   ₹13,44,897 ("Order Won") while the verticals summed to ₹10,08,823 ("Revenue
   Generated"), because `bm_groups` keys on rep phone and the branch total does
-  not. Both now read `pipeline.won.value`. The difference has to go somewhere,
-  so `revenueSources` (`views/overview/utils.ts`) appends a grey
-  `No B2B rep on cart` slice for the remainder — on the order basis that slice
-  is most of the donut (₹36.6L of ₹47.4L), which is the honest shape of the
-  data, not a bug to tune away.
+  not. The Orders section reads `pipeline.won.value`. The old grey `No B2B rep on
+  cart` slice went with the donut on 2026-10-31: `overview.md` §Three revenue
+  channels now places those orders by rep and number.
 
 - **The B2B target is the sum of every team member's revenue target**
   (`b2bTargetL`, `leadership.md` §Set targets), not a typed 120L. Achieved on
-  the Overview is still Django's figure, so achieved and target come from
+  the Overview is the three-channel total, so achieved and target come from
   different places by design.
 
 - **The rep roster is one hardcoded list, `components/b2b/models/roster.ts`.**

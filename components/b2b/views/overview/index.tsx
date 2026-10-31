@@ -4,14 +4,14 @@ import { b2bTargetL } from '../../models/performance';
 import { RANGE_LABELS } from './constants';
 import { useOverviewData } from './hooks/use-overview-data';
 import { AccountsSection } from './sections/accounts';
-import { RevenueHero } from './sections/hero';
 import { JourneySection } from './sections/journey';
 import { KamDesk } from './sections/kam-desk';
 import { OrdersSection } from './sections/orders';
+import { RevenueSection } from './sections/revenue';
 import { OverviewTarget } from './types';
 import { Notice } from './ui';
 import { OpenPipelineDrawer } from './ui/open-pipeline';
-import { monthPace, rangeFor, revenueSources } from './utils';
+import { rangeFor } from './utils';
 import type { B2BTeamLoad } from '@/lib/b2b/team/types';
 import { useMemo, useState } from 'react';
 
@@ -21,15 +21,12 @@ export default function B2BOverview({ team, onNavigate }: {
 }) {
   const o = useOverviewData();
   const [openDrawer, setOpenDrawer] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const teamLive = !team.loading && !team.tableMissing && !team.error;
   const monthlyTarget = useMemo(
     () => (o.base ? b2bTargetL(team.members, teamLive, o.base.targetStore) * 1_00_000 : 0),
     [o.base, team.members, teamLive],
-  );
-  const pace = useMemo(
-    () => monthPace(o.ranged?.monthRevenue ?? 0, monthlyTarget, o.updatedAt ?? new Date()),
-    [o.ranged?.monthRevenue, monthlyTarget, o.updatedAt],
   );
 
   if (!o.base) {
@@ -59,7 +56,7 @@ export default function B2BOverview({ team, onNavigate }: {
             </span>
           )}
           <button
-            onClick={o.reload}
+            onClick={() => { setRefreshKey((k) => k + 1); o.reload(); }}
             disabled={o.refreshing}
             className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-lg bg-white text-gray-600 hover:border-gray-300 cursor-pointer disabled:opacity-50 disabled:cursor-default"
           >
@@ -75,26 +72,25 @@ export default function B2BOverview({ team, onNavigate }: {
         <Notice title="Order stats could not be read.">The rupee figures show zero because the request failed, not because there are no orders. Refresh to retry.</Notice>
       )}
       {ranged && !ranged.basisApplied && (
-        <Notice title="Counted by cart date.">This backend cannot count by order date yet, so revenue below is still by cart-created date.</Notice>
+        <Notice title="Counted by cart date.">This backend cannot count by order date yet, so the orders below are still by cart-created date.</Notice>
       )}
       {!base.targetsOk && (
         <Notice title="Targets could not be read.">The target shown is the built-in default, not your team&rsquo;s.</Notice>
       )}
 
+      <RevenueSection target={monthlyTarget} refreshKey={refreshKey} />
+
       {ranged ? (
-        <>
-          <RevenueHero pace={pace} sources={revenueSources(ranged.monthVerticals, ranged.monthRevenue)} />
-          <OrdersSection
-            stats={ranged.stats}
-            open={ranged.open}
-            range={o.range}
-            basis={o.basis}
-            busy={o.rangeBusy}
-            onRange={o.setRange}
-            onBasis={o.setBasis}
-            onOpenPipeline={() => setOpenDrawer(true)}
-          />
-        </>
+        <OrdersSection
+          stats={ranged.stats}
+          open={ranged.open}
+          range={o.range}
+          basis={o.basis}
+          busy={o.rangeBusy}
+          onRange={o.setRange}
+          onBasis={o.setBasis}
+          onOpenPipeline={() => setOpenDrawer(true)}
+        />
       ) : (
         <div className="h-40 rounded-xl border border-gray-200 bg-white animate-pulse" />
       )}

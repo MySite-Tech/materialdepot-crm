@@ -1,23 +1,8 @@
 'use client';
 
 import type { KamDashboard } from '../../models/analytics';
-import { SOURCE_COLORS, UNATTRIBUTED_COLOR, UNATTRIBUTED_SOURCE } from './constants';
 import { KamDeskRow, MonthPace, RangeKey } from './types';
-import { VerticalStats, istToday } from '@/lib/b2b';
-
-export function revenueSources(
-  verticals: VerticalStats[],
-  branchTotal: number,
-): { source: string; value: number; color: string }[] {
-  const rows = verticals.map((v, i) => ({
-    source: v.label,
-    value: v.won.value,
-    color: SOURCE_COLORS[i % SOURCE_COLORS.length],
-  }));
-  const unattributed = branchTotal - rows.reduce((s, r) => s + r.value, 0);
-  if (unattributed <= 0) return rows;
-  return [...rows, { source: UNATTRIBUTED_SOURCE, value: unattributed, color: UNATTRIBUTED_COLOR }];
-}
+import { istToday } from '@/lib/b2b';
 
 export function rangeFor(key: RangeKey, now: Date): { from?: string; to?: string } {
   if (key === 'all') return {};
