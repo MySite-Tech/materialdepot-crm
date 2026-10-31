@@ -380,28 +380,20 @@ before changing a fetch; `tsc` and `build` cannot catch any of it.
 A teammate pushes to this branch regularly — **pull before starting.**
 
 **B2B Sales work is on `b2b-revamp-2026-10-28`**, not `Installation-Changes`.
-Its **PR #29 was merged to `main` and deployed on 2026-10-29** (`3483cc3`),
-together with b2b-backend PR #13 (migrations 0020 and 0021, live). **The branch
-has moved on since: these commits are on it but not on `main`,** so they are not
-deployed: Studio Space access read-only (`5402162`), per-person Targets
-(`aa86b0f`), the Leadership Board's "Set targets" replacing the Targets tab
-(`5af8bf2`), and Dashboard → **Overview** (`6309057`, `docs/b2b/overview.md`).
-They ship in **PR #32** (this branch, supersedes #30, which is fully inside it
-and can be closed). PR #32 needs **b2b-backend, merged in this order: #15, then
-#16** (migrations 0022 and 0023; #16 also needs `MD_SNAPSHOT_API_KEY` on the
-deployment). **#16 must first carry the conflict fix from local branch
-`local-crm-latest` (`6e5d037`, a fast-forward of its branch); #14 is then inside
-#16 and closes unmerged.** Merging #14 before #15 conflicts in `b2b_crm.py`,
-which GitHub only shows once one lands. Without #14's code the Waitlist KPI and
-Numbers-by-firm read Unknown. Without #15 the console frame shows Studio Space's
-own sign-in page. Without #16 a held meeting cannot be saved. Check `git log origin/main..HEAD` before claiming anything is live.
-**PR #32 (2026-10-30) supersedes #30** and carries everything on this branch. On
-2026-10-31 the branch gained the EC B2B Referral tab (`docs/b2b/ec-referral.md`),
-the shared assign bar (team, then One person or Round robin, `docs/b2b/leads.md`)
-and the no-reject rule for moved firms (`docs/b2b/kam.md`). None of those needs a
-new backend migration, and they are not live until #32 merges. **The tab reaches
-nobody until `crm.ec_b2b_referral` is ticked under Admin > Users**, because nearly
-every account has a permission list.
+Its **PR #29 shipped on 2026-10-29** with b2b-backend #13 (migrations 0020 and
+0021). **PR #32 shipped on 2026-10-31** with b2b-backend #15 then #16 (#14 went in
+inside #16; migrations 0022 and 0023): Studio Space framing and read-only access,
+per-person Targets, Overview, the check-in, multi-team people, EC Directed, the
+assign bar, firm SPoCs and the EC B2B Referral tab. **That tab reaches nobody until
+`crm.ec_b2b_referral` is ticked under Admin > Users**, because nearly every account
+has a permission list. Check-in photos need `MD_SNAPSHOT_API_KEY` on the backend
+deployment; nothing in either repo shows whether it is set, and proving it means a
+real upload, which the file service cannot delete.
+**A merge to b2b-backend `master` runs its migrations by itself.** Seen on
+2026-10-31: 0022 was live about four minutes after #15 merged. To test that without
+writing, open `/auth/handoff?code=x` in real Chrome, because Cloudflare challenges
+`/auth/*` from curl and lets `/b2b/*` through. A redirect to `/login` means the
+table exists. Check `git log origin/main..HEAD` before claiming anything is live.
 **The tech team merges, not a session**, unless Dhruv asks.
 `npm run dev` on :3001 serves the working tree, so whatever is committed or
 uncommitted here shows there without a restart. While `npm run dev:sandbox` is
