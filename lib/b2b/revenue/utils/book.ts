@@ -1,7 +1,7 @@
 import { B2B_ROSTER } from '../../../../components/b2b/models/roster';
-import { FALLBACK_STUDIO_FIRM, HOLDER_RANK } from '../constants';
+import { HOLDER_RANK } from '../constants';
 import type { B2BTeam, TeamMember } from '../../team/types';
-import type { B2BSourceRow, Holder, NumberBook, RedirectInput, RepTeams, StudioNumbers, StudioReferral } from '../types';
+import type { B2BSourceRow, Holder, NumberBook, RedirectInput, RepTeams, StudioFirm } from '../types';
 
 export const phoneOf = (raw: unknown): string => {
   const digits = String(raw ?? '').replace(/\D/g, '').slice(-10);
@@ -66,16 +66,7 @@ function holderOf(row: B2BSourceRow): Holder | null {
 const firmHolderOf = (book: NumberBook, phone: string): Holder | undefined =>
   (book.get(phone) ?? []).find((h) => h.kind === 'firm');
 
-function studioHolder(r: StudioReferral, book: NumberBook): Holder {
-  const firm = firmHolderOf(book, phoneOf(r.partner_phone));
-  const name = text(r.firm_name) || firm?.firm || FALLBACK_STUDIO_FIRM;
-  const owner = firm?.owner ?? '';
-  return r.source === 'client'
-    ? { kind: 'referred', team: 'kam', owner, firm: name, since: day(r.referred_on) }
-    : { kind: 'studio', team: 'kam', owner, firm: name, since: '' };
-}
-
-export function buildNumberBook(rows: B2BSourceRow[], studio: StudioNumbers | null, redirects: RedirectInput[]): NumberBook {
+export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[]): NumberBook {
   const book: NumberBook = new Map();
   const hold = (raw: unknown, holder: Holder) => {
     const phone = phoneOf(raw);
@@ -87,12 +78,19 @@ export function buildNumberBook(rows: B2BSourceRow[], studio: StudioNumbers | nu
     if (holder) for (const n of contactNumbers(row.meta_data ?? {})) hold(n, holder);
   }
 
-  const approved = (studio?.referrals ?? []).filter((r) => r.status === 'approved');
-  const byId = new Map(approved.map((r) => [r.id, studioHolder(r, book)]));
-  for (const r of approved) hold(r.md_phone, byId.get(r.id)!);
-  for (const l of studio?.linked ?? []) {
-    const holder = byId.get(l.referral_id);
-    if (holder) hold(l.phone, holder);
+  for (const f of studio ?? []) {
+    const firm = f.phones.map((p) => firmHolderOf(book, phoneOf(p))).find(Boolean);
+    const owned = { team: 'kam' as const, owner: firm?.owner ?? '', firm: f.firm_name };
+    const ownNumber: Holder = { kind: 'studio', ...owned, since: '' };
+    const referredNumber: Holder = { kind: 'referred', ...owned, since: '' };
+    for (const p of f.phones) hold(p, ownNumber);
+    for (const r of f.referrals) {
+      if (r.status === 'approved') hold(r.phone, { ...referredNumber, since: day(r.referred_on) });
+    }
+    const listed = new Set(f.referrals.map((r) => phoneOf(r.phone)));
+    for (const o of f.orders) {
+      if (!listed.has(phoneOf(o.phone))) hold(o.phone, o.source === 'client' ? referredNumber : ownNumber);
+    }
   }
 
   for (const r of redirects) {

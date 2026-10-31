@@ -5,8 +5,8 @@ import type { EcVisitRow } from '../b2b/ec-visits/types';
 import { buildNumberBook, buildRepTeams } from '../b2b/revenue/utils/book';
 import { classifyOrder } from '../b2b/revenue/utils/classify';
 import { B2B_BRANCH } from '../b2b/revenue/constants';
-import type { B2BSourceRow, OrderInput, RevenueOrder, RevenueReport, StudioNumbers } from '../b2b/revenue/types';
-import { b2bBackendFetch, b2bSyncRead } from './b2b-backend';
+import type { B2BSourceRow, OrderInput, RevenueOrder, RevenueReport, StudioFirm } from '../b2b/revenue/types';
+import { b2bBackendFetch } from './b2b-backend';
 import { readMembers } from './b2b-team';
 
 const PAGE_SIZE = 1000;
@@ -46,7 +46,7 @@ export async function buildRevenueReport(from: string, to: string, auth: string)
     allOrders(window, auth),
     allOrders(`${window}&branch=${B2B_BRANCH}`, auth),
     b2bBackendFetch<B2BSourceRow[]>('/rows'),
-    b2bSyncRead<StudioNumbers>('/pull-numbers').catch(() => null),
+    b2bBackendFetch<{ firms?: StudioFirm[] }>('/studio-access').then((r) => r.firms ?? null).catch(() => null),
     b2bBackendFetch<{ visits: EcVisitRow[] }>('/ec-visits?kind=redirect').catch(() => null),
     readMembers().catch(() => null),
   ]);

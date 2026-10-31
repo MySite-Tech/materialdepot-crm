@@ -163,8 +163,9 @@ client, or one that only flips round robin, cannot clear someone's B2B admin
 flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
 reads as false.
 
-`b2bSyncRead` reads the backend's `/sync/*` routes with the same key, and only
-`lib/server/b2b-revenue.ts` uses it. That builder pages Django's `/crm/leads/`
+**A server route reads the backend through `/b2b/*`, never `/sync/*`.** Cloudflare
+answered `/sync/*` 403 from a script with the right key on 2026-10-31 and let `/b2b/*`
+through. `lib/server/b2b-revenue.ts` pages Django's `/crm/leads/`
 server-side because a month is 5+ requests, which a page may not spend on mount. It
 caches 5 minutes per caller, because Django scopes rows to the caller's token, and a
 Studio, redirect or team failure sets a flag rather than reading as zero

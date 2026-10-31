@@ -86,6 +86,7 @@ function studioLogins(db) {
     })),
     firms: [
       ...phones.slice(0, 4).map((phone, i) => ({ partner_id: `sandbox-${i}`, firm_name: 'Sandbox Studio', phones: [phone], gsts: [], logins: 1, power: i % 2 === 0, orders: i ? [] : [{ enq_id: 'ENQ-STUDIO-1', phone: '9000099998', source: 'team', value: 25000, ordered_on: '2026-10-20', status: 'Delivered' }], referrals: i ? [] : [{ name: 'Sandbox Referred Client', phone: '9000099997', status: 'approved', referred_on: '2026-10-01', orders: 0, value: 0 }] })),
+      { partner_id: 'sandbox-mockup', firm_name: 'Mockup Interiors', phones: ['9000020001', '9000020010'], gsts: [], logins: 1, power: true, orders: [], referrals: [{ name: 'A client of Mockup Interiors', phone: '9000020009', status: 'approved', referred_on: istDay(-20), orders: 1, value: 215000 }] },
       { partner_id: 'sandbox-unmatched', firm_name: 'Sandbox Unmatched Studio', phones: ['9000099999'], gsts: [], logins: 3, power: true, orders: [], referrals: [] },
     ],
   };
@@ -122,16 +123,6 @@ function lastRoundRobin(db) {
 
 export function backendRoutes(db) {
   return (req) => {
-    if (req.path === '/sync/pull-numbers') {
-      return {
-        partner_id: null,
-        referrals: [
-          { id: 'ref-1', md_phone: '9000020009', status: 'approved', source: 'client', firm_name: 'Mockup Interiors', partner_phone: '9000020001', referred_on: istDay(-20) },
-          { id: 'ref-2', md_phone: '9000020010', status: 'approved', source: 'team', firm_name: 'Mockup Interiors', partner_phone: '9000020001', referred_on: istDay(-20) },
-        ],
-        linked: [],
-      };
-    }
     if (req.path === '/auth/handoff') {
       const phone = db.handoffs?.[req.query.get('code')];
       if (!phone) return reply(401, { sandbox: 'Studio Space would show its sign-in page: unknown or spent code' });

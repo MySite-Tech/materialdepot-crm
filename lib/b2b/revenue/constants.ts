@@ -14,4 +14,3 @@ export const HOLDER_RANK: Record<HolderKind, number> = {
   unowned: 6,
 };
 
-export const FALLBACK_STUDIO_FIRM = 'Studio Space firm';

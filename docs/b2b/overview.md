@@ -57,12 +57,13 @@ they are worth.
   self and referrals. It is not added to company revenue.
 - **Filters narrow the cards and table, not the hero.** The hero stays against the
   whole target. A line under the cards states the filtered share.
-- **Referred uses `/sync/pull-numbers`,** which holds `source`. It has no firm name,
-  referral date or partner phone yet: until the b2b-backend change that adds them
-  deploys (b2b-backend PR #19, open), the firm reads "Studio Space
-  firm", the credited person is blank and the date gate is off. A failed read shows
-  Unknown, never ₹0. Decide on that branch after checking whether `studio-access`
-  `firms[]` referrals (`studio-space.md`) already carry what this needs.
+- **Referred reads `GET /b2b/studio-access` `firms[]`, not `/sync/pull-numbers`.**
+  A firm's `referrals` are its client numbers, `phones` its own, and `orders` adds any
+  number Studio attributed an order to, which covers the linked numbers it does not
+  list. An order-only number has no date, so it skips the date gate. `/sync/*` was the
+  first choice and Cloudflare answers it 403 from outside a browser, while `/b2b/*`
+  passes. b2b-backend #19 added the fields `/sync/pull-numbers` lacked and is now
+  unused here. A failed read shows Unknown, never ₹0.
 - **A Studio-rejected order still counts here** if Django shows it placed, because
   this reads Django's orders and not Studio's `referral_order`. On 2026-10-31 that
   was one small order. A firm's revenue on its page can differ from this report: that
