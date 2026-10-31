@@ -8,7 +8,7 @@ import {
 } from '@/lib/b2b/team/constants';
 import type { MemberInput, ReassignOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
-import { intakePool, kylasUserForPhone, listKylasUsers, readLead, setLeadOwner } from './kylas';
+import { intakePool, KylasBusy, kylasUserForPhone, listKylasUsers, readLead, setLeadOwner } from './kylas';
 import { isCrmAddedLead } from '@/components/b2b/models/inbound/kylas';
 import {
   assignedLeadIdsSince,
@@ -21,12 +21,13 @@ import {
   workedInboundLeadIds,
 } from './store';
 
-export { listKylasUsers } from './kylas';
+export { KylasBusy, listKylasUsers } from './kylas';
 export { readMembers, TeamTableMissing } from './store';
 
 export class InputError extends Error {}
 
 const DAY_MS = 86_400_000;
+const ASSIGNMENT_LOG_FROM = '2000-01-01T00:00:00Z';
 
 function rotationSince(now = Date.now()): string {
   const start = new Date(INBOUND_ROTATION_START).getTime();
@@ -79,7 +80,7 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
   }
 
   const since = rotationSince();
-  const [pool, assigned] = await Promise.all([intakePool(since), assignedLeadIdsSince(since)]);
+  const [pool, assigned] = await Promise.all([intakePool(since), assignedLeadIdsSince(ASSIGNMENT_LOG_FROM)]);
   const fresh = pool.filter((l) => !assigned.has(l.id));
   const worked = await workedInboundLeadIds(fresh.map((l) => l.id));
   const queue = fresh.filter((l) => !worked.has(l.id));
@@ -92,7 +93,7 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     return outcome;
   }
 
-  for (const { lead, member } of plan) {
+  for (const [i, { lead, member }] of plan.entries()) {
     const to = member.kylasUserId as number;
     const claim = await claimRoundRobin({
       lead_id: lead.id,
@@ -115,6 +116,10 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     } catch (e) {
       await releaseClaim(claim).catch(() => undefined);
       outcome.failed.push({ leadId: lead.id, error: e instanceof Error ? e.message : String(e) });
+      if (e instanceof KylasBusy) {
+        outcome.waiting += plan.length - i - 1;
+        break;
+      }
     }
   }
   return outcome;
@@ -144,12 +149,17 @@ export async function reassignInboundLeads(
   if (items.length > INBOUND_ROTATION_BATCH) throw new InputError(`Inbound leads move ${INBOUND_ROTATION_BATCH} at a time`);
   const read = await readMembers();
   const outcome: ReassignOutcome = { moved: [], failed: [] };
-  for (const { leadId, toPhone } of items) {
+  for (const [i, { leadId, toPhone }] of items.entries()) {
     try {
       const to = await moveInboundLead(leadId, await inboundTarget(toPhone, read), reason, byName);
       outcome.moved.push({ leadId, name: to.name, kylasUserId: to.kylasUserId as number });
     } catch (e) {
-      outcome.failed.push({ leadId, error: e instanceof Error ? e.message : String(e) });
+      const error = e instanceof Error ? e.message : String(e);
+      if (e instanceof KylasBusy) {
+        outcome.failed.push(...items.slice(i).map((item) => ({ leadId: item.leadId, error })));
+        break;
+      }
+      outcome.failed.push({ leadId, error });
     }
   }
   return outcome;

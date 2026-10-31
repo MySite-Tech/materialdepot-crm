@@ -26,3 +26,7 @@ export const INBOUND_ROTATION_WINDOW_DAYS = 7;
 export const INBOUND_ROTATION_BATCH = 25;
 
 export const INBOUND_ROTATION_MAX_PAGES = 3;
+
+export const INBOUND_ROTATION_INTERVAL_MS = 300_000;
+
+export const INBOUND_ROTATION_RETRY_NOTE = 'New leads stay with the intake owner in Kylas for now. The CRM tries again every 5 minutes while Inbound Leads is open.';

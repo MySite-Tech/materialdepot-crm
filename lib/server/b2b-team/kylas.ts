@@ -6,6 +6,8 @@ import type { KylasUser } from '@/lib/b2b/team/types';
 const BASE = (process.env.KYLAS_API_BASE_URL || 'https://api.kylas.io/v1').replace(/\/+$/, '');
 const USER_PAGE = 100;
 const POOL_PAGE = 200;
+const BUSY_RETRY_MS = [1000, 2000, 4000, 8000];
+const MAX_RETRY_WAIT_MS = 8000;
 
 export interface PoolLead {
   id: string;
@@ -19,25 +21,36 @@ export interface KylasLead {
   createdAt: string | null;
 }
 
+export class KylasBusy extends Error {}
+
 async function kylas(path: string, init?: RequestInit): Promise<Record<string, any>> {
   const key = process.env.KYLAS_API_KEY;
   if (!key) throw new Error('KYLAS_API_KEY is not set');
-  let res: Response;
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', 'api-key': key, ...init?.headers },
-      cache: 'no-store',
-    });
-  } catch {
-    throw new Error('Could not reach Kylas');
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${path}`, {
+        ...init,
+        headers: { 'Content-Type': 'application/json', 'api-key': key, ...init?.headers },
+        cache: 'no-store',
+      });
+    } catch {
+      throw new Error('Could not reach Kylas');
+    }
+    if (res.status === 429 || res.status === 503) {
+      if (attempt >= BUSY_RETRY_MS.length) throw new KylasBusy('Kylas is rate limiting the CRM right now');
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      const waitMs = retryAfter > 0 ? Math.min(retryAfter * 1000, MAX_RETRY_WAIT_MS) : BUSY_RETRY_MS[attempt];
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const detail = body?.message || body?.errorCode;
+      throw new Error(`Kylas answered ${res.status}${detail ? `: ${detail}` : ''}`);
+    }
+    return body ?? {};
   }
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    const detail = body?.message || body?.errorCode;
-    throw new Error(`Kylas answered ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-  return body ?? {};
 }
 
 export async function listKylasUsers(): Promise<KylasUser[]> {
@@ -76,7 +89,7 @@ export async function intakePool(sinceIso: string): Promise<PoolLead[]> {
         { operator: 'equal', id: 'ownerId', field: 'ownerId', type: 'long', value: INBOUND_INTAKE_KYLAS_ID },
         { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE },
         { operator: 'in', id: 'pipelineStage', field: 'pipelineStage', type: 'long', value: B2B_INBOUND_STAGES, relatedFieldIds: ['pipeline'] },
-        { operator: 'greater', id: 'createdAt', field: 'createdAt', type: 'date', value: sinceIso, timeZone: 'Asia/Calcutta' },
+        { operator: 'greater', id: 'expectedClosureOn', field: 'expectedClosureOn', type: 'date', value: sinceIso, timeZone: 'Asia/Calcutta' },
       ],
     },
   };

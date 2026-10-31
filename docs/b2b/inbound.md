@@ -389,9 +389,14 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   2026-10-28: 245 of 245 leads in the two inbound stages over the previous two
   weeks, at 10–32 a day. Fixing that in Kylas was tried and did not work. The
   CRM therefore re-owns them: `POST /api/b2b/inbound/assign {mode:'rotate'}`.
-- **The pool** = owner `81181`, the two inbound stages, created after
+- **The pool** = owner `81181`, the two inbound stages, **qualified** after
   `INBOUND_ROTATION_START` and within the last `INBOUND_ROTATION_WINDOW_DAYS`
-  (7). From that it drops leads with any `b2b_lead_assignment` row, and leads
+  (7). Qualified means `expectedClosureOn`, which the Presales flow stamps along
+  with "B2B Qualified" (80 of 80 Hardi leads had it on 2026-10-31). It was
+  `createdAt` until then, and that stranded leads: leads are created under
+  Kousika and qualified later, up to a year later, so 10 qualified since 29 Oct
+  were never in the pool and sat with Hardi unworked. The log check reads the
+  whole log for the same reason. From that it drops leads with any `b2b_lead_assignment` row, and leads
   Hardi already worked (a `b2b_lead` row past `New`). **Hardi is also a
   rotation member**, so "owned by Hardi" cannot mean "unassigned". The
   assignment row is what tells the two apart.
@@ -409,6 +414,25 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   (see the "Success reported off an HTTP 200" landmine), so a mismatch counts as
   a failure. **This had not been exercised against a real lead as of
   2026-10-28**: the first real run is the verification.
+- **It repeats (2026-10-31).** `useInboundRotation` runs on open and then every
+  5 minutes while a tab is visible, so a failed run recovers without a reload.
+- **Hardi's share is half, not everything, and Kylas still delivers to her.**
+  She is a rotation member, so with Vikas she gets every second lead. On
+  2026-10-31 the log held 75 leads: Hardi 39, Vikas 19, Vilok 17. That excess
+  over an even split fits 429s: a lead for Hardi needs no PATCH and always
+  sticks, while a PATCH for anyone else failed and was released. Inferred, since
+  production has no route listing each row's `to_kylas_id`. Stopping the batch on
+  `KylasBusy` removes it. Vilok was `in_rotation: false` that day; a manager
+  changes that under Team.
+- **A Kylas 429 only delays a run (2026-10-31).** "Round robin did not run:
+  Kylas answered 429" meant the first Kylas call hit the rate limit and the run
+  gave up, leaving new leads with Hardi until the next tab open. The drawer's
+  Reassign failed the same way. Each server call now waits out the limit
+  (`docs/api-layer/context.md`). If Kylas is still refusing mid-batch, that
+  claim is released and the rest of the batch stops and counts as `waiting`,
+  because 25 leads at 15s each would outlast the request. Bulk reassign stops
+  the same way and reports the rest as failed. Nothing is lost: the next run
+  picks the round robin back up.
 - **Mine vs All is in the fetch.** A rep linked to Kylas gets `ownerId` = their
   own id, and the owner filter is hidden. **"All inbound" is for managers and
   B2B admins only (2026-10-29).** It used to be one click away for every rep,

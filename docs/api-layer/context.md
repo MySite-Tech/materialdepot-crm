@@ -182,7 +182,8 @@ reports `moved` and `failed` separately rather than failing the whole batch.
 See `docs/b2b/ec-referral.md` and `docs/b2b/leads.md`.
 
 This is why the B2B inbound round robin (`/api/b2b/inbound/assign`, 2026-10-28)
-runs **when someone opens Inbound Leads**, not on a timer. A lead that arrives
+runs **while someone has Inbound Leads open**: on open, then every 5 minutes
+when the tab is visible. There is no server timer, so a lead that arrives
 overnight is assigned by the first rep to open the tab. It is idempotent, so
 being triggered from many browsers is safe. See `docs/b2b/inbound.md` §Who owns
 a lead.
@@ -205,6 +206,17 @@ Two things it does that `kylasFetch` callers do not:
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.
+- **It retries 429 and 503 on its own (2026-10-31).** It waits 1s, 2s, 4s, then
+  8s, or `Retry-After` capped at 8s, then throws `KylasBusy`. Kylas's headers
+  read `x-ratelimit-replenish-rate: 5` and `x-ratelimit-burst-capacity: 10`, but
+  the budget is shared with whatever else uses the key. Sampled about once a
+  second on 2026-10-31 from a machine with no other Kylas traffic, it cycled
+  about 7s clear, 7s of only 429. People do not click on a timer, so something
+  automated outside this repo is spending it. Lead edits showed Kylas's
+  "Universal API Key" as the top non-workflow writer, but that is this same key,
+  so it cannot name the caller. `docs/backends.md` §Owed by Django row 12 has the
+  ask. The 15s total exists to outlast the cycle. `kylasFetch` now retries five
+  times (15.5s) for the same reason.
 - **A `crm-…` lead id never reaches Kylas (2026-10-30).** Inbound leads
   added in the CRM have no Kylas record, so `reassignInboundLead` skips
   `readLead` and `setLeadOwner` for them and only logs the assignment. The

@@ -125,6 +125,7 @@ and who changes it is still open. Each row names the doc with the detail.
 | 7 | Permission rows for `team_leader`, `asst_store_manager`, `cluster_head`, `area_manager` | Those rungs of the store ladder stay empty | `org-hierarchy/context.md` |
 | 8 | Per-phone orders in bulk with `orderPlacedAt` (`estimate.order_placed_time`) and the booked-at branch (`estimate.branch_id`), e.g. `b2b-bulk?include=orders` with an `echo` | Sales by SPoC exists per firm only, split by Created, with no all-firms roll-up; the Firm page shows Created instead of a placement date; EC-directed revenue is checked per redirect on click and matched on the cart owner's branch | `b2b/ec-directed.md`, `b2b/client-db.md` §One enquiry |
 | 9 | A per-customer footfall read: `contacts=` on `/footfall-record/` returning `{phone, branch, visitedAt}` | EC redirects are marked Visited by hand | `b2b/ec-directed.md` |
+| 12 | Find what spends the shared Kylas key on a 14s cycle, and throttle it or give it its own key | Kylas answers only 429 for about 7s in every 14s, so CRM calls wait up to 15s and can fail. Also check whether a separate key gets a separate budget | `api-layer/context.md` §`lib/server/b2b-team` |
 
 Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
 Users), and backfilling `crm.remarks_quality` on existing permission lists.

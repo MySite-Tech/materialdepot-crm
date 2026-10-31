@@ -442,6 +442,14 @@ out of its output. `next dev` rejects a symlinked `node_modules` ("points out of
 filesystem root"), so `cp -cR` it instead to run a server. Either way, keep it
 out of the commit.
 
+**Kylas rate limit and the inbound round robin (2026-10-31).** Every Kylas caller
+shares one budget of 5 requests a second, and something outside this repo spends
+it on a cycle of about 7s clear, 7s of only 429. Who is still unknown
+(`docs/backends.md` §Owed by Django row 12). Kylas still delivers every qualified
+lead to Hardi and the CRM re-owns them, keyed on qualification time
+(`expectedClosureOn`), not `createdAt`. See `docs/b2b/inbound.md` §Who owns a lead.
+Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
+
 **Open on Studio Space (2026-10-31): b2b-backend PR #17, then b2b-dashboard PR
 #35, both draft and not live.** After #17 only admins see every firm there, and
 the CRM's assignment sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees
