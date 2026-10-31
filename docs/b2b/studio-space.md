@@ -44,9 +44,11 @@ mounted only when picked, so the default pane costs the CRM no request.
 - **Studio Space's own sidebar shows inside the frame**, beside the CRM's. A
   chrome-less embed mode with CRM subtabs per console page needs a
   `b2b-dashboard` change and is not built.
-- **What a KAM sees is Studio Space's scoping, not the CRM's:** the console
-  shows a KAM their market's firms plus the firms they are KAM of
-  (`sees_partner` in b2b-backend `scope.py`).
+- **What a person sees is Studio Space's scoping, not the CRM's.** Until
+  b2b-backend PR #17 merges, the console shows a KAM their market's firms plus
+  the firms they are KAM of. After it, only an admin sees every firm, and KAM,
+  outreach and inbound see only firms assigned to them (`sees_partner` in
+  `scope.py`). §Who sees which firm below.
 
 ## One login: the CRM signs the user in to Studio Space (2026-10-30)
 
@@ -79,6 +81,35 @@ Django-verified session), **never from the request body**, and asks b2b-backend
   was checked on a throwaway copy of the local Studio Space Postgres. The CRM
   side was checked on `npm run dev:sandbox` (stub: Kavya and Meera have Studio
   Space logins, the others do not).
+
+## Who sees which firm (decided 2026-10-31, PR #17 and dashboard PR #35)
+
+**The CRM and Studio Space share a backend and a database, not firms.** The CRM's
+firms are `b2b_client`, Studio Space's are `partner`, and on 2026-10-31 only 16 of
+the 29 `partner` firms matched a CRM firm, by phone. Before PR #17 nothing carried
+an assignment across.
+
+- **Firm visibility:** an admin sees every firm; everyone else only firms assigned
+  to them. Outreach and inbound are held to it because their firms are not
+  onboarded on Studio Space. Prospects, onboarding forms and the waitlist stay on
+  market, because they are not assigned firms.
+- **The CRM drives the KAM** (`app/firm_kam.py`, no migration): firm by phone,
+  person by `kamPhone` on the latest assignment or one roster name that fits, login
+  by phone. **Never a name to a login:** two different people share a first name
+  across the CRM roster and Studio Space's staff, so a name match would hand one
+  person's firms to the other. It runs after a CRM firm save, a roster change, a
+  staff change and a provisioned firm, so a new login picks up its firms by itself.
+- **It leaves a firm alone when unsure:** no CRM owner, owner not on the roster, no
+  active login, a mobile two logins share, or CRM rows that disagree. Setting a firm
+  to Unassigned in the CRM keeps Studio Space's KAM, so a blank cannot wipe a real
+  assignment. A firm with no CRM match keeps the KAM chosen on its console page.
+- **The CRM team list and Studio Space's staff are two lists.** Being on the first
+  creates no login on the second. An admin adds people under console Team → Add
+  somebody, with the same mobile as their CRM account, or nothing links. Merge PR #17
+  before adding KAMs, or they see a whole market in between.
+- **Failures leave little trace.** A refused CRM sign-in writes no row and
+  `audit_log` records only successful writes, so "nothing happened" for a person
+  is not visible in either.
 
 ## Numbers by firm
 

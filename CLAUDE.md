@@ -442,6 +442,12 @@ out of its output. `next dev` rejects a symlinked `node_modules` ("points out of
 filesystem root"), so `cp -cR` it instead to run a server. Either way, keep it
 out of the commit.
 
+**Open on Studio Space (2026-10-31): b2b-backend PR #17, then b2b-dashboard PR
+#35, both draft and not live.** After #17 only admins see every firm there, and
+the CRM's assignment sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees
+which firm). Never match a staff login by name. The CRM's team list creates no
+Studio Space login. The CRM keeps screen-only rep scoping by the user's decision.
+
 **b2b-backend is a sibling repo** (`~/Projects/b2b-backend`,
 `MySite-Tech/b2b-backend`, production is `origin/master`). Its checkout has
 `dhruv-changes` on it, which was dropped on purpose: never commit there. Make a

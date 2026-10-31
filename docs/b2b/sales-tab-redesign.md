@@ -195,7 +195,10 @@ The user answered the open questions:
 - **Nothing hardcoded.** Managers put existing CRM users onto teams, and people
   will keep joining and leaving.
 - **Calls target is 1,500 a month per head** (user, 2026-10-29; was 90/day).
-- **Outreach/KAM get a scoped view, not a server-side block.**
+- **Outreach/KAM get a scoped view, not a server-side block.** Reconfirmed by
+  the user on 2026-10-31, after it was explained that every firm still reaches a
+  rep's browser and is hidden only on screen. Do not re-propose the server-side
+  block.
 
 That changed one earlier decision. **Team membership is a CRM-Supabase table,
 `b2b_team_member`, not `individualPermissions` sub-slugs.** Two reasons:
