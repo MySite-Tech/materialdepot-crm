@@ -420,7 +420,7 @@ dev stack is `~/Projects/ss-local-stack` (`status.sh`, dashboard on
 on 2026-10-30. Test a backend migration on a `CREATE DATABASE … TEMPLATE newdb`
 copy of that Postgres, never on `newdb` itself: the stack's `start.sh` migrates
 from `dhruv-changes` and fails on a revision it does not know.
-**Studio Space catalogues (2026-11-02, b2b-dashboard PR #36, open, not merged).**
+**Studio Space catalogues (b2b-dashboard PR #36, live 2026-11-03 as `aff3642`).**
 Console → Catalogues takes custom categories ("Hardware"), uses page 1 as the cover,
 and takes PDFs up to 200MB, uploaded in 45MB parts because Material Depot's file
 store caps a request at 50MB and Cloudflare at 100MB. `app/catalogue-pdf` joins
