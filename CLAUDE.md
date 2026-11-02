@@ -420,6 +420,13 @@ dev stack is `~/Projects/ss-local-stack` (`status.sh`, dashboard on
 on 2026-10-30. Test a backend migration on a `CREATE DATABASE … TEMPLATE newdb`
 copy of that Postgres, never on `newdb` itself: the stack's `start.sh` migrates
 from `dhruv-changes` and fails on a revision it does not know.
+**Studio Space catalogues (2026-11-02, b2b-dashboard PR #36, open, not merged).**
+Console → Catalogues takes custom categories ("Hardware"), uses page 1 as the cover,
+and takes PDFs up to 200MB, uploaded in 45MB parts because Material Depot's file
+store caps a request at 50MB and Cloudflare at 100MB. `app/catalogue-pdf` joins
+the parts. After it deploys, upload one catalogue over 45MB on production and open
+it. A 400 means production's file host is missing from `PART_HOSTS`. The full
+account is in that repo's `docs/launches.md`.
 
 **Branching while other sessions edit this tree: use a `git worktree`.**
 Switching branches here drags every session's uncommitted files along.
