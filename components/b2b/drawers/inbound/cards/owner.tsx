@@ -37,7 +37,7 @@ export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReass
     setError(null);
     reassignInboundLead(draft.id, to.phone, reason)
       .then(() => onReassigned(to))
-      .then((failed) => { if (failed) { setError(failed); return; } setToPhone(''); setReason(''); })
+      .then((failed) => { setToPhone(''); setReason(''); if (failed) setError(failed); })
       .catch((e) => setError(e instanceof Error ? e.message : 'Reassign failed'))
       .finally(() => setSaving(false));
   };

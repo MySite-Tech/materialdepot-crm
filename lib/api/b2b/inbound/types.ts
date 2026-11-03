@@ -34,13 +34,6 @@ export interface InboundLeadEdit {
   selections?: string[];
 }
 
-export interface KylasWriteResult {
-  ok: boolean;
-  error?: string;
-
-  dropped?: string[];
-}
-
 export interface InboundLeadDetail extends InboundLeadEdit {
 
   selections?: Selection[];

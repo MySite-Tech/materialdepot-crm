@@ -208,12 +208,12 @@ export function clientMetricsFrom(
 export function orderDatesFromAggregates(
   aggregates: Record<string, ClientOrderHistory>,
   phones: string[],
-  ok = true,
+  unread: ReadonlySet<string> = new Set(),
 ): { byPhone: Record<string, { last?: string; loaded: boolean }> } {
   const byPhone: Record<string, { last?: string; loaded: boolean }> = {};
   for (const p of phones.map(normalizeContactNumber)) {
     if (!p) continue;
-    byPhone[p] = { loaded: ok, last: aggregates[p]?.lastOrderDate ?? undefined };
+    byPhone[p] = { loaded: !unread.has(p), last: aggregates[p]?.lastOrderDate ?? undefined };
   }
   return { byPhone };
 }

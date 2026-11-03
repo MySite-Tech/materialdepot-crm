@@ -1,5 +1,6 @@
 import { getToken, refreshSession } from '@/lib/api/core/client';
-import type { KylasUser, MemberInput, ReassignOutcome, RotationOutcome, SavedMember, TeamState } from './types';
+import type { InboundLead } from '@/components/b2b/models/mock-data';
+import type { KylasUser, MemberInput, ReassignOutcome, RotationOutcome, SavedMember, SyncOutcome, TeamState } from './types';
 
 async function send<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   const headers: Record<string, string> = {
@@ -34,8 +35,24 @@ export const saveTeamMember = (input: MemberInput): Promise<SavedMember> =>
 export const runInboundRotation = (dryRun = false): Promise<RotationOutcome> =>
   send<RotationOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'rotate', dryRun }));
 
+export const syncInbound = (full = false): Promise<SyncOutcome> =>
+  send<SyncOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'sync', full }));
+
 export const reassignInboundLeads = (items: { leadId: string; toPhone: string }[], reason: string): Promise<ReassignOutcome> =>
   send<ReassignOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'reassign-many', items, reason }));
 
 export const reassignInboundLead = (leadId: string, toPhone: string, reason: string): Promise<{ to: string }> =>
   send<{ to: string }>('/api/b2b/inbound/assign', json('POST', { mode: 'reassign', leadId, toPhone, reason }));
+
+export async function moveInboundLeads(
+  plan: { lead: InboundLead; toPhone: string }[],
+  reason: string,
+): Promise<{ moved: InboundLead[]; failed: ReassignOutcome['failed'] }> {
+  const outcome = await reassignInboundLeads(plan.map(({ lead, toPhone }) => ({ leadId: lead.id, toPhone })), reason);
+  const byId = new Map(outcome.moved.map((m) => [m.leadId, m]));
+  const moved = plan.flatMap(({ lead }) => {
+    const m = byId.get(lead.id);
+    return m ? [{ ...lead, owner: m.name, ownerId: m.kylasUserId }] : [];
+  });
+  return { moved, failed: outcome.failed };
+}

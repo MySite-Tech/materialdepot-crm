@@ -89,7 +89,7 @@ function Deal({ lead }: { lead: InboundLead }) {
   return <div className="flex flex-col gap-0.5 whitespace-nowrap">{value}{enq}</div>;
 }
 
-export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText, page, setPage, onOpen, onClearSearch, emptyAction }: {
+export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText, page, setPage, onOpen, onClearSearch, emptyAction, picked, onTogglePick, onTogglePage }: {
   lens: Lens;
   rows: InboundLead[];
   today: string;
@@ -101,11 +101,15 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
   onOpen: (id: string) => void;
   onClearSearch: () => void;
   emptyAction?: ReactNode;
+  picked?: Set<string>;
+  onTogglePick?: (id: string) => void;
+  onTogglePage?: (ids: string[]) => void;
 }) {
   const meta = LENS[lens];
   const pages = Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE));
   const cur = Math.min(page, pages - 1);
   const visible = rows.slice(cur * LIST_PAGE_SIZE, (cur + 1) * LIST_PAGE_SIZE);
+  const visibleIds = visible.map((l) => l.id);
   const showStatus = !SINGLE_STATUS.includes(lens);
   const showGaps = lens === 'gaps';
   const isResult = !searchQuery && OUTCOME_LENSES.includes(lens);
@@ -144,6 +148,16 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
           <table className="w-full text-[12.5px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/60">
+                {picked && (
+                  <th className={th}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select this page"
+                      checked={visibleIds.length > 0 && visibleIds.every((id) => picked.has(id))}
+                      onChange={() => onTogglePage?.(visibleIds)}
+                    />
+                  </th>
+                )}
                 <th className={th}>Pri</th>
                 <th className={th}>Lead</th>
                 {showStatus && <th className={th}>Status</th>}
@@ -158,6 +172,11 @@ export function LeadTable({ lens, rows, today, showOwner, searchQuery, valueText
               {visible.map((l) => {
                 return (
                   <tr key={l.id} onClick={() => onOpen(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
+                    {picked && (
+                      <td className={td} onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" aria-label={`Select ${l.company}`} checked={picked.has(l.id)} onChange={() => onTogglePick?.(l.id)} />
+                      </td>
+                    )}
                     <td className={td}><PriorityChip p={l.priority} /></td>
                     <td className={`${td} max-w-[260px]`}>
                       <div className="font-semibold text-gray-900 truncate"><LeadName lead={l} /><CrmAddedTag lead={l} /></div>

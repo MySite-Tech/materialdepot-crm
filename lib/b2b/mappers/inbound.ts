@@ -1,4 +1,4 @@
-import { B2BLeadRow } from '../data/rows';
+import { B2BLeadRow, InboundRowChange } from '../data/rows';
 import { CallAttempt, InboundStatus, clientTypeFromKylas, decomposeLegacyStage, locationFromPincode, normalizeStatus } from '@/components/b2b/models/inbound';
 import { InboundLead } from '@/components/b2b/models/mock-data';
 import { INVALID_ENQUIRY_REASON } from '@/components/b2b/constants/inbound';
@@ -169,31 +169,61 @@ export function inboundToRow(l: InboundLead): B2BLeadRow {
   };
 }
 
-export function mergeKylasIntoRow(dbLead: InboundLead, kylas: InboundLead): InboundLead {
-  const merged: InboundLead = {
-    ...dbLead,
-    phone: kylas.phone || dbLead.phone,
-    contactName: kylas.contactName || dbLead.contactName,
-    owner: kylas.owner || dbLead.owner,
-    ownerId: kylas.ownerId ?? dbLead.ownerId,
-    leadCreatedAt: kylas.leadCreatedAt || dbLead.leadCreatedAt,
-    qualificationTag: kylas.qualificationTag || dbLead.qualificationTag,
-    presalesOwner: kylas.presalesOwner || dbLead.presalesOwner,
-    leadSummary: kylas.leadSummary || dbLead.leadSummary,
-    urgency: kylas.urgency || dbLead.urgency,
-    pincode: kylas.pincode || dbLead.pincode,
-    presalesClientType: kylas.presalesClientType || dbLead.presalesClientType,
-    presalesMissedCalls: kylas.presalesMissedCalls ?? dbLead.presalesMissedCalls,
-    kylasStage: kylas.kylasStage ?? dbLead.kylasStage,
-    source: kylas.source || dbLead.source,
+const APPENDED = new Set(['call_attempts', 'notes', 'requirement_history']);
+const SNAPSHOT = new Set(INBOUND_KYLAS_SNAPSHOT.map((f) => f.db));
 
-    requirement: dbLead.requirement || kylas.requirement,
+function canon(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canon((v as Record<string, unknown>)[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+export function inboundChange(base: InboundLead | null, next: InboundLead): InboundRowChange {
+  const to = inboundToRow(next);
+  const from = base ? inboundToRow(base) : null;
+  const change: InboundRowChange = { meta: {}, append: {} };
+  if (!from || from.stage !== to.stage) change.stage = to.stage;
+  if (!from || from.owner !== to.owner) change.owner = to.owner;
+  if (!from || from.value !== to.value) change.value = to.value;
+  for (const [k, v] of Object.entries(to.meta_data)) {
+    const was = from?.meta_data[k];
+    if (APPENDED.has(k)) {
+      const seen = new Set((Array.isArray(was) ? was : []).map(canon));
+      const added = (v as unknown[]).filter((item) => !seen.has(canon(item)));
+      if (added.length) change.append[k] = added;
+    } else if (!from || canon(was) !== canon(v)) {
+      change.meta[k] = v;
+    }
+  }
+  return change;
+}
+
+export function hasTeamEdits(base: InboundLead, next: InboundLead): boolean {
+  const c = inboundChange(base, next);
+  return c.stage !== undefined || Object.keys(c.append).length > 0
+    || Object.keys(c.meta).some((k) => !SNAPSHOT.has(k) && k !== 'company');
+}
+
+export function applyInboundChange(row: B2BLeadRow, change: InboundRowChange): B2BLeadRow {
+  const meta: Record<string, any> = { ...row.meta_data, ...change.meta };
+  for (const [k, items] of Object.entries(change.append)) {
+    const cur: unknown[] = Array.isArray(meta[k]) ? meta[k] : [];
+    const seen = new Set(cur.map(canon));
+    meta[k] = [...cur, ...items.filter((item) => !seen.has(canon(item)))];
+  }
+  if (Array.isArray(meta.call_attempts)) {
+    meta.call_attempts = [...meta.call_attempts]
+      .sort((a, b) => String(a?.at ?? '').localeCompare(String(b?.at ?? '')))
+      .map((c, i) => ({ ...c, n: i + 1 }));
+  }
+  return {
+    ...row,
+    stage: change.stage ?? row.stage,
+    owner: change.owner ?? row.owner,
+    value: change.value ?? row.value,
+    meta_data: meta,
   };
-  if (!merged.location) merged.location = locationFromPincode(merged.pincode);
-  if (!merged.clientType) merged.clientType = clientTypeFromKylas(merged.presalesClientType);
-  merged.company = inboundDisplayName(merged);
-  merged.timeline = merged.urgency;
-  merged.requirementBrief = merged.leadSummary;
-  return merged;
 }
 

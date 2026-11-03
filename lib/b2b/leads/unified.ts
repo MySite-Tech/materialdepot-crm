@@ -80,9 +80,6 @@ export function outreachToUnified(l: OutreachLead): UnifiedLead {
 interface UnifiedLeadsResult {
   leads: UnifiedLead[];
 
-  inboundTotal: number;
-  inboundHasMore: boolean;
-
   failed: LeadSource[];
 }
 
@@ -92,11 +89,15 @@ export async function fetchUnifiedLeads(opts?: {
 }): Promise<UnifiedLeadsResult> {
   const failed: LeadSource[] = [];
 
-  const inboundP = fetchInboundBoard({ page: 0, createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
+  const inboundP = fetchInboundBoard({ createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
+    .then((r) => {
+      if (!r.ok) failed.push('Inbound');
+      return r;
+    })
     .catch((e) => {
       console.error('[b2b] leads tab: inbound fetch failed', e);
       failed.push('Inbound');
-      return { leads: [] as InboundLead[], page: 0, hasMore: false, total: 0 };
+      return { leads: [] as InboundLead[] };
     });
   const outreachP = fetchOutreachLeads({ createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
     .catch((e) => {
@@ -112,8 +113,6 @@ export async function fetchUnifiedLeads(opts?: {
       ...inbound.leads.map(inboundToUnified),
       ...outreach.map(outreachToUnified),
     ],
-    inboundTotal: inbound.total,
-    inboundHasMore: inbound.hasMore,
     failed,
   };
 }

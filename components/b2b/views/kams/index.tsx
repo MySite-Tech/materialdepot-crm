@@ -7,7 +7,7 @@ import { KamOrderTable } from './orders/table';
 
 import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, InteractionType, contactNumbers, istToday, openCheckIn, primaryContact, withInteraction } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, acceptFirmHandover, rejectFirmHandover, sortFirmsForLens } from '../../models/kam';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, ownsFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, acceptFirmHandover, rejectFirmHandover, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
 import { fmtL } from '../../models/mock-data';
 import { repNames, sameRep } from '../../models/outreach/handover';
@@ -109,18 +109,28 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
     return repNames(allKams, [...clients.map((c) => c.kam), ...orders.map((o) => o.kam)]);
   }, [allKams, clients, orders]);
 
-  const scopedClients = useMemo(
-    () => (kamFilter === 'all' ? clients : clients.filter((c) => (kamFilter === 'unassigned' ? !c.kam : sameRep(c.kam, kamFilter)))),
-    [clients, kamFilter],
+  const manager = viewer.isManager;
+  const assignedFirms = useMemo(
+    () => clients.filter((c) => (manager ? !!c.kam : ownsFirm(c, me))),
+    [clients, manager, me],
   );
+  const myOrders = useMemo(
+    () => (manager ? orders : orders.filter((o) => sameRep(o.kam, me.name))),
+    [orders, manager, me.name],
+  );
+  const scopedClients = useMemo(() => {
+    if (!manager || kamFilter === 'all') return assignedFirms;
+    return kamFilter === 'unassigned' ? clients.filter((c) => !c.kam) : assignedFirms.filter((c) => sameRep(c.kam, kamFilter));
+  }, [clients, assignedFirms, manager, kamFilter]);
   const scopedOrders = useMemo(
-    () => (kamFilter === 'all' ? orders : orders.filter((o) => sameRep(o.kam, kamFilter))),
-    [orders, kamFilter],
+    () => (!manager || kamFilter === 'all' ? myOrders : myOrders.filter((o) => sameRep(o.kam, kamFilter))),
+    [myOrders, manager, kamFilter],
   );
+  const unassignedCount = useMemo(() => clients.filter((c) => !c.kam).length, [clients]);
 
   const openOrderCount = useMemo(
-    () => orders.filter((o) => KAM_OPEN_STATUSES.includes(o.status)).length,
-    [orders],
+    () => myOrders.filter((o) => KAM_OPEN_STATUSES.includes(o.status)).length,
+    [myOrders],
   );
 
   const rows = useMemo(() => assignedClientRows(scopedClients, metricsFor, today), [scopedClients, metricsFor, today]);
@@ -160,8 +170,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const isOrderLens = (k: KamLens): k is KamOrderLens => k in ordersBy;
   const countOf = (k: KamLens) => (isOrderLens(k) ? ordersBy[k].length : firmsBy[k].length);
 
-  const callTarget = kamFilter === 'all'
-    ? repNames([], clients.map((c) => c.kam)).length * DAILY_CALL_TARGET
+  const callTarget = manager && kamFilter === 'all'
+    ? repNames([], assignedFirms.map((c) => c.kam)).length * DAILY_CALL_TARGET
     : DAILY_CALL_TARGET;
 
   const firmRows = useMemo(
@@ -206,8 +216,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
 
   const pickLens = (k: KamLens) => setLens(k);
 
-  const legacyCount = useMemo(() => orders.filter((o) => isLegacyKamStage(o.legacyStage)).length, [orders]);
-  const unlinkedOrders = useMemo(() => orders.filter((o) => !o.clientId).length, [orders]);
+  const legacyCount = useMemo(() => myOrders.filter((o) => isLegacyKamStage(o.legacyStage)).length, [myOrders]);
+  const unlinkedOrders = useMemo(() => myOrders.filter((o) => !o.clientId).length, [myOrders]);
 
   const drawerRow = useMemo(() => rows.find((r) => r.client.id === drawerId) || null, [rows, drawerId]);
   const loggingClient = useMemo(() => clients.find((c) => c.id === loggingFor?.id) || null, [clients, loggingFor]);
@@ -237,7 +247,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       contactName: primary?.name,
       phone: primary?.number,
       status: 'Requirement Logged',
-      kam: client?.kam || (kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name),
+      kam: client?.kam || (manager && kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name),
       source: client?.source || 'Existing',
       value: 0,
       notes: [],
@@ -262,12 +272,12 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
         </div>
       )}
 
-      {!failed.length && !clients.length && !loading && (
+      {!failed.length && !assignedFirms.length && !loading && (
         <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-[12px] text-blue-900">
           <span className="font-semibold">No clients are assigned yet.</span> §7 says this module shares its client
           universe with the Client Database — seed that tab and assigned clients, the call cadence and the temperature
           readings all appear here.
-          {!!orders.length && ` ${orders.length} order${orders.length === 1 ? '' : 's'} already exist and are under Order board — ${openOrderCount} still open, which is the Open orders tile.`}
+          {!!myOrders.length && ` ${myOrders.length} order${myOrders.length === 1 ? '' : 's'} already exist and are under Order board — ${openOrderCount} still open, which is the Open orders tile.`}
         </div>
       )}
 
@@ -276,11 +286,13 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search firm, contact, number or Enq ID…"
           className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white outline-none focus:border-[#0F766E] w-full sm:w-[280px]" />
-        <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All KAMs ({clients.length} firms)</option>
-          <option value="unassigned">Unassigned</option>
-          {kamOptions.map((k) => <option key={k} value={k}>{k} ({clients.filter((c) => sameRep(c.kam, k)).length})</option>)}
-        </select>
+        {manager && (
+          <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
+            <option value="all">All KAMs ({assignedFirms.length} firms)</option>
+            <option value="unassigned">No KAM yet ({unassignedCount})</option>
+            {kamOptions.map((k) => <option key={k} value={k}>{k} ({assignedFirms.filter((c) => sameRep(c.kam, k)).length})</option>)}
+          </select>
+        )}
         <select value={segment} onChange={(e) => setSegment(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
           <option value="all">All segments</option>
           {SEGMENTS.map((x) => <option key={x} value={x}>Segment {x}</option>)}
@@ -400,8 +412,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
         <OrderModal
           order={orderModal.order}
           isNew={orderModal.isNew}
-          clients={kamFilter === 'all' ? clients : scopedClients}
-          kam={kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name}
+          clients={manager && kamFilter === 'all' ? clients : scopedClients}
+          kam={manager && kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name}
           actor={me.name}
           creditPeople={allKams}
           canCredit={viewer.isManager}

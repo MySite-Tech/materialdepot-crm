@@ -23,6 +23,13 @@ export function firmHandoverState(c: ClientEntity, nowMs: number): FirmHandoverS
 
 export const firmHandoverPending = (c: ClientEntity): boolean => firmHandover(c)?.status === 'Pending';
 
+export const ownsFirm = (c: ClientEntity, me: Rep): boolean => {
+  if (!c.kam) return false;
+  const a = latestAssignment(c);
+  if (a?.kamPhone && me.phone && sameRep(a.kam, c.kam)) return a.kamPhone === me.phone;
+  return sameRep(c.kam, me.name);
+};
+
 export function assignFirm(c: ClientEntity, rep: Rep, by: string, at: string, how: 'manual' | 'round-robin', reason?: string): ClientEntity {
   const entry: KamAssignment = {
     kam: rep.name, kamPhone: rep.phone, at, by, how, status: 'Pending',

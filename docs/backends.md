@@ -91,6 +91,11 @@ branch `b2b-crm-extra-and-team`, pushed 2026-10-29) adds `b2b_team_member.is_adm
 `GET/PUT /b2b/ec-visits`. The CRM reads both gracefully without it: a missing
 `is_admin` reads as false. 0020 and 0021 are live since 2026-10-29.
 
+**`POST /b2b/rows/{id}/change`** (b2b-backend PR #20, 2026-11-03, no migration) is
+the locked partial write behind Inbound saves (`b2b/inbound.md` §The CRM owns a
+lead once it is imported). The CRM works before it deploys, using a slower
+read-and-write fallback, so either side can merge first.
+
 **Migration `0023_b2b_teams_and_ec_redirect`** (b2b-backend branch
 `b2b-team-ownership-checkin` (merge #15 then #16; #14 goes inside #16, see `CLAUDE.md` §Git), based on PR #15's `studio-staff-handoff` because
 it chains after 0022):
@@ -129,6 +134,7 @@ and who changes it is still open. Each row names the doc with the detail.
 | 11 | The name join in `/crm/leads/` doubles surnames in `assignedTo` | Reps show as "First Last Last" | `b2b/client-db.md` §One enquiry |
 | 12 | Find what spends the shared Kylas key on a 14s cycle, and throttle it or give it its own key | Kylas answers only 429 for about 7s in every 14s, so CRM calls wait up to 15s and can fail. Also check whether a separate key gets a separate budget | `api-layer/context.md` §`lib/server/b2b-team` |
 | 13 | `/crm/leads/b2b-bulk/` histories gain `lastOrderBm` per phone | Client Database's EC SPoC column reads "Not logged" unless a manager logged one, although the Firm page can show the BM | `b2b/client-db.md` §Choosing the list's columns |
+| 14 | Find why `/user-organisation/` answered 500 for a signed-in user on 2026-11-02 11:48, and log it | Every CRM route handler checks the session with this call, so a 500 stopped a rep saving a lead at a site | — |
 
 Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
 Users), and backfilling `crm.remarks_quality` on existing permission lists.

@@ -115,7 +115,7 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
   canPickBm: boolean;
   assigner: boolean;
   onClose: () => void;
-  onCreate: (lead: OutreachLead) => void;
+  onCreate: (lead: OutreachLead) => Promise<string | null | undefined>;
 }) {
   const [source, setSource] = useState<OutreachSource>('Own research');
   const [email, setEmail] = useState('');
@@ -149,6 +149,8 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
   const [mArea, setMArea] = useState('');
   const [mOffice, setMOffice] = useState('');
   const [touched, setTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const toggle = (s: Selection) =>
     setSelections((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
@@ -169,7 +171,8 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
   const err = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
   const cls = (k: keyof typeof errors) => (err(k) ? errorInputCls : inputCls);
 
-  const save = () => {
+  const save = async () => {
+    if (saving) return;
     if (Object.keys(errors).length) { setTouched(true); return; }
     const meetings: OutreachMeeting[] = mDate
       ? [{
@@ -178,7 +181,9 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
         status: 'Scheduled', loggedBy: rep.name || me.name, updatedAt: nowIso(),
       }]
       : [];
-    onCreate({
+    setSaving(true);
+    setSaveError(null);
+    const err = await onCreate({
       id: newB2BId('OR'),
       company: company.trim(),
       contactPerson: contactPerson.trim(),
@@ -214,7 +219,9 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
       spok: rep.name,
       notes: [],
       value: 0,
-    });
+    }).catch((e: unknown) => (e instanceof Error ? e.message : 'The save failed'));
+    setSaving(false);
+    if (err) setSaveError(`${err}. Nothing was saved, and your details are still here. Try Create lead again.`);
   };
 
   return (
@@ -359,12 +366,13 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
           </div>
         </div>
 
+        {saveError && <p className="px-6 pt-3 text-[12px] text-red-600">{saveError}</p>}
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
           {touched && Object.keys(errors).length > 0 && (
             <span className="mr-auto text-[11px] text-red-600">Fill the {Object.keys(errors).length} highlighted field{Object.keys(errors).length === 1 ? '' : 's'} to create the lead.</span>
           )}
           <button onClick={onClose} className="px-4 py-2 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-500 bg-white">Cancel</button>
-          <button onClick={save} className="px-4 py-2 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Create lead</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white disabled:opacity-50">{saving ? 'Saving…' : 'Create lead'}</button>
         </div>
       </div>
     </div>

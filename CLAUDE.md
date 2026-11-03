@@ -206,7 +206,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 71 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 77 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -285,7 +285,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 71 titles, so grep a title and read around the line you
+**Contents** list of all 77 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -419,6 +419,13 @@ dev stack is `~/Projects/ss-local-stack` (`status.sh`, dashboard on
 on 2026-10-30. Test a backend migration on a `CREATE DATABASE … TEMPLATE newdb`
 copy of that Postgres, never on `newdb` itself: the stack's `start.sh` migrates
 from `dhruv-changes` and fails on a revision it does not know.
+**Studio Space catalogues (b2b-dashboard PR #36, live 2026-11-03 as `aff3642`).**
+Console → Catalogues takes custom categories ("Hardware"), uses page 1 as the cover,
+and takes PDFs up to 200MB, uploaded in 45MB parts because Material Depot's file
+store caps a request at 50MB and Cloudflare at 100MB. `app/catalogue-pdf` joins
+the parts. After it deploys, upload one catalogue over 45MB on production and open
+it. A 400 means production's file host is missing from `PART_HOSTS`. The full
+account is in that repo's `docs/launches.md`.
 
 **Branching while other sessions edit this tree: use a `git worktree`.**
 Switching branches here drags every session's uncommitted files along.
@@ -455,6 +462,23 @@ it on a cycle of about 7s clear, 7s of only 429. Who is still unknown
 lead to Hardi and the CRM re-owns them, keyed on qualification time
 (`expectedClosureOn`), not `createdAt`. See `docs/b2b/inbound.md` §Who owns a lead.
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
+
+**Inbound is CRM-owned (2026-11-03, CRM PR #38 from `b2b-inbound-crm-owned` → `main`,
+with b2b-backend PR #20, either order; open until the tech team merges).** Draft PR
+#39 (`b2b-overview-funnel`, the Overview's Client Database funnel) is stacked on
+#38, and the shared tree is checked out on it. The user decided a lead comes from Kylas once, and from
+then on only the CRM changes it. **Nothing writes to Kylas.** An insert-only import
+brings in new Kylas leads when the tab opens, every 5 minutes and on Sync. The board
+reads CRM rows only, so "Load more" is gone. A save sends only what changed, and
+calls and notes only append. The owner is the row's `owner_kylas_id`, which the
+round robin and reassign write. The drawer asks before discarding unsaved edits.
+Read `docs/b2b/inbound.md` §The CRM owns a lead once it is imported before any
+Inbound change, and don't re-propose following Kylas's owner. **At deploy, run
+`scripts/inbound-owner-cutover.mjs` once against production** (dry run first, log
+JSON from the SQL in that section). Without it, 140 rows keep stale owners.
+Still open: the 400 the user saw on :3001 (`mdFetch` errors now name the endpoint,
+and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
+Outreach's BM chips into Filters.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
@@ -651,8 +675,9 @@ for it.
 
 - **Assignment has one shape in B2B (2026-10-31).** `ui/assign-bar.tsx`: team
   first, then One person or Round robin over a chosen set. Bulk takes only records
-  with no owner; an owned record moves only as the single selected row. Do not add
-  a second assign control. A team stays greyed out where no data path exists.
+  with no owner; an owned record moves only as the single selected row. The Inbound
+  tab is the exception (2026-11-02): its bulk reassign takes owned open leads, at the
+  user's request. Do not add a second assign control. A team stays greyed out where no data path exists.
 
 - **A rep's name is not a key (2026-10-31).** Rows hold roster short names and the
   team table full ones. Compare with `sameRep`, build lists with `repNames`, and

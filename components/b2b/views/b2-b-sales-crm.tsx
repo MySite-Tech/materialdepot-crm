@@ -13,19 +13,20 @@ import StudioSpace from './studio-space/index';
 import TeamView from './team/index';
 import { useB2BTeam } from '../hooks/use-b2b-team';
 import { viewerFor } from '@/lib/b2b/team/utils';
+import type { B2BTeam } from '@/lib/b2b/team/types';
 import type { AppUser } from '@/types/crm';
 
 type B2BView =
   | 'overview' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'ec'
   | 'leadership' | 'studio' | 'team';
 
-const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean }> = [
-  { key: 'overview',   label: 'Overview',         ready: true },
-  { key: 'leads',      label: 'Leads',            ready: true },
+const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean; managersOnly?: boolean }> = [
+  { key: 'overview',   label: 'Overview',         ready: true, managersOnly: true },
+  { key: 'leads',      label: 'Leads',            ready: true, managersOnly: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
   { key: 'outreach',   label: 'Outreach',         ready: true },
 
-  { key: 'clients',    label: 'Client Database',  ready: true },
+  { key: 'clients',    label: 'Client Database',  ready: true, managersOnly: true },
   { key: 'kams',       label: 'KAM',              ready: true },
   { key: 'ec',         label: 'EC Directed',      ready: true },
   { key: 'leadership', label: 'Leadership Board', ready: true },
@@ -34,13 +35,17 @@ const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly
   { key: 'team',       label: 'Team',             ready: true, teamManagersOnly: true },
 ];
 
+const TEAM_VIEW: Record<B2BTeam, B2BView> = { inbound: 'inbound', outreach: 'outreach', kam: 'kams' };
+
 export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | null }) {
-  const [view, setView] = useState<B2BView>('overview');
+  const [picked, setView] = useState<B2BView | null>(null);
   const team = useB2BTeam();
   const viewer = useMemo(() => viewerFor(currentUser, team.members), [currentUser, team.members]);
   const nav = useMemo(() => NAV
-    .filter((item) => !item.teamManagersOnly || viewer.canManageTeam)
+    .filter((item) => (!item.teamManagersOnly || viewer.canManageTeam) && (!item.managersOnly || viewer.isManager))
     .map((item) => (item.key === 'leadership' && !viewer.isManager ? { ...item, label: 'My performance' } : item)), [viewer.isManager, viewer.canManageTeam]);
+  const landing: B2BView = viewer.isManager ? 'overview' : viewer.member ? TEAM_VIEW[viewer.member.team] : 'leadership';
+  const view = picked && nav.some((item) => item.key === picked) ? picked : landing;
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-84px)] bg-[#FAFAFA]">
@@ -88,6 +93,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
       </div>
 
       <main className="flex-1 overflow-y-auto min-w-0">
+        {team.loading && !viewer.isManager ? <p className="p-6 text-sm text-gray-400">Loading your B2B team…</p> : <>
         {view === 'overview' && <B2BOverview team={team} onNavigate={setView} />}
         {view === 'inbound' && <InboundLeads team={team} viewer={viewer} />}
         {view === 'leads' && <LeadsTab team={team} viewer={viewer} />}
@@ -98,6 +104,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'leadership' && <Leadership team={team} viewer={viewer} />}
         {view === 'studio' && <StudioSpace />}
         {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}
+        </>}
       </main>
     </div>
   );

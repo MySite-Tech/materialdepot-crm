@@ -25,20 +25,10 @@ export function kylasClientTypeIsAmbiguous(raw: string | undefined): boolean {
   return !!v && !clientTypeFromKylas(v);
 }
 
-export function selectionsToKylasLabels(sel: string[] | undefined): string[] {
-  return (sel || [])
-    .map((s) => SELECTION_KYLAS_LABEL[s as Selection])
-    .filter((s): s is string => !!s);
-}
-
 export function selectionsFromKylasLabels(labels: string[] | undefined): Selection[] {
   const inverse = new Map(
     Object.entries(SELECTION_KYLAS_LABEL).map(([ours, theirs]) => [theirs, ours as Selection]),
   );
   return (labels || []).map((l) => inverse.get(l)).filter((s): s is Selection => !!s);
-}
-
-export function selectionsKylasWillDrop(sel: string[] | undefined): string[] {
-  return (sel || []).filter((s) => !SELECTION_KYLAS_LABEL[s as Selection]);
 }
 

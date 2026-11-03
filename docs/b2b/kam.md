@@ -166,6 +166,20 @@ data, with Django stubbed.
 - **Against the Django stub every firm reads Inactive with ₹0.** The stub
   answers `200 []` for `b2b-bulk`, so this says nothing about real accounts.
 
+### Who sees which firms (2026-11-02)
+
+- **A rep sees only their own book.** Not a manager (`viewer.isManager`): firms
+  where `ownsFirm` holds (the latest assignment's KAM phone when it names the
+  firm's KAM, else `sameRep` on `kam`, so "Jadhav" rows are Krishna Jadhav's) and
+  orders whose `kam` is them. No KAM picker. Screen-only, like every B2B scope.
+- **Assigned means a firm has a KAM.** Since the 1,000+ firm import
+  (`client-db.md` §The client_master import) most Client Database firms have no
+  KAM. "All KAMs" and every tile count only firms with one; a manager reaches
+  the rest under "No KAM yet". On 2026-11-02 production had 1,285 firms, 158 with
+  a KAM (Krishna Jadhav 117 with the "Jadhav" rows, Tharun 27, Sai Suresh 8,
+  Hardi 5, Vilok 1).
+- Checked in the dummy CRM (:3100) as the KAM, Outreach and manager personas.
+
 ### Account status: 30 / 60 days, every firm (2026-10-29)
 
 The user set this rule for KAM in the morning and, the same evening, asked for

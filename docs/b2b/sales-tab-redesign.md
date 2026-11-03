@@ -178,6 +178,14 @@ First sub-tab brief. Source: the user's message plus `kpi-definitions.md`
 Inbound is open on purpose: when one rep is out, another takes the lead over
 and puts it in their own name. Outreach and KAM are hard-scoped.
 
+**2026-11-02: company-wide tabs are manager-only.** The user: reps must see only
+what is assigned to them, and only their own performance. Overview, Leads and
+Client Database (`managersOnly` in `b2-b-sales-crm.tsx`) are hidden from anyone
+who is not `viewer.isManager`. A rep lands on their team's tab (Inbound,
+Outreach or KAM), or on My performance with no team. The KAM tab was the one
+team tab with no rep scope until then (`kam.md` §Who sees which firms). Still
+screen-only: the 2026-10-31 decision against a server-side block stands.
+
 **Scope belongs in the fetch, not in a filter.** Today the owner filter
 defaults to `'all'` and a rep can change it. "Mine" has to be the `ownerIds`
 handed to `fetchInboundBoard`, or a rep's numbers are only right while nobody

@@ -2,14 +2,13 @@
 
 import { usePicked } from '../../../hooks/use-picked';
 import { OutreachLead } from '../../../models/mock-data';
-import { isCrmAddedLead } from '../../../models/inbound/kylas';
 import { sameRep } from '../../../models/outreach/handover';
 import { Rep, assignLead, isUnassigned, planRoundRobin, spreadByLoad } from '../../../models/outreach/intake';
 import { withJourney } from '../../../models/outreach/reminders';
 import { AssignTarget, AssignTeams, isRoundRobin } from '../../../ui/assign-bar';
-import { UnifiedLead, inboundToUnified, istToday, outreachToUnified, upsertInboundLeads, upsertOutreachLeads } from '@/lib/b2b';
+import { UnifiedLead, inboundToUnified, istToday, outreachToUnified, upsertOutreachLeads } from '@/lib/b2b';
 import { INBOUND_INTAKE_KYLAS_ID, INBOUND_ROTATION_BATCH } from '@/lib/b2b/team/constants';
-import { reassignInboundLeads } from '@/lib/b2b/team';
+import { moveInboundLeads } from '@/lib/b2b/team';
 import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
 import { useMemo, useState } from 'react';
 
@@ -64,23 +63,19 @@ export function useLeadAssign({ leads, members, reps, rotationReps, by, onSaved 
   };
 
   const moveInbound = async (list: UnifiedLead[], to: AssignTarget): Promise<string | null> => {
-    if (list.length > INBOUND_ROTATION_BATCH) return `Inbound leads move ${INBOUND_ROTATION_BATCH} at a time, because each one is a Kylas owner change. Select fewer.`;
+    if (list.length > INBOUND_ROTATION_BATCH) return `Inbound leads move ${INBOUND_ROTATION_BATCH} at a time. Select fewer.`;
     const held = new Map<string, number>();
     for (const l of leads) {
       const m = l.inbound && open(l) ? inboundTeam.find((t) => t.kylasUserId === l.inbound?.ownerId) : undefined;
       if (m) held.set(m.name, (held.get(m.name) || 0) + 1);
     }
     const plan = isRoundRobin(to) ? spreadByLoad(list, to.among, held) : list.map((item) => ({ item, rep: to }));
-    const outcome = await reassignInboundLeads(plan.map(({ item, rep }) => ({ leadId: item.id, toPhone: rep.phone || '' })), REASON);
-    const byId = new Map(outcome.moved.map((m) => [m.leadId, m]));
-    const moved = list.flatMap((l) => {
-      const m = byId.get(l.id);
-      return m && l.inbound ? [{ ...l.inbound, owner: m.name, ownerId: m.kylasUserId }] : [];
-    });
-    const saveErr = await upsertInboundLeads(moved.filter(isCrmAddedLead));
+    const { moved, failed } = await moveInboundLeads(
+      plan.flatMap(({ item, rep }) => (item.inbound ? [{ lead: item.inbound, toPhone: rep.phone || '' }] : [])),
+      REASON,
+    );
     onSaved(moved.map(inboundToUnified));
-    if (saveErr) return `Logged, but the new owners of leads added in the CRM were not saved: ${saveErr}. Try again.`;
-    if (outcome.failed.length) return `${plural(outcome.moved.length)} moved, ${outcome.failed.length} did not: ${outcome.failed[0].error}`;
+    if (failed.length) return `${plural(moved.length)} moved, ${failed.length} did not: ${failed[0].error}`;
     return null;
   };
 

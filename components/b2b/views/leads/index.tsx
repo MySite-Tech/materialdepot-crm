@@ -19,8 +19,6 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<LeadSource[]>([]);
-  const [inboundTotal, setInboundTotal] = useState(0);
-  const [inboundHasMore, setInboundHasMore] = useState(false);
 
   const [source, setSource] = useState<'all' | LeadSourceLabel>('all');
   const [status, setStatus] = useState<'all' | UnifiedStatus>('all');
@@ -42,8 +40,6 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
       .then((res) => {
         setLeads(res.leads);
         setFailed(res.failed);
-        setInboundTotal(res.inboundTotal);
-        setInboundHasMore(res.inboundHasMore);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load leads'))
       .finally(() => setLoading(false));
@@ -289,9 +285,6 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
           <div className="flex items-center justify-between px-3 py-3 border-t border-gray-100 gap-3 flex-wrap">
             <span className="text-[11px] text-gray-400">
               Page {page + 1} of {pages} · {filtered.length} shown
-              {inboundHasMore && inboundTotal > 0 && (
-                <span> · {inboundTotal} unactioned inbound leads sit in Kylas; open the Inbound tab to page through them.</span>
-              )}
             </span>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}

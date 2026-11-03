@@ -150,7 +150,7 @@ async function mdFetchRaw(path: string, init?: RequestInit, retried = false): Pr
   }
   if (!res.ok) {
 
-    let msg = `API error: ${res.status}`;
+    let msg = `API error: ${res.status} on ${path.split('?')[0]}`;
     try {
       const j = JSON.parse(await res.text());
       msg = (typeof j?.data === 'string' && j.data)

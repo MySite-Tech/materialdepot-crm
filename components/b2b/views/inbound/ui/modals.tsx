@@ -7,7 +7,7 @@ import { CRM_INBOUND_ID_PREFIX, Selection } from '../../../models/inbound';
 import { isMobile } from '../../../models/outreach/handover';
 import { newB2BId } from '../../../models/ids';
 import { Field, GateErrors, LeadName, errorInputCls, inputCls } from '../../../ui/inbound-chips';
-import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
+import { fetchInboundBoard, saveInboundLead } from '@/lib/b2b';
 import { normalisePhone } from '@/lib/org/utils';
 import { useState } from 'react';
 
@@ -166,12 +166,11 @@ export interface LeadOwnerOption { id: number; name: string }
 const samePhone = (l: InboundLead, phone: string) =>
   [l.phone, l.primaryContactPhone].some((p) => normalisePhone(p) === phone);
 
-export function AddLeadModal({ owners, defaultOwner, canPickOwner, loaded, boardOwnerIds, actorName, onCancel, onCreated, onOpenExisting }: {
+export function AddLeadModal({ owners, defaultOwner, canPickOwner, loaded, actorName, onCancel, onCreated, onOpenExisting }: {
   owners: LeadOwnerOption[];
   defaultOwner?: LeadOwnerOption;
   canPickOwner: boolean;
   loaded: InboundLead[];
-  boardOwnerIds: number[];
   actorName: string;
   onCancel: () => void;
   onCreated: (lead: InboundLead) => void;
@@ -210,7 +209,7 @@ export function AddLeadModal({ owners, defaultOwner, canPickOwner, loaded, board
     setDuplicate(null);
     let existing = loaded.find((l) => samePhone(l, mobile));
     if (!existing) {
-      const found = await fetchInboundBoard({ page: 0, ownerIds: boardOwnerIds, search: mobile }).catch(() => null);
+      const found = await fetchInboundBoard({ search: mobile }).catch(() => null);
       if (!found?.ok) {
         setBusy(false);
         setFailure('Could not check Kylas and the CRM for this number, so nothing was added. Try again.');
@@ -242,10 +241,10 @@ export function AddLeadModal({ owners, defaultOwner, canPickOwner, loaded, board
       callAttempts: [],
       calls: [],
     };
-    const saveErr = await upsertInboundLead(lead);
+    const res = await saveInboundLead(null, lead);
     setBusy(false);
-    if (saveErr) { setFailure(`Not added: ${saveErr}. Nothing was stored — try again.`); return; }
-    onCreated(lead);
+    if (!res.lead) { setFailure(`Not added: ${res.error}. Nothing was stored — try again.`); return; }
+    onCreated(res.lead);
   };
 
   return (

@@ -7,12 +7,6 @@ export function categoryLabelsFromIds(raw: unknown): string[] {
     .filter((l): l is string => !!l);
 }
 
-export function categoryIdsFromLabels(labels: string[] | undefined): number[] {
-  return (labels || [])
-    .map((l) => KYLAS_CATEGORIES.find((c) => c.label === l)?.id)
-    .filter((id): id is number => typeof id === 'number');
-}
-
 export function cf(raw: Record<string, any>, key: string): unknown {
   const nested = raw.customFieldValues?.[key];
   return nested !== undefined && nested !== null ? nested : raw[key];

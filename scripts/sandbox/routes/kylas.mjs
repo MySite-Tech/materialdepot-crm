@@ -4,6 +4,7 @@ import { KYLAS_API_USER, KYLAS_USERS } from '../constants.mjs';
 const stageOf = (l) => (typeof l.pipelineStage === 'object' ? l.pipelineStage?.id : l.pipelineStage);
 
 const FIELD = {
+  id: (l) => Number(l.id),
   ownerId: (l) => l.ownerId,
   pipeline: (l) => l.pipeline?.id,
   pipelineStage: stageOf,

@@ -15,16 +15,16 @@ export function useClientAggregates() {
   const load = useCallback(async (phones: string[], enquiryIds: string[] = []) => {
     const bulk = await fetchB2BBulk(phones, enquiryIds);
     setAggregates(bulk.histories);
-    setDates(orderDatesFromAggregates(bulk.histories, phones, bulk.ok));
+    setDates(orderDatesFromAggregates(bulk.histories, phones, bulk.unread));
     return bulk;
   }, []);
 
   const addPhones = useCallback(async (phones: string[]) => {
     const fresh = phones.map(normalizeContactNumber).filter((p) => p && !dates?.byPhone[p]);
     if (!fresh.length) return;
-    const { histories, ok } = await fetchB2BBulk(fresh, []);
+    const { histories, unread } = await fetchB2BBulk(fresh, []);
     setAggregates((a) => ({ ...a, ...histories }));
-    setDates((d) => ({ byPhone: { ...d?.byPhone, ...orderDatesFromAggregates(histories, fresh, ok).byPhone } }));
+    setDates((d) => ({ byPhone: { ...d?.byPhone, ...orderDatesFromAggregates(histories, fresh, unread).byPhone } }));
   }, [dates]);
 
   const metricsFor = useCallback(

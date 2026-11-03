@@ -84,30 +84,107 @@ is the literal em-dash `'—'` on 150 of the 151 live rows, because
 handed. `PERSISTED_PLACEHOLDERS` reads those as empty. Do not add a display
 fallback anywhere upstream of a write.
 
-Kylas owns §3.1 outright, so `mergeKylasIntoRow` **replaces** those fields on
-every sync — a stored snapshot must never win over Presales, or a reassigned
-lead keeps showing the old BM forever. `requirement` is the exception: shared,
-and a local edit not yet pushed wins.
+### The CRM owns a lead once it is imported (2026-11-03)
 
-**The overlay runs on every page and every filter; only the *prepend* is
-page-0.** `fetchInboundBoard` used to skip the Supabase read entirely unless
-`page === 0 && !kylasStage`, so page 2+ and any Kylas-stage filter showed raw
-Kylas — your team's stage, follow-up, order value and notes silently absent on a
-board that looked normal. Fixed 2026-09-10: the read and `mergeKylasIntoRow`
-always run, and those two paths return the overlaid Kylas list early.
+The user's rule, after reps lost work on 2 Nov: **a lead comes from Kylas once,
+and from then on only the CRM changes it. Nothing is written to Kylas.** Before
+this, the board was one Kylas page of 25 plus every CRM row, merged on every
+load. Three things followed from that, all seen on production data that day:
 
-Page 0 keeps its original assembly — `[...dbLeads, ...kylasNotInDb]`, with
-db-only rows still at `New` dropped. That ordering is load-bearing: **an edited
-lead sorts above an untouched one in its column**, because "has a Supabase row"
-is doing double duty as a sort key. A rewrite that maps over `kylas.leads` to
-overlay in place is cleaner and loses that grouping — it was tried and reverted
-the same day.
+- **568 of 1,394 Kylas inbound leads had no CRM row**, so they existed only on
+  whichever page of 25 "Load more" had reached. First call went 18 → 54 as the
+  user paged, and "Sync from Kylas" re-read page 0 and dropped the rest, which
+  read as a reset. "1390 unactioned in Kylas" was every lead in the two stages,
+  826 of them already worked.
+- **Kylas moved worked leads back to Hardi outside the CRM**, and the board filed
+  each lead under its Kylas owner, so the lead left the rep's list with the
+  rep's work on it. Lead 56581783 had a Connected call, a note
+  and a follow-up from Vikas at 18:16 IST, and Kylas owned it as Hardi at 19:00.
+  Three more of Vikas's leads went the same way, 4–10s after his CRM save. The
+  assignment log holds no move back. The cause is unproven. User 71926 is the
+  API key and stamps 1,378 of 1,394 leads, so who made the change can't be told
+  apart. The suspect was the Requirement/Selection PATCH on Save re-firing a
+  Kylas workflow.
+- **Every save replaced the whole row from the browser's copy** (see below).
 
-**Newest-first is applied in the view, not in that assembly.** The board, the
-list and the export all want the latest lead at the top, and the obvious place to
-sort is the fetch — which is exactly the rewrite above that was reverted. So
-`byNewestLeadFirst` runs on `filtered` in `views/inbound/index.tsx` instead: the
-data layer's grouping stays intact and every rendered list is still date-ordered.
+Kylas is now read in exactly two places:
+
+- **The import.** `importInbound` (`lib/server/b2b-inbound/`) searches the two
+  inbound stages, sorted by `updatedAt` desc, 500 a page. It inserts rows only
+  for lead ids the CRM does not have, through `/rows/bulk` with `only_new`, so it
+  cannot touch an existing row. A routine run stops at the first page with
+  nothing new, normally 1 Kylas call. "Sync from Kylas" runs it with `full`,
+  every page, 3 calls for the ~1,400 leads. It runs inside `POST
+  /api/b2b/inbound/assign {mode:'sync'}`, followed by the round robin, when
+  Inbound opens and every 5 minutes after (`useInboundSync`). The first full run
+  on real data imported 565 rows in 2s and changed none of the 1,049 existing
+  ones.
+- **A search.** `fetchInboundBoard` with a search term also runs the widened
+  Kylas search (§Search deliberately reaches outside the board) and appends
+  leads that are not imported. Saving one inserts its row.
+
+**The board is the CRM rows and nothing else.** No paging against Kylas, no
+merge. Date, owner, stage tag and search filter `rowToInbound` output in memory.
+`total` is the count at New, which `analytics.ts` reads as the inbound "New"
+figure. The drawer's Kylas detail read fills only empty fields
+(`useInboundDetail`). Its Presales calls and notes are still read live and
+read-only.
+
+**A save sends a change, not a row.** `/rows` upserts every column, `extra`
+included, so the old whole-row write let a stale copy erase newer work. On
+lead 56525199, the round robin sent the lead to Vikas at 10:49 IST. At
+16:42 a reassign plus a save wrote a copy that still showed Hardi as owner,
+New, with no calls. Nothing keeps history, so what it overwrote is unknown.
+Now `saveInboundLead(base, next)` sends `inboundChange(base, next)`: the
+top-level and `meta_data` fields that differ, and **only the added items** of
+`call_attempts`, `notes` and `requirement_history`. `POST
+/api/b2b/inbound/save` passes it to b2b-backend's `POST /rows/{id}/change`
+(b2b-backend PR #20). That route locks the row, applies the change and adds to the
+lists in one transaction. Ten parallel call appends all survived. It answers 404
+"No such row" for a lead with no row, and the route then inserts the browser's
+copy. **Until #20 deploys**, the 404 for the missing route makes `writeInbound`
+read all of `/rows` (2.3 MB), apply the change with `applyInboundChange` (the
+same rules) and write the row back, one write at a time per server process. Two
+saves on different server instances inside the same second can still race on
+that path. Both paths were run against real rows on 2026-11-03.
+
+**The owner is the row's `owner_kylas_id`.** The round robin and reassign write it
+to the row (`writeInbound` + `ownerChange`) and log the assignment. Neither
+calls Kylas. The intake pool is still read from Kylas (owner 81181, qualified in
+the window), which now never changes. The assignment log keeps a lead from being
+dealt twice. The switch-over set each row's owner once with
+`scripts/inbound-owner-cutover.mjs`: the latest assignment-log entry if there is
+one, otherwise Kylas's owner at that moment. The row's name comes from the team
+list, the legacy six, then Kylas's user list. Its first local run kept the old
+name when the new owner was outside the team, which put "Mandeep" on three user
+ids and broke Leadership's row keys. Fixed the same day. That matches what reps already
+saw, except 14 leads Kylas had taken back to Hardi (11 to Vikas, 3 to Vilok).
+On the local copy it changed 140 rows, mostly stored owners that disagreed with
+Kylas. **Production still needs this run once, at deploy:** the log comes from
+`select distinct on (lead_id) lead_id, to_kylas_id from b2b_lead_assignment
+order by lead_id, at desc, id desc` (Metabase db 38), as a `{lead_id: to}` JSON
+file. Dry-run it first.
+
+### The lead window keeps unsaved work (2026-11-03)
+
+Calls and notes save the moment they are logged. Everything else waits for Save
+changes, and until 2026-11-03 three things threw it away without a word: Close,
+a click on the backdrop, and a board reload that dropped the lead from the
+list. The round robin reloads the board whenever it deals a lead, and the
+user's screenshot showed "1 new lead shared out round robin just now" with a
+lead open. Now:
+
+- **Close, ×, the backdrop and leaving the page ask first** when there are
+  unsaved edits: "Your changes to this lead are not saved yet", with Keep editing
+  or Discard changes. `hasTeamEdits` decides, comparing team fields only, so
+  Kylas detail filled in on open does not count as an edit (the `clean` ref in
+  the drawer).
+- **The open lead is held by the view (`opened`), not looked up in the list**, so
+  a reload, a filter change or an owner change cannot unmount it. It is keyed on
+  the lead id.
+
+**Newest-first is applied in the view.** `byNewestLeadFirst` runs on `filtered`
+in `views/inbound/index.tsx`, so every rendered list is date-ordered.
 Leads with no `leadCreatedAt` sort last rather than to the top, which is what
 comparing empty strings the other way round would have done. The call lists
 (Call today, Overdue, Due today, Upcoming, PI Shared) are deliberately **not**
@@ -352,20 +429,11 @@ How it works without Kylas:
   every later save fail on the primary key. Reusing the id keeps the existing
   route working with no backend change. `isCrmAddedLead` (the prefix) is the
   only test. Never read `kylas_lead_id` as "this is in Kylas".
-- **Every Kylas call is skipped for these leads.** That covers the Presales
-  detail, notes and call logs (the drawer shows an "Added in the CRM" card
-  instead), the requirement/selection push on Save, and on reassign the Kylas
-  read and owner PATCH. A reassign still validates the target and logs a
-  `b2b_lead_assignment` row (`from_kylas_id` null). The drawer then saves the
-  new owner onto the row itself, because the row is the only place ownership
-  lives.
-- **`fetchInboundBoard` keeps them at stage New.** Backend rows at New are
-  otherwise dropped unless Kylas returned them on this page. They load on
-  page 0 only, like every other backend row.
+- **Every Kylas read is skipped for these leads**: the Presales detail, notes and
+  call logs (the drawer shows an "Added in the CRM" card instead). Since
+  2026-11-03 nothing writes to Kylas for any lead, so save and reassign treat
+  these the same as imported leads.
 - The list and board tag them **CRM**.
-- **Not counted in Leadership's "new leads assigned"**, which is a Kylas
-  total per owner (`use-inbound-assigned.ts`). The Leads tab does include
-  them, because it reads `fetchInboundBoard`.
 
 Verified 2026-10-30 in `npm run dev:sandbox`: add, the required-field errors,
 the duplicate refusal, Save (no Kylas warning), reassign (owner and
@@ -376,9 +444,10 @@ backend.
 ### Who owns a lead: the team table, round robin, and Mine vs All
 
 Built 2026-10-28; the design is in `sales-tab-redesign.md` §Inbound. **Inbound
-ownership is the Kylas `ownerId`, and the people who can hold it are the
-`inbound` rows of `b2b_team_member`**, which a B2B manager edits under the
-**Team** sub-tab. Nothing about who is on the team is hardcoded any more.
+ownership is the row's `owner_kylas_id` since 2026-11-03** (§The CRM owns a lead
+once it is imported). It still holds a Kylas user id, because that is how a team
+member is identified. The people who can hold it are the `inbound` rows of
+`b2b_team_member`, which a B2B manager edits under the **Team** sub-tab. Nothing about who is on the team is hardcoded any more.
 
 - **`B2B_INBOUND_OWNERS` is now only a fallback**, for display and for the
   board's owner set until managers have added everyone. The board's owner set
@@ -388,7 +457,9 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
 - **Kylas delivers every Presales-qualified lead to Hardi (`81181`).** Verified
   2026-10-28: 245 of 245 leads in the two inbound stages over the previous two
   weeks, at 10–32 a day. Fixing that in Kylas was tried and did not work. The
-  CRM therefore re-owns them: `POST /api/b2b/inbound/assign {mode:'rotate'}`.
+  CRM therefore re-owns them, on the CRM row only. The `sync` mode of `POST
+  /api/b2b/inbound/assign` imports and then rotates. `rotate` alone is the Team
+  tab's Preview and Run.
 - **The pool** = owner `81181`, the two inbound stages, **qualified** after
   `INBOUND_ROTATION_START` and within the last `INBOUND_ROTATION_WINDOW_DAYS`
   (7). Qualified means `expectedClosureOn`, which the Presales flow stamps along
@@ -403,19 +474,17 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
 - **The race guard is the partial unique index** on `lead_id` where
   `kind = 'round_robin'`. Every Inbound tab open runs the rotation, so two reps
   opening it together both plan the same leads; the second insert gets `23505`
-  and skips that lead. The claim row is written before the Kylas PATCH, and
-  deleted again if Kylas refuses, so a failed lead is retried on the next run.
+  and skips that lead. Claims are written first, then one bulk owner write. If
+  the write fails, or a lead has no row yet, its claim is deleted, so it is
+  retried on the next run.
 - **Order** = active, in-rotation, Kylas-linked inbound members, sorted by name,
   continuing after whoever got the last `round_robin` row (`planRotation`).
   "Paused" is how a manager takes someone out for the day. A paused person can
   still *receive* a manual reassign.
-- **The owner change is a JSON Patch on `/ownerId`**, and `setLeadOwner` then
-  reads `ownerId` back. Not every API applies a write it accepts with a 200
-  (see the "Success reported off an HTTP 200" landmine), so a mismatch counts as
-  a failure. **This had not been exercised against a real lead as of
-  2026-10-28**: the first real run is the verification.
-- **It repeats (2026-10-31).** `useInboundRotation` runs on open and then every
+- **It repeats (2026-10-31).** `useInboundSync` runs on open and then every
   5 minutes while a tab is visible, so a failed run recovers without a reload.
+  A run that imports or assigns reloads the board quietly, without the spinner,
+  and the open lead stays open (§The lead window keeps unsaved work).
 - **Hardi's share is half, not everything, and Kylas still delivers to Hardi.**
   Hardi is a rotation member, so with Vikas every second lead stays put. On
   2026-10-31 the log held 75 leads: Hardi 39, Vikas 19, Vilok 17. That excess
@@ -424,15 +493,10 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   production has no route listing each row's `to_kylas_id`. Stopping the batch on
   `KylasBusy` removes it. Vilok was `in_rotation: false` that day; a manager
   changes that under Team.
-- **A Kylas 429 only delays a run (2026-10-31).** "Round robin did not run:
-  Kylas answered 429" meant the first Kylas call hit the rate limit and the run
-  gave up, leaving new leads with Hardi until the next tab open. The drawer's
-  Reassign failed the same way. Each server call now waits out the limit
-  (`docs/api-layer/context.md`). If Kylas is still refusing mid-batch, that
-  claim is released and the rest of the batch stops and counts as `waiting`,
-  because 25 leads at 15s each would outlast the request. Bulk reassign stops
-  the same way and reports the rest as failed. Nothing is lost: the next run
-  picks the round robin back up.
+- **A Kylas 429 only delays a run (2026-10-31).** The import and the pool read
+  wait out the limit (`docs/api-layer/context.md`). If Kylas still refuses, the
+  run fails and the next one picks it up. Reassign no longer touches Kylas, so
+  a 429 cannot stop it.
 - **Mine vs All is in the fetch.** A rep linked to Kylas gets `ownerId` = their
   own id, and the owner filter is hidden. **"All inbound" is for managers and
   B2B admins only (2026-10-29).** It used to be one click away for every rep,
@@ -443,8 +507,21 @@ ownership is the Kylas `ownerId`, and the people who can hold it are the
   still a screen filter, not confidentiality: the Kylas key is in the browser.
   Filtering on the server is the planned next step.
 - **Reassign** (the drawer's Owner card) is open to any active inbound member or
-  manager. The route re-checks that rule, refuses any lead outside the
-  inbound pipeline, and logs `kind = 'reassign'` with a reason.
+  manager. The route re-checks that rule, refuses a lead with no CRM row, and
+  writes the owner onto the row server-side. It logs `kind = 'reassign'` with a
+  reason and `from_kylas_id` = the row's previous owner. The browser does not
+  write the row.
+- **A move made inside Kylas no longer reaches the CRM.** Before 2026-11-03 the
+  board followed Kylas's owner (112 of 998 rows disagreed with Kylas on 2 Nov,
+  54 of them Mandeep's leads moved to Hardi in Kylas). If someone moves a lead
+  in Kylas on purpose, the move has to be repeated in the CRM.
+- **The owner filter is also applied in the browser.** The list holds one owner's
+  fetch, so `filtered` drops a lead the moment its `ownerId` stops matching.
+- **The list has checkboxes for multi-select reassign (2026-11-02).** The user asked
+  for this, so on this tab bulk takes **owned** leads, unlike Leads and Client
+  Database. Same `AssignBar`, same access as the drawer, `useInboundReassign`.
+  Open leads only, 25 at a time, list view only. Picks clear on any filter or lens
+  change, so nothing hidden moves. Failed leads stay ticked for a retry.
 - **`CallAttempt.by` is the logged-in user, not the lead's owner.** It was
   `draft.owner`, which would have credited every call on a reassigned lead to
   its new owner. Calls are an Effort KPI and belong to whoever dialled.
@@ -536,14 +613,5 @@ matched deal's own `assignedTo`.
   collapses two distinct PRD values and `Commercial owner` has no PRD
   equivalent, so those stay blank with the Kylas value shown beside the field.
 - **Selection.** The PRD has seven; Kylas's `cfCategoriesOfInterest` has six and
-  **Plywood is not one of them.** Selection is CRM-owned, the six are mirrored
-  back, and `selectionsKylasWillDrop` surfaces the rest in the UI rather than
-  losing them silently.
-
-`updateInboundLeadKylas` returns a result, not a boolean. The old drawer
-discarded it, so a rejected PATCH rendered as a successful save and Kylas and the
-CRM diverged with nothing on screen to say so.
-
-The PATCH itself must be JSON Patch (`application/json-patch+json`, an array of
-ops; custom fields under `/customFieldValues/<key>`). Kylas answers a plain JSON
-object with 415, which is what every inbound save got until 2026-10-07.
+  **Plywood is not one of them.** Selection is CRM-owned. Since 2026-11-03 it is
+  never written back to Kylas. An import maps the six into the CRM once.

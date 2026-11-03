@@ -5,6 +5,9 @@ import { roleFromPermission } from '../api/crm/roles';
 const API_BASE = MD_API_BASE_URL;
 
 const SESSION_TTL_MS = 30_000;
+const LAST_VERIFIED_TTL_MS = 3_600_000;
+const ROSTER_RETRY_MS = [400, 1200];
+const ROSTER_DOWN = 502;
 
 export class SessionError extends Error {
   readonly status: number;
@@ -61,19 +64,30 @@ function userIdFromToken(token: string): string {
   return userId;
 }
 
+async function requestRoster(token: string, attempt = 0): Promise<Response> {
+  const res = await fetch(`${API_BASE}/user-organisation/`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  }).catch((e: unknown) => e as Error);
+  const failed = res instanceof Error || res.status >= 500;
+  if (!failed || attempt >= ROSTER_RETRY_MS.length) {
+    if (res instanceof Error) throw res;
+    return res;
+  }
+  await new Promise((r) => setTimeout(r, ROSTER_RETRY_MS[attempt]));
+  return requestRoster(token, attempt + 1);
+}
+
 async function fetchRoster(token: string): Promise<OrgRow[]> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/user-organisation/`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    });
+    res = await requestRoster(token);
   } catch {
-    throw new SessionError('Could not reach the backend to verify this session', 502);
+    throw new SessionError('Could not reach the backend to verify this session', ROSTER_DOWN);
   }
 
   if (res.status === 401 || res.status === 403) throw new SessionError('Session rejected by the backend');
-  if (!res.ok) throw new SessionError(`Could not verify this session (${res.status})`, 502);
+  if (!res.ok) throw new SessionError(`Could not verify this session (${res.status})`, ROSTER_DOWN);
 
   const body: unknown = await res.json().catch(() => null);
   const rows = Array.isArray(body)
@@ -81,7 +95,7 @@ async function fetchRoster(token: string): Promise<OrgRow[]> {
     : Array.isArray((body as { data?: unknown })?.data)
       ? (body as { data: unknown[] }).data
       : null;
-  if (!rows) throw new SessionError('Could not verify this session', 502);
+  if (!rows) throw new SessionError('Could not verify this session', ROSTER_DOWN);
   return rows as OrgRow[];
 }
 
@@ -113,12 +127,23 @@ export async function requireCaller(request: Request): Promise<Caller> {
   const cached = getCached(key) as Caller | null;
   if (cached) return cached;
 
-  const row = (await fetchRoster(token)).find((r) => String(r.user?.id ?? '') === userId);
+  const lastKey = `last-verified:${key}`;
+  let roster: OrgRow[];
+  try {
+    roster = await fetchRoster(token);
+  } catch (err) {
+    const last = getCached(lastKey) as Caller | null;
+    if (last && err instanceof SessionError && err.status === ROSTER_DOWN) return last;
+    throw err;
+  }
+
+  const row = roster.find((r) => String(r.user?.id ?? '') === userId);
   if (!row) throw new SessionError('This account is not on the organisation roster', 403);
   if (row.status === false) throw new SessionError('This account is inactive', 403);
 
   const caller = toCaller(row, userId);
   setCache(key, caller, SESSION_TTL_MS);
+  setCache(lastKey, caller, LAST_VERIFIED_TTL_MS);
   return caller;
 }
 

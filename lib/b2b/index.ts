@@ -14,7 +14,7 @@ export type { ClientOrderDetails } from './orders/details';
 export type { CartLine, ClientOrderRow } from './orders/ticket';
 export { clientFromSeed, planClientSeed } from './leads/client-seed';
 export type { ClientSeedPlan } from './leads/client-seed';
-export { deleteB2BRow, upsertClient, upsertClients, upsertInboundLead, upsertInboundLeads, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
+export { deleteB2BRow, saveInboundLead, upsertClient, upsertClients, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
 export { fetchTargets, saveTargets } from './stats/targets';
 export { fetchUnifiedLeads, inboundToUnified, outreachToUnified } from './leads/unified';
 export type { LeadSource, UnifiedLead, UnifiedStatus } from './leads/unified';

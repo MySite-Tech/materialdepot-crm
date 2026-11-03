@@ -18,16 +18,16 @@ import { InboundOutreachCard } from './cards/outreach';
 import { useCallLog } from './hooks/use-call-log';
 import { useInboundDetail } from './hooks/use-inbound-detail';
 
-import { OutreachReferral, PlacedUnder, clientSpocs, isCrmAddedLead, closureReadiness, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, selectionsKylasWillDrop, statusGateErrors, withStatusStamps } from '../../models/inbound';
+import { OutreachReferral, PlacedUnder, clientSpocs, isCrmAddedLead, closureReadiness, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, statusGateErrors, withStatusStamps } from '../../models/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { Spinner } from '../../ui/inbound-chips';
 import { SaveState } from '../../types/inbound-drawer';
-import { EnqLookup, lookupEnqId, upsertInboundLead } from '@/lib/b2b';
-import { updateInboundLeadKylas } from '@/lib/api';
+import { EnqLookup, lookupEnqId, saveInboundLead } from '@/lib/b2b';
+import { hasTeamEdits } from '@/lib/b2b/mappers/inbound';
 import { CreditPicker } from '../../ui/credit-picker';
 import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
 import { creditOf } from '../../models/credit';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const GATE_TEXT: Record<GateField, string> = {
   followUpDate: 'follow-up date',
@@ -65,16 +65,37 @@ export default function InboundDrawer({
     setDraft((d) => ({ ...d, [k]: v }));
 
   const crmOnly = isCrmAddedLead(lead);
-  const detail = useInboundDetail(lead, setDraft);
+  const saved = useRef(lead);
+  const clean = useRef(draft);
+  const fillFromKylas = useCallback((fill: SetStateAction<InboundLead>) => {
+    clean.current = typeof fill === 'function' ? fill(clean.current) : fill;
+    setDraft(fill);
+  }, []);
+  const detail = useInboundDetail(lead, fillFromKylas);
   const today = istToday();
 
-  const saved = useRef(lead);
   const withHistory = useCallback(
     (next: InboundLead) => withRequirementHistory(saved.current, next, actorName, new Date().toISOString()),
     [actorName],
   );
-  const commit = useCallback((next: InboundLead) => { saved.current = next; setDraft(next); onSaved(next); }, [onSaved]);
-  const calls = useCallLog(draft, actorName, actorPhone, withHistory, commit);
+  const commit = useCallback((next: InboundLead) => {
+    saved.current = next;
+    clean.current = next;
+    setDraft(next);
+    onSaved(next);
+  }, [onSaved]);
+  const calls = useCallLog(() => saved.current, draft, actorName, actorPhone, withHistory, commit);
+
+  const dirty = useMemo(() => hasTeamEdits(clean.current, draft), [draft]);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   const connected = hasConnected(draft.callAttempts);
   const readiness = useMemo(() => closureReadiness(draft, today),
@@ -146,30 +167,14 @@ export default function InboundDrawer({
       requirementBrief: draft.leadSummary,
     }, at), actorName, at);
 
-    const [kylasRes, dbErr] = await Promise.all([
-      crmOnly
-        ? Promise.resolve({ ok: true, dropped: [] as string[], error: undefined })
-        : updateInboundLeadKylas(lead.id, { requirement: toSave.requirement, selections: toSave.selections }),
-      upsertInboundLead(toSave),
-    ]);
-
-    if (dbErr) {
-      setSave({ saving: false, error: `Save failed: ${dbErr}. Nothing was stored — try again.` });
+    const res = await saveInboundLead(saved.current, toSave);
+    if (!res.lead) {
+      setSave({ saving: false, error: `Save failed: ${res.error}. Nothing was stored — try again.` });
       return;
     }
-
-    const notes: string[] = [];
-    if (!kylasRes.ok) {
-      notes.push(`Saved here, but the Kylas push failed (${kylasRes.error || 'unknown error'}). Requirement and Selection may differ in Kylas until the next save.`);
-    }
-    if (kylasRes.dropped?.length) {
-      notes.push(`${kylasRes.dropped.join(', ')} — Kylas has no option for this, so it is stored in the CRM only.`);
-    }
-    saved.current = toSave;
-    setDraft(toSave);
-    onSaved(toSave);
-    setSave({ saving: false, warning: notes.length ? notes.join(' ') : undefined });
-    if (!notes.length) onClose();
+    commit(res.lead);
+    setSave({ saving: false });
+    onClose();
   };
 
   const [summaryModal, setSummaryModal] = useState<{ loading: boolean; text?: string; error?: string } | null>(null);
@@ -189,9 +194,9 @@ export default function InboundDrawer({
 
   return (
     <div className="fixed inset-0 z-[1200] flex justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40" onClick={requestClose} />
       <div className="relative w-full max-w-[780px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
-        <InboundDrawerHeader draft={draft} gaps={gaps} onClose={onClose} today={today} />
+        <InboundDrawerHeader draft={draft} gaps={gaps} onClose={requestClose} today={today} />
 
         <div className="p-5 flex flex-col gap-4">
           <InboundOwnerCard
@@ -202,14 +207,11 @@ export default function InboundDrawer({
             canReassign={canReassign}
             onReassigned={async (to) => {
               const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
-              const next = { ...saved.current, ...owned };
-              if (crmOnly) {
-                const err = await upsertInboundLead(next);
-                if (err) return `Logged, but the new owner was not saved: ${err}. Try again.`;
-              }
-              saved.current = next;
+              saved.current = { ...saved.current, ...owned };
+              clean.current = { ...clean.current, ...owned };
               setDraft((d) => ({ ...d, ...owned }));
-              onSaved(next);
+              onSaved(saved.current);
+              return undefined;
             }}
           />
 
@@ -222,7 +224,7 @@ export default function InboundDrawer({
 
           <InboundClientCard draft={draft} presalesTypeUnmapped={presalesTypeUnmapped} set={set} />
 
-          <InboundRequirementCard draft={draft} crmOnly={crmOnly} droppedSelections={crmOnly ? [] : selectionsKylasWillDrop(draft.selections)} set={set} />
+          <InboundRequirementCard draft={draft} set={set} />
 
           <InboundStatusCard
             checkEnq={checkEnq}
@@ -282,7 +284,15 @@ export default function InboundDrawer({
           />}
         </div>
 
-        <InboundDrawerFooter gaps={gaps} gateErrors={gateErrors} handleSave={handleSave} onClose={onClose} save={save} showGates={showGates} />
+        <InboundDrawerFooter
+          gaps={gaps}
+          gateErrors={gateErrors}
+          handleSave={handleSave}
+          onClose={requestClose}
+          save={save}
+          showGates={showGates}
+          discard={confirmDiscard ? { keep: () => setConfirmDiscard(false), discard: onClose } : null}
+        />
       </div>
 
       {summaryModal && (

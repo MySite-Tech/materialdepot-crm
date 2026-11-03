@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from '@/lib/server/session';
-import { InputError, KylasBusy, readMembers, reassignInboundLead, reassignInboundLeads, rotateInbound, TeamTableMissing } from '@/lib/server/b2b-team';
+import { InputError, KylasBusy, readMembers, reassignInboundLead, reassignInboundLeads, rotateInbound, syncInbound, TeamTableMissing } from '@/lib/server/b2b-team';
 import { canUseB2B, isB2BManager, membershipsForPhone } from '@/lib/b2b/team/utils';
 
 export const dynamic = 'force-dynamic';
@@ -16,11 +16,14 @@ export async function POST(request: NextRequest) {
   }
   if (!canUseB2B(c)) return bad('Your account does not have B2B Sales access', 403);
 
-  let body: { mode?: unknown; dryRun?: unknown; leadId?: unknown; toPhone?: unknown; reason?: unknown; items?: unknown };
+  let body: { mode?: unknown; dryRun?: unknown; full?: unknown; leadId?: unknown; toPhone?: unknown; reason?: unknown; items?: unknown };
   try { body = await request.json(); }
   catch { return bad('Body must be JSON'); }
 
   try {
+    if (body.mode === 'sync') {
+      return Response.json(await syncInbound(c.name, body.full === true));
+    }
     if (body.mode === 'rotate') {
       return Response.json(await rotateInbound(c.name, body.dryRun === true));
     }
@@ -41,12 +44,12 @@ export async function POST(request: NextRequest) {
       );
       return Response.json({ to: to.name });
     }
-    return bad("'mode' must be rotate, reassign or reassign-many");
+    return bad("'mode' must be sync, rotate, reassign or reassign-many");
   } catch (err) {
     if (err instanceof InputError) return bad(err.message);
     if (err instanceof TeamTableMissing) return bad(err.message, 503);
     if (err instanceof KylasBusy) {
-      return bad(body.mode === 'rotate' ? err.message : `${err.message}, so the reassign did not finish. Try again in a minute.`, 503);
+      return bad(err.message, 503);
     }
     return bad(err instanceof Error ? err.message : 'Assignment failed', 502);
   }
