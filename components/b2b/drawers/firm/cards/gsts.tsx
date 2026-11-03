@@ -108,14 +108,6 @@ export function GstsCard({ client, clients, onSave }: {
           </div>
         </div>
       )}
-      {!!gsts.length && (
-        <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1.5 mt-2">
-          Enquiries billed to these GSTINs are included in this firm&apos;s orders, even when
-          raised on a number not listed here — matched exactly on{' '}
-          <span className="font-mono">estimate.client_gst</span> via the{' '}
-          <span className="font-mono">gst=</span> filter.
-        </p>
-      )}
       {error && <p className="text-[11px] text-red-600 mt-2">Could not save: {error}</p>}
     </SectionCard>
   );
