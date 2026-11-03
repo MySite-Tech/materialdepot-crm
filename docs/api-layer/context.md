@@ -285,6 +285,16 @@ means unknown: a caller may show the GST-inclusive `value` instead only if it
 labels it "incl. GST", never under an ex-GST label. See
 `docs/crm-shell/context.md` for how it is computed and displayed.
 
+Each `/crm/leads/` row also carries (all optional, additive — an older Django
+omits them): **`clientGst`** (the enquiry's `estimate.client_gst`),
+`orderPlacedAt` (`estimate.order_placed_time`) and `bookedBranch` (where the
+order was booked, vs `branch` = the cart owner's). Two new query params match
+the same exact, uppercased GSTIN (never `icontains`): **`gst=`** filters the
+list and stats to enquiries billed to those GSTINs, and **`include=boq`** adds a
+`boqItems` array per row — the PI's BOQ lines (`name`, `qty`, `unit`, `rate`,
+`total`) — which is heavy and off by default, requested only by the Firm page's
+per-phone fetch.
+
 ## `fetchLead` selects on `ticketId`, not on the lead id
 
 `lib/api/crm/lead-details.ts` re-reads a single row after a save. It cannot match

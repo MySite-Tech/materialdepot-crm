@@ -23,6 +23,7 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
         <Fact label="Cart value" value={fmtINR(r.orderValue)} />
         <Fact label="Excl. GST" value={r.cartValueExclGst !== undefined ? fmtINR(r.cartValueExclGst) : undefined} />
+        <Fact label="GST" value={r.gstOnOrder ? <span className="font-mono">{r.gstOnOrder}</span> : undefined} />
         <Fact label="Status" value={[r.status, r.lostReason].filter(Boolean).join(' · ')} />
         <Fact label="Raised on" value={fmtPhone(r.contactNumber) + (r.contactName ? ` · ${r.contactName}` : '')} />
         <Fact label="Created" value={fmtDate(r.createdAt)} />
@@ -38,8 +39,23 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
       </div>
 
       <div>
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Cart</div>
-        {r.cart.length ? (
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Items</div>
+        {r.items?.length ? (
+          <ul className="bg-white border border-gray-100 rounded divide-y divide-gray-50">
+            {r.items.map((i, k) => (
+              <li key={k} className="flex items-start justify-between gap-3 px-2 py-1 text-[12px]">
+                <span className="text-gray-700 min-w-0 break-words">{i.name}</span>
+                <span className="font-mono text-[11px] text-gray-500 whitespace-nowrap">
+                  {[
+                    i.qty ? `× ${i.qty}${i.unit ? ` ${i.unit}` : ''}` : '',
+                    i.rate ? `@ ${fmtINR(i.rate)}` : '',
+                    i.total ? fmtINR(i.total) : '',
+                  ].filter(Boolean).join('  ')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : r.cart.length ? (
           <ul className="bg-white border border-gray-100 rounded divide-y divide-gray-50">
             {r.cart.map((i, k) => (
               <li key={k} className="flex items-start justify-between gap-3 px-2 py-1 text-[12px]">
@@ -51,7 +67,7 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
             ))}
           </ul>
         ) : (
-          <p className="text-[11px] text-gray-400">The ticket lists no cart items.</p>
+          <p className="text-[11px] text-gray-400">No items on the PI or ticket.</p>
         )}
         {cartTotal > 0 && Math.round(cartTotal) !== Math.round(r.orderValue) && (
           <p className="text-[10px] text-gray-400 mt-1">Item prices add up to {fmtINR(cartTotal)}; the ticket&apos;s cart value is {fmtINR(r.orderValue)}.</p>
