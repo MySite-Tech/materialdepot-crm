@@ -12,6 +12,10 @@ export interface CRMLeadRow {
   cartValue: number;
   cartValueExclGst?: number;
   cartItems: string;
+  clientGst?: string;
+  orderPlacedAt?: string | null;
+  bookedBranch?: string;
+  boqItems?: { name: string; qty?: number; unit?: string; rate?: number; total?: number }[];
   clientType: string;
   propertyType: string;
   architectInvolved: boolean;
@@ -61,6 +65,7 @@ export interface CRMLeadsQuery {
   taskFilter?: string;
   category?: string;
   priority?: string;
+  include?: string;
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number; valueExclGst?: number }
@@ -233,6 +238,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
   if (query.category) params.set('category', query.category);
   if (query.priority) params.set('priority', query.priority);
+  if (query.include) params.set('include', query.include);
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();

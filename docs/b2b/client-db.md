@@ -58,17 +58,25 @@ acting as. Where a match must belong to *this* client — `resolveClientOrders` 
 carrying `otherPhone`. Anywhere that check is dropped, a ticket raised on another
 number attaches its money to this account.
 
-### Two columns §3.2 asks for do not exist
+### The GST per order, and the PI's items on the Firm page (2026-11-03)
 
-`CRMLeadRow` carries a client's PERSON name and **no GST at all**, so §3.2's
-"Company Name captured on that specific order" and "GST Number used on that
-specific order" are **not rendered as columns at all** until some row carries
-`companyOnOrder` / `gstOnOrder`. Until 2026-10-28 they were two columns of
-*"not in Procurement"* on every row: honest, but it was most of what the user
-called "texty". An absent column cannot be misread as "this order had no
-company name"; a blank cell could, so never bring the column back with blanks
-in it. The KAM shown on the Firm page is the account's KAM **today**. Nothing
-in this stack records who held the account at the time.
+`CRMLeadRow` now carries **`clientGst`** (the enquiry's `estimate.client_gst`,
+item 5 on the Django side), plus `orderPlacedAt` and `bookedBranch`. The Firm
+page's enquiry card (`drawers/firm/cards/enquiry.tsx`) reads it into
+`gstOnOrder` and shows a **GST** fact per enquiry — so an order's billing GSTIN
+is visible, not just the client's person name. (The old note here said
+`CRMLeadRow` had "no GST at all"; that stopped being true with item 5.)
+
+The same card's item list was renamed **Cart → Items** and now renders the
+**PI's BOQ line items** (`boq_item`, qty, unit, `unit_selling_price`, line
+total) when present, falling back to the ticket's `cart_items` otherwise. Those
+BOQ items are per-line and heavy, so Django only returns them when the request
+carries **`include=boq`** — which `fetchLeadsByPhone` (the Firm-page per-phone
+fetch) now sends; the default `/crm/leads/` list stays lean. It adds no request,
+only payload, to a call the page already makes.
+
+The KAM shown on the Firm page is the account's KAM **today**. Nothing in this
+stack records who held the account at the time.
 
 ### The Firm page: one drawer for Client DB and the KAM tab
 

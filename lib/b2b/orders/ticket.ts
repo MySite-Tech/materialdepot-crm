@@ -21,6 +21,7 @@ export interface ClientOrderRow {
   spoc?: string;
   branch?: string;
   cart: CartLine[];
+  items?: BoqLine[];
   lostReason?: string;
 
   ticketId?: number;
@@ -42,6 +43,14 @@ export interface CartLine {
   price?: number;
 }
 
+export interface BoqLine {
+  name: string;
+  qty?: number;
+  unit?: string;
+  rate?: number;
+  total?: number;
+}
+
 function cartLines(v: unknown): CartLine[] {
   if (Array.isArray(v)) {
     return v
@@ -51,6 +60,19 @@ function cartLines(v: unknown): CartLine[] {
   return String(v || '').split('\n').map((name) => ({ name: name.trim() })).filter((i) => i.name);
 }
 
+function boqLines(v: unknown): BoqLine[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v
+    .map((i) => ({
+      name: String(i?.name || '').trim(),
+      qty: Number(i?.qty) || undefined,
+      unit: String(i?.unit || '').trim() || undefined,
+      rate: Number(i?.rate) || undefined,
+      total: Number(i?.total) || undefined,
+    }))
+    .filter((i) => i.name);
+}
+
 export function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
   const ordered = dealIsOrder(t.status);
   return {
@@ -58,7 +80,7 @@ export function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
     contactNumber: phone,
     contactName: String(t.clientName || '').trim(),
     companyOnOrder: undefined,
-    gstOnOrder: undefined,
+    gstOnOrder: String(t.clientGst || '').trim() || undefined,
     orderValue: Number(t.cartValue) || 0,
     status: String(t.status || ''),
     ordered,
@@ -68,6 +90,7 @@ export function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
     spoc: String(t.assignedTo || '').trim() || undefined,
     branch: String(t.branch || '').trim() || undefined,
     cart: cartLines(t.cartItems),
+    items: boqLines(t.boqItems),
     lostReason: String(t.lostReason || '').trim() || undefined,
     ticketId: t.ticketId,
     cartValueExclGst: t.cartValueExclGst !== undefined && t.cartValueExclGst !== null ? Number(t.cartValueExclGst) || 0 : undefined,
