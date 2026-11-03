@@ -109,10 +109,11 @@ export function GstsCard({ client, clients, onSave }: {
         </div>
       )}
       {!!gsts.length && (
-        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-2">
-          Enquiries are matched to this firm by its numbers only. Django&apos;s tickets carry no GSTIN and{' '}
-          <span className="font-mono">/crm/leads/</span> has no GST filter, so an enquiry billed to one of these GSTINs but raised on a
-          number not listed here cannot be found yet. Needs a <span className="font-mono">gst=</span> filter on that endpoint (Django team).
+        <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1.5 mt-2">
+          Enquiries billed to these GSTINs are included in this firm&apos;s orders, even when
+          raised on a number not listed here — matched exactly on{' '}
+          <span className="font-mono">estimate.client_gst</span> via the{' '}
+          <span className="font-mono">gst=</span> filter.
         </p>
       )}
       {error && <p className="text-[11px] text-red-600 mt-2">Could not save: {error}</p>}

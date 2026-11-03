@@ -1,9 +1,9 @@
 import { lookupEnqId } from '../leads/enq-lookup';
 import { ClientOrderHistory } from './history';
 import { ClientOrderRow, ticketToOrderRow } from './ticket';
-import { ClientContact, ClientOrderMetrics, averageOrderValue, contactNumbers, normalizeContactNumber } from '@/components/b2b/models/client';
+import { ClientContact, ClientOrderMetrics, averageOrderValue, contactNumbers, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
-import { CRMLeadRow, ClientTicketResult, fetchClientTickets, invalidateLeadsByPhone } from '@/lib/api';
+import { CRMLeadRow, ClientTicketResult, fetchCRMLeads, fetchClientTickets, invalidateLeadsByPhone } from '@/lib/api';
 
 const ORDER_DETAIL_CONCURRENCY = 4;
 
@@ -146,6 +146,16 @@ export async function fetchClientOrderRows(phones: string[]): Promise<ClientOrde
   rows.sort((a, b) =>
     String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   return { rows, failedPhones, rejected };
+}
+
+export async function fetchOrdersByGst(gstins: string[]): Promise<ClientOrderRow[]> {
+  const wanted = [...new Set(gstins.map(normalizeGst).filter((g) => g.length === 15))];
+  if (!wanted.length) return [];
+  const { results } = await fetchCRMLeads({
+    gst: wanted.join(','), page: 1, pageSize: 100,
+    include: 'boq', sortBy: 'createdAt', sortDir: 'desc',
+  });
+  return (Array.isArray(results) ? results : []).map((r) => ticketToOrderRow(r, String(r.clientPhone || '')));
 }
 
 export function invalidateClientTickets(phones: string[]): void {
