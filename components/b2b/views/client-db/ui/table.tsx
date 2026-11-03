@@ -44,6 +44,11 @@ function SortTh({ label, k, sort, onSort, align = 'left', className = '' }: {
 
 function KamCell({ client }: { client: ClientEntity }) {
   const h = firmHandover(client);
+  const rejected = h?.status === 'Rejected' && (
+    <div className="text-[10px] text-red-700 mt-1 max-w-[180px] truncate" title={`${h.kam} rejected it: ${h.rejectReason || 'no reason'}`}>
+      {h.kam} rejected: {h.rejectReason || 'no reason'}
+    </div>
+  );
   if (client.kam) {
     return (
       <>
@@ -51,17 +56,14 @@ function KamCell({ client }: { client: ClientEntity }) {
         {h?.status === 'Pending' && (
           <div className="text-[10px] font-semibold text-violet-700 mt-0.5" title={`Assigned by ${h.by || 'an admin'}. Counts as theirs, and waits for them to accept.`}>waiting for sign-off</div>
         )}
+        {rejected}
       </>
     );
   }
   return (
     <>
       <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700">No KAM</span>
-      {h?.status === 'Rejected' && (
-        <div className="text-[10px] text-red-700 mt-1 max-w-[180px] truncate" title={`${h.kam} rejected it: ${h.rejectReason || 'no reason'}`}>
-          {h.kam} rejected: {h.rejectReason || 'no reason'}
-        </div>
-      )}
+      {rejected}
     </>
   );
 }
