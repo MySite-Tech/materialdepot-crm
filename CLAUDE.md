@@ -480,7 +480,7 @@ Still open: the 400 the user saw on :3001 (`mdFetch` errors now name the endpoin
 and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
 Outreach's BM chips into Filters.
 
-**KAM sign-in fixes (2026-11-03): CRM branch `kam-sign-in-check` and b2b-backend
+**KAM sign-in fixes (2026-11-03): CRM PR #42 (`kam-sign-in-check`) and b2b-backend
 PR #21 (`POST /b2b/team/renumber`). Deploy the backend first.**
 Krishna Jadhav's data was already merged onto his real number in production that
 day by script, so these PRs prevent the next case and fix nothing that is live.
