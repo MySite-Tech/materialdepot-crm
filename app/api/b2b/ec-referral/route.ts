@@ -3,7 +3,6 @@ import { requireCaller, sessionErrorResponse, type Caller } from '@/lib/server/s
 import { B2BBackendError, b2bBackendFetch } from '@/lib/server/b2b-backend';
 import { MY_REFERRALS_LIMIT } from '@/lib/b2b/ec-referral/constants';
 import type { MyReferral } from '@/lib/b2b/ec-referral/types';
-import { canReferToB2B } from '@/lib/b2b/ec-referral/utils';
 import type { B2BLeadRow } from '@/lib/b2b/data/rows';
 import { outreachToRow, rowToOutreach } from '@/lib/b2b/mappers/outreach';
 import { normalisePhone } from '@/lib/org/utils';
@@ -20,13 +19,11 @@ const bad = (error: string, status = 400) => Response.json({ error }, { status }
 const text = (v: unknown, max: number): string => String(v ?? '').trim().slice(0, max);
 
 async function caller(request: NextRequest): Promise<Caller | Response> {
-  let c: Caller;
   try {
-    c = await requireCaller(request);
+    return await requireCaller(request);
   } catch (err) {
     return sessionErrorResponse(err) ?? bad('Not authenticated', 401);
   }
-  return canReferToB2B(c) ? c : bad('Your account cannot send EC B2B referrals', 403);
 }
 
 const failure = (err: unknown): Response =>

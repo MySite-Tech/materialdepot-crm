@@ -4,8 +4,6 @@ import { AppUser, Lead } from '../../types/crm';
 import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
 import { MainTab } from './types';
 import { B2B_SALES_ROLES } from '@/lib/b2b/team/constants';
-import { EC_REFERRAL_ROLES } from '@/lib/b2b/ec-referral/constants';
-import { canReferToB2B } from '@/lib/b2b/ec-referral/utils';
 
 // `id` is the lead's business key (cart number, or the estimate's ENQ id) and the
 // APIs take it as such — but it is NOT unique per row: a client with several deal
@@ -40,7 +38,7 @@ const defaultTabsForRole = (role: string): Array<MainTab> => {
   if (B2B_SALES_ROLES.has(role) && !tabs.includes('b2bSales')) {
     tabs = [...tabs, 'b2bSales'];
   }
-  if (EC_REFERRAL_ROLES.has(role) && !tabs.includes('ecB2bReferral')) {
+  if (!tabs.includes('ecB2bReferral')) {
     tabs = [...tabs, 'ecB2bReferral'];
   }
   if (APPOINTMENT_TRACKER_ROLES.has(role) && !tabs.includes('appointmentTracker')) {
@@ -61,7 +59,7 @@ export const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
     const tabs = PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
-    return user && canReferToB2B(user) && !tabs.includes('ecB2bReferral') ? [...tabs, 'ecB2bReferral'] : tabs;
+    return tabs.includes('ecB2bReferral') ? tabs : [...tabs, 'ecB2bReferral'];
   }
 
   return defaultTabsForRole(user?.role ?? '');
