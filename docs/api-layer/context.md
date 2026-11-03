@@ -187,6 +187,12 @@ one channel on a card and another in a tile. Each call rebuilds the whole number
 from `/rows`, so keep this cached rather than calling it per row. All time stops at
 `MAX_PAGES` and returns `truncated`, which the drawer must show.
 
+It also serves `app/api/b2b/revenue/funnel` (2026-11-03, work in progress), the
+Client Database funnel (`docs/b2b/overview.md` §Client Database funnel). That route
+pages up to `FUNNEL_PAGES` (30) of `/crm/leads/`, 8 in flight at a time
+(`PARALLEL_PAGES`). Before this, every page was requested at once, and 30 at once
+would hit Django together.
+
 ### There is no scheduled route in this app, and no platform cron to run one
 
 Worth knowing before someone adds one: this app deploys to **Azure Static Web

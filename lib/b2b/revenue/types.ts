@@ -122,3 +122,33 @@ export interface RollupRow {
   uncounted: number;
   detail: string;
 }
+
+export type FunnelBucket = 'studio' | 'ecReferred' | 'ecDirect';
+
+export type FunnelStage = 'enquiry' | 'quoted' | 'ordered' | 'delivered' | 'lost';
+
+export interface FunnelEnquiry extends RevenueOrder {
+  funnel: FunnelBucket;
+}
+
+export interface FunnelReport {
+  from: string;
+  to: string;
+  enquiries: FunnelEnquiry[];
+  firms: number;
+  referredSkipped: number;
+  truncated: boolean;
+  studioOk: boolean;
+  redirectsOk: boolean;
+  teamOk: boolean;
+  generatedAt: string;
+}
+
+export interface FunnelCell {
+  count: number;
+  value: number;
+  firms: number;
+  enquiries: FunnelEnquiry[];
+}
+
+export type FunnelRow = Record<FunnelStage, FunnelCell>;

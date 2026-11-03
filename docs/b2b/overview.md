@@ -17,6 +17,7 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 | `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; 5-minute server cache per caller. Refresh bypasses it. Carries each order's whole ticket, so the drill-down below costs no request |
 | `fetchCRMLeads` | Django `/crm/leads/` | Only when Open carts is clicked |
 | `fetchBranchLedger` | `GET /api/b2b/revenue/ledger` | Only when a tile in Orders on the B2B branch is clicked; 5-minute server cache per caller |
+| `fetchFunnelReport` | `GET /api/b2b/revenue/funnel?from&to` | Only once the Client Database funnel is opened (remembered per browser), then one per month picked; 5-minute server cache per caller. Reads `/crm/leads/?created_from&created_to` for the month, up to 30 pages of 1,000, 8 at a time |
 
 ## Three revenue channels (2026-10-31)
 
@@ -126,6 +127,43 @@ because they hold the firm. **Not checked:** whether Django
 scopes this read for a non-admin token, and `/api/b2b/revenue` itself against real
 data. Only the classifier ran on real rows; the route ran on the sandbox and answered
 401 without a session. Check the route first once it is deployed or running on :3001.
+
+## Client Database funnel (2026-11-03)
+
+The user asked for the whole funnel of the Client Database firms, split three ways:
+**EC direct** (a store rep on the cart, nobody from B2B on the firm), **EC referred**
+(a store rep on the cart, a B2B person on the firm) and **Studio direct** (an Inbound,
+Outreach or KAM rep booked it). "Studio" is the user's word for the B2B team here,
+not Studio Space. They are the hero's buckets narrowed to Client Database numbers
+(`FUNNEL_OF`): Direct, EC-directed and No KAM yet. So EC referred follows the hero's
+rule exactly, including that a firm's KAM counts for carts raised before the
+assignment while a lead counts only from its own date.
+
+- **Only numbers on a `pipeline = 'client'` row are in it** (`clientDbFirms`). A cart
+  whose number is also a Studio Space referral counts as Referred in the hero and is
+  left out here, with a line saying how many.
+- **By cart date, not order date.** Every deal ticket created in the month is read and
+  staged by its status now: Carts raised → Quote shared → Ordered → Delivered, with
+  Lost beside them (`reachedStage`). So Ordered here is not the hero's set, and the
+  hint says so. A June estimate can sit on a ticket raised in October and then
+  counts in October.
+- **A cart has no ENQ ID until its quote is made.** Django's row `id` is the cart
+  number (`CT…`) until then, so In Cart rows show that. Rows are deduped on
+  `ticketId`, never `id` (`landmines.md`, a lead's displayed id is not unique).
+- **A logged Inbound or Outreach SPoC counts as involvement** from its `from` date
+  (`spocHolders` in `book.ts`). This also moves such a firm's orders from No KAM yet
+  into EC-directed in the hero. No firm had one logged on 2026-11-03.
+- **Why it waits for a click.** A month is about 10 pages of `/crm/leads/`, far more
+  than the order-date read, because most carts never become orders. Loading it on
+  every Overview open would spend that on people who never look.
+- `Closed, no estimate` (a resolved deal ticket with no estimate) was a guess at
+  Django's label when this was checked through Metabase. Whatever Django calls it,
+  it counts only under Carts raised unless it is one of the Lost statuses.
+
+Checked 2026-11-03 by running the compiled classifier over Metabase's deal tickets
+(the recipe below, with `ticket.extra_data.cart_number` standing in for the id of a
+cart without an estimate) and production's `/b2b/*` holders. The route itself has
+answered 401 without a session and has not yet run signed in.
 
 ## Checking a figure against production (2026-11-01)
 

@@ -1,4 +1,4 @@
-import type { HolderKind, RevenueChannel } from './types';
+import type { FunnelBucket, FunnelStage, HolderKind, OrderBucket, RevenueChannel } from './types';
 
 export const B2B_BRANCH = 'B2B';
 
@@ -14,3 +14,19 @@ export const HOLDER_RANK: Record<HolderKind, number> = {
   unowned: 6,
 };
 
+
+export const FUNNEL_BUCKETS: FunnelBucket[] = ['ecDirect', 'ecReferred', 'studio'];
+
+export const FUNNEL_STAGES: FunnelStage[] = ['enquiry', 'quoted', 'ordered', 'delivered', 'lost'];
+
+export const FUNNEL_OF: Partial<Record<OrderBucket, FunnelBucket>> = {
+  direct: 'studio',
+  ec: 'ecReferred',
+  unowned: 'ecDirect',
+};
+
+export const QUOTED_STATUSES = new Set(['Quote Approval Pending', 'Availability Check', 'Hold Stock', 'Payment Pending']);
+
+export const DELIVERED_STATUSES = new Set(['Partly Delivered', 'Delivered']);
+
+export const FUNNEL_PAGES = 30;

@@ -8,6 +8,7 @@ import { JourneySection } from './sections/journey';
 import { KamDesk } from './sections/kam-desk';
 import { OrdersSection } from './sections/orders';
 import { RevenueSection } from './sections/revenue';
+import { ClientFunnel } from './sections/revenue/funnel';
 import { OverviewTarget } from './types';
 import { Notice } from './ui';
 import { OpenPipelineDrawer } from './ui/open-pipeline';
@@ -79,6 +80,7 @@ export default function B2BOverview({ team, onNavigate }: {
       )}
 
       <RevenueSection target={monthlyTarget} refreshKey={refreshKey} />
+      <ClientFunnel refreshKey={refreshKey} />
 
       {ranged ? (
         <OrdersSection

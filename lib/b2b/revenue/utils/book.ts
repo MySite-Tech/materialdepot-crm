@@ -1,7 +1,7 @@
 import { B2B_ROSTER } from '../../../../components/b2b/models/roster';
 import { HOLDER_RANK } from '../constants';
 import type { B2BTeam, TeamMember } from '../../team/types';
-import type { B2BSourceRow, Holder, NumberBook, RedirectInput, RepTeams, StudioFirm } from '../types';
+import type { B2BSourceRow, Holder, HolderKind, NumberBook, RedirectInput, RepTeams, StudioFirm } from '../types';
 
 export const phoneOf = (raw: unknown): string => {
   const digits = String(raw ?? '').replace(/\D/g, '').slice(-10);
@@ -48,6 +48,30 @@ const contactNumbers = (meta: Record<string, unknown>): unknown[] => {
 
 const day = (v: unknown): string => String(v ?? '').slice(0, 10);
 
+const SPOC_TEAMS: Record<string, B2BTeam | undefined> = { inbound: 'inbound', outreach: 'outreach' };
+
+function spocHolders(row: B2BSourceRow, firm: string): Holder[] {
+  const log = Array.isArray(row.meta_data?.spoc_log) ? row.meta_data.spoc_log as { role?: string; name?: string; from?: string }[] : [];
+  return log.flatMap((e) => {
+    const team = SPOC_TEAMS[String(e.role)];
+    return team && text(e.name) ? [{ kind: team as HolderKind, team, owner: repName(e.name), firm, since: day(e.from) }] : [];
+  });
+}
+
+export function clientDbFirms(rows: B2BSourceRow[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    if (row.pipeline !== 'client') continue;
+    const meta = row.meta_data ?? {};
+    const firm = text(meta.company) || text(meta.firm_name);
+    for (const n of contactNumbers(meta)) {
+      const phone = phoneOf(n);
+      if (phone && !out.has(phone)) out.set(phone, firm);
+    }
+  }
+  return out;
+}
+
 function holderOf(row: B2BSourceRow): Holder | null {
   const meta = row.meta_data ?? {};
   const owner = repName(row.owner);
@@ -75,7 +99,9 @@ export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | nul
 
   for (const row of rows) {
     const holder = holderOf(row);
-    if (holder) for (const n of contactNumbers(row.meta_data ?? {})) hold(n, holder);
+    if (!holder) continue;
+    const held = row.pipeline === 'client' ? [holder, ...spocHolders(row, holder.firm)] : [holder];
+    for (const n of contactNumbers(row.meta_data ?? {})) for (const h of held) hold(n, h);
   }
 
   for (const f of studio ?? []) {

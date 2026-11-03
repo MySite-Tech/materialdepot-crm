@@ -37,8 +37,8 @@ export const BUCKET_RULE: Record<OrderBucket, string> = {
 export const EC_REASON: Record<HolderKind, string> = {
   firm: 'A store rep held the cart, on a number of a firm with a KAM.',
   studio: 'A store rep held the cart, on a Studio Space firm\'s own number.',
-  outreach: 'A store rep held the cart, on the number of an Outreach lead raised before this cart.',
-  inbound: 'A store rep held the cart, on the number of an Inbound lead raised before this cart.',
+  outreach: 'A store rep held the cart, on the number of an Outreach lead raised, or an Outreach SPoC logged, before this cart.',
+  inbound: 'A store rep held the cart, on the number of an Inbound lead raised, or an Inbound SPoC logged, before this cart.',
   redirect: 'A store rep held the cart, and a redirect to an EC is logged for this number.',
   referred: '',
   unowned: '',
