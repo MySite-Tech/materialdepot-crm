@@ -13,36 +13,59 @@ const th = 'text-left font-semibold px-3 py-2 whitespace-nowrap';
 const td = 'px-3 py-2.5 align-top';
 const btn = 'px-2.5 py-1 text-[11px] font-semibold rounded-md whitespace-nowrap disabled:opacity-50';
 
-function Respond({ client, canAct, onRespond }: {
+function Respond({ client, canAct, onAccept, onReject }: {
   client: ClientEntity;
   canAct: boolean;
-  onRespond: (c: ClientEntity) => Promise<string | null>;
+  onAccept: (c: ClientEntity) => Promise<string | null>;
+  onReject: (c: ClientEntity, reason: string) => Promise<string | null>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const accept = async () => {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState('');
+  const run = async (save: () => Promise<string | null>) => {
     setBusy(true);
     setError(null);
-    const err = await onRespond(client);
+    const err = await save();
     if (err) setError(err);
     setBusy(false);
   };
   if (!canAct) return <span className="text-[11px] text-gray-400">Waiting on {client.kam}</span>;
   return (
-    <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-      <button disabled={busy} onClick={accept} className={`${btn} bg-[#0F766E] text-white self-start`}>Accept</button>
+    <div className="flex flex-col gap-1.5 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
+      {rejecting ? (
+        <>
+          <input
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why? The admin sees this"
+            className="px-2 py-1 text-[11px] border border-gray-300 rounded-md focus:outline-none focus:border-red-400"
+          />
+          <div className="flex gap-1.5">
+            <button disabled={busy || !reason.trim()} onClick={() => run(() => onReject(client, reason.trim()))} className={`${btn} bg-red-600 text-white`}>Reject</button>
+            <button disabled={busy} onClick={() => { setRejecting(false); setReason(''); }} className={`${btn} text-gray-600 border border-gray-300`}>Cancel</button>
+          </div>
+        </>
+      ) : (
+        <div className="flex gap-1.5">
+          <button disabled={busy} onClick={() => run(() => onAccept(client))} className={`${btn} bg-[#0F766E] text-white`}>Accept</button>
+          <button disabled={busy} onClick={() => setRejecting(true)} className={`${btn} text-red-700 border border-red-200 hover:bg-red-50`}>Reject</button>
+        </div>
+      )}
       {error && <span className="text-[10.5px] text-red-700">Not saved: {error}</span>}
     </div>
   );
 }
 
-export function KamSignoffTable({ rows, nowMs, page, setPage, canRespond, onRespond, onOpen }: {
+export function KamSignoffTable({ rows, nowMs, page, setPage, canRespond, onAccept, onReject, onOpen }: {
   rows: AssignedClientRow[];
   nowMs: number;
   page: number;
   setPage: (p: number) => void;
   canRespond: (c: ClientEntity) => boolean;
-  onRespond: (c: ClientEntity) => Promise<string | null>;
+  onAccept: (c: ClientEntity) => Promise<string | null>;
+  onReject: (c: ClientEntity, reason: string) => Promise<string | null>;
   onOpen: (clientId: string) => void;
 }) {
   const meta = KAM_LENS.signoff;
@@ -91,7 +114,7 @@ export function KamSignoffTable({ rows, nowMs, page, setPage, canRespond, onResp
                     <td className={`${td} whitespace-nowrap font-mono font-semibold text-gray-800`}>
                       <Metric value={r.metrics.totalRevenue} state={r.metrics.dateState} format={fmtL} />
                     </td>
-                    <td className={td}><Respond client={r.client} canAct={canRespond(r.client)} onRespond={onRespond} /></td>
+                    <td className={td}><Respond client={r.client} canAct={canRespond(r.client)} onAccept={onAccept} onReject={onReject} /></td>
                   </tr>
                 );
               })}

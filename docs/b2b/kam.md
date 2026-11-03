@@ -207,8 +207,8 @@ delimiter parsing that the Client Database import still uses.
 ### Admin assigns firms, the KAM signs off (2026-10-29)
 
 An admin selects firms in the Client Database (one or many) and assigns them to
-a KAM, either by name or round robin. The KAM accepts from the **Waiting for
-sign-off** tile here (`panels/signoff.tsx`).
+a KAM, either by name or round robin. The KAM accepts or rejects from the
+**Waiting for sign-off** tile here (`panels/signoff.tsx`).
 
 - **The handover lives on the latest `assignments` entry**, as `status`,
   `how`, `kamPhone` and `respondedAt/By`. There is no new meta
@@ -223,15 +223,18 @@ sign-off** tile here (`panels/signoff.tsx`).
 - **A pending firm already has `kam` set.** It counts in that KAM's book, tiles
   and coverage from the moment it is assigned, so a KAM cannot shrink their
   book by leaving it unanswered. Client DB also gets an **Awaiting KAM** tile while any firm is pending.
-- **A KAM cannot reject a firm (2026-10-31).** The user: a manager assigned it, so
-  the KAM gets Accept and nothing else. This replaced a same-day rule that only
-  barred rejecting a firm moved from another KAM, after a test showed a rejected
-  move left an active client with no KAM, so `movedFrom` and
-  `respondFirmHandover` are gone. If the wrong KAM was picked, a manager moves the
-  firm. Stored `Rejected` entries stay readable as history, which is why
-  `status` keeps the value and Client DB can still say "X rejected". **The
-  Outreach-to-KAM handover keeps its Reject**: a BM sends that, and it is a quality
-  check on the handover, not a manager's assignment.
+- **A KAM accepts or rejects (2026-11-03).** The user asked for Reject back so a
+  KAM can turn down a firm and the admin reassigns it. Reject needs a reason,
+  which Client DB shows under the KAM column as "X rejected: reason".
+  `rejectFirmHandover` hands the firm to the previous holder: the latest earlier
+  entry with no status or `Accepted`, skipping any for the same person
+  (`sameRep`), so "Jadhav" never gets a firm back from "Krishna Jadhav". With no
+  earlier holder it goes to No KAM. This is what makes Reject safe now. The
+  31 Oct version cleared `kam` on every reject, and a test showed a rejected move
+  leaving an active client with no KAM, which is why Reject was removed that day.
+  On production on 3 Nov, 91 of the 92 pending firms had no earlier holder, so a
+  reject sends them to No KAM. The Outreach-to-KAM handover has its own Reject,
+  unchanged.
 - **Assigning a firm to the KAM who already holds it is refused.** It used to write
   a pending entry and put the firm back in sign-off for nothing. The bar says it is
   already with them, and the Firm page closes the picker. Both compare with
@@ -241,8 +244,10 @@ sign-off** tile here (`panels/signoff.tsx`).
   moved, and ties go by name. `/kam-load` counts converted Inbound and Outreach
   leads. It answers a different question (who got the most new conversions), and
   it costs a request. Book size comes from the list already loaded.
-- **Who may answer:** the KAM it was assigned to (phone, then name), a
-  manager, or anyone while the team table is not live. The 48-hour window
+- **Who may answer:** the KAM it was assigned to (phone, normalised, then name),
+  a manager, or anyone while the team table is not live. **A KAM's sign-off tile
+  and list hold only the firms they may answer**, so every other KAM sees 0
+  rather than a list of "Waiting on Krishna Jadhav" rows. A manager sees all. The 48-hour window
   matches the Outreach handover (`HANDOVER_TAT_HOURS`). The tile counts those
   past it.
 - **One bulk write.** An assignment is one `POST /rows/bulk` (`upsertClients`).
