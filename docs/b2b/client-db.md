@@ -75,6 +75,15 @@ carries **`include=boq`** — which `fetchLeadsByPhone` (the Firm-page per-phone
 fetch) now sends; the default `/crm/leads/` list stays lean. It adds no request,
 only payload, to a call the page already makes.
 
+**Enquiries billed to a firm's GSTIN on a number not on the firm are now folded
+in.** `useFirmOrders(phones, gstins)` fetches the phone-matched orders AND, in
+parallel, `fetchOrdersByGst(gstins)` (one `/crm/leads/?gst=` call using item 6's
+exact GSTIN filter), then merges the GST-only rows deduped by enquiry
+(`ticketId ?? enqId`). A GST-matched row shows the unlisted number under "Raised
+on", so it reads for what it is. This retired the old amber `gsts.tsx` notice
+that said `/crm/leads/` had no GST filter and the Django team still owed one —
+it does now, and the Firm page uses it.
+
 The KAM shown on the Firm page is the account's KAM **today**. Nothing in this
 stack records who held the account at the time.
 
