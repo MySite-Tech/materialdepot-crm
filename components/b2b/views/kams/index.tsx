@@ -7,7 +7,7 @@ import { KamOrderTable } from './orders/table';
 
 import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, InteractionType, contactNumbers, istToday, openCheckIn, primaryContact, withInteraction } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
-import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, ownsFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, acceptFirmHandover, sortFirmsForLens } from '../../models/kam';
+import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, ownsFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, acceptFirmHandover, rejectFirmHandover, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
 import { fmtL } from '../../models/mock-data';
 import { repNames, sameRep } from '../../models/outreach/handover';
@@ -156,8 +156,9 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const firmsBy = useMemo(() => {
     const out = Object.fromEntries(KAM_FIRM_LENSES.map((k) => [k, [] as AssignedClientRow[]])) as Record<KamFirmLens, AssignedClientRow[]>;
     for (const r of filteredRows) for (const k of KAM_FIRM_LENSES) if (firmLensMatches(k, r, today)) out[k].push(r);
+    if (!viewer.isManager) out.signoff = out.signoff.filter((r) => canRespondToFirm(r.client, me, false, live));
     return out;
-  }, [filteredRows, today]);
+  }, [filteredRows, today, viewer.isManager, me, live]);
 
   const ordersBy = useMemo(() => ({
     open: filteredOrders.filter((o) => orderLensMatches('open', o)),
@@ -345,7 +346,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
             page={listPage}
             setPage={setListPage}
             canRespond={(c) => canRespondToFirm(c, me, viewer.isManager, live)}
-            onRespond={(c) => saveClient(acceptFirmHandover(c, me.name, new Date().toISOString()))}
+            onAccept={(c) => saveClient(acceptFirmHandover(c, me.name, new Date().toISOString()))}
+            onReject={(c, reason) => saveClient(rejectFirmHandover(c, me.name, new Date().toISOString(), reason))}
             onOpen={setDrawerId}
           />
         ) : (

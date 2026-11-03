@@ -100,7 +100,7 @@ a new session knows what is live and what is being worked on.
   - targets are monthly: KAM 500 calls and 35 meetings, Inbound 1,500 calls;
   - Partner Content is deleted and Studio Space replaced it (`studio-space.md`);
   - on the Firm page, each enquiry expands to its cart, dates, visits and remarks, and each number has a classification and a Studio Space access read from Studio Space itself, Power or Normal (`client-db.md`, `studio-space.md`);
-  - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin. An Outreach assignee accepts or rejects; a KAM only accepts (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
+  - admins assign Outreach leads from any source, and Client DB firms to KAMs, by name or round robin. An Outreach assignee accepts or rejects, and so does a KAM since 2026-11-03 (`outreach.md`, `kam.md`). The Firm page's own KAM picker is managers-only and goes through the same sign-off.
   - **Not done:** enquiries cannot be found by GSTIN (needs a Django `gst` filter on `/crm/leads/`; the full list of Django asks is `docs/backends.md` §Owed by Django), and the CRM cannot grant or change Studio Space access, it only reads it (the read needs b2b-backend `GET /b2b/studio-access`, PR #14, not yet deployed).
 - **2026-10-30:** the Studio Space tab frames the Studio Space admin console and signs the KAM in by their CRM phone (`studio-space.md`; needs b2b-backend PR #15, migration 0022).
 - **Where it lives.** PR #29 (the revamp) is merged and deployed (2026-10-29).

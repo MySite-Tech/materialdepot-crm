@@ -1,3 +1,4 @@
+import { normalisePhone } from '@/lib/org/utils';
 import { ClientEntity, KamAssignment } from '../../client';
 import { HANDOVER_TAT_HOURS, hoursSince, sameRep } from '../../outreach/handover';
 import { Rep, spreadByLoad } from '../../outreach/intake';
@@ -44,6 +45,17 @@ export function acceptFirmHandover(c: ClientEntity, by: string, at: string): Cli
   return { ...c, assignments: (c.assignments || []).map((a) => (a === h ? answered : a)) };
 }
 
+export function rejectFirmHandover(c: ClientEntity, by: string, at: string, reason: string): ClientEntity {
+  const h = firmHandover(c);
+  if (!h || h.status !== 'Pending') return c;
+  const answered: KamAssignment = { ...h, status: 'Rejected', respondedAt: at, respondedBy: by, rejectReason: reason };
+  const previous = (c.assignments || [])
+    .filter((a) => a !== h && (!a.status || a.status === 'Accepted') && String(a.at) < String(h.at) && !sameRep(a.kam, h.kam))
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)))
+    .pop();
+  return { ...c, kam: previous?.kam || undefined, assignments: (c.assignments || []).map((a) => (a === h ? answered : a)) };
+}
+
 export function planFirmRoundRobin(firms: ClientEntity[], kams: Rep[], all: ClientEntity[]): { item: ClientEntity; rep: Rep }[] {
   const moving = new Set(firms.map((f) => f.id));
   const load = new Map<string, number>();
@@ -59,5 +71,5 @@ export const canRespondToFirm = (c: ClientEntity, me: Rep, isManager: boolean, t
   const h = firmHandover(c);
   if (!h || h.status !== 'Pending') return false;
   if (isManager || !teamLive) return true;
-  return h.kamPhone && me.phone ? h.kamPhone === me.phone : sameRep(h.kam, me.name);
+  return h.kamPhone && me.phone ? normalisePhone(h.kamPhone) === normalisePhone(me.phone) : sameRep(h.kam, me.name);
 };

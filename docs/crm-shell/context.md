@@ -99,12 +99,11 @@ into `PERMISSION_TAB_ORDER` rather than written twice, because a rename in one
 place would leave the route denying everyone. A tab whose backend must enforce
 the same rule should follow that shape; see `docs/api-layer/context.md`.
 
-`crm.ec_b2b_referral` (`ecB2bReferral`, 2026-10-31) is enforced the same way, in
-`app/api/b2b/ec-referral/route.ts` through `canReferToB2B`. The slug and
-`EC_REFERRAL_ROLES` live in `lib/b2b/ec-referral/constants.ts`, with
-`EC_STAFF_ROLES`, the roles that get the tab whatever their list says
-(`docs/b2b/ec-referral.md`). Any other role with a permission list needs it ticked
-under Admin > Users.
+`ecB2bReferral` (2026-10-31) is not gated: since 2026-11-03 `resolveAllowedTabs`
+appends it for every account but the site-audit-only roles, and
+`app/api/b2b/ec-referral/route.ts` only needs a session. The slug
+`crm.ec_b2b_referral` is still listed under Admin > Users but changes nothing
+(`docs/b2b/ec-referral.md`).
 
 `siteAudit` additionally force-adds off the caller's **Site Audit `profiles.role`**,
 which is fetched async — so that tab can appear a beat after the others. That is

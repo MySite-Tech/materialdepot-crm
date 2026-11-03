@@ -384,9 +384,8 @@ Its **PR #29 shipped on 2026-10-29** with b2b-backend #13 (migrations 0020 and
 0021). **PR #32 shipped on 2026-10-31** with b2b-backend #15 then #16 (#14 went in
 inside #16; migrations 0022 and 0023): Studio Space framing and read-only access,
 per-person Targets, Overview, the check-in, multi-team people, EC Directed, the
-assign bar, firm SPoCs and the EC B2B Referral tab. Sales, retail, manager and admin
-get that tab by role; any other role with a permission list needs
-`crm.ec_b2b_referral` ticked under Admin > Users.
+assign bar, firm SPoCs and the EC B2B Referral tab. Since 2026-11-03 every
+signed-in account gets that tab; `crm.ec_b2b_referral` no longer gates it.
 **PR #33 shipped on 2026-10-31** (`34e85b9`) with b2b-backend #17, #18 (migration
 0024) and #19, and b2b-dashboard #35: location-only check-in, a KAM can only accept
 a firm, live KAM pickers, one rep name through `sameRep`, EC B2B Referral by role,

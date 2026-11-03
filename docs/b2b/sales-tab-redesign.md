@@ -586,8 +586,8 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   (`ec-referral.md`). The assign bar is now one shape on Leads, Client Database and
   Outreach's pool: team first, then One person or Round robin over a chosen set.
   Bulk takes only unowned records, an owned one moves alone (`leads.md`,
-  `client-db.md`). A KAM cannot reject a firm at all (`kam.md`, the user's call the
-  same day). Tested in the sandbox on dummy data, stubbed Kylas. **Open:** real
+  `client-db.md`). A KAM could not reject a firm at all until 2026-11-03, when the
+  user asked for Reject back (`kam.md`). Tested in the sandbox on dummy data, stubbed Kylas. **Open:** real
   Kylas owner change from `reassign-many` is unproven.
 
 ## Outreach: the brief (2026-10-28) and what was built

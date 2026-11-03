@@ -204,7 +204,7 @@ doubly so for anything holding the service-role key.
 **`/api/b2b/ec-referral` (2026-10-31) is a B2B route that non-B2B users may call.**
 It holds `B2B_BACKEND_SECRET` and answers store staff, so it does not use
 `relayB2B`, whose `canUseB2B` gate would refuse them and whose passthrough would
-hand them every row. It runs `canReferToB2B` and writes only a lead it built from
+hand them every row. Any session may call it, and it writes only a lead it built from
 whitelisted fields. `reassign-many` on `/api/b2b/inbound/assign` is capped at
 `INBOUND_ROTATION_BATCH` because each lead is a Kylas read and write, and it
 reports `moved` and `failed` separately rather than failing the whole batch.
