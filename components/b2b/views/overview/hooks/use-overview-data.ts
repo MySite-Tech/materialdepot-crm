@@ -3,10 +3,9 @@
 import { buildHealthOverview } from '../../../models/account-health';
 import { ClientMetricsMap, computeDashboard, computeKamDashboard } from '../../../models/analytics';
 import { ClientEntity, contactNumbers } from '../../../models/client';
-import { BaseData, RangeData, RangeKey } from '../types';
-import { rangeFor } from '../utils';
-import { B2B_STATS_BRANCH, StatsBasis, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchB2BPipelineStats, fetchTargets, fetchVerticalStats, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { BaseData } from '../types';
+import { clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchTargets, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
+import { useCallback, useEffect, useState } from 'react';
 
 async function readBase(): Promise<BaseData> {
   const now = new Date();
@@ -52,76 +51,22 @@ async function readBase(): Promise<BaseData> {
   };
 }
 
-async function readRange(range: RangeKey, basis: StatsBasis): Promise<RangeData> {
-  const now = new Date();
-  const selected = rangeFor(range, now);
-  const onOrder = basis === 'order';
-
-  const [createdStats, orderStats] = await Promise.all([
-    fetchVerticalStats(selected, B2B_STATS_BRANCH),
-    onOrder ? fetchVerticalStats(selected, B2B_STATS_BRANCH, 'order') : Promise.resolve(null),
-  ]);
-  const revenueSelected = orderStats ?? createdStats;
-  const pipeline = revenueSelected.pipeline ?? await fetchB2BPipelineStats(selected, basis);
-
-  return {
-    stats: pipeline,
-    statsOk: createdStats.ok && pipeline.ok && revenueSelected.ok,
-    basisApplied: revenueSelected.basisApplied,
-    open: createdStats.pipeline?.active ?? { count: 0, value: 0 },
-  };
-}
-
 export function useOverviewData() {
-  const [range, setRangeState] = useState<RangeKey>('month');
-  const rangePicked = useRef(false);
-  const [basis, setBasis] = useState<StatsBasis>('order');
   const [base, setBase] = useState<BaseData | null>(null);
-  const [ranged, setRanged] = useState<RangeData | null>(null);
-  const [baseBusy, setBaseBusy] = useState(true);
-  const [rangeBusy, setRangeBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  const loadBase = useCallback(async () => {
-    setBaseBusy(true);
+  const reload = useCallback(async () => {
+    setBusy(true);
     try {
       setBase(await readBase());
       setUpdatedAt(new Date());
     } finally {
-      setBaseBusy(false);
+      setBusy(false);
     }
   }, []);
 
-  const loadRange = useCallback(async () => {
-    setRangeBusy(true);
-    try {
-      setRanged(await readRange(range, basis));
-      setUpdatedAt(new Date());
-    } finally {
-      setRangeBusy(false);
-    }
-  }, [range, basis]);
+  useEffect(() => { reload(); }, [reload]);
 
-  const reload = useCallback(
-    () => Promise.all([loadBase(), loadRange()]).then(() => undefined),
-    [loadBase, loadRange],
-  );
-
-  useEffect(() => { loadBase(); }, [loadBase]);
-  useEffect(() => { loadRange(); }, [loadRange]);
-
-  useEffect(() => {
-    if (!rangePicked.current && range === 'month' && ranged?.statsOk && !ranged.stats.total.count) setRangeState('lastMonth');
-  }, [ranged, range]);
-
-  const setRange = useCallback((r: RangeKey) => {
-    rangePicked.current = true;
-    setRangeState(r);
-  }, []);
-
-  return {
-    base, ranged, range, setRange, basis, setBasis, updatedAt, reload,
-    refreshing: baseBusy || rangeBusy,
-    rangeBusy,
-  };
+  return { base, updatedAt, reload, refreshing: busy };
 }

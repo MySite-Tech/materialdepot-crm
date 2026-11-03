@@ -76,6 +76,13 @@ neither is a shared cache or a global rate limit — two instances will happily
 issue two requests inside the same 500 ms. Treat them as best-effort politeness
 toward Kylas, not as guarantees.
 
+The B2B revenue report (`lib/server/b2b-revenue.ts` `revenueReport`) keeps a past
+month for 30 minutes instead of 5, because the six-month trend rebuilds every
+month it misses, at about five Django pages each. It also single-flights per
+caller and month: the hero and the trend ask for the current month at the same
+moment on open, and without that the month would be read from Django twice.
+Refresh skips the cache, but not for a report built in the last minute.
+
 ### `requireCaller` — the only way a route handler learns who is calling
 
 `lib/server/session.ts`. A route handler has no session of its own: auth in this
@@ -178,14 +185,13 @@ through. `lib/server/b2b-revenue.ts` pages Django's `/crm/leads/`
 server-side because a month is 5+ requests, which a page may not spend on mount. It
 caches 5 minutes per caller, because Django scopes rows to the caller's token, and a
 Studio, redirect or team failure sets a flag rather than reading as zero
-(`docs/b2b/overview.md` §Three revenue channels).
+(`docs/b2b/overview.md` §Four revenue channels).
 
-The same file serves `app/api/b2b/revenue/ledger` (2026-11-01), which reads only the
-`B2B` branch for one Orders tile. It is keyed by caller, basis and dates, and runs only
-on a click. The report and the ledger share `readHolders`, so an order cannot land in
-one channel on a card and another in a tile. Each call rebuilds the whole number book
-from `/rows`, so keep this cached rather than calling it per row. All time stops at
-`MAX_PAGES` and returns `truncated`, which the drawer must show.
+The report, the trend and the funnel share `readHolders`, so an order cannot land in
+one channel in one place and another elsewhere. Each call rebuilds the whole number
+book from `/rows`, so keep it cached rather than calling it per row. A read stops at
+`MAX_PAGES` and returns `truncated`, which the screen must show. (The Orders-tile
+ledger route that also read through it was deleted on 2026-11-03 with its panel.)
 
 It also serves `app/api/b2b/revenue/funnel` (2026-11-03, work in progress), the
 Client Database funnel (`docs/b2b/overview.md` §Client Database funnel). That route
@@ -275,8 +281,8 @@ where they differed by ₹33L — so `order_from`/`order_to` is only meaningful 
 The response **echoes back the basis it actually applied** (`basis: 'created' |
 'order'`), because a deployment that predates `order_from` ignores the param and
 answers with cart-created figures that are indistinguishable from the real
-thing. `fetchVerticalStats` turns the mismatch into `basisApplied: false` and the
-B2B Dashboard renders an amber notice rather than the wrong number under the
+thing. The Overview's stats reads (deleted 2026-11-03) turned the mismatch into
+`basisApplied: false` and an amber notice rather than the wrong number under the
 right label. **Anything added here that Django might not understand needs the
 same echo** — a silently ignored query param is the frontend half of "never
 present a failed request as data".

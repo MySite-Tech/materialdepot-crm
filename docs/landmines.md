@@ -84,6 +84,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A reassign changed the system of record and left the copy the filter reads
 - A failed save closed the form first, so the rep lost what they typed at the site
 - "Assigned" counted every firm once the Client Database held firms nobody owned
+- A bulk GET over 4 KB came back as a bare 400
 - One failed batch marked every firm Unknown, and a different failed batch read as Never ordered
 - A whole-row save let a stale copy erase a colleague's calls
 - The Inbound board followed Kylas's owner, so a move inside Kylas took a rep's work off their list
@@ -1155,6 +1156,19 @@ imported into the Client Database with no owner. The same tab had no viewer scop
 so a KAM also saw every other KAM's book. When a list's source widens, re-check
 every predicate that was `true` because the old source was narrow
 (`docs/b2b/kam.md` §Who sees which firms).
+
+### A bulk GET over 4 KB came back as a bare 400 (2026-11-03)
+
+The Overview and Client Database showed "API error: 400 on /crm/leads/b2b-bulk/"
+on every open once the Client Database held 1,284 firms. `fetchB2BBulk` sent 300
+numbers and up to 60 enquiry IDs in one query string, about 4,100 bytes, and the
+server in front of Django refuses a request line over roughly 4 KB with an HTML
+400 before auth runs (a 4,040-byte query answered 403, a 4,060-byte one 400,
+checked without a token). Because the body is HTML, `mdFetch` had no message to
+show. The numbers in that batch read Unknown. `fetchB2BBulk` now sizes its first
+batch by bytes, not count (`BULK_QUERY_BYTES`). Any GET that packs a list into
+the URL (`enquiry_ids=`, `phones=`, `bm_groups=`) has the same ceiling: budget
+it in bytes.
 
 ### One failed batch marked every firm Unknown, and a different failed batch read as Never ordered (2026-11-02)
 

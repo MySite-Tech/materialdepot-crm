@@ -2,6 +2,7 @@
 
 import { fmtDate, fmtPhone } from '../utils';
 import { fmtINR } from '../../../models/mock-data';
+import { useEnquiryItems } from '../hooks/use-enquiry-items';
 import { ClientOrderRow } from '@/lib/b2b';
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
@@ -14,6 +15,7 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
+  const { items, state } = useEnquiryItems(r);
   const cartTotal = r.cart.reduce((n, i) => n + (i.price && i.qty ? i.price * i.qty : i.price || 0), 0);
   const remarks = [...r.remarks].sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   const visits = [...r.visits].sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -40,9 +42,11 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
 
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Items</div>
-        {r.items?.length ? (
+        {state === 'loading' ? (
+          <p className="text-[11px] text-gray-400">Loading items…</p>
+        ) : items?.length ? (
           <ul className="bg-white border border-gray-100 rounded divide-y divide-gray-50">
-            {r.items.map((i, k) => (
+            {items.map((i, k) => (
               <li key={k} className="flex items-start justify-between gap-3 px-2 py-1 text-[12px]">
                 <span className="text-gray-700 min-w-0 break-words">{i.name}</span>
                 <span className="font-mono text-[11px] text-gray-500 whitespace-nowrap">
@@ -69,6 +73,7 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
         ) : (
           <p className="text-[11px] text-gray-400">No items on the PI or ticket.</p>
         )}
+        {state === 'failed' && <p className="text-[10px] text-amber-700 mt-1">The PI&apos;s items could not be read, so this shows the ticket&apos;s categories.</p>}
         {cartTotal > 0 && Math.round(cartTotal) !== Math.round(r.orderValue) && (
           <p className="text-[10px] text-gray-400 mt-1">Item prices add up to {fmtINR(cartTotal)}; the ticket&apos;s cart value is {fmtINR(r.orderValue)}.</p>
         )}

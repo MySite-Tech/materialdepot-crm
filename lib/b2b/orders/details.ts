@@ -1,6 +1,6 @@
 import { lookupEnqId } from '../leads/enq-lookup';
 import { ClientOrderHistory } from './history';
-import { ClientOrderRow, ticketToOrderRow } from './ticket';
+import { BoqLine, ClientOrderRow, boqLines, ticketToOrderRow } from './ticket';
 import { ClientContact, ClientOrderMetrics, averageOrderValue, contactNumbers, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
 import { CRMLeadRow, ClientTicketResult, fetchCRMLeads, fetchClientTickets, invalidateLeadsByPhone } from '@/lib/api';
@@ -156,6 +156,19 @@ export async function fetchOrdersByGst(gstins: string[]): Promise<ClientOrderRow
     include: 'boq', sortBy: 'createdAt', sortDir: 'desc',
   });
   return (Array.isArray(results) ? results : []).map((r) => ticketToOrderRow(r, String(r.clientPhone || '')));
+}
+
+const itemsCache = new Map<string, Promise<BoqLine[]>>();
+
+export function fetchEnquiryItems(enqId: string): Promise<BoqLine[]> {
+  const want = enqId.trim().toUpperCase();
+  const hit = itemsCache.get(want);
+  if (hit) return hit;
+  const promise = fetchCRMLeads({ enquiryIds: [want], page: 1, pageSize: 5, include: 'boq' })
+    .then(({ results }) => boqLines((results ?? []).find((r) => String(r.id).toUpperCase() === want)?.boqItems) ?? []);
+  itemsCache.set(want, promise);
+  promise.catch(() => itemsCache.delete(want));
+  return promise;
 }
 
 export function invalidateClientTickets(phones: string[]): void {

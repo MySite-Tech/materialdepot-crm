@@ -2,7 +2,7 @@ import { LOST_SET, ORDER_SET } from '../../../../components/b2b/constants/client
 import { DELIVERED_STATUSES, FUNNEL_BUCKETS, FUNNEL_OF, FUNNEL_STAGES, QUOTED_STATUSES } from '../constants';
 import type { FunnelBucket, FunnelCell, FunnelEnquiry, FunnelRow, FunnelStage, RevenueOrder } from '../types';
 
-export const funnelBucketOf = (o: RevenueOrder): FunnelBucket | null => FUNNEL_OF[o.bucket] ?? null;
+export const funnelBucketOf = (o: RevenueOrder): FunnelBucket | null => FUNNEL_OF[o.type] ?? null;
 
 export function reachedStage(status: string, stage: FunnelStage): boolean {
   if (stage === 'enquiry') return true;

@@ -5,9 +5,9 @@ import { fmtDate, fmtPhone } from '../../../../../drawers/firm/utils';
 import { dealIsOrder } from '../../../../../models/client';
 import { fmtINR, fmtL } from '../../../../../models/mock-data';
 import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
-import { RevenueOrder, channelSplits, isCounted } from '@/lib/b2b/revenue';
+import { REVENUE_CHANNELS, RevenueOrder, channelSplits } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useState } from 'react';
-import { BUCKET_LABELS, BUCKET_REASON, CHANNEL_META, EC_REASON } from '../constants';
+import { CHANNEL_META, HELD_BY, TYPE_META } from '../constants';
 
 export interface Explained {
   label: string;
@@ -17,14 +17,14 @@ export interface Explained {
 }
 
 const explainOrder = (o: RevenueOrder): Explained => ({
-  label: BUCKET_LABELS[o.bucket],
-  color: o.bucket in CHANNEL_META ? CHANNEL_META[o.bucket as keyof typeof CHANNEL_META].color : undefined,
-  reason: o.bucket === 'ec' ? (o.heldBy && EC_REASON[o.heldBy]) || CHANNEL_META.ec.hint : BUCKET_REASON[o.bucket],
+  label: CHANNEL_META[o.channel].label,
+  color: CHANNEL_META[o.channel].color,
+  reason: [TYPE_META[o.type].rule, o.heldBy && HELD_BY[o.heldBy]].filter(Boolean).join(' '),
 });
 
 function OrderRow({ o, startOpen, explain }: { o: RevenueOrder; startOpen: boolean; explain: (o: RevenueOrder) => Explained }) {
   const [open, setOpen] = useState(startOpen);
-  const items = o.ticket.cart.map((c) => c.name);
+  const categories = o.ticket.cart.map((c) => c.name).join(', ');
   const why = explain(o);
   return (
     <div className="bg-white border border-gray-200 rounded-lg">
@@ -43,8 +43,8 @@ function OrderRow({ o, startOpen, explain }: { o: RevenueOrder; startOpen: boole
         <div className="text-[11px] text-gray-500 mt-1">
           {[fmtDate(o.day), o.client, o.phone && fmtPhone(o.phone), o.person && `Credited to ${o.person}${o.team ? ` (${B2B_TEAM_LABEL[o.team]})` : ''}`, o.placedBy && `On the cart ${o.placedBy}`, o.store].filter(Boolean).join(' · ')}
         </div>
-        {!!items.length && (
-          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{items.length} item{items.length === 1 ? '' : 's'}: {items.join(', ')}</div>
+        {categories && (
+          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{categories}</div>
         )}
       </button>
       {open && (
@@ -52,7 +52,6 @@ function OrderRow({ o, startOpen, explain }: { o: RevenueOrder; startOpen: boole
           <p className="text-[11px] text-gray-600">
             {!dealIsOrder(o.status) && !why.funnel && <span className="font-semibold">{o.status || 'This status'} is not an order yet, so this is not in B2B revenue. Once placed it would count this way. </span>}
             <span className="font-semibold">Why {why.label}:</span> {why.reason}
-            {o.bookedOnB2B ? ' Booked on the B2B branch.' : ' Booked at a store.'}
           </p>
           <EnquiryDetail r={o.ticket} />
         </div>
@@ -71,7 +70,6 @@ export function OrderDrawer({ title, orders, note, explain, onClose }: {
   const splits = useMemo(() => channelSplits(orders.filter((o) => dealIsOrder(o.status))), [orders]);
   const notOrders = orders.filter((o) => !dealIsOrder(o.status)).length;
   const total = useMemo(() => orders.reduce((s, o) => s + o.value, 0), [orders]);
-  const counted = orders.filter((o) => isCounted(o) && dealIsOrder(o.status)).length;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -91,10 +89,10 @@ export function OrderDrawer({ title, orders, note, explain, onClose }: {
                 {explain
                   ? `${orders.length} enquir${orders.length === 1 ? 'y' : 'ies'} · ${fmtL(total)}${notOrders ? ` · ${notOrders} not orders yet` : ''}`
                   : `${orders.length} order${orders.length === 1 ? '' : 's'} · ${fmtL(total)}`}
-                {!explain && counted < orders.length && ` · ${orders.length - counted} not in B2B revenue${notOrders ? ` (${notOrders} not orders yet)` : ''}`}
+                {!explain && !!notOrders && ` · ${notOrders} not orders yet`}
               </div>
               <div className="flex items-center gap-3 flex-wrap mt-1.5">
-                {(Object.keys(CHANNEL_META) as (keyof typeof CHANNEL_META)[]).filter((c) => !explain && splits[c].orders > 0).map((c) => (
+                {REVENUE_CHANNELS.filter((c) => !explain && splits[c].orders > 0).map((c) => (
                   <span key={c} className="inline-flex items-center gap-1.5 text-[11px] text-gray-600 tabular-nums">
                     <span className="w-2 h-2 rounded-sm" style={{ background: CHANNEL_META[c].color }} />
                     {CHANNEL_META[c].label} {fmtL(splits[c].value)} · {splits[c].orders}

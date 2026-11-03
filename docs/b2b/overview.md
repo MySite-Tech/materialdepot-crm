@@ -13,31 +13,67 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 |---|---|---|
 | `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readBase`) |
 | `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/` | On open |
-| `fetchVerticalStats` (1–2 calls) | Django `/crm/leads/stats/` | Orders section: on open and on each period or basis change (`readRange`) |
-| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; 5-minute server cache per caller. Refresh bypasses it. Carries each order's whole ticket, so the drill-down below costs no request |
-| `fetchCRMLeads` | Django `/crm/leads/` | Only when Open carts is clicked |
-| `fetchBranchLedger` | `GET /api/b2b/revenue/ledger` | Only when a tile in Orders on the B2B branch is clicked; 5-minute server cache per caller |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it. Carries each order's whole ticket, so the drill-down below costs no request |
+| `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, two months at a time. No orders in the response |
+| `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
 | `fetchFunnelReport` | `GET /api/b2b/revenue/funnel?from&to` | Only once the Client Database funnel is opened (remembered per browser), then one per month picked; 5-minute server cache per caller. Reads `/crm/leads/?created_from&created_to` for the month, up to 30 pages of 1,000, 8 at a time |
 
-## Three revenue channels (2026-10-31)
+## Four revenue channels (redefined 2026-11-03)
 
-The user's definition: B2B moves revenue directly, by sending a client to an EC,
-or through clients a partner firm refers. Direct and EC-directed each split into
-KAM and Inbound · Outreach. Referred is always KAM.
+The user's definition, matching their Metabase logic. Every placed order gets a
+**type** (1–8, the numbering in their "B2B Sales Data" sheet), and the type plus
+where it was booked decides the channel (`lib/b2b/revenue/utils/classify.ts`):
 
-**The first match wins, per order** (`lib/b2b/revenue/utils/classify.ts`):
+| Type | Rep on the cart · number | Booked on the B2B branch | Booked at a store |
+|---|---|---|---|
+| 1 / 2 | A B2B rep | 1 → **Direct** | 2 → **Studio EC Redirected** |
+| 3 / 4 | Store rep, a number B2B holds | 3 → **Direct** | 4 → **Studio EC Redirected** |
+| 5 | A Studio Space referred client | **Referred** | **Referred** |
+| 6 / 8 | Store rep, a Client Database firm with no KAM | 6 → **Direct** | 8 → **EC Direct** |
+| 7 | Store rep, a number on no B2B record | 7 → **Direct** | ordinary retail, dropped |
 
-1. **Referred.** The number is a Studio Space `referral` with `source = client`.
-2. **Direct.** A B2B rep holds the cart, whichever branch booked it.
-3. **EC-directed.** A store rep holds the cart, and the number is held by a firm
-   with a KAM, a Studio Space firm's own numbers, an Outreach or Inbound lead, or
-   a logged redirect.
-4. **Not counted, No KAM yet.** The number is only on a firm with no owner.
-5. **Not counted, Not traced.** Booked on the B2B branch, on no B2B record.
+- **The user's four, in their words (2026-11-03):** Direct is placed on B2B.
+  Studio EC Redirected is firms with a B2B person on them (a KAM, an Inbound or
+  Outreach SPoC) ordering at a store, so B2B sent them there. EC Direct is
+  Client Database firms ordering at a store with no B2B SPoC: they deal with the
+  store directly and have not explored a B2B tie-up. Referred is the end clients
+  Studio Space partners refer. A number held only by an Inbound or Outreach lead
+  counts as having a SPoC, and so does a logged redirect.
+- **"The B2B branch" is HQ until 30 June 2026 and `B2B` (branch 70) from 1 July**
+  (`B2B_BOOKING`). Branch 70's first order is 1 July. The user: "in June, B2B
+  orders were taken on HQ". `readBooked` reads each era's branch with its window
+  clamped to the era, so one report can straddle the cutover.
+- **HQ is a store too, so type 7 does not exist there.** A walk-in at HQ on no B2B
+  record is retail (`booked: 'shared'`). HQ kept booking 110–150 store orders a month
+  after July with almost no B2B rep, and June held about a hundred such walk-ins.
+- **Direct is every placed order on the B2B branch except referred clients.** From
+  July, Direct plus the Referred card's "on the B2B branch" equals branch 70 in
+  Metabase. Before 2026-11-03 Direct was "a B2B rep on the cart", and types 6 and 7
+  were "not counted"; the not-counted line and the bridge table went with that.
+- **Referred is every order of a referred client, wherever it was booked.** The user
+  first listed type 5 under Direct, then asked to see referred clients' orders
+  entirely separately. The Referred card splits its total by booking place, and the
+  Direct card says how much referred revenue sat on the branch, so the Metabase
+  figure can still be rebuilt from the screen.
+- **Types 6 and 8 are the Client Database's firms with no KAM**, including the
+  client_master import. Many of those designers bought at stores before anyone at
+  B2B knew them, and the user wants that volume visible as EC Direct. A firm is
+  matched by any of its numbers with no date gate, so its whole history counts.
+  An order placed under a number the firm record does not hold (a site supervisor,
+  the end client) is missed: there is no GST or name match.
+- **The first match decides the type:** referred, then a B2B rep, then a number B2B
+  holds, then a firm with no KAM, then the B2B branch.
+- **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is
+  1–2, EC referred 3–4, EC direct 6 and 8.
+- **`branch=HQ` on `/crm/leads/` has not been seen answering from real Django.**
+  `branch=B2B` matches `organisation_branch.branch_name`, and HQ's name is `HQ`, but
+  the first signed-in run over a June month should confirm Direct is not ₹0.
 
-Anything else is ordinary retail and is dropped. Bucket 4 and 5 are shown under
-the cards and open as lenses, so the Client Database's unassigned firms show what
-they are worth.
+Checked 2026-11-03 by running the compiled classifier over every placed order from
+June to 3 November (Metabase) against production's `/b2b/*` holders. From July,
+Direct plus referred-on-branch equalled branch 70 in count and value every month,
+and June's Direct equalled HQ less its walk-ins. The figures stay out of this
+public repo. The route itself has run only on the sandbox.
 
 - **The only bulk read of orders is `/crm/leads/?order_from&order_to&branch_basis=estimate&page_size=1000`.**
   It takes `page_size=1000`, unlike what `backends.md` row 8 assumed. October was
@@ -48,13 +84,10 @@ they are worth.
   roster. Never `sameRep`.** Its prefix match made a team member equal to a store
   rep with the same first name and moved that rep's whole month into Direct. The
   two have different phones in `users_user`.
-- **Rep on the cart beats booking branch.** Most orders on the B2B branch carry a
-  store rep (the old grey "No B2B rep on cart"). The user's rule is who placed it,
-  so those are EC-directed or not counted.
 - **A lead or redirect counts only for carts raised on or after its date,** so a
   store customer who later became a lead is not claimed. Firms have no such gate.
-- **The hero can exceed the Orders section, and the EC's own revenue overlaps it.**
-  EC-directed and Referred are also in the stores' numbers. The hero is B2B's
+- **The hero is at least the Orders section's Won, and the EC's own revenue overlaps it.**
+  Studio EC Redirected, EC Direct and Referred are also in the stores' numbers. The hero is B2B's
   influence, measured against a target that `kpi-definitions.md` says counts EC,
   self and referrals. It is not added to company revenue.
 - **An empty current month opens on last month (2026-11-01).** At midnight on the 1st
@@ -63,7 +96,9 @@ they are worth.
   Picking a period yourself always wins, and a failed read never falls back: it has to
   stay visible as a failure, not pass for an empty month.
 - **Filters narrow the cards and table, not the hero.** The hero stays against the
-  whole target. A line under the cards states the filtered share.
+  whole target. A line beside the filters states the filtered share. The branch
+  filter is the rep's home branch (the row's `branch`), not where the order was
+  booked, so it is labelled "Every branch", not "Every store".
 - **Referred reads `GET /b2b/studio-access` `firms[]`, not `/sync/pull-numbers`.**
   A firm's `referrals` are its client numbers, `phones` its own, and `orders` adds any
   number Studio attributed an order to, which covers the linked numbers it does not
@@ -99,28 +134,8 @@ in Orders opens that one enquiry. Each enquiry shows why it landed in its channe
 - The report now holds client numbers and carts for any `canUseB2B` caller. Those
   callers could already read them on the Firm page.
 
-**The tiles open too, and one table ties the two totals together (2026-11-01).** The
-user kept reading Direct as the B2B branch figure, because both sound like "B2B's
-orders". They split on different things: the branch ledger on where an order was
-booked, Direct on who held the cart. `ui/branch-bridge.tsx` shows every counted or
-not-counted order by channel against booked on B2B or at a store, and its B2B column
-adds up to the Orders section's Won. Every cell opens its enquiries. It reads the
-report already loaded, so it costs no request, and it ignores the filters because it
-has to tie to a total that ignores them too.
-
-Every tile in Orders opens `ui/branch-orders.tsx`, through
-`GET /api/b2b/revenue/ledger?basis&from&to`: one read on click, 5-minute server cache.
-It lists rows on the `B2B` branch for the selected period and basis, each run through
-`classifyOrder`, so a row says which channel it lands in. The report cannot serve this
-because it drops non-orders (Quote Approval Pending) and only covers order date in one
-month. Django's status tile is the count of record, so a list that disagrees says so
-instead of quietly showing a different number. All time reads at most 8,000 rows and
-says when it was cut.
-
-The sandbox shows that warning on every tile, and it is the stub, not the app: its stats count every deal under `total_branch` while its list filters on the row's own branch. Only real Django can prove the list and tile agree on the ledger.
-
 Real October was read through the compiled classifier in a signed-in production
-tab on 2026-10-31. EC-directed was the largest channel, then Direct, with Referred
+tab on 2026-10-31 (under the three-channel rules of that day). EC-directed was the largest channel, then Direct, with Referred
 very small, and orders booked on B2B still tied to the old hero's total. The figures
 stay out of this public repo. Client rows owned by an Inbound person count as KAM,
 because they hold the firm. **Not checked:** whether Django
@@ -134,8 +149,8 @@ The user asked for the whole funnel of the Client Database firms, split three wa
 **EC direct** (a store rep on the cart, nobody from B2B on the firm), **EC referred**
 (a store rep on the cart, a B2B person on the firm) and **Studio direct** (an Inbound,
 Outreach or KAM rep booked it). "Studio" is the user's word for the B2B team here,
-not Studio Space. They are the hero's buckets narrowed to Client Database numbers
-(`FUNNEL_OF`): Direct, EC-directed and No KAM yet. So EC referred follows the hero's
+not Studio Space. They are the hero's types narrowed to Client Database numbers
+(`FUNNEL_OF`): 1–2, 3–4, and 6 and 8. So EC referred follows the hero's
 rule exactly, including that a firm's KAM counts for carts raised before the
 assignment while a lead counts only from its own date.
 
@@ -151,8 +166,8 @@ assignment while a lead counts only from its own date.
   number (`CT…`) until then, so In Cart rows show that. Rows are deduped on
   `ticketId`, never `id` (`landmines.md`, a lead's displayed id is not unique).
 - **A logged Inbound or Outreach SPoC counts as involvement** from its `from` date
-  (`spocHolders` in `book.ts`). This also moves such a firm's orders from No KAM yet
-  into EC-directed in the hero. No firm had one logged on 2026-11-03.
+  (`spocHolders` in `book.ts`). This also moves such a firm's orders from type 6
+  or 8 to 3 or 4. No firm had one logged on 2026-11-03.
 - **Why it waits for a click.** A month is about 10 pages of `/crm/leads/`, far more
   than the order-date read, because most carts never become orders. Loading it on
   every Overview open would spend that on people who never look.
@@ -200,16 +215,19 @@ panel. Revenue split appeared twice from two sources (Django verticals, and type
 Supabase values). "Pipeline by Stage" added New, In Progress, PI and Won across
 three teams that do not share stages.
 
-## The five sections, top to bottom
+## The sections, top to bottom
 
-1. **B2B revenue, three channels.** See the section below. The hero is the sum of
-   Direct, EC-directed and Referred against `b2bTargetL`, with a pace marker on
-   the current month.
-2. **Orders on the B2B branch.** Django's ledger for the `B2B` branch, so its Won is smaller than the hero. Booked is every status tile added up, and Won is Booked less Quote Approval Pending, the one status here that is not yet an order (`ORDER_SET`). The hero excludes it too. The period (this month · last month · all time) and the basis
-   (order date · cart date) apply here. It shows booked, won and lost value,
-   then each Django status as a tile. The tiles are sorted by value, with no
-   arrows between them: Django returns the statuses in no meaningful order, and
-   an arrow would claim a sequence. Open carts opens the existing drawer.
+1. **B2B revenue, four channels.** See the section above. The hero is the sum of
+   Direct, Studio EC Redirected, EC Direct and Referred against `b2bTargetL`, with
+   a pace marker on the current month. Direct and Studio EC Redirected show their
+   types as bars, and a bar filters the table to that type. Referred shows where
+   its orders were booked. Under the cards, **Month by month** stacks the channels
+   for the last six months; a bar opens that month. Its two months at a time keep
+   Django to 16 page reads in flight, and a month the hero is already building is
+   shared, not built twice (`revenueReport`'s single-flight). EC Direct is cyan
+   (`#0891B2`), which passed the palette validator against all three other
+   channel colours; purple failed against Direct's indigo.
+2. **Client Database funnel**, below.
 3. **Inbound → Outreach → KAM.** One card per team: live pipeline (deal-ticket
    value at Quote or PI shared), a stage funnel, and one rate. Inbound and
    Outreach show "Converted" (Closed over every stage except Invalid). **KAM
@@ -227,7 +245,7 @@ three teams that do not share stages.
 Explanations moved off the page into the ⓘ tooltips (`Hint`). Notices stay as
 amber lines, because a failed read must never pass for a zero.
 
-**Dropped on purpose; don't re-add them as panels:** Where It Came From (the Django vertical donut, replaced by the channels), Target
+**Dropped on purpose; don't re-add them as panels:** Orders on the B2B branch (its period and basis toggles, status tiles and Open carts drawer) and the "How this ties to Orders on the B2B branch" table, both removed by the user on 2026-11-03, Where It Came From (the Django vertical donut, replaced by the channels), Target
 Achieved and Run Rate (now in the hero), Pipeline by Stage, Pipeline by Vertical, the KAM §6
 pipeline tiles, Target vs Revenue and Total Revenue Split. The last two used the
 typed Supabase values, a third revenue number that agrees with neither Django

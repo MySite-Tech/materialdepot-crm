@@ -2,10 +2,10 @@
 
 import { fmtL } from '../../../../../models/mock-data';
 import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
-import { RevenueOrder, rollupBy, rollupOrders } from '@/lib/b2b/revenue';
+import { REVENUE_CHANNELS, RevenueOrder, rollupBy, rollupOrders } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useState } from 'react';
 import { Segmented } from '../../../ui';
-import { BREAKDOWN_LABELS, BUCKET_LABELS, BreakdownView, CHANNEL_META, PAGE_SIZE } from '../constants';
+import { BREAKDOWN_LABELS, BreakdownView, CHANNEL_META, PAGE_SIZE, TYPE_META } from '../constants';
 import { OrderDrawer } from './order-drawer';
 
 const CELL = 'px-3 py-2 whitespace-nowrap';
@@ -18,13 +18,11 @@ interface Drill { title: string; rows: RevenueOrder[] }
 
 function RollupTable({ rows, head, onOpen }: { rows: ReturnType<typeof rollupBy>; head: string; onOpen: (key: string) => void }) {
   return (
-    <table className="w-full text-[12px] min-w-[640px]">
+    <table className="w-full text-[12px] min-w-[760px]">
       <thead className="text-[10px] uppercase tracking-wider text-gray-400">
         <tr>
           <th className="text-left font-semibold px-3 py-2">{head}</th>
-          <th className="text-right font-semibold px-3 py-2">Direct</th>
-          <th className="text-right font-semibold px-3 py-2">EC-directed</th>
-          <th className="text-right font-semibold px-3 py-2">Referred</th>
+          {REVENUE_CHANNELS.map((c) => <th key={c} className="text-right font-semibold px-3 py-2">{CHANNEL_META[c].label}</th>)}
           <th className="text-right font-semibold px-3 py-2">Orders</th>
           <th className="text-right font-semibold px-3 py-2">Total</th>
         </tr>
@@ -36,9 +34,7 @@ function RollupTable({ rows, head, onOpen }: { rows: ReturnType<typeof rollupBy>
               <div className="font-semibold text-gray-900 truncate">{r.key}</div>
               {r.detail && <div className="text-[10.5px] text-gray-400 truncate">{r.detail}</div>}
             </td>
-            <td className={NUM}>{cash(r.direct)}</td>
-            <td className={NUM}>{cash(r.ec)}</td>
-            <td className={NUM}>{cash(r.referred)}</td>
+            {REVENUE_CHANNELS.map((c) => <td key={c} className={NUM}>{cash(r[c])}</td>)}
             <td className={`${NUM} text-gray-500`}>{r.orders}</td>
             <td className={`${NUM} font-semibold text-gray-900`}>{fmtL(r.value)}</td>
           </tr>
@@ -68,10 +64,10 @@ function OrdersTable({ rows, onOpen }: { rows: RevenueOrder[]; onOpen: (o: Reven
             </td>
             <td className={CELL}>
               <span className="inline-flex items-center gap-1.5">
-                {o.bucket in CHANNEL_META && <span className="w-2 h-2 rounded-sm" style={{ background: CHANNEL_META[o.bucket as keyof typeof CHANNEL_META].color }} />}
-                {BUCKET_LABELS[o.bucket]}
+                <span className="w-2 h-2 rounded-sm" style={{ background: CHANNEL_META[o.channel].color }} />
+                {CHANNEL_META[o.channel].label}
               </span>
-              {o.redirectLogged && <div className="text-[10.5px] text-gray-400">Redirect logged</div>}
+              <div className="text-[10.5px] text-gray-400">{TYPE_META[o.type].label}{o.redirectLogged ? ' · redirect logged' : ''}</div>
             </td>
             <td className={CELL}>
               {o.person || '—'}

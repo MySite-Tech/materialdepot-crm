@@ -1,12 +1,13 @@
 'use client';
 
 import { fmtL } from '../../../../../models/mock-data';
-import { FUNNEL_BUCKETS, FUNNEL_STAGES, FunnelBucket, FunnelCell, FunnelEnquiry, FunnelStage, RevenueOrder, funnelRows } from '@/lib/b2b/revenue';
+import { FUNNEL_BUCKETS, FUNNEL_STAGES, FunnelBucket, FunnelCell, FunnelEnquiry, FunnelStage, RevenueOrder, funnelRows, monthWindows } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFunnelReport } from '../../../hooks/use-funnel-report';
 import { Card, Hint, Notice } from '../../../ui';
 import { OrderDrawer } from '../ui/order-drawer';
-import { monthOptions, share } from '../utils';
+import { share } from '../utils';
+import { MONTHS_OFFERED } from '../constants';
 import { FUNNEL_META, FUNNEL_OPEN_KEY, STAGE_META } from './constants';
 
 const SELECT = 'px-2 py-1 text-[11px] font-semibold border border-gray-200 rounded-lg bg-white text-gray-600 cursor-pointer';
@@ -33,7 +34,7 @@ function Cell({ cell, base, onOpen }: { cell: FunnelCell; base: number | null; o
 }
 
 export function ClientFunnel({ refreshKey }: { refreshKey: number }) {
-  const months = useMemo(() => monthOptions(new Date()), []);
+  const months = useMemo(() => monthWindows(new Date(), MONTHS_OFFERED), []);
   const [monthKey, setMonthKey] = useState(months[0].key);
   const [open, setOpen] = useState(false);
   const [fellBack, setFellBack] = useState(false);

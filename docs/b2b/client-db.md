@@ -199,6 +199,17 @@ them. The remarks shown are the ones on the ticket. `/crm/lead-remarks/` is
 not called, because `fetchLeadRemarks` swallows failures into `[]` and would
 turn an outage into "no remarks".
 
+**Every enquiry card lists the PI's items, wherever it opens (2026-11-03).** The
+user wants item, quantity, rate and amount, not the ticket's categories, on any
+screen that opens an enquiry. A row read with `include=boq` already has `items`.
+A row without them (the Overview's revenue drawer reads a whole month, and BOQ
+lines would make that read far heavier) asks for its own on expand: one
+`/crm/leads/?enquiry_ids=<id>&include=boq`, cached per enquiry
+(`fetchEnquiryItems`, `use-enquiry-items.ts`). A card without an ENQ ID (a cart
+still `CT…`) has no PI and skips it. While it loads the card says so, and a
+failed read says the PI could not be read rather than passing categories off as
+items.
+
 **Round robin only shares out firms with no KAM (2026-10-30).** The user:
 after one round robin, the next one should take the new, unassigned firms, not
 the database again. `useFirmAssign` drops every selected firm that has a KAM
