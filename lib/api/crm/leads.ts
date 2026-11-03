@@ -65,6 +65,7 @@ export interface CRMLeadsQuery {
   taskFilter?: string;
   category?: string;
   priority?: string;
+  gst?: string;
   include?: string;
 }
 
@@ -238,6 +239,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.taskFilter) params.set('task_filter', query.taskFilter);
   if (query.category) params.set('category', query.category);
   if (query.priority) params.set('priority', query.priority);
+  if (query.gst) params.set('gst', query.gst);
   if (query.include) params.set('include', query.include);
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);

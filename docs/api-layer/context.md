@@ -293,7 +293,10 @@ the same exact, uppercased GSTIN (never `icontains`): **`gst=`** filters the
 list and stats to enquiries billed to those GSTINs, and **`include=boq`** adds a
 `boqItems` array per row — the PI's BOQ lines (`name`, `qty`, `unit`, `rate`,
 `total`) — which is heavy and off by default, requested only by the Firm page's
-per-phone fetch.
+per-phone fetch. `CRMLeadsQuery` (`fetchCRMLeads`) now carries `gst` and
+`include`; `fetchLeadsByPhone` sends `include=boq`, and the Firm page's
+`fetchOrdersByGst` (`lib/b2b/orders/details.ts`) sends `gst=` to fold in
+enquiries billed to a firm's GSTIN on a number not listed on it.
 
 ## `fetchLead` selects on `ticketId`, not on the lead id
 

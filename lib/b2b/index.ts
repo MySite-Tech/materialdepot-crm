@@ -9,7 +9,7 @@ export { lookupEnqId } from './leads/enq-lookup';
 export type { EnqLookup } from './leads/enq-lookup';
 export { fetchKamLoad, fetchVerticalStats } from './leads/kam-load';
 export type { VerticalStats } from './leads/kam-load';
-export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClientOrderRows, firstOrderValueFromAggregates, invalidateClientTickets, orderDatesFromAggregates, resolveKamOrders } from './orders/details';
+export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClientOrderRows, fetchOrdersByGst, firstOrderValueFromAggregates, invalidateClientTickets, orderDatesFromAggregates, resolveKamOrders } from './orders/details';
 export type { ClientOrderDetails } from './orders/details';
 export type { CartLine, ClientOrderRow } from './orders/ticket';
 export { clientFromSeed, planClientSeed } from './leads/client-seed';

@@ -11,7 +11,7 @@ import { SpocsCard } from './cards/spocs';
 import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, lastOrderInFuture } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, gstNumbers, lastOrderInFuture } from '../../models/client';
 import { fmtShortINR } from '../../models/mock-data';
 import { Rep } from '../../models/outreach/intake';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
@@ -38,7 +38,8 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   children?: React.ReactNode;
 }) {
   const phones = useMemo(() => contactNumbers(client.contacts), [client.contacts]);
-  const orders = useFirmOrders(phones);
+  const gstins = useMemo(() => gstNumbers(client.gsts), [client.gsts]);
+  const orders = useFirmOrders(phones, gstins);
   const links = useFirmLinks(client);
   const [via, setVia] = useState<string | null>(null);
 
