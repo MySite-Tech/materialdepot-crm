@@ -12,6 +12,14 @@ export interface B2BLeadRow {
   updated_at?: string;
 }
 
+export interface InboundRowChange {
+  stage?: string;
+  owner?: string;
+  value?: number;
+  meta: Record<string, unknown>;
+  append: Record<string, unknown[]>;
+}
+
 export const B2B_FRESH_START = '2026-08-26';
 
 export function floorToFreshStart(day?: string): string {

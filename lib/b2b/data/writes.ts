@@ -1,5 +1,5 @@
 import { clientToRow } from '../mappers/client';
-import { inboundToRow } from '../mappers/inbound';
+import { inboundChange, inboundToRow, rowToInbound } from '../mappers/inbound';
 import { kamOrderToRow } from '../mappers/kam';
 import { outreachToRow } from '../mappers/outreach';
 import { B2BLeadRow, Pipeline } from './rows';
@@ -36,19 +36,18 @@ async function upsert(row: B2BLeadRow): Promise<string | null> {
   }
 }
 
-export function upsertInboundLead(l: InboundLead): Promise<string | null> {
-  return upsert(inboundToRow(l));
-}
-
-export async function upsertInboundLeads(list: InboundLead[]): Promise<string | null> {
-  if (!list.length) return null;
+export async function saveInboundLead(base: InboundLead | null, next: InboundLead): Promise<{ lead?: InboundLead; error?: string }> {
   try {
-    await b2bBackendPost('/rows/bulk', { rows: list.map(inboundToRow) });
+    const { row } = await b2bBackendPost<{ row: B2BLeadRow }>('/inbound/save', {
+      id: next.id,
+      change: inboundChange(base, next),
+      row: inboundToRow(next),
+    });
     invalidateB2BCache();
-    return null;
+    return { lead: rowToInbound(row) };
   } catch (e) {
-    console.error('[b2b] bulk inbound upsert failed', e);
-    return writeErrorMessage(e);
+    console.error('[b2b] inbound save failed', e);
+    return { error: writeErrorMessage(e) };
   }
 }
 

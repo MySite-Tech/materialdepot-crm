@@ -5,7 +5,6 @@ import { Period } from '../../models/outreach/kpis';
 import { ENGINES, TEAM_ORDER, dailyCards, failedSources, revenueTargetL, scoreCard, selfOn } from '../../models/performance';
 import { Person } from '../../models/performance/types';
 import { addDays, memberPeople } from '../../models/performance/utils';
-import { KYLAS_COUNT_CAP } from './constants';
 import { useInboundAssigned } from './hooks/use-inbound-assigned';
 import { usePerformanceData } from './hooks/use-performance-data';
 import { DailyTable } from './ui/daily';
@@ -139,9 +138,6 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
       )}
       {!targetsOk && (
         <Notice>Saved targets could not be read, so every target below is the KPI sheet default, not what was set on the Targets tab.</Notice>
-      )}
-      {!setting && teamKey === 'inbound' && kylas.capped && (
-        <Notice>Coverage reads Kylas once per person, so only the first {KYLAS_COUNT_CAP} linked inbound people get it. The rest read Unknown.</Notice>
       )}
       {!manager && data && !team.loading && !selves.length && (
         <Notice>

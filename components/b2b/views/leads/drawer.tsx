@@ -7,7 +7,7 @@ import { companyTypeLabel } from '../../models/outreach';
 import { Empty, Field, LeadName, Pill, ReadValue, SectionCard, Spinner, StatusBadge, fmtDay, fmtLeadDateTime } from '../../ui/inbound-chips';
 import { MeetingLine, OutreachStatusBadge } from '../../ui/outreach-chips';
 import { SourceChip, UnifiedStatusCell } from './cells';
-import { EnqLookup, UnifiedLead, lookupEnqId, upsertInboundLead, upsertOutreachLead } from '@/lib/b2b';
+import { EnqLookup, UnifiedLead, lookupEnqId, saveInboundLead, upsertOutreachLead } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 
 export function DetailDrawer({ lead, onClose, onSaved }: {
@@ -55,8 +55,9 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
         ...inbound,
         placedUnder: { ...(inbound.placedUnder || {}), ecName, ecBmName },
       };
-      err = await upsertInboundLead(updated);
-      if (!err) onSaved({ ...lead, inbound: updated });
+      const res = await saveInboundLead(inbound, updated);
+      err = res.error ?? null;
+      if (res.lead) onSaved({ ...lead, inbound: res.lead });
     } else {
       err = 'This lead has no source record to write to.';
     }

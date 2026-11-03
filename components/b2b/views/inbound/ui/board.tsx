@@ -73,10 +73,9 @@ function LeadCard({ lead, today, onClick, onDragStart }: {
   );
 }
 
-export function InboundBoard({ leads, today, total, scroll, onOpen, onMove }: {
+export function InboundBoard({ leads, today, scroll, onOpen, onMove }: {
   leads: InboundLead[];
   today: string;
-  total: number;
   scroll: { ref: RefObject<HTMLDivElement | null>; onDragOver: (e: DragEvent<Element>) => void; onDragEnd: () => void; onDrop: () => void };
   onOpen: (id: string) => void;
   onMove: (id: string, target: InboundStatus) => void;
@@ -115,7 +114,7 @@ export function InboundBoard({ leads, today, total, scroll, onOpen, onMove }: {
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">{s}</span>
                   <span className="text-[11px] font-semibold text-gray-400">
-                    {s === 'New' && total > items.length ? `${items.length} of ${total}` : items.length}
+                    {items.length}
                   </span>
                 </div>
                 <p className="text-[9.5px] text-gray-400 leading-snug mt-0.5">{INBOUND_STATUS_HINT[s]}</p>

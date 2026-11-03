@@ -6,8 +6,7 @@ import { fetchB2BInboundLeads } from '@/lib/api';
 import { ClientEntity, InboundLink } from '@/components/b2b/models/client';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { KamOrder } from '@/components/b2b/models/kam';
-import { isCrmAddedLead } from '@/components/b2b/models/inbound';
-import { mergeKylasIntoRow, rowToInbound } from '../mappers/inbound';
+import { rowToInbound } from '../mappers/inbound';
 import { rowToClient } from '../mappers/client';
 import { rowToKamOrder } from '../mappers/kam';
 
@@ -36,81 +35,53 @@ export async function fetchRows(
   });
 }
 
-interface InboundBoardPage {
+interface InboundBoard {
   leads: InboundLead[];
-  page: number;
-  hasMore: boolean;
   total: number;
   ok: boolean;
 }
 
+const istDay = (iso?: string): string => {
+  const ms = Date.parse(iso || '');
+  return Number.isNaN(ms) ? '' : new Date(ms + 19_800_000).toISOString().slice(0, 10);
+};
+
 export async function fetchInboundBoard(
-  opts?: {
-    page?: number; ownerId?: number; ownerIds?: number[]; search?: string;
-    createdFrom?: string; createdTo?: string; kylasStage?: number;
-  },
-): Promise<InboundBoardPage> {
-  const page = opts?.page ?? 0;
-  const ownerIds = opts?.ownerId ? [opts.ownerId] : opts?.ownerIds;
+  opts?: { ownerId?: number; search?: string; createdFrom?: string; createdTo?: string; kylasStage?: number },
+): Promise<InboundBoard> {
   const search = (opts?.search || '').trim();
-  const createdFrom = search ? (opts?.createdFrom || undefined) : floorToFreshStart(opts?.createdFrom);
-  const createdAfter = createdFrom ? new Date(`${createdFrom}T00:00:00+05:30`).toISOString() : '';
-  const createdBefore = opts?.createdTo ? new Date(`${opts.createdTo}T23:59:59.999+05:30`).toISOString() : '';
-  const kylas = await fetchB2BInboundLeads(
-    page, ownerIds, search, createdAfter, createdBefore, opts?.kylasStage,
-  );
+  const from = search ? opts?.createdFrom || '' : floorToFreshStart(opts?.createdFrom);
+  const to = opts?.createdTo || '';
+  const q = search.toLowerCase();
+  const kylasP = search
+    ? fetchB2BInboundLeads(0, opts?.ownerId ? [opts.ownerId] : undefined, search, '', '', opts?.kylasStage)
+    : null;
 
-  let dbLeads: InboundLead[] = [];
-  let dbOk = true;
+  let leads: InboundLead[];
   try {
-
-    const rows = await fetchRows('inbound', {
-      createdFrom,
-      createdTo: opts?.createdTo,
-    });
-    dbLeads = rows.map(rowToInbound);
-    if (opts?.ownerId) dbLeads = dbLeads.filter((l) => l.ownerId === opts.ownerId);
-    if (search) {
-      const q = search.toLowerCase();
-      dbLeads = dbLeads.filter((l) =>
-        [l.company, l.companyName, l.contactName, l.phone].some((v) => (v || '').toLowerCase().includes(q)),
-      );
-    }
+    leads = (await fetchRows('inbound')).map(rowToInbound);
   } catch (e) {
-    console.error('[b2b] inbound DB fetch failed (pre-migration?)', e);
-    dbOk = false;
+    console.error('[b2b] inbound rows fetch failed', e);
+    return { leads: [], total: 0, ok: false };
   }
-
-  const kylasById = new Map(kylas.leads.map((k) => [k.id, k]));
-  dbLeads = dbLeads.map((l) => {
-    const fresh = kylasById.get(l.id);
-    return fresh ? mergeKylasIntoRow(l, fresh) : l;
+  leads = leads.filter((l) => {
+    const day = istDay(l.leadCreatedAt);
+    if (day && from && day < from) return false;
+    if (day && to && day > to) return false;
+    if (opts?.ownerId != null && l.ownerId !== opts.ownerId) return false;
+    if (opts?.kylasStage && l.kylasStage !== opts.kylasStage) return false;
+    return !q || [l.company, l.companyName, l.contactName, l.phone, l.primaryContactPhone]
+      .some((v) => (v || '').toLowerCase().includes(q));
   });
 
-  const dbById = new Map(dbLeads.map((l) => [l.id, l]));
-
-  if (page > 0 || opts?.kylasStage) {
-
-    return {
-      leads: kylas.leads.map((k) => dbById.get(k.id) ?? k),
-      page: kylas.page,
-      hasMore: kylas.hasMore,
-      total: kylas.total,
-      ok: kylas.ok && dbOk,
-    };
+  let ok = true;
+  if (kylasP) {
+    const kylas = await kylasP;
+    ok = kylas.ok;
+    const have = new Set(leads.map((l) => l.id));
+    leads = [...leads, ...kylas.leads.filter((k) => !have.has(k.id))];
   }
-
-  const kylasIds = new Set(kylas.leads.map((k) => k.id));
-  dbLeads = dbLeads.filter((l) => l.stage !== 'New' || kylasIds.has(l.id) || isCrmAddedLead(l));
-
-  const dbIds = new Set(dbLeads.map((l) => l.id));
-  return {
-    leads: [...dbLeads, ...kylas.leads.filter((k) => !dbIds.has(k.id))],
-    page: kylas.page,
-    hasMore: kylas.hasMore,
-    total: kylas.total,
-    ok: kylas.ok && dbOk,
-  };
+  return { leads, total: leads.filter((l) => l.stage === 'New').length, ok };
 }
 
 export interface B2BData {
@@ -130,9 +101,7 @@ export async function fetchB2BData(): Promise<B2BData> {
 }
 
 async function fetchB2BDataUncached(): Promise<B2BData> {
-  const inboundP = fetchInboundBoard()
-    .then((p) => ({ leads: p.leads, total: p.total }))
-    .catch((e) => { console.error('[b2b] inbound aggregate fetch failed', e); return { leads: [] as InboundLead[], total: 0 }; });
+  const inboundP = fetchInboundBoard();
   const outreachP = fetchOutreachLeads()
     .catch((e) => { console.error('[b2b] outreach aggregate fetch failed', e); return [] as OutreachLead[]; });
   const failed: B2BData['failed'] = [];
@@ -143,7 +112,7 @@ async function fetchB2BDataUncached(): Promise<B2BData> {
   const [inbound, outreach, kam, clients] = await Promise.all([
     inboundP, outreachP, kamP, clientsP,
   ]);
-  if (!inbound.leads.length && !inbound.total) failed.push('inbound');
+  if (!inbound.ok) failed.push('inbound');
   return {
     inbound: inbound.leads, outreach, kam, clients,
     inboundTotal: inbound.total, failed,

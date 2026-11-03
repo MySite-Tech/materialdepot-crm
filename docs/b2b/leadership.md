@@ -9,7 +9,7 @@
 | Call | Endpoint | When |
 |---|---|---|
 | `fetchInboundForOutreach`, `fetchOutreachLeads`, `fetchClients`, `fetchKamOrders` | Supabase `b2b_lead`, one paged `select *` shared through the 8 s B2B cache | On open |
-| `fetchB2BInboundLeads(…, size=1)`, once per linked inbound person, **one at a time** | Kylas `POST /search/lead` (two inbound stages, `createdAt` in the period) | Inbound team only, per period. Capped at `KYLAS_COUNT_CAP` (6). Successful counts are cached per person and period |
+| `fetchInboundBoard` for the period, counted by `ownerId` | b2b-backend `/rows` (cached with every other B2B read) | Inbound team only, per period. One request for everyone since 2026-11-03. It read Kylas once per person (capped at 6) until the CRM took over ownership, and Kylas's owner no longer moves |
 | `fetchStudioWaitlist` | `GET /api/b2b/waitlist` | Outreach team only, once |
 | `fetchB2BBulk` via `useClientAggregates` | Django `/crm/leads/b2b-bulk/` | KAM team only, once |
 | `fetchTargets` | backend `GET /target` (one `b2b_target` row), shared through the B2B cache | On open |
@@ -70,7 +70,10 @@ The KPI sheet's numbers are the **defaults** in each engine's defs (`target`).
 A manager overrides any of them per person under **Leadership Board → Set targets**. Overrides
 are stored in `b2b_target.reps` (free JSONB, no migration needed) as
 `{ "<team>|<personKey>": { "<kpiKey>": n } }`. `personKey` is the 10-digit
-phone, or `name:<lowercased>` for someone with no phone. A value equal to the
+phone, or `name:<lowercased>` for someone with no phone. An Inbound lead owner who
+is not on the team and shares a name with someone already listed gets
+`kylas:<id>` instead. Before 2026-11-03 two Kylas users both stored as
+"Mandeep" made two rows with one React key. A value equal to the
 sheet default is not stored, so an untouched person follows the sheet when it
 changes. The old `{ "<rep name>": { revenueTargetL, … } }` entries are dropped
 on read. They belonged to the hardcoded roster and went away on the first save.

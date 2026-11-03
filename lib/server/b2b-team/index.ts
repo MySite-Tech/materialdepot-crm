@@ -1,5 +1,4 @@
 import { normalisePhone } from '@/lib/org/utils';
-import { B2B_INBOUND_PIPELINE } from '@/lib/api/b2b/inbound/constants';
 import {
   INBOUND_INTAKE_KYLAS_ID,
   INBOUND_ROTATION_BATCH,
@@ -8,8 +7,8 @@ import {
 } from '@/lib/b2b/team/constants';
 import type { MemberInput, ReassignOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
-import { intakePool, KylasBusy, kylasUserForPhone, listKylasUsers, readLead, setLeadOwner } from './kylas';
-import { isCrmAddedLead } from '@/components/b2b/models/inbound/kylas';
+import { intakePool, kylasUserForPhone, listKylasUsers } from './kylas';
+import { importInbound, ownerChange, readInboundRows, writeInbound, type ImportOutcome } from '@/lib/server/b2b-inbound';
 import {
   assignedLeadIdsSince,
   claimRoundRobin,
@@ -70,6 +69,13 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
   return { member, warning };
 }
 
+export async function syncInbound(byName: string, full: boolean): Promise<RotationOutcome & ImportOutcome> {
+  const { members, tableMissing } = await readMembers();
+  if (tableMissing) throw new InputError('The B2B team tables are not set up yet');
+  const imported = await importInbound(members, full);
+  return { ...(await rotateInbound(byName, false)), ...imported };
+}
+
 export async function rotateInbound(byName: string, dryRun: boolean): Promise<RotationOutcome> {
   const outcome: RotationOutcome = { dryRun, assigned: [], failed: [], waiting: 0 };
   const { members, tableMissing } = await readMembers();
@@ -93,34 +99,37 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     return outcome;
   }
 
-  for (const [i, { lead, member }] of plan.entries()) {
-    const to = member.kylasUserId as number;
+  const claimed: { leadId: string; claim: number; member: TeamMember }[] = [];
+  for (const { lead, member } of plan) {
     const claim = await claimRoundRobin({
       lead_id: lead.id,
       lead_created_at: lead.createdAt,
       kind: 'round_robin',
-      to_kylas_id: to,
+      to_kylas_id: member.kylasUserId as number,
       to_name: member.name,
       from_kylas_id: INBOUND_INTAKE_KYLAS_ID,
       reason: null,
       by_name: byName,
     });
-    if (claim == null) continue;
-    if (to === INBOUND_INTAKE_KYLAS_ID) {
-      outcome.assigned.push({ leadId: lead.id, to: member.name });
-      continue;
+    if (claim != null) claimed.push({ leadId: lead.id, claim, member });
+  }
+  if (!claimed.length) return outcome;
+
+  const release = async (ids: Set<string>, error: string) => {
+    for (const c of claimed.filter((x) => ids.has(x.leadId))) {
+      await releaseClaim(c.claim).catch(() => undefined);
+      outcome.failed.push({ leadId: c.leadId, error });
     }
-    try {
-      await setLeadOwner(lead.id, to);
-      outcome.assigned.push({ leadId: lead.id, to: member.name });
-    } catch (e) {
-      await releaseClaim(claim).catch(() => undefined);
-      outcome.failed.push({ leadId: lead.id, error: e instanceof Error ? e.message : String(e) });
-      if (e instanceof KylasBusy) {
-        outcome.waiting += plan.length - i - 1;
-        break;
-      }
-    }
+  };
+  try {
+    const { missing } = await writeInbound(claimed.map((c) => ({
+      id: c.leadId, change: ownerChange(c.member.name, c.member.kylasUserId as number),
+    })));
+    const gone = new Set(missing);
+    await release(gone, 'Not imported into the CRM yet');
+    for (const c of claimed) if (!gone.has(c.leadId)) outcome.assigned.push({ leadId: c.leadId, to: c.member.name });
+  } catch (e) {
+    await release(new Set(claimed.map((c) => c.leadId)), e instanceof Error ? e.message : String(e));
   }
   return outcome;
 }
@@ -138,7 +147,9 @@ export async function reassignInboundLead(
   reason: string,
   byName: string,
 ): Promise<TeamMember> {
-  return moveInboundLead(leadId, await inboundTarget(toPhone, await readMembers()), reason, byName);
+  const out = await reassignInboundLeads([{ leadId, toPhone }], reason, byName);
+  if (out.failed.length) throw new InputError(out.failed[0].error);
+  return memberForPhone(teamMembers((await readMembers()).members, 'inbound'), toPhone) as TeamMember;
 }
 
 export async function reassignInboundLeads(
@@ -148,47 +159,38 @@ export async function reassignInboundLeads(
 ): Promise<ReassignOutcome> {
   if (items.length > INBOUND_ROTATION_BATCH) throw new InputError(`Inbound leads move ${INBOUND_ROTATION_BATCH} at a time`);
   const read = await readMembers();
+  const rows = await readInboundRows();
   const outcome: ReassignOutcome = { moved: [], failed: [] };
-  for (const [i, { leadId, toPhone }] of items.entries()) {
+  const planned: { leadId: string; to: TeamMember }[] = [];
+  for (const { leadId, toPhone } of items) {
+    const id = String(leadId ?? '').trim();
     try {
-      const to = await moveInboundLead(leadId, await inboundTarget(toPhone, read), reason, byName);
-      outcome.moved.push({ leadId, name: to.name, kylasUserId: to.kylasUserId as number });
+      const to = await inboundTarget(toPhone, read);
+      const row = rows.get(id);
+      if (!row) throw new InputError('That lead is not in the CRM yet. Sync from Kylas, then try again.');
+      if (Number(row.meta_data?.owner_kylas_id) === to.kylasUserId) throw new InputError(`${to.name} already owns this lead`);
+      planned.push({ leadId: id, to });
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      if (e instanceof KylasBusy) {
-        outcome.failed.push(...items.slice(i).map((item) => ({ leadId: item.leadId, error })));
-        break;
-      }
-      outcome.failed.push({ leadId, error });
+      outcome.failed.push({ leadId: id, error: e instanceof Error ? e.message : String(e) });
     }
   }
-  return outcome;
-}
+  if (!planned.length) return outcome;
 
-async function moveInboundLead(leadId: string, target: TeamMember, reason: string, byName: string): Promise<TeamMember> {
-  const id = String(leadId ?? '').trim();
-  const crmOnly = isCrmAddedLead({ id });
-  if (!crmOnly && !/^\d+$/.test(id)) throw new InputError('leadId must be a Kylas lead id or a CRM-added lead id');
-
-  let createdAt: string | null = null;
-  let fromId: number | null = null;
-  if (!crmOnly) {
-    const lead = await readLead(id);
-    if (lead.pipelineId !== B2B_INBOUND_PIPELINE) throw new InputError('That lead is not in the inbound pipeline');
-    if (lead.ownerId === target.kylasUserId) throw new InputError(`${target.name} already owns this lead`);
-    await setLeadOwner(id, target.kylasUserId as number);
-    createdAt = lead.createdAt;
-    fromId = lead.ownerId;
+  await writeInbound(planned.map(({ leadId, to }) => ({ id: leadId, change: ownerChange(to.name, to.kylasUserId as number) })));
+  for (const { leadId, to } of planned) {
+    const row = rows.get(leadId) as NonNullable<ReturnType<typeof rows.get>>;
+    const from = Number(row.meta_data?.owner_kylas_id);
+    await recordAssignment({
+      lead_id: leadId,
+      lead_created_at: row.meta_data?.lead_created_at ? String(row.meta_data.lead_created_at) : null,
+      kind: 'reassign',
+      to_kylas_id: to.kylasUserId as number,
+      to_name: to.name,
+      from_kylas_id: Number.isFinite(from) && from ? from : null,
+      reason: reason.trim().slice(0, 300) || null,
+      by_name: byName,
+    });
+    outcome.moved.push({ leadId, name: to.name, kylasUserId: to.kylasUserId as number });
   }
-  await recordAssignment({
-    lead_id: id,
-    lead_created_at: createdAt,
-    kind: 'reassign',
-    to_kylas_id: target.kylasUserId as number,
-    to_name: target.name,
-    from_kylas_id: fromId,
-    reason: reason.trim().slice(0, 300) || null,
-    by_name: byName,
-  });
-  return target;
+  return outcome;
 }

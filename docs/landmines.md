@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-71 entries. They live in one file because they cross-reference each other —
+77 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -81,6 +81,12 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A logged interaction was credited to the firm's KAM, not to whoever logged it
 - The same KAM was two people because stored rows and the team spelled the name differently
 - Performance showed less KAM revenue than Overview for the same orders
+- A reassign changed the system of record and left the copy the filter reads
+- A failed save closed the form first, so the rep lost what they typed at the site
+- "Assigned" counted every firm once the Client Database held firms nobody owned
+- One failed batch marked every firm Unknown, and a different failed batch read as Never ordered
+- A whole-row save let a stale copy erase a colleague's calls
+- The Inbound board followed Kylas's owner, so a move inside Kylas took a rep's work off their list
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -962,9 +968,9 @@ grep for a term, then read around the line you hit rather than opening all of it
   "0 · all called" and the Kylas total vanished. A rep would read that as a
   clean inbox. The database half had the same shape: its catch logged to the
   console and returned `[]`. Both now return `ok`. The Inbound view treats
-  `ok: false` as a failed load: tiles say "Unknown", a retry panel replaces the
-  table, Load more raises an error, and Export fails rather than writing a
-  partial file. Same family as the "Every stats read carries an `ok`" note in
+  `ok: false` as a failed load: tiles say "Unknown" and a retry panel replaces the
+  table. (Since 2026-11-03 the board reads CRM rows only, so a Kylas outage
+  costs search results, not the board.) Same family as the "Every stats read carries an `ok`" note in
   `docs/b2b/data-layer.md`: a catch behind a typed return is invisible at the
   call site unless the type says so. **Other readers of `fetchB2BInboundLeads`
   still ignore `ok`**: `fetchInboundOwnerTotals` and `leads/unified.ts`
@@ -1119,3 +1125,66 @@ number, and a first pass here called one of them absent from the CRM because a
 name search missed a spelling, when its GSTIN matched. When a list means
 "everything X holds", check which rows the join key can drop, and reconcile against
 the source's own count by every key you have (`docs/b2b/studio-space.md`).
+
+### A reassign changed the system of record and left the copy the filter reads (2026-11-02)
+
+Moving a lead from Hardi to Vikas succeeded in Kylas, the log and the drawer, yet
+the lead stayed under Hardi's filter and came back there after a reload, so it
+looked unsaved. The filter ran on the CRM row, which keeps a copy of the owner,
+and only CRM-added leads wrote that copy. Under Vikas the row was filtered out
+before the Kylas merge, so a worked lead either vanished or appeared as a bare New
+lead with no calls, and saving that drawer would have overwritten the row's call
+log, because `/rows` replaces the whole row. 112 of 998 rows disagreed with Kylas.
+When two systems hold a field, filter after the merge, and write both on a move
+(`docs/b2b/inbound.md` §Who owns a lead).
+
+### A failed save closed the form first, so the rep lost what they typed at the site (2026-11-02)
+
+A rep at a site saved a new Outreach lead and got "Could not verify this session
+(500)". `/user-organisation/` had failed on Django, which is one thing. The form
+had already closed, because `onCreate` called `setCreating(false)` before the save,
+so every field was gone. Close a form after the save answers, and put the error
+inside it. `requireCaller` now also retries a 5xx (`docs/api-layer/context.md`).
+
+### "Assigned" counted every firm once the Client Database held firms nobody owned (2026-11-02)
+
+KAM's Assigned tile and "All KAMs" counted 1,285 firms when 158 had a KAM. Its lens
+was `return true` over the whole client list, which was right while every firm in
+the list came from a KAM handover and stopped being right the day 1,000+ firms were
+imported into the Client Database with no owner. The same tab had no viewer scope,
+so a KAM also saw every other KAM's book. When a list's source widens, re-check
+every predicate that was `true` because the old source was narrow
+(`docs/b2b/kam.md` §Who sees which firms).
+
+### One failed batch marked every firm Unknown, and a different failed batch read as Never ordered (2026-11-02)
+
+`fetchB2BBulk` read 300 numbers through `b2b-bulk` and the rest in further
+batches, and kept one `ok` flag for the whole set. That flag tracked only the
+first call, so its failure turned all 1,285 firms Unknown, including numbers a
+later batch had read. A later batch failing instead left `ok` true and zero-filled
+those numbers, so they read Never ordered, a failed request shown as data. A
+read that is batched records success per item (`unread`), never per call
+(`docs/b2b/client-db.md`).
+
+### A whole-row save let a stale copy erase a colleague's calls (2026-11-03)
+
+Every Inbound save sent the whole lead as the browser held it, and b2b-backend's
+`/rows` upserts every column, `extra` included. A drawer opened at 10:00 and saved
+at 16:00 wrote back the 10:00 call log, status and follow-up, erasing whatever a
+colleague logged in between. Reps reported it as "progress lost". Lead
+56525199 was last written at 16:42 IST on 2 Nov from a copy with no calls,
+status New and the old owner. There is no row history, so what it erased cannot
+be known. Saves now send a change (`inboundChange`), and lists only append
+(`docs/b2b/inbound.md` §The CRM owns a lead once it is imported). Any other
+pipeline that writes through `/rows` has the same shape until it does the same.
+
+### The Inbound board followed Kylas's owner, so a move inside Kylas took a rep's work off their list (2026-11-03)
+
+The board filed each lead under its live Kylas owner. Kylas moved worked leads
+back to Hardi with no CRM action: lead 56581783 had Vikas's Connected call, note and
+follow-up, then sat under Hardi 44 minutes later. Three more of his leads went the
+same way within 10 seconds of a CRM save. The data was intact, but Vikas's
+"Mine" list no longer showed it, which looks exactly like lost work. When two
+systems can both set a field, the screen must read the one the team controls.
+The row's owner is now the only owner (`docs/b2b/inbound.md` §The CRM owns a lead
+once it is imported), and the cause on the Kylas side is still unknown.

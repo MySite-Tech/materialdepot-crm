@@ -48,6 +48,11 @@ export interface RotationOutcome {
   skipped?: string;
 }
 
+export interface SyncOutcome extends RotationOutcome {
+  imported: number;
+  checked: number;
+}
+
 export interface ReassignOutcome {
   moved: { leadId: string; name: string; kylasUserId: number }[];
   failed: { leadId: string; error: string }[];

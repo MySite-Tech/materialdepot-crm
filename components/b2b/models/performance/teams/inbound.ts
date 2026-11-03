@@ -154,7 +154,10 @@ function people(data: PerfData, members: Parameters<TeamEngine['people']>[1], li
     const name = String(l.owner || '').trim();
     if (!name && l.ownerId == null) continue;
     const known = out.some((p) => (p.kylasUserId != null && l.ownerId != null ? p.kylasUserId === l.ownerId : sameRep(l.owner, p.name)));
-    if (!known && name && !isPlaceholderName(name)) out.push({ key: personKey(name), name, kylasUserId: l.ownerId ?? null, onTeam: false });
+    if (known || !name || isPlaceholderName(name)) continue;
+    const byName = personKey(name);
+    const key = out.some((p) => p.key === byName) && l.ownerId != null ? `kylas:${l.ownerId}` : byName;
+    if (!out.some((p) => p.key === key)) out.push({ key, name, kylasUserId: l.ownerId ?? null, onTeam: false });
   }
   return out;
 }

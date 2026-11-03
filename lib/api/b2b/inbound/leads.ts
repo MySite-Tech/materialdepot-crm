@@ -2,9 +2,9 @@ import { CRMLeadRow, fetchCRMLeads } from '../../crm/leads';
 import { kylasFetch } from '../../core/kylas-client';
 import { B2B_INBOUND_OWNER_IDS, B2B_INBOUND_PAGE_SIZE } from './constants';
 import { b2bInboundRule, kylasLeadIdentity, mapInboundLead } from './mappers';
-import { B2BInboundPage, ClientTicketResult, InboundLeadDetail, InboundLeadEdit, KylasWriteResult } from './types';
-import { categoryIdsFromLabels, categoryLabelsFromIds, cf, cfCount, cfString, normalizeTicketPhone } from './utils';
-import { selectionsFromKylasLabels, selectionsToKylasLabels } from '@/components/b2b/models/inbound';
+import { B2BInboundPage, ClientTicketResult, InboundLeadDetail } from './types';
+import { categoryLabelsFromIds, cf, cfCount, cfString, normalizeTicketPhone } from './utils';
+import { selectionsFromKylasLabels } from '@/components/b2b/models/inbound';
 export async function fetchB2BInboundLeads(
   page = 0,
   ownerIds: number[] = B2B_INBOUND_OWNER_IDS,
@@ -63,30 +63,6 @@ export async function fetchInboundLeadDetail(leadId: string | number): Promise<I
     };
   } catch {
     return { loaded: false };
-  }
-}
-
-export async function updateInboundLeadKylas(
-  leadId: string | number,
-  edit: InboundLeadEdit,
-): Promise<KylasWriteResult> {
-  const kylasLabels = selectionsToKylasLabels(edit.selections);
-  const dropped = (edit.selections || []).filter(
-    (s) => !selectionsToKylasLabels([s]).length,
-  );
-  const patches = [
-    { op: 'replace', path: '/requirementName', value: edit.requirement || '' },
-    { op: 'add', path: '/customFieldValues/cfCategoriesOfInterest', value: categoryIdsFromLabels(kylasLabels) },
-  ];
-  try {
-    await kylasFetch(`/leads/${leadId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json-patch+json' },
-      body: JSON.stringify(patches),
-    });
-    return { ok: true, dropped: dropped.length ? dropped : undefined };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

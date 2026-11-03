@@ -44,9 +44,9 @@ than in JSX:
   quietly showing only the Outreach half looks exactly like a CRM with no
   inbound leads.
 
-Inbound contributes `fetchInboundBoard()` page 0 plus the whole DB overlay — the
-same set the Inbound tab shows — so the footer states how many unactioned Kylas
-leads are NOT in the list rather than implying the count is everything.
+Inbound contributes `fetchInboundBoard()`, the same CRM rows the Inbound tab
+shows. Since 2026-11-03 every Kylas inbound lead is imported, so there is no
+"unactioned in Kylas" remainder to footnote.
 
 ### Assigning from this tab (2026-10-31)
 
@@ -79,7 +79,8 @@ filter and an EC B2B Referral source filter. `useLeadAssign` holds the rules.
 - **Inbound changes the Kylas owner, one call per lead.** `reassign-many` on
   `/api/b2b/inbound/assign` takes at most `INBOUND_ROTATION_BATCH` (25), reads the
   team once, and reports `moved` and `failed` separately, so a partial failure
-  shows. CRM-added leads have no Kylas owner and are saved with `upsertInboundLeads`.
+  shows. `moveInboundLeads` then saves every moved lead's row, because the row's
+  owner copy feeds other tabs (`inbound.md` §Who owns a lead).
 - Load for an Inbound round robin counts only the open leads on this tab's loaded
   set, because Kylas gives no per-owner total in that response.
 

@@ -2,7 +2,7 @@
 
 import { CallAttempt, InboundStatus, connectedCallErrors, istToday, nextAttemptNumber, nextWorkingDay } from '../../../models/inbound';
 import { InboundLead, LeadNote } from '../../../models/mock-data';
-import { upsertInboundLead } from '@/lib/b2b';
+import { saveInboundLead } from '@/lib/b2b';
 import { useState } from 'react';
 
 export interface ConnectedForm { durationMin: string; followUpDate: string; note: string }
@@ -10,6 +10,7 @@ export interface ConnectedForm { durationMin: string; followUpDate: string; note
 const EMPTY_FORM: ConnectedForm = { durationMin: '', followUpDate: '', note: '' };
 
 export function useCallLog(
+  base: () => InboundLead,
   draft: InboundLead,
   actorName: string,
   actorPhone: string,
@@ -27,11 +28,10 @@ export function useCallLog(
   const persist = async (draftNext: InboundLead, failMsg: string): Promise<boolean> => {
     setBusy(true);
     setError(null);
-    const next = prepare(draftNext);
-    const err = await upsertInboundLead(next);
+    const res = await saveInboundLead(base(), prepare(draftNext));
     setBusy(false);
-    if (err) { setError(`${failMsg}: ${err}`); return false; }
-    commit(next);
+    if (!res.lead) { setError(`${failMsg}: ${res.error}`); return false; }
+    commit(res.lead);
     return true;
   };
 

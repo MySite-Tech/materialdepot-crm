@@ -14,16 +14,9 @@ export interface PoolLead {
   createdAt: string;
 }
 
-export interface KylasLead {
-  id: string;
-  ownerId: number | null;
-  pipelineId: number | null;
-  createdAt: string | null;
-}
-
 export class KylasBusy extends Error {}
 
-async function kylas(path: string, init?: RequestInit): Promise<Record<string, any>> {
+export async function kylas(path: string, init?: RequestInit): Promise<Record<string, any>> {
   const key = process.env.KYLAS_API_KEY;
   if (!key) throw new Error('KYLAS_API_KEY is not set');
   for (let attempt = 0; ; attempt++) {
@@ -106,24 +99,4 @@ export async function intakePool(sinceIso: string): Promise<PoolLead[]> {
     if (page + 1 >= Number(body.totalPages ?? 0)) break;
   }
   return out;
-}
-
-export async function readLead(id: string): Promise<KylasLead> {
-  const d = await kylas(`/leads/${encodeURIComponent(id)}`);
-  return {
-    id: String(d.id),
-    ownerId: typeof d.ownerId === 'number' ? d.ownerId : null,
-    pipelineId: typeof d.pipeline?.id === 'number' ? d.pipeline.id : null,
-    createdAt: d.createdAt ? String(d.createdAt) : null,
-  };
-}
-
-export async function setLeadOwner(id: string, ownerId: number): Promise<void> {
-  const body = await kylas(`/leads/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json-patch+json' },
-    body: JSON.stringify([{ op: 'replace', path: '/ownerId', value: ownerId }]),
-  });
-  const now = typeof body.ownerId === 'number' ? body.ownerId : (await readLead(id)).ownerId;
-  if (now !== ownerId) throw new Error(`Kylas accepted the change but the lead is still owned by ${now ?? 'nobody'}`);
 }

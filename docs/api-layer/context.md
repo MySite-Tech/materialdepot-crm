@@ -55,7 +55,9 @@ error wording will break the refresh path silently.
 
 Error text for a non-OK response is taken in order:
 `data` (when a string) → `detail` → `message` → `error` / `error.message` →
-`API error: <status>`.
+`API error: <status> on <path>`. The path has its query string removed, so no
+phone number reaches the console. The bare `API error: 400` named no endpoint,
+which left a dev-overlay error untraceable (2026-11-03).
 
 Tokens live in `localStorage` under `jwt_token` and `refresh_token`. `API_BASE_URL`
 is re-exported from `lib/api/core/config.ts`, which is the only place either
@@ -88,6 +90,13 @@ it trustworthy: the payload is base64, not verified locally, so a forged token
 gets past the decode and is then rejected by Django. It returns the caller's
 `role`, `allowedBranches` and `individualPermissions` — everything the tab
 permission gate runs on.
+
+**A Django 5xx on that roster call is survivable (2026-11-02).** It is retried
+twice (0.4s, then 1.2s). If it still fails, a token this server instance verified
+in the last hour keeps its last known caller, because one failed roster call was
+stopping every B2B save for that person. Only a 5xx or a network failure does
+this: a 401 or 403 always rejects, so a revoked session never benefits. It lives in
+memory, so a cold instance has nothing to fall back on and still answers 502.
 
 Four things worth knowing before reusing it:
 
@@ -219,10 +228,10 @@ its Supabase half needs.
 
 Two things it does that `kylasFetch` callers do not:
 
-- **A PATCH is checked by reading the field back.** `setLeadOwner` compares the
-  returned `ownerId` with the one it asked for, and re-reads the lead if the
-  body has none. Kylas's API reference is not public, so a 200 alone was not
-  trusted.
+- **It only reads (2026-11-03).** The owner PATCH (`setLeadOwner`) and its read
+  back are gone: inbound ownership lives on the CRM row (`docs/b2b/inbound.md`
+  §The CRM owns a lead once it is imported). `kylas()` is exported for the import
+  in `lib/server/b2b-inbound/`, which searches and never writes.
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.
@@ -237,12 +246,8 @@ Two things it does that `kylasFetch` callers do not:
   so it cannot name the caller. `docs/backends.md` §Owed by Django row 12 has the
   ask. The 15s total exists to outlast the cycle. `kylasFetch` now retries five
   times (15.5s) for the same reason.
-- **A `crm-…` lead id never reaches Kylas (2026-10-30).** Inbound leads
-  added in the CRM have no Kylas record, so `reassignInboundLead` skips
-  `readLead` and `setLeadOwner` for them and only logs the assignment. The
-  caller saves the new owner onto the backend row (`docs/b2b/inbound.md`
-  §Leads added in the CRM). Any id that is neither all digits nor `crm-…` is
-  still refused.
+- **Reassign never reaches Kylas (2026-11-03).** It reads the CRM row, writes
+  the new owner onto it and logs the assignment, for `crm-…` and Kylas ids alike.
 
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 

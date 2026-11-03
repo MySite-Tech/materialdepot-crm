@@ -14,13 +14,15 @@ import { InboundFilterBar } from './ui/filters';
 import { LeadTable } from './ui/table';
 import { InboundFilters, Lens, View } from './types';
 import { LensPills, LensTiles } from '../../ui/lens-tiles';
+import { AssignBar } from '../../ui/assign-bar';
 import { activeFilterCount, byNewestLeadFirst, countsTomorrow, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups } from './utils';
-import { fetchInboundBoard, upsertInboundLead } from '@/lib/b2b';
+import { fetchInboundBoard, saveInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
-import { useEffect, useMemo, useState } from 'react';
-import { useInboundRotation } from '../../hooks/use-inbound-rotation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useInboundSync } from '../../hooks/use-inbound-sync';
+import { useInboundReassign } from '../../hooks/use-inbound-reassign';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
-import { membershipIn, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
+import { membershipIn, teamMembers } from '@/lib/b2b/team/utils';
 
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const { everyone } = useB2BReps(team);
@@ -36,13 +38,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [listPage, setListPage] = useState(0);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [opened, setOpened] = useState<InboundLead | null>(null);
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -53,8 +51,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     const members = teamMembers(team.members, 'inbound').map((m) => ({ id: m.kylasUserId as number, name: m.name }));
     return members.length ? members : B2B_INBOUND_OWNER_LIST;
   }, [team.members]);
-  const boardOwnerKey = [...new Set([...B2B_INBOUND_OWNER_LIST, ...inboundOwners].map((o) => o.id))].join(',');
-  const boardOwnerIds = useMemo(() => boardOwnerKey.split(',').map(Number), [boardOwnerKey]);
   const ownerName = useMemo(() => new Map(inboundOwners.map((o) => [o.id, o.name])), [inboundOwners]);
 
   const me = membershipIn(viewer, 'inbound');
@@ -74,65 +70,50 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     [scope, myKylasId, f.owner, inboundOwners],
   );
   const serverOpts = useMemo(() => ({
-    ownerId, ownerIds: boardOwnerIds, search: appliedSearch, createdFrom: f.createdFrom,
+    ownerId, search: appliedSearch, createdFrom: f.createdFrom,
     createdTo: f.createdTo, kylasStage: f.kylasStage === 'all' ? undefined : Number(f.kylasStage),
-  }), [ownerId, boardOwnerIds, appliedSearch, f.createdFrom, f.createdTo, f.kylasStage]);
+  }), [ownerId, appliedSearch, f.createdFrom, f.createdTo, f.kylasStage]);
 
-  const load = () => {
-    setError(null);
-    setLoadFailed(false);
+  const load = (quiet = false) => {
     if (unlinked) {
       setLeads([]);
-      setHasMore(false);
-      setTotal(0);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    fetchInboundBoard({ page: 0, ...serverOpts })
+    if (!quiet) {
+      setError(null);
+      setLoadFailed(false);
+      setLoading(true);
+    }
+    fetchInboundBoard(serverOpts)
       .then((res) => {
-        if (!res.ok) throw new Error('Kylas or the CRM database did not answer, so the board is missing leads. Nothing is counted until it loads.');
+        if (!res.ok) throw new Error(appliedSearch
+          ? 'Kylas did not answer the search, so leads not yet in the CRM may be missing from these results.'
+          : 'The CRM database did not answer, so the board is missing leads. Nothing is counted until it loads.');
         setLeads(res.leads);
-        setPage(res.page);
-        setHasMore(res.hasMore);
-        setTotal(res.total);
+        setLoadFailed(false);
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : 'Failed to load leads');
-        setLoadFailed(true);
+        if (!quiet) setLoadFailed(true);
       })
       .finally(() => setLoading(false));
   };
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => { if (!team.loading) load(); }, [serverOpts, team.loading, unlinked]);
 
-  const rotationNote = useInboundRotation(!team.loading && rotationOrder(team.members).length > 0, load);
+  const sync = useInboundSync(!team.loading, () => loadRef.current(true));
 
   const named = useMemo(() => leads.map((l) => {
     const n = l.ownerId != null ? ownerName.get(l.ownerId) : undefined;
     return n && n !== l.owner ? { ...l, owner: n } : l;
   }), [leads, ownerName]);
 
-  const loadMore = () => {
-    if (loadingMore || loading || !hasMore) return;
-    setLoadingMore(true);
-    fetchInboundBoard({ page: page + 1, ...serverOpts })
-      .then((res) => {
-        if (!res.ok) { setError('Could not load more leads from Kylas. Try again.'); return; }
-        setLeads((prev) => {
-          const seen = new Set(prev.map((l) => l.id));
-          return [...prev, ...res.leads.filter((l) => !seen.has(l.id))];
-        });
-        setPage(res.page);
-        setHasMore(res.hasMore);
-        setTotal(res.total);
-      })
-      .finally(() => setLoadingMore(false));
-  };
-
   const filtered = useMemo(
-    () => named.filter((l) => matchesFilters(l, f)).sort(byNewestLeadFirst),
-    [named, f],
+    () => named.filter((l) => (ownerId == null || l.ownerId === ownerId) && matchesFilters(l, f)).sort(byNewestLeadFirst),
+    [named, f, ownerId],
   );
 
   const byLens = useMemo(() => {
@@ -156,7 +137,18 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
 
   const rows = useMemo(() => sortForLens(lens, byLens[lens], today), [lens, byLens, today]);
 
-  useEffect(() => { setListPage(0); }, [serverOpts, f, lens]);
+  const canReassign = viewer.isManager || !!me;
+  const reassign = useInboundReassign({
+    leads: named,
+    members: team.members,
+    onMoved: (moved) => {
+      const byId = new Map(moved.map((l) => [l.id, l]));
+      setLeads((prev) => prev.map((l) => byId.get(l.id) ?? l));
+    },
+  });
+  const clearPicks = reassign.clear;
+
+  useEffect(() => { setListPage(0); clearPicks(); }, [serverOpts, f, lens, clearPicks]);
 
   const pickLens = (k: Lens) => {
     setLens(k);
@@ -176,11 +168,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     }, new Date().toISOString());
 
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
-    const err = await upsertInboundLead(updated);
-    if (err) {
-      setLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
-      setMoveError(`Could not move ${lead.companyName || lead.company}: ${err}`);
-    }
+    const res = await saveInboundLead(lead, updated);
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? res.lead ?? lead : l)));
+    if (!res.lead) setMoveError(`Could not move ${lead.companyName || lead.company}: ${res.error}`);
   };
 
   const requestMove = (id: string, target: InboundStatus) => {
@@ -205,7 +195,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const clearFilters = () => setF(NO_FILTERS);
   const activeFilters = activeFilterCount(f);
 
-  const selected = named.find((l) => l.id === selectedId) || null;
+  const selected = opened ? named.find((l) => l.id === opened.id) ?? opened : null;
+  const openLead = (id: string) => setOpened(named.find((l) => l.id === id) ?? null);
   const kanbanScroll = useDragAutoScroll<HTMLDivElement>();
 
   const emptyAction = (
@@ -233,9 +224,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             {scope === 'mine'
               ? `Your leads, ${me?.name ?? ''}`
               : <span title={inboundOwners.map((o) => o.name).join(', ')}>Every inbound owner</span>}
-            {loading ? ' · loading…' : ` · ${filtered.length} loaded`}
-            {!loading && total > 0 && <span className="text-gray-400"> · {total} unactioned in Kylas</span>}
-            {!loading && hasMore && <span className="text-gray-400"> · counts cover loaded leads only</span>}
+            {loading ? ' · loading…' : ` · ${filtered.length} lead${filtered.length === 1 ? '' : 's'}`}
+            {sync.syncing && <span className="text-gray-400"> · checking Kylas for new leads…</span>}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -272,11 +262,12 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             </button>
           )}
           <button
-            onClick={load}
-            disabled={loading}
+            onClick={sync.syncNow}
+            disabled={sync.syncing}
+            title="Brings in every inbound lead from Kylas that is not in the CRM yet. It never changes a lead that is already here."
             className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap disabled:opacity-50"
           >
-            ↻ Sync from Kylas
+            {sync.syncing ? '↻ Syncing…' : '↻ Sync from Kylas'}
           </button>
         </div>
       </div>
@@ -294,9 +285,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             : 'You are not on the Inbound team with a linked Kylas user, so no leads are shown. A B2B manager can add you under B2B → Team.'}
         </p>
       )}
-      {rotationNote && (
-        <p className={`text-[12px] rounded px-3 py-2 mb-3 border ${rotationNote.tone === 'ok' ? 'bg-teal-50 border-teal-200 text-teal-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-          {rotationNote.text}
+      {sync.note && (
+        <p className={`text-[12px] rounded px-3 py-2 mb-3 border ${sync.note.tone === 'ok' ? 'bg-teal-50 border-teal-200 text-teal-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+          {sync.note.text}
         </p>
       )}
 
@@ -319,6 +310,15 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-700 text-lg leading-none shrink-0">×</button>
         </div>
       )}
+      {reassign.error && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 flex items-start justify-between gap-3">
+          <span>{reassign.error}</span>
+          <button onClick={() => reassign.setError(null)} className="text-red-400 hover:text-red-700 text-lg leading-none shrink-0">×</button>
+        </div>
+      )}
+      {reassign.note && (
+        <p className="text-[12px] rounded px-3 py-2 mb-3 border bg-teal-50 border-teal-200 text-teal-800">{reassign.note}</p>
+      )}
       {moveError && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 flex items-start justify-between gap-3">
           <span>{moveError}</span>
@@ -326,15 +326,27 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </div>
       )}
 
-      {loading ? <div className="bg-white rounded-lg border border-gray-200 py-16"><Spinner label="Loading leads from Kylas and the CRM…" /></div>
+      {loading ? <div className="bg-white rounded-lg border border-gray-200 py-16"><Spinner label="Loading leads…" /></div>
         : loadFailed ? (
           <div className="bg-white rounded-lg border border-gray-200 py-12 flex flex-col items-center gap-3">
             <p className="text-[12px] text-gray-600">Leads did not load, so nothing here can be counted yet.</p>
-            <button onClick={load} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Try again</button>
+            <button onClick={() => load()} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Try again</button>
           </div>
         ) : view === 'board' ? (
-          <InboundBoard leads={filtered} today={today} total={total} scroll={kanbanScroll} onOpen={setSelectedId} onMove={requestMove} />
+          <InboundBoard leads={filtered} today={today} scroll={kanbanScroll} onOpen={openLead} onMove={requestMove} />
         ) : (
+          <>
+          {canReassign && (
+            <AssignBar
+              count={reassign.selectedCount}
+              noun="lead"
+              teams={reassign.teams}
+              busy={reassign.busy}
+              rule={reassign.rule}
+              onAssign={reassign.assign}
+              onClear={reassign.clear}
+            />
+          )}
           <LeadTable
             lens={lens}
             rows={rows}
@@ -344,24 +356,15 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             valueText={valueText}
             page={listPage}
             setPage={setListPage}
-            onOpen={setSelectedId}
+            onOpen={openLead}
             onClearSearch={() => { setSearch(''); setAppliedSearch(''); }}
             emptyAction={emptyAction}
+            picked={canReassign ? reassign.picked : undefined}
+            onTogglePick={reassign.toggle}
+            onTogglePage={reassign.togglePage}
           />
+          </>
         )}
-
-      {!loading && hasMore && (
-        <div className="flex items-center justify-center py-4">
-          {loadingMore ? <Spinner label="Loading more…" /> : (
-            <button
-              onClick={loadMore}
-              className="px-4 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 hover:border-[#0F766E] hover:text-[#0F766E]"
-            >
-              Load more from Kylas{total > 0 ? ` · ${total} unactioned in total` : ''}
-            </button>
-          )}
-        </div>
-      )}
 
       {adding && (
         <AddLeadModal
@@ -369,14 +372,13 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           defaultOwner={myKylasId ? { id: myKylasId, name: me?.name || viewer.name } : undefined}
           canPickOwner={viewer.isManager}
           loaded={leads}
-          boardOwnerIds={boardOwnerIds}
           actorName={viewer.name}
           onCancel={() => setAdding(false)}
-          onCreated={(lead) => { setLeads((prev) => [lead, ...prev]); setAdding(false); setSelectedId(lead.id); }}
+          onCreated={(lead) => { setLeads((prev) => [lead, ...prev]); setAdding(false); setOpened(lead); }}
           onOpenExisting={(lead) => {
             setLeads((prev) => (prev.some((l) => l.id === lead.id) ? prev : [lead, ...prev]));
             setAdding(false);
-            setSelectedId(lead.id);
+            setOpened(lead);
           }}
         />
       )}
@@ -393,14 +395,18 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
       {selected && (
         <InboundDrawer
           lead={selected}
-          onClose={() => setSelectedId(null)}
+          key={selected.id}
+          onClose={() => setOpened(null)}
           actorName={viewer.name}
           actorPhone={viewer.phone}
           members={teamMembers(team.members, 'inbound')}
           people={everyone}
-          canReassign={viewer.isManager || !!me}
+          canReassign={canReassign}
           canCredit={viewer.isManager}
-          onSaved={(updated) => setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}
+          onSaved={(updated) => {
+            setOpened(updated);
+            setLeads((prev) => (prev.some((l) => l.id === updated.id) ? prev.map((l) => (l.id === updated.id ? updated : l)) : [updated, ...prev]));
+          }}
         />
       )}
     </div>
