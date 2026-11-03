@@ -17,7 +17,7 @@ export const B2B_ROSTER: B2BRep[] = [
   { name: 'Krishna Bhagavatula', fullName: 'Krishna Bhagavatula', role: 'Admin', assignable: true },
 
   { name: 'Tharun',    fullName: 'Tharun',              contact: '8309230101', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true },
-  { name: 'Jadhav',    fullName: 'Krishna Jadhav',      contact: '9187200807', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true },
+  { name: 'Jadhav',    fullName: 'Krishna Jadhav',      contact: '9187200810', role: 'KAM',      vertical: 'Bangalore KAM', assignable: true },
   { name: 'Sidhant',   fullName: 'Sidhant',                                    role: 'KAM',                                 assignable: true },
   { name: 'Sai Suresh', fullName: 'Sai Suresh',         contact: '9187953228', role: 'KAM',                                 assignable: true },
 

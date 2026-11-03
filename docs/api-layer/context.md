@@ -166,6 +166,12 @@ the backend predates migration 0020, which the store turns into
 `TeamTableMissing`. Those paths are deliberately **not** in the relay's allow
 list: the browser has no business writing assignment rows.
 
+`POST /api/b2b/team` with `{from, to}` (manager-only) is Change number. It goes
+to `/b2b/team/renumber` through the same store. A 404 whose detail is FastAPI's
+own "Not Found" means the backend predates that route, and the user is told so.
+A 404 with a detail of its own ("Nobody on the team has that number") is shown
+as is. It must not fall into `TeamTableMissing` like the other 404s.
+
 The store sends `is_admin` only when the caller passed one. The backend's PUT
 leaves the column untouched when the key is absent, so a save from an older
 client, or one that only flips round robin, cannot clear someone's B2B admin

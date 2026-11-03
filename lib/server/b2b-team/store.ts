@@ -1,5 +1,5 @@
 import { B2BBackendError, b2bBackendFetch } from '@/lib/server/b2b-backend';
-import type { B2BTeam, TeamMember, TeamState } from '@/lib/b2b/team/types';
+import type { B2BTeam, RenumberOutcome, TeamMember, TeamState } from '@/lib/b2b/team/types';
 
 export class TeamTableMissing extends Error {
   constructor() {
@@ -70,6 +70,14 @@ export async function upsertMember(m: Omit<TeamMember, 'updatedAt' | 'isAdmin'> 
     },
   });
   return toMember(row);
+}
+
+export async function renumberMember(from: string, to: string, updatedBy: string): Promise<RenumberOutcome> {
+  const res = await b2bBackendFetch<{ moved_teams: B2BTeam[]; merged_teams: B2BTeam[]; rows: Record<string, number> }>(
+    '/team/renumber',
+    { method: 'POST', body: { from, to, updated_by: updatedBy } },
+  );
+  return { movedTeams: res.moved_teams, mergedTeams: res.merged_teams, firms: res.rows.client ?? 0, outreachLeads: res.rows.outbound ?? 0 };
 }
 
 export async function lastRoundRobinKylasId(): Promise<number | null> {

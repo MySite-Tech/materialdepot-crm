@@ -179,6 +179,29 @@ data, with Django stubbed.
   a KAM (Krishna Jadhav 117 with the "Jadhav" rows, Tharun 27, Sai Suresh 8,
   Hardi 5, Vilok 1).
 - Checked in the dummy CRM (:3100) as the KAM, Outreach and manager personas.
+- **Who "me" is comes from the login number, through the team list.** The
+  viewer's B2B team row is found by the phone they signed in with, and its name
+  is what the name match uses. Django's own name for the login is used only when
+  no team row matches, and Django can hold a placeholder there ("none"). So a team
+  row on a number the person does not sign in with leaves them with an empty tab,
+  every tile at 0 and no error (`landmines.md`, the KAM login-number entry).
+- **An empty tab says why (2026-11-03).** A rep not on the KAM team is told the
+  name and number they signed in with, and that a manager adds that number under
+  B2B → Team. A KAM with nothing assigned is told a manager assigns firms here.
+  A manager with no KAM'd firm is pointed at "No KAM yet". The old banner told
+  everyone to "seed" the Client Database, which was true of none of them.
+- **Krishna Jadhav is one person on the number ending 810 (2026-11-03).** Django
+  has two `b2b_KAM` logins for him: ...807 named "Krishna Jadhav", which he does
+  not use, and ...810 named "none", which he does. The team row and all 92 pending
+  handovers carried ...807, and 25 firms, 15 orders and his logs said "Jadhav".
+  On the user's word they were merged onto ...810: owners, assignment KAM and phone,
+  `loggedBy`, note authors and Outreach/Inbound `kam` now read "Krishna Jadhav",
+  the ...810 team row was added with the same Kylas user, and the ...807 row is
+  inactive (the team route has no delete). 138 rows, written through
+  `/rows/{id}/change`; production read back 117 firms, 92 pending on ...810, 15
+  orders, nothing left on "Jadhav" or ...807. The roster keeps `Jadhav` as an alias,
+  because free-text notes and the legacy target key still say it. The Django
+  side is still owed (`backends.md` §Owed by Django row 15).
 
 ### Account status: 30 / 60 days, every firm (2026-10-29)
 

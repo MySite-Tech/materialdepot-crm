@@ -40,6 +40,13 @@ export interface SavedMember {
   warning?: string;
 }
 
+export interface RenumberOutcome {
+  movedTeams: B2BTeam[];
+  mergedTeams: B2BTeam[];
+  firms: number;
+  outreachLeads: number;
+}
+
 export interface RotationOutcome {
   dryRun: boolean;
   assigned: { leadId: string; to: string }[];
@@ -78,4 +85,10 @@ export interface B2BTeamLoad extends TeamState {
   loading: boolean;
   error: string | null;
   reload: () => void;
+}
+
+export interface SignInGaps {
+  unteamed: { user: B2BUser & { id: string | number }; suggest: B2BTeam | null }[];
+  noLogin: TeamMember[];
+  placeholder: (B2BUser & { id: string | number })[];
 }

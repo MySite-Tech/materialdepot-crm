@@ -8,6 +8,10 @@ export const B2B_ACCESS_SLUG = 'crm.b2b_sales';
 
 export const B2B_MANAGER_SLUG = 'b2b.manager';
 
+export const B2B_REP_ROLE_TEAM: Record<string, B2BTeam | null> = { b2b_KAM: 'kam', b2b_sales: null };
+
+export const PLACEHOLDER_NAMES = new Set(['', 'none', 'null', 'undefined', 'na', 'n/a', '-', 'test']);
+
 export const B2B_TEAMS: { key: B2BTeam; label: string }[] = [
   { key: 'inbound', label: 'Inbound' },
   { key: 'outreach', label: 'Outreach' },

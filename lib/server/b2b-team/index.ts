@@ -5,7 +5,8 @@ import {
   INBOUND_ROTATION_START,
   INBOUND_ROTATION_WINDOW_DAYS,
 } from '@/lib/b2b/team/constants';
-import type { MemberInput, ReassignOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
+import type { MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
+import { B2BBackendError } from '@/lib/server/b2b-backend';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 import { intakePool, kylasUserForPhone, listKylasUsers } from './kylas';
 import { importInbound, ownerChange, readInboundRows, writeInbound, type ImportOutcome } from '@/lib/server/b2b-inbound';
@@ -16,6 +17,7 @@ import {
   readMembers,
   recordAssignment,
   releaseClaim,
+  renumberMember,
   upsertMember,
   workedInboundLeadIds,
 } from './store';
@@ -67,6 +69,22 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     updatedBy: byName,
   });
   return { member, warning };
+}
+
+export async function changeMemberNumber(fromPhone: string, toPhone: string, byName: string): Promise<RenumberOutcome> {
+  const from = normalisePhone(fromPhone);
+  const to = normalisePhone(toPhone);
+  if (from.length !== 10 || to.length !== 10) throw new InputError('Both numbers must have 10 digits');
+  if (from === to) throw new InputError('That is already their number');
+  try {
+    return await renumberMember(from, to, byName);
+  } catch (e) {
+    if (e instanceof B2BBackendError && e.status === 404 && e.message === 'Not Found') {
+      throw new InputError('Changing a number needs the b2b-backend /team/renumber route, which is not deployed yet');
+    }
+    if (e instanceof B2BBackendError && e.status < 500) throw new InputError(e.message);
+    throw e;
+  }
 }
 
 export async function syncInbound(byName: string, full: boolean): Promise<RotationOutcome & ImportOutcome> {

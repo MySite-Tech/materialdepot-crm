@@ -1,6 +1,6 @@
 import { normalisePhone } from '@/lib/org/utils';
-import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_SALES_ROLES } from './constants';
-import { B2BTeam, B2BUser, TeamMember, Viewer } from './types';
+import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_REP_ROLE_TEAM, B2B_SALES_ROLES, PLACEHOLDER_NAMES } from './constants';
+import { B2BTeam, B2BUser, SignInGaps, TeamMember, Viewer } from './types';
 
 const perms = (u: B2BUser): string[] =>
   Array.isArray(u.individualPermissions) ? u.individualPermissions : [];
@@ -56,4 +56,25 @@ export function planRotation<T>(
   if (!order.length) return [];
   const last = order.findIndex((m) => m.kylasUserId === lastKylasId);
   return leads.map((lead, i) => ({ lead, member: order[(last + 1 + i) % order.length] }));
+}
+
+export const isPlaceholderName = (name?: string | null): boolean => {
+  const n = String(name ?? '').trim().toLowerCase();
+  return PLACEHOLDER_NAMES.has(n) || /^\d+$/.test(n);
+};
+
+export function signInGaps(users: (B2BUser & { id: string | number; active?: boolean })[], members: TeamMember[]): SignInGaps {
+  const live = users.filter((u) => u.active !== false && normalisePhone(u.phone).length === 10);
+  const loginPhones = new Set(live.map((u) => normalisePhone(u.phone)));
+  const teamPhones = new Set(members.filter((m) => m.active).map((m) => m.phone));
+  const everTeamed = new Set(members.map((m) => m.phone));
+  const reps = live.filter((u) => u.role in B2B_REP_ROLE_TEAM && canUseB2B(u));
+  return {
+    unteamed: reps
+      .filter((u) => !everTeamed.has(normalisePhone(u.phone)))
+      .map((user) => ({ user, suggest: B2B_REP_ROLE_TEAM[user.role] }))
+      .sort((a, b) => a.user.name.localeCompare(b.user.name)),
+    noLogin: members.filter((m) => m.active && !loginPhones.has(m.phone)),
+    placeholder: live.filter((u) => isPlaceholderName(u.name) && (teamPhones.has(normalisePhone(u.phone)) || u.role in B2B_REP_ROLE_TEAM)),
+  };
 }
