@@ -15,7 +15,7 @@ async function readBase(): Promise<BaseData> {
   const today = istToday(now);
 
   const clientPhones = data.clients.flatMap((c) => contactNumbers(c.contacts));
-  const { histories: aggregates, deals, ok: aggOk } = await fetchB2BBulk(
+  const { histories: aggregates, deals, unread } = await fetchB2BBulk(
     clientPhones, kamEnquiryIdsToResolve(data.kam),
   );
 
@@ -25,7 +25,7 @@ async function readBase(): Promise<BaseData> {
     !!String(o.enqId || '').trim() && !resolvedById.has(o.id) && o.orderValue === undefined).length;
   data = { ...data, kam: data.kam.map((o) => resolvedById.get(o.id) ?? o) };
 
-  const dates = orderDatesFromAggregates(aggregates, clientPhones, aggOk);
+  const dates = orderDatesFromAggregates(aggregates, clientPhones, unread);
   const clientMetrics: ClientMetricsMap = {};
   for (const c of data.clients) {
     clientMetrics[c.id] = clientMetricsFrom(c.contacts, aggregates, dates);

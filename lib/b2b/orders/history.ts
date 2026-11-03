@@ -46,11 +46,11 @@ function absorb(
   }
 }
 
-function zeroFill(keys: string[], out: Record<string, ClientOrderHistory>, cache: boolean): void {
+function zeroFill(keys: string[], out: Record<string, ClientOrderHistory>, unread: ReadonlySet<string>): void {
   for (const key of keys) {
-    if (out[key]) continue;
+    if (out[key] || unread.has(key)) continue;
     const zero: ClientOrderHistory = { orders: 0, lifetimeValue: 0, openValue: 0, enquiries: 0, enquiryValue: 0, furthestStatus: null, firstOrderDate: null, firstOrderValue: null, lastOrderDate: null };
-    if (cache) orderHistoryCache.set(key, zero);
+    orderHistoryCache.set(key, zero);
     out[key] = zero;
   }
 }
@@ -69,29 +69,20 @@ function splitCached(phones: (string | undefined)[]): {
   return { out, missing };
 }
 
-async function fetchClientOrderHistories(
-  phones: (string | undefined)[],
-): Promise<Record<string, ClientOrderHistory>> {
-  const { out, missing } = splitCached(phones);
-  if (!missing.length) return out;
-
+async function fetchClientOrderHistories(phones: string[], out: Record<string, ClientOrderHistory>, unread: Set<string>): Promise<void> {
   const batches: string[][] = [];
-  for (let i = 0; i < missing.length; i += HISTORY_BATCH) batches.push(missing.slice(i, i + HISTORY_BATCH));
+  for (let i = 0; i < phones.length; i += HISTORY_BATCH) batches.push(phones.slice(i, i + HISTORY_BATCH));
 
-  let ok = true;
-  const settled = await Promise.all(
+  await Promise.all(
     batches.map((batch) =>
-      fetchClientOrderHistoriesApi(batch).catch((e) => {
-        console.error('[b2b] client order history fetch failed', e);
-        ok = false;
-        return {} as Record<string, ClientOrderHistoryRow>;
-      }),
+      fetchClientOrderHistoriesApi(batch)
+        .then((rows) => absorb(rows, out))
+        .catch((e) => {
+          console.error('[b2b] client order history fetch failed', e);
+          for (const p of batch) unread.add(p);
+        }),
     ),
   );
-
-  for (const batch of settled) absorb(batch, out);
-  zeroFill(missing, out, ok);
-  return out;
 }
 
 export interface B2BBulk {
@@ -99,7 +90,7 @@ export interface B2BBulk {
 
   deals: B2BBulkResult['deals'];
 
-  ok: boolean;
+  unread: ReadonlySet<string>;
 }
 
 export async function fetchB2BBulk(
@@ -111,19 +102,19 @@ export async function fetchB2BBulk(
 
   const head = missing.slice(0, HISTORY_BATCH);
   const rest = missing.slice(HISTORY_BATCH);
+  const unread = new Set<string>();
 
   let deals: B2BBulkResult['deals'] = [];
-  let ok = true;
   if (head.length || ids.length) {
     const res = await fetchB2BBulkApi(head, ids).catch((e) => {
       console.error('[b2b] bulk resolve failed', e);
-      ok = false;
+      for (const p of head) unread.add(p);
       return { histories: {}, deals: [] } as B2BBulkResult;
     });
     deals = res.deals;
     absorb(res.histories, out);
   }
-  if (rest.length) Object.assign(out, await fetchClientOrderHistories(rest));
-  zeroFill(missing, out, ok);
-  return { histories: out, deals, ok };
+  if (rest.length) await fetchClientOrderHistories(rest, out, unread);
+  zeroFill(missing, out, unread);
+  return { histories: out, deals, unread };
 }

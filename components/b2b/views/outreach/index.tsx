@@ -297,9 +297,9 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
       {creating && (
         <CreateLeadModal reps={scope.reps} me={scope.me} canPickBm={canPickBm} assigner={scope.isManager} onClose={() => setCreating(false)}
           onCreate={async (lead) => {
-            setCreating(false);
             const err = await data.save(null, lead);
-            if (err) data.setError(`Could not save ${lead.company}: ${err}. The lead was not created — try again.`);
+            if (!err) setCreating(false);
+            return err;
           }} />
       )}
 

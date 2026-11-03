@@ -318,6 +318,13 @@ No KAM, plus Unread only when some firm's orders did not load.
   estimates. The CRM already takes the max across a firm's numbers, so no
   frontend change is needed when it ships. Future dates then just stop
   happening.
+- **Unknown is decided per number (2026-11-02).** `fetchB2BBulk` returns
+  `unread`, the numbers whose batch failed, and `orderDatesFromAggregates`
+  marks only those unloaded. It used to keep one `ok` for the whole read, so
+  with 1,285 firms a failed first call turned every firm Unknown, and a failed
+  later batch read as Never ordered (`docs/landmines.md`). Production's KAM tab
+  showed 1,285 Unknown on 2026-11-02; which call failed there was not seen,
+  because no signed-in session was available.
 - **`b2b-bulk`'s `lastOrderDate` is wrong at the source — a Django bug, open.**
   On 2026-10-28 the top seven rows of the list all showed future dates
   (30 Oct 2026 to 10 Feb 2027). In Metabase (`materialdepot_azure`), no estimate
