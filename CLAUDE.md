@@ -464,7 +464,7 @@ lead to Hardi and the CRM re-owns them, keyed on qualification time
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
 
 **Inbound is CRM-owned (2026-11-03, CRM PR #38 from `b2b-inbound-crm-owned` → `main`,
-with b2b-backend PR #20, either order; open until the tech team merges).** Draft PR
+with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** Draft PR
 #39 (`b2b-overview-funnel`, the Overview's Client Database funnel) is stacked on
 #38, and the shared tree is checked out on it. The user decided a lead comes from Kylas once, and from
 then on only the CRM changes it. **Nothing writes to Kylas.** An insert-only import
