@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-77 entries. They live in one file because they cross-reference each other —
+78 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -87,6 +87,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - One failed batch marked every firm Unknown, and a different failed batch read as Never ordered
 - A whole-row save let a stale copy erase a colleague's calls
 - The Inbound board followed Kylas's owner, so a move inside Kylas took a rep's work off their list
+- A KAM signed in on a number the team list did not hold, so the whole KAM tab read 0
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1188,3 +1189,21 @@ same way within 10 seconds of a CRM save. The data was intact, but Vikas's
 systems can both set a field, the screen must read the one the team controls.
 The row's owner is now the only owner (`docs/b2b/inbound.md` §The CRM owns a lead
 once it is imported), and the cause on the Kylas side is still unknown.
+
+### A KAM signed in on a number the team list did not hold, so the whole KAM tab read 0 (2026-11-03)
+
+Krishna Jadhav opened KAM on his own phone and saw "No clients are assigned yet",
+every tile at 0 and an empty order board, while production held 117 firms, 92
+handovers waiting for him and 15 orders. Nothing failed: every read answered 200.
+Django has two `b2b_KAM` logins for him, and he uses the one named "none". The team
+row and the handovers carried the other number, and the old rows said "Jadhav". So
+he matched by neither phone nor name, and the tab filtered to nothing. The
+header's "none" was the only clue on screen. The same code
+with the team row on his real number shows all 117 (`docs/b2b/kam.md` §Who sees
+which firms). Before suspecting the scoping code, compare the login's number and
+Django name with the team list. In Metabase, `user_organisation` joined to
+`users_user` gives every B2B-role login. On the same day three more `b2b_KAM`
+logins (Sai Suresh, Sidhant, Iliyas Kazi) had no team row at all.
+The guard is now the Team tab's Sign-in check, which listed "none" for that
+morning's team, and Change number, which carries a person's firms to their new
+number (`docs/b2b/sales-tab-redesign.md` §Sign-in check and Change number).

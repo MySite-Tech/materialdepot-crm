@@ -24,6 +24,7 @@ import { istDay } from '../../models/outreach/reminders';
 import { CheckInCapture } from '../../ui/check-in-capture';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
+import { membershipIn } from '@/lib/b2b/team/utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
@@ -274,9 +275,14 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
 
       {!failed.length && !assignedFirms.length && !loading && (
         <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-[12px] text-blue-900">
-          <span className="font-semibold">No clients are assigned yet.</span> §7 says this module shares its client
-          universe with the Client Database — seed that tab and assigned clients, the call cadence and the temperature
-          readings all appear here.
+          {manager ? (
+            <><span className="font-semibold">No firm has a KAM yet.</span> Pick &quot;No KAM yet&quot; in the KAM filter to assign them.</>
+          ) : membershipIn(viewer, 'kam') ? (
+            <><span className="font-semibold">No firm has you as its KAM yet.</span> A B2B manager assigns firms from this tab, and they appear here waiting for your sign-off.</>
+          ) : (
+            <><span className="font-semibold">You are signed in as {me.name || 'a user with no name'} on {me.phone || 'no number'}, which is not on the KAM team list.</span>{' '}
+            Firms are matched to you by that number, so none can show here. A B2B manager adds this number under B2B → Team.</>
+          )}
           {!!myOrders.length && ` ${myOrders.length} order${myOrders.length === 1 ? '' : 's'} already exist and are under Order board — ${openOrderCount} still open, which is the Open orders tile.`}
         </div>
       )}

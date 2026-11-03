@@ -6,15 +6,18 @@ import type { B2BTeam, KylasUser, TeamMember } from '@/lib/b2b/team/types';
 
 const ROTATION_ON: Record<B2BTeam, string> = { inbound: 'Gets new leads', outreach: 'Gets assigned leads', kam: 'Gets new firms' };
 
-export function MemberRow({ member, otherTeams, busy, kylasUsers, onLoadKylasUsers, onChange }: {
+export function MemberRow({ member, otherTeams, busy, kylasUsers, onLoadKylasUsers, onChange, onRenumber }: {
   member: TeamMember;
   otherTeams: B2BTeam[];
   busy: boolean;
   kylasUsers: KylasUser[] | null;
   onLoadKylasUsers: () => void;
   onChange: (patch: Partial<Pick<TeamMember, 'inRotation' | 'active' | 'kylasUserId' | 'isAdmin'>>) => void;
+  onRenumber: (to: string) => void;
 }) {
   const [linking, setLinking] = useState(false);
+  const [newPhone, setNewPhone] = useState<string | null>(null);
+  const digits = (newPhone ?? '').replace(/\D/g, '');
   const isInbound = member.team === 'inbound';
 
   return (
@@ -23,7 +26,22 @@ export function MemberRow({ member, otherTeams, busy, kylasUsers, onLoadKylasUse
         {member.name}
         {otherTeams.length > 0 && <span className="block text-[10.5px] font-normal text-gray-400">also on {otherTeams.map((t) => B2B_TEAM_LABEL[t]).join(', ')}</span>}
       </td>
-      <td className="px-3 py-2 text-[12px] font-mono text-gray-500">{member.phone}</td>
+      <td className="px-3 py-2 text-[12px] font-mono text-gray-500">
+        {newPhone === null ? (
+          <>
+            {member.phone}
+            <button disabled={busy} onClick={() => setNewPhone('')} className="ml-2 font-sans text-[11px] text-gray-400 hover:text-gray-700 underline">change</button>
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-1">
+            <input autoFocus value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="New number"
+              className="w-[96px] border border-gray-200 rounded px-1 py-0.5 text-[12px]" />
+            <button disabled={busy || digits.length !== 10} onClick={() => { onRenumber(digits); setNewPhone(null); }}
+              className="font-sans text-[11px] font-semibold text-gray-700 disabled:opacity-40">Move</button>
+            <button onClick={() => setNewPhone(null)} className="font-sans text-[11px] text-gray-400">Cancel</button>
+          </span>
+        )}
+      </td>
       <td className="px-3 py-2 text-[12px]">
         {linking ? (
           kylasUsers ? (

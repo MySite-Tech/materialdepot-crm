@@ -1,6 +1,6 @@
 import { getToken, refreshSession } from '@/lib/api/core/client';
 import type { InboundLead } from '@/components/b2b/models/mock-data';
-import type { KylasUser, MemberInput, ReassignOutcome, RotationOutcome, SavedMember, SyncOutcome, TeamState } from './types';
+import type { KylasUser, MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, SyncOutcome, TeamState } from './types';
 
 async function send<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   const headers: Record<string, string> = {
@@ -31,6 +31,9 @@ export const fetchKylasUsers = (): Promise<KylasUser[]> =>
 
 export const saveTeamMember = (input: MemberInput): Promise<SavedMember> =>
   send<SavedMember>('/api/b2b/team', json('PUT', input));
+
+export const changeTeamMemberNumber = (from: string, to: string): Promise<RenumberOutcome> =>
+  send<RenumberOutcome>('/api/b2b/team', json('POST', { from, to }));
 
 export const runInboundRotation = (dryRun = false): Promise<RotationOutcome> =>
   send<RotationOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'rotate', dryRun }));

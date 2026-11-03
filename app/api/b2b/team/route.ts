@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from '@/lib/server/session';
-import { InputError, listKylasUsers, readMembers, saveMember, TeamTableMissing } from '@/lib/server/b2b-team';
+import { changeMemberNumber, InputError, listKylasUsers, readMembers, saveMember, TeamTableMissing } from '@/lib/server/b2b-team';
 import { B2B_TEAMS } from '@/lib/b2b/team/constants';
 import type { MemberInput } from '@/lib/b2b/team/types';
 import { canUseB2B, isB2BManager } from '@/lib/b2b/team/utils';
@@ -66,6 +66,22 @@ export async function PUT(request: NextRequest) {
       isAdmin: typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined,
       kylasUserId: body.kylasUserId,
     }, c.name));
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const c = await caller(request);
+  if (c instanceof Response) return c;
+  if (!isB2BManager(c)) return bad('Only a B2B manager can change the team', 403);
+
+  let body: { from?: unknown; to?: unknown };
+  try { body = await request.json(); }
+  catch { return bad('Body must be JSON'); }
+
+  try {
+    return Response.json(await changeMemberNumber(String(body.from ?? ''), String(body.to ?? ''), c.name));
   } catch (err) {
     return failure(err);
   }

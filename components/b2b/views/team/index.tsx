@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fetchUsers } from '@/lib/api';
-import { fetchKylasUsers, saveTeamMember } from '@/lib/b2b/team';
+import { changeTeamMemberNumber, fetchKylasUsers, saveTeamMember } from '@/lib/b2b/team';
 import { B2B_TEAM_LABEL, B2B_TEAMS } from '@/lib/b2b/team/constants';
 import type { B2BTeam, B2BTeamLoad, KylasUser, TeamMember, Viewer } from '@/lib/b2b/team/types';
-import { canUseB2B, rotationOrder } from '@/lib/b2b/team/utils';
+import { canUseB2B, rotationOrder, signInGaps } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 import type { AppUser } from '@/types/crm';
 import { MemberRow } from './ui/member-row';
 import { RotationPanel } from './ui/rotation-panel';
+import { SignInCheck } from './ui/sign-in-check';
 
 const memberKey = (m: Pick<TeamMember, 'phone' | 'team'>) => `${m.phone}|${m.team}`;
 
@@ -51,6 +52,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
     return out;
   }, [team.members]);
   const rotationSize = useMemo(() => rotationOrder(team.members).length, [team.members]);
+  const gaps = useMemo(() => (users ? signInGaps(users, team.members) : null), [users, team.members]);
 
   const save = (m: Pick<TeamMember, 'phone' | 'name' | 'team' | 'inRotation' | 'active'> & { kylasUserId?: number | null; isAdmin?: boolean }) => {
     setBusyKey(memberKey(m));
@@ -61,6 +63,18 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
         team.reload();
       })
       .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Save failed' }))
+      .finally(() => setBusyKey(null));
+  };
+
+  const renumber = (m: TeamMember, to: string) => {
+    setBusyKey(memberKey(m));
+    setNotice(null);
+    changeTeamMemberNumber(m.phone, to)
+      .then((r) => {
+        setNotice({ tone: 'warn', text: `${m.name} is now on ${to}. ${r.firms} firm${r.firms === 1 ? '' : 's'} and ${r.outreachLeads} Outreach lead${r.outreachLeads === 1 ? '' : 's'} moved with them${r.mergedTeams.length ? `; the old row was merged into the existing ${r.mergedTeams.map((t) => B2B_TEAM_LABEL[t]).join(', ')} row` : ''}.` });
+        team.reload();
+      })
+      .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Could not change the number' }))
       .finally(() => setBusyKey(null));
   };
 
@@ -131,6 +145,16 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
         {usersError && <p className="basis-full text-[12px] text-red-600">{usersError}</p>}
       </section>
 
+      {gaps && !team.tableMissing && (
+        <SignInCheck
+          gaps={gaps}
+          members={team.members}
+          busy={!!busyKey}
+          onAdd={(u, t) => save({ phone: u.phone, name: u.name, team: t, inRotation: true, active: true })}
+          onRenumber={renumber}
+        />
+      )}
+
       <RotationPanel rotationSize={rotationSize} />
 
       {B2B_TEAMS.map((t) => {
@@ -168,6 +192,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}
                         onChange={(patch) => save({ ...m, ...patch })}
+                        onRenumber={(to) => renumber(m, to)}
                       />
                     ))}
                   </tbody>

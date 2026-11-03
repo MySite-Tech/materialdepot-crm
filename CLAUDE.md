@@ -206,7 +206,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 77 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 78 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -285,7 +285,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 77 titles, so grep a title and read around the line you
+**Contents** list of all 78 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -479,6 +479,12 @@ JSON from the SQL in that section). Without it, 140 rows keep stale owners.
 Still open: the 400 the user saw on :3001 (`mdFetch` errors now name the endpoint,
 and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
 Outreach's BM chips into Filters.
+
+**KAM sign-in fixes (2026-11-03): CRM branch `kam-sign-in-check` and b2b-backend
+PR #21 (`POST /b2b/team/renumber`). Deploy the backend first.**
+Krishna Jadhav's data was already merged onto his real number in production that
+day by script, so these PRs prevent the next case and fix nothing that is live.
+Still owed by Django: `docs/backends.md` §Owed by Django rows 15–17.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
@@ -683,6 +689,16 @@ for it.
   team table full ones. Compare with `sameRep`, build lists with `repNames`, and
   never `===` two rep names or fill a picker from `roster.ts`. `useB2BReps` is the
   live team, with the roster only as its fallback.
+
+- **A rep's sign-in number is their identity (2026-11-03).** The B2B tabs find a
+  person's team row by the phone they signed in with, and firms by the
+  assignment's `kamPhone`. So when a KAM's tab reads 0 with every read at 200,
+  compare the login's number and Django name with the team list before touching
+  any scoping code. Krishna Jadhav signed in on a second login named "none" and
+  matched none of his 117 firms. Fix it with the Team tab's Sign-in check and
+  Change number, never by hand-editing rows (`docs/b2b/sales-tab-redesign.md`
+  §Sign-in check and Change number). A KAM tab that is empty because nothing is
+  assigned (Varun, the same day) is correct.
 
 - **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
   removed it from Client Database, Leads and Inbound for every role, admins

@@ -256,6 +256,40 @@ Team reads were stubbed, and the rotation POST was stubbed in the browser run:**
 **Not verified:** a real Kylas owner change. Nothing was written to Kylas or
 Supabase.
 
+### Sign-in check and Change number (2026-11-03)
+
+The team row's phone is the only thing that ties a person to their work, and
+nothing checked it. Krishna Jadhav signed in on a second Django login named
+"none", and the team row and all 92 handovers carried his other number, so
+every KAM tile read 0 with no error (`landmines.md`, the KAM login-number entry).
+Varun's empty tab the same day was not this: nothing was assigned to him.
+
+- **Team tab, Sign-in check.** It is built from the Django user list the tab already
+  loads, so it adds no request. It lists `b2b_KAM`/`b2b_sales` logins with B2B access
+  and no team row, active team rows whose number has no active CRM login, and
+  logins with a placeholder name ("none", "null", digits). A login that ever had a
+  team row is left out even if that row is now off: a manager removed them on
+  purpose. A placeholder-named login cannot be added under that name. Its fix is
+  **same person as…**, which moves an existing member onto that number. Store
+  "manager" logins with `crm.b2b_sales` are not listed (about 30 admins and store
+  managers hold it), so Manikanta and Shahrukh, who run Outreach leads, are added by hand.
+- **Change number** on a team row, and "same person as…", call `POST
+  /api/b2b/team` (manager-only), which calls b2b-backend `POST /b2b/team/renumber`.
+  One transaction moves the roster rows and every `kamPhone` in firm assignments,
+  plus Outreach `bm_phone` and handover `kamPhone`, then reruns the Studio KAM
+  sync. A team the person is already on under the new number keeps that row. The
+  old one is deleted, so the same person never sits on a team twice. Inbound needs
+  nothing: it matches on the Kylas user id. Until the backend route deploys, the
+  CRM says so instead of failing silently.
+- **Run in the sandbox (:3200/:4100), 2026-11-03, with the Django user list
+  stubbed on read:** a "none" `b2b_KAM` login was listed with Add disabled and
+  "same person as" offered, and a named KAM login got "Add to KAM". On the real
+  login list and team, the check lists exactly Iliyas Kazi, Sai Suresh and Sidhant,
+  plus "none" until Django renames it. Against this morning's team it also listed
+  "none", which is the one-click fix that was missing. The backend route was run on
+  a migrated copy of the production snapshot: 92 firms and the Outreach rows moved,
+  nothing else in any row changed, and the merge path deleted the duplicate row.
+
 ### The working surface: the Today view becomes the rep's day
 
 **Layout done 2026-10-28.** The tiles are now clickable lenses, and the First
