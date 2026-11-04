@@ -74,10 +74,9 @@ They live here now because the code cannot carry them.
   fourth signature.
 
 - **Every stats read carries an `ok`, because an empty bucket is a plausible
-  number.** `fetchB2BPipelineStats` and `fetchVerticalStats` both catch
-  internally and fall back to `EMPTY_BUCKET`/`{}`, which renders as a confident
-  ₹0 pipeline. Both now return `ok`, and the Dashboard shows a banner rather
-  than the zeros. Same trap as the Kylas `total: 0` note above — a caught error
+  number.** The Dashboard's pipeline and vertical stats (both deleted 2026-11-03)
+  caught internally and fell back to an empty bucket, which rendered as a
+  confident ₹0 pipeline until they returned `ok` and the page showed a banner. Same trap as the Kylas `total: 0` note above — a caught error
   behind a typed return is invisible at the call site unless the type says so.
   `fetchB2BInboundLeads` and `fetchInboundBoard` carry the same `ok` since
   2026-10-28; see the Kylas-outage entry in `docs/landmines.md`.
@@ -99,75 +98,21 @@ They live here now because the code cannot carry them.
   names the wrong slice (HYD's revenue once read as Outreach's). `revenueBySource`
   carries a `color` per row and both the `<Cell>` and the legend swatch read it.
 
-- **The Overview (ex-Dashboard, `overview.md`) splits its load by dependency.** Only the pipeline and vertical
-  stats depend on the range selector, so `loadBase` (board data, KAM resolution,
-  client histories) runs once and survives a range switch, while `loadRange`
-  re-runs alone. One stats request carries both the per-vertical groups and the
-  overall B2B pipeline via `total_branch`, so switching range costs one call.
-  `loadRange` keys on `[range, basis]` and costs **two** calls on mount, because
-  the default basis is `order` and the created-basis call is still needed for
-  open pipeline. Two is the ceiling. The revenue section loads on its own
-  (`use-revenue-report.ts`) and keys on its own month, not on this range.
+- **The Overview reads no stats any more (2026-11-03).** The user removed the
+  "Orders on the B2B branch" panel, with its period and basis toggles, status
+  tiles, Open carts drawer and ledger route, because Direct is now every order on
+  the branch (`overview.md` §Four revenue channels). `fetchVerticalStats`,
+  `fetchB2BPipelineStats` and `loadRange` went with it, which took two or three
+  Django calls off every open.
 
-- **The Overview has a date basis and a branch basis, and they are not
-  independent.** `StatsBasis` (`lib/b2b/stats/pipeline.ts`) is `created` or
-  `order`; `basisQuery` turns it into either `created_from/to` on the ticket, or
-  `order_from/to` on `estimate.order_placed_time` **plus**
-  `branch_basis=estimate`. The two always travel together, because Django's
-  `branch` filter otherwise keys on the **cart owner's** branch, and that is a
-  different population from the branch the order was booked at: in Sept 2026, 49
-  of the 82 orders booked at B2B sat on carts owned by Gachibowli, HQ, JP Nagar,
-  Whitefield or HSR staff. Filtering by order date alone moved the month from
-  ₹13.44L to only ₹14.10L; adding the estimate branch moved it to ₹47.36L. Do
-  not offer one without the other.
-
-- **The Overview checks that Django honoured the basis.** `/crm/leads/stats/`
-  echoes `basis`, `fetchVerticalStats` compares it to what it asked for and
-  returns `basisApplied`, and the tab shows an amber notice when it is false.
-  This is deliberately not cosmetic: the backend half deploys separately, and an
-  older Django ignores `order_from` and answers with cart-created figures that
-  look exactly like real ones. `basisApplied` is `true` when the request *failed*
-  outright — that case is already `ok: false`, and two banners for one problem
-  reads as two problems.
-
-- **The basis toggle governs the whole page except open carts, and defaults
-  to `order`.** The Orders section, its status tiles, the month's revenue,
-  projection and "Where it came from" all follow it. One thing does not and
-  cannot: the **Open carts** card, which reads `active` off the
-  created-basis call — a cart that is still open has no `order_placed_time` to
-  be counted by, so under an order filter `active` comes back structurally 0.
-  That zero is arithmetic, not a dropped call, which is why the Active Pipeline
-  card is dropped from the panel on the order basis rather than rendered as ₹0,
-  and why the panel relabels itself "Orders · placed" with counts in *orders*
-  instead of *carts*. Both surviving cart-created figures say so in their own
-  labels.
-
-- **The Open Pipeline card reads `branchTotal.active`, and that is what makes it
-  tappable.** It used to sum `verticals[].active`, which is keyed on the rep
-  roster's phone numbers and carries **no branch filter** — so it quietly
-  excluded B2B-branch carts owned by anyone not in `B2B_ROSTER` (45 carts /
-  ₹48,12,240 branch-wide against 43 / ₹48,07,xxx for the roster in Sept 2026).
-  A drill-down has to list the rows the card counted, and there is no clean
-  `fetchCRMLeads` query for "owned by one of eight roster phones"; `branch=B2B`
-  plus the four open statuses reproduces the branch total **exactly**, verified
-  at 45 rows against 45. If you move the card back to the verticals sum, the
-  drawer stops matching it — the badge landmine, one panel over.
-
-  The "Pipeline by Vertical" accent tile still sums the verticals, because it
-  must equal the tiles beside it. It is labelled **"All verticals"** rather than
-  "Overall Pipeline" for exactly that reason: it is not the branch figure and
-  must not read as though it were.
-
-- **The open-pipeline drawer fetches on open, never on mount.** One
-  `fetchCRMLeads` at `pageSize: OPEN_ROWS_CAP` (500), sorted by cart value
-  descending, then paged **client-side** at 25. It is outside the mount budget
-  because it costs nothing until someone taps the card. The cap is surfaced, not
-  swallowed: when `count > results.length` the drawer says it is showing the N
-  largest of M and that the headline total still counts all M — unlike the retail
-  dashboard's 3,000-row cap, which truncates silently (see
-  `docs/dashboard/context.md`). A failed fetch says the list is missing and that
-  the total above came from a different call, rather than rendering as "no open
-  carts".
+- **Order date and booking branch always travel together.** On `/crm/leads/`,
+  `order_from/to` filters on `estimate.order_placed_time`, and it needs
+  `branch_basis=estimate` beside it, because Django's `branch` filter otherwise
+  keys on the **cart owner's** branch. That is a different population: in Sept
+  2026, 49 of the 82 orders booked at B2B sat on carts owned by Gachibowli, HQ,
+  JP Nagar, Whitefield or HSR staff. Filtering by order date alone moved the
+  month from ₹13.44L to only ₹14.10L; adding the estimate branch moved it to
+  ₹47.36L. The revenue reads (`lib/server/b2b-revenue.ts`) send both.
 
   Order Won was briefly left on the created basis while Revenue Generated moved,
   which put ₹13.58L and ₹47.5L on one screen as two different answers to "what
@@ -180,8 +125,9 @@ They live here now because the code cannot carry them.
   ₹13,44,897 ("Order Won") while the verticals summed to ₹10,08,823 ("Revenue
   Generated"), because `bm_groups` keys on rep phone and the branch total does
   not. The Orders section reads `pipeline.won.value`. The old grey `No B2B rep on
-  cart` slice went with the donut on 2026-10-31: `overview.md` §Three revenue
-  channels now places those orders by rep and number.
+  cart` slice went with the donut on 2026-10-31. Since 2026-11-03 every placed
+  order on the branch is Direct unless the client was referred (`overview.md`
+  §Four revenue channels).
 
 - **The B2B target is the sum of every team member's revenue target**
   (`b2bTargetL`, `leadership.md` §Set targets), not a typed 120L. Achieved on

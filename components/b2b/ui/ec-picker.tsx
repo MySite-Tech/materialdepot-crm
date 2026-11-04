@@ -64,8 +64,7 @@ export default function EcPicker({
     return () => { alive = false; };
   }, [ecName, crmNames]);
 
-  const withStored = (items: string[], stored?: string) =>
-    (stored && !items.includes(stored) ? [...items, stored] : items);
+  const withStored = (items: string[], stored?: string) => [...new Set(stored ? [...items, stored] : items)];
 
   const ecOptions = withStored(ecs.kind === 'loading' ? [] : ecs.items, ecName);
   const bmOptions = withStored(bms.kind === 'loading' ? [] : bms.items, ecBmName);

@@ -1,17 +1,14 @@
 'use client';
 
 import { b2bTargetL } from '../../models/performance';
-import { RANGE_LABELS } from './constants';
 import { useOverviewData } from './hooks/use-overview-data';
 import { AccountsSection } from './sections/accounts';
 import { JourneySection } from './sections/journey';
 import { KamDesk } from './sections/kam-desk';
-import { OrdersSection } from './sections/orders';
 import { RevenueSection } from './sections/revenue';
+import { ClientFunnel } from './sections/revenue/funnel';
 import { OverviewTarget } from './types';
 import { Notice } from './ui';
-import { OpenPipelineDrawer } from './ui/open-pipeline';
-import { rangeFor } from './utils';
 import type { B2BTeamLoad } from '@/lib/b2b/team/types';
 import { useMemo, useState } from 'react';
 
@@ -20,7 +17,6 @@ export default function B2BOverview({ team, onNavigate }: {
   onNavigate?: (t: OverviewTarget) => void;
 }) {
   const o = useOverviewData();
-  const [openDrawer, setOpenDrawer] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const teamLive = !team.loading && !team.tableMissing && !team.error;
@@ -39,8 +35,7 @@ export default function B2BOverview({ team, onNavigate }: {
     );
   }
 
-  const { base, ranged } = o;
-  const selected = rangeFor(o.range, new Date());
+  const { base } = o;
 
   return (
     <div className="p-4 sm:p-6 max-w-[1400px] mx-auto flex flex-col gap-3">
@@ -68,33 +63,13 @@ export default function B2BOverview({ team, onNavigate }: {
       {!!base.failed.length && (
         <Notice title="Partly loaded.">{base.failed.join(', ')} could not be read, so the figures below leave {base.failed.length === 1 ? 'it' : 'them'} out. Refresh to retry.</Notice>
       )}
-      {ranged && !ranged.statsOk && (
-        <Notice title="Order stats could not be read.">The rupee figures show zero because the request failed, not because there are no orders. Refresh to retry.</Notice>
-      )}
-      {ranged && !ranged.basisApplied && (
-        <Notice title="Counted by cart date.">This backend cannot count by order date yet, so the orders below are still by cart-created date.</Notice>
-      )}
       {!base.targetsOk && (
         <Notice title="Targets could not be read.">The target shown is the built-in default, not your team&rsquo;s.</Notice>
       )}
 
       <RevenueSection target={monthlyTarget} refreshKey={refreshKey} />
+      <ClientFunnel refreshKey={refreshKey} />
 
-      {ranged ? (
-        <OrdersSection
-          stats={ranged.stats}
-          open={ranged.open}
-          range={o.range}
-          period={selected}
-          basis={o.basis}
-          busy={o.rangeBusy}
-          onRange={o.setRange}
-          onBasis={o.setBasis}
-          onOpenPipeline={() => setOpenDrawer(true)}
-        />
-      ) : (
-        <div className="h-40 rounded-xl border border-gray-200 bg-white animate-pulse" />
-      )}
 
       <JourneySection k={base.kam} onNavigate={onNavigate} />
       <AccountsSection
@@ -106,16 +81,6 @@ export default function B2BOverview({ team, onNavigate }: {
       />
       <KamDesk k={base.kam} unresolved={base.unresolvedOrders} onNavigate={onNavigate} />
 
-      {openDrawer && ranged && (
-        <OpenPipelineDrawer
-          from={selected.from}
-          to={selected.to}
-          rangeLabel={RANGE_LABELS[o.range]}
-          value={ranged.open.value}
-          count={ranged.open.count}
-          onClose={() => setOpenDrawer(false)}
-        />
-      )}
     </div>
   );
 }

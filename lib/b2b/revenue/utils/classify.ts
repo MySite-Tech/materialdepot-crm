@@ -1,7 +1,7 @@
 import { ticketToOrderRow } from '../../orders/ticket';
 import { B2B_BRANCH } from '../constants';
 import type { B2BTeam } from '../../team/types';
-import type { Holder, NumberBook, OrderBucket, OrderInput, RepTeams, RevenueOrder } from '../types';
+import type { BookedOn, Holder, NumberBook, OrderInput, OrderType, RepTeams, RevenueChannel, RevenueOrder } from '../types';
 import { phoneOf, repName, teamsOfRep } from './book';
 
 const placedBefore = (h: Holder, cartDay: string) => !h.since || !cartDay || cartDay >= h.since;
@@ -12,11 +12,12 @@ function directTeam(teams: B2BTeam[], held: Holder[]): B2BTeam | null {
 
 export function classifyOrder(
   o: OrderInput,
-  bookedOnB2B: boolean,
+  booked: BookedOn,
   book: NumberBook,
   reps: RepTeams,
 ): RevenueOrder | null {
   const day = String(o.createdAt || '').slice(0, 10);
+  const bookedOnB2B = booked !== 'store';
   const phone = phoneOf(o.clientPhone);
   const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, day));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
@@ -24,9 +25,13 @@ export function classifyOrder(
   const byB2BRep = o.branch === B2B_BRANCH || repTeams.length > 0;
   const referred = held.find((h) => h.kind === 'referred');
 
-  const shape = (bucket: OrderBucket, team: B2BTeam | null, person: string, from?: Holder): RevenueOrder => ({
+  const channelOf = (type: OrderType): RevenueChannel =>
+    type === 5 ? 'referred' : bookedOnB2B ? 'direct' : type === 8 ? 'ecDirect' : 'redirected';
+
+  const shape = (type: OrderType, team: B2BTeam | null, person: string, from?: Holder): RevenueOrder => ({
     id: o.id,
-    bucket,
+    channel: channelOf(type),
+    type,
     team,
     person,
     firm: from?.firm || held.find((h) => h.firm)?.firm || String(o.clientName || '').trim(),
@@ -43,10 +48,10 @@ export function classifyOrder(
     day,
   });
 
-  if (referred) return shape('referred', 'kam', referred.owner, referred);
-  if (byB2BRep) return shape('direct', directTeam(repTeams, held), repName(o.assignedTo), owned);
-  if (owned) return shape('ec', owned.team, owned.owner, owned);
+  if (referred) return shape(5, 'kam', referred.owner, referred);
+  if (byB2BRep) return shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), repName(o.assignedTo), owned);
+  if (owned) return shape(bookedOnB2B ? 3 : 4, owned.team, owned.owner, owned);
   const unowned = held.find((h) => h.kind === 'unowned');
-  if (unowned) return shape('unowned', null, '', unowned);
-  return bookedOnB2B ? shape('untraced', null, '') : null;
+  if (unowned) return shape(bookedOnB2B ? 6 : 8, null, '', unowned);
+  return booked === 'branch' ? shape(7, null, '') : null;
 }

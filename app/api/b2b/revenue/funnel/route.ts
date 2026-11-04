@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { getCached, setCache } from '@/lib/server/cache';
-import { buildBranchLedger } from '@/lib/server/b2b-revenue';
+import { buildFunnelReport } from '@/lib/server/b2b-revenue';
 import { requireCaller, sessionErrorResponse } from '@/lib/server/session';
 import { canUseB2B } from '@/lib/b2b/team/utils';
-import type { BranchLedger } from '@/lib/b2b/revenue/types';
+import type { FunnelReport } from '@/lib/b2b/revenue/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,18 +24,17 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams;
   const from = q.get('from') ?? '';
   const to = q.get('to') ?? '';
-  const basis = q.get('basis') === 'created' ? 'created' : 'order';
-  if ((from || to) && (!DAY.test(from) || !DAY.test(to) || from > to)) return bad('from and to must be dates');
+  if (!DAY.test(from) || !DAY.test(to) || from > to) return bad('from and to must be dates');
 
-  const key = `b2b-ledger:${userId}:${basis}:${from}:${to}`;
-  const cached = getCached(key) as BranchLedger | null;
-  if (cached) return Response.json(cached);
+  const key = `b2b-funnel:${userId}:${from}:${to}`;
+  const cached = getCached(key) as FunnelReport | null;
+  if (cached && q.get('fresh') !== '1') return Response.json(cached);
 
   try {
-    const ledger = await buildBranchLedger(from, to, basis, request.headers.get('authorization') ?? '');
-    setCache(key, ledger);
-    return Response.json(ledger);
+    const report = await buildFunnelReport(from, to, request.headers.get('authorization') ?? '');
+    setCache(key, report);
+    return Response.json(report);
   } catch (err) {
-    return bad(err instanceof Error ? err.message : 'Orders could not be read', 502);
+    return bad(err instanceof Error ? err.message : 'The funnel could not be read', 502);
   }
 }

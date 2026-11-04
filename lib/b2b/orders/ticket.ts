@@ -60,7 +60,7 @@ function cartLines(v: unknown): CartLine[] {
   return String(v || '').split('\n').map((name) => ({ name: name.trim() })).filter((i) => i.name);
 }
 
-function boqLines(v: unknown): BoqLine[] | undefined {
+export function boqLines(v: unknown): BoqLine[] | undefined {
   if (!Array.isArray(v)) return undefined;
   return v
     .map((i) => ({

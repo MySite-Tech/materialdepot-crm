@@ -20,6 +20,10 @@ const orderHistoryCache = new Map<string, ClientOrderHistory>();
 
 const HISTORY_BATCH = 300;
 
+const BULK_QUERY_BYTES = 3800;
+
+const PHONE_QUERY_BYTES = 13;
+
 function toHistory(row: ClientOrderHistoryRow): ClientOrderHistory {
   return {
     orders: Number(row.orders) || 0,
@@ -100,8 +104,10 @@ export async function fetchB2BBulk(
   const { out, missing } = splitCached(phones);
   const ids = [...new Set(enquiryIds.filter(Boolean))].slice(0, HISTORY_BATCH);
 
-  const head = missing.slice(0, HISTORY_BATCH);
-  const rest = missing.slice(HISTORY_BATCH);
+  const idBytes = ids.reduce((n, id) => n + encodeURIComponent(id).length + 3, 0);
+  const headSize = Math.min(HISTORY_BATCH, Math.floor((BULK_QUERY_BYTES - idBytes) / PHONE_QUERY_BYTES));
+  const head = missing.slice(0, headSize);
+  const rest = missing.slice(headSize);
   const unread = new Set<string>();
 
   let deals: B2BBulkResult['deals'] = [];

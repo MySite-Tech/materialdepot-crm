@@ -1,33 +1,33 @@
 'use client';
 
 import { fmtL } from '../../../../models/mock-data';
-import { OrderBucket, REVENUE_CHANNELS, RevenueFilter, bucketSplit, channelSplits, countedValue, matchesFilter } from '@/lib/b2b/revenue';
+import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, channelSplits, matchesFilter, monthWindows, revenueTotal } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRevenueReport } from '../../hooks/use-revenue-report';
+import { useRevenueTrend } from '../../hooks/use-revenue-trend';
 import { Card, Hint, Notice, Pill, Segmented, Stat } from '../../ui';
 import { monthPace } from '../../utils';
-import { TEAM_OPTIONS } from './constants';
-import { BranchBridge } from './ui/branch-bridge';
+import { MONTHS_OFFERED, TEAM_OPTIONS } from './constants';
 import { Breakdown } from './ui/breakdown';
 import { ChannelCard } from './ui/channel-card';
 import { TargetBar } from './ui/target-bar';
-import { monthOptions } from './utils';
+import { RevenueTrendChart } from './ui/trend';
 
 const SELECT = 'px-2 py-1 text-[11px] font-semibold border border-gray-200 rounded-lg bg-white text-gray-600 cursor-pointer max-w-[170px]';
 
-const NO_FILTER: Omit<RevenueFilter, 'bucket'> = { team: 'all', person: 'all', store: 'all', search: '' };
+const NO_FILTER: RevenueFilter = { channel: 'all', type: 'all', team: 'all', person: 'all', store: 'all', search: '' };
 
 export function RevenueSection({ target, refreshKey }: { target: number; refreshKey: number }) {
-  const months = useMemo(() => monthOptions(new Date()), []);
+  const months = useMemo(() => monthWindows(new Date(), MONTHS_OFFERED), []);
   const [monthKey, setMonthKey] = useState(months[0].key);
   const [fellBack, setFellBack] = useState(false);
   const monthPicked = useRef(false);
   const month = months.find((m) => m.key === monthKey) ?? months[0];
   const { report, error, busy, reload } = useRevenueReport(month.from, month.to, refreshKey);
-  const [bucket, setBucket] = useState<OrderBucket | 'all'>('all');
+  const trend = useRevenueTrend(refreshKey);
   const [filter, setFilter] = useState(NO_FILTER);
 
-  useEffect(() => { setBucket('all'); setFilter(NO_FILTER); }, [monthKey]);
+  useEffect(() => { setFilter(NO_FILTER); }, [monthKey]);
 
   useEffect(() => {
     if (monthPicked.current || monthKey !== months[0].key) return;
@@ -39,14 +39,13 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
 
   const orders = useMemo(() => report?.orders ?? [], [report]);
   const isCurrent = monthKey === months[0].key;
-  const total = useMemo(() => countedValue(orders), [orders]);
+  const total = useMemo(() => revenueTotal(orders), [orders]);
   const pace = useMemo(() => monthPace(total, target, new Date()), [total, target]);
 
-  const narrowed = useMemo(() => orders.filter((o) => matchesFilter(o, { ...filter, bucket: o.bucket })), [orders, filter]);
+  const narrowed = useMemo(() => orders.filter((o) => matchesFilter(o, { ...filter, channel: 'all', type: 'all' })), [orders, filter]);
   const splits = useMemo(() => channelSplits(narrowed), [narrowed]);
-  const unowned = useMemo(() => bucketSplit(narrowed, 'unowned'), [narrowed]);
-  const untraced = useMemo(() => bucketSplit(narrowed, 'untraced'), [narrowed]);
-  const shown = useMemo(() => orders.filter((o) => matchesFilter(o, { ...filter, bucket })), [orders, filter, bucket]);
+  const referredOnBranch = useMemo(() => narrowed.reduce((s, o) => (o.channel === 'referred' && o.bookedOnB2B ? s + o.value : s), 0), [narrowed]);
+  const shown = useMemo(() => orders.filter((o) => matchesFilter(o, filter)), [orders, filter]);
   const people = useMemo(() => [...new Set(orders.map((o) => o.person).filter(Boolean))].sort(), [orders]);
   const stores = useMemo(() => [...new Set(orders.map((o) => o.store))].sort(), [orders]);
   const narrowedTotal = REVENUE_CHANNELS.reduce((s, c) => s + splits[c].value, 0);
@@ -55,8 +54,20 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
   const hasTarget = target > 0;
   const ahead = pace.achievedPct >= pace.expectedPct;
   const onTrack = pace.projection >= pace.target;
-  const toggle = (b: OrderBucket) => setBucket(bucket === b ? 'all' : b);
-  const set = (patch: Partial<typeof filter>) => setFilter({ ...filter, ...patch });
+  const set = (patch: Partial<RevenueFilter>) => setFilter({ ...filter, ...patch });
+  const pickChannel = (channel: RevenueChannel) =>
+    set(filter.channel === channel && filter.type === 'all' ? { channel: 'all', type: 'all' } : { channel, type: 'all' });
+  const pickType = (channel: RevenueChannel, type: OrderType) =>
+    set(filter.channel === channel && filter.type === type ? { channel: 'all', type: 'all' } : { channel, type });
+  const notes: Partial<Record<RevenueChannel, string>> = referredOnBranch > 0 ? {
+    direct: `${fmtL(referredOnBranch)} more on the B2B branch is referred clients, in Referred`,
+    referred: `${fmtL(referredOnBranch)} booked on the B2B branch · ${fmtL(splits.referred.value - referredOnBranch)} at a store`,
+  } : {};
+  const pickMonth = (key: string) => {
+    monthPicked.current = true;
+    setFellBack(false);
+    setMonthKey(key);
+  };
 
   return (
     <Card className={busy ? 'opacity-80 transition-opacity' : 'transition-opacity'}>
@@ -64,7 +75,7 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-500">
             B2B revenue · {isCurrent ? `${pace.monthLabel} so far` : month.label}
-            <Hint text="Everything B2B moved: orders the team placed, orders on B2B numbers placed through an EC, and orders from referred clients. By order date, whichever branch booked them. The target is the sum of each person's revenue target." />
+            <Hint text="Direct is every order placed on the B2B branch (HQ until June 2026). Studio EC Redirected is store orders from firms the B2B team works with. EC Direct is store orders from Client Database firms with no B2B SPoC. Referred is every order from clients a Studio Space partner referred. By order date. The target is the sum of each person's revenue target." />
           </div>
           <div className="flex items-baseline gap-3 flex-wrap mt-1">
             <span className="tabular-nums text-[34px] sm:text-[40px] leading-none font-bold text-gray-900">{report ? fmtL(total) : error ? 'Unknown' : '…'}</span>
@@ -73,27 +84,9 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
             {report && hasTarget && !isCurrent && <Pill tone={total >= target ? 'good' : 'muted'}>{pace.achievedPct}% of the current target</Pill>}
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select aria-label="Month" value={monthKey} onChange={(e) => { monthPicked.current = true; setFellBack(false); setMonthKey(e.target.value); }} className={SELECT}>
-            {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-          </select>
-          <Segmented options={TEAM_OPTIONS} value={filter.team} onChange={(team) => set({ team, person: 'all' })} />
-          <select aria-label="Person" value={filter.person} onChange={(e) => set({ person: e.target.value })} className={SELECT}>
-            <option value="all">Everyone</option>
-            {people.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select aria-label="Store" value={filter.store} onChange={(e) => set({ store: e.target.value })} className={SELECT}>
-            <option value="all">Every store</option>
-            {stores.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <input
-            aria-label="Search firm, person, number or enquiry ID"
-            value={filter.search}
-            onChange={(e) => set({ search: e.target.value })}
-            placeholder="Firm, person, number, enquiry"
-            className="px-2 py-1 text-[11px] border border-gray-200 rounded-lg bg-white w-[160px]"
-          />
-        </div>
+        <select aria-label="Month" value={monthKey} onChange={(e) => pickMonth(e.target.value)} className={SELECT}>
+          {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
       </div>
 
       {fellBack && (
@@ -105,10 +98,10 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
         </div>
       )}
       {report && !report.studioOk && (
-        <div className="mt-4"><Notice title="Studio Space numbers did not load.">Referred clients read Unknown and partner numbers are left out of EC-directed. Refresh to retry.</Notice></div>
+        <div className="mt-4"><Notice title="Studio Space numbers did not load.">Referred clients read Unknown and partner numbers are left out of Studio EC Redirected. Refresh to retry.</Notice></div>
       )}
       {report && !report.redirectsOk && (
-        <div className="mt-4"><Notice title="EC redirects did not load.">Redirects logged in the CRM are left out, so EC-directed may read low.</Notice></div>
+        <div className="mt-4"><Notice title="EC redirects did not load.">Redirects logged in the CRM are left out, so Studio EC Redirected may read low and EC Direct high.</Notice></div>
       )}
       {report?.truncated && (
         <div className="mt-4"><Notice title="This month has more orders than one read covers.">The figures are incomplete.</Notice></div>
@@ -118,29 +111,8 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
         <>
           <TargetBar splits={channelSplits(orders)} target={target} expectedPct={isCurrent ? pace.expectedPct : null} />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
-            {REVENUE_CHANNELS.map((c) => (
-              <ChannelCard
-                key={c}
-                channel={c}
-                split={splits[c]}
-                total={narrowedTotal}
-                selected={bucket === c}
-                unknown={c === 'referred' && !report.studioOk}
-                onSelect={() => toggle(c)}
-              />
-            ))}
-          </div>
-
-          {filtering && (
-            <p className="text-[11px] text-gray-500 mt-2 tabular-nums">
-              {fmtL(narrowedTotal)} of {fmtL(total)} match these filters.{' '}
-              <button onClick={() => setFilter(NO_FILTER)} className="font-semibold text-[#0F766E] cursor-pointer hover:underline">Clear</button>
-            </p>
-          )}
-
           {isCurrent && (
-            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
+            <div className="grid grid-cols-3 gap-4 mt-4">
               <Stat
                 label="Month-end projection"
                 value={fmtL(pace.projection)}
@@ -151,22 +123,53 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
             </div>
           )}
 
-          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-4 text-[11px] text-gray-500">
-            <span className="font-semibold text-gray-400">Not counted:</span>
-            <button onClick={() => toggle('unowned')} aria-pressed={bucket === 'unowned'} className={`cursor-pointer hover:text-gray-800 ${bucket === 'unowned' ? 'font-semibold text-gray-900' : ''}`}>
-              <span className="tabular-nums font-semibold">{fmtL(unowned.value)}</span> at {unowned.firms} firms with no KAM
-            </button>
-            <button onClick={() => toggle('untraced')} aria-pressed={bucket === 'untraced'} className={`cursor-pointer hover:text-gray-800 ${bucket === 'untraced' ? 'font-semibold text-gray-900' : ''}`}>
-              <span className="tabular-nums font-semibold">{fmtL(untraced.value)}</span> booked on B2B, number not on any record
-            </button>
-            <Hint text="Nobody at B2B is on record for these. Assigning a KAM moves a firm's orders into EC-directed. Booked on B2B means the B2B branch, a store rep on the cart, and a number no firm or lead holds." />
+          <div className="flex items-center gap-2 flex-wrap mt-5">
+            <Segmented options={TEAM_OPTIONS} value={filter.team} onChange={(team) => set({ team, person: 'all' })} />
+            <select aria-label="Person" value={filter.person} onChange={(e) => set({ person: e.target.value })} className={SELECT}>
+              <option value="all">Everyone</option>
+              {people.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select aria-label="Rep's branch" value={filter.store} onChange={(e) => set({ store: e.target.value })} className={SELECT}>
+              <option value="all">Every branch</option>
+              {stores.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input
+              aria-label="Search firm, person, number or enquiry ID"
+              value={filter.search}
+              onChange={(e) => set({ search: e.target.value })}
+              placeholder="Firm, person, number, enquiry"
+              className="px-2 py-1 text-[11px] border border-gray-200 rounded-lg bg-white w-[160px]"
+            />
+            {filtering && (
+              <span className="text-[11px] text-gray-500 tabular-nums">
+                {fmtL(narrowedTotal)} of {fmtL(total)}{' '}
+                <button onClick={() => setFilter({ ...NO_FILTER, channel: filter.channel, type: filter.type })} className="font-semibold text-[#0F766E] cursor-pointer hover:underline">Clear</button>
+              </span>
+            )}
           </div>
 
-          <BranchBridge orders={orders} />
-
-          <Breakdown orders={shown} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-3">
+            {REVENUE_CHANNELS.map((c) => (
+              <ChannelCard
+                key={c}
+                channel={c}
+                split={splits[c]}
+                total={narrowedTotal}
+                selected={filter.channel === c}
+                selectedType={filter.type}
+                unknown={c === 'referred' && !report.studioOk}
+                note={notes[c]}
+                onSelect={() => pickChannel(c)}
+                onType={(t) => pickType(c, t)}
+              />
+            ))}
+          </div>
         </>
       )}
+
+      <RevenueTrendChart trend={trend.trend} error={trend.error} selected={monthKey} onPick={pickMonth} onRetry={trend.reload} />
+
+      {report && <Breakdown orders={shown} />}
     </Card>
   );
 }

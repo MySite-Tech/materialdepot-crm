@@ -2,11 +2,18 @@ import type { CRMLeadRow } from '../../api/crm/leads';
 import type { ClientOrderRow } from '../orders/ticket';
 import type { B2BTeam } from '../team/types';
 
-export type RevenueChannel = 'direct' | 'ec' | 'referred';
+export type RevenueChannel = 'direct' | 'redirected' | 'ecDirect' | 'referred';
 
-export type UncountedBucket = 'unowned' | 'untraced';
+export type OrderType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
-export type OrderBucket = RevenueChannel | UncountedBucket;
+export type BookedOn = 'branch' | 'shared' | 'store';
+
+export interface B2BBooking {
+  branch: string;
+  from: string;
+  to: string;
+  shared: boolean;
+}
 
 export type HolderKind = 'redirect' | 'firm' | 'studio' | 'outreach' | 'inbound' | 'referred' | 'unowned';
 
@@ -26,7 +33,8 @@ export type OrderInput = CRMLeadRow;
 
 export interface RevenueOrder {
   id: string;
-  bucket: OrderBucket;
+  channel: RevenueChannel;
+  type: OrderType;
   team: B2BTeam | null;
   person: string;
   firm: string;
@@ -52,25 +60,6 @@ export interface RevenueReport {
   redirectsOk: boolean;
   teamOk: boolean;
   generatedAt: string;
-}
-
-export type LedgerBasis = 'order' | 'created';
-
-export interface BranchLedger {
-  orders: RevenueOrder[];
-  truncated: boolean;
-  studioOk: boolean;
-}
-
-export interface BridgeCell {
-  value: number;
-  orders: RevenueOrder[];
-}
-
-export interface BridgeRow {
-  bucket: OrderBucket;
-  branch: BridgeCell;
-  store: BridgeCell;
 }
 
 export interface B2BSourceRow {
@@ -100,12 +89,12 @@ export interface ChannelSplit {
   value: number;
   orders: number;
   firms: number;
-  kam: number;
-  field: number;
+  types: Partial<Record<OrderType, number>>;
 }
 
 export interface RevenueFilter {
-  bucket: OrderBucket | 'all';
+  channel: RevenueChannel | 'all';
+  type: OrderType | 'all';
   team: B2BTeam | 'all';
   person: string;
   store: string;
@@ -117,8 +106,56 @@ export interface RollupRow {
   value: number;
   orders: number;
   direct: number;
-  ec: number;
+  redirected: number;
+  ecDirect: number;
   referred: number;
-  uncounted: number;
   detail: string;
 }
+
+export interface MonthWindow {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface TrendMonth extends MonthWindow, Record<RevenueChannel, number> {
+  orders: number;
+  truncated: boolean;
+}
+
+export interface RevenueTrend {
+  months: TrendMonth[];
+  studioOk: boolean;
+  generatedAt: string;
+}
+
+export type FunnelBucket = 'studio' | 'ecReferred' | 'ecDirect';
+
+export type FunnelStage = 'enquiry' | 'quoted' | 'ordered' | 'delivered' | 'lost';
+
+export interface FunnelEnquiry extends RevenueOrder {
+  funnel: FunnelBucket;
+}
+
+export interface FunnelReport {
+  from: string;
+  to: string;
+  enquiries: FunnelEnquiry[];
+  firms: number;
+  referredSkipped: number;
+  truncated: boolean;
+  studioOk: boolean;
+  redirectsOk: boolean;
+  teamOk: boolean;
+  generatedAt: string;
+}
+
+export interface FunnelCell {
+  count: number;
+  value: number;
+  firms: number;
+  enquiries: FunnelEnquiry[];
+}
+
+export type FunnelRow = Record<FunnelStage, FunnelCell>;

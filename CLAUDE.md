@@ -437,18 +437,31 @@ out of its output. `next dev` rejects a symlinked `node_modules` ("points out of
 filesystem root"), so `cp -cR` it instead to run a server. Either way, keep it
 out of the commit.
 
-**Overview revenue is three channels (2026-10-31):** Direct, EC-directed and
+**Overview revenue is four channels (redefined 2026-11-03):** Direct (every order
+booked on the B2B branch, HQ before July 2026), Studio EC Redirected, EC Direct and
 Referred, from per-order rows through `/api/b2b/revenue` (`docs/b2b/overview.md`
-§Three revenue channels). It rides PR #33. The rep on the cart decides Direct, not
-the booking branch. Match that rep exactly, never with `sameRep`, or a team member
-absorbs a store rep with the same first name. The total is B2B influence and is
-never added to company revenue.
-The route has run on real data signed in as an admin. A non-admin token still has not.
+§Four revenue channels). The booking branch decides Direct, not the rep on the cart.
+Match a B2B rep exactly, never with `sameRep`, or a team member absorbs a store rep
+with the same first name. The total is B2B influence and is
+never added to company revenue. Under the old three-channel rules the route ran
+signed in as an admin; the four-channel version has run only on the sandbox and on
+real orders through the compiled classifier, which tied out every month.
 
-**Overview drill-down (2026-11-01).** Every Firms, People and Orders row and every
-Orders tile opens its enquiries, and each enquiry says why it landed in its channel.
-"How this ties to Orders on the B2B branch" crosses channel with booking place, so
-the two totals reconcile on screen. An empty current month opens on last month. The
+**Overview revamp is CRM PR #39 (`b2b-overview-funnel` → `main`, opened for review
+2026-11-03; the tech team merges).** It carries the four channels, the six-month
+trend (`/api/b2b/revenue/trend`), the Client Database funnel, full PI items in every
+enquiry card (`fetchEnquiryItems` on expand), the `b2b-bulk` 400 fix (a request line
+over about 4 KB; batches are sized by bytes, `docs/landmines.md`) and a duplicate-key
+fix in the EC picker, and it removes the B2B-branch panel. It needs no backend PR and
+no new env var. **After it deploys, check signed in:** June shows a non-zero
+Direct matching the figure in memory (proves Django answers `branch=HQ`), an expanded Overview enquiry lists PI
+items (`enquiry_ids` with `include=boq` is not yet seen answering), and the console
+has no `b2b-bulk` 400. Real figures are in memory, never in this public repo.
+
+**Overview drill-down (2026-11-01).** Every Firms, People and Orders row opens its
+enquiries, and each enquiry says why it landed in its channel and lists the PI's
+items. The "Orders on the B2B branch" panel and its tie-out table were removed on
+2026-11-03; don't re-add them. An empty current month opens on last month. The
 order is `docs/b2b/overview.md` §Every figure opens down to the enquiry.
 **To explain or audit a revenue figure, run the real classifier** on real orders and
 tie it out before quoting anything: §Checking a figure against production.
@@ -464,9 +477,8 @@ lead to Hardi and the CRM re-owns them, keyed on qualification time
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
 
 **Inbound is CRM-owned (2026-11-03, CRM PR #38 from `b2b-inbound-crm-owned` → `main`,
-with b2b-backend PR #20, either order; open until the tech team merges).** Draft PR
-#39 (`b2b-overview-funnel`, the Overview's Client Database funnel) is stacked on
-#38, and the shared tree is checked out on it. The user decided a lead comes from Kylas once, and from
+with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** The
+shared tree is checked out on `b2b-overview-funnel` (PR #39, above). The user decided a lead comes from Kylas once, and from
 then on only the CRM changes it. **Nothing writes to Kylas.** An insert-only import
 brings in new Kylas leads when the tab opens, every 5 minutes and on Sync. The board
 reads CRM rows only, so "Load more" is gone. A save sends only what changed, and

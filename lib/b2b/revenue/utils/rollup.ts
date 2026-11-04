@@ -1,14 +1,11 @@
 import { REVENUE_CHANNELS } from '../constants';
-import type { BridgeCell, BridgeRow, ChannelSplit, OrderBucket, RevenueChannel, RevenueFilter, RevenueOrder, RollupRow } from '../types';
+import type { ChannelSplit, RevenueChannel, RevenueFilter, RevenueOrder, RollupRow } from '../types';
 
-export const isCounted = (o: RevenueOrder): boolean => (REVENUE_CHANNELS as string[]).includes(o.bucket);
-
-export const countedValue = (orders: RevenueOrder[]): number =>
-  orders.reduce((s, o) => (isCounted(o) ? s + o.value : s), 0);
+export const revenueTotal = (orders: RevenueOrder[]): number => orders.reduce((s, o) => s + o.value, 0);
 
 export const matchesFilter = (o: RevenueOrder, f: RevenueFilter): boolean => {
-  if (f.bucket !== 'all' && o.bucket !== f.bucket) return false;
-  if (f.bucket === 'all' && !isCounted(o)) return false;
+  if (f.channel !== 'all' && o.channel !== f.channel) return false;
+  if (f.type !== 'all' && o.type !== f.type) return false;
   if (f.team !== 'all' && o.team !== f.team) return false;
   if (f.person !== 'all' && o.person !== f.person) return false;
   if (f.store !== 'all' && o.store !== f.store) return false;
@@ -16,36 +13,14 @@ export const matchesFilter = (o: RevenueOrder, f: RevenueFilter): boolean => {
   return !q || `${o.id} ${o.phone} ${o.firm} ${o.client} ${o.person} ${o.placedBy}`.toLowerCase().includes(q);
 };
 
-export function bucketSplit(orders: RevenueOrder[], bucket: OrderBucket): ChannelSplit {
-  const rows = orders.filter((o) => o.bucket === bucket);
-  const sum = (keep: (o: RevenueOrder) => boolean) => rows.reduce((s, o) => (keep(o) ? s + o.value : s), 0);
-  return {
-    value: sum(() => true),
-    orders: rows.length,
-    firms: new Set(rows.map((o) => o.firm)).size,
-    kam: sum((o) => o.team === 'kam'),
-    field: sum((o) => o.team === 'inbound' || o.team === 'outreach'),
-  };
+function splitOf(rows: RevenueOrder[]): ChannelSplit {
+  const types: ChannelSplit['types'] = {};
+  for (const o of rows) types[o.type] = (types[o.type] ?? 0) + o.value;
+  return { value: revenueTotal(rows), orders: rows.length, firms: new Set(rows.map((o) => o.firm)).size, types };
 }
 
-export function channelSplits(orders: RevenueOrder[]): Record<RevenueChannel, ChannelSplit> {
-  return {
-    direct: bucketSplit(orders, 'direct'),
-    ec: bucketSplit(orders, 'ec'),
-    referred: bucketSplit(orders, 'referred'),
-  };
-}
-
-const cell = (orders: RevenueOrder[]): BridgeCell => ({ value: orders.reduce((s, o) => s + o.value, 0), orders });
-
-export const bridgeRows = (orders: RevenueOrder[]): BridgeRow[] =>
-  (['direct', 'ec', 'referred', 'unowned', 'untraced'] as OrderBucket[]).map((bucket) => {
-    const rows = orders.filter((o) => o.bucket === bucket).sort((a, b) => b.value - a.value);
-    return { bucket, branch: cell(rows.filter((o) => o.bookedOnB2B)), store: cell(rows.filter((o) => !o.bookedOnB2B)) };
-  });
-
-export const bridgeTotal = (rows: BridgeRow[], side: 'branch' | 'store', keep: (r: BridgeRow) => boolean): BridgeCell =>
-  cell(rows.filter(keep).flatMap((r) => r[side].orders));
+export const channelSplits = (orders: RevenueOrder[]): Record<RevenueChannel, ChannelSplit> =>
+  Object.fromEntries(REVENUE_CHANNELS.map((c) => [c, splitOf(orders.filter((o) => o.channel === c))])) as Record<RevenueChannel, ChannelSplit>;
 
 const rollupKey = (o: RevenueOrder, keyOf: (o: RevenueOrder) => string): string => keyOf(o) || 'Not assigned';
 
@@ -56,11 +31,10 @@ export function rollupBy(orders: RevenueOrder[], keyOf: (o: RevenueOrder) => str
   const rows = new Map<string, RollupRow & { details: Set<string> }>();
   for (const o of orders) {
     const key = rollupKey(o, keyOf);
-    const row = rows.get(key) ?? { key, value: 0, orders: 0, direct: 0, ec: 0, referred: 0, uncounted: 0, detail: '', details: new Set<string>() };
+    const row = rows.get(key) ?? { key, value: 0, orders: 0, direct: 0, redirected: 0, ecDirect: 0, referred: 0, detail: '', details: new Set<string>() };
     row.value += o.value;
     row.orders += 1;
-    if (o.bucket === 'direct' || o.bucket === 'ec' || o.bucket === 'referred') row[o.bucket] += o.value;
-    else row.uncounted += o.value;
+    row[o.channel] += o.value;
     const d = detailOf(o);
     if (d) row.details.add(d);
     rows.set(key, row);
