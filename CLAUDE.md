@@ -447,8 +447,7 @@ never added to company revenue. Under the old three-channel rules the route ran
 signed in as an admin; the four-channel version has run only on the sandbox and on
 real orders through the compiled classifier, which tied out every month.
 
-**Overview revamp is CRM PR #39 (`b2b-overview-funnel` → `main`, opened for review
-2026-11-03; the tech team merges).** It carries the four channels, the six-month
+**Overview revamp is CRM PR #39 (merged 2026-11-04).** It carries the four channels, the six-month
 trend (`/api/b2b/revenue/trend`), the Client Database funnel, full PI items in every
 enquiry card (`fetchEnquiryItems` on expand), the `b2b-bulk` 400 fix (a request line
 over about 4 KB; batches are sized by bytes, `docs/landmines.md`) and a duplicate-key
@@ -477,8 +476,7 @@ lead to Hardi and the CRM re-owns them, keyed on qualification time
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
 
 **Inbound is CRM-owned (2026-11-03, CRM PR #38 from `b2b-inbound-crm-owned` → `main`,
-with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** The
-shared tree is checked out on `b2b-overview-funnel` (PR #39, above). The user decided a lead comes from Kylas once, and from
+with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** The user decided a lead comes from Kylas once, and from
 then on only the CRM changes it. **Nothing writes to Kylas.** An insert-only import
 brings in new Kylas leads when the tab opens, every 5 minutes and on Sync. The board
 reads CRM rows only, so "Load more" is gone. A save sends only what changed, and
@@ -493,10 +491,20 @@ and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
 Outreach's BM chips into Filters.
 
 **KAM sign-in fixes (2026-11-03): CRM PR #42 (`kam-sign-in-check`) and b2b-backend
-PR #21 (`POST /b2b/team/renumber`). Deploy the backend first.**
+PR #21 (`POST /b2b/team/renumber`), both merged 2026-11-03.**
 Krishna Jadhav's data was already merged onto his real number in production that
 day by script, so these PRs prevent the next case and fix nothing that is live.
 Still owed by Django: `docs/backends.md` §Owed by Django rows 15–17.
+
+**CRM PR #43 (2026-11-05, `b2b-placed-date-requalified-leads` → `main`, open; no
+backend PR).** Four fixes: orders show `orderPlacedAt`, not the ticket's creation
+date (credit still gates on the cart date); the round robin inserts re-qualified
+leads the import never brought in; Overview, Inbound and Leads apply only their
+newest request, and Inbound's filters cost no request; a merged firm's KAM state
+starts at its merge. **After it deploys:** Team → Assign now shows no "Not imported
+into the CRM yet", and a placed order on the Firm page shows a placement time. If
+every placed order reads "—", Django is not sending `orderPlacedAt` (Owed by Django
+#10). Detail in `docs/b2b/context.md` and `docs/landmines.md`.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
