@@ -118,13 +118,27 @@ Kylas is now read in exactly two places:
   /api/b2b/inbound/assign {mode:'sync'}`, followed by the round robin, when
   Inbound opens and every 5 minutes after (`useInboundSync`). The first full run
   on real data imported 565 rows in 2s and changed none of the 1,049 existing
-  ones.
+  ones. It takes only leads **created** after `B2B_FRESH_START`. A lead created
+  earlier and qualified later is inserted by the round robin instead
+  (§Who owns a lead, the pool).
 - **A search.** `fetchInboundBoard` with a search term also runs the widened
   Kylas search (§Search deliberately reaches outside the board) and appends
   leads that are not imported. Saving one inserts its row.
 
 **The board is the CRM rows and nothing else.** No paging against Kylas, no
 merge. Date, owner, stage tag and search filter `rowToInbound` output in memory.
+**Only a search reaches the network (2026-11-05).** Owner, Mine / All, Kylas stage
+tag and lead date run in memory through `inboundBoardMatches`, the same predicate
+`fetchInboundBoard` applies, so changing them sends nothing. Before, each change
+re-read all of `/rows` (3.2 MB) once the 8 s cache had expired, and an older
+answer arriving late replaced the newer one. A search re-reads, keyed on
+`JSON.stringify(serverOpts)`, and only the newest load is applied (`latestLoad`).
+Checked on the sandbox: scope plus three date changes sent no `/rows` read.
+Two side effects: Add lead's duplicate check and bulk round robin's load count
+now see every inbound lead, not only the filtered ones.
+**There is no created-date floor on the rows (2026-11-05).** The import already
+floors what it inserts, and on 5 Nov no row was older than `B2B_FRESH_START`
+except the re-qualified leads the round robin inserts, which the floor hid.
 `total` is the count at New, which `analytics.ts` reads as the inbound "New"
 figure. The drawer's Kylas detail read fills only empty fields
 (`useInboundDetail`). Its Presales calls and notes are still read live and
@@ -397,10 +411,10 @@ or one still sitting with its Presales owner, is invisible — "15 leads in Kyla
 only some of them here". So **while a search term is present the rule keeps only
 `pipeline`**, dropping the stage restriction, and the owner restriction too
 unless one owner was explicitly picked in the filter. An explicit Kylas-tag
-filter still wins over the widening. A search also drops the `B2B_FRESH_START`
-created-date floor (`fetchInboundBoard`), for Kylas and the DB rows alike — a
-B2B lead created in March was unfindable by its own phone number (2026-10-16).
-A user-picked "Lead date from" still applies. A lead owned by nobody the board
+filter still wins over the widening. Neither a search nor the board applies the
+`B2B_FRESH_START` created-date floor any more. A search dropped it first, after a
+B2B lead created in March was unfindable by its own phone number (2026-10-16),
+and the board dropped it on 2026-11-05. A user-picked "Lead date from" still applies. A lead owned by nobody the board
 knows maps to `owner: 'Unassigned'`. That means no team member or legacy owner
 has that Kylas id, not that Kylas left the lead unassigned.
 
@@ -471,12 +485,22 @@ member is identified. The people who can hold it are the `inbound` rows of
   Hardi already worked (a `b2b_lead` row past `New`). **Hardi is also a
   rotation member**, so "owned by Hardi" cannot mean "unassigned". The
   assignment row is what tells the two apart.
+- **The pool can hold leads the import never brought in (2026-11-05).** The import
+  goes by creation date, the pool by qualification date, so a lead created before
+  `B2B_FRESH_START` and qualified this week has no row. On 5 Nov that was 5 of 101.
+  Each one failed with "Not imported into the CRM yet" on every run. The pool
+  now reads the full lead (`B2B_INBOUND_FIELDS`), and each owner write carries a
+  `fallback` row built from it by `inboundRowFromKylas`, the import's own mapper.
+  `writeInbound` inserts that row, with the new owner, when the backend answers
+  "No such row". Checked on 39971691 and 49515900 from the real pool: both map to
+  an inbound `New` row that reads back under the new owner. The write itself has
+  not run on production.
 - **The race guard is the partial unique index** on `lead_id` where
   `kind = 'round_robin'`. Every Inbound tab open runs the rotation, so two reps
   opening it together both plan the same leads; the second insert gets `23505`
   and skips that lead. Claims are written first, then one bulk owner write. If
-  the write fails, or a lead has no row yet, its claim is deleted, so it is
-  retried on the next run.
+  the write fails, its claim is deleted, so it is retried on the next run. A lead
+  with no row is inserted, not skipped (the bullet above).
 - **Order** = active, in-rotation, Kylas-linked inbound members, sorted by name,
   continuing after whoever got the last `round_robin` row (`planRotation`).
   "Paused" is how a manager takes someone out for the day. A paused person can

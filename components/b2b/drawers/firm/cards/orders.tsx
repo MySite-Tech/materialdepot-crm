@@ -1,7 +1,7 @@
 'use client';
 
 import { ORDER_PAGE_SIZE, ORDER_TABS } from '../constants';
-import { OrderTab, fmtDate, fmtPhone, orderTab } from '../utils';
+import { OrderTab, fmtDate, fmtDateTime, fmtPhone, orderTab } from '../utils';
 import { fmtINR } from '../../../models/mock-data';
 import { SectionCard, Spinner } from '../../../ui/inbound-chips';
 import { EnquiryDetail } from './enquiry';
@@ -103,7 +103,7 @@ export function OrdersCard({ details, loading, failed, numbers, via, onClearVia,
               <thead>
                 <tr className="text-gray-400 text-[9px] uppercase tracking-wider">
                   <th className="text-left font-semibold px-1 py-1.5">Enquiry ID</th>
-                  <th className="text-left font-semibold px-1 py-1.5">Created</th>
+                  <th className="text-left font-semibold px-1 py-1.5">{tab === 'placed' ? 'Order placed' : 'Created'}</th>
                   <th className="text-right font-semibold px-1 py-1.5">Value</th>
                   <th className="text-left font-semibold px-1 py-1.5 pl-3">Status</th>
                   {showVia && <th className="text-left font-semibold px-1 py-1.5">Via</th>}
@@ -124,7 +124,8 @@ export function OrdersCard({ details, loading, failed, numbers, via, onClearVia,
                   >
                     <td className="px-1 py-1.5"><EnqChip id={r.enqId} /></td>
                     <td className="px-1 py-1.5 text-gray-600 whitespace-nowrap">
-                      {fmtDate(r.createdAt) || <span className="text-gray-300">—</span>}
+                      {(tab === 'placed' ? fmtDateTime(r.placedAt) : fmtDate(r.createdAt))
+                        || <span className="text-gray-300" title={tab === 'placed' ? 'Django sent no placement time for this order' : undefined}>—</span>}
                     </td>
                     <td className="px-1 py-1.5 text-right font-mono font-semibold text-gray-800 whitespace-nowrap">{fmtINR(r.orderValue)}</td>
                     <td className="px-1 py-1.5 pl-3">

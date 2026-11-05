@@ -2,6 +2,7 @@
 
 import { liveRepName, repNames } from '../../../../models/outreach/handover';
 import { Rep } from '../../../../models/outreach/intake';
+import { currentAssignments } from '../../../../models/kam';
 
 import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, ClientEntity, ClientEntityType, ClientSource, SEGMENTS, Segment, clientEnrichmentGaps, clientGateErrors, normalizeContactNumber, normalizeGst } from '../../../../models/client';
 import { useState } from 'react';
@@ -105,11 +106,11 @@ export function ClientModal({ client, isNew, kams, onClose, onSave }: {
             <textarea value={draft.remarks || ''} onChange={(e) => set('remarks', e.target.value)} rows={2} className={inputCls + ' resize-none'} />
           </Field>
 
-          {!!(draft.assignments || []).length && (
+          {!!currentAssignments(draft).length && (
             <div className="border-t border-gray-100 pt-3">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Assignment history</div>
               <div className="flex flex-col gap-0.5">
-                {[...(draft.assignments || [])].reverse().map((a, i) => (
+                {[...currentAssignments(draft)].reverse().map((a, i) => (
                   <div key={i} className="text-[11px] text-gray-500">
                     <span className="font-medium text-gray-700">{a.kam}</span> · {String(a.at).slice(0, 10)}
                     {a.reason && <span className="text-gray-400"> · {a.reason}</span>}

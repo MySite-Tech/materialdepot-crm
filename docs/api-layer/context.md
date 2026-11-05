@@ -250,6 +250,10 @@ Two things it does that `kylasFetch` callers do not:
   back are gone: inbound ownership lives on the CRM row (`docs/b2b/inbound.md`
   §The CRM owns a lead once it is imported). `kylas()` is exported for the import
   in `lib/server/b2b-inbound/`, which searches and never writes.
+- **The pool search asks for the full lead (2026-11-05)**, `B2B_INBOUND_FIELDS`
+  rather than id, created and owner. That is what lets the round robin insert a
+  lead the import never brought in, with no second Kylas call
+  (`docs/b2b/inbound.md` §Who owns a lead). It is still one search a run.
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.

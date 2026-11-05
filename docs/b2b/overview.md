@@ -13,7 +13,7 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 |---|---|---|
 | `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readBase`) |
 | `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/` | On open |
-| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it. Carries each order's whole ticket, so the drill-down below costs no request |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
 | `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, two months at a time. No orders in the response |
 | `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
 | `fetchFunnelReport` | `GET /api/b2b/revenue/funnel?from&to` | Only once the Client Database funnel is opened (remembered per browser), then one per month picked; 5-minute server cache per caller. Reads `/crm/leads/?created_from&created_to` for the month, up to 30 pages of 1,000, 8 at a time |
@@ -120,6 +120,22 @@ Firms or People opens `ui/order-drawer.tsx` with every order in that row, and it
 header adds up to the row because both read `rollupBy`'s key (`rollupOrders`). A row
 in Orders opens that one enquiry. Each enquiry shows why it landed in its channel
 (`heldBy`) and `EnquiryDetail`, the Firm page's own card.
+
+**Only the month you picked is ever on screen (2026-11-05).** The user: switching
+filters often loaded the wrong data. `useMonthReport` (revenue and the funnel)
+keeps only the newest request's answer and shows "…" until the picked month's
+report arrives. Before, a slow month that landed after a fast one replaced it
+under the new month's name, and its `finally` cleared the loading state early.
+Checked on the sandbox with September's read held for 4 s: October stayed on
+screen with October's figure. The team, person, branch and search filters were
+always in memory and cost no request.
+
+**An order's date on screen is when it was placed (2026-11-05).** The Orders
+table's column and the drawer's header read `ticket.placedAt` (`orderPlacedAt`),
+as date and time in IST. It was the cart's `createdAt`, labelled "Cart date". The
+classifier still gates holders on the cart date (`cartDay` in `classify.ts`),
+because a lead or redirect counts only for carts raised on or after it. So
+`RevenueOrder.day` is gone, and the month an order lands in is unchanged.
 
 - **No request on click, on purpose.** `/crm/leads/?order_from` already returns the
   ticket, so `classifyOrder` keeps it through `ticketToOrderRow`

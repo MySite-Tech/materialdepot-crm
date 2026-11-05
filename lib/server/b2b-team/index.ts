@@ -9,7 +9,7 @@ import type { MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, Sa
 import { B2BBackendError } from '@/lib/server/b2b-backend';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 import { intakePool, kylasUserForPhone, listKylasUsers } from './kylas';
-import { importInbound, ownerChange, readInboundRows, writeInbound, type ImportOutcome } from '@/lib/server/b2b-inbound';
+import { importInbound, inboundOwnerNames, inboundRowFromKylas, ownerChange, readInboundRows, writeInbound, type ImportOutcome } from '@/lib/server/b2b-inbound';
 import {
   assignedLeadIdsSince,
   claimRoundRobin,
@@ -117,7 +117,7 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     return outcome;
   }
 
-  const claimed: { leadId: string; claim: number; member: TeamMember }[] = [];
+  const claimed: { leadId: string; claim: number; member: TeamMember; raw: Record<string, any> }[] = [];
   for (const { lead, member } of plan) {
     const claim = await claimRoundRobin({
       lead_id: lead.id,
@@ -129,7 +129,7 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
       reason: null,
       by_name: byName,
     });
-    if (claim != null) claimed.push({ leadId: lead.id, claim, member });
+    if (claim != null) claimed.push({ leadId: lead.id, claim, member, raw: lead.raw });
   }
   if (!claimed.length) return outcome;
 
@@ -140,12 +140,13 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     }
   };
   try {
-    const { missing } = await writeInbound(claimed.map((c) => ({
-      id: c.leadId, change: ownerChange(c.member.name, c.member.kylasUserId as number),
+    const names = inboundOwnerNames(members);
+    await writeInbound(claimed.map((c) => ({
+      id: c.leadId,
+      change: ownerChange(c.member.name, c.member.kylasUserId as number),
+      fallback: inboundRowFromKylas(c.raw, names),
     })));
-    const gone = new Set(missing);
-    await release(gone, 'Not imported into the CRM yet');
-    for (const c of claimed) if (!gone.has(c.leadId)) outcome.assigned.push({ leadId: c.leadId, to: c.member.name });
+    for (const c of claimed) outcome.assigned.push({ leadId: c.leadId, to: c.member.name });
   } catch (e) {
     await release(new Set(claimed.map((c) => c.leadId)), e instanceof Error ? e.message : String(e));
   }

@@ -1,6 +1,6 @@
 import { lookupEnqId } from '../leads/enq-lookup';
 import { ClientOrderHistory } from './history';
-import { BoqLine, ClientOrderRow, boqLines, ticketToOrderRow } from './ticket';
+import { BoqLine, ClientOrderRow, boqLines, byNewestOrder, ticketToOrderRow } from './ticket';
 import { ClientContact, ClientOrderMetrics, averageOrderValue, contactNumbers, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
 import { CRMLeadRow, ClientTicketResult, fetchCRMLeads, fetchClientTickets, invalidateLeadsByPhone } from '@/lib/api';
@@ -143,8 +143,7 @@ export async function fetchClientOrderRows(phones: string[]): Promise<ClientOrde
     for (const row of t.rows) rows.push(ticketToOrderRow(row, phone));
   }
 
-  rows.sort((a, b) =>
-    String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  rows.sort(byNewestOrder);
   return { rows, failedPhones, rejected };
 }
 

@@ -1,9 +1,9 @@
 'use client';
 
 import { fmtL } from '../../../../models/mock-data';
-import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, channelSplits, matchesFilter, monthWindows, revenueTotal } from '@/lib/b2b/revenue';
+import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, channelSplits, fetchRevenueReport, matchesFilter, monthWindows, revenueTotal } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRevenueReport } from '../../hooks/use-revenue-report';
+import { useMonthReport } from '../../hooks/use-month-report';
 import { useRevenueTrend } from '../../hooks/use-revenue-trend';
 import { Card, Hint, Notice, Pill, Segmented, Stat } from '../../ui';
 import { monthPace } from '../../utils';
@@ -23,7 +23,7 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
   const [fellBack, setFellBack] = useState(false);
   const monthPicked = useRef(false);
   const month = months.find((m) => m.key === monthKey) ?? months[0];
-  const { report, error, busy, reload } = useRevenueReport(month.from, month.to, refreshKey);
+  const { report, error, busy, reload } = useMonthReport(fetchRevenueReport, month.from, month.to, true, refreshKey, 'Revenue could not be read');
   const trend = useRevenueTrend(refreshKey);
   const [filter, setFilter] = useState(NO_FILTER);
 
@@ -54,7 +54,7 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
   const hasTarget = target > 0;
   const ahead = pace.achievedPct >= pace.expectedPct;
   const onTrack = pace.projection >= pace.target;
-  const set = (patch: Partial<RevenueFilter>) => setFilter({ ...filter, ...patch });
+  const set = (patch: Partial<RevenueFilter>) => setFilter((cur) => ({ ...cur, ...patch }));
   const pickChannel = (channel: RevenueChannel) =>
     set(filter.channel === channel && filter.type === 'all' ? { channel: 'all', type: 'all' } : { channel, type: 'all' });
   const pickType = (channel: RevenueChannel, type: OrderType) =>

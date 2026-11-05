@@ -2,7 +2,7 @@
 
 import { fmtDate } from '../utils';
 import { ClientEntity } from '../../../models/client';
-import { assignFirm } from '../../../models/kam';
+import { assignFirm, currentAssignments } from '../../../models/kam';
 import { liveRepName, repNames, sameRep } from '../../../models/outreach/handover';
 import { Rep } from '../../../models/outreach/intake';
 import { SectionCard } from '../../../ui/inbound-chips';
@@ -21,7 +21,7 @@ export function AccountCard({ client, reassignReason, assignAs, kams, onSave }: 
   const [nextKam, setNextKam] = useState(held);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const history = [...(client.assignments || [])].reverse();
+  const history = [...currentAssignments(client)].reverse();
 
   const reassign = async () => {
     if (nextKam ? sameRep(nextKam, client.kam) : !client.kam) { setReassigning(false); return; }

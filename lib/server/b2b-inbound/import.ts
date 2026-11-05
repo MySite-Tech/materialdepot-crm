@@ -22,6 +22,11 @@ export function inboundOwnerNames(members: TeamMember[]): Map<number, string> {
   return names;
 }
 
+export function inboundRowFromKylas(raw: Record<string, any>, names: Map<number, string>): B2BLeadRow {
+  const lead = mapInboundLead(raw);
+  return inboundToRow({ ...lead, owner: (lead.ownerId != null && names.get(lead.ownerId)) || lead.owner });
+}
+
 export async function importInbound(members: TeamMember[], full: boolean): Promise<ImportOutcome> {
   const names = inboundOwnerNames(members);
   const known = new Set((await readInboundRows()).keys());
@@ -36,9 +41,8 @@ export async function importInbound(members: TeamMember[], full: boolean): Promi
     checked += content.length;
     const unseen = content.filter((raw) => !known.has(String(raw.id)));
     for (const raw of unseen) {
-      const lead = mapInboundLead(raw);
-      known.add(lead.id);
-      fresh.push(inboundToRow({ ...lead, owner: (lead.ownerId != null && names.get(lead.ownerId)) || lead.owner }));
+      known.add(String(raw.id));
+      fresh.push(inboundRowFromKylas(raw, names));
     }
     if (page + 1 >= Number(body.totalPages ?? 0)) break;
     if (!full && !unseen.length) break;

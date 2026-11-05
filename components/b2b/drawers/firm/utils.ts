@@ -31,3 +31,12 @@ export function fmtDate(iso: string | undefined): string {
   if (Number.isNaN(ms)) return String(iso);
   return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
+
+export function fmtDateTime(iso: string | undefined): string {
+  if (!iso) return '';
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return iso;
+  return new Date(ms).toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata',
+  });
+}

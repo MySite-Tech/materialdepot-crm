@@ -1,9 +1,9 @@
 'use client';
 
 import { fmtL } from '../../../../../models/mock-data';
-import { FUNNEL_BUCKETS, FUNNEL_STAGES, FunnelBucket, FunnelCell, FunnelEnquiry, FunnelStage, RevenueOrder, funnelRows, monthWindows } from '@/lib/b2b/revenue';
+import { FUNNEL_BUCKETS, FUNNEL_STAGES, FunnelBucket, FunnelCell, FunnelEnquiry, FunnelStage, RevenueOrder, fetchFunnelReport, funnelRows, monthWindows } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFunnelReport } from '../../../hooks/use-funnel-report';
+import { useMonthReport } from '../../../hooks/use-month-report';
 import { Card, Hint, Notice } from '../../../ui';
 import { OrderDrawer } from '../ui/order-drawer';
 import { share } from '../utils';
@@ -40,7 +40,7 @@ export function ClientFunnel({ refreshKey }: { refreshKey: number }) {
   const [fellBack, setFellBack] = useState(false);
   const monthPicked = useRef(false);
   const month = months.find((m) => m.key === monthKey) ?? months[0];
-  const { report, error, busy, reload } = useFunnelReport(month.from, month.to, open, refreshKey);
+  const { report, error, busy, reload } = useMonthReport(fetchFunnelReport, month.from, month.to, open, refreshKey, 'The funnel could not be read');
   const [drawer, setDrawer] = useState<{ title: string; cell: FunnelCell } | null>(null);
 
   useEffect(() => { setOpen(readOpen()); }, []);

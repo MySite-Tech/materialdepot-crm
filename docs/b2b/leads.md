@@ -25,6 +25,13 @@ where it was raised and `assignedTo` is who owns it; "assisted at" is a claim
 about who helped close it, and inferring one from the other puts a name in a
 field nobody attested to.
 
+**The date filters still re-read, and only the newest read is applied
+(2026-11-05).** A late answer for an earlier date range used to replace the newer
+one. They re-read rather than filter in memory because Outreach's date is the
+row's top-level `created_at` (`fetchRows`), which the mapped lead does not hold:
+it carries `meta_data.created_at`. Moving the filter in memory needs the mapper to
+keep the row date first.
+
 Three PRD open questions are resolved in `fetchUnifiedLeads`, in code rather
 than in JSX:
 

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-78 entries. They live in one file because they cross-reference each other —
+81 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -89,6 +89,9 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A whole-row save let a stale copy erase a colleague's calls
 - The Inbound board followed Kylas's owner, so a move inside Kylas took a rep's work off their list
 - A KAM signed in on a number the team list did not hold, so the whole KAM tab read 0
+- The round robin dealt leads the import never brought in, and failed on them every 5 minutes
+- A late answer for an earlier filter replaced the newer one on screen
+- A merged firm showed a rejection one of its source firms had received
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1221,3 +1224,44 @@ logins (Sai Suresh, Sidhant, Iliyas Kazi) had no team row at all.
 The guard is now the Team tab's Sign-in check, which listed "none" for that
 morning's team, and Change number, which carries a person's firms to their new
 number (`docs/b2b/sales-tab-redesign.md` §Sign-in check and Change number).
+
+### The round robin dealt leads the import never brought in, and failed on them every 5 minutes (2026-11-05)
+
+Team → Assign now read "Assigned 0 leads, 2 failed", with "Not imported into the
+CRM yet" on leads 39971691 and 49515900, and it said the same on every run. The two
+Kylas reads disagreed on which date makes a lead new. The pool takes Hardi's leads
+**qualified** in the last 7 days (`expectedClosureOn`). The import took only leads
+**created** after `B2B_FRESH_START` (26 Aug). Kylas had created those two in Nov
+2025 and Jun 2026, and Presales qualified them on 3 and 4 Nov. On 5 Nov, 5 of the
+101 pool leads had no CRM row, all created before 26 Aug. Each run claimed them,
+found no row and released them. The board would also have hidden them, because it
+floored rows on the same creation date. Now the pool reads the full lead, and
+each owner write carries a row built from it, so a lead with no row is inserted
+with its new owner (`docs/b2b/inbound.md` §Who owns a lead). The board no longer floors on
+creation. When two reads pick "new" by different dates, whatever one deals the
+other has to be able to hold.
+
+### A late answer for an earlier filter replaced the newer one on screen (2026-11-05)
+
+The user: changing filters often showed the wrong data, and the screen felt
+laggy. Three loaders set state from whichever request finished last. On the
+Overview, a slow month read landed after the one picked next and replaced it under
+the new month's name. Its `finally` also cleared the loading state while the
+newer read was still running. Inbound and Leads did the same on their filters.
+Inbound also re-read all of `/rows` (3.2 MB) for filters it applies in memory.
+The Overview also re-read every month uncached once Refresh had been pressed,
+because `fresh` was `refreshKey > 0`, which stays true. Now each loader applies only its newest request
+(`useMonthReport`, `latestLoad`), the Overview shows "…" rather than another
+month's figures, and Inbound's filters cost no request (`docs/b2b/inbound.md`
+§Only a search reaches the network). `useInboundAssigned` already had the right
+shape, a result keyed on its inputs, and is the one to copy. Any effect that
+fetches on a filter needs this guard.
+
+### A merged firm showed a rejection one of its source firms had received (2026-11-05)
+
+A parent firm was merged from three firms, all assigned to one KAM in the same
+second. The KAM accepted two and rejected one. The merge kept that KAM and kept
+all three entries, and the list reads the newest entry. With equal timestamps that
+was the rejection, so the parent read "<KAM> rejected: …" beside the same person
+as its KAM. A merge combines history, but the merged row's state must come from
+the merge onwards (`docs/b2b/client-db.md` §Merge).

@@ -8,8 +8,13 @@ export type FirmHandoverState = 'pending' | 'overdue' | 'accepted' | 'rejected' 
 export const latestAssignment = (c: ClientEntity): KamAssignment | undefined =>
   [...(c.assignments || [])].sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
 
+export function currentAssignments(c: ClientEntity): KamAssignment[] {
+  const mergedAt = (c.mergedFrom || []).map((m) => String(m.mergedAt || '')).sort().pop();
+  return (c.assignments || []).filter((a) => !mergedAt || String(a.at) >= mergedAt);
+}
+
 export function firmHandover(c: ClientEntity): KamAssignment | undefined {
-  const a = latestAssignment(c);
+  const a = [...currentAssignments(c)].sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
   return a?.status ? a : undefined;
 }
 

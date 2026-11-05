@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Segmented } from '../../../ui';
 import { BREAKDOWN_LABELS, BreakdownView, CHANNEL_META, PAGE_SIZE, TYPE_META } from '../constants';
 import { OrderDrawer } from './order-drawer';
+import { fmtDateTime } from '../../../../../drawers/firm/utils';
 
 const CELL = 'px-3 py-2 whitespace-nowrap';
 const NUM = `${CELL} text-right tabular-nums`;
@@ -49,7 +50,7 @@ function OrdersTable({ rows, onOpen }: { rows: RevenueOrder[]; onOpen: (o: Reven
     <table className="w-full text-[12px] min-w-[960px]">
       <thead className="text-[10px] uppercase tracking-wider text-gray-400">
         <tr>
-          {['Enquiry ID', 'Cart date', 'Firm', 'Channel', 'Credited to', 'On the cart', 'Status'].map((h) => <th key={h} className="text-left font-semibold px-3 py-2">{h}</th>)}
+          {['Enquiry ID', 'Order placed', 'Firm', 'Channel', 'Credited to', 'On the cart', 'Status'].map((h) => <th key={h} className="text-left font-semibold px-3 py-2">{h}</th>)}
           <th className="text-right font-semibold px-3 py-2">Value</th>
         </tr>
       </thead>
@@ -57,7 +58,7 @@ function OrdersTable({ rows, onOpen }: { rows: RevenueOrder[]; onOpen: (o: Reven
         {rows.map((o) => (
           <tr key={o.id} onClick={() => onOpen(o)} className="border-t border-gray-100 cursor-pointer hover:bg-teal-50/40">
             <td className={`${CELL} font-mono text-[11px] text-[#0F766E]`}>{o.id}</td>
-            <td className={`${CELL} text-gray-500`}>{o.day}</td>
+            <td className={`${CELL} text-gray-500`}>{fmtDateTime(o.ticket.placedAt) || '—'}</td>
             <td className="px-3 py-2 max-w-[240px]">
               <div className="font-semibold text-gray-900 truncate">{o.firm || 'Unnamed'}</div>
               {o.client && o.client !== o.firm && <div className="text-[10.5px] text-gray-400 truncate">{o.client}</div>}

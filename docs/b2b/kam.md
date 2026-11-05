@@ -252,7 +252,10 @@ a KAM, either by name or round robin. The KAM accepts or rejects from the
   key. `assignments` is a real `b2b_client` jsonb column on the deployed
   backend. A new key would only persist once migration 0020's `extra` column
   ships, and until then it would be dropped silently. `firmHandover()` reads the
-  latest entry only. **The Firm page's KAM picker goes through the same
+  latest entry only, **and on a merged firm only entries from its latest merge
+  on** (`currentAssignments`, 2026-11-05; `client-db.md` §Merge).
+  `ownsFirm` still reads every entry, because `kamPhone` there is what tells a
+  KAM's two logins apart. **The Firm page's KAM picker goes through the same
   sign-off**: it is shown to managers only (`assignAs`), assigning there appends
   a `Pending` entry, and setting Unassigned appends one with no `status`, which
   ends any pending handover. Before this, any KAM could reassign a firm from

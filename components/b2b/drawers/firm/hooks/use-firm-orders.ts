@@ -1,6 +1,6 @@
 'use client';
 
-import { ClientOrderDetails, fetchClientOrderRows, fetchOrdersByGst, invalidateClientTickets } from '@/lib/b2b';
+import { ClientOrderDetails, byNewestOrder, fetchClientOrderRows, fetchOrdersByGst, invalidateClientTickets } from '@/lib/b2b';
 import { useCallback, useEffect, useState } from 'react';
 
 export function useFirmOrders(phones: string[], gstins: string[] = []) {
@@ -32,8 +32,7 @@ export function useFirmOrders(phones: string[], gstins: string[] = []) {
         if (!alive) return;
         const seen = new Set(byPhone.rows.map((r) => r.ticketId ?? r.enqId));
         const extra = byGst.filter((r) => !seen.has(r.ticketId ?? r.enqId));
-        const rows = [...byPhone.rows, ...extra].sort((a, b) =>
-          String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        const rows = [...byPhone.rows, ...extra].sort(byNewestOrder);
         setDetails({ ...byPhone, rows });
       })
       .catch((e) => { console.error('[b2b] firm orders failed', e); if (alive) setFailed(true); })
