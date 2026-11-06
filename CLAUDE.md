@@ -545,8 +545,8 @@ shared CRM tree is checked out on it, so :3001 serves it. What it carries:
   After deploy, check Team → round robin shows the backlog count (about 329 on
   6 Nov). Then check that a store manager sees only their EC on Sent to your store.
 
-**EC redirects show on every team's drawer (2026-11-06, branch
-`ec-redirect-visibility`, no backend PR).** The user found a client an Outreach BM
+**EC redirects show on every team's drawer (2026-11-06, CRM PR #46 from
+`ec-redirect-visibility`, open, not merged; no backend PR).** The user found a client an Outreach BM
 had sent to an EC reading "Not redirected from here yet." The card only listed what
 that drawer had sent since it opened. Now the Inbound, Outreach and KAM drawers load
 every redirect matching the record's id or any of its numbers, from any team, with
