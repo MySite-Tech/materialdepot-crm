@@ -6,6 +6,8 @@
 |---|---|---|
 | `fetchEcVisits({ kind: 'redirect' })` | `GET /api/b2b/ec-visits?kind=redirect` → b2b-backend `GET /b2b/ec-visits?kind=redirect` | One per mount. The whole tab. Needs migration 0023 |
 | `saveEcVisit(v)` | `PUT /api/b2b/ec-visits` → `PUT /b2b/ec-visits` | A redirect, a status change, or a saved orders check |
+| `fetchClientRedirects(ref, phones)` | `GET /api/b2b/ec-visits?kind=redirect&lead_ref=&phones=` → b2b-backend `GET /b2b/ec-visits?kind=redirect`, filtered in the route | One per lead or firm drawer, and again only when its 10-digit numbers change |
+| `fetchEcTickets(v)` | `fetchClientTickets(phone)` → Django `GET /crm/leads/?q=<phone>` | Per redirect shown in a drawer. `fetchLeadsByPhone` caches per phone for the session, so a number the drawer already looked up costs nothing |
 | `checkAssisted(v)` | `fetchClientTickets(phone)` → Django `GET /crm/leads/?q=<phone>` | One per phone on the redirect, **only on a click** ("Check orders", or "Check orders for N", two at a time) |
 
 ## EC Directed: B2B as a lead source for the stores (2026-10-30)
@@ -54,3 +56,33 @@ what those numbers then ordered at that EC is **assisted revenue**.
   endpoints report totals, not visitors. The row's status (Directed → Visited /
   No show / Cancelled) is set by hand until Django can answer "did this number
   walk into this EC".
+
+## Every redirect shows on the client, from any team (2026-11-06)
+
+The user found a client an Outreach BM had redirected reading "Not redirected
+from here yet." on the lead. Until then the drawer card listed only the
+redirects sent in that drawer since it was opened (`docs/landmines.md`). The
+user's rule: whoever sent the client, every team's drawer for that client shows
+it, with whether a cart was made and whether an order was placed.
+
+- **A redirect belongs to a client by `lead_ref`, `client_id` or any shared
+  phone** (`redirectIsFor`). Phones are what carry it across teams: an Inbound
+  lead, its later Outreach lead and the KAM firm have different ids and the same
+  numbers. Every B2B user sees every match, whoever made it. The EC Directed
+  tab's "a rep sees only their own" scoping is unchanged.
+- **The route filters, not the browser.** b2b-backend has no phone or lead
+  filter, so `/api/b2b/ec-visits` fetches `kind=redirect` and returns only the
+  matches. A `phones`/`lead_ref` filter on the backend would let it stop pulling
+  the whole list; it is a small table today.
+- **The steps are Redirected → Cart created → Order placed.** Cart created is
+  any enquiry at that EC on one of the redirect's own numbers from the redirect
+  day on, whatever its status. Order placed is the `dealIsOrder` subset. Both use
+  the same owner-branch rule as assisted revenue above, through one function
+  (`fetchEcTickets`), so the drawer and the tab cannot disagree. A lookup failure
+  shows `?` and "unknown", never an empty step.
+- **The drawer computes live and saves nothing.** Opening a lead must not write.
+  The EC Directed tab still saves its click check, which now also stores `carts`
+  and so drives the Cart at the EC tile. A check saved before 2026-11-06 has no
+  `carts` and says "re-check to count".
+- The Visited / No show status is still set by hand on the tab, so the drawer
+  shows it as recorded.

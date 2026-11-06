@@ -1,16 +1,18 @@
 import type { EcVisit } from '@/lib/b2b/ec-visits';
 
-export type EcLens = 'all' | 'unchecked' | 'ordered' | 'visited';
+export type EcLens = 'all' | 'unchecked' | 'carted' | 'ordered' | 'visited';
 
 export const EC_LENSES: { key: EcLens; label: string }[] = [
   { key: 'all', label: 'All redirects' },
   { key: 'unchecked', label: 'Orders not checked' },
+  { key: 'carted', label: 'Cart at the EC' },
   { key: 'ordered', label: 'Ordered at the EC' },
   { key: 'visited', label: 'Visited' },
 ];
 
 export function lensMatches(v: EcVisit, lens: EcLens): boolean {
   if (lens === 'unchecked') return !v.assisted;
+  if (lens === 'carted') return (v.assisted?.carts || 0) > 0;
   if (lens === 'ordered') return (v.assisted?.orders || 0) > 0;
   if (lens === 'visited') return v.status === 'Visited';
   return true;

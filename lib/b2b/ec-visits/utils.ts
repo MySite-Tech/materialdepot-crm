@@ -56,6 +56,11 @@ export function ecVisitQueryString(q: EcVisitQuery): string {
   if (q.from) p.set('from', q.from);
   if (q.to) p.set('to', q.to);
   if (q.kind) p.set('kind', q.kind);
+  if (q.leadRef) p.set('lead_ref', q.leadRef);
+  if (q.phones?.length) p.set('phones', q.phones.join(','));
   const s = p.toString();
   return s ? `?${s}` : '';
 }
+
+export const redirectIsFor = (v: EcVisit, ref: string, phones: string[]): boolean =>
+  (!!ref && (v.leadRef === ref || v.clientId === ref)) || v.phones.some((p) => phones.includes(p));

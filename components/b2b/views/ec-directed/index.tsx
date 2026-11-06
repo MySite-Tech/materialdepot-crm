@@ -77,7 +77,7 @@ export default function EcDirected({ viewer }: { viewer: Viewer }) {
       <div>
         <h2 className="text-[18px] font-bold text-gray-900">EC Directed</h2>
         <p className="text-[12.5px] text-gray-500 mt-0.5 max-w-3xl">
-          Every lead Inbound, Outreach or KAM sent to an Experience Centre. <strong>Assisted revenue</strong>{' '}is what those numbers ordered at
+          Every lead Inbound, Outreach or KAM sent to an Experience Centre. Each one also shows on that client&apos;s lead or firm, in every team&apos;s drawer. <strong>Assisted revenue</strong>{' '}is what those numbers ordered at
           that EC since the redirect. It is also in the EC&apos;s own revenue, so it is a measure of B2B&apos;s contribution, never added on top.
           {' '}{viewer.isManager ? 'You see every redirect.' : 'You see the redirects you made.'}
         </p>
@@ -89,7 +89,7 @@ export default function EcDirected({ viewer }: { viewer: Viewer }) {
         </p>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {EC_LENSES.map((l) => (
           <button key={l.key} onClick={() => setLens(l.key)}
             className={`text-left rounded-lg border px-3 py-2.5 bg-white ${lens === l.key ? 'border-[#1A1A1A] ring-1 ring-[#1A1A1A]' : 'border-gray-200 hover:border-gray-300'}`}>
@@ -149,6 +149,7 @@ export default function EcDirected({ viewer }: { viewer: Viewer }) {
                   {v.assisted ? (
                     <>
                       <div className={`font-semibold ${v.assisted.orders ? 'text-[#0F766E]' : 'text-gray-500'}`}>{fmtINR(v.assisted.value)} · {v.assisted.orders} order{v.assisted.orders === 1 ? '' : 's'}</div>
+                      <div className="text-[10.5px] text-gray-500">{v.assisted.carts == null ? 'Carts: re-check to count' : `${v.assisted.carts} cart${v.assisted.carts === 1 ? '' : 's'} at the EC`}</div>
                       <div className="text-[10.5px] text-gray-400">checked {fmtDay(v.assisted.checkedAt.slice(0, 10))}</div>
                     </>
                   ) : <div className="text-gray-400">Not checked</div>}

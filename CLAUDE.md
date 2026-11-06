@@ -206,7 +206,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 81 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 84 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -285,7 +285,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 81 titles, so grep a title and read around the line you
+**Contents** list of all 84 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -544,6 +544,24 @@ shared CRM tree is checked out on it, so :3001 serves it. What it carries:
 - **Not seen signed in on real data.** Every screen was driven on the sandbox only.
   After deploy, check Team → round robin shows the backlog count (about 329 on
   6 Nov). Then check that a store manager sees only their EC on Sent to your store.
+
+**EC redirects show on every team's drawer (2026-11-06, branch
+`ec-redirect-visibility`, no backend PR).** The user found a client an Outreach BM
+had sent to an EC reading "Not redirected from here yet." The card only listed what
+that drawer had sent since it opened. Now the Inbound, Outreach and KAM drawers load
+every redirect matching the record's id or any of its numbers, from any team, with
+Redirected → Cart created → Order placed at that EC. EC Directed counts carts too.
+The rules are in `docs/b2b/ec-directed.md` §Every redirect shows on the client. It
+has run only on the sandbox. The reported redirect was not in the 3 Nov `crm_real`
+copy. **After deploy,** open that lead. If it still reads "Not sent to an EC by any
+team yet", no redirect row was ever saved. A redirect on a client's number must
+never be scoped per team or per rep in the drawer.
+
+**:3001 may not be serving this checkout.** On 2026-11-06 it was restarted from a
+combined snapshot of several sessions' uncommitted work, at the user's request. When
+an edit does not show there, check whose tree it runs:
+`lsof -a -p $(lsof -tiTCP:3001 -sTCP:LISTEN) -d cwd`. To restore it, stop :3001 and
+run `~/Projects/ss-local-stack/crm-local.sh up`.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment

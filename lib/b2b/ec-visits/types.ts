@@ -8,7 +8,16 @@ export interface EcAssisted {
   value: number;
   orders: number;
   enqIds: string[];
+  carts?: number;
   checkedAt: string;
+}
+
+export interface EcTicket {
+  id: string;
+  status: string;
+  value: number;
+  createdAt: string;
+  ordered: boolean;
 }
 
 export interface EcVisit {
@@ -68,4 +77,6 @@ export interface EcVisitQuery {
   from?: string;
   to?: string;
   kind?: EcVisitKind;
+  leadRef?: string;
+  phones?: string[];
 }
