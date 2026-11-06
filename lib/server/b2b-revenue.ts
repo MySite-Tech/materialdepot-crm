@@ -36,7 +36,7 @@ async function ordersPage(query: string, page: number, auth: string): Promise<Or
   return data;
 }
 
-async function allOrders(query: string, auth: string, maxPages = MAX_PAGES): Promise<{ orders: OrderInput[]; truncated: boolean }> {
+export async function allOrders(query: string, auth: string, maxPages = MAX_PAGES): Promise<{ orders: OrderInput[]; truncated: boolean }> {
   const first = await ordersPage(query, 1, auth);
   const pages = Math.min(first.totalPages, maxPages);
   const rest: OrdersPage[] = [];

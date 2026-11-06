@@ -21,15 +21,16 @@ function seedDeals() {
   return [
     deal('ENQ-900101', leadPhone(11), 'Prototype Projects', 'Estimate Shared', 245000, RAVI, 'JP Nagar', -3, { followUpDate: istDay(2) }),
     deal('ENQ-900102', leadPhone(12), 'Sandbox Studio', 'Order Placed', 380000, SNEHA, 'Whitefield', -8, { closureDate: istDay(-5) }),
-    deal('ENQ-900103', '9000020001', 'Mockup Interiors', 'Order Placed', 520000, IMRAN, 'HSR', -6, { closureDate: istDay(-4) }),
-    deal('ENQ-900104', '9000020002', 'Template Builders', 'Delivered', 610000, SNEHA, 'Whitefield', -30, { closureDate: istDay(-25) }),
+    deal('ENQ-900103', '9000020001', 'Mockup Interiors', 'Order Placed', 520000, IMRAN, 'HSR', -6, { closureDate: istDay(-4), clientGst: '29AAACS1111A1Z1' }),
+    deal('ENQ-900104', '9000020002', 'Template Builders', 'Delivered', 610000, SNEHA, 'Whitefield', -30, { closureDate: istDay(-25), clientGst: '29AAACT2222B1Z5' }),
     deal('ENQ-900105', '9000020003', 'Exemplar Interiors', 'Delivered', 180000, RAVI, 'JP Nagar', -50, { closureDate: istDay(-45) }),
     deal('ENQ-900106', leadPhone(9), 'Fictional Spaces', 'Cart Created', 90000, RAVI, 'JP Nagar', -1),
     deal('ENQ-900107', leadPhone(16), 'Specimen Studio', 'Estimate Shared', 150000, IMRAN, 'HSR', -2, { followUpDate: istDay(3) }),
-    deal('ENQ-900108', '9000020001', 'Mockup Interiors', 'Order Confirmed', 340000, { name: 'Kavya (KAM)', phone: '9000000021' }, 'B2B', -7, { closureDate: istDay(-3) }),
+    deal('ENQ-900108', '9000020001', 'Mockup Interiors', 'Order Confirmed', 340000, { name: 'Kavya (KAM)', phone: '9000000021' }, 'B2B', -7, { closureDate: istDay(-3), clientGst: '29AAACS1111A2Z0' }),
     deal('ENQ-900109', leadPhone(12), 'Sandbox Studio', 'Delivered', 125000, { name: 'Asha (Inbound)', phone: '9000000001' }, 'B2B', -9, { closureDate: istDay(-6) }),
-    deal('ENQ-900110', '9000020009', 'A client of Mockup Interiors', 'Order Placed', 215000, SNEHA, 'Whitefield', -4, { closureDate: istDay(-2) }),
+    deal('ENQ-900110', '9000020009', 'A client of Mockup Interiors', 'Order Placed', 215000, SNEHA, 'Whitefield', -4, { closureDate: istDay(-2), clientGst: '29AAACS1111A2Z0' }),
     deal('ENQ-900111', '9000020010', 'Mockup team member', 'Delivered', 90000, RAVI, 'JP Nagar', -5, { closureDate: istDay(-3) }),
+    deal('ENQ-900112', '9000020011', 'Specimen Fabricators', 'Delivered', 135000, IMRAN, 'HSR', -70, { closureDate: istDay(-60), clientGst: '29AAACF4444D1Z3' }),
   ];
 }
 

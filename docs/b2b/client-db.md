@@ -597,6 +597,7 @@ blank SPoC, segment and client type. The user wanted them here, not in Leads.
   Rows have no owner, `source` Existing, and `import_batch` in `extra`. GSTINs that
   fail `GSTIN_SHAPE` were left off.
 - **It was a one-time copy.** Later edits to `client_master` do not reach this tab.
+  New firms now arrive from orders instead (next section).
   Four names differ only by case or spacing and were kept, because their phones
   differ. Use Merge.
 - **Reading it:** `/client-master` is staff-only and Cloudflare challenges curl. A
@@ -604,3 +605,52 @@ blank SPoC, segment and client type. The user wanted them here, not in Leads.
   `POST /b2b/rows/bulk` with `only_new`, tested first with fake rows on :3100.
 - **Verified on production:** the tab reads 1,278 firms, all loading their order
   status through the batched history calls.
+
+## New firms come in from orders by themselves (2026-11-06)
+
+The 2026-10-31 copy was a one-time snapshot of an SQL export: a client with a GST
+and a placed order in the last 360 days. The user wanted every firm that meets
+that rule later to land here on its own. `lib/server/b2b-client-import/` does it,
+with the grouping in `lib/b2b/client-import/utils.ts`.
+
+| Call | Endpoint | When |
+|---|---|---|
+| `runClientImport('recent')` | `POST /api/b2b/client-import?scope=recent` → Django `/crm/leads/?order_from&order_to&branch_basis=estimate` (14 days, usually 1–2 pages of 1,000) + backend `GET /rows`, then `POST /rows/bulk {only_new}` | Once per Client Database open, after the list loads, by a B2B manager. The server skips it for an hour after a run |
+| `previewClientImport('year')` | `GET /api/b2b/client-import?scope=year`, 12 calendar-month windows read 3 at a time; writes nothing | **Sync from orders** |
+| `runClientImport('year')` | `POST …?scope=year` | **Add N firms** on the preview |
+
+- **The GST is the order's (`estimate.client_gst`), not the profile's.** The
+  export read `users_user.gst_number`, and that field has almost stopped being
+  filled. Phones first qualifying by it fell from 120 (May 2026) to 42, 9, 6, 3, 3
+  and 0 (November), while by either GST it was 126, 172, 214, 247, 247 and 213.
+  Copying the SQL exactly would have looked like it worked and added nothing. Over
+  360 days, 1,075 phones qualify by profile GST and 2,156 by either. The user
+  chose either GST on 2026-11-06. `/crm/leads/` carries only the order's GST, so a
+  firm whose GST is only on its profile is still missed. That is 0–3 a month now,
+  and the 2026-10-31 copy holds the older ones.
+- **The export's `GST IS NOT NULL` let `''` through** (474 orders). That is why
+  about 125 of the 1,200 firms have no GST. This rule needs a GSTIN that passes
+  `GSTIN_SHAPE`.
+- **One firm per connected set of GSTINs and numbers.** Two numbers billed to
+  one GSTIN, or one number billing two GSTINs, become one row (union-find over
+  both). The id is `CLI-GST-<first GSTIN>`, so a second run, or two managers
+  opening at once, cannot add it twice. The `import_batch` is `orders-gst` in
+  `extra`. The firm is named after the client on its most recent order and
+  has no KAM, so it shows under No KAM.
+- **Skipped when any of its numbers or GSTINs is already on a client row**, and
+  never edited. A similar name alone does not skip it (§Open question #3): the
+  names are people's names, many of them first names only. A firm with no
+  10-digit number is left out and counted, as `planClientSeed` does.
+- **Dropped from the export: the five internal-BM numbers.** Over 360 days they
+  decided 1 firm, and keeping them would put staff phone numbers in this public
+  repo.
+- **Only a B2B manager runs it**, server-checked, because Django's `/crm/leads/`
+  answers from the caller's token and the read must be company-wide.
+- **Why on open and not a timer:** the CRM is an Azure Static Web App with no
+  scheduled jobs. A nightly job would need a Django service login and a new
+  secret, for a list a manager opens daily anyway.
+- **Verified** by hand on synthetic orders through the compiled module, and on
+  `npm run dev:sandbox` (four seeded orders carry dummy GSTINs). Opening the tab
+  added one firm with two numbers and two GSTINs. Sync then found 3, with 2
+  already here, and added 1. **Not yet run on real data.** The real catch-up
+  should offer roughly 950 firms. Read the preview's counts before clicking Add.

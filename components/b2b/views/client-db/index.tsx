@@ -12,12 +12,14 @@ import { AssignBar } from '../../ui/assign-bar';
 import { useClientColumns } from './hooks/use-client-columns';
 import { useFirmAssign } from './hooks/use-firm-assign';
 import { useSpocSources } from './hooks/use-spoc-sources';
+import { useClientImport } from './hooks/use-client-import';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
 import { clientLensMatches, filterChips, matchesFilters, sortRows } from './utils';
 import { ClientFilterBar, ListHead } from './ui/filters';
+import { ImportBar } from './ui/import-bar';
 import { ClientModal } from './ui/modals/client-modal';
 import { MergeModal } from './ui/modals/merge';
 import { SeedModal } from './ui/modals/seed';
@@ -72,6 +74,15 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   }, [loadAggregates]);
 
   useEffect(() => { load(); }, [load]);
+
+  const addImported = useCallback((list: ClientEntity[]) => {
+    setClients((prev) => {
+      const have = new Set(prev.map((c) => c.id));
+      return [...list.filter((c) => !have.has(c.id)), ...prev];
+    });
+    addPhones(list.flatMap((c) => contactNumbers(c.contacts)));
+  }, [addPhones]);
+  const importer = useClientImport(viewer.canManageTeam && !loading && !loadError, addImported);
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
@@ -217,6 +228,16 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {viewer.canManageTeam && (
+            <button
+              onClick={importer.check}
+              disabled={!!importer.busy}
+              className={btnGhost}
+              title="Find every firm billed with a GSTIN on an order placed this month or in the eleven before it, and not here yet"
+            >
+              {importer.busy === 'preview' ? 'Checking orders…' : 'Sync from orders'}
+            </button>
+          )}
           {viewer.canManageTeam && <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>}
           {viewer.canManageTeam && <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>}
           {viewer.canManageTeam && <button
@@ -237,6 +258,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           <button onClick={load} className="font-semibold underline cursor-pointer">Retry</button>
         </div>
       )}
+
+      {viewer.canManageTeam && <ImportBar importer={importer} />}
 
       {(loading || !!clients.length) && <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />}
 
