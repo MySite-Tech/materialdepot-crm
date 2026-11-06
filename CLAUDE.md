@@ -736,7 +736,9 @@ for it.
   anyone looked at it; the rest of that shape was converted defensively rather
   than after being seen to break, because the trigger is not predictable. The
   quick check is to render the panel and grep its `innerText` for a digit jammed
-  against a word.
+  against a word. A closing tag does it too: `<strong>Assisted revenue</strong> is`
+  on a wrapping line rendered "Assisted revenueis" on EC Directed until
+  2026-11-06, so treat `</tag> word` the same as `} word`.
 
 - **Assignment has one shape in B2B (2026-10-31).** `ui/assign-bar.tsx`: team
   first, then One person or Round robin over a chosen set. Bulk takes only records
