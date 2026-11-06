@@ -10,6 +10,7 @@ import { WaitlistIndex, waitlistFor } from '../../../models/outreach/kpis';
 import { LENS_STATUS } from '../constants';
 import { Lens, LensRow } from '../types';
 import { gapsFor } from '../utils';
+import { fmtTime } from '../../../models/reminders';
 import { ReactNode } from 'react';
 
 export interface Col {
@@ -36,7 +37,7 @@ function When({ date, time, today }: { date: string; time?: string; today: strin
   const [text, cls] = late > 0 ? [`${late}d late`, 'text-red-600 font-semibold']
     : late === 0 ? ['Today', 'text-amber-700 font-semibold']
       : late === -1 ? ['Tomorrow', 'text-gray-700'] : [fmtDay(date), 'text-gray-700'];
-  return <span className={`whitespace-nowrap ${cls}`} title={date}>{text}{time ? <span className="font-normal text-gray-400"> · {time}</span> : ''}</span>;
+  return <span className={`whitespace-nowrap ${cls}`} title={date}>{text}{time ? <span className="font-normal text-gray-400"> · {fmtTime(time)}</span> : ''}</span>;
 }
 
 function Firm({ l }: { l: OutreachLead }) {
@@ -64,7 +65,7 @@ function NextStep({ l, today }: { l: OutreachLead; today: string }) {
   }
   return (
     <div className="leading-tight">
-      <When date={useMeeting ? day(m!.date) : f} time={useMeeting ? m!.time : undefined} today={today} />
+      <When date={useMeeting ? day(m!.date) : f} time={useMeeting ? m!.time : l.followUpTime} today={today} />
       <div className="text-[10.5px] text-gray-400 whitespace-nowrap">{useMeeting ? `Meeting ${m!.n}` : 'Follow-up'}</div>
     </div>
   );
@@ -145,7 +146,7 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { tod
         stage, ...bm,
       ];
     case 'followups':
-      return [firm, { head: 'Follow-up', cell: (r) => <When date={day(r.lead.followUpDate)} today={today} /> }, stage, meetings, ...bm];
+      return [firm, { head: 'Follow-up', cell: (r) => <When date={day(r.lead.followUpDate)} time={r.lead.followUpTime} today={today} /> }, stage, meetings, ...bm];
     case 'handoff': case 'won':
       return [firm, converted, { head: 'First order', cell: (r) => <FirstOrder l={r.lead} /> }, handover, onWaitlist, { head: 'KAM', cell: (r) => muted(r.lead.handover?.kam || r.lead.kam) }, ...bm];
     case 'lost':

@@ -113,6 +113,9 @@ export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, 
                 error={followUpError ? 'Set when you will next follow up after this visit.' : undefined}>
                 <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value)} className={followUpError ? errorInputCls : inputCls} />
               </Field>
+              <Field label="Time" hint="Optional">
+                <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value || undefined)} className={inputCls} />
+              </Field>
             </div>
           )}
         </>

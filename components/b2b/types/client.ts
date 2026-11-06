@@ -160,6 +160,7 @@ export interface ClientInteraction {
   upcomingProject?: string;
 
   nextFollowUpDate?: string;
+  nextFollowUpTime?: string;
   loggedBy?: string;
   checkIn?: MeetingCheckIn;
 

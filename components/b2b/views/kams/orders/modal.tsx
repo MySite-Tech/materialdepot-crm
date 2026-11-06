@@ -151,6 +151,9 @@ export function OrderModal({ order, isNew, clients, kam, actor, creditPeople, ca
             <Field label={`Next follow-up on this order${draft.status === 'PI Shared' ? ' *' : ''}`} hint="Each PI keeps its own follow-up, separate from the firm's.">
               <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value || undefined)} className={inputCls} />
             </Field>
+            <Field label="Follow-up time" hint="Optional. Reminders show it an hour before.">
+              <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value || undefined)} className={inputCls} />
+            </Field>
           </div>
 
           <Field label="Status" hint={KAM_ORDER_STATUS_HINT[draft.status]}>

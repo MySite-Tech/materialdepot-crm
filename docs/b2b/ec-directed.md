@@ -54,3 +54,12 @@ what those numbers then ordered at that EC is **assisted revenue**.
   endpoints report totals, not visitors. The row's status (Directed → Visited /
   No show / Cancelled) is set by hand until Django can answer "did this number
   walk into this EC".
+- **A redirect sent from a lead does not show on the firm page (found
+  2026-11-06).** The Firm page (and so KAM) reads EC visits by `client_id`, and a
+  redirect sent from an Inbound or Outreach lead is saved with `client_id` null.
+  So a firm handed to KAM never shows the redirects its lead had. The fix reads
+  redirects on the firm's numbers as well and labels each "Redirected from
+  <team>". It depends on `fetchClientRedirects`, which only exists on the
+  uncommitted `ec-redirect-visibility` work, so it is not on any branch yet. The
+  patch is `~/Projects/ss-local-stack/patches/firm-page-redirects.patch`, and it
+  runs on the combined local :3001.

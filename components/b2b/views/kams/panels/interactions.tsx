@@ -25,6 +25,7 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
   const [temperature, setTemperature] = useState<string>('');
   const [upcomingProject, setUpcomingProject] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
+  const [nextFollowUpTime, setNextFollowUpTime] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -45,6 +46,7 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
       temperature: temperature === '' ? undefined : clampTemperature(temperature),
       upcomingProject: upcomingProject.trim() || undefined,
       nextFollowUpDate: nextFollowUpDate || undefined,
+      nextFollowUpTime: (nextFollowUpDate && nextFollowUpTime) || undefined,
       loggedBy,
       checkIn: completing?.checkIn,
       createdAt: completing?.createdAt || new Date().toISOString(),
@@ -121,14 +123,19 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
             <textarea value={upcomingProject} onChange={(e) => setUpcomingProject(e.target.value)} rows={2} className={inputCls + ' resize-none'} />
           </Field>
 
-          <Field
-            label={`Next follow-up date${type !== 'Meeting' ? ' *' : ''}`}
-            hint={type !== 'Meeting'
-              ? `Required on a logged ${type.toLowerCase()} — it is what fills Today’s Calls and the Follow-up Queue.`
-              : 'Optional on a meeting.'}
-          >
-            <input type="date" min={date} value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} className={inputCls} />
-          </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-3">
+            <Field
+              label={`Next follow-up date${type !== 'Meeting' ? ' *' : ''}`}
+              hint={type !== 'Meeting'
+                ? `Required on a logged ${type.toLowerCase()} — it is what fills Today’s Calls and the Follow-up Queue.`
+                : 'Optional on a meeting.'}
+            >
+              <input type="date" min={date} value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Time" hint="Optional. Reminders show it an hour before.">
+              <input type="time" value={nextFollowUpTime} onChange={(e) => setNextFollowUpTime(e.target.value)} className={inputCls} />
+            </Field>
+          </div>
 
           {!!errors.length && (
             <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">

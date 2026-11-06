@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-83 entries. They live in one file because they cross-reference each other —
+84 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -94,6 +94,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A merged firm showed a rejection one of its source firms had received
 - Pausing a rep in the round robin left leads on the intake owner, because the import keeps Kylas's owner
 - A settings row saved from a stale page switched a rep's round robin back on
+- A column the CRM stopped writing still held old values, so reading it again would have attached them to new dates
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1289,3 +1290,15 @@ a row edit sends only the changed field and `saveMember` fills the rest from the
 stored row. Nothing kept history, so whether this is what re-enabled Hardi at
 08:04 UTC on 6 Nov is not known; the row now prints who changed it last. Same
 shape as the Inbound whole-row save (§A save sends a change, not a row).
+
+### A column the CRM stopped writing still held old values, so reading it again would have attached them to new dates (2026-11-06)
+
+On 2026-10-30 the follow-up time was dropped from the types and mappers, so the
+CRM stopped writing `follow_up_time`. It did not clear it. When the time came back
+on 2026-11-06, 18 real rows still held a bare `HH:MM`, some of them noise (00:29,
+02:56) and most under a follow-up date set since. Reading the column as it was would
+have shown a rep "call at 2:56 am" on a date they never gave a time for. The time is
+now stored as `<date>T<time>` and read only when the date matches
+(`docs/b2b/reminders.md`). When a field comes back, check what the backend kept
+while nothing was writing it, and tie a dependent value to the value it depends on
+rather than trusting the two to move together.

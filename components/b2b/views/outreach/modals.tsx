@@ -24,6 +24,7 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
   onDone: (patch: Partial<OutreachLead>) => void;
 }) {
   const [followUpDate, setFollowUpDate] = useState(lead.followUpDate || '');
+  const [followUpTime, setFollowUpTime] = useState(lead.followUpTime || '');
   const [enqId, setEnqId] = useState(lead.enqId || '');
   const [lostReason, setLostReason] = useState(lead.lostReason || '');
   const [touched, setTouched] = useState(false);
@@ -38,6 +39,7 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
     onDone({
       status: target,
       followUpDate: needsFollowUp ? followUpDate : lead.followUpDate,
+      followUpTime: needsFollowUp ? followUpTime || undefined : lead.followUpTime,
       enqId: wantsEnq ? enqId.trim() || undefined : lead.enqId,
       lostReason: needsReason ? lostReason : lead.lostReason,
     });
@@ -64,6 +66,9 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
               <Field label="Next follow-up date" required error={touched ? errors.find((e) => e.includes('follow-up')) : undefined}>
                 <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)}
                   className={touched && !followUpDate ? errorInputCls : inputCls} />
+              </Field>
+              <Field label="Time" hint="Optional">
+                <input type="time" value={followUpTime} onChange={(e) => setFollowUpTime(e.target.value)} className={inputCls} />
               </Field>
             </div>
           )}
@@ -132,6 +137,7 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
   const [altRole, setAltRole] = useState('');
   const [contacts, setContacts] = useState<OutreachContact[]>([]);
   const [followUpDate, setFollowUpDate] = useState('');
+  const [followUpTime, setFollowUpTime] = useState('');
   const [gstNumber, setGstNumber] = useState('');
   const [segment, setSegment] = useState<Segment | ''>('');
   const [leadType, setLeadType] = useState<LeadType | ''>('');
@@ -194,6 +200,7 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
       altRole: altPhone.trim() ? altRole.trim() : undefined,
       contacts: contacts.map((c) => ({ name: c.name.trim(), role: c.role.trim(), phone: c.phone?.trim() || undefined })),
       followUpDate: followUpDate || undefined,
+      followUpTime: (followUpDate && followUpTime) || undefined,
       gstNumber: gstNumber.trim() || undefined,
       segment: segment || undefined,
       leadType: leadType || undefined,
@@ -358,8 +365,11 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
               <Field label="Time"><input type="time" value={mTime} onChange={(e) => setMTime(e.target.value)} className={inputCls} /></Field>
               <Field label="Area"><input value={mArea} onChange={(e) => setMArea(e.target.value)} className={inputCls} /></Field>
               <Field label="Office location"><input value={mOffice} onChange={(e) => setMOffice(e.target.value)} className={inputCls} /></Field>
-              <Field label="Or next follow-up" className="col-span-2 sm:col-span-1">
+              <Field label="Or next follow-up">
                 <input type="date" value={followUpDate} min={istToday()} onChange={(e) => setFollowUpDate(e.target.value)} className={cls('next')} />
+              </Field>
+              <Field label="Follow-up time" hint="Optional">
+                <input type="time" value={followUpTime} onChange={(e) => setFollowUpTime(e.target.value)} className={inputCls} />
               </Field>
             </div>
             {err('next') && <p className="text-[10px] text-red-500 mt-1.5">{err('next')}</p>}

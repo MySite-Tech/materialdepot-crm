@@ -21,6 +21,14 @@ export function withB2BCache<T>(key: string, run: () => Promise<T>): Promise<T> 
   return promise;
 }
 
+const writeListeners = new Set<() => void>();
+
+export function onB2BWrite(fn: () => void): () => void {
+  writeListeners.add(fn);
+  return () => { writeListeners.delete(fn); };
+}
+
 export function invalidateB2BCache() {
   cache.clear();
+  for (const fn of writeListeners) fn();
 }

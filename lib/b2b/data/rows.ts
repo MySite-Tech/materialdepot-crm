@@ -39,3 +39,14 @@ export const num = (v: any): number | undefined => {
   return Number.isFinite(n) && n !== 0 ? n : undefined;
 };
 export const arr = <T,>(v: any): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+export const pairTime = (date: string | undefined, time: string | undefined): string | null => {
+  const d = String(date || '').slice(0, 10);
+  const t = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(time || '')) ? String(time) : '';
+  return d && t ? `${d}T${t}` : null;
+};
+
+export const unpairTime = (stored: unknown, date: string | undefined): string | undefined => {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(String(stored ?? ''));
+  return m && m[1] === String(date || '').slice(0, 10) ? m[2] : undefined;
+};

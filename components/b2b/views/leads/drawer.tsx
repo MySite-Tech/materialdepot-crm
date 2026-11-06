@@ -9,6 +9,7 @@ import { MeetingLine, OutreachStatusBadge } from '../../ui/outreach-chips';
 import { SourceChip, UnifiedStatusCell } from './cells';
 import { EnqLookup, UnifiedLead, inboundPhones, lookupEnqId, outreachPhones, saveInboundLead, upsertOutreachLead } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
+import { fmtFollowUp } from '../../models/reminders';
 
 export function DetailDrawer({ lead, onClose, onSaved }: {
   lead: UnifiedLead;
@@ -135,7 +136,7 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
                 <Field label="Priority"><ReadValue v={inbound.priority} /></Field>
                 <Field label="Lead summary" className="col-span-2 sm:col-span-3"><ReadValue v={inbound.leadSummary} /></Field>
                 <Field label="Selection" className="col-span-2"><ReadValue v={(inbound.selections || []).join(' / ')} /></Field>
-                <Field label="Next follow-up"><ReadValue v={inbound.followUpDate ? fmtDay(inbound.followUpDate) : ''} /></Field>
+                <Field label="Next follow-up"><ReadValue v={fmtFollowUp(inbound.followUpDate, inbound.followUpTime)} /></Field>
                 <Field label="Requirement" className="col-span-2 sm:col-span-3"><ReadValue v={inbound.requirement} /></Field>
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100">
@@ -166,7 +167,7 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
                   <ReadValue v={outreach.expectedOrderValue ? fmtINR(outreach.expectedOrderValue) : ''} />
                 </Field>
                 <Field label="Requirement" className="col-span-2 sm:col-span-3"><ReadValue v={outreach.requirement} /></Field>
-                <Field label="Next follow-up"><ReadValue v={outreach.followUpDate ? fmtDay(outreach.followUpDate) : ''} /></Field>
+                <Field label="Next follow-up"><ReadValue v={fmtFollowUp(outreach.followUpDate, outreach.followUpTime)} /></Field>
                 <Field label="Lost reason"><ReadValue v={outreach.lostReason} /></Field>
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100">

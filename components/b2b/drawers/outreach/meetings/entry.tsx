@@ -5,11 +5,13 @@ import { meetingLocation, pinMapUrl } from '../../../models/outreach';
 import { CheckInLine } from '../../../ui/check-in-capture';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { fmtMeetingDay } from './utils';
+import { fmtTime } from '../../../models/reminders';
 
-export function MeetingEntry({ m, gap, followUp, onEdit }: {
+export function MeetingEntry({ m, gap, followUp, followUpTime, onEdit }: {
   m: OutreachMeeting;
   gap: string;
   followUp?: string;
+  followUpTime?: string;
   onEdit: () => void;
 }) {
   const where = meetingLocation(m);
@@ -39,7 +41,7 @@ export function MeetingEntry({ m, gap, followUp, onEdit }: {
       {notes
         ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-gray-800 whitespace-pre-wrap break-words">{notes}</p>
         : m.status !== 'Completed' && <p className="mt-1.5 text-[11.5px] text-gray-400">No notes.</p>}
-      {followUp && <p className="mt-1.5 text-[11px] text-gray-500">Next follow-up: <span className="font-semibold text-gray-700">{fmtMeetingDay(followUp)}</span></p>}
+      {followUp && <p className="mt-1.5 text-[11px] text-gray-500">Next follow-up: <span className="font-semibold text-gray-700">{fmtMeetingDay(followUp)}{followUpTime ? ` · ${fmtTime(followUpTime)}` : ''}</span></p>}
     </div>
   );
 }

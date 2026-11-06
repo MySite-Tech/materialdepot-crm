@@ -11,16 +11,20 @@ import EcDirected from './ec-directed/index';
 import Leadership from './leadership/index';
 import StudioSpace from './studio-space/index';
 import TeamView from './team/index';
+import Reminders from './reminders/index';
 import { useB2BTeam } from '../hooks/use-b2b-team';
+import { useReminders } from '../hooks/use-reminders';
+import { useReminderAlerts } from '../hooks/use-reminder-alerts';
 import { viewerFor } from '@/lib/b2b/team/utils';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import type { AppUser } from '@/types/crm';
 
 type B2BView =
-  | 'overview' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'ec'
+  | 'reminders' | 'overview' | 'leads' | 'inbound' | 'outreach' | 'clients' | 'kams' | 'ec'
   | 'leadership' | 'studio' | 'team';
 
 const NAV: Array<{ key: B2BView; label: string; ready: boolean; teamManagersOnly?: boolean; managersOnly?: boolean }> = [
+  { key: 'reminders',  label: 'Reminders',        ready: true },
   { key: 'overview',   label: 'Overview',         ready: true, managersOnly: true },
   { key: 'leads',      label: 'Leads',            ready: true, managersOnly: true },
   { key: 'inbound',    label: 'Inbound Leads',    ready: true },
@@ -41,6 +45,8 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
   const [picked, setView] = useState<B2BView | null>(null);
   const team = useB2BTeam();
   const viewer = useMemo(() => viewerFor(currentUser, team.members), [currentUser, team.members]);
+  const reminders = useReminders(team, viewer);
+  const alerts = useReminderAlerts(reminders.mine, reminders.nowMs, !reminders.loading && !team.loading, () => setView('reminders'));
   const nav = useMemo(() => NAV
     .filter((item) => (!item.teamManagersOnly || viewer.canManageTeam) && (!item.managersOnly || viewer.isManager))
     .map((item) => (item.key === 'leadership' && !viewer.isManager ? { ...item, label: 'My performance' } : item)), [viewer.isManager, viewer.canManageTeam]);
@@ -67,6 +73,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
               }`}
             >
               <span>{item.label}</span>
+              {item.key === 'reminders' && reminders.activeCount > 0 && <NavCount n={reminders.activeCount} />}
               {!item.ready && <span className="text-[8px] uppercase tracking-wider text-gray-600 font-bold">soon</span>}
             </button>
           ))}
@@ -86,6 +93,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
               }`}
             >
               {item.label}
+              {item.key === 'reminders' && reminders.activeCount > 0 && <NavCount n={reminders.activeCount} className="ml-1.5" />}
               {!item.ready && <span className="ml-1.5 text-[8px] uppercase tracking-wider text-gray-600 font-bold">soon</span>}
             </button>
           ))}
@@ -94,6 +102,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
 
       <main className="flex-1 overflow-y-auto min-w-0">
         {team.loading && !viewer.isManager ? <p className="p-6 text-sm text-gray-400">Loading your B2B team…</p> : <>
+        {view === 'reminders' && <Reminders reminders={reminders} team={team} viewer={viewer} alerts={alerts} />}
         {view === 'overview' && <B2BOverview team={team} onNavigate={setView} />}
         {view === 'inbound' && <InboundLeads team={team} viewer={viewer} />}
         {view === 'leads' && <LeadsTab team={team} viewer={viewer} />}
@@ -107,5 +116,13 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         </>}
       </main>
     </div>
+  );
+}
+
+function NavCount({ n, className = '' }: { n: number; className?: string }) {
+  return (
+    <span className={`min-w-[18px] h-[18px] px-1 rounded-full bg-[#EAB308] text-[#1A1A1A] text-[10px] font-bold inline-flex items-center justify-center ${className}`}>
+      {n > 99 ? '99+' : n}
+    </span>
   );
 }

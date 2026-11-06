@@ -1,6 +1,6 @@
 'use client';
 
-import { callTally, closureReadiness, enrichmentGaps, followUpBucket, inboundWorkDay, isOpenStatus, istDay, lastAttempt, lastCallDay, piDay, sentToOutreach } from '../../models/inbound';
+import { awaitsFollowUp, callTally, closureReadiness, enrichmentGaps, followUpBucket, inboundWorkDay, isOpenStatus, istDay, lastAttempt, lastCallDay, piDay, sentToOutreach } from '../../models/inbound';
 import { FollowUpBucket } from '../../types/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { fmtLeadDateTime } from '../../ui/inbound-chips';
@@ -29,9 +29,7 @@ export const matchesFilters = (l: InboundLead, f: InboundFilters): boolean =>
   && (f.leadType === 'all' || l.leadType === f.leadType)
   && (f.location === 'all' || l.location === f.location);
 
-const called = (l: InboundLead) => isOpenStatus(l.stage) && !(l.stage === 'New' && !(l.callAttempts || []).length);
-
-const callBucket = (l: InboundLead, today: string, b: FollowUpBucket) => called(l) && followUpBucket(l.followUpDate, today) === b;
+const callBucket = (l: InboundLead, today: string, b: FollowUpBucket) => awaitsFollowUp(l) && followUpBucket(l.followUpDate, today) === b;
 
 export const firstCallDue = (l: InboundLead, today: string) =>
   l.stage === 'New' && !(l.callAttempts || []).length && (inboundWorkDay(l.leadCreatedAt) || today) <= today;
