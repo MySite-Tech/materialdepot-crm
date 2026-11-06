@@ -25,8 +25,8 @@ import { Rep, assignLead } from '../../models/outreach/intake';
 import { newOnboardingFrom } from '../../models/outreach/kpis';
 import { outreachCaptureErrors } from '../../models/outreach/reminders';
 import { OutreachScope, SaveLead } from '../../views/outreach/types';
-import { EnqLookup, fetchKamLoad, lookupEnqId } from '@/lib/b2b';
-import { fetchLeadDeals } from '@/lib/api';
+import { EnqLookup, fetchKamLoad, lookupEnqId, outreachPhones } from '@/lib/b2b';
+import { fetchFirmDeals } from '@/lib/api';
 import { CheckInCapture } from '../../ui/check-in-capture';
 import { CreditPicker } from '../../ui/credit-picker';
 import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
@@ -55,15 +55,20 @@ export default function OutreachDrawer({
   const [deals, setDeals] = useState<LeadDeal[] | null>(null);
   const [dealsFailed, setDealsFailed] = useState(false);
 
+  const phoneKey = useMemo(
+    () => outreachPhones(lead).join(','),
+    [lead.phone, lead.altPhone, lead.contacts],
+  );
+
   useEffect(() => {
     let alive = true;
-    if (!lead.phone) { setDeals([]); return; }
+    if (!phoneKey) { setDeals([]); return; }
     setDealsFailed(false);
-    fetchLeadDeals(lead.phone)
+    fetchFirmDeals(phoneKey.split(','))
       .then((d) => { if (alive) setDeals(d); })
       .catch(() => { if (alive) { setDeals([]); setDealsFailed(true); } });
     return () => { alive = false; };
-  }, [lead.phone]);
+  }, [phoneKey]);
 
   const gateErrors = useMemo(() => [
     ...outreachGateErrors({ status: draft.status, followUpDate: draft.followUpDate, lostReason: draft.lostReason }),
@@ -101,7 +106,7 @@ export default function OutreachDrawer({
     if (!want || enqChecking) return;
     setEnqChecking(true);
     lastCheckedEnq.current = want;
-    const res = await lookupEnqId(draft.phone, want);
+    const res = await lookupEnqId(outreachPhones(draft), want);
     setEnq(res);
     if (res.status === 'matched') {
       const onboarding = deals && !dealsFailed ? newOnboardingFrom(deals, want, dealIsOrder) : undefined;

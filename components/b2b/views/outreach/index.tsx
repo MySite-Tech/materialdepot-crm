@@ -5,7 +5,7 @@ import { OutreachLead } from '../../models/mock-data';
 import { OutreachStatus, STUDIO_WAITLIST_URL, istToday, outreachGateErrors } from '../../models/outreach';
 import { repOwns } from '../../models/outreach/handover';
 import { inboundPool, isUnassigned, unassignedPool } from '../../models/outreach/intake';
-import { OUTREACH_KPIS, Period, monthPeriod, outreachKpis, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
+import { OUTREACH_KPIS, Period, inPeriod, monthPeriod, outreachKpis, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS, NO_FILTERS } from './constants';
 import { useOutreachData } from './hooks/use-outreach-data';
@@ -15,7 +15,7 @@ import { Assignments } from './intake';
 import { LensStrip } from './lenses';
 import { OutreachBoard } from './lists/board';
 import { columnsFor } from './lists/columns';
-import { BmChips, Toolbar } from './lists/filters';
+import { BmPicker, Toolbar } from './lists/filters';
 import { LensTable } from './lists/table';
 import { CreateLeadModal, MoveModal } from './modals';
 import { Scorecard } from './performance';
@@ -61,14 +61,19 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const [move, setMove] = useState<{ lead: OutreachLead; target: OutreachStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
 
-  const period = useMemo<Period>(
-    () => (periodKey.startsWith('m:') ? monthPeriod(periodKey.slice(2)) : rangeFor(periodKey as RangeKey, today, custom) ?? monthPeriod(today.slice(0, 7))),
-    [periodKey, today, custom],
-  );
-  const added = useMemo(() => rangeFor(f.added, today, { from: f.addedFrom, to: f.addedTo }), [f.added, f.addedFrom, f.addedTo, today]);
-
   const waitIdx = useMemo(() => waitlistIndex(data.waitlist), [data.waitlist]);
   const scoped = useMemo(() => data.leads.filter((l) => scope.owns(l) && !isUnassigned(l)), [data.leads, scope]);
+  const firstDay = useMemo(() => scoped.reduce((min, l) => {
+    const d = String(l.createdAt || '').slice(0, 10);
+    return d && d < min ? d : min;
+  }, today), [scoped, today]);
+  const allTime = periodKey === 'all';
+  const period = useMemo<Period>(
+    () => (allTime ? { from: firstDay, to: today }
+      : periodKey.startsWith('m:') ? monthPeriod(periodKey.slice(2))
+        : rangeFor(periodKey as RangeKey, today, custom) ?? monthPeriod(today.slice(0, 7))),
+    [allTime, firstDay, periodKey, today, custom],
+  );
   const unassigned = useMemo(() => (scope.isManager ? unassignedPool(data.leads) : []), [data.leads, scope.isManager]);
   const teamLive = scope.mode !== 'open';
   const bms = useMemo(() => bmOptions(scoped, scope.reps, teamLive), [scoped, scope.reps, teamLive]);
@@ -78,10 +83,11 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
     [canPickBm, bm, bms],
   );
   const bmLeads = useMemo(() => (pickedRep ? scoped.filter(repOwns(pickedRep)) : scoped), [scoped, pickedRep]);
-  const filtered = useMemo(() => bmLeads.filter((l) => matchesFilters(l, f, added)), [bmLeads, f, added]);
+  const filtered = useMemo(() => bmLeads.filter((l) => matchesFilters(l, f)), [bmLeads, f]);
+  const pipelineLeads = useMemo(() => (allTime || f.search.trim() ? filtered : filtered.filter((l) => inPeriod(l.createdAt, period))), [filtered, allTime, f.search, period]);
   const kpis = useMemo(() => outreachKpis(bmLeads, period, waitIdx), [bmLeads, period, waitIdx]);
   const pool = useMemo(() => (data.inbound ? inboundPool(data.inbound, data.leads) : null), [data.inbound, data.leads]);
-  const lenses = useOutreachLenses({ leads: filtered, kpis, lens, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
+  const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, kpis, lens, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
 
   const validLens = lens.startsWith('kpi:') ? !isKamView : lenses.groups.some((g) => g.head === lens || g.lenses.includes(lens as WorkLens));
   useEffect(() => { if (!validLens) setLens(defaultLens); }, [validLens, defaultLens]);
@@ -143,6 +149,11 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const heads = pickedRep || scope.mode === 'mine' ? 1 : Math.max(1, teamLive ? scope.reps.length : bms.length);
   const customIncomplete = periodKey === 'custom' && !rangeFor('custom', today, custom);
   const customPeriod = !customIncomplete && !periodKey.startsWith('m:') && !['month', 'last-month'].includes(periodKey);
+  const periodName = allTime || f.search.trim() ? 'any time' : fmtRange(period);
+  const groups = useMemo(
+    () => lenses.groups.map((g) => (g.flow ? { ...g, title: `Pipeline · added ${periodName}` } : g.head === 'action' ? { ...g, title: 'Action needed today' } : g)),
+    [lenses.groups, periodName],
+  );
   const pickPeriod = (key: string) => {
     if (key === 'custom' && !rangeFor('custom', today, custom)) setCustom({ from: period.from, to: period.to > today ? today : period.to });
     setPeriodKey(key);
@@ -167,9 +178,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div className="min-w-0 flex flex-col gap-1.5">
           <h1 className="text-[19px] font-bold text-gray-900">Outreach</h1>
-          {isKamView ? <p className="text-[11.5px] text-gray-500">Converted firms handed over to you</p>
-            : canPickBm ? <BmChips options={bms} value={bm} onChange={setBm} />
-              : <p className="text-[11.5px] text-gray-500">Your leads · {scope.me.name}</p>}
+          {isKamView && <p className="text-[11.5px] text-gray-500">Converted firms handed over to you</p>}
         </div>
         {!isKamView && (
           <div className="flex items-center gap-2">
@@ -199,13 +208,29 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
       )}
 
       {!isKamView && (
+        <div className="mb-4 bg-white rounded-lg border border-gray-200 px-3 py-2.5 flex items-center gap-x-4 gap-y-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">BM</span>
+            {canPickBm ? <BmPicker options={bms} value={bm} onChange={setBm} />
+              : <span className="text-[12px] font-semibold text-gray-700">Your leads · {scope.me.name}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Period</span>
+            <PeriodPicker value={periodKey} onChange={pickPeriod} custom={custom} setCustom={setCustom} today={today} />
+          </div>
+          <span className={`text-[11px] ${customIncomplete ? 'text-amber-700' : 'text-gray-400'}`}>
+            {customIncomplete ? `Pick a start and an end date — showing ${fmtRange(period)} until then`
+              : 'The scorecard counts this period; the pipeline shows leads added in it. Action needed is always as of today.'}
+          </span>
+        </div>
+      )}
+
+      {!isKamView && (
         <div className="mb-4">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <h2 className="text-[13px] font-bold text-gray-900">Scorecard</h2>
-            <PeriodPicker value={periodKey} onChange={pickPeriod} custom={custom} setCustom={setCustom} today={today} />
-            <span className={`text-[11px] ${customIncomplete ? 'text-amber-700' : 'text-gray-400'}`}>
-              {customIncomplete ? `Pick a start and an end date — showing ${fmtRange(period)} until then`
-                : customPeriod ? `${fmtRange(period)} · no monthly targets` : heads > 1 ? `Targets for ${heads} BMs` : 'Per-head targets'}
+            <span className="text-[11px] text-gray-400">
+              {customPeriod ? `${allTime ? `All time, ${fmtRange(period)}` : fmtRange(period)} · no monthly targets` : heads > 1 ? `Targets for ${heads} BMs` : 'Per-head targets'}
             </span>
             {!customPeriod && periodKey === 'month' && (
               <span className="text-[11px] text-gray-400 flex items-center gap-1" title="The marker on each bar is where the number should be by today, at an even pace through the month.">
@@ -234,7 +259,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         right={!isKamView && <Segmented value={view} onChange={setView} options={[['list', 'List'], ['board', 'Board']]} />}
       />
 
-      <LensStrip groups={lenses.groups} counts={lenses.counts} hints={lenses.hints} state={state}
+      <LensStrip groups={groups} counts={lenses.counts} hints={lenses.hints} state={state}
         active={view === 'list' ? lens : null} onPick={pickLens} />
 
       <div ref={tableRef}>
@@ -246,7 +271,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
             <button onClick={data.load} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Try again</button>
           </div>
         ) : view === 'board' ? (
-          <OutreachBoard leads={filtered} today={today} onOpen={setSelectedId} onMove={requestMove} />
+          <OutreachBoard leads={pipelineLeads} today={today} onOpen={setSelectedId} onMove={requestMove} />
         ) : lens === 'inbox' ? (
           <Assignments leads={filtered} allLeads={data.leads} pool={pool} unassigned={unassigned} scope={scope} today={today}
             save={data.save} saveMany={data.saveMany} createMany={data.createMany} onOpen={setSelectedId} />

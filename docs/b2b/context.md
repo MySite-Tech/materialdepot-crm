@@ -61,7 +61,9 @@ a new session knows what is live and what is being worked on.
   tidy-up, so that all four tabs share one tile shape.
 - **KAM: its own 30 / 60-day status, and no header buttons (2026-10-29).**
   Active = ordered in the last 30 days, Inactive 1 month = 31–60 days,
-  Inactive = more than 60 days, Never ordered = none (split out 2026-10-30). **Since that evening it is every
+  Inactive = more than 60 days, Never ordered = none (split out 2026-10-30).
+  **Replaced on 2026-11-06 by month bands, 1–3, 3–6, 6–12 and 12+ months**
+  (`kam.md` §Account status). **Since that evening it is every
   firm's rule** (`clientStatus`), Client Database included, so the two tabs
   agree again. Export, Upload Orders and + Add Order are gone from the tab header
   (orders are added from a firm's page). See `kam.md` §Account status.
@@ -80,6 +82,7 @@ a new session knows what is live and what is being worked on.
   revenue target (`leadership.md`); Dashboard became **Overview**, with five
   sections and no duplicate panels (`overview.md`). These need a new PR to
   `main` to deploy.
+- **2026-11-06, branch `6-nov-changes` (cut from `main`, carries PR #43), pushed, no PR yet:** EC B2B Referral has three sub-tabs, Refer a client, Sent to your store and All referrals (`ec-referral.md` §Three views); Client Database and KAM use month bands, 1–3, 3–6, 6–12 and 12+ months (`kam.md` §Account status); Outreach puts BM and period in one filter bar driving the scorecard and pipeline (`outreach.md` §The page is tiles you click); the round robin also deals CRM rows left on the intake owner, with a manager-only backlog, and Team saves send only what changed (`inbound.md` §Why leads still read as Hardi's); order lookups use every number on the lead or firm (`inbound.md` §Enq ID → order value).
 - **2026-11-05, CRM PR #43 → `main`, open, no backend PR:** orders show when they were placed (`client-db.md` §An order shows when it was placed, `overview.md`); the round robin inserts leads created before `B2B_FRESH_START` and qualified now (`inbound.md` §Who owns a lead); only the newest request is applied on Overview, Inbound and Leads, and Inbound's filters run in memory (`inbound.md` §Only a search reaches the network, `overview.md` §Only the month you picked); a merged firm's KAM state starts at its merge, and duplicate-finding is indexed (`client-db.md` §Merge).
 - **2026-11-03, CRM PR #39 → `main`, merged 2026-11-04:** the Overview's revenue is four channels by order type and booking branch, HQ before July 2026 (`overview.md` §Four revenue channels), with a six-month trend and the PI's items in every enquiry card; the B2B-branch panel and the channel-by-branch table are gone. This supersedes the 2026-11-01 and 2026-10-31 Overview bullets below.
 - **2026-10-31, after PR #32, in open PR #33 and not on `main`:** the check-in is location only (`kam.md`); a KAM can only accept a firm (`kam.md`); pickers and filters use the live team and rep names match through `sameRep` (`data-layer.md`); My performance resolves KAM order values like Overview (`kam.md`); sales, retail, manager and admin get EC B2B Referral by role (`ec-referral.md`); the Inbound round robin keys on qualification time, repeats every 5 minutes while the tab is visible and survives Kylas 429s (`inbound.md` §Who owns a lead, `docs/api-layer/context.md`). A person must merge it.

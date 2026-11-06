@@ -1,5 +1,5 @@
 import { istToday } from '../../inbound';
-import { ACTIVE_DAYS, INACTIVE_DAYS } from '../../../constants/client';
+import { ORDER_BANDS } from '../../../constants/client';
 import { ClientOrderMetrics, ClientStatus } from '../../../types/client';
 
 function daysSinceLastOrder(m: ClientOrderMetrics, today: string): number | undefined {
@@ -14,8 +14,7 @@ export function clientStatus(m: ClientOrderMetrics, today: string = istToday()):
   const days = daysSinceLastOrder(m, today);
   if (days === undefined) return 'Never ordered';
   if (days < 0) return 'Unknown';
-  if (days > INACTIVE_DAYS) return 'Inactive';
-  return days <= ACTIVE_DAYS ? 'Active' : 'Inactive 1 month';
+  return ORDER_BANDS.find((b) => days <= b.upTo)?.status ?? 'Inactive 12+ months';
 }
 
 export function lastOrderInFuture(m: ClientOrderMetrics, today: string = istToday()): boolean {
@@ -26,7 +25,6 @@ export function daysToLapse(m: ClientOrderMetrics, today: string = istToday()): 
   const status = clientStatus(m, today);
   const days = daysSinceLastOrder(m, today);
   if (days === undefined) return undefined;
-  if (status === 'Active') return ACTIVE_DAYS - days;
-  if (status === 'Inactive 1 month') return INACTIVE_DAYS - days;
-  return undefined;
+  const band = ORDER_BANDS.slice(0, 2).find((b) => b.status === status);
+  return band ? band.upTo - days : undefined;
 }

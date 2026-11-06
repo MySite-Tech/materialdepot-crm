@@ -120,8 +120,10 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     switch (k) {
       case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} status unknown` : ''}`, warn: !!unread };
       case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_DAYS} days` };
-      case 'lapsing':  return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
-      case 'inactive': return { value: String(n), sub: `last order over ${INACTIVE_DAYS} days ago` };
+      case 'm1to3':    return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
+      case 'm3to6':    return { value: String(n), sub: `last order ${INACTIVE_DAYS + 1}–180 days ago` };
+      case 'm6to12':   return { value: String(n), sub: 'last order 181–365 days ago' };
+      case 'm12plus':  return { value: String(n), sub: 'last order over a year ago' };
       case 'never':    return { value: String(n), sub: 'no order on record' };
       case 'unknown':  return { value: String(n), sub: futureDated ? `${futureDated} with a future order date` : 'orders did not load', warn: true };
       case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
@@ -348,7 +350,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {`Active means an order placed in the last ${ACTIVE_DAYS} days, Inactive 1 month ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago, Inactive anything older, counted back from today. The KAM tab uses the same rule.`}
+        {`Active means an order placed in the last ${ACTIVE_DAYS} days. After that a firm is Inactive 1–3, 3–6 or 6–12 months, or over 12 months, counted back from today to its last order. The KAM tab uses the same rule: its Inactive 3+ months tile is the last three together.`}
       </p>
 
       {addingNew && (

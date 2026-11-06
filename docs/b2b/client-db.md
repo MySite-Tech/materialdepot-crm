@@ -314,8 +314,10 @@ taken from the seeded clients.
 
 Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
 `clientLensMatches` (`views/client-db/utils.ts`) gives both a tile's count and
-the list it opens. Tiles: All firms · Active · Inactive 1 month · Inactive · Never ordered, then
-No KAM, plus Unread only when some firm's orders did not load.
+the list it opens. Tiles: All firms · Active · Inactive 1–3 months · Inactive 3–6 months ·
+Inactive 6–12 months · Over 12 months · Never ordered, then No KAM, plus Unread only when some
+firm's orders did not load. The bands are `ORDER_BANDS` (`kam.md` §Account status, 2026-11-06),
+and `LENS_STATUS` maps each status tile to its band, so the tile and the list cannot disagree.
 
 - **Why it changed.** The five tiles were `StatTile`s with no click handler, and
   a status dropdown did the tiles' job. The tiles counted the dropdown-filtered
@@ -399,8 +401,8 @@ so non-managers get the old table unchanged.
 
 ### §2.1's window is anchored to TODAY, and the PRD does not quite say that
 
-**The window is 30 / 60 days since 2026-10-29** (`kam.md` §Account status), not
-the PRD's 3 months: the user asked for KAM's rule on every firm. The anchoring
+**The window is the month bands of 2026-11-06** (`kam.md` §Account status), not
+the PRD's 3 months, and not the 30 / 60 days of 2026-10-29. The anchoring
 argument below still holds.
 
 "Active: at least one order placed within the last 3 months, **measured from

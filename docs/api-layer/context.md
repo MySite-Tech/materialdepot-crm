@@ -58,6 +58,13 @@ Error text for a non-OK response is taken in order:
 `API error: <status> on <path>`. The path has its query string removed, so no
 phone number reaches the console. The bare `API error: 400` named no endpoint,
 which left a dev-overlay error untraceable (2026-11-03).
+**A 5xx with a body message also gets `(<status> on <path>)` appended
+(2026-11-06).** On :3001 the local read-only guard (`~/Projects/ss-local-stack/crm-guard.mjs`)
+answers 502 `{error: "TypeError: fetch failed"}` when it cannot reach api-dev2, and
+the overlay showed only "TypeError: fetch failed" at `mdFetchRaw`, which reads
+like a bug in this app. It was a passing network failure between the guard and
+api-dev2. The guard now retries a GET once and logs `NETWORK` / `FAILED` lines
+with the cause to `logs/crm-guard.log`.
 
 Tokens live in `localStorage` under `jwt_token` and `refresh_token`. `API_BASE_URL`
 is re-exported from `lib/api/core/config.ts`, which is the only place either

@@ -486,9 +486,8 @@ Read `docs/b2b/inbound.md` §The CRM owns a lead once it is imported before any
 Inbound change, and don't re-propose following Kylas's owner. **At deploy, run
 `scripts/inbound-owner-cutover.mjs` once against production** (dry run first, log
 JSON from the SQL in that section). Without it, 140 rows keep stale owners.
-Still open: the 400 the user saw on :3001 (`mdFetch` errors now name the endpoint,
-and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
-Outreach's BM chips into Filters.
+The :3001 400 was solved in PR #39, and Outreach's BM picker moved into the top
+filter bar on `6-nov-changes` (below).
 
 **KAM sign-in fixes (2026-11-03): CRM PR #42 (`kam-sign-in-check`) and b2b-backend
 PR #21 (`POST /b2b/team/renumber`), both merged 2026-11-03.**
@@ -505,6 +504,36 @@ starts at its merge. **After it deploys:** Team → Assign now shows no "Not imp
 into the CRM yet", and a placed order on the Firm page shows a placement time. If
 every placed order reads "—", Django is not sending `orderPlacedAt` (Owed by Django
 #10). Detail in `docs/b2b/context.md` and `docs/landmines.md`.
+
+**START HERE for B2B: branch `6-nov-changes` (2026-11-06), CRM and b2b-backend.**
+In the CRM it is cut from `main` and carries PR #43's two commits, because the round
+robin work builds on them. If #43 merges first, a PR from this branch shows only the
+6 Nov commit. In b2b-backend it is cut from `master` with no commits yet; nothing
+in this round needed the backend. **No PR is open; the tech team merges.** The
+shared CRM tree is checked out on it, so :3001 serves it. What it carries:
+- **EC B2B Referral has three sub-tabs.** Refer a client (everyone), Sent to your
+  store (assistant store manager and up, or a B2B manager) and All referrals
+  (area manager and up, or a B2B manager). The route gates each view, and orders
+  on referred numbers come from one `b2b-bulk` call (`docs/b2b/ec-referral.md`
+  §Three views).
+- **Client Database and KAM status is month bands:** Active ≤30 days, Inactive
+  1–3, 3–6, 6–12 and 12+ months. It is still one `clientStatus` for every tab
+  (`docs/b2b/kam.md` §Account status).
+- **Outreach has a top filter bar** with BM and period. It drives the scorecard
+  and the pipeline (leads added in the period). Action needed is always as of
+  today (`docs/b2b/outreach.md`).
+- **The round robin's root cause** was not Hardi's switch: production showed the
+  pause honoured. 329 untouched Aug–Oct leads sit on the intake id because the
+  import keeps Kylas's owner. They are now a manager-only backlog button on the
+  Team tab, and new leads left on the intake id are dealt automatically. Team
+  saves send only what changed, and each row shows who last changed it
+  (`docs/b2b/inbound.md` §Why leads still read as Hardi's).
+- **Orders and enquiry lookups use every number on a lead or firm**
+  (`inboundPhones`, `outreachPhones`, `resolveKamOrders(…, clients)`;
+  `docs/b2b/inbound.md` §Enq ID → order value).
+- **Not seen signed in on real data.** Every screen was driven on the sandbox only.
+  After deploy, check Team → round robin shows the backlog count (about 329 on
+  6 Nov). Then check that a store manager sees only their EC on Sent to your store.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment

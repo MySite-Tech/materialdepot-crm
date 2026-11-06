@@ -2,8 +2,8 @@
 
 import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_SOURCES, SEGMENTS } from '../../../models/outreach';
 import { inputCls } from '../../../constants/ui';
-import { NO_FILTERS, RANGE_LABEL } from '../constants';
-import { BmOption, OutreachFilters, RangeKey } from '../types';
+import { NO_FILTERS } from '../constants';
+import { BmOption, OutreachFilters } from '../types';
 import { activeFilterCount } from '../utils';
 import { ReactNode, useState } from 'react';
 
@@ -11,40 +11,21 @@ const label = 'block text-[9px] font-bold uppercase tracking-wider text-gray-400
 const control = 'px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[130px] focus:border-[#0F766E]';
 const chip = 'px-2.5 py-1 rounded-full text-[11.5px] font-semibold border whitespace-nowrap';
 
-const ADDED: RangeKey[] = ['any', 'today', 'week', 'last7', 'last30', 'month', 'last-month', 'custom'];
-
-export function BmChips({ options, value, onChange }: {
+export function BmPicker({ options, value, onChange }: {
   options: BmOption[];
   value: string;
   onChange: (name: string) => void;
 }) {
-  if (options.length > 7) {
-    return (
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={control}>
-        <option value="all">All BMs</option>
-        {options.map((o) => <option key={o.rep.name} value={o.rep.name}>{`${o.rep.name} (${o.leads})`}</option>)}
-      </select>
-    );
-  }
-  const btn = (key: string, text: ReactNode, title?: string) => (
-    <button
-      key={key}
-      onClick={() => onChange(key)}
-      title={title}
-      className={`${chip} ${value === key ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
-    >
-      {text}
-    </button>
-  );
+  const total = options.reduce((n, o) => n + o.leads, 0);
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {btn('all', 'All BMs')}
-      {options.map((o) => btn(
-        o.rep.name,
-        <>{o.rep.name}<span className="tabular-nums opacity-60"> {o.leads}</span></>,
-        o.onTeam ? undefined : 'Holds leads but is not on the Outreach team list',
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={`${control} font-semibold text-gray-700`}>
+      <option value="all">{`All BMs (${total})`}</option>
+      {options.map((o) => (
+        <option key={o.rep.name} value={o.rep.name}>
+          {`${o.rep.name} (${o.leads})${o.onTeam ? '' : ' · not on the Outreach team'}`}
+        </option>
       ))}
-    </div>
+    </select>
   );
 }
 
@@ -65,11 +46,6 @@ export function Toolbar({ f, set, onSearch, right }: {
   const [open, setOpen] = useState(false);
   const chips: { key: string; text: string; clear: Partial<OutreachFilters> }[] = [
     ...SELECTS.filter(([, k]) => f[k] !== 'all').map(([, k, , show]) => ({ key: k, text: show(f[k] as string), clear: { [k]: 'all' } })),
-    ...(f.added !== 'any' ? [{
-      key: 'added',
-      text: `Added ${f.added === 'custom' ? `${f.addedFrom || '…'} – ${f.addedTo || '…'}` : RANGE_LABEL[f.added].toLowerCase()}`,
-      clear: { added: 'any' as RangeKey, addedFrom: '', addedTo: '' },
-    }] : []),
     ...(f.onlyGaps ? [{ key: 'gaps', text: 'Missing details', clear: { onlyGaps: false } }] : []),
   ];
 
@@ -117,30 +93,12 @@ export function Toolbar({ f, set, onSearch, right }: {
                 </select>
               </div>
             ))}
-            <div>
-              <label className={label}>Lead added</label>
-              <select value={f.added} onChange={(e) => set({ added: e.target.value as RangeKey })} className={control}>
-                {ADDED.map((k) => <option key={k} value={k}>{RANGE_LABEL[k]}</option>)}
-              </select>
-            </div>
-            {f.added === 'custom' && (
-              <>
-                <div>
-                  <label className={label}>From</label>
-                  <input type="date" value={f.addedFrom} onChange={(e) => set({ addedFrom: e.target.value })} className={control} />
-                </div>
-                <div>
-                  <label className={label}>To</label>
-                  <input type="date" value={f.addedTo} onChange={(e) => set({ addedTo: e.target.value })} className={control} />
-                </div>
-              </>
-            )}
             <label className="flex items-center gap-1.5 text-[12px] text-gray-600 py-1.5 cursor-pointer select-none">
               <input type="checkbox" checked={f.onlyGaps} onChange={(e) => set({ onlyGaps: e.target.checked })} className="accent-[#0F766E]" />
               Only leads missing details
             </label>
           </div>
-          <p className="mt-2 text-[10.5px] text-gray-400">These narrow the tiles and lists below. The scorecard above follows only the BM and its period; a scorecard tile&apos;s list still honours these.</p>
+          <p className="mt-2 text-[10.5px] text-gray-400">These narrow the tiles and lists below, together with the BM and period at the top. The scorecard follows only the BM and period.</p>
         </div>
       )}
     </div>

@@ -4,7 +4,8 @@
 
 | Call | Endpoint | Notes |
 |---|---|---|
-| `fetchMyReferrals()` | `GET /api/b2b/ec-referral` → b2b-backend `GET /b2b/rows` | One per mount. Answers only the caller's own referrals, newest 20, as a summary |
+| `fetchEcReferrals(view)` | `GET /api/b2b/ec-referral?view=mine\|store\|admin` → b2b-backend `GET /b2b/rows`, plus `GET /b2b/ec-visits?kind=redirect` for store and admin | One per sub-tab open. Every row, no cap |
+| order history | `fetchB2BBulk(phones)` → Django `/crm/leads/b2b-bulk/` | One per sub-tab open (two above ~290 numbers), over the referred numbers |
 | `sendEcReferral(input)` | `POST /api/b2b/ec-referral` → `GET /b2b/rows`, then `POST /b2b/rows` | One per submit. The read is the duplicate check |
 | EC list | `branches` from the CRM shell (`fetchBranchList`) | No request of its own: `ecB2bReferral` is in `needsBranches` |
 
@@ -42,3 +43,31 @@ or rejects as for any assigned lead (`outreach.md` §Admin assignment).
   and the older hand-picked `EC referral`, which stays for existing rows.
 - **BMs cannot pick this source in + New lead** (`OUTREACH_ENTRY_SOURCES`). Such a
   lead would have no EC or referrer behind it.
+
+## Three views: the EC, the store manager, the admin (2026-11-06)
+
+The user asked for full transparency both ways. One tab, three sub-tabs, and
+the route decides who gets which (`lib/b2b/ec-referral/utils.ts`; the UI uses the
+same predicates only to hide the buttons):
+
+| Sub-tab | Who | What |
+|---|---|---|
+| Refer a client | everyone | The form, then every referral the caller sent (by `ecReferral.byPhone`), where each is now (waiting, with which rep at which stage, converted, lost) and the orders on each number |
+| Sent to your store | assistant store manager and up (`depth ≥ 2`), or a B2B manager | B2B → EC redirects (`b2b_ec_visit`, `kind='redirect'`) into the caller's ECs, plus that store's own referrals to B2B |
+| All referrals | area manager and up (`depth ≥ 5`), or a B2B manager | Both directions company-wide, filtered by direction, EC, date range, status and a search, with a per-EC table |
+
+- **A store manager's ECs are their Django branches**, canonicalised with
+  `apptBranchesFromCrm`, as the Appointment Tracker does. No branches, or an
+  admin role, means every EC (an empty `allowedBranches` means all, see
+  `docs/landmines.md`). A redirect's branch matches only when it canonicalises to
+  exactly one of them.
+- **Orders on a referred number are lifetime, not since the referral.**
+  `b2b-bulk` answers per-phone aggregates with no order dates by row. A number
+  whose first order predates the referral says "ordered before the referral",
+  so the total is not read as all B2B's doing. A number whose history did not
+  load reads Unknown and is counted apart, never as ₹0.
+- **Redirect orders are the B2B team's saved checks** (`assisted`, `ec-directed.md`).
+  The store view shows "Not checked yet" rather than computing them, because a
+  per-branch figure needs one request per phone.
+- **The old hand-picked `EC referral` source is not listed.** Those rows have no
+  `ecReferral` record of who sent them or from which EC.

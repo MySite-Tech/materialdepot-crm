@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { fetchUsers } from '@/lib/api';
 import { changeTeamMemberNumber, fetchKylasUsers, saveTeamMember } from '@/lib/b2b/team';
 import { B2B_TEAM_LABEL, B2B_TEAMS } from '@/lib/b2b/team/constants';
-import type { B2BTeam, B2BTeamLoad, KylasUser, TeamMember, Viewer } from '@/lib/b2b/team/types';
+import type { B2BTeam, B2BTeamLoad, KylasUser, MemberInput, TeamMember, Viewer } from '@/lib/b2b/team/types';
 import { canUseB2B, rotationOrder, signInGaps } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 import type { AppUser } from '@/types/crm';
@@ -51,10 +51,10 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
     for (const m of team.members) if (m.active) out.set(m.phone, [...(out.get(m.phone) || []), m.team]);
     return out;
   }, [team.members]);
-  const rotationSize = useMemo(() => rotationOrder(team.members).length, [team.members]);
+  const rotation = useMemo(() => rotationOrder(team.members), [team.members]);
   const gaps = useMemo(() => (users ? signInGaps(users, team.members) : null), [users, team.members]);
 
-  const save = (m: Pick<TeamMember, 'phone' | 'name' | 'team' | 'inRotation' | 'active'> & { kylasUserId?: number | null; isAdmin?: boolean }) => {
+  const save = (m: MemberInput) => {
     setBusyKey(memberKey(m));
     setNotice(null);
     saveTeamMember(m)
@@ -155,7 +155,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
         />
       )}
 
-      <RotationPanel rotationSize={rotationSize} />
+      <RotationPanel rotation={rotation} />
 
       {B2B_TEAMS.map((t) => {
         const rows = team.members.filter((m) => m.team === t.key);
@@ -191,7 +191,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                         busy={busyKey === memberKey(m)}
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}
-                        onChange={(patch) => save({ ...m, ...patch })}
+                        onChange={(patch) => save({ phone: m.phone, name: m.name, team: m.team, ...patch })}
                         onRenumber={(to) => renumber(m, to)}
                       />
                     ))}

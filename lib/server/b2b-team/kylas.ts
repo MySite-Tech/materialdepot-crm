@@ -12,7 +12,7 @@ const MAX_RETRY_WAIT_MS = 8000;
 export interface PoolLead {
   id: string;
   createdAt: string;
-  raw: Record<string, any>;
+  raw?: Record<string, any>;
 }
 
 export class KylasBusy extends Error {}

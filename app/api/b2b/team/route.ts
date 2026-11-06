@@ -61,8 +61,8 @@ export async function PUT(request: NextRequest) {
       phone: String(body.phone ?? ''),
       name: String(body.name ?? ''),
       team: body.team,
-      inRotation: body.inRotation !== false,
-      active: body.active !== false,
+      inRotation: typeof body.inRotation === 'boolean' ? body.inRotation : undefined,
+      active: typeof body.active === 'boolean' ? body.active : undefined,
       isAdmin: typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined,
       kylasUserId: body.kylasUserId,
     }, c.name));

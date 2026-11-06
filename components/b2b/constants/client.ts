@@ -57,14 +57,33 @@ export const TEMPERATURE_BANDS = [
 
 export const ACTIVE_DAYS = 30;
 
-export const INACTIVE_DAYS = 60;
+export const INACTIVE_DAYS = 90;
+
+export const ORDER_BANDS: { status: ClientStatus; upTo: number }[] = [
+  { status: 'Active', upTo: ACTIVE_DAYS },
+  { status: 'Inactive 1–3 months', upTo: INACTIVE_DAYS },
+  { status: 'Inactive 3–6 months', upTo: 180 },
+  { status: 'Inactive 6–12 months', upTo: 365 },
+];
+
+export const LONG_INACTIVE: ClientStatus[] = ['Inactive 3–6 months', 'Inactive 6–12 months', 'Inactive 12+ months'];
 
 export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {
-  colors: { Active: '#22C55E', 'Inactive 1 month': '#F59E0B', Inactive: '#9CA3AF', 'Never ordered': '#D1D5DB', Unknown: '#3B82F6' },
+  colors: {
+    Active: '#22C55E',
+    'Inactive 1–3 months': '#F59E0B',
+    'Inactive 3–6 months': '#9CA3AF',
+    'Inactive 6–12 months': '#6B7280',
+    'Inactive 12+ months': '#374151',
+    'Never ordered': '#D1D5DB',
+    Unknown: '#3B82F6',
+  },
   hint: {
     Active: `Ordered within the last ${ACTIVE_DAYS} days`,
-    'Inactive 1 month': `Last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago`,
-    Inactive: `Last order more than ${INACTIVE_DAYS} days ago`,
+    'Inactive 1–3 months': `Last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago`,
+    'Inactive 3–6 months': `Last order ${INACTIVE_DAYS + 1}–180 days ago`,
+    'Inactive 6–12 months': 'Last order 181–365 days ago',
+    'Inactive 12+ months': 'Last order more than a year ago',
     'Never ordered': 'No order on record for any of the firm’s numbers',
     Unknown: 'Order dates could not be read, or the last order date is after today',
   },

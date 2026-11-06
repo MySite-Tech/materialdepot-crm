@@ -1,4 +1,4 @@
-import { ClientEntity, ClientOrderMetrics, INACTIVE_DAYS, clientStatus, currentTemperature, daysToLapse, latestInteraction, nextFollowUp, primaryContact, temperatureBand } from '../client';
+import { ClientEntity, ClientOrderMetrics, INACTIVE_DAYS, LONG_INACTIVE, clientStatus, currentTemperature, daysToLapse, latestInteraction, nextFollowUp, primaryContact, temperatureBand } from '../client';
 import { daysUntil, followUpBucket, istToday } from '../inbound';
 import { DAILY_CALL_TARGET, KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, TEMPERATURE_SILENCE_DAYS } from '../../constants/kam';
 import { AssignedClientRow, CallCompliance, KamFirmLens, KamOrder, KamOrderLens, TemperatureMismatch } from '../../types/kam';
@@ -81,7 +81,7 @@ export function temperatureMismatch(
   const t = row.temperature;
   if (typeof t !== 'number') return undefined;
 
-  if (t >= 7 && row.status === 'Inactive') {
+  if (t >= 7 && LONG_INACTIVE.includes(row.status)) {
     return {
       kind: 'hot-but-cold',
       message: `Scored ${t}/10 but the account has not ordered in over ${INACTIVE_DAYS} days.`,
@@ -103,7 +103,7 @@ export function temperatureMismatch(
 }
 
 export function isAtRisk(row: AssignedClientRow): boolean {
-  return row.status === 'Inactive 1 month' && (row.followUp === 'none' || row.followUp === 'overdue');
+  return row.status === 'Inactive 1–3 months' && (row.followUp === 'none' || row.followUp === 'overdue');
 }
 
 export function firmLensMatches(lens: KamFirmLens, r: AssignedClientRow, today: string): boolean {
@@ -116,8 +116,8 @@ export function firmLensMatches(lens: KamFirmLens, r: AssignedClientRow, today: 
     case 'nofollow': return r.followUp === 'none';
     case 'called':   return calledOn(r.client, today);
     case 'active':   return r.status === 'Active';
-    case 'lapsing':  return r.status === 'Inactive 1 month';
-    case 'inactive': return r.status === 'Inactive';
+    case 'lapsing':  return r.status === 'Inactive 1–3 months';
+    case 'inactive': return LONG_INACTIVE.includes(r.status);
     case 'never':    return r.status === 'Never ordered';
   }
 }

@@ -1,8 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from '@/lib/server/session';
 import { B2BBackendError, b2bBackendFetch } from '@/lib/server/b2b-backend';
-import { MY_REFERRALS_LIMIT } from '@/lib/b2b/ec-referral/constants';
-import type { MyReferral } from '@/lib/b2b/ec-referral/types';
+import type { EcReferralData, ReferralSummary } from '@/lib/b2b/ec-referral/types';
+import { canSeeAllReferrals, canSeeStoreReferrals, ecMatches, storeEcs } from '@/lib/b2b/ec-referral/utils';
+import type { EcVisitRow } from '@/lib/b2b/ec-visits/types';
+import { rowToEcVisit } from '@/lib/b2b/ec-visits/utils';
 import type { B2BLeadRow } from '@/lib/b2b/data/rows';
 import { outreachToRow, rowToOutreach } from '@/lib/b2b/mappers/outreach';
 import { normalisePhone } from '@/lib/org/utils';
@@ -29,15 +31,31 @@ async function caller(request: NextRequest): Promise<Caller | Response> {
 const failure = (err: unknown): Response =>
   bad(err instanceof B2BBackendError ? err.message : 'Could not reach the B2B backend', 502);
 
-const summary = (l: OutreachLead): MyReferral => ({
+const summary = (l: OutreachLead): ReferralSummary => ({
   id: l.id,
   company: l.company,
   contactPerson: l.contactPerson,
+  phone: normalisePhone(l.phone),
+  companyType: l.companyType ?? '',
+  city: l.city ?? '',
   ec: l.ecReferral?.ec ?? '',
   at: l.ecReferral?.at ?? l.createdAt ?? '',
   status: l.status,
   bm: l.bm,
+  by: l.ecReferral?.by ?? '',
+  convertedAt: l.convertedAt ?? '',
 });
+
+const referralLeads = (rows: B2BLeadRow[]): OutreachLead[] => rows
+  .filter((r) => r.pipeline === 'outbound')
+  .map(rowToOutreach)
+  .filter((l) => l.source === EC_B2B_REFERRAL);
+
+const summaries = (leads: OutreachLead[]): ReferralSummary[] => leads.map(summary).sort((a, b) => b.at.localeCompare(a.at));
+
+const redirectsIn = async () => (await b2bBackendFetch<{ visits: EcVisitRow[] }>('/ec-visits?kind=redirect')).visits
+  .map(rowToEcVisit)
+  .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
 const clientPhones = (r: B2BLeadRow): string[] =>
   (Array.isArray(r.meta_data?.contacts) ? r.meta_data.contacts : []).map((c: { number?: string }) => normalisePhone(c?.number));
@@ -74,16 +92,25 @@ function parse(body: Record<string, unknown>): EcReferralInput | string {
 export async function GET(request: NextRequest) {
   const c = await caller(request);
   if (c instanceof Response) return c;
+  const view = request.nextUrl.searchParams.get('view') ?? 'mine';
+  if (view === 'store' && !canSeeStoreReferrals(c)) return bad('Only store managers and above can see their store\'s referrals', 403);
+  if (view === 'admin' && !canSeeAllReferrals(c)) return bad('Only admins and B2B managers can see every referral', 403);
+  if (!['mine', 'store', 'admin'].includes(view)) return bad("'view' must be mine, store or admin");
   const me = normalisePhone(c.phone);
   try {
     const rows = await b2bBackendFetch<B2BLeadRow[]>('/rows');
-    const mine = rows
-      .filter((r) => r.pipeline === 'outbound')
-      .map(rowToOutreach)
-      .filter((l) => l.source === EC_B2B_REFERRAL && !!me && normalisePhone(l.ecReferral?.byPhone) === me)
-      .sort((a, b) => String(b.ecReferral?.at).localeCompare(String(a.ecReferral?.at)))
-      .slice(0, MY_REFERRALS_LIMIT);
-    return Response.json(mine.map(summary));
+    const leads = referralLeads(rows);
+    if (view === 'mine') {
+      const data: EcReferralData = { referrals: summaries(leads.filter((l) => !!me && normalisePhone(l.ecReferral?.byPhone) === me)), redirects: [], ecs: null };
+      return Response.json(data);
+    }
+    const ecs = view === 'store' ? storeEcs(c) : null;
+    const data: EcReferralData = {
+      referrals: summaries(leads.filter((l) => ecMatches(l.ecReferral?.ec, ecs))),
+      redirects: (await redirectsIn()).filter((v) => ecMatches(v.branch, ecs)),
+      ecs,
+    };
+    return Response.json(data);
   } catch (err) {
     return failure(err);
   }

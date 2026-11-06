@@ -397,8 +397,10 @@ firm-level version of this card is `client-db.md` §Four SPoCs on every firm.
 
 ### Enq ID is picked from the client's deal tickets
 
-At PI Shared and Closed, the Status card lists the deal tickets on the Kylas
-number and the primary person's number (at most two `fetchLeadDeals` calls). Each
+At PI Shared and Closed, the Status card lists the deal tickets on **every
+number on the lead**: the Kylas number, the primary person's and each added
+person's (`inboundPhones`, one memoised `fetchLeadDeals` per number through
+`fetchFirmDeals`, 2026-11-06). Each
 shows its value, status, branch and BM, and clicking one sets the Enq ID and runs
 the lookup. Typing an Enq ID is still possible, for a ticket raised on a number
 the lead does not have. The separate Deal tickets card is gone.
@@ -554,6 +556,42 @@ member is identified. The people who can hold it are the `inbound` rows of
   backend migration 0020 is deployed the round robin skips and every lead stays
   with Hardi (`docs/backends.md`).
 
+### Why leads still read as Hardi's after she was paused (2026-11-06)
+
+The user paused Hardi in the round robin and still saw leads on her. Measured on
+production that day (Metabase db 38):
+
+- **The rotation honoured the pause.** From 2 Nov 05:20 UTC to 6 Nov 08:04 UTC
+  every `round_robin` row went to Vikas (94 leads) and none to Hardi. At 08:04
+  her switch was turned back on from the Team tab, and she got one lead at 08:08.
+  Nothing showed who had changed it, so each Team row now prints "changed by …"
+  with the time (`updated_by`, `updated_at`).
+- **Kylas will always show Hardi.** It hands every qualified lead to the intake
+  user, and the CRM has written nothing to Kylas since 2026-11-03. Anyone reading
+  owners in Kylas sees Hardi on everything. The Team tab says so.
+- **The real gap: 329 leads at New, never called and never dealt, owned by the
+  intake id in the CRM** (by creation month: 33 Aug, 163 Sep, 133 Oct). The 3 Nov
+  import inserts each lead under its Kylas owner, and the rotation only deals
+  what Kylas's own pool query returns: owner 81181, qualified in the last 7
+  days. A lead that query misses keeps the intake owner forever, whatever the
+  switch says.
+
+Fixed in `rotateInbound`: the pool also takes **CRM rows held by the intake id,
+at New, with no call and no assignment-log row** (`untouchedOnIntake`). Those
+created after `INBOUND_ROTATION_START` are dealt on every run like the Kylas
+pool. Older ones are the backlog: counted (`RotationOutcome.backlog`), shown on
+the Team tab, and dealt only when a manager clicks "Deal N", 50 at a time
+(`INBOUND_BACKLOG_BATCH`, manager-only in the route). Dumping 329 stale leads on
+whoever is in rotation is the user's call, not an automatic step. Checked on the
+sandbox: a 4 Nov row on the intake owner was dealt on the next run, a September
+one waited as backlog until asked.
+
+**A Team row save sends only what changed (2026-11-06).** It sent the whole
+member from the page's copy, so a stale page could switch someone's round robin
+back on while a manager changed their access. `saveMember` now reads the stored
+row and fills whatever the request leaves out. The same shape as §A save sends a
+change, not a row.
+
 ### Gates: the PRD's four, Invalid's three, nine soft
 
 `statusGateErrors` blocks the four the PRD states — follow-up date on
@@ -569,6 +607,16 @@ the Due today and Overdue tiles and the card badge. Do not word either as if a n
 sent.
 
 ### Enq ID → order value
+
+**Every number on the record counts as the client's (2026-11-06).** The user:
+orders come in on any of a firm's numbers, so fetch them all. `lookupEnqId` takes
+a list. Inbound passes `inboundPhones` (Kylas number, primary person, added
+people), Outreach `outreachPhones` (number, alternate, contacts), the Leads tab
+whichever of the two it holds, and KAM the order's number plus every contact on
+its firm, in the order modal and in `resolveKamOrders`. `otherPhone` now means
+"on a number not on this lead or firm", and the "did you mean" chips list the
+Enq IDs on all of them. Client Database, the Firm page and KAM's firm metrics
+already read every contact number (and the Firm page every GSTIN).
 
 The PRD says the order value is "auto-fetched from Procurement using the Enq
 ID". **There is no Procurement API here.** `lookupEnqId` resolves the id against

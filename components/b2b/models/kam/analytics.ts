@@ -1,4 +1,4 @@
-import { ClientEntity } from '../client';
+import { ClientEntity, LONG_INACTIVE } from '../client';
 import { istToday } from '../inbound';
 import { sameRep } from '../outreach/handover';
 import { KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, STATUS_RANK } from '../../constants/kam';
@@ -111,7 +111,7 @@ export function kamAccountSplit(
       kam,
       clients: mine.length,
       active: mine.filter((r) => r.status === 'Active').length,
-      inactive: mine.filter((r) => r.status === 'Inactive').length,
+      inactive: mine.filter((r) => LONG_INACTIVE.includes(r.status)).length,
       unknown: mine.filter((r) => r.status === 'Unknown').length,
       revenue: sum(myOrders.filter((o) => o.status === 'Closed').map((o) => o.orderValue)),
       pipeline: p.pipeline,

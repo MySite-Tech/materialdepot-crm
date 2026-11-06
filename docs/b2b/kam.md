@@ -203,7 +203,20 @@ data, with Django stubbed.
   because free-text notes and the legacy target key still say it. The Django
   side is still owed (`backends.md` §Owed by Django row 15).
 
-### Account status: 30 / 60 days, every firm (2026-10-29)
+### Account status: months since the last order, every firm (2026-11-06)
+
+**Replaced the 30 / 60-day rule on 2026-11-06**, at the user's ask, so firms can
+be targeted and handed to KAMs by how long they have been quiet. The bands are
+`ORDER_BANDS` (`constants/client.ts`): **Active** 0–30 days, **Inactive 1–3
+months** 31–90, **Inactive 3–6 months** 91–180, **Inactive 6–12 months** 181–365,
+**Inactive 12+ months** after that. Never ordered and Unknown are unchanged. The
+user listed four bands; 12+ was added so every firm with an order lands in one.
+It stayed one rule for every firm, so KAM moved too: its "lapsing" tile is
+Inactive 1–3 months (days to 90), and its "Inactive 3+ months" tile is the three
+longer bands (`LONG_INACTIVE`). `daysToLapse` still only counts down for Active
+and Inactive 1–3 months. The history below explains why the rule is shared.
+
+#### The 30 / 60-day rule it replaced (2026-10-29)
 
 The user set this rule for KAM in the morning and, the same evening, asked for
 it on **every firm**. So there is one rule again: `clientStatus`

@@ -1,5 +1,6 @@
 import { normalisePhone } from '@/lib/org/utils';
 import {
+  INBOUND_BACKLOG_BATCH,
   INBOUND_INTAKE_KYLAS_ID,
   INBOUND_ROTATION_BATCH,
   INBOUND_ROTATION_START,
@@ -8,7 +9,7 @@ import {
 import type { MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { B2BBackendError } from '@/lib/server/b2b-backend';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
-import { intakePool, kylasUserForPhone, listKylasUsers } from './kylas';
+import { intakePool, kylasUserForPhone, listKylasUsers, type PoolLead } from './kylas';
 import { importInbound, inboundOwnerNames, inboundRowFromKylas, ownerChange, readInboundRows, writeInbound, type ImportOutcome } from '@/lib/server/b2b-inbound';
 import {
   assignedLeadIdsSince,
@@ -30,6 +31,14 @@ export class InputError extends Error {}
 const DAY_MS = 86_400_000;
 const ASSIGNMENT_LOG_FROM = '2000-01-01T00:00:00Z';
 
+function untouchedOnIntake(rows: Awaited<ReturnType<typeof readInboundRows>>): PoolLead[] {
+  return [...rows.entries()]
+    .filter(([, r]) => Number(r.meta_data?.owner_kylas_id) === INBOUND_INTAKE_KYLAS_ID
+      && r.stage === 'New'
+      && !(Array.isArray(r.meta_data?.call_attempts) && r.meta_data.call_attempts.length))
+    .map(([id, r]) => ({ id, createdAt: String(r.meta_data?.lead_created_at || r.created_at || '') }));
+}
+
 function rotationSince(now = Date.now()): string {
   const start = new Date(INBOUND_ROTATION_START).getTime();
   return new Date(Math.max(start, now - INBOUND_ROTATION_WINDOW_DAYS * DAY_MS)).toISOString();
@@ -38,14 +47,16 @@ function rotationSince(now = Date.now()): string {
 export async function saveMember(input: MemberInput, byName: string): Promise<SavedMember> {
   const phone = normalisePhone(input.phone);
   if (phone.length !== 10) throw new InputError('A team member needs a 10-digit phone number');
-  const name = String(input.name ?? '').trim();
+  const { members } = await readMembers();
+  const stored = members.find((m) => m.phone === phone && m.team === input.team);
+  const name = String(input.name ?? '').trim() || stored?.name || '';
   if (!name) throw new InputError('A team member needs a name');
 
-  let kylasUserId = input.kylasUserId ?? null;
-  let kylasName: string | null = null;
+  let kylasUserId = input.kylasUserId !== undefined ? input.kylasUserId : stored?.kylasUserId ?? null;
+  let kylasName: string | null = input.kylasUserId === undefined ? stored?.kylasName ?? null : null;
   let warning: string | undefined;
   const users = await listKylasUsers();
-  if (input.kylasUserId === undefined) {
+  if (input.kylasUserId === undefined && !stored) {
     const hit = kylasUserForPhone(users, phone);
     kylasUserId = hit?.id ?? null;
     kylasName = hit?.name ?? null;
@@ -63,8 +74,8 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     team: input.team,
     kylasUserId,
     kylasName,
-    inRotation: input.inRotation,
-    active: input.active,
+    inRotation: input.inRotation ?? stored?.inRotation ?? true,
+    active: input.active ?? stored?.active ?? true,
     isAdmin: input.isAdmin,
     updatedBy: byName,
   });
@@ -91,11 +102,11 @@ export async function syncInbound(byName: string, full: boolean): Promise<Rotati
   const { members, tableMissing } = await readMembers();
   if (tableMissing) throw new InputError('The B2B team tables are not set up yet');
   const imported = await importInbound(members, full);
-  return { ...(await rotateInbound(byName, false)), ...imported };
+  return { ...(await rotateInbound(byName, false, false)), ...imported };
 }
 
-export async function rotateInbound(byName: string, dryRun: boolean): Promise<RotationOutcome> {
-  const outcome: RotationOutcome = { dryRun, assigned: [], failed: [], waiting: 0 };
+export async function rotateInbound(byName: string, dryRun: boolean, backlog: boolean): Promise<RotationOutcome> {
+  const outcome: RotationOutcome = { dryRun, assigned: [], failed: [], waiting: 0, backlog: 0 };
   const { members, tableMissing } = await readMembers();
   if (tableMissing) return { ...outcome, skipped: 'The B2B team tables are not set up yet' };
   const order = rotationOrder(members);
@@ -104,12 +115,18 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
   }
 
   const since = rotationSince();
-  const [pool, assigned] = await Promise.all([intakePool(since), assignedLeadIdsSince(ASSIGNMENT_LOG_FROM)]);
-  const fresh = pool.filter((l) => !assigned.has(l.id));
+  const [pool, assigned, rows] = await Promise.all([intakePool(since), assignedLeadIdsSince(ASSIGNMENT_LOG_FROM), readInboundRows()]);
+  const inKylasPool = new Set(pool.map((l) => l.id));
+  const start = new Date(INBOUND_ROTATION_START).getTime();
+  const held = untouchedOnIntake(rows).filter((l) => !assigned.has(l.id) && !inKylasPool.has(l.id));
+  const recent = held.filter((l) => Date.parse(l.createdAt) >= start);
+  const older = held.filter((l) => !(Date.parse(l.createdAt) >= start));
+  const fresh = [...pool.filter((l) => !assigned.has(l.id)), ...recent, ...(backlog ? older : [])];
   const worked = await workedInboundLeadIds(fresh.map((l) => l.id));
   const queue = fresh.filter((l) => !worked.has(l.id));
-  const batch = queue.slice(0, INBOUND_ROTATION_BATCH);
+  const batch = queue.slice(0, backlog ? INBOUND_BACKLOG_BATCH : INBOUND_ROTATION_BATCH);
   outcome.waiting = queue.length - batch.length;
+  outcome.backlog = backlog ? 0 : older.length;
 
   const plan = planRotation(batch, order, await lastRoundRobinKylasId());
   if (dryRun) {
@@ -117,11 +134,11 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     return outcome;
   }
 
-  const claimed: { leadId: string; claim: number; member: TeamMember; raw: Record<string, any> }[] = [];
+  const claimed: { leadId: string; claim: number; member: TeamMember; raw?: Record<string, any> }[] = [];
   for (const { lead, member } of plan) {
     const claim = await claimRoundRobin({
       lead_id: lead.id,
-      lead_created_at: lead.createdAt,
+      lead_created_at: lead.createdAt || null,
       kind: 'round_robin',
       to_kylas_id: member.kylasUserId as number,
       to_name: member.name,
@@ -144,7 +161,7 @@ export async function rotateInbound(byName: string, dryRun: boolean): Promise<Ro
     await writeInbound(claimed.map((c) => ({
       id: c.leadId,
       change: ownerChange(c.member.name, c.member.kylasUserId as number),
-      fallback: inboundRowFromKylas(c.raw, names),
+      fallback: c.raw ? inboundRowFromKylas(c.raw, names) : undefined,
     })));
     for (const c of claimed) outcome.assigned.push({ leadId: c.leadId, to: c.member.name });
   } catch (e) {

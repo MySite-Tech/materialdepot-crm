@@ -45,5 +45,5 @@ export const RANGE_LABEL: Record<RangeKey, string> = {
 
 export const NO_FILTERS: OutreachFilters = {
   companyType: 'all', leadType: 'all', segment: 'all', source: 'all',
-  added: 'any', addedFrom: '', addedTo: '', search: '', onlyGaps: false,
+  search: '', onlyGaps: false,
 };

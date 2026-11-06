@@ -7,7 +7,7 @@ import { companyTypeLabel } from '../../models/outreach';
 import { Empty, Field, LeadName, Pill, ReadValue, SectionCard, Spinner, StatusBadge, fmtDay, fmtLeadDateTime } from '../../ui/inbound-chips';
 import { MeetingLine, OutreachStatusBadge } from '../../ui/outreach-chips';
 import { SourceChip, UnifiedStatusCell } from './cells';
-import { EnqLookup, UnifiedLead, lookupEnqId, saveInboundLead, upsertOutreachLead } from '@/lib/b2b';
+import { EnqLookup, UnifiedLead, inboundPhones, lookupEnqId, outreachPhones, saveInboundLead, upsertOutreachLead } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 
 export function DetailDrawer({ lead, onClose, onSaved }: {
@@ -35,11 +35,11 @@ export function DetailDrawer({ lead, onClose, onSaved }: {
     let alive = true;
     if (!lead.enqId) { setEnq(null); return; }
     setEnqLoading(true);
-    lookupEnqId(lead.phone, lead.enqId)
+    lookupEnqId(lead.inbound ? inboundPhones(lead.inbound) : lead.outreach ? outreachPhones(lead.outreach) : lead.phone, lead.enqId)
       .then((r) => { if (alive) setEnq(r); })
       .finally(() => { if (alive) setEnqLoading(false); });
     return () => { alive = false; };
-  }, [lead.enqId, lead.phone]);
+  }, [lead.enqId, lead.phone, lead.inbound, lead.outreach]);
 
   const saveEc = async () => {
     if (saving) return;

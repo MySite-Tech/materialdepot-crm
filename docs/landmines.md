@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-81 entries. They live in one file because they cross-reference each other —
+83 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -92,6 +92,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - The round robin dealt leads the import never brought in, and failed on them every 5 minutes
 - A late answer for an earlier filter replaced the newer one on screen
 - A merged firm showed a rejection one of its source firms had received
+- Pausing a rep in the round robin left leads on the intake owner, because the import keeps Kylas's owner
+- A settings row saved from a stale page switched a rep's round robin back on
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1265,3 +1267,25 @@ all three entries, and the list reads the newest entry. With equal timestamps th
 was the rejection, so the parent read "<KAM> rejected: …" beside the same person
 as its KAM. A merge combines history, but the merged row's state must come from
 the merge onwards (`docs/b2b/client-db.md` §Merge).
+
+### Pausing a rep in the round robin left leads on the intake owner, because the import keeps Kylas's owner (2026-11-06)
+
+The user paused Hardi and still saw leads on her. The rotation itself honoured
+the switch: none of the 94 leads dealt while she was paused went to her. But the
+import inserts every Kylas lead under its Kylas owner, which is the intake user,
+and the rotation only dealt leads that a separate Kylas query returned (qualified
+in the last 7 days). 329 leads imported on 3 Nov were outside that query, so they
+sat on the intake owner, never called, whatever the switch said. Kylas showing her
+on everything made it look like the CRM was assigning to her. A lead's owner must
+be decided from the CRM's own rows, not inherited from the system it was copied
+from (`docs/b2b/inbound.md` §Why leads still read as Hardi's).
+
+### A settings row saved from a stale page switched a rep's round robin back on (2026-11-06)
+
+The Team tab saved a member by sending the whole row from the page's copy, so
+changing one checkbox re-sent every other field as the page last saw it. A page
+opened before someone else's pause would undo it on the next unrelated click. Now
+a row edit sends only the changed field and `saveMember` fills the rest from the
+stored row. Nothing kept history, so whether this is what re-enabled Hardi at
+08:04 UTC on 6 Nov is not known; the row now prints who changed it last. Same
+shape as the Inbound whole-row save (§A save sends a change, not a row).
