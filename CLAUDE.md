@@ -508,8 +508,9 @@ every placed order reads "—", Django is not sending `orderPlacedAt` (Owed by D
 **START HERE for B2B: branch `6-nov-changes` (2026-11-06), CRM and b2b-backend.**
 In the CRM it is cut from `main` and carries PR #43's two commits, because the round
 robin work builds on them. If #43 merges first, a PR from this branch shows only the
-6 Nov commit. In b2b-backend it is cut from `master` with no commits yet; nothing
-in this round needed the backend. **No PR is open; the tech team merges.** The
+6 Nov commit. In b2b-backend it is cut from `master` (`efdae93`) with no commits yet. Nothing
+in this round needed the backend. Work there in the worktree `~/Projects/b2b-backend-6nov`, never in
+the `dhruv-changes` checkout. **No PR is open; the tech team merges.** The
 shared CRM tree is checked out on it, so :3001 serves it. What it carries:
 - **EC B2B Referral has three sub-tabs.** Refer a client (everyone), Sent to your
   store (assistant store manager and up, or a B2B manager) and All referrals
