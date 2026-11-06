@@ -118,13 +118,27 @@ Kylas is now read in exactly two places:
   /api/b2b/inbound/assign {mode:'sync'}`, followed by the round robin, when
   Inbound opens and every 5 minutes after (`useInboundSync`). The first full run
   on real data imported 565 rows in 2s and changed none of the 1,049 existing
-  ones.
+  ones. It takes only leads **created** after `B2B_FRESH_START`. A lead created
+  earlier and qualified later is inserted by the round robin instead
+  (§Who owns a lead, the pool).
 - **A search.** `fetchInboundBoard` with a search term also runs the widened
   Kylas search (§Search deliberately reaches outside the board) and appends
   leads that are not imported. Saving one inserts its row.
 
 **The board is the CRM rows and nothing else.** No paging against Kylas, no
 merge. Date, owner, stage tag and search filter `rowToInbound` output in memory.
+**Only a search reaches the network (2026-11-05).** Owner, Mine / All, Kylas stage
+tag and lead date run in memory through `inboundBoardMatches`, the same predicate
+`fetchInboundBoard` applies, so changing them sends nothing. Before, each change
+re-read all of `/rows` (3.2 MB) once the 8 s cache had expired, and an older
+answer arriving late replaced the newer one. A search re-reads, keyed on
+`JSON.stringify(serverOpts)`, and only the newest load is applied (`latestLoad`).
+Checked on the sandbox: scope plus three date changes sent no `/rows` read.
+Two side effects: Add lead's duplicate check and bulk round robin's load count
+now see every inbound lead, not only the filtered ones.
+**There is no created-date floor on the rows (2026-11-05).** The import already
+floors what it inserts, and on 5 Nov no row was older than `B2B_FRESH_START`
+except the re-qualified leads the round robin inserts, which the floor hid.
 `total` is the count at New, which `analytics.ts` reads as the inbound "New"
 figure. The drawer's Kylas detail read fills only empty fields
 (`useInboundDetail`). Its Presales calls and notes are still read live and
@@ -383,8 +397,10 @@ firm-level version of this card is `client-db.md` §Four SPoCs on every firm.
 
 ### Enq ID is picked from the client's deal tickets
 
-At PI Shared and Closed, the Status card lists the deal tickets on the Kylas
-number and the primary person's number (at most two `fetchLeadDeals` calls). Each
+At PI Shared and Closed, the Status card lists the deal tickets on **every
+number on the lead**: the Kylas number, the primary person's and each added
+person's (`inboundPhones`, one memoised `fetchLeadDeals` per number through
+`fetchFirmDeals`, 2026-11-06). Each
 shows its value, status, branch and BM, and clicking one sets the Enq ID and runs
 the lookup. Typing an Enq ID is still possible, for a ticket raised on a number
 the lead does not have. The separate Deal tickets card is gone.
@@ -397,10 +413,10 @@ or one still sitting with its Presales owner, is invisible — "15 leads in Kyla
 only some of them here". So **while a search term is present the rule keeps only
 `pipeline`**, dropping the stage restriction, and the owner restriction too
 unless one owner was explicitly picked in the filter. An explicit Kylas-tag
-filter still wins over the widening. A search also drops the `B2B_FRESH_START`
-created-date floor (`fetchInboundBoard`), for Kylas and the DB rows alike — a
-B2B lead created in March was unfindable by its own phone number (2026-10-16).
-A user-picked "Lead date from" still applies. A lead owned by nobody the board
+filter still wins over the widening. Neither a search nor the board applies the
+`B2B_FRESH_START` created-date floor any more. A search dropped it first, after a
+B2B lead created in March was unfindable by its own phone number (2026-10-16),
+and the board dropped it on 2026-11-05. A user-picked "Lead date from" still applies. A lead owned by nobody the board
 knows maps to `owner: 'Unassigned'`. That means no team member or legacy owner
 has that Kylas id, not that Kylas left the lead unassigned.
 
@@ -471,12 +487,22 @@ member is identified. The people who can hold it are the `inbound` rows of
   Hardi already worked (a `b2b_lead` row past `New`). **Hardi is also a
   rotation member**, so "owned by Hardi" cannot mean "unassigned". The
   assignment row is what tells the two apart.
+- **The pool can hold leads the import never brought in (2026-11-05).** The import
+  goes by creation date, the pool by qualification date, so a lead created before
+  `B2B_FRESH_START` and qualified this week has no row. On 5 Nov that was 5 of 101.
+  Each one failed with "Not imported into the CRM yet" on every run. The pool
+  now reads the full lead (`B2B_INBOUND_FIELDS`), and each owner write carries a
+  `fallback` row built from it by `inboundRowFromKylas`, the import's own mapper.
+  `writeInbound` inserts that row, with the new owner, when the backend answers
+  "No such row". Checked on 39971691 and 49515900 from the real pool: both map to
+  an inbound `New` row that reads back under the new owner. The write itself has
+  not run on production.
 - **The race guard is the partial unique index** on `lead_id` where
   `kind = 'round_robin'`. Every Inbound tab open runs the rotation, so two reps
   opening it together both plan the same leads; the second insert gets `23505`
   and skips that lead. Claims are written first, then one bulk owner write. If
-  the write fails, or a lead has no row yet, its claim is deleted, so it is
-  retried on the next run.
+  the write fails, its claim is deleted, so it is retried on the next run. A lead
+  with no row is inserted, not skipped (the bullet above).
 - **Order** = active, in-rotation, Kylas-linked inbound members, sorted by name,
   continuing after whoever got the last `round_robin` row (`planRotation`).
   "Paused" is how a manager takes someone out for the day. A paused person can
@@ -530,6 +556,45 @@ member is identified. The people who can hold it are the `inbound` rows of
   backend migration 0020 is deployed the round robin skips and every lead stays
   with Hardi (`docs/backends.md`).
 
+### Why leads still read as Hardi's after she was paused (2026-11-06)
+
+The user paused Hardi in the round robin and still saw leads on her. Measured on
+production that day (Metabase db 38):
+
+- **The rotation honoured the pause.** From 2 Nov 05:20 UTC to 6 Nov 08:04 UTC
+  every `round_robin` row went to Vikas (94 leads) and none to Hardi. At 08:04
+  her switch was turned back on from the Team tab, and she got one lead at 08:08.
+  Nothing showed who had changed it, so each Team row now prints "changed by …"
+  with the time (`updated_by`, `updated_at`).
+- **Kylas will always show Hardi.** It hands every qualified lead to the intake
+  user, and the CRM has written nothing to Kylas since 2026-11-03. Anyone reading
+  owners in Kylas sees Hardi on everything. The Team tab says so.
+- **The real gap: 329 leads at New, never called and never dealt, owned by the
+  intake id in the CRM** (by creation month: 33 Aug, 163 Sep, 133 Oct). The 3 Nov
+  import inserts each lead under its Kylas owner, and the rotation only deals
+  what Kylas's own pool query returns: owner 81181, qualified in the last 7
+  days. A lead that query misses keeps the intake owner forever, whatever the
+  switch says.
+
+Fixed in `rotateInbound`: the pool also takes **CRM rows held by the intake id,
+at New, with no call and no assignment-log row** (`untouchedOnIntake`). Those
+created after `INBOUND_ROTATION_START` are dealt on every run like the Kylas
+pool. Older ones are the backlog: counted (`RotationOutcome.backlog`), shown on
+the Team tab, and dealt only when a manager clicks "Deal N", 50 at a time
+(`INBOUND_BACKLOG_BATCH`, manager-only in the route). Dumping 329 stale leads on
+whoever is in rotation is the user's call, not an automatic step. Checked on the
+sandbox: a 4 Nov row on the intake owner was dealt on the next run, a September
+one waited as backlog until asked.
+
+A sync passes the rows the import already read (plus what it inserted) to the
+rotation, so the 5-minute sync reads `/rows` once, not twice.
+
+**A Team row save sends only what changed (2026-11-06).** It sent the whole
+member from the page's copy, so a stale page could switch someone's round robin
+back on while a manager changed their access. `saveMember` now reads the stored
+row and fills whatever the request leaves out. The same shape as §A save sends a
+change, not a row.
+
 ### Gates: the PRD's four, Invalid's three, nine soft
 
 `statusGateErrors` blocks the four the PRD states — follow-up date on
@@ -545,6 +610,16 @@ the Due today and Overdue tiles and the card badge. Do not word either as if a n
 sent.
 
 ### Enq ID → order value
+
+**Every number on the record counts as the client's (2026-11-06).** The user:
+orders come in on any of a firm's numbers, so fetch them all. `lookupEnqId` takes
+a list. Inbound passes `inboundPhones` (Kylas number, primary person, added
+people), Outreach `outreachPhones` (number, alternate, contacts), the Leads tab
+whichever of the two it holds, and KAM the order's number plus every contact on
+its firm, in the order modal and in `resolveKamOrders`. `otherPhone` now means
+"on a number not on this lead or firm", and the "did you mean" chips list the
+Enq IDs on all of them. Client Database, the Firm page and KAM's firm metrics
+already read every contact number (and the Firm page every GSTIN).
 
 The PRD says the order value is "auto-fetched from Procurement using the Enq
 ID". **There is no Procurement API here.** `lookupEnqId` resolves the id against

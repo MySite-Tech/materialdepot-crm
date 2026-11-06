@@ -29,8 +29,8 @@ export interface MemberInput {
   phone: string;
   name: string;
   team: B2BTeam;
-  inRotation: boolean;
-  active: boolean;
+  inRotation?: boolean;
+  active?: boolean;
   kylasUserId?: number | null;
   isAdmin?: boolean;
 }
@@ -52,6 +52,7 @@ export interface RotationOutcome {
   assigned: { leadId: string; to: string }[];
   failed: { leadId: string; error: string }[];
   waiting: number;
+  backlog: number;
   skipped?: string;
 }
 

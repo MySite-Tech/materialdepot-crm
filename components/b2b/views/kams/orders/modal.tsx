@@ -1,6 +1,6 @@
 'use client';
 
-import { ClientEntity, primaryContact } from '../../../models/client';
+import { ClientEntity, contactNumbers, primaryContact } from '../../../models/client';
 import { withRequirementHistory } from '../../../models/requirement';
 import { RequirementHistory } from '../../../ui/requirement-history';
 import { KAM_ORDER_LOST_REASONS, KAM_ORDER_STATUSES, KAM_ORDER_STATUS_HINT, KamOrder, KamOrderStatus, kamOrderGateErrors, kamOrderStatusPrompts } from '../../../models/kam';
@@ -57,14 +57,15 @@ export function OrderModal({ order, isNew, clients, kam, actor, creditPeople, ca
       return;
     }
     setLookup({ state: 'busy' });
-    const r = await lookupEnqId(draft.phone, enq);
+    const firm = clients.find((x) => x.id === draft.clientId);
+    const r = await lookupEnqId([draft.phone, ...(firm ? contactNumbers(firm.contacts) : [])], enq);
     if (r.status === 'matched' && r.otherPhone) {
       // The enquiry-id resolve is phone-independent, but a KAM order is a claim
       // about *this* client's money — binding a ticket raised on another number
       // is what the old phone-scoped lookup ruled out, and that stays ruled out.
       setLookup({
         state: 'no-match',
-        note: `${enq} exists, but on ${r.otherPhone} — not this client's number. Enter the value yourself if it is genuinely theirs.`,
+        note: `${enq} exists, but on ${r.otherPhone} — not one of this firm's numbers. Enter the value yourself if it is genuinely theirs.`,
       });
     } else if (r.status === 'matched') {
       setDraft((d) => ({

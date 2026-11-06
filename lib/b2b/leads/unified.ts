@@ -1,6 +1,13 @@
 import { fetchOutreachLeads } from '../data/reads';
 import { fetchInboundBoard } from '../data/reads';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
+import { firmPhoneList } from './enq-lookup';
+
+export const inboundPhones = (l: Pick<InboundLead, 'phone' | 'primaryContactPhone' | 'additionalContacts'>): string[] =>
+  firmPhoneList([l.phone, l.primaryContactPhone, ...(l.additionalContacts ?? []).map((c) => c.phone)]);
+
+export const outreachPhones = (l: Pick<OutreachLead, 'phone' | 'altPhone' | 'contacts'>): string[] =>
+  firmPhoneList([l.phone, l.altPhone, ...(l.contacts ?? []).map((c) => c.phone)]);
 
 export type LeadSource = 'Inbound' | 'Outreach';
 export type UnifiedStatus = 'Closed' | 'Yet to Close';

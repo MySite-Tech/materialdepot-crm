@@ -13,8 +13,8 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 |---|---|---|
 | `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readBase`) |
 | `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/` | On open |
-| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it. Carries each order's whole ticket, so the drill-down below costs no request |
-| `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, two months at a time. No orders in the response |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
+| `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, three months at a time (two until 2026-11-06). No orders in the response |
 | `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
 | `fetchFunnelReport` | `GET /api/b2b/revenue/funnel?from&to` | Only once the Client Database funnel is opened (remembered per browser), then one per month picked; 5-minute server cache per caller. Reads `/crm/leads/?created_from&created_to` for the month, up to 30 pages of 1,000, 8 at a time |
 
@@ -121,6 +121,22 @@ header adds up to the row because both read `rollupBy`'s key (`rollupOrders`). A
 in Orders opens that one enquiry. Each enquiry shows why it landed in its channel
 (`heldBy`) and `EnquiryDetail`, the Firm page's own card.
 
+**Only the month you picked is ever on screen (2026-11-05).** The user: switching
+filters often loaded the wrong data. `useMonthReport` (revenue and the funnel)
+keeps only the newest request's answer and shows "…" until the picked month's
+report arrives. Before, a slow month that landed after a fast one replaced it
+under the new month's name, and its `finally` cleared the loading state early.
+Checked on the sandbox with September's read held for 4 s: October stayed on
+screen with October's figure. The team, person, branch and search filters were
+always in memory and cost no request.
+
+**An order's date on screen is when it was placed (2026-11-05).** The Orders
+table's column and the drawer's header read `ticket.placedAt` (`orderPlacedAt`),
+as date and time in IST. It was the cart's `createdAt`, labelled "Cart date". The
+classifier still gates holders on the cart date (`cartDay` in `classify.ts`),
+because a lead or redirect counts only for carts raised on or after it. So
+`RevenueOrder.day` is gone, and the month an order lands in is unchanged.
+
 - **No request on click, on purpose.** `/crm/leads/?order_from` already returns the
   ticket, so `classifyOrder` keeps it through `ticketToOrderRow`
   (`lib/b2b/orders/ticket.ts`, split out so the server can import it). A per-phone
@@ -142,6 +158,29 @@ because they hold the firm. **Not checked:** whether Django
 scopes this read for a non-admin token, and `/api/b2b/revenue` itself against real
 data. Only the classifier ran on real rows; the route ran on the sandbox and answered
 401 without a session. Check the route first once it is deployed or running on :3001.
+
+## Why the revenue sections were slow, and the cache (2026-11-06)
+
+The user found the Overview slow. The :3001 dev log over several days
+(`~/Projects/ss-local-stack/logs/crm-3001.log`) had `revenue/trend` averaging
+9.1 s (14.4 s on 6 Nov, 114 s worst), one month's `revenue` 1.3 s, and `rows`
+about 1 s. Each month's report reads every company order in that month from
+Django, 1,000 a page, so six months is six full scans. Two changes:
+
+- **Three months build at once** (`TREND_PARALLEL`), so six months take two rounds,
+  not three. More is possible but each month already runs up to 8 page reads.
+- **A past month is served from cache and rebuilt in the background.** It is kept
+  24 h (`PAST_MONTH_KEEP`). Once it is older than 30 min (`PAST_MONTH_TTL`), the
+  next read still answers at once from cache and starts a rebuild. Refresh
+  (`fresh=1`) rebuilds unless the copy is under a minute old. The current month
+  keeps the 5-minute cache. The cache is per user and per server process, so a
+  cold process still pays the full build once.
+
+**Still open:** sharing one report across managers would make a second
+manager's load instant. It needs proof that Django's `/crm/leads/` answers the
+same rows for callers with the same role and branches. Until then the key
+stays per user. A Django endpoint returning only orders on a given set of
+numbers would remove the full scans.
 
 ## Client Database funnel (2026-11-03)
 

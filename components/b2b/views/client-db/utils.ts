@@ -1,19 +1,15 @@
 import { ClientEntity } from '../../models/client';
 import { firmHandoverPending } from '../../models/kam';
 import { sameRep } from '../../models/outreach/handover';
-import { NO_FILTERS } from './constants';
+import { LENS_STATUS, NO_FILTERS } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
 
 export function clientLensMatches(lens: ClientLens, r: ClientListRow): boolean {
   switch (lens) {
     case 'all':      return true;
-    case 'active':   return r.status === 'Active';
-    case 'lapsing':  return r.status === 'Inactive 1 month';
-    case 'inactive': return r.status === 'Inactive';
-    case 'never':    return r.status === 'Never ordered';
-    case 'unknown':  return r.status === 'Unknown';
     case 'nokam':    return !r.client.kam;
     case 'pending':  return firmHandoverPending(r.client);
+    default:         return r.status === LENS_STATUS[lens];
   }
 }
 

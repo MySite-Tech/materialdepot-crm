@@ -203,7 +203,20 @@ data, with Django stubbed.
   because free-text notes and the legacy target key still say it. The Django
   side is still owed (`backends.md` §Owed by Django row 15).
 
-### Account status: 30 / 60 days, every firm (2026-10-29)
+### Account status: months since the last order, every firm (2026-11-06)
+
+**Replaced the 30 / 60-day rule on 2026-11-06**, at the user's ask, so firms can
+be targeted and handed to KAMs by how long they have been quiet. The bands are
+`ORDER_BANDS` (`constants/client.ts`): **Active** 0–30 days, **Inactive 1–3
+months** 31–90, **Inactive 3–6 months** 91–180, **Inactive 6–12 months** 181–365,
+**Inactive 12+ months** after that. Never ordered and Unknown are unchanged. The
+user listed four bands; 12+ was added so every firm with an order lands in one.
+It stayed one rule for every firm, so KAM moved too: its "lapsing" tile is
+Inactive 1–3 months (days to 90), and its "Inactive 3+ months" tile is the three
+longer bands (`LONG_INACTIVE`). `daysToLapse` still only counts down for Active
+and Inactive 1–3 months. The history below explains why the rule is shared.
+
+#### The 30 / 60-day rule it replaced (2026-10-29)
 
 The user set this rule for KAM in the morning and, the same evening, asked for
 it on **every firm**. So there is one rule again: `clientStatus`
@@ -252,7 +265,10 @@ a KAM, either by name or round robin. The KAM accepts or rejects from the
   key. `assignments` is a real `b2b_client` jsonb column on the deployed
   backend. A new key would only persist once migration 0020's `extra` column
   ships, and until then it would be dropped silently. `firmHandover()` reads the
-  latest entry only. **The Firm page's KAM picker goes through the same
+  latest entry only, **and on a merged firm only entries from its latest merge
+  on** (`currentAssignments`, 2026-11-05; `client-db.md` §Merge).
+  `ownsFirm` still reads every entry, because `kamPhone` there is what tells a
+  KAM's two logins apart. **The Firm page's KAM picker goes through the same
   sign-off**: it is shown to managers only (`assignAs`), assigning there appends
   a `Pending` entry, and setting Unassigned appends one with no `status`, which
   ends any pending handover. Before this, any KAM could reassign a firm from

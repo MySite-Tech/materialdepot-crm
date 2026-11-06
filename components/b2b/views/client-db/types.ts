@@ -1,6 +1,6 @@
 import { ClientEntity, ClientOrderMetrics, ClientStatus } from '../../models/client';
 
-export type ClientLens = 'all' | 'active' | 'lapsing' | 'inactive' | 'never' | 'unknown' | 'nokam' | 'pending';
+export type ClientLens = 'all' | 'active' | 'm1to3' | 'm3to6' | 'm6to12' | 'm12plus' | 'never' | 'unknown' | 'nokam' | 'pending';
 
 export interface ClientLensMeta {
   title: string;

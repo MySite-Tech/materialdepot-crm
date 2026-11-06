@@ -150,15 +150,16 @@ async function mdFetchRaw(path: string, init?: RequestInit, retried = false): Pr
   }
   if (!res.ok) {
 
-    let msg = `API error: ${res.status} on ${path.split('?')[0]}`;
+    const where = `${res.status} on ${path.split('?')[0]}`;
+    let detail = '';
     try {
       const j = JSON.parse(await res.text());
-      msg = (typeof j?.data === 'string' && j.data)
+      detail = (typeof j?.data === 'string' && j.data)
         || j?.detail || j?.message
         || (typeof j?.error === 'string' ? j.error : j?.error?.message)
-        || msg;
+        || '';
     } catch { /* non-JSON body — keep the status message */ }
-    throw new Error(msg);
+    throw new Error(!detail ? `API error: ${where}` : res.status >= 500 ? `${detail} (${where})` : detail);
   }
   if (res.status === 204) return null;
   const text = await res.text();

@@ -419,7 +419,7 @@ shown as each tile's tooltip; the non-obvious ones:
   Later orders from the same client are not in it — this CRM does not track
   them per Outreach lead.
 
-The scorecard follows only the BM chip and its period. The filter panel and
+The scorecard follows only the BM and the period in the filter bar. The filter panel and
 search narrow the work tiles and every list, a scorecard tile's list included,
 which then says "Filters or search hide n of N".
 
@@ -435,10 +435,19 @@ full-width banners, and My day as a wall of reminder sentences. The layout now
 matches Inbound's (`inbound.md` §One tab, three tile groups): **every number
 is a lens, and clicking it lists exactly what it counts**.
 
-- **Order: BM chips → Scorecard → search/filters → work tiles → one table.**
-  The BM chip sits under the title because it is the only control that moves
-  the scorecard. The filters sit below the scorecard, so "filters apply to
-  what is below them" is literally true.
+- **Order: filter bar (BM + period) → Scorecard → search/filters → work tiles
+  → one table (2026-11-06).** The user asked for the filters first and the data
+  after. The BM chips became a `BmPicker` select in that bar, and the period
+  picker moved up from the scorecard header. **One period drives the scorecard
+  (counted in it) and the Pipeline group (leads added in it)**; the panel's
+  separate "Lead added" filter was removed because two created-date controls
+  disagreed. **Action needed ignores the period on purpose**: a follow-up due
+  today on an August lead must not vanish because the period is "This month",
+  so its head reads "Action needed today". "All time" was added to the period
+  list (the scorecard then runs from the first lead's day, with no targets). A
+  search ignores the period, because it jumps to All leads and would otherwise
+  hide an older match. Board follows the pipeline set. A rep sees "Your leads"
+  in place of the picker; a manager starts on All BMs.
 - **Scorecard**: Effort and Output, four tiles each, with a period picker
   (this/last month, four earlier months, this week, last 7/30 days, custom;
   grouped Months / Ranges). Picking **Custom range** seeds both dates from

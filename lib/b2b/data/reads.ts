@@ -1,6 +1,6 @@
 import { rowToOutreach } from '../mappers/outreach';
 import { withB2BCache } from './cache';
-import { B2BLeadRow, Pipeline, floorToFreshStart } from './rows';
+import { B2BLeadRow, Pipeline } from './rows';
 import { b2bBackendGet } from './backend';
 import { fetchB2BInboundLeads } from '@/lib/api';
 import { ClientEntity, InboundLink } from '@/components/b2b/models/client';
@@ -46,15 +46,29 @@ const istDay = (iso?: string): string => {
   return Number.isNaN(ms) ? '' : new Date(ms + 19_800_000).toISOString().slice(0, 10);
 };
 
-export async function fetchInboundBoard(
-  opts?: { ownerId?: number; search?: string; createdFrom?: string; createdTo?: string; kylasStage?: number },
-): Promise<InboundBoard> {
-  const search = (opts?.search || '').trim();
-  const from = search ? opts?.createdFrom || '' : floorToFreshStart(opts?.createdFrom);
-  const to = opts?.createdTo || '';
-  const q = search.toLowerCase();
+export interface InboundBoardOpts {
+  ownerId?: number;
+  search?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  kylasStage?: number;
+}
+
+export function inboundBoardMatches(l: InboundLead, opts: InboundBoardOpts): boolean {
+  const day = istDay(l.leadCreatedAt);
+  if (day && opts.createdFrom && day < opts.createdFrom) return false;
+  if (day && opts.createdTo && day > opts.createdTo) return false;
+  if (opts.ownerId != null && l.ownerId !== opts.ownerId) return false;
+  if (opts.kylasStage && l.kylasStage !== opts.kylasStage) return false;
+  const q = (opts.search || '').trim().toLowerCase();
+  return !q || [l.company, l.companyName, l.contactName, l.phone, l.primaryContactPhone]
+    .some((v) => (v || '').toLowerCase().includes(q));
+}
+
+export async function fetchInboundBoard(opts: InboundBoardOpts = {}): Promise<InboundBoard> {
+  const search = (opts.search || '').trim();
   const kylasP = search
-    ? fetchB2BInboundLeads(0, opts?.ownerId ? [opts.ownerId] : undefined, search, '', '', opts?.kylasStage)
+    ? fetchB2BInboundLeads(0, opts.ownerId ? [opts.ownerId] : undefined, search, '', '', opts.kylasStage)
     : null;
 
   let leads: InboundLead[];
@@ -64,15 +78,7 @@ export async function fetchInboundBoard(
     console.error('[b2b] inbound rows fetch failed', e);
     return { leads: [], total: 0, ok: false };
   }
-  leads = leads.filter((l) => {
-    const day = istDay(l.leadCreatedAt);
-    if (day && from && day < from) return false;
-    if (day && to && day > to) return false;
-    if (opts?.ownerId != null && l.ownerId !== opts.ownerId) return false;
-    if (opts?.kylasStage && l.kylasStage !== opts.kylasStage) return false;
-    return !q || [l.company, l.companyName, l.contactName, l.phone, l.primaryContactPhone]
-      .some((v) => (v || '').toLowerCase().includes(q));
-  });
+  leads = leads.filter((l) => inboundBoardMatches(l, opts));
 
   let ok = true;
   if (kylasP) {

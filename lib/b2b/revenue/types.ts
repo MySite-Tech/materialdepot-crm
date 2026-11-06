@@ -48,7 +48,6 @@ export interface RevenueOrder {
   redirectLogged: boolean;
   status: string;
   value: number;
-  day: string;
 }
 
 export interface RevenueReport {

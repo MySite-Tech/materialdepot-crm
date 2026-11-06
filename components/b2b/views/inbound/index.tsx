@@ -16,7 +16,7 @@ import { InboundFilters, Lens, View } from './types';
 import { LensPills, LensTiles } from '../../ui/lens-tiles';
 import { AssignBar } from '../../ui/assign-bar';
 import { activeFilterCount, byNewestLeadFirst, countsTomorrow, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups } from './utils';
-import { fetchInboundBoard, saveInboundLead } from '@/lib/b2b';
+import { fetchInboundBoard, inboundBoardMatches, saveInboundLead } from '@/lib/b2b';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInboundSync } from '../../hooks/use-inbound-sync';
@@ -73,6 +73,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     ownerId, search: appliedSearch, createdFrom: f.createdFrom,
     createdTo: f.createdTo, kylasStage: f.kylasStage === 'all' ? undefined : Number(f.kylasStage),
   }), [ownerId, appliedSearch, f.createdFrom, f.createdTo, f.kylasStage]);
+  const fetchKey = appliedSearch ? JSON.stringify(serverOpts) : '';
+  const latestLoad = useRef(0);
 
   const load = (quiet = false) => {
     if (unlinked) {
@@ -80,13 +82,15 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
       setLoading(false);
       return;
     }
+    const run = ++latestLoad.current;
     if (!quiet) {
       setError(null);
       setLoadFailed(false);
       setLoading(true);
     }
-    fetchInboundBoard(serverOpts)
+    fetchInboundBoard(appliedSearch ? serverOpts : {})
       .then((res) => {
+        if (run !== latestLoad.current) return;
         if (!res.ok) throw new Error(appliedSearch
           ? 'Kylas did not answer the search, so leads not yet in the CRM may be missing from these results.'
           : 'The CRM database did not answer, so the board is missing leads. Nothing is counted until it loads.');
@@ -94,15 +98,16 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         setLoadFailed(false);
       })
       .catch((e) => {
+        if (run !== latestLoad.current) return;
         setError(e instanceof Error ? e.message : 'Failed to load leads');
         if (!quiet) setLoadFailed(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (run === latestLoad.current) setLoading(false); });
   };
   const loadRef = useRef(load);
   loadRef.current = load;
 
-  useEffect(() => { if (!team.loading) load(); }, [serverOpts, team.loading, unlinked]);
+  useEffect(() => { if (!team.loading) load(); }, [fetchKey, team.loading, unlinked]);
 
   const sync = useInboundSync(!team.loading, () => loadRef.current(true));
 
@@ -112,8 +117,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   }), [leads, ownerName]);
 
   const filtered = useMemo(
-    () => named.filter((l) => (ownerId == null || l.ownerId === ownerId) && matchesFilters(l, f)).sort(byNewestLeadFirst),
-    [named, f, ownerId],
+    () => named.filter((l) => inboundBoardMatches(l, { ...serverOpts, search: undefined }) && matchesFilters(l, f)).sort(byNewestLeadFirst),
+    [named, f, serverOpts],
   );
 
   const byLens = useMemo(() => {

@@ -3,7 +3,7 @@ export { KAM_ORDER_STATUSES, KAM_ORDER_STATUS_COLORS, KAM_ORDER_STATUS_HINT, KAM
 export { normalizeKamOrderStatus, isLegacyKamStage, queueAgeBand } from '../utils/kam';
 export { kamOrderGateErrors, kamOrderStatusPrompts, interactionGateErrors, interactionPrompts } from './gates';
 export { callsLoggedOn, calledOn, firmFollowUp, callCompliance, assignedClientRows, temperatureMismatch, isAtRisk, firmLensMatches, orderLensMatches, sortFirmsForLens } from './cadence';
-export { assignFirm, canRespondToFirm, firmHandover, firmHandoverPending, firmHandoverState, ownsFirm, planFirmRoundRobin, acceptFirmHandover, rejectFirmHandover } from './handover';
+export { assignFirm, canRespondToFirm, currentAssignments, firmHandover, firmHandoverPending, firmHandoverState, ownsFirm, planFirmRoundRobin, acceptFirmHandover, rejectFirmHandover } from './handover';
 export type { FirmHandoverState } from './handover';
 export { kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit, lostReasonBreakdown, newVsRepeat, segmentRevenue } from './analytics';
 export { SEGMENTS } from '../inbound';

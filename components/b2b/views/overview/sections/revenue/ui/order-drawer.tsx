@@ -1,7 +1,7 @@
 'use client';
 
 import { EnquiryDetail } from '../../../../../drawers/firm/cards/enquiry';
-import { fmtDate, fmtPhone } from '../../../../../drawers/firm/utils';
+import { fmtDateTime, fmtPhone } from '../../../../../drawers/firm/utils';
 import { dealIsOrder } from '../../../../../models/client';
 import { fmtINR, fmtL } from '../../../../../models/mock-data';
 import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
@@ -41,7 +41,7 @@ function OrderRow({ o, startOpen, explain }: { o: RevenueOrder; startOpen: boole
           <span className="tabular-nums text-[13px] font-semibold text-gray-900 whitespace-nowrap">{fmtINR(o.value)}</span>
         </div>
         <div className="text-[11px] text-gray-500 mt-1">
-          {[fmtDate(o.day), o.client, o.phone && fmtPhone(o.phone), o.person && `Credited to ${o.person}${o.team ? ` (${B2B_TEAM_LABEL[o.team]})` : ''}`, o.placedBy && `On the cart ${o.placedBy}`, o.store].filter(Boolean).join(' · ')}
+          {[fmtDateTime(o.ticket.placedAt), o.client, o.phone && fmtPhone(o.phone), o.person && `Credited to ${o.person}${o.team ? ` (${B2B_TEAM_LABEL[o.team]})` : ''}`, o.placedBy && `On the cart ${o.placedBy}`, o.store].filter(Boolean).join(' · ')}
         </div>
         {categories && (
           <div className="text-[11px] text-gray-400 mt-0.5 truncate">{categories}</div>

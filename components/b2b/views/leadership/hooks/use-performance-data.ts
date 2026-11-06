@@ -65,7 +65,7 @@ export function usePerformanceData(team: B2BTeam | null, today: string) {
     setHistoryState('loading');
     const orders = base.kamOrders;
     loadHistories(base.clients.flatMap((c) => contactNumbers(c.contacts)), kamEnquiryIdsToResolve(orders))
-      .then(({ deals }) => resolveKamOrders(orders, deals))
+      .then(({ deals }) => resolveKamOrders(orders, deals, base.clients))
       .then(({ resolutions }) => {
         const resolved = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
         setBase((b) => b && { ...b, kamOrders: b.kamOrders.map((o) => resolved.get(o.id) ?? o) });

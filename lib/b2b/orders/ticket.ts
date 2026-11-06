@@ -17,6 +17,7 @@ export interface ClientOrderRow {
 
 
   createdAt?: string;
+  placedAt?: string;
 
   spoc?: string;
   branch?: string;
@@ -73,6 +74,9 @@ export function boqLines(v: unknown): BoqLine[] | undefined {
     .filter((i) => i.name);
 }
 
+export const byNewestOrder = (a: ClientOrderRow, b: ClientOrderRow): number =>
+  String(b.placedAt || b.createdAt || '').localeCompare(String(a.placedAt || a.createdAt || ''));
+
 export function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
   const ordered = dealIsOrder(t.status);
   return {
@@ -87,6 +91,7 @@ export function ticketToOrderRow(t: CRMLeadRow, phone: string): ClientOrderRow {
     lost: !ordered && !dealIsOpen(t.status),
     open: dealIsOpen(t.status),
     createdAt: String(t.createdAt || '').slice(0, 10) || undefined,
+    placedAt: ordered && t.orderPlacedAt ? String(t.orderPlacedAt) : undefined,
     spoc: String(t.assignedTo || '').trim() || undefined,
     branch: String(t.branch || '').trim() || undefined,
     cart: cartLines(t.cartItems),

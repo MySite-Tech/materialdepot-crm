@@ -45,9 +45,6 @@ export interface OutreachFilters {
   leadType: string;
   segment: string;
   source: string;
-  added: RangeKey;
-  addedFrom: string;
-  addedTo: string;
   search: string;
   onlyGaps: boolean;
 }

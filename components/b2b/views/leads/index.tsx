@@ -12,7 +12,7 @@ import { DetailDrawer } from './drawer';
 import { useLeadAssign } from './hooks/use-lead-assign';
 import { LeadSource, UnifiedLead, UnifiedStatus, fetchUnifiedLeads } from '@/lib/b2b';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [leads, setLeads] = useState<UnifiedLead[]>([]);
@@ -33,16 +33,19 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
+  const latestLoad = useRef(0);
   const load = () => {
+    const run = ++latestLoad.current;
     setLoading(true);
     setError(null);
     fetchUnifiedLeads({ createdFrom, createdTo })
       .then((res) => {
+        if (run !== latestLoad.current) return;
         setLeads(res.leads);
         setFailed(res.failed);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load leads'))
-      .finally(() => setLoading(false));
+      .catch((e) => { if (run === latestLoad.current) setError(e instanceof Error ? e.message : 'Failed to load leads'); })
+      .finally(() => { if (run === latestLoad.current) setLoading(false); });
   };
 
   useEffect(() => { load(); }, [createdFrom, createdTo]);

@@ -1,5 +1,5 @@
 import { normalisePhone } from '@/lib/org/utils';
-import { B2B_INBOUND_PIPELINE, B2B_INBOUND_STAGES } from '@/lib/api/b2b/inbound/constants';
+import { B2B_INBOUND_FIELDS, B2B_INBOUND_PIPELINE, B2B_INBOUND_STAGES } from '@/lib/api/b2b/inbound/constants';
 import { INBOUND_INTAKE_KYLAS_ID, INBOUND_ROTATION_MAX_PAGES } from '@/lib/b2b/team/constants';
 import type { KylasUser } from '@/lib/b2b/team/types';
 
@@ -12,6 +12,7 @@ const MAX_RETRY_WAIT_MS = 8000;
 export interface PoolLead {
   id: string;
   createdAt: string;
+  raw?: Record<string, any>;
 }
 
 export class KylasBusy extends Error {}
@@ -74,7 +75,7 @@ export function kylasUserForPhone(users: KylasUser[], phone: string): KylasUser 
 
 export async function intakePool(sinceIso: string): Promise<PoolLead[]> {
   const rule = {
-    fields: ['id', 'createdAt', 'ownerId'],
+    fields: B2B_INBOUND_FIELDS,
     jsonRule: {
       condition: 'AND',
       valid: true,
@@ -94,7 +95,7 @@ export async function intakePool(sinceIso: string): Promise<PoolLead[]> {
     });
     const content: Record<string, any>[] = Array.isArray(body.content) ? body.content : [];
     for (const l of content) {
-      if (l.ownerId === INBOUND_INTAKE_KYLAS_ID) out.push({ id: String(l.id), createdAt: String(l.createdAt) });
+      if (l.ownerId === INBOUND_INTAKE_KYLAS_ID) out.push({ id: String(l.id), createdAt: String(l.createdAt), raw: l });
     }
     if (page + 1 >= Number(body.totalPages ?? 0)) break;
   }

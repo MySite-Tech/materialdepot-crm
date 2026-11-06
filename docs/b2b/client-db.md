@@ -139,8 +139,9 @@ that is not a gap.
   first SPoC on record" for firms loaded with a history. Per month is what shows
   a drop after a move. EC BMs are a separate line and never added, the same rule
   as assisted revenue.
-- **The date is Created, not placement**, because `order_placed_time` is owed by
-  Django (`backends.md` §Owed by Django #8).
+- **The split stays on Created, not placement (2026-11-05).** It asks who held the
+  firm when the cart was raised, the same gate the Overview's classifier uses. The
+  order list above it shows the placement time.
 - **The table is per firm, on purpose.** It reads the ticket list the Firm page
   already loaded, so it costs no extra order request. Across all firms it would be
   one request per phone, which the request budget forbids. That roll-up waits on
@@ -221,12 +222,20 @@ is the single selected row. In a larger selection owned firms are skipped, wheth
 the choice is One person or Round robin. This replaces the 2026-10-30 line that
 let picking a name move every selected firm.
 
-**The Orders sub-tab has no "Placed on" column (2026-10-30).** It showed the
-ticket's `closureDate`, which is the deal's hand-set expected closure, so
-orders read "placed on 14 Nov 2026" on 30 Oct. Every tab now shows Created and
-sorts by it, and the expanded row labels the closure date as hand-set. A real
-placement date needs Django to add `estimate.order_placed_time` to each
-`/crm/leads/` row. **Branch · SPOC is the cart owner, not where it was
+**An order shows when it was placed, not when its cart was created (2026-11-05).**
+The user: an enquiry placed on 4 Nov read "1 Aug 2026" on the Firm page. That was
+`createdAt`, which is the ticket's creation, older even than the enquiry (raised
+31 Oct). The Orders tab's column is now **Order placed**, the row's
+`orderPlacedAt` (`estimate.order_placed_time`) as date and time in IST, and the
+expanded card adds an Order placed fact. Open carts and Lost keep Created, since
+they were never placed. `ticketToOrderRow` keeps `placedAt` only on ordered
+rows, and `byNewestOrder` sorts by it, falling back to Created. An ordered row
+without `orderPlacedAt` shows "—", never its Created date under that heading.
+**Not yet seen on a real response:** the field is in `CRMLeadRow` since item 5,
+but no signed-in read has confirmed Django fills it. If every placed row shows
+"—" after deploy, Django is not sending it (`backends.md` §Owed by Django #10).
+The 2026-10-30 "Placed on" column was removed because it showed the hand-set
+`closureDate`, and the expanded row still labels that date as hand-set. **Branch · SPOC is the cart owner, not where it was
 booked.** `branch` is the owner's store and `spoc` is `assignedTo`, both
 passed through untouched. The doubled surname ("Tanmay Jagtap Jagtap") comes
 from Django's name join, not from the CRM. The booked-at branch is on the
@@ -305,8 +314,10 @@ taken from the seeded clients.
 
 Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
 `clientLensMatches` (`views/client-db/utils.ts`) gives both a tile's count and
-the list it opens. Tiles: All firms · Active · Inactive 1 month · Inactive · Never ordered, then
-No KAM, plus Unread only when some firm's orders did not load.
+the list it opens. Tiles: All firms · Active · Inactive 1–3 months · Inactive 3–6 months ·
+Inactive 6–12 months · Over 12 months · Never ordered, then No KAM, plus Unread only when some
+firm's orders did not load. The bands are `ORDER_BANDS` (`kam.md` §Account status, 2026-11-06),
+and `LENS_STATUS` maps each status tile to its band, so the tile and the list cannot disagree.
 
 - **Why it changed.** The five tiles were `StatTile`s with no click handler, and
   a status dropdown did the tiles' job. The tiles counted the dropdown-filtered
@@ -390,8 +401,8 @@ so non-managers get the old table unchanged.
 
 ### §2.1's window is anchored to TODAY, and the PRD does not quite say that
 
-**The window is 30 / 60 days since 2026-10-29** (`kam.md` §Account status), not
-the PRD's 3 months: the user asked for KAM's rule on every firm. The anchoring
+**The window is the month bands of 2026-11-06** (`kam.md` §Account status), not
+the PRD's 3 months, and not the 30 / 60 days of 2026-10-29. The anchoring
 argument below still holds.
 
 "Active: at least one order placed within the last 3 months, **measured from
@@ -511,6 +522,26 @@ Open question #1 (whose Segment wins) is answered by asking: `mergeConflicts`
 reports every field the sources disagree on and the Merge button stays disabled
 until each is picked. No "most recent order wins" rule, because a segment chosen
 by a machine changes how the account is targeted and nobody would know.
+
+**A parent firm shows only its own KAM (2026-11-05).** The user, about a parent
+firm merged from three: its KAM had rejected one of the three firms it was merged from, and the
+parent, which that same KAM holds, still read "<KAM> rejected: …". A merge
+concatenates every source's `assignments`, and the list shows the newest entry.
+All three were assigned in the same second on 31 Oct, so the tie went to the
+rejected one. Now a merged firm's handover state and Assignment history start at
+its latest `mergedFrom[].mergedAt` (`currentAssignments`). The sources' entries
+stay stored but no longer show. A merge also appends one entry for the KAM it
+kept ("Kept as KAM when the firms were merged", no status, with that KAM's last
+`kamPhone`), so the parent's history begins with who it went to. Run over the
+1,269 real firms on 5 Nov, it changed only merged firms: that firm's rejection
+cleared, and 9 lost an Accepted state that nothing on screen shows. Every one
+kept its KAM.
+
+**Finding duplicates is indexed, not pairwise (2026-11-05).** `findDuplicates`
+compared all 805k pairs of 1,269 firms, 87 ms on every change to the list
+(each save and assignment). It now pairs only firms that share a phone, GST, PAN
+or normalised name, the only things that can be evidence, in 3 ms. On the real
+list it returned the same 15 pairs in the same order.
 
 Order history needs no migration on merge — it was never stored. Retaining the
 contact numbers **is** the rollup. The survivor is the OLDEST record's id, is

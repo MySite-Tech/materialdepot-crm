@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   }
   if (!canUseB2B(c)) return bad('Your account does not have B2B Sales access', 403);
 
-  let body: { mode?: unknown; dryRun?: unknown; full?: unknown; leadId?: unknown; toPhone?: unknown; reason?: unknown; items?: unknown };
+  let body: { mode?: unknown; dryRun?: unknown; full?: unknown; backlog?: unknown; leadId?: unknown; toPhone?: unknown; reason?: unknown; items?: unknown };
   try { body = await request.json(); }
   catch { return bad('Body must be JSON'); }
 
@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
       return Response.json(await syncInbound(c.name, body.full === true));
     }
     if (body.mode === 'rotate') {
-      return Response.json(await rotateInbound(c.name, body.dryRun === true));
+      if (body.backlog === true && !isB2BManager(c)) return bad('Only a B2B manager can deal the backlog', 403);
+      return Response.json(await rotateInbound(c.name, body.dryRun === true, body.backlog === true));
     }
     if (body.mode === 'reassign' || body.mode === 'reassign-many') {
       if (!isB2BManager(c)) {

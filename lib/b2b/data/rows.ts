@@ -22,10 +22,6 @@ export interface InboundRowChange {
 
 export const B2B_FRESH_START = '2026-08-26';
 
-export function floorToFreshStart(day?: string): string {
-  return day && day > B2B_FRESH_START ? day : B2B_FRESH_START;
-}
-
 export type MetaSpec<T> = {
   [K in keyof T]?: {
 

@@ -77,7 +77,7 @@ export default function EcDirected({ viewer }: { viewer: Viewer }) {
       <div>
         <h2 className="text-[18px] font-bold text-gray-900">EC Directed</h2>
         <p className="text-[12.5px] text-gray-500 mt-0.5 max-w-3xl">
-          Every lead Inbound, Outreach or KAM sent to an Experience Centre. <strong>Assisted revenue</strong> is what those numbers ordered at
+          Every lead Inbound, Outreach or KAM sent to an Experience Centre. <strong>Assisted revenue</strong>{' '}is what those numbers ordered at
           that EC since the redirect. It is also in the EC&apos;s own revenue, so it is a measure of B2B&apos;s contribution, never added on top.
           {' '}{viewer.isManager ? 'You see every redirect.' : 'You see the redirects you made.'}
         </p>

@@ -35,8 +35,8 @@ export const saveTeamMember = (input: MemberInput): Promise<SavedMember> =>
 export const changeTeamMemberNumber = (from: string, to: string): Promise<RenumberOutcome> =>
   send<RenumberOutcome>('/api/b2b/team', json('POST', { from, to }));
 
-export const runInboundRotation = (dryRun = false): Promise<RotationOutcome> =>
-  send<RotationOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'rotate', dryRun }));
+export const runInboundRotation = (dryRun = false, backlog = false): Promise<RotationOutcome> =>
+  send<RotationOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'rotate', dryRun, backlog }));
 
 export const syncInbound = (full = false): Promise<SyncOutcome> =>
   send<SyncOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'sync', full }));

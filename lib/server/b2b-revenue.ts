@@ -8,7 +8,7 @@ import { classifyOrder } from '../b2b/revenue/utils/classify';
 import { monthWindows } from '../b2b/revenue/utils/months';
 import { istToday } from '../b2b/stats/pipeline';
 import { channelSplits } from '../b2b/revenue/utils/rollup';
-import { B2B_BOOKING, B2B_BRANCH, FUNNEL_PAGES, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
+import { B2B_BOOKING, B2B_BRANCH, FUNNEL_PAGES, PAST_MONTH_KEEP, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
 import type { B2BSourceRow, BookedOn, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
 import { getCached, setCache } from './cache';
 import { b2bBackendFetch } from './b2b-backend';
@@ -17,7 +17,7 @@ import { readMembers } from './b2b-team';
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 8;
 const PARALLEL_PAGES = 8;
-const TREND_PARALLEL = 2;
+const TREND_PARALLEL = 3;
 const FRESH_ENOUGH = 60_000;
 
 interface OrdersPage {
@@ -114,16 +114,24 @@ export async function buildRevenueReport(from: string, to: string, auth: string,
 
 export function revenueReport(userId: string, from: string, to: string, auth: string, fresh: boolean, holders?: () => Promise<Holders>): Promise<RevenueReport> {
   const key = `b2b-revenue:${userId}:${from}:${to}`;
-  const cached = getCached(key) as RevenueReport | null;
-  if (cached && (!fresh || Date.now() - Date.parse(cached.generatedAt) < FRESH_ENOUGH)) return Promise.resolve(cached);
-  const running = inflight.get(key);
-  if (running) return running;
   const past = to.slice(0, 7) < istToday().slice(0, 7);
-  const build = buildRevenueReport(from, to, auth, holders?.())
-    .then((r) => { setCache(key, r, past ? PAST_MONTH_TTL : undefined); return r; })
-    .finally(() => inflight.delete(key));
-  inflight.set(key, build);
-  return build;
+  const cached = getCached(key) as RevenueReport | null;
+  const age = cached ? Date.now() - Date.parse(cached.generatedAt) : Infinity;
+  const rebuild = () => {
+    const running = inflight.get(key);
+    if (running) return running;
+    const build = buildRevenueReport(from, to, auth, holders?.())
+      .then((r) => { setCache(key, r, past ? PAST_MONTH_KEEP : undefined); return r; })
+      .finally(() => inflight.delete(key));
+    inflight.set(key, build);
+    return build;
+  };
+  if (cached && fresh && age < FRESH_ENOUGH) return Promise.resolve(cached);
+  if (cached && !fresh) {
+    if (past && age > PAST_MONTH_TTL) rebuild().catch(() => undefined);
+    return Promise.resolve(cached);
+  }
+  return rebuild();
 }
 
 export async function buildRevenueTrend(userId: string, auth: string, fresh: boolean): Promise<RevenueTrend> {

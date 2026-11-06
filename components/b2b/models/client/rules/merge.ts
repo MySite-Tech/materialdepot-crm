@@ -88,6 +88,12 @@ export function mergeClients(
     return fallback;
   };
 
+  const kam = pick<string>('kam', keep.kam);
+  const kamPhone = ordered.flatMap((c) => c.assignments || [])
+    .filter((a) => kam && a.kam === kam && a.kamPhone)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)))
+    .pop()?.kamPhone;
+
   const merged: ClientEntity = {
     ...keep,
     company: pick<string>('company', keep.company) || keep.company,
@@ -95,13 +101,15 @@ export function mergeClients(
     gsts,
     segment: pick<Segment>('segment', keep.segment),
     clientType: pick<ClientEntityType>('clientType', keep.clientType),
-    kam: pick<string>('kam', keep.kam),
+    kam,
     source: (pick<ClientSource>('source', keep.source) || 'Existing') as ClientSource,
 
     interactions: ordered.flatMap((c) => c.interactions || []),
     escalations: ordered.flatMap((c) => c.escalations || []),
-    assignments: ordered.flatMap((c) => c.assignments || [])
-      .sort((a, b) => String(a.at).localeCompare(String(b.at))),
+    assignments: [
+      ...ordered.flatMap((c) => c.assignments || []).sort((a, b) => String(a.at).localeCompare(String(b.at))),
+      ...(kam ? [{ kam, kamPhone, at: now, by, reason: 'Kept as KAM when the firms were merged' }] : []),
+    ],
     remarks: ordered.map((c) => String(c.remarks || '').trim()).filter(Boolean).join(' · ') || undefined,
     mergedFrom: [
       ...(keep.mergedFrom || []),

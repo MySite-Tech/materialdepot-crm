@@ -58,6 +58,13 @@ Error text for a non-OK response is taken in order:
 `API error: <status> on <path>`. The path has its query string removed, so no
 phone number reaches the console. The bare `API error: 400` named no endpoint,
 which left a dev-overlay error untraceable (2026-11-03).
+**A 5xx with a body message also gets `(<status> on <path>)` appended
+(2026-11-06).** On :3001 the local read-only guard (`~/Projects/ss-local-stack/crm-guard.mjs`)
+answers 502 `{error: "TypeError: fetch failed"}` when it cannot reach api-dev2, and
+the overlay showed only "TypeError: fetch failed" at `mdFetchRaw`, which reads
+like a bug in this app. It was a passing network failure between the guard and
+api-dev2. The guard now retries a GET once and logs `NETWORK` / `FAILED` lines
+with the cause to `logs/crm-guard.log`.
 
 Tokens live in `localStorage` under `jwt_token` and `refresh_token`. `API_BASE_URL`
 is re-exported from `lib/api/core/config.ts`, which is the only place either
@@ -137,7 +144,10 @@ original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
 then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
 server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
 (`app/api/b2b/waitlist`, `ec-visits`) call `b2bBackendFetch` with the
-same credential instead. Four things the relay deliberately does:
+same credential instead. **A successful answer is streamed through untouched
+(2026-11-06).** It used to be parsed and re-encoded, which on `rows` (3.2 MB)
+cost CPU and memory on every B2B tab open. Only an error body is parsed now,
+for its message. Four things the relay deliberately does:
 
 - **Refuses two things to anyone but a manager or admin (2026-10-31).**
   `managersOnly` covers `studio-number` and a client-row `DELETE`, so hiding the
@@ -250,6 +260,10 @@ Two things it does that `kylasFetch` callers do not:
   back are gone: inbound ownership lives on the CRM row (`docs/b2b/inbound.md`
   §The CRM owns a lead once it is imported). `kylas()` is exported for the import
   in `lib/server/b2b-inbound/`, which searches and never writes.
+- **The pool search asks for the full lead (2026-11-05)**, `B2B_INBOUND_FIELDS`
+  rather than id, created and owner. That is what lets the round robin insert a
+  lead the import never brought in, with no second Kylas call
+  (`docs/b2b/inbound.md` §Who owns a lead). It is still one search a run.
 - **Kylas errors throw.** They are not swallowed into an empty list (the
   `total: 0` trap in the request-budget skill). The route turns them into a
   502 naming Kylas.

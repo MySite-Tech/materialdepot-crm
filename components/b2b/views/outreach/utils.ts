@@ -4,7 +4,7 @@ import { OutreachLead } from '../../models/mock-data';
 import { outreachEnrichmentGaps } from '../../models/outreach';
 import { repOwns } from '../../models/outreach/handover';
 import { Rep } from '../../models/outreach/intake';
-import { Period, currentMonth, inPeriod, monthPeriod } from '../../models/outreach/kpis';
+import { Period, currentMonth, monthPeriod } from '../../models/outreach/kpis';
 import { BmOption, OutreachFilters, RangeKey } from './types';
 
 export const gapsFor = (l: OutreachLead) => outreachEnrichmentGaps({
@@ -64,14 +64,13 @@ export function bmOptions(leads: OutreachLead[], reps: Rep[], teamLive: boolean)
 
 export const activeFilterCount = (f: OutreachFilters): number =>
   (['companyType', 'leadType', 'segment', 'source'] as const).filter((k) => f[k] !== 'all').length
-  + (f.added !== 'any' ? 1 : 0) + (f.onlyGaps ? 1 : 0);
+  + (f.onlyGaps ? 1 : 0);
 
-export function matchesFilters(l: OutreachLead, f: OutreachFilters, added: Period | null): boolean {
+export function matchesFilters(l: OutreachLead, f: OutreachFilters): boolean {
   if (f.companyType !== 'all' && l.companyType !== f.companyType) return false;
   if (f.leadType !== 'all' && l.leadType !== f.leadType) return false;
   if (f.segment !== 'all' && l.segment !== f.segment) return false;
   if (f.source !== 'all' && (l.source || 'none') !== f.source) return false;
-  if (added && !inPeriod(l.createdAt, added)) return false;
   if (f.onlyGaps && gapsFor(l).length === 0) return false;
   const q = f.search.trim().toLowerCase();
   if (q) {

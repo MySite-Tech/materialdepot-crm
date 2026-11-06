@@ -6,6 +6,9 @@ import type { B2BTeam, KylasUser, TeamMember } from '@/lib/b2b/team/types';
 
 const ROTATION_ON: Record<B2BTeam, string> = { inbound: 'Gets new leads', outreach: 'Gets assigned leads', kam: 'Gets new firms' };
 
+const changedAt = (iso: string) =>
+  new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+
 export function MemberRow({ member, otherTeams, busy, kylasUsers, onLoadKylasUsers, onChange, onRenumber }: {
   member: TeamMember;
   otherTeams: B2BTeam[];
@@ -88,6 +91,11 @@ export function MemberRow({ member, otherTeams, busy, kylasUsers, onLoadKylasUse
             />
             {member.inRotation && member.active ? ROTATION_ON[member.team] : 'Paused'}
           </label>
+        )}
+        {member.updatedBy && (
+          <span className="block text-[10.5px] text-gray-400" title="The last change to this row, whichever setting it was">
+            changed by {member.updatedBy}{member.updatedAt ? ` · ${changedAt(member.updatedAt)}` : ''}
+          </span>
         )}
       </td>
       <td className="px-3 py-2 text-[12px]">

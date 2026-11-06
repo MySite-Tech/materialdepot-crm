@@ -15,8 +15,9 @@ import { useMemo } from 'react';
 const day = (d: string | undefined) => String(d || '').slice(0, 10);
 const lakh = (n: number) => `₹${Math.round((n / 1_00_000) * 10) / 10}L`;
 
-export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, waitlist, pool, unassigned }: {
+export function useOutreachLenses({ leads, pipeline, kpis, lens, isKam, today, nowMs, waitlist, pool, unassigned }: {
   leads: OutreachLead[];
+  pipeline: OutreachLead[];
   kpis: OutreachKpis;
   lens: Lens;
   isKam: boolean;
@@ -36,11 +37,16 @@ export function useOutreachLenses({ leads, kpis, lens, isKam, today, nowMs, wait
 
   const groups = isKam ? KAM_GROUPS : REP_GROUPS;
 
+  const pipelineIds = useMemo(() => new Set(pipeline.map((l) => l.id)), [pipeline]);
+
   const lists = useMemo(() => {
     const ctx = { today, nowMs };
-    const keys = groups.flatMap((g) => [...(g.head ? [g.head] : []), ...g.lenses]);
-    return Object.fromEntries(keys.map((k) => [k, sortLens(k, rows.filter((r) => lensMatches(k, r, ctx)), ctx)])) as Partial<Record<WorkLens, LensRow[]>>;
-  }, [rows, groups, today, nowMs]);
+    const pipelineRows = rows.filter((r) => pipelineIds.has(r.lead.id));
+    return Object.fromEntries(groups.flatMap((g) => {
+      const from = g.flow ? pipelineRows : rows;
+      return [...(g.head ? [g.head] : []), ...g.lenses].map((k) => [k, sortLens(k, from.filter((r) => lensMatches(k, r, ctx)), ctx)]);
+    })) as Partial<Record<WorkLens, LensRow[]>>;
+  }, [rows, pipelineIds, groups, today, nowMs]);
 
   const counts = useMemo(
     () => Object.fromEntries(Object.entries(lists).map(([k, v]) => [k, v?.length ?? 0])) as Partial<Record<WorkLens, number>>,

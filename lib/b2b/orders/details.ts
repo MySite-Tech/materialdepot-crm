@@ -1,7 +1,7 @@
-import { lookupEnqId } from '../leads/enq-lookup';
+import { firmPhoneList, lookupEnqId } from '../leads/enq-lookup';
 import { ClientOrderHistory } from './history';
-import { BoqLine, ClientOrderRow, boqLines, ticketToOrderRow } from './ticket';
-import { ClientContact, ClientOrderMetrics, averageOrderValue, contactNumbers, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
+import { BoqLine, ClientOrderRow, boqLines, byNewestOrder, ticketToOrderRow } from './ticket';
+import { ClientContact, ClientEntity, ClientOrderMetrics, averageOrderValue, contactNumbers, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
 import { KamOrder } from '@/components/b2b/models/kam';
 import { CRMLeadRow, ClientTicketResult, fetchCRMLeads, fetchClientTickets, invalidateLeadsByPhone } from '@/lib/api';
 
@@ -81,7 +81,10 @@ export function kamEnquiryIdsToResolve(orders: KamOrder[]): string[] {
 export async function resolveKamOrders(
   orders: KamOrder[],
   deals: B2BDealRef[],
+  clients: ClientEntity[] = [],
 ): Promise<KamOrderResolveResult> {
+  const firmNumbers = new Map(clients.map((c) => [c.id, contactNumbers(c.contacts)]));
+  const phonesOf = (o: KamOrder) => firmPhoneList([o.phone, ...(o.clientId ? firmNumbers.get(o.clientId) ?? [] : [])]);
 
   const needing = ordersNeedingResolve(orders);
   const head = needing.slice(0, ENQ_RESOLVE_CAP);
@@ -90,7 +93,7 @@ export async function resolveKamOrders(
 
   const resolutions = await pooled(head, ORDER_DETAIL_CONCURRENCY, async (o): Promise<KamOrderResolution> => {
     const bulk = byEnqId.get(normalizeEnqId(o.enqId));
-    if (bulk && normalizeContactNumber(bulk.clientPhone ?? '') === normalizeContactNumber(o.phone)) {
+    if (bulk && phonesOf(o).includes(normalizeContactNumber(bulk.clientPhone ?? ''))) {
       return {
         order: o,
         outcome: 'matched',
@@ -103,10 +106,9 @@ export async function resolveKamOrders(
         },
       };
     }
-    // `otherPhone` set means the ticket carries this enquiry id but belongs to a
-    // different number. The bulk path above verifies the phone deliberately, so
-    // the fallback holds to the same rule rather than widening it.
-    const r = await lookupEnqId(o.phone, o.enqId);
+    // `otherPhone` set means the ticket carries this enquiry id but sits on a
+    // number that is not on the firm. The bulk path above checks the same set.
+    const r = await lookupEnqId(phonesOf(o), o.enqId);
     if (r.status === 'matched' && !r.otherPhone) {
       return {
         order: o,
@@ -143,8 +145,7 @@ export async function fetchClientOrderRows(phones: string[]): Promise<ClientOrde
     for (const row of t.rows) rows.push(ticketToOrderRow(row, phone));
   }
 
-  rows.sort((a, b) =>
-    String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  rows.sort(byNewestOrder);
   return { rows, failedPhones, rejected };
 }
 

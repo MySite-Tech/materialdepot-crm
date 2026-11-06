@@ -16,10 +16,10 @@ export function classifyOrder(
   book: NumberBook,
   reps: RepTeams,
 ): RevenueOrder | null {
-  const day = String(o.createdAt || '').slice(0, 10);
+  const cartDay = String(o.createdAt || '').slice(0, 10);
   const bookedOnB2B = booked !== 'store';
   const phone = phoneOf(o.clientPhone);
-  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, day));
+  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
   const repTeams = teamsOfRep(o.assignedTo, reps);
   const byB2BRep = o.branch === B2B_BRANCH || repTeams.length > 0;
@@ -45,7 +45,6 @@ export function classifyOrder(
     redirectLogged: held.some((h) => h.kind === 'redirect'),
     status: o.status,
     value: Number(o.cartValue) || 0,
-    day,
   });
 
   if (referred) return shape(5, 'kam', referred.owner, referred);

@@ -22,7 +22,7 @@ import { OutreachReferral, PlacedUnder, clientSpocs, isCrmAddedLead, closureRead
 import { InboundLead } from '../../models/mock-data';
 import { Spinner } from '../../ui/inbound-chips';
 import { SaveState } from '../../types/inbound-drawer';
-import { EnqLookup, lookupEnqId, saveInboundLead } from '@/lib/b2b';
+import { EnqLookup, inboundPhones, lookupEnqId, saveInboundLead } from '@/lib/b2b';
 import { hasTeamEdits } from '@/lib/b2b/mappers/inbound';
 import { CreditPicker } from '../../ui/credit-picker';
 import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
@@ -129,7 +129,7 @@ export default function InboundDrawer({
     if (!want || enqChecking) return;
     setEnqChecking(true);
     lastCheckedEnq.current = want;
-    const res = await lookupEnqId(draft.phone, want);
+    const res = await lookupEnqId(inboundPhones(draft), want);
     setEnq(res);
     if (res.status === 'matched') {
       setDraft((d) => ({

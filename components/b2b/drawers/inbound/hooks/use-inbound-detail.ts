@@ -1,10 +1,9 @@
 'use client';
 
 import { CallLogEntry, InboundLead, LeadDeal, LeadNote, OutreachLead } from '../../../models/mock-data';
-import { fetchCallLogSummary, fetchInboundLeadDetail, fetchLeadCallLogs, fetchLeadDeals, fetchLeadNotes } from '@/lib/api';
-import { fetchOutreachLeads } from '@/lib/b2b';
+import { fetchCallLogSummary, fetchFirmDeals, fetchInboundLeadDetail, fetchLeadCallLogs, fetchLeadNotes } from '@/lib/api';
+import { fetchOutreachLeads, inboundPhones } from '@/lib/b2b';
 import { isCrmAddedLead } from '../../../models/inbound';
-import { normalisePhone } from '@/lib/org/utils';
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 
 export interface Loaded<T> { loading: boolean; data: T; failed?: boolean }
@@ -61,20 +60,15 @@ export function useInboundDetail(lead: InboundLead, setDraft: Dispatch<SetStateA
   }, [lead.id, lead.ownerId]);
 
   const phoneKey = useMemo(
-    () => [...new Set([lead.phone, lead.primaryContactPhone].map((p) => normalisePhone(p)).filter((p) => p.length === 10))].join(','),
-    [lead.phone, lead.primaryContactPhone],
+    () => inboundPhones(lead).join(','),
+    [lead.phone, lead.primaryContactPhone, lead.additionalContacts],
   );
 
   useEffect(() => {
     let alive = true;
     setDeals({ loading: true, data: [] });
-    const phones = phoneKey ? phoneKey.split(',') : [];
-    Promise.all(phones.map((p) => fetchLeadDeals(p))).then((lists) => {
-      if (!alive) return;
-      const seen = new Set<string>();
-      const merged = lists.flat().filter((d) => (seen.has(d.id) ? false : (seen.add(d.id), true)));
-      merged.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-      setDeals({ loading: false, data: merged });
+    fetchFirmDeals(phoneKey ? phoneKey.split(',') : []).then((merged) => {
+      if (alive) setDeals({ loading: false, data: merged });
     });
     return () => { alive = false; };
   }, [phoneKey]);

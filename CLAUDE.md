@@ -206,7 +206,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 78 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 81 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -285,7 +285,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 78 titles, so grep a title and read around the line you
+**Contents** list of all 81 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -447,8 +447,7 @@ never added to company revenue. Under the old three-channel rules the route ran
 signed in as an admin; the four-channel version has run only on the sandbox and on
 real orders through the compiled classifier, which tied out every month.
 
-**Overview revamp is CRM PR #39 (`b2b-overview-funnel` → `main`, opened for review
-2026-11-03; the tech team merges).** It carries the four channels, the six-month
+**Overview revamp is CRM PR #39 (merged 2026-11-04).** It carries the four channels, the six-month
 trend (`/api/b2b/revenue/trend`), the Client Database funnel, full PI items in every
 enquiry card (`fetchEnquiryItems` on expand), the `b2b-bulk` 400 fix (a request line
 over about 4 KB; batches are sized by bytes, `docs/landmines.md`) and a duplicate-key
@@ -477,8 +476,7 @@ lead to Hardi and the CRM re-owns them, keyed on qualification time
 Kylas's feed does not record owner changes, so it cannot prove what moved a lead.
 
 **Inbound is CRM-owned (2026-11-03, CRM PR #38 from `b2b-inbound-crm-owned` → `main`,
-with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** The
-shared tree is checked out on `b2b-overview-funnel` (PR #39, above). The user decided a lead comes from Kylas once, and from
+with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** The user decided a lead comes from Kylas once, and from
 then on only the CRM changes it. **Nothing writes to Kylas.** An insert-only import
 brings in new Kylas leads when the tab opens, every 5 minutes and on Sync. The board
 reads CRM rows only, so "Load more" is gone. A save sends only what changed, and
@@ -488,15 +486,64 @@ Read `docs/b2b/inbound.md` §The CRM owns a lead once it is imported before any
 Inbound change, and don't re-propose following Kylas's owner. **At deploy, run
 `scripts/inbound-owner-cutover.mjs` once against production** (dry run first, log
 JSON from the SQL in that section). Without it, 140 rows keep stale owners.
-Still open: the 400 the user saw on :3001 (`mdFetch` errors now name the endpoint,
-and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
-Outreach's BM chips into Filters.
+The :3001 400 was solved in PR #39, and Outreach's BM picker moved into the top
+filter bar on `6-nov-changes` (below).
 
 **KAM sign-in fixes (2026-11-03): CRM PR #42 (`kam-sign-in-check`) and b2b-backend
-PR #21 (`POST /b2b/team/renumber`). Deploy the backend first.**
+PR #21 (`POST /b2b/team/renumber`), both merged 2026-11-03.**
 Krishna Jadhav's data was already merged onto his real number in production that
 day by script, so these PRs prevent the next case and fix nothing that is live.
 Still owed by Django: `docs/backends.md` §Owed by Django rows 15–17.
+
+**CRM PR #43 (2026-11-05, `b2b-placed-date-requalified-leads` → `main`, open; no
+backend PR).** Four fixes: orders show `orderPlacedAt`, not the ticket's creation
+date (credit still gates on the cart date); the round robin inserts re-qualified
+leads the import never brought in; Overview, Inbound and Leads apply only their
+newest request, and Inbound's filters cost no request; a merged firm's KAM state
+starts at its merge. **After it deploys:** Team → Assign now shows no "Not imported
+into the CRM yet", and a placed order on the Firm page shows a placement time. If
+every placed order reads "—", Django is not sending `orderPlacedAt` (Owed by Django
+#10). Detail in `docs/b2b/context.md` and `docs/landmines.md`.
+
+**START HERE for B2B: branch `6-nov-changes` (2026-11-06), CRM and b2b-backend.**
+In the CRM it is cut from `main` and carries PR #43's two commits, because the round
+robin work builds on them. If #43 merges first, a PR from this branch shows only the
+6 Nov commit. In b2b-backend it is cut from `master` (`efdae93`) with no commits yet. Nothing
+in this round needed the backend. Work there in the worktree `~/Projects/b2b-backend-6nov`, never in
+the `dhruv-changes` checkout. **No PR is open; the tech team merges.** The
+shared CRM tree is checked out on it, so :3001 serves it. What it carries:
+- **EC B2B Referral has three sub-tabs.** Refer a client (everyone), Sent to your
+  store (assistant store manager and up, or a B2B manager) and All referrals
+  (area manager and up, or a B2B manager). The route gates each view, and orders
+  on referred numbers come from one `b2b-bulk` call (`docs/b2b/ec-referral.md`
+  §Three views).
+- **Client Database and KAM status is month bands:** Active ≤30 days, Inactive
+  1–3, 3–6, 6–12 and 12+ months. It is still one `clientStatus` for every tab
+  (`docs/b2b/kam.md` §Account status).
+- **Outreach has a top filter bar** with BM and period. It drives the scorecard
+  and the pipeline (leads added in the period). Action needed is always as of
+  today (`docs/b2b/outreach.md`).
+- **The round robin's root cause** was not Hardi's switch: production showed the
+  pause honoured. 329 untouched Aug–Oct leads sit on the intake id because the
+  import keeps Kylas's owner. They are now a manager-only backlog button on the
+  Team tab, and new leads left on the intake id are dealt automatically. Team
+  saves send only what changed, and each row shows who last changed it
+  (`docs/b2b/inbound.md` §Why leads still read as Hardi's).
+- **Orders and enquiry lookups use every number on a lead or firm**
+  (`inboundPhones`, `outreachPhones`, `resolveKamOrders(…, clients)`;
+  `docs/b2b/inbound.md` §Enq ID → order value).
+- **Speed (the user's ask, 6 Nov).** Measured from the :3001 dev log: month by month
+  averaged 9.1 s, 14.4 s on 6 Nov. Now the trend builds three months at a time,
+  past months answer from cache while they rebuild in the background, and the B2B
+  relay streams answers. The Inbound sync reads `/rows` once, not twice
+  (`docs/b2b/overview.md` §Why the revenue sections were slow). **To measure:**
+  `~/Projects/ss-local-stack/logs/crm-3001.log` has every route's time, and
+  `logs/crm-guard-timing.log` has every Django, Kylas and B2B-backend call :3001
+  makes (time, status, bytes; no tokens or query values). Read both before and
+  after a speed change.
+- **Not seen signed in on real data.** Every screen was driven on the sandbox only.
+  After deploy, check Team → round robin shows the backlog count (about 329 on
+  6 Nov). Then check that a store manager sees only their EC on Sent to your store.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
@@ -689,7 +736,9 @@ for it.
   anyone looked at it; the rest of that shape was converted defensively rather
   than after being seen to break, because the trigger is not predictable. The
   quick check is to render the panel and grep its `innerText` for a digit jammed
-  against a word.
+  against a word. A closing tag does it too: `<strong>Assisted revenue</strong> is`
+  on a wrapping line rendered "Assisted revenueis" on EC Directed until
+  2026-11-06, so treat `</tag> word` the same as `} word`.
 
 - **Assignment has one shape in B2B (2026-10-31).** `ui/assign-bar.tsx`: team
   first, then One person or Round robin over a chosen set. Bulk takes only records

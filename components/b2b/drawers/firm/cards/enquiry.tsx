@@ -1,6 +1,6 @@
 'use client';
 
-import { fmtDate, fmtPhone } from '../utils';
+import { fmtDate, fmtDateTime, fmtPhone } from '../utils';
 import { fmtINR } from '../../../models/mock-data';
 import { useEnquiryItems } from '../hooks/use-enquiry-items';
 import { ClientOrderRow } from '@/lib/b2b';
@@ -28,6 +28,7 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
         <Fact label="GST" value={r.gstOnOrder ? <span className="font-mono">{r.gstOnOrder}</span> : undefined} />
         <Fact label="Status" value={[r.status, r.lostReason].filter(Boolean).join(' · ')} />
         <Fact label="Raised on" value={fmtPhone(r.contactNumber) + (r.contactName ? ` · ${r.contactName}` : '')} />
+        {r.ordered && <Fact label="Order placed" value={fmtDateTime(r.placedAt)} />}
         <Fact label="Created" value={fmtDate(r.createdAt)} />
         <Fact label="Follow-up" value={fmtDate(r.followUpDate)} />
         <Fact label="Closure date (set by hand on the deal)" value={fmtDate(r.closureDate)} />

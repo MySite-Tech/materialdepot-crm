@@ -19,7 +19,7 @@ export function periodOptions(today: string): { group: string; options: { key: s
         ...[2, 3, 4, 5].map((n) => ({ key: `m:${shiftMonth(month, -n)}`, label: monthLabel(shiftMonth(month, -n)) })),
       ],
     },
-    { group: 'Ranges', options: ranges.map((r) => ({ key: r, label: RANGE_LABEL[r] })) },
+    { group: 'Ranges', options: [...ranges.map((r) => ({ key: r, label: RANGE_LABEL[r] })), { key: 'all', label: 'All time' }] },
   ];
 }
 

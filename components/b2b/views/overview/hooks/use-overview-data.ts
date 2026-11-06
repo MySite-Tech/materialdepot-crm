@@ -18,7 +18,7 @@ async function readBase(): Promise<BaseData> {
     clientPhones, kamEnquiryIdsToResolve(data.kam),
   );
 
-  const { resolutions } = await resolveKamOrders(data.kam, deals);
+  const { resolutions } = await resolveKamOrders(data.kam, deals, data.clients);
   const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
   const unresolvedOrders = data.kam.filter((o) =>
     !!String(o.enqId || '').trim() && !resolvedById.has(o.id) && o.orderValue === undefined).length;

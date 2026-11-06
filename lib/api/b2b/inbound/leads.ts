@@ -89,6 +89,15 @@ export async function fetchLeadDeals(phone: string | number): Promise<import('..
   }
 }
 
+export async function fetchFirmDeals(phones: (string | undefined | null)[]): Promise<import('../../../../components/b2b/models/mock-data').LeadDeal[]> {
+  const wanted = [...new Set(phones.map((p) => String(p || '').replace(/\D/g, '').slice(-10)).filter((p) => p.length === 10))];
+  const lists = await Promise.all(wanted.map((p) => fetchLeadDeals(p)));
+  const seen = new Set<string>();
+  return lists.flat()
+    .filter((d) => (seen.has(d.id) ? false : (seen.add(d.id), true)))
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
 const enqLeadCache = new Map<string, Promise<CRMLeadRow[]>>();
 
 /** Resolve deal tickets by enquiry/cart id, with no phone involved.

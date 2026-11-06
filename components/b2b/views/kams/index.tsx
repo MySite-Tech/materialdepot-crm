@@ -73,7 +73,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
     setLoading(false);
 
     if (!ord.length) return;
-    const { resolutions, overflow } = await resolveKamOrders(ord, deals);
+    const { resolutions, overflow } = await resolveKamOrders(ord, deals, cl);
     const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
     const afterResolve = ord.map((o) => resolvedById.get(o.id) ?? o);
 

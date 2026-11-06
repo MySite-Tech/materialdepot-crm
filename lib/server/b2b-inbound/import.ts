@@ -16,15 +16,23 @@ export interface ImportOutcome {
   checked: number;
 }
 
+export type InboundRows = Map<string, B2BLeadRow>;
+
 export function inboundOwnerNames(members: TeamMember[]): Map<number, string> {
   const names = new Map(Object.entries(B2B_INBOUND_OWNERS).map(([id, name]) => [Number(id), name]));
   for (const m of teamMembers(members, 'inbound')) if (m.kylasUserId) names.set(m.kylasUserId, m.name);
   return names;
 }
 
-export async function importInbound(members: TeamMember[], full: boolean): Promise<ImportOutcome> {
+export function inboundRowFromKylas(raw: Record<string, any>, names: Map<number, string>): B2BLeadRow {
+  const lead = mapInboundLead(raw);
+  return inboundToRow({ ...lead, owner: (lead.ownerId != null && names.get(lead.ownerId)) || lead.owner });
+}
+
+export async function importInbound(members: TeamMember[], full: boolean): Promise<ImportOutcome & { rows: InboundRows }> {
   const names = inboundOwnerNames(members);
-  const known = new Set((await readInboundRows()).keys());
+  const rows = await readInboundRows();
+  const known = new Set(rows.keys());
   const after = new Date(`${B2B_FRESH_START}T00:00:00+05:30`).toISOString();
   const rule = JSON.stringify(b2bInboundRule([...names.keys()], '', after));
 
@@ -36,9 +44,8 @@ export async function importInbound(members: TeamMember[], full: boolean): Promi
     checked += content.length;
     const unseen = content.filter((raw) => !known.has(String(raw.id)));
     for (const raw of unseen) {
-      const lead = mapInboundLead(raw);
-      known.add(lead.id);
-      fresh.push(inboundToRow({ ...lead, owner: (lead.ownerId != null && names.get(lead.ownerId)) || lead.owner }));
+      known.add(String(raw.id));
+      fresh.push(inboundRowFromKylas(raw, names));
     }
     if (page + 1 >= Number(body.totalPages ?? 0)) break;
     if (!full && !unseen.length) break;
@@ -47,5 +54,6 @@ export async function importInbound(members: TeamMember[], full: boolean): Promi
   for (let i = 0; i < fresh.length; i += PAGE) {
     await b2bBackendFetch('/rows/bulk', { method: 'POST', body: { rows: fresh.slice(i, i + PAGE), only_new: true } });
   }
-  return { imported: fresh.length, checked };
+  for (const r of fresh) rows.set(String(r.kylas_lead_id || r.id), r);
+  return { imported: fresh.length, checked, rows };
 }
