@@ -87,6 +87,46 @@ it does now, and the Firm page uses it.
 The KAM shown on the Firm page is the account's KAM **today**. Nothing in this
 stack records who held the account at the time.
 
+### The Firm page lists deal tickets, and many orders have none (2026-11-04)
+
+The Enquiries & orders card can only list what `/crm/leads/` returns, and that
+endpoint is rooted on Django's **deal tickets**. An `estimate` that no deal ticket
+points at (by the ticket's estimate, or another revision of the same ENQ id) is
+invisible to it, while `client-order-history` counts it. So a firm could show
+"1 order" under each number and "No placed order on these numbers yet" in the
+card below. Measured on production 2026-11-04 over non-deleted, unrevised
+estimates since 1 Jan 2026: about a quarter of placed orders and nearly every
+Quote Approval Pending PI have no deal ticket.
+
+- **The card says so.** `unlistedOrders` (`drawers/firm/utils.ts`) compares each
+  number's aggregate order count with the ordered rows listed for it. When the
+  aggregate is higher, the Orders tab names how many orders are missing and why,
+  and its empty text becomes "None with a deal ticket". It costs no request.
+- **The fix is Django's** (`docs/backends.md` §Owed by Django row 18). The CRM
+  already sends `estimates=1` on the Firm page's per-phone and GST reads
+  (`fetchLeadsByPhone`, `fetchOrdersByGst`). Django ignores it today, so nothing
+  changes until it ships, and then the missing rows arrive with no CRM change
+  and the notice goes away by itself. They dedupe against tickets on
+  `ticketId ?? enqId`, so a ticketless row must carry no `ticketId`.
+- **PI shared is its own tab:** Orders · PI shared · Open carts · Lost. PI shared
+  is an open row in `QUOTED_STATUSES` (Quote Approval Pending, Availability Check,
+  Hold Stock, Payment Pending), the same set the Overview funnel calls quoted.
+  `orderTab` is the one function both the tab counts and the lists read.
+
+### A B2B SPoC and an EC on each open cart or PI (2026-11-04)
+
+The user wants carts and PIs handled one at a time, not the whole firm. Each open
+row's expanded card (`EnquiryActions` in `cards/orders.tsx`) has two lines:
+
+- **B2B SPoC on this cart / PI**, picked from everyone on the live B2B team.
+  Stored as `enquiry_spocs` (`{enqId, name, at, by}`), append-only, an unmapped
+  meta key like `spoc_log`, so no migration. The latest entry wins
+  (`enquirySpoc`). Only managers (`assignAs`) set it, like the firm's SPoCs. It
+  does not feed Sales by SPoC yet.
+- **Send this cart / PI to an EC**, with an EC and an optional BM
+  (`ec-directed.md` §One cart or PI at a time). The KAM tab's whole-firm
+  Redirect card was removed for it.
+
 ### The Firm page: one drawer for Client DB and the KAM tab
 
 `components/b2b/drawers/firm/` is the page `sales-tab-redesign.md` §KAM calls
@@ -120,6 +160,12 @@ filled as the firm moves along, so we can see what each SPoC sold and whether
 sales drop after a move. A firm joining at Outreach has no Inbound SPoC, and
 that is not a gap.
 
+- **A manager picks a SPoC, never types one (2026-11-04).** Inbound and Outreach
+  list the live team's members of that team (`useB2BReps().byTeam`), keeping a
+  stored name that left the team as an extra option. Typing is the fallback only
+  when the team list did not load, and the form says so. The KAM slot's Change
+  opens the Account card's picker, so the firm still has one KAM control. EC stays
+  typed, because a store BM is not on the B2B team.
 - **A slot fills itself where a link exists, and a manager can log one.**
   `firmSpocs` reads Inbound and Outreach from the leads on the firm's numbers,
   KAM from `client.kam`, EC from the BM on the last order. An entry in
@@ -145,6 +191,27 @@ that is not a gap.
   already loaded, so it costs no extra order request. Across all firms it would be
   one request per phone, which the request budget forbids. That roll-up waits on
   #8. Opening the drawer adds no request when the all-rows read is cached.
+
+### Every column filters (2026-11-04)
+
+The user found three dropdowns (segment, client type, KAM) too few to find a firm.
+The table now has a filter row under its headings, one control per visible column:
+text for Firm, Primary contact and EC SPoC, and a dropdown for the rest (thresholds
+for counts and amounts, windows for Last order, the five statuses, Studio access,
+KAM and the Inbound / Outreach SPoCs with a "none" option, type, segment, source).
+
+- **Filters run after the metrics,** on the `ClientListRow` (`rowMatchesFilters`),
+  so order figures, status and Studio access can be filtered. The tiles and the
+  list header count the filtered set, as before.
+- **A filter on a hidden column still applies** and stays as a removable chip,
+  so hiding a column never hides why a firm is missing.
+- **The table stays on screen when nothing matches,** so its filter row can be
+  changed. The empty message sits under it.
+- **SPoC filters scan the leads per firm,** lazily and cached per load
+  (`spocsOf`), only for firms a SPoC filter actually checks. The page-only rule
+  below still holds for the columns themselves.
+- A filter on data that did not load (Studio Space, the Inbound and Outreach
+  leads) is disabled and reads Unknown rather than matching nothing.
 
 ### Choosing the list's columns (2026-10-31)
 
@@ -246,10 +313,9 @@ estimate, which `/crm/leads/` also does not return.
 
 ### GST: what can and cannot be linked
 
-Tickets carry **no GSTIN**, and no Django endpoint filters by GST (`lib/api`
-has none). So an enquiry billed to one of the firm's GSTINs, but raised on a
-number that is not on the firm, cannot be found. The GST card says so in amber,
-and names the ask: a `gst=` filter on `/crm/leads/`. Do not join GST to
+Since 2026-11-03 Django filters `/crm/leads/` by exact GSTIN, and the Firm page
+folds those enquiries in (§The GST per order above). Only deal tickets come
+back, the same gap as §The Firm page lists deal tickets. Do not join GST to
 enquiries by firm name or by PAN on the frontend. That is the name-merge
 mistake §Parent companies rules out.
 

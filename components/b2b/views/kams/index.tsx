@@ -51,7 +51,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
   const [orderModal, setOrderModal] = useState<{ order: KamOrder; isNew: boolean } | null>(null);
 
   const today = istToday();
-  const { live, allKams } = useB2BReps(team);
+  const { live, allKams, byTeam } = useB2BReps(team);
   const me = useMemo(() => ({ name: viewer.member?.name || viewer.name, phone: viewer.phone }), [viewer.member, viewer.name, viewer.phone]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const boardScroll = useDragAutoScroll<HTMLDivElement>();
@@ -375,6 +375,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
           row={drawerRow}
           assignAs={viewer.isManager ? me.name : undefined}
           kams={allKams}
+          people={byTeam}
           clients={clients}
           historyFor={historyFor}
           orders={orders.filter((o) => o.clientId === drawerRow.client.id)}

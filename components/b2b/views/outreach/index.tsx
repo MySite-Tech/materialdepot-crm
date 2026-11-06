@@ -15,7 +15,7 @@ import { Assignments } from './intake';
 import { LensStrip } from './lenses';
 import { OutreachBoard } from './lists/board';
 import { columnsFor } from './lists/columns';
-import { BmChips, Toolbar } from './lists/filters';
+import { Toolbar } from './lists/filters';
 import { LensTable } from './lists/table';
 import { CreateLeadModal, MoveModal } from './modals';
 import { Scorecard } from './performance';
@@ -168,7 +168,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         <div className="min-w-0 flex flex-col gap-1.5">
           <h1 className="text-[19px] font-bold text-gray-900">Outreach</h1>
           {isKamView ? <p className="text-[11.5px] text-gray-500">Converted firms handed over to you</p>
-            : canPickBm ? <BmChips options={bms} value={bm} onChange={setBm} />
+            : canPickBm ? <p className="text-[11.5px] text-gray-500">{bm === 'all' ? `All BMs · ${bms.length}` : bm}</p>
               : <p className="text-[11.5px] text-gray-500">Your leads · {scope.me.name}</p>}
         </div>
         {!isKamView && (
@@ -198,6 +198,14 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         </div>
       )}
 
+      <Toolbar
+        f={f}
+        set={setFilters}
+        onSearch={onSearch}
+        bm={canPickBm && !isKamView ? { options: bms, value: bm, onChange: setBm } : undefined}
+        right={!isKamView && <Segmented value={view} onChange={setView} options={[['list', 'List'], ['board', 'Board']]} />}
+      />
+
       {!isKamView && (
         <div className="mb-4">
           <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -226,13 +234,6 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
           )}
         </div>
       )}
-
-      <Toolbar
-        f={f}
-        set={setFilters}
-        onSearch={onSearch}
-        right={!isKamView && <Segmented value={view} onChange={setView} options={[['list', 'List'], ['board', 'Board']]} />}
-      />
 
       <LensStrip groups={lenses.groups} counts={lenses.counts} hints={lenses.hints} state={state}
         active={view === 'list' ? lens : null} onPick={pickLens} />

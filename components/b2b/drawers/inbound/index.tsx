@@ -25,7 +25,7 @@ import { SaveState } from '../../types/inbound-drawer';
 import { EnqLookup, lookupEnqId, saveInboundLead } from '@/lib/b2b';
 import { hasTeamEdits } from '@/lib/b2b/mappers/inbound';
 import { CreditPicker } from '../../ui/credit-picker';
-import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
+import { RedirectToEc, openEnquiries, uniquePhones } from '../../ui/redirect-to-ec';
 import { creditOf } from '../../models/credit';
 import { SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -269,6 +269,8 @@ export default function InboundDrawer({
             phones={uniquePhones([draft.primaryContactPhone, draft.phone, ...(draft.additionalContacts || []).map((c) => c.phone)])}
             sourceTeam="inbound"
             leadRef={draft.id}
+            enquiries={openEnquiries(detail.deals.data)}
+            enquiriesState={detail.deals.loading ? 'loading' : detail.deals.failed ? 'failed' : 'ready'}
           />
 
           <InboundNotesCard draft={draft} calls={calls} />

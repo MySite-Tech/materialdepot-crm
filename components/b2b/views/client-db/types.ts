@@ -1,4 +1,4 @@
-import { ClientEntity, ClientOrderMetrics, ClientStatus } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, FirmSpoc, StudioAccess } from '../../models/client';
 
 export type ClientLens = 'all' | 'active' | 'lapsing' | 'inactive' | 'never' | 'unknown' | 'nokam' | 'pending';
 
@@ -17,13 +17,19 @@ export interface ClientListRow {
   days?: number;
 }
 
-export interface ClientFilters {
-  segment: string;
-  type: string;
-  kam: string;
-}
-
 export type ClientColumn = 'contact' | 'gst' | 'orders' | 'enquiries' | 'revenue' | 'avgOrder' | 'openCarts' | 'lastOrder' | 'status' | 'studio' | 'kam' | 'inboundSpoc' | 'outreachSpoc' | 'ecSpoc' | 'clientType' | 'segment' | 'source';
+
+export type FilterKey = 'firm' | ClientColumn;
+
+export type ClientFilters = Partial<Record<FilterKey, string>>;
+
+export type FilterOption = [value: string, label: string];
+
+export interface FilterContext {
+  today: string;
+  studio: (c: ClientEntity) => StudioAccess | 'none' | null;
+  spocs: (c: ClientEntity) => FirmSpoc[];
+}
 
 export type SortKey = 'company' | 'orders' | 'revenue' | 'lastOrder';
 

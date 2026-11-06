@@ -1,5 +1,5 @@
 import { contactNumbers, normalizeContactNumber } from '../../utils/client';
-import { ClientEntity, SpocLogEntry, SpocRole } from '../../../types/client';
+import { ClientEntity, EnquirySpoc, SpocLogEntry, SpocRole } from '../../../types/client';
 import { dealIsOrder } from './deals';
 import { sameRep } from '../../outreach/handover';
 
@@ -37,6 +37,9 @@ export interface SpocSales {
 interface SalesOrder { orderValue: number; status: string; createdAt?: string; spoc?: string }
 
 const DAY_MS = 86_400_000;
+
+export const enquirySpoc = (client: ClientEntity, enqId: string): EnquirySpoc | undefined =>
+  (client.enquirySpocs || []).filter((e) => e.enqId === enqId).sort((a, b) => b.at.localeCompare(a.at))[0];
 
 const latestEntry = (client: ClientEntity, role: SpocLogEntry['role']): SpocLogEntry | undefined =>
   (client.spocLog || []).filter((e) => e.role === role).sort((a, b) => b.from.localeCompare(a.from))[0];

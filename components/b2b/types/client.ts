@@ -121,6 +121,13 @@ export interface SpocLogEntry {
   by?: string;
 }
 
+export interface EnquirySpoc {
+  enqId: string;
+  name: string;
+  at: string;
+  by?: string;
+}
+
 export interface ClientEntity {
   id: string;
 
@@ -137,6 +144,7 @@ export interface ClientEntity {
 
   assignments?: KamAssignment[];
   spocLog?: SpocLogEntry[];
+  enquirySpocs?: EnquirySpoc[];
   remarks?: string;
 
   interactions?: ClientInteraction[];

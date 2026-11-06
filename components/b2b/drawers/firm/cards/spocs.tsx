@@ -8,11 +8,14 @@ import { btnPrimary, inputCls } from '../../../constants/ui';
 import type { ClientOrderRow } from '@/lib/b2b';
 import { useMemo, useState } from 'react';
 import { istToday } from '../../../models/inbound';
+import { repNames } from '../../../models/outreach/handover';
+import { Rep } from '../../../models/outreach/intake';
+import type { B2BTeam } from '@/lib/b2b/team/types';
 
 const LABEL: Record<SpocRole, string> = { inbound: 'Inbound SPoC', outreach: 'Outreach SPoC', kam: 'KAM SPoC', ec: 'EC SPoC' };
 const STAGE: Record<string, string> = { inbound: 'Inbound', outreach: 'Outreach', kam: 'KAM' };
 
-export function SpocsCard({ client, links, linksLoading, linksFailed, orders, ordersLoading, ordersFailed, assignAs, onSave }: {
+export function SpocsCard({ client, links, linksLoading, linksFailed, orders, ordersLoading, ordersFailed, assignAs, people, onChangeKam, onSave }: {
   client: ClientEntity;
   links: FirmLinks;
   linksLoading: boolean;
@@ -21,6 +24,8 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
   ordersLoading: boolean;
   ordersFailed: boolean;
   assignAs?: string;
+  people: Record<B2BTeam, Rep[]>;
+  onChangeKam: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
 }) {
   const [editing, setEditing] = useState<SpocLogEntry['role'] | null>(null);
@@ -52,6 +57,8 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
   const unread = (role: SpocRole) => (role === 'ec' ? ordersFailed : role !== 'kam' && linksFailed);
   const pending = (role: SpocRole) => (role === 'ec' ? ordersLoading : role !== 'kam' && linksLoading);
   const hasSales = sales.rows.length > 0 || sales.before.orders > 0;
+  const team = editing && editing !== 'ec' ? people[editing] : [];
+  const current = editing ? spocs.find((s) => s.role === editing)?.name : undefined;
 
   return (
     <SectionCard title="People on this firm" subtitle="One SPoC per team. A firm can join at any stage, so any slot can stay empty">
@@ -69,7 +76,11 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
                 {s.name ? 'Change' : 'Add'}
               </button>
             )}
-            {s.role === 'kam' && <div className="mt-1 text-[11px] text-gray-400">Change under Account</div>}
+            {assignAs !== undefined && s.role === 'kam' && (
+              <button onClick={onChangeKam} className="mt-1 text-[11px] font-semibold text-[#0F766E] hover:underline">
+                {s.name ? 'Change' : 'Add'}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -77,13 +88,21 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
       {editing && (
         <div className="mt-2 flex items-end gap-2 flex-wrap border border-teal-100 bg-teal-50 rounded-md px-3 py-2">
           <label className="text-[11px] text-gray-600">{LABEL[editing]}
-            <input value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} block mt-0.5`} />
+            {team.length ? (
+              <select value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} block mt-0.5`}>
+                <option value="">Pick a person</option>
+                {repNames(team, [current]).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            ) : (
+              <input value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} block mt-0.5`} />
+            )}
           </label>
           <label className="text-[11px] text-gray-600">Since
             <input type="date" value={from} max={istToday()} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} block mt-0.5`} />
           </label>
           <button onClick={save} disabled={busy || !name.trim() || !from} className={btnPrimary}>{busy ? 'Saving…' : 'Save'}</button>
           <button onClick={() => setEditing(null)} className="text-[11px] text-gray-500">Cancel</button>
+          {editing !== 'ec' && !team.length && <span className="w-full text-[11px] text-amber-700">The B2B team list did not load, so type the name.</span>}
           {error && <span className="w-full text-[11px] text-red-600">{error}</span>}
         </div>
       )}

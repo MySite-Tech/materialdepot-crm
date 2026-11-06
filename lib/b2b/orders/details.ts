@@ -153,7 +153,7 @@ export async function fetchOrdersByGst(gstins: string[]): Promise<ClientOrderRow
   if (!wanted.length) return [];
   const { results } = await fetchCRMLeads({
     gst: wanted.join(','), page: 1, pageSize: 100,
-    include: 'boq', sortBy: 'createdAt', sortDir: 'desc',
+    include: 'boq', estimates: true, sortBy: 'createdAt', sortDir: 'desc',
   });
   return (Array.isArray(results) ? results : []).map((r) => ticketToOrderRow(r, String(r.clientPhone || '')));
 }

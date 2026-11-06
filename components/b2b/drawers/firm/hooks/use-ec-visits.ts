@@ -19,18 +19,21 @@ export function useEcVisits(clientId: string) {
     return () => { alive = false; };
   }, [clientId]);
 
+  const remember = useCallback((saved: EcVisit) => {
+    setVisits((cur) => {
+      const rest = cur.filter((x) => x.id !== saved.id);
+      return [...rest, saved].sort((a, b) => (a.visitDate || '').localeCompare(b.visitDate || '') || String(a.visitTime || '').localeCompare(String(b.visitTime || '')));
+    });
+  }, []);
+
   const save = useCallback(async (v: EcVisit): Promise<string | null> => {
     try {
-      const saved = await saveEcVisit(v);
-      setVisits((cur) => {
-        const rest = cur.filter((x) => x.id !== saved.id);
-        return [...rest, saved].sort((a, b) => (a.visitDate || '').localeCompare(b.visitDate || '') || String(a.visitTime || '').localeCompare(String(b.visitTime || '')));
-      });
+      remember(await saveEcVisit(v));
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : 'Save failed';
     }
-  }, []);
+  }, [remember]);
 
-  return { visits, loading, error, save };
+  return { visits, loading, error, save, remember };
 }

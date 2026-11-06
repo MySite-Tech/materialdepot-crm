@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { fmtShortINR } from '../../models/mock-data';
 import { repNames } from '../../models/outreach/handover';
@@ -15,8 +15,8 @@ import { useSpocSources } from './hooks/use-spoc-sources';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
-import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
-import { clientLensMatches, filterChips, matchesFilters, sortRows } from './utils';
+import { ClientFilters, ClientLens, ClientListRow, FilterContext, FilterKey, FilterOption, SortState } from './types';
+import { clientLensMatches, filterChips, rowMatchesFilters, sortRows } from './utils';
 import { ClientFilterBar, ListHead } from './ui/filters';
 import { ClientModal } from './ui/modals/client-modal';
 import { MergeModal } from './ui/modals/merge';
@@ -46,7 +46,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
-  const { kams, allKams } = useB2BReps(team);
+  const { kams, allKams, byTeam } = useB2BReps(team);
   const assigner = useFirmAssign(clients, viewer.member?.name || viewer.name, (list) => {
     const byId = new Map(list.map((c) => [c.id, c]));
     setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
@@ -75,14 +75,33 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
+  const spocsOf = useMemo(() => {
+    const cache = new Map<string, FirmSpoc[]>();
+    return (c: ClientEntity): FirmSpoc[] => {
+      let s = cache.get(c.id);
+      if (!s) {
+        s = firmSpocs(c, firmLinks(c, spocSource.inbound, spocSource.outreach), []);
+        cache.set(c.id, s);
+      }
+      return s;
+    };
+  }, [spocSource.inbound, spocSource.outreach]);
+
+  const filterCtx = useMemo<FilterContext>(() => ({
+    today,
+    spocs: spocsOf,
+    studio: (c) => (studio.logins ? firmStudioAccess(c, studio.logins, studio.firms) ?? 'none' : null),
+  }), [today, spocsOf, studio.logins, studio.firms]);
+
   const scoped = useMemo<ClientListRow[]>(() =>
     clients
-      .filter((c) => matchesFilters(c, f) && clientMatchesSearch(c, search))
+      .filter((c) => clientMatchesSearch(c, search))
       .map((client) => {
         const metrics = metricsFor(client);
         return { client, metrics, status: clientStatus(metrics, today), days: daysToLapse(metrics, today) };
-      }),
-  [clients, metricsFor, f, search, today]);
+      })
+      .filter((r) => rowMatchesFilters(r, f, filterCtx)),
+  [clients, metricsFor, f, search, today, filterCtx]);
 
   const byLens = useMemo(() => {
     const out = Object.fromEntries((Object.keys(CLIENT_LENS) as ClientLens[]).map((k) => [k, [] as ClientListRow[]])) as Record<ClientLens, ClientListRow[]>;
@@ -102,13 +121,14 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const pickLens = (k: ClientLens) => { setLens(k); setSortPick(null); };
   const clearAll = () => { setSearch(''); setF(NO_FILTERS); pickLens('all'); };
   const filtersSet = !!search.trim() || filterChips(f).length > 0;
+  const setFilter = (k: FilterKey, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
   const pageRows = useMemo(() => rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE), [rows, curPage]);
   const pageSpocs = useMemo(
-    () => new Map(pageRows.map(({ client }) => [client.id, firmSpocs(client, firmLinks(client, spocSource.inbound, spocSource.outreach), [])])),
-    [pageRows, spocSource.inbound, spocSource.outreach],
+    () => new Map(pageRows.map(({ client }) => [client.id, spocsOf(client)])),
+    [pageRows, spocsOf],
   );
 
   const unread = byLens.unknown.length;
@@ -144,9 +164,14 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     return { client, metrics, status: clientStatus(metrics, today), days: daysToLapse(metrics, today), temp: currentTemperature(client.interactions) };
   }, [clients, openId, metricsFor, today]);
 
-  const kamOptions = useMemo(() => {
-    return repNames(allKams, clients.map((c) => c.kam));
-  }, [allKams, clients]);
+  const filterOptions = useMemo<Partial<Record<FilterKey, FilterOption[]>>>(() => {
+    const names = (list: string[], none: string): FilterOption[] => [...list.map((n): FilterOption => [n, n]), ['none', none]];
+    return {
+      kam: names(repNames(allKams, clients.map((c) => c.kam)), 'No KAM'),
+      inboundSpoc: names(repNames(byTeam.inbound, []), 'None found'),
+      outreachSpoc: names(repNames(byTeam.outreach, []), 'None found'),
+    };
+  }, [allKams, byTeam, clients]);
 
   const saveClient = async (c: ClientEntity): Promise<string | null> => {
     const err = await upsertClient(c);
@@ -241,10 +266,9 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       {!!clients.length && (
         <ClientFilterBar
           f={f}
-          set={(patch) => setF((p) => ({ ...p, ...patch }))}
+          options={filterOptions}
           search={search}
           setSearch={setSearch}
-          kamOptions={kamOptions}
           onClear={clearAll}
           visible={visible}
           onColumns={setVisible}
@@ -276,9 +300,10 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             revenue={listRevenue}
             unread={rows.filter((r) => r.status === 'Unknown').length}
             f={f}
+            options={filterOptions}
             search={search}
             onLens={pickLens}
-            onFilter={(k) => setF((p) => ({ ...p, [k]: NO_FILTERS[k] }))}
+            onFilter={(k) => setFilter(k, '')}
             onSearch={() => setSearch('')}
             onClearAll={clearAll}
           />
@@ -307,8 +332,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
               <button onClick={() => assigner.setError(null)} className="opacity-60 hover:opacity-100 leading-none">×</button>
             </div>
           )}
-          {rows.length ? (
-            <ClientTable
+          <ClientTable
               rows={pageRows}
               today={today}
               studio={studio}
@@ -321,8 +345,11 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
               visible={visible}
               spocs={pageSpocs}
               spocSource={spocSource}
+              f={f}
+              options={filterOptions}
+              onFilter={setFilter}
             />
-          ) : (
+          {!rows.length && (
             <div className="py-12 px-6 text-center">
               <p className="text-[13px] font-semibold text-gray-600">
                 {filtersSet ? `No firm in ${CLIENT_LENS[lens].heading} matches the search and filters.` : CLIENT_LENS[lens].empty}
@@ -366,6 +393,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           reassignReason="Reassigned in the Client Database"
           assignAs={viewer.isManager ? viewer.member?.name || viewer.name : undefined}
           kams={allKams}
+          people={byTeam}
           onClose={() => setOpenId(null)}
           onSave={saveClient}
           onEdit={() => setEditing(openRow.client)}

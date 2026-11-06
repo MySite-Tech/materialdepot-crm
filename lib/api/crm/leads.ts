@@ -67,6 +67,7 @@ export interface CRMLeadsQuery {
   priority?: string;
   gst?: string;
   include?: string;
+  estimates?: boolean;
 }
 
 export interface CRMLeadsStatsBucket { count: number; value: number; valueExclGst?: number }
@@ -241,6 +242,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.priority) params.set('priority', query.priority);
   if (query.gst) params.set('gst', query.gst);
   if (query.include) params.set('include', query.include);
+  if (query.estimates) params.set('estimates', '1');
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();

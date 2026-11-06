@@ -13,41 +13,6 @@ const chip = 'px-2.5 py-1 rounded-full text-[11.5px] font-semibold border whites
 
 const ADDED: RangeKey[] = ['any', 'today', 'week', 'last7', 'last30', 'month', 'last-month', 'custom'];
 
-export function BmChips({ options, value, onChange }: {
-  options: BmOption[];
-  value: string;
-  onChange: (name: string) => void;
-}) {
-  if (options.length > 7) {
-    return (
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={control}>
-        <option value="all">All BMs</option>
-        {options.map((o) => <option key={o.rep.name} value={o.rep.name}>{`${o.rep.name} (${o.leads})`}</option>)}
-      </select>
-    );
-  }
-  const btn = (key: string, text: ReactNode, title?: string) => (
-    <button
-      key={key}
-      onClick={() => onChange(key)}
-      title={title}
-      className={`${chip} ${value === key ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
-    >
-      {text}
-    </button>
-  );
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {btn('all', 'All BMs')}
-      {options.map((o) => btn(
-        o.rep.name,
-        <>{o.rep.name}<span className="tabular-nums opacity-60"> {o.leads}</span></>,
-        o.onTeam ? undefined : 'Holds leads but is not on the Outreach team list',
-      ))}
-    </div>
-  );
-}
-
 const SELECTS: [string, keyof OutreachFilters, readonly string[], (v: string) => string][] = [
   ['Client type', 'companyType', COMPANY_TYPES, (v) => v],
   ['Segment', 'segment', SEGMENTS, (v) => `Segment ${v}`],
@@ -55,10 +20,11 @@ const SELECTS: [string, keyof OutreachFilters, readonly string[], (v: string) =>
   ['Source', 'source', [...OUTREACH_SOURCES, 'none'], (v) => (v === 'none' ? 'Source not set' : v)],
 ];
 
-export function Toolbar({ f, set, onSearch, right }: {
+export function Toolbar({ f, set, onSearch, bm, right }: {
   f: OutreachFilters;
   set: (patch: Partial<OutreachFilters>) => void;
   onSearch: (q: string) => void;
+  bm?: { options: BmOption[]; value: string; onChange: (name: string) => void };
   right?: ReactNode;
 }) {
   const active = activeFilterCount(f);
@@ -87,6 +53,15 @@ export function Toolbar({ f, set, onSearch, right }: {
             <button onClick={() => onSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm leading-none">×</button>
           )}
         </div>
+        {bm && (
+          <select value={bm.value} onChange={(e) => bm.onChange(e.target.value)} aria-label="BM"
+            className={`${control} ${bm.value !== 'all' ? 'border-[#0F766E] text-[#0F766E] bg-teal-50 font-semibold' : ''}`}>
+            <option value="all">All BMs</option>
+            {bm.options.map((o) => (
+              <option key={o.rep.name} value={o.rep.name}>{`${o.rep.name} · ${o.leads}${o.onTeam ? '' : ' (not on the Outreach team)'}`}</option>
+            ))}
+          </select>
+        )}
         <button
           onClick={() => setOpen((o) => !o)}
           className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border whitespace-nowrap ${active ? 'border-[#0F766E] text-[#0F766E] bg-teal-50' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-400'}`}
@@ -140,7 +115,7 @@ export function Toolbar({ f, set, onSearch, right }: {
               Only leads missing details
             </label>
           </div>
-          <p className="mt-2 text-[10.5px] text-gray-400">These narrow the tiles and lists below. The scorecard above follows only the BM and its period; a scorecard tile&apos;s list still honours these.</p>
+          <p className="mt-2 text-[10.5px] text-gray-400">These narrow the tiles and lists below. The scorecard counts only by the BM and its period; a scorecard tile&apos;s list still honours these.</p>
         </div>
       )}
     </div>

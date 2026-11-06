@@ -1,5 +1,5 @@
-import { ACTIVE_DAYS, INACTIVE_DAYS } from '../../models/client';
-import { ClientColumn, ClientFilters, ClientLens, ClientLensMeta, SortKey, SortState } from './types';
+import { ACTIVE_DAYS, CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INACTIVE_DAYS, SEGMENTS, STUDIO_ACCESS } from '../../models/client';
+import { ClientColumn, ClientFilters, ClientLens, ClientLensMeta, FilterKey, FilterOption, SortKey, SortState } from './types';
 
 export const PAGE_SIZE = 25;
 
@@ -55,4 +55,28 @@ export const SORT_FIRST_DIR: Record<SortKey, SortState['dir']> = {
   company: 'asc', orders: 'desc', revenue: 'desc', lastOrder: 'desc',
 };
 
-export const NO_FILTERS: ClientFilters = { segment: 'all', type: 'all', kam: 'all' };
+export const NO_FILTERS: ClientFilters = {};
+
+export const TEXT_FILTERS: Partial<Record<FilterKey, string>> = {
+  firm: 'Firm name',
+  contact: 'Name or number',
+  ecSpoc: 'Name',
+};
+
+const COUNT: FilterOption[] = [['0', 'None'], ['1', '1+'], ['2', '2+'], ['5', '5+'], ['10', '10+'], ['25', '25+']];
+const AMOUNT: FilterOption[] = [['10000', '₹10K+'], ['100000', '₹1L+'], ['500000', '₹5L+'], ['2500000', '₹25L+'], ['10000000', '₹1Cr+']];
+
+export const FIXED_FILTER_OPTIONS: Partial<Record<FilterKey, FilterOption[]>> = {
+  gst: [['yes', 'Has GST'], ['no', 'No GST']],
+  orders: COUNT,
+  enquiries: COUNT,
+  revenue: AMOUNT,
+  avgOrder: AMOUNT,
+  openCarts: [['0', 'None'], ...AMOUNT],
+  lastOrder: [['7', 'Last 7 days'], ['30', `Last ${ACTIVE_DAYS} days`], [String(INACTIVE_DAYS), `Last ${INACTIVE_DAYS} days`], ['90', 'Last 90 days'], ['180', 'Last 180 days'], ['over180', 'Over 180 days ago'], ['never', 'Never']],
+  status: (['Active', 'Inactive 1 month', 'Inactive', 'Never ordered', 'Unknown'] as const).map((s) => [s, s]),
+  studio: [['power', STUDIO_ACCESS.power.label], ['non-power', STUDIO_ACCESS['non-power'].label], ['none', 'Not onboarded']],
+  clientType: [...CLIENT_ENTITY_TYPES.map((t): FilterOption => [t, t]), ['none', 'Not set']],
+  segment: [...SEGMENTS.map((s): FilterOption => [s, `Segment ${s}`]), ['none', 'Not set']],
+  source: CLIENT_SOURCES.map((s) => [s, s]),
+};

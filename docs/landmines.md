@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-78 entries. They live in one file because they cross-reference each other —
+79 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -89,6 +89,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A whole-row save let a stale copy erase a colleague's calls
 - The Inbound board followed Kylas's owner, so a move inside Kylas took a rep's work off their list
 - A KAM signed in on a number the team list did not hold, so the whole KAM tab read 0
+- A firm's page said "No placed order" under numbers that each showed an order
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1221,3 +1222,18 @@ logins (Sai Suresh, Sidhant, Iliyas Kazi) had no team row at all.
 The guard is now the Team tab's Sign-in check, which listed "none" for that
 morning's team, and Change number, which carries a person's firms to their new
 number (`docs/b2b/sales-tab-redesign.md` §Sign-in check and Change number).
+
+### A firm's page said "No placed order" under numbers that each showed an order (2026-11-04)
+
+A manager opened a firm whose three numbers read "1 order", "1 order" and "0
+orders", and the Enquiries & orders card below said 0 orders, 1 open cart and 1
+lost. Production held two delivered orders and two PIs at Quote Approval Pending
+on those numbers. Nothing failed: the per-number counts come from
+`client-order-history`, which reads estimates, and the card comes from
+`/crm/leads/`, which lists only Django deal tickets. None of those four estimates
+had a deal ticket, so the card could not see them and its empty text claimed
+something false. The shape is two reads of "orders" with different roots shown
+on one screen. Before trusting an empty list, compare it with a figure on the same
+page. The card now names the orders it cannot list (`docs/b2b/client-db.md`
+§The Firm page lists deal tickets), and the real fix is `docs/backends.md` §Owed
+by Django row 18.

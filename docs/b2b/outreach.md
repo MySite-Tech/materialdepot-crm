@@ -328,8 +328,8 @@ asked to book meeting 2 again. Unlocking a saved meeting is not built.
 A Converted lead's revenue goes to its BM, unless a manager credits someone else
 with a reason (`ui/credit-picker.tsx`, `revenueCredit`, 2026-10-30). The
 Leadership Board honours the credit. The Outreach tab's own scorecard still
-counts by BM. A lead also carries a **Redirect to an EC** card
-(`ec-directed.md`).
+counts by BM. A lead also carries a **Send a cart or PI to an EC** card
+(`ec-directed.md` §One cart or PI at a time).
 
 
 `Closed` is still the stored stage (see above on renaming stored values); it is
@@ -419,7 +419,7 @@ shown as each tile's tooltip; the non-obvious ones:
   Later orders from the same client are not in it — this CRM does not track
   them per Outreach lead.
 
-The scorecard follows only the BM chip and its period. The filter panel and
+The scorecard follows only the BM and its period. The filter panel and
 search narrow the work tiles and every list, a scorecard tile's list included,
 which then says "Filters or search hide n of N".
 
@@ -435,10 +435,14 @@ full-width banners, and My day as a wall of reminder sentences. The layout now
 matches Inbound's (`inbound.md` §One tab, three tile groups): **every number
 is a lens, and clicking it lists exactly what it counts**.
 
-- **Order: BM chips → Scorecard → search/filters → work tiles → one table.**
-  The BM chip sits under the title because it is the only control that moves
-  the scorecard. The filters sit below the scorecard, so "filters apply to
-  what is below them" is literally true.
+- **Order: search, BM and Filters → Scorecard → work tiles → one table
+  (2026-11-04).** The user found a row of BM chips unclean and asked for the BM
+  to be one of the filters, with everything else below them. The BM is a single
+  "All BMs" dropdown in the filter bar, with each BM's lead count, and a member
+  holding leads off the team list says so in the option. The title's subtitle
+  names the BM picked. The scorecard still follows only the BM and the period,
+  and the Filters panel says so. Action needed and Pipeline stay side by side.
+  Before this the chips sat under the title and the filters below the scorecard.
 - **Scorecard**: Effort and Output, four tiles each, with a period picker
   (this/last month, four earlier months, this week, last 7/30 days, custom;
   grouped Months / Ranges). Picking **Custom range** seeds both dates from

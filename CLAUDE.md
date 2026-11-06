@@ -489,8 +489,8 @@ Inbound change, and don't re-propose following Kylas's owner. **At deploy, run
 `scripts/inbound-owner-cutover.mjs` once against production** (dry run first, log
 JSON from the SQL in that section). Without it, 140 rows keep stale owners.
 Still open: the 400 the user saw on :3001 (`mdFetch` errors now name the endpoint,
-and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`), and moving
-Outreach's BM chips into Filters.
+and `crm-guard.mjs` logs upstream errors to `logs/crm-guard.log`). Outreach's BM
+chips became a dropdown in its filter bar on 2026-11-04 (`docs/b2b/outreach.md`).
 
 **KAM sign-in fixes (2026-11-03): CRM PR #42 (`kam-sign-in-check`) and b2b-backend
 PR #21 (`POST /b2b/team/renumber`). Deploy the backend first.**

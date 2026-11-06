@@ -19,8 +19,8 @@ const STATUS_COLOR: Record<EcVisitStatus, string> = {
   'No show': 'text-amber-700 bg-amber-50 border-amber-200',
 };
 
-export function EcVisitsCard({ client }: { client: ClientEntity }) {
-  const { visits, loading, error, save } = useEcVisits(client.id);
+export function EcVisitsCard({ client, ec }: { client: ClientEntity; ec: ReturnType<typeof useEcVisits> }) {
+  const { visits, loading, error, save } = ec;
   const [scheduling, setScheduling] = useState(false);
   const today = istToday();
   const upcoming = visits.filter((v) => v.status === 'Scheduled' && (v.visitDate || '') >= today).length;

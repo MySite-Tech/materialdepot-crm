@@ -6,6 +6,7 @@
 |---|---|---|
 | `fetchEcVisits({ kind: 'redirect' })` | `GET /api/b2b/ec-visits?kind=redirect` → b2b-backend `GET /b2b/ec-visits?kind=redirect` | One per mount. The whole tab. Needs migration 0023 |
 | `saveEcVisit(v)` | `PUT /api/b2b/ec-visits` → `PUT /b2b/ec-visits` | A redirect, a status change, or a saved orders check |
+| `saveEcVisit` from a cart or PI | `PUT /api/b2b/ec-visits` with `enq_id` set | From the Firm page's open rows, or the lead drawers' card. No new column: `enq_id` already existed |
 | `checkAssisted(v)` | `fetchClientTickets(phone)` → Django `GET /crm/leads/?q=<phone>` | One per phone on the redirect, **only on a click** ("Check orders", or "Check orders for N", two at a time) |
 
 ## EC Directed: B2B as a lead source for the stores (2026-10-30)
@@ -50,6 +51,20 @@ what those numbers then ordered at that EC is **assisted revenue**.
   stores nothing, so it never reads as ₹0.
 - **Who sees what:** a rep sees the redirects they made (`scheduledBy`), and a
   manager or B2B admin sees all of them.
+- **One cart or PI at a time (2026-11-04).** The user: send to the EC order by
+  order, situationally, not the whole client. A redirect now names the cart or
+  PI in `enq_id` and sends only the number it was raised on. On the Firm page
+  every open cart and PI has "+ Send to EC" (EC, optional BM, purpose, date,
+  note), and its earlier sends show on that row. In the Inbound and Outreach
+  drawers the card asks which open cart or PI first. A lead with no open cart,
+  or whose carts did not load, sends the client without one, because a new lead
+  often visits an EC before any cart exists. The KAM tab's whole-firm card is
+  gone. The tab shows the enquiry above the purpose.
+- **A redirected enquiry counts once it is an order at that EC,** whenever it
+  was created, judged by `bookedBranch` and else the cart owner's branch. The
+  phone rule above still adds any new order on that number at that EC. Without
+  this, a PI raised before the send and ordered at the store afterwards was
+  missed, because the phone rule needs the order created on or after the send.
 - **Footfall is not shown.** `/crm/lead-visits/` has no branch, and the footfall
   endpoints report totals, not visitors. The row's status (Directed → Visited /
   No show / Cancelled) is set by hand until Django can answer "did this number

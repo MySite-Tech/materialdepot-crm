@@ -123,7 +123,7 @@ export function fetchLeadsByPhone(phone: string): Promise<CRMLeadRow[]> {
   const hit = phoneLeadCache.get(want);
   if (hit) return hit;
 
-  const promise = fetchCRMLeads({ q: want, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc', include: 'boq' })
+  const promise = fetchCRMLeads({ q: want, page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc', include: 'boq', estimates: true })
     .then(({ results }) => (Array.isArray(results) ? results : []));
   phoneLeadCache.set(want, promise);
   promise.catch(() => phoneLeadCache.delete(want));
