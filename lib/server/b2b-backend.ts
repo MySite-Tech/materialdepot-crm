@@ -97,9 +97,9 @@ export async function relayB2B(
     return Response.json({ error: 'Could not reach the B2B backend' }, { status: 502 });
   }
 
-  const body: unknown = await res.json().catch(() => null);
-  if (!res.ok) {
-    return Response.json({ error: errorDetail(body) ?? `B2B backend answered ${res.status}` }, { status: 502 });
+  if (res.ok) {
+    return new Response(res.body ?? 'null', { status: 200, headers: { 'Content-Type': res.headers.get('content-type') ?? 'application/json' } });
   }
-  return Response.json(body);
+  const body: unknown = await res.json().catch(() => null);
+  return Response.json({ error: errorDetail(body) ?? `B2B backend answered ${res.status}` }, { status: 502 });
 }

@@ -20,6 +20,8 @@ export const TREND_MONTHS = 6;
 
 export const PAST_MONTH_TTL = 30 * 60_000;
 
+export const PAST_MONTH_KEEP = 24 * 60 * 60_000;
+
 export const HOLDER_RANK: Record<HolderKind, number> = {
   referred: 0,
   redirect: 1,

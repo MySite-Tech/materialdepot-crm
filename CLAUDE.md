@@ -532,6 +532,15 @@ shared CRM tree is checked out on it, so :3001 serves it. What it carries:
 - **Orders and enquiry lookups use every number on a lead or firm**
   (`inboundPhones`, `outreachPhones`, `resolveKamOrders(…, clients)`;
   `docs/b2b/inbound.md` §Enq ID → order value).
+- **Speed (the user's ask, 6 Nov).** Measured from the :3001 dev log: month by month
+  averaged 9.1 s, 14.4 s on 6 Nov. Now the trend builds three months at a time,
+  past months answer from cache while they rebuild in the background, and the B2B
+  relay streams answers. The Inbound sync reads `/rows` once, not twice
+  (`docs/b2b/overview.md` §Why the revenue sections were slow). **To measure:**
+  `~/Projects/ss-local-stack/logs/crm-3001.log` has every route's time, and
+  `logs/crm-guard-timing.log` has every Django, Kylas and B2B-backend call :3001
+  makes (time, status, bytes; no tokens or query values). Read both before and
+  after a speed change.
 - **Not seen signed in on real data.** Every screen was driven on the sandbox only.
   After deploy, check Team → round robin shows the backlog count (about 329 on
   6 Nov). Then check that a store manager sees only their EC on Sent to your store.

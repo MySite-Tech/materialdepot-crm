@@ -586,6 +586,9 @@ whoever is in rotation is the user's call, not an automatic step. Checked on the
 sandbox: a 4 Nov row on the intake owner was dealt on the next run, a September
 one waited as backlog until asked.
 
+A sync passes the rows the import already read (plus what it inserted) to the
+rotation, so the 5-minute sync reads `/rows` once, not twice.
+
 **A Team row save sends only what changed (2026-11-06).** It sent the whole
 member from the page's copy, so a stale page could switch someone's round robin
 back on while a manager changed their access. `saveMember` now reads the stored

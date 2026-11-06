@@ -144,7 +144,10 @@ original `admin`/`b2b_sales` set would 403 every `b2b_KAM` and `b2b_manager`),
 then forwards to `${B2B_BACKEND_URL}/b2b/<path>` with a
 server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
 (`app/api/b2b/waitlist`, `ec-visits`) call `b2bBackendFetch` with the
-same credential instead. Four things the relay deliberately does:
+same credential instead. **A successful answer is streamed through untouched
+(2026-11-06).** It used to be parsed and re-encoded, which on `rows` (3.2 MB)
+cost CPU and memory on every B2B tab open. Only an error body is parsed now,
+for its message. Four things the relay deliberately does:
 
 - **Refuses two things to anyone but a manager or admin (2026-10-31).**
   `managersOnly` covers `studio-number` and a client-row `DELETE`, so hiding the

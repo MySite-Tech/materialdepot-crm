@@ -10,7 +10,7 @@ import type { MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, Sa
 import { B2BBackendError } from '@/lib/server/b2b-backend';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
 import { intakePool, kylasUserForPhone, listKylasUsers, type PoolLead } from './kylas';
-import { importInbound, inboundOwnerNames, inboundRowFromKylas, ownerChange, readInboundRows, writeInbound, type ImportOutcome } from '@/lib/server/b2b-inbound';
+import { importInbound, inboundOwnerNames, inboundRowFromKylas, ownerChange, readInboundRows, writeInbound, type ImportOutcome, type InboundRows } from '@/lib/server/b2b-inbound';
 import {
   assignedLeadIdsSince,
   claimRoundRobin,
@@ -31,7 +31,7 @@ export class InputError extends Error {}
 const DAY_MS = 86_400_000;
 const ASSIGNMENT_LOG_FROM = '2000-01-01T00:00:00Z';
 
-function untouchedOnIntake(rows: Awaited<ReturnType<typeof readInboundRows>>): PoolLead[] {
+function untouchedOnIntake(rows: InboundRows): PoolLead[] {
   return [...rows.entries()]
     .filter(([, r]) => Number(r.meta_data?.owner_kylas_id) === INBOUND_INTAKE_KYLAS_ID
       && r.stage === 'New'
@@ -101,11 +101,11 @@ export async function changeMemberNumber(fromPhone: string, toPhone: string, byN
 export async function syncInbound(byName: string, full: boolean): Promise<RotationOutcome & ImportOutcome> {
   const { members, tableMissing } = await readMembers();
   if (tableMissing) throw new InputError('The B2B team tables are not set up yet');
-  const imported = await importInbound(members, full);
-  return { ...(await rotateInbound(byName, false, false)), ...imported };
+  const { rows, ...imported } = await importInbound(members, full);
+  return { ...(await rotateInbound(byName, false, false, rows)), ...imported };
 }
 
-export async function rotateInbound(byName: string, dryRun: boolean, backlog: boolean): Promise<RotationOutcome> {
+export async function rotateInbound(byName: string, dryRun: boolean, backlog: boolean, known?: InboundRows): Promise<RotationOutcome> {
   const outcome: RotationOutcome = { dryRun, assigned: [], failed: [], waiting: 0, backlog: 0 };
   const { members, tableMissing } = await readMembers();
   if (tableMissing) return { ...outcome, skipped: 'The B2B team tables are not set up yet' };
@@ -115,7 +115,7 @@ export async function rotateInbound(byName: string, dryRun: boolean, backlog: bo
   }
 
   const since = rotationSince();
-  const [pool, assigned, rows] = await Promise.all([intakePool(since), assignedLeadIdsSince(ASSIGNMENT_LOG_FROM), readInboundRows()]);
+  const [pool, assigned, rows] = await Promise.all([intakePool(since), assignedLeadIdsSince(ASSIGNMENT_LOG_FROM), known ?? readInboundRows()]);
   const inKylasPool = new Set(pool.map((l) => l.id));
   const start = new Date(INBOUND_ROTATION_START).getTime();
   const held = untouchedOnIntake(rows).filter((l) => !assigned.has(l.id) && !inKylasPool.has(l.id));
