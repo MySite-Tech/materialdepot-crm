@@ -495,8 +495,8 @@ Krishna Jadhav's data was already merged onto his real number in production that
 day by script, so these PRs prevent the next case and fix nothing that is live.
 Still owed by Django: `docs/backends.md` §Owed by Django rows 15–17.
 
-**CRM PR #43 (2026-11-05, `b2b-placed-date-requalified-leads` → `main`, open; no
-backend PR).** Four fixes: orders show `orderPlacedAt`, not the ticket's creation
+**CRM PR #43 (2026-11-05, `b2b-placed-date-requalified-leads`; merged inside #44 and
+live 2026-11-06; no backend PR).** Four fixes: orders show `orderPlacedAt`, not the ticket's creation
 date (credit still gates on the cart date); the round robin inserts re-qualified
 leads the import never brought in; Overview, Inbound and Leads apply only their
 newest request, and Inbound's filters cost no request; a merged firm's KAM state
@@ -505,13 +505,12 @@ into the CRM yet", and a placed order on the Firm page shows a placement time. I
 every placed order reads "—", Django is not sending `orderPlacedAt` (Owed by Django
 #10). Detail in `docs/b2b/context.md` and `docs/landmines.md`.
 
-**START HERE for B2B: branch `6-nov-changes` (2026-11-06), CRM and b2b-backend.**
-In the CRM it is cut from `main` and carries PR #43's two commits, because the round
-robin work builds on them. If #43 merges first, a PR from this branch shows only the
-6 Nov commit. In b2b-backend it is cut from `master` (`efdae93`) with no commits yet. Nothing
-in this round needed the backend. Work there in the worktree `~/Projects/b2b-backend-6nov`, never in
-the `dhruv-changes` checkout. **No PR is open; the tech team merges.** The
-shared CRM tree is checked out on it, so :3001 serves it. What it carries:
+**B2B 6 Nov round: CRM PR #44 (`6-nov-changes`, with #43's commits), merged and
+live on 2026-11-06 at 13:56 UTC (`dd57076`), on Dhruv's ask.** Nothing in this
+round needed the backend. Its b2b-backend branch `6-nov-changes` (worktree
+`~/Projects/b2b-backend-6nov`, from `master` `efdae93`) has no commits. Never work
+in the `dhruv-changes` checkout. Start the next CRM change from `origin/main`. What
+it carries:
 - **EC B2B Referral has three sub-tabs.** Refer a client (everyone), Sent to your
   store (assistant store manager and up, or a B2B manager) and All referrals
   (area manager and up, or a B2B manager). The route gates each view, and orders
