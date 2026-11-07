@@ -23,6 +23,7 @@ import { MergeModal } from './ui/modals/merge';
 import { SeedModal } from './ui/modals/seed';
 import { UploadModal } from './ui/modals/upload';
 import { ClientTable } from './ui/table';
+import { ClientReview } from './review';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { clientFromSeed, deleteB2BRow, fetchClients, upsertClient } from '@/lib/b2b';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
@@ -39,6 +40,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [page, setPage] = useState(1);
+  const [section, setSection] = useState<'firms' | 'review'>('firms');
 
   const [search, setSearch] = useState('');
   const [f, setF] = useState<ClientFilters>(NO_FILTERS);
@@ -72,6 +74,14 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   }, [loadAggregates]);
 
   useEffect(() => { load(); }, [load]);
+
+  const addImported = useCallback((list: ClientEntity[]) => {
+    setClients((prev) => {
+      const have = new Set(prev.map((c) => c.id));
+      return [...list.filter((c) => !have.has(c.id)), ...prev];
+    });
+    addPhones(list.flatMap((c) => contactNumbers(c.contacts)));
+  }, [addPhones]);
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
@@ -238,6 +248,20 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
         </div>
       )}
 
+      {viewer.canManageTeam && (
+        <div className="inline-flex rounded-md border border-gray-200 overflow-hidden mb-4">
+          {([['firms', 'Firms'], ['review', 'Review new firms']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setSection(k)}
+              className={`px-3 py-1.5 text-[12px] font-semibold ${section === k ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {section === 'review' && viewer.canManageTeam ? (
+        <ClientReview clients={clients} team={team} viewer={viewer} onClients={addImported} />
+      ) : (<>
       {(loading || !!clients.length) && <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />}
 
       {!!clients.length && (
@@ -352,6 +376,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       <p className="text-[10px] text-gray-400 mt-3">
         {`Active means an order placed in the last ${ACTIVE_DAYS} days. After that a firm is Inactive 1–3, 3–6 or 6–12 months, or over 12 months, counted back from today to its last order. The KAM tab uses the same rule: its Inactive 3+ months tile is the last three together.`}
       </p>
+      </>)}
 
       {addingNew && (
         <ClientModal client={blank()} isNew kams={allKams} onClose={() => setAddingNew(false)} onSave={saveClient} />

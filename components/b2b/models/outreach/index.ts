@@ -49,15 +49,18 @@ export const OUTREACH_OPEN_STATUSES: OutreachStatus[] = ['Yet to Meet', 'Follow 
 
 export const EC_B2B_REFERRAL = 'EC B2B Referral';
 
-export const OUTREACH_SOURCES = ['Inbound', EC_B2B_REFERRAL, 'EC referral', 'Dormant form', 'Own research'] as const;
+export const STORE_ORDERS = 'Store orders';
+
+export const OUTREACH_SOURCES = ['Inbound', EC_B2B_REFERRAL, 'EC referral', STORE_ORDERS, 'Dormant form', 'Own research'] as const;
 export type OutreachSource = typeof OUTREACH_SOURCES[number];
 
-export const OUTREACH_ENTRY_SOURCES = OUTREACH_SOURCES.filter((s) => s !== EC_B2B_REFERRAL);
+export const OUTREACH_ENTRY_SOURCES = OUTREACH_SOURCES.filter((s) => s !== EC_B2B_REFERRAL && s !== STORE_ORDERS);
 
 export const OUTREACH_SOURCE_HINT: Record<OutreachSource, string> = {
   'Inbound':      'Handed over by the Inbound team for an in-person meeting',
   [EC_B2B_REFERRAL]: 'Sent by EC staff through the EC B2B Referral form',
   'EC referral':  'Referred by an Experience Centre',
+  [STORE_ORDERS]: 'Billed with a GSTIN on store orders, and sent here from the Client Database review list',
   'Dormant form': 'From an older lead form that is no longer worked',
   'Own research': 'Found by the BM — field visit, directory, Instagram',
 };

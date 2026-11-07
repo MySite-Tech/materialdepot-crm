@@ -14,7 +14,7 @@ export { byNewestOrder } from './orders/ticket';
 export type { BoqLine, CartLine, ClientOrderRow } from './orders/ticket';
 export { clientFromSeed, planClientSeed } from './leads/client-seed';
 export type { ClientSeedPlan } from './leads/client-seed';
-export { deleteB2BRow, saveInboundLead, upsertClient, upsertClients, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
+export { deleteB2BRow, insertInboundLeads, saveInboundLead, upsertClient, upsertClients, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
 export { fetchTargets, saveTargets } from './stats/targets';
 export { fetchUnifiedLeads, inboundPhones, inboundToUnified, outreachPhones, outreachToUnified } from './leads/unified';
 export type { LeadSource, UnifiedLead, UnifiedStatus } from './leads/unified';

@@ -90,6 +90,13 @@ caller and month: the hero and the trend ask for the current month at the same
 moment on open, and without that the month would be read from Django twice.
 Refresh skips the cache, but not for a report built in the last minute.
 
+`lib/server/b2b-client-import/` reuses the report's `allOrders` pager, so the two
+read `/crm/leads/` the same way. It caches 12 months of orders under one global key
+for 30 minutes, not one per caller, because the read is company-wide and takes up to
+a minute. A read in flight is shared, and Refresh bypasses the key. The B2B rows and
+Not-a-client decisions are read fresh on every call, so a firm a manager just sent on
+leaves the list (`docs/b2b/client-db.md` §Review new firms).
+
 ### `requireCaller` — the only way a route handler learns who is calling
 
 `lib/server/session.ts`. A route handler has no session of its own: auth in this

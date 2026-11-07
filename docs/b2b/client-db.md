@@ -597,6 +597,7 @@ blank SPoC, segment and client type. The user wanted them here, not in Leads.
   Rows have no owner, `source` Existing, and `import_batch` in `extra`. GSTINs that
   fail `GSTIN_SHAPE` were left off.
 - **It was a one-time copy.** Later edits to `client_master` do not reach this tab.
+  New firms are now found on orders and reviewed by a manager (next section).
   Four names differ only by case or spacing and were kept, because their phones
   differ. Use Merge.
 - **Reading it:** `/client-master` is staff-only and Cloudflare challenges curl. A
@@ -604,3 +605,67 @@ blank SPoC, segment and client type. The user wanted them here, not in Leads.
   `POST /b2b/rows/bulk` with `only_new`, tested first with fake rows on :3100.
 - **Verified on production:** the tab reads 1,278 firms, all loading their order
   status through the batched history calls.
+
+## Review new firms: found on orders, decided by a manager (2026-11-07)
+
+Client Database → **Review new firms** (managers only) lists every firm billed with a
+GSTIN on a placed order in the last 12 calendar months that is on no B2B board. A
+manager ticks firms and sends them on, or marks them **Not a client**. Nothing joins a
+board without that click. The rule for finding firms is the one below.
+
+| Call | Endpoint | When |
+|---|---|---|
+| `fetchReviewQueue()` | `GET /api/b2b/client-import` → Django `/crm/leads/?order_from&order_to&branch_basis=estimate` (12 calendar-month windows, 3 at a time) + backend `GET /rows` + `GET /client-review` | On opening Review new firms. The orders are cached server-side for 30 minutes, one global key, and a read in flight is shared. Rows and decisions are read fresh every time. **Refresh** re-reads the orders |
+| Add to Client Database / KAM | `POST /rows/bulk` (client rows) | KAM writes a Pending assignment that the KAM accepts on the KAM tab (`kam.md` §Admin assigns firms) |
+| Outreach | `GET /rows` once for round-robin load, then `POST /rows/bulk {only_new}` | Source **Store orders**, a pending intake that the BM accepts or rejects |
+| Inbound | `GET /rows` once for round-robin load (CRM rows only, no Kylas), then `POST /rows/bulk {only_new}` | A `crm-` lead, stage New, source Walk-in, owned at once. Nothing is written to Kylas |
+| Not a client / Undo | `POST /b2b/client-review`, `DELETE /b2b/client-review/{key}` (b2b-backend migration 0025) | Relay is manager-only for reads and writes |
+
+- **Why review, not auto-import.** PR #45 first added every new GST firm on Client
+  Database open. On 2026-11-06 that ran on the local real-data copy and added 161
+  firms from 14 days of orders. 88 had their first-ever order in that fortnight and
+  89 GSTINs were individuals or proprietors: mostly store walk-ins who asked for a
+  GST bill. A Client Database firm with no SPoC counts as **EC Direct** with its
+  whole history (`overview.md` §Four revenue channels), so the order that qualified
+  a firm was also counted as its B2B revenue. Locally, November's B2B revenue
+  roughly doubled against production, and past months rose too, because a firm's
+  older orders count as well. The user asked for a list to verify by hand instead
+  (real figures are in memory, not here). Accepting a firm still brings its
+  whole history into EC Direct: that rule is unchanged and is the user's to change.
+- **Firms already on a board are left out,** by any number or GSTIN on a client row,
+  an Inbound lead (`inboundPhones`, `gstNumber`) or an Outreach lead
+  (`outreachPhones`, `gstNumber`), Lost and Invalid leads included. The user chose
+  this on 2026-11-07 over listing them with a chip. It keeps an Inbound lead from
+  being copied to Outreach, which the user ruled out (`outreach.md`).
+- **Only Not a client is stored.** Every other choice creates a row on a board,
+  which takes the firm off the list. A decision matches a firm by its key
+  (`CLI-GST-<first GSTIN>`) or by any GSTIN or number it saved, so a firm that gains
+  a second number or GSTIN later stays rejected. Undo deletes the decision.
+- **One firm per connected set of GSTINs and numbers.** Two numbers billed to one
+  GSTIN, or one number billing two GSTINs, are one row (union-find over both). It is
+  named after the client on its most recent order, which is often a person's name.
+  A firm with no 10-digit number is counted and left out.
+- **Type comes from the GSTIN's PAN** (its 4th letter, GSTIN position 6): C company,
+  F partnership or LLP, P an individual (a proprietor), anything else Other.
+- **The GST is the order's (`estimate.client_gst`), not the profile's.** The
+  2026-10-31 export read `users_user.gst_number`, and that field has almost stopped
+  being filled. Phones first qualifying by it fell from 120 (May 2026) to 42, 9, 6, 3,
+  3 and 0 (November), while by either GST it was 126, 172, 214, 247, 247 and 213.
+  `/crm/leads/` carries only the order's GST, so a firm whose GST is only on its
+  profile is missed. That is 0–3 a month now, and the 2026-10-31 copy holds the
+  older ones. Of the 161 firms above, 3 had a profile GST.
+- **The GSTIN must pass `GSTIN_SHAPE`.** The export's `GST IS NOT NULL` let `''`
+  through (474 orders), which is why about 125 of the 1,200 firms have no GST.
+- **The five internal-BM numbers the export dropped are not filtered.** Over 360
+  days they decided 1 firm, and listing them would put staff phone numbers in this
+  public repo. A manager can mark such a firm Not a client.
+- **Only a B2B manager can open it**, server-checked, because Django's `/crm/leads/`
+  answers from the caller's token and the read must be company-wide.
+- **Verified** on synthetic orders through the compiled `utils/queue.ts` (grouping,
+  board exclusion by client GST, Inbound `+91` number and Outreach alternate number,
+  a decision matched by number under another key, non-orders, bad GSTINs, no phone).
+  On `npm run dev:sandbox` the manager sent one firm each to Outreach (one person),
+  KAM (round robin), the Client Database and Inbound (round robin). The manager also
+  marked one firm, undid it, re-marked it and reloaded. The Inbound persona gets 403
+  from both routes. **Not yet run on real data,** where PR #45's preview measured roughly
+  950 firms. The first read takes up to a minute.

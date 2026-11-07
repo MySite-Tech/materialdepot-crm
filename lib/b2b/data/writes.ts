@@ -51,6 +51,18 @@ export async function saveInboundLead(base: InboundLead | null, next: InboundLea
   }
 }
 
+export async function insertInboundLeads(list: InboundLead[]): Promise<string | null> {
+  if (!list.length) return null;
+  try {
+    await b2bBackendPost('/rows/bulk', { rows: list.map(inboundToRow), only_new: true });
+    invalidateB2BCache();
+    return null;
+  } catch (e) {
+    console.error('[b2b] bulk inbound insert failed', e);
+    return writeErrorMessage(e);
+  }
+}
+
 export function upsertOutreachLead(l: OutreachLead): Promise<string | null> {
   return upsert(outreachToRow(l));
 }

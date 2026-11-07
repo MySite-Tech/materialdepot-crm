@@ -129,9 +129,12 @@ a focus aid, not confidentiality (same caveat as Inbound).
 
 ### Lead sources
 
-`Inbound | EC B2B Referral | EC referral | Dormant form | Own research`.
+`Inbound | EC B2B Referral | EC referral | Store orders | Dormant form | Own research`.
 **EC B2B Referral** comes only from the store form (`ec-referral.md`) and cannot
-be picked in + New lead. "Dormant form" is the
+be picked in + New lead. **Store orders** (2026-11-07) comes only from the Client
+Database's Review new firms list (`client-db.md` §Review new firms): a manager sends
+a firm billed with a GSTIN on store orders, with its orders in a note. It cannot be
+picked in + New lead either, and it is not a coverage source. "Dormant form" is the
 user's "existing forms that are inactive": there is no integration for those
 forms, so a BM enters each one by hand with `Source` set.
 Inbound and both EC sources are what the **coverage** KPI is measured on.
