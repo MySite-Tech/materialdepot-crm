@@ -546,7 +546,7 @@ shared CRM tree is checked out on it, so :3001 serves it. What it carries:
   6 Nov). Then check that a store manager sees only their EC on Sent to your store.
 
 **EC redirects show on every team's drawer (2026-11-06, CRM PR #46 from
-`ec-redirect-visibility`, open, not merged; no backend PR).** The user found a client an Outreach BM
+`ec-redirect-visibility`, merged 2026-11-07 on Dhruv's ask; no backend PR).** The user found a client an Outreach BM
 had sent to an EC reading "Not redirected from here yet." The card only listed what
 that drawer had sent since it opened. Now the Inbound, Outreach and KAM drawers load
 every redirect matching the record's id or any of its numbers, from any team, with
@@ -556,9 +556,12 @@ has run only on the sandbox. The reported redirect was not in the 3 Nov `crm_rea
 copy. **After deploy,** open that lead. If it still reads "Not sent to an EC by any
 team yet", no redirect row was ever saved. A redirect on a client's number must
 never be scoped per team or per rep in the drawer.
+Not covered by #46: the KAM Firm page still reads EC visits by `client_id` only, so a
+redirect sent from a lead (no client id yet) does not show on the firm.
 
 **:3001 may not be serving this checkout.** On 2026-11-06 it was restarted from a
-combined snapshot of several sessions' uncommitted work, at the user's request. When
+combined snapshot of several sessions' uncommitted work, at the user's request, and
+from 2026-11-07 from `~/Projects/crm-combined`. When
 an edit does not show there, check whose tree it runs:
 `lsof -a -p $(lsof -tiTCP:3001 -sTCP:LISTEN) -d cwd`. To restore it, stop :3001 and
 run `~/Projects/ss-local-stack/crm-local.sh up`.
