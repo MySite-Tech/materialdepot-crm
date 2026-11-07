@@ -91,11 +91,11 @@ moment on open, and without that the month would be read from Django twice.
 Refresh skips the cache, but not for a report built in the last minute.
 
 `lib/server/b2b-client-import/` reuses the report's `allOrders` pager, so the two
-read `/crm/leads/` the same way. It keeps one global key for an hour, not one per
-caller: it only adds firms that are missing, so a second manager's run inside the
-hour would re-read about two pages and find nothing new. Its 12-month Sync bypasses
-that key, and a run in flight is shared, not repeated
-(`docs/b2b/client-db.md` §New firms come in from orders by themselves).
+read `/crm/leads/` the same way. It caches 12 months of orders under one global key
+for 30 minutes, not one per caller, because the read is company-wide and takes up to
+a minute. A read in flight is shared, and Refresh bypasses the key. The B2B rows and
+Not-a-client decisions are read fresh on every call, so a firm a manager just sent on
+leaves the list (`docs/b2b/client-db.md` §Review new firms).
 
 ### `requireCaller` — the only way a route handler learns who is calling
 

@@ -31,6 +31,10 @@ function seedDeals() {
     deal('ENQ-900110', '9000020009', 'A client of Mockup Interiors', 'Order Placed', 215000, SNEHA, 'Whitefield', -4, { closureDate: istDay(-2), clientGst: '29AAACS1111A2Z0' }),
     deal('ENQ-900111', '9000020010', 'Mockup team member', 'Delivered', 90000, RAVI, 'JP Nagar', -5, { closureDate: istDay(-3) }),
     deal('ENQ-900112', '9000020011', 'Specimen Fabricators', 'Delivered', 135000, IMRAN, 'HSR', -70, { closureDate: istDay(-60), clientGst: '29AAACF4444D1Z3' }),
+    deal('ENQ-900113', '9000020012', 'Placeholder Modular', 'Order Confirmed', 410000, SNEHA, 'Whitefield', -12, { closureDate: istDay(-10), clientGst: '29AAFCP5555E1Z2' }),
+    deal('ENQ-900114', '9000020013', 'Placeholder Modular', 'Delivered', 95000, RAVI, 'JP Nagar', -40, { closureDate: istDay(-35), clientGst: '29AAFCP5555E1Z2' }),
+    deal('ENQ-900115', '9000020014', 'Dummy Decor', 'Order Placed', 62000, IMRAN, 'HSR', -3, { closureDate: istDay(-2), clientGst: '29ABCPD6666F1Z7' }),
+    deal('ENQ-900116', '9000020015', 'Stand-in Constructions', 'Delivered', 230000, SNEHA, 'Whitefield', -95, { closureDate: istDay(-90), clientGst: '36AAACS7777G1Z4' }),
   ];
 }
 

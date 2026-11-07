@@ -113,6 +113,15 @@ exercised over HTTP there. Without 0023:
 - EC Directed reads Unknown;
 - check-in uploads fail, so a held meeting cannot be saved.
 
+**Migration `0025_b2b_client_review`** (b2b-backend branch `client-review`, 2026-11-07)
+adds `b2b_client_review` and `GET/POST /b2b/client-review`, `DELETE
+/b2b/client-review/{key}`: the firms a manager marked Not a client on the Client
+Database's Review new firms list (`b2b/client-db.md` §Review new firms). **Deploy it
+first.** Without it the list still loads, with an amber notice that earlier
+decisions could not be read, and Not a client fails. Sending firms on does not need it.
+It was run up, down and up on a scratch database stamped at 0024, and the three routes
+were exercised over HTTP there.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against

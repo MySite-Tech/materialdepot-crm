@@ -1,9 +1,14 @@
-export const IMPORT_BATCH = 'orders-gst';
-
-export const IMPORT_ID_PREFIX = 'CLI-GST-';
-
-export const RECENT_DAYS = 14;
+export const REVIEW_ID_PREFIX = 'CLI-GST-';
 
 export const YEAR_MONTHS = 12;
 
-export const RECENT_EVERY_MS = 60 * 60_000;
+export const ORDERS_TTL_MS = 30 * 60_000;
+
+export const RECENT_ORDERS = 5;
+
+export const FIRM_KIND_LABEL = {
+  company: 'Company',
+  partnership: 'Partnership or LLP',
+  proprietor: 'Proprietor',
+  other: 'Other',
+} as const;

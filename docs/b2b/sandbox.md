@@ -73,7 +73,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | Presales notes and calls | Kylas `/notes/relation`, `/call-logs/search`, `/call-logs/{id}` | Kylas stub, seeded on two leads |
 | B2B calls (RNR / Connected), client details, status, team notes, Send to Outreach | backend `POST /b2b/rows` (pipeline `inbound`). Nothing is written to Kylas since 2026-10-29 | backend stub |
 | Enq ID and deal tickets | Django `/crm/leads/?enquiry_ids=` and `?q=<phone>` | Django stub, seven `ENQ-9001xx` tickets |
-| Firms from orders | Django `/crm/leads/?order_from` → `/api/b2b/client-import` | Django stub. Four tickets carry dummy GSTINs: Mockup Interiors on two numbers (added on open), Template Builders (already a client) and `ENQ-900112` 60 days back (only Sync finds it) |
+| Review new firms | Django `/crm/leads/?order_from` → `/api/b2b/client-import`; backend `/client-review` | Django stub and the backend stub. Eight tickets carry dummy GSTINs: Mockup Interiors and Template Builders are already clients, and four firms are left to review (one on two numbers, one a proprietor, one in Telangana). Not-a-client decisions land in `backend.clientReview` |
 | BM / EC pickers | Django `/crm/available-bms/`, `/orgainsation-branch/` | Django stub |
 | Outreach pool, accept, meetings, handover | backend rows (pipeline `outbound`, id `OR-IN-<kylas id>`) | backend stub |
 | Studio Space waitlist | backend `GET /b2b/waitlist` | backend stub, two sign-ups: one on Mockup Interiors' mobile (Waitlist tile 1), one matching no lead |

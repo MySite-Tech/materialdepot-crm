@@ -167,6 +167,20 @@ export function backendRoutes(db) {
     if (path === '/team' && method === 'PUT') return putMember(db, body);
     if (path === '/ec-visits' && method === 'GET') return listEcVisits(db, query);
     if (path === '/ec-visits' && method === 'PUT') return putEcVisit(db, body);
+    if (path === '/client-review' && method === 'GET') return { decisions: db.clientReview ?? [] };
+    if (path === '/client-review' && method === 'POST') {
+      const kept = new Map((db.clientReview ?? []).map((d) => [d.key, d]));
+      for (const item of body?.items ?? []) {
+        kept.set(item.key, { ...item, decision: 'not_a_client', decided_by: kept.get(item.key)?.decided_by ?? body.by, decided_at: kept.get(item.key)?.decided_at ?? new Date().toISOString() });
+      }
+      db.clientReview = [...kept.values()];
+      return { saved: (body?.items ?? []).length };
+    }
+    if (path.startsWith('/client-review/') && method === 'DELETE') {
+      const before = (db.clientReview ?? []).length;
+      db.clientReview = (db.clientReview ?? []).filter((d) => d.key !== id('/client-review/'));
+      return { deleted: before - db.clientReview.length };
+    }
     if (path === '/assignments/last-round-robin') return lastRoundRobin(db);
     if (path === '/assignments/lead-ids') {
       const since = query.get('since') || '';

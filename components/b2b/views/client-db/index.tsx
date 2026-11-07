@@ -12,19 +12,18 @@ import { AssignBar } from '../../ui/assign-bar';
 import { useClientColumns } from './hooks/use-client-columns';
 import { useFirmAssign } from './hooks/use-firm-assign';
 import { useSpocSources } from './hooks/use-spoc-sources';
-import { useClientImport } from './hooks/use-client-import';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, SortState } from './types';
 import { clientLensMatches, filterChips, matchesFilters, sortRows } from './utils';
 import { ClientFilterBar, ListHead } from './ui/filters';
-import { ImportBar } from './ui/import-bar';
 import { ClientModal } from './ui/modals/client-modal';
 import { MergeModal } from './ui/modals/merge';
 import { SeedModal } from './ui/modals/seed';
 import { UploadModal } from './ui/modals/upload';
 import { ClientTable } from './ui/table';
+import { ClientReview } from './review';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { clientFromSeed, deleteB2BRow, fetchClients, upsertClient } from '@/lib/b2b';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
@@ -41,6 +40,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [uploading, setUploading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [page, setPage] = useState(1);
+  const [section, setSection] = useState<'firms' | 'review'>('firms');
 
   const [search, setSearch] = useState('');
   const [f, setF] = useState<ClientFilters>(NO_FILTERS);
@@ -82,7 +82,6 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     });
     addPhones(list.flatMap((c) => contactNumbers(c.contacts)));
   }, [addPhones]);
-  const importer = useClientImport(viewer.canManageTeam && !loading && !loadError, addImported);
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
@@ -228,16 +227,6 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {viewer.canManageTeam && (
-            <button
-              onClick={importer.check}
-              disabled={!!importer.busy}
-              className={btnGhost}
-              title="Find every firm billed with a GSTIN on an order placed this month or in the eleven before it, and not here yet"
-            >
-              {importer.busy === 'preview' ? 'Checking orders…' : 'Sync from orders'}
-            </button>
-          )}
           {viewer.canManageTeam && <button onClick={() => setSeeding(true)} className={btnGhost}>Seed from leads</button>}
           {viewer.canManageTeam && <button onClick={() => setUploading(true)} className={btnGhost}>Bulk Upload</button>}
           {viewer.canManageTeam && <button
@@ -259,8 +248,20 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
         </div>
       )}
 
-      {viewer.canManageTeam && <ImportBar importer={importer} />}
+      {viewer.canManageTeam && (
+        <div className="inline-flex rounded-md border border-gray-200 overflow-hidden mb-4">
+          {([['firms', 'Firms'], ['review', 'Review new firms']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setSection(k)}
+              className={`px-3 py-1.5 text-[12px] font-semibold ${section === k ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
+      {section === 'review' && viewer.canManageTeam ? (
+        <ClientReview clients={clients} team={team} viewer={viewer} onClients={addImported} />
+      ) : (<>
       {(loading || !!clients.length) && <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />}
 
       {!!clients.length && (
@@ -375,6 +376,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       <p className="text-[10px] text-gray-400 mt-3">
         {`Active means an order placed in the last ${ACTIVE_DAYS} days. After that a firm is Inactive 1–3, 3–6 or 6–12 months, or over 12 months, counted back from today to its last order. The KAM tab uses the same rule: its Inactive 3+ months tile is the last three together.`}
       </p>
+      </>)}
 
       {addingNew && (
         <ClientModal client={blank()} isNew kams={allKams} onClose={() => setAddingNew(false)} onSave={saveClient} />
