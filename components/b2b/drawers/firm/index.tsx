@@ -5,9 +5,10 @@ import { ContactsCard } from './cards/contacts';
 import { EcVisitsCard } from './cards/ec-visits';
 import { GstsCard } from './cards/gsts';
 import { DeleteFirm } from './cards/delete-firm';
-import { OrdersCard } from './cards/orders';
+import { EnquiryActions, OrdersCard } from './cards/orders';
 import { ReferredClientsCard } from './cards/referred-clients';
 import { SpocsCard } from './cards/spocs';
+import { useEcVisits } from './hooks/use-ec-visits';
 import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
@@ -17,9 +18,12 @@ import { Rep } from '../../models/outreach/intake';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
 import { btnGhost } from '../../constants/ui';
 import { ClientOrderHistory } from '@/lib/b2b';
+import type { B2BTeam } from '@/lib/b2b/team/types';
 import { useEffect, useMemo, useState } from 'react';
 
-export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], onClose, onSave, onEdit, onDelete, canAddStudioNumber, children }: {
+const NO_PEOPLE: Record<B2BTeam, Rep[]> = { inbound: [], outreach: [], kam: [] };
+
+export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], people = NO_PEOPLE, onClose, onSave, onEdit, onDelete, canAddStudioNumber, children }: {
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
@@ -30,6 +34,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   reassignReason: string;
   assignAs?: string;
   kams?: Rep[];
+  people?: Record<B2BTeam, Rep[]>;
   onClose: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
   onEdit?: () => void;
@@ -41,7 +46,9 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   const gstins = useMemo(() => gstNumbers(client.gsts), [client.gsts]);
   const orders = useFirmOrders(phones, gstins);
   const links = useFirmLinks(client);
+  const ec = useEcVisits(client.id, phones);
   const [via, setVia] = useState<string | null>(null);
+  const [kamPicker, setKamPicker] = useState(0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -104,6 +111,8 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             ordersLoading={orders.loading}
             ordersFailed={orders.failed}
             assignAs={assignAs}
+            people={people}
+            onChangeKam={() => setKamPicker((n) => n + 1)}
             onSave={onSave}
           />
 
@@ -116,19 +125,21 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             details={orders.details}
             loading={orders.loading}
             failed={orders.failed}
-            numbers={phones.length}
+            phones={phones}
+            historyFor={historyFor}
             via={via}
             onClearVia={() => setVia(null)}
             onRecheck={orders.recheck}
+            renderActions={(r) => <EnquiryActions client={client} row={r} ec={ec} people={people} assignAs={assignAs} onSave={onSave} />}
           />
 
           <ReferredClientsCard client={client} metrics={metrics} />
 
-          <EcVisitsCard client={client} />
+          <EcVisitsCard client={client} ec={ec} />
 
           {children}
 
-          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} kams={kams} onSave={onSave} />
+          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} kams={kams} openNonce={kamPicker} onSave={onSave} />
 
           {onDelete && <DeleteFirm client={client} onDelete={onDelete} />}
         </div>

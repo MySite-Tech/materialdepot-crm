@@ -14,7 +14,7 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
+export function EnquiryDetail({ r, actions }: { r: ClientOrderRow; actions?: React.ReactNode }) {
   const { items, state } = useEnquiryItems(r);
   const cartTotal = r.cart.reduce((n, i) => n + (i.price && i.qty ? i.price * i.qty : i.price || 0), 0);
   const remarks = [...r.remarks].sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
@@ -22,6 +22,7 @@ export function EnquiryDetail({ r }: { r: ClientOrderRow }) {
 
   return (
     <div className="bg-gray-50 border border-gray-100 rounded-md p-3 flex flex-col gap-3">
+      {actions}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
         <Fact label="Cart value" value={fmtINR(r.orderValue)} />
         <Fact label="Excl. GST" value={r.cartValueExclGst !== undefined ? fmtINR(r.cartValueExclGst) : undefined} />

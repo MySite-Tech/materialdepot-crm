@@ -29,7 +29,7 @@ import { EnqLookup, fetchKamLoad, lookupEnqId, outreachPhones } from '@/lib/b2b'
 import { fetchFirmDeals } from '@/lib/api';
 import { CheckInCapture } from '../../ui/check-in-capture';
 import { CreditPicker } from '../../ui/credit-picker';
-import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
+import { RedirectToEc, openEnquiries, uniquePhones } from '../../ui/redirect-to-ec';
 import { creditOf } from '../../models/credit';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -260,6 +260,8 @@ export default function OutreachDrawer({
             phones={uniquePhones([draft.phone, draft.altPhone, ...(draft.contacts || []).map((c) => c.phone)])}
             sourceTeam="outreach"
             leadRef={draft.id}
+            enquiries={openEnquiries(deals ?? [])}
+            enquiriesState={!deals ? 'loading' : dealsFailed ? 'failed' : 'ready'}
           />
 
           <OutreachCompanyCard

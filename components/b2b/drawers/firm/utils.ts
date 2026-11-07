@@ -1,6 +1,7 @@
 import { ORDER_TABS } from './constants';
 import { ClientEntity, contactNumbers, gstNumbers, normalizeContactNumber, normalizeGst } from '../../models/client';
-import { ClientOrderRow } from '@/lib/b2b';
+import { ClientOrderHistory, ClientOrderRow } from '@/lib/b2b';
+import { QUOTED_STATUSES } from '@/lib/b2b/revenue/constants';
 
 export type OrderTab = typeof ORDER_TABS[number]['key'];
 
@@ -12,7 +13,27 @@ export function firmHolding(clients: ClientEntity[], selfId: string, key: { phon
 }
 
 export function orderTab(r: ClientOrderRow): OrderTab {
-  return r.ordered ? 'placed' : r.open ? 'open' : 'lost';
+  if (r.ordered) return 'placed';
+  if (!r.open) return 'lost';
+  return QUOTED_STATUSES.has(r.status) ? 'pi' : 'open';
+}
+
+export function unlistedOrders(
+  rows: ClientOrderRow[],
+  phones: string[],
+  historyFor: (phone: string) => ClientOrderHistory | undefined,
+): { orders: number; value: number } {
+  let orders = 0, value = 0;
+  for (const phone of phones) {
+    const counted = historyFor(phone);
+    if (!counted) continue;
+    const listed = rows.filter((r) => r.ordered && r.contactNumber === phone);
+    const missing = counted.orders - listed.length;
+    if (missing <= 0) continue;
+    orders += missing;
+    value += Math.max(0, counted.lifetimeValue - listed.reduce((n, r) => n + r.orderValue, 0));
+  }
+  return { orders, value };
 }
 
 export function fmtPhone(n: string): string {

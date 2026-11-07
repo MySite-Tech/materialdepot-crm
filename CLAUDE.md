@@ -213,7 +213,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 84 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 87 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -292,7 +292,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 84 titles, so grep a title and read around the line you
+**Contents** list of all 87 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -563,8 +563,8 @@ has run only on the sandbox. The reported redirect was not in the 3 Nov `crm_rea
 copy. **After deploy,** open that lead. If it still reads "Not sent to an EC by any
 team yet", no redirect row was ever saved. A redirect on a client's number must
 never be scoped per team or per rep in the drawer.
-Not covered by #46: the KAM Firm page still reads EC visits by `client_id` only, so a
-redirect sent from a lead (no client id yet) does not show on the firm.
+The KAM Firm page gap #46 left (it read EC visits by `client_id` only, so a redirect
+sent from a lead never showed on the firm) is closed in the 2026-11-07 release below.
 
 **:3001 may not be serving this checkout.** On 2026-11-06 it was restarted from a
 combined snapshot of several sessions' uncommitted work, at the user's request, and
@@ -574,7 +574,7 @@ an edit does not show there, check whose tree it runs:
 run `~/Projects/ss-local-stack/crm-local.sh up`.
 
 **Reminders and the follow-up time (2026-11-06), branch `b2b-follow-up-reminders`,
-pushed, no PR yet, no backend PR.** The user asked for an optional time beside every
+shipped in the 2026-11-07 release below, no backend PR.** The user asked for an optional time beside every
 follow-up date (Inbound, Outreach, KAM, PI) and a Reminders tab for every B2B
 person, where a timed follow-up moves into Due now an hour before. This reverses
 the 2026-10-30 "no follow-up time" decision. Open shows the lead or firm drawer on
@@ -582,6 +582,21 @@ the Reminders tab itself. The time is stored paired with its date
 (`2026-11-08T17:00`) because 18 production rows held stale bare times. Read
 `docs/b2b/reminders.md` before touching it. Seen on the sandbox only, not signed
 in on real data.
+
+**Release 2026-11-07 (branch `release-2026-11-07` → `main`, with b2b-backend PR #27,
+migration 0025; on the user's ask to make everything on :3001 live).** It ships, on top
+of #46: Reminders and the follow-up time; the Client Database **Review new firms** list,
+which supersedes PR #45's auto-import (`docs/b2b/client-db.md` §Review new firms); the
+Firm page from the 4 Nov `b2b-firm-orders-ec-per-cart` work (orders it cannot list, a
+PI shared tab, a B2B SPoC and an EC send on each open cart), resolved against #43/#44;
+and the Firm page now lists redirects sent from the firm's leads, matched on its
+numbers. **Deploy backend #27 first and run `alembic upgrade head`.** Until 0025 runs
+the review list shows an amber notice and Not a client fails; nothing else needs it.
+**After deploy, check signed in:** Reminders tab badge and Open in place; a lead's
+redirect on the KAM Firm page; Client Database → Review new firms loads (first read up
+to a minute) and Not a client sticks after a reload. None of it has been seen signed in
+on production data: the firm-orders work and the review list ran on the sandbox and
+local copies only.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import EcPicker from './ec-picker';
 import { Field, SectionCard, fmtDay, inputCls } from './inbound-chips';
 import { newB2BId } from '../models/ids';
-import { fmtINR } from '../models/mock-data';
+import { LeadDeal, fmtINR } from '../models/mock-data';
+import { dealIsOpen } from '../models/client';
 import { RedirectTickets, useClientRedirects } from '../hooks/use-client-redirects';
 import { EcVisit, saveEcVisit } from '@/lib/b2b/ec-visits';
 import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
@@ -13,6 +14,18 @@ import { normalisePhone } from '@/lib/org/utils';
 
 export const uniquePhones = (list: (string | undefined)[]): string[] =>
   [...new Set(list.map((p) => normalisePhone(p)).filter((p) => p.length === 10))];
+
+export interface RedirectEnquiry {
+  enqId: string;
+  status: string;
+  value: number;
+  phone?: string;
+}
+
+export const openEnquiries = (deals: LeadDeal[]): RedirectEnquiry[] =>
+  deals.filter((d) => dealIsOpen(d.status) && d.id).map((d) => ({ enqId: d.id, status: d.status, value: d.cartValue }));
+
+export const enquiryLabel = (e: RedirectEnquiry): string => `${e.enqId} · ${e.status} · ${fmtINR(e.value)}`;
 
 const PURPOSES = ['See the material in person', 'Selection with the EC team', 'Place the order at the EC', 'Sample collection'];
 
@@ -46,7 +59,7 @@ function RedirectRow({ v, result }: { v: EcVisit; result?: RedirectTickets }) {
       </div>
       <p className="text-[11px] text-gray-500">
         {fmtDay(v.createdAt)} by {v.scheduledBy || 'unknown'}{v.sourceTeam ? ` from ${B2B_TEAM_LABEL[v.sourceTeam]}` : ''}
-        {v.purpose ? ` · ${v.purpose}` : ''}{v.visitDate ? ` · visit expected ${fmtDay(v.visitDate)}` : ''}
+        {v.enqId ? ` · ${v.enqId}` : ''}{v.purpose ? ` · ${v.purpose}` : ''}{v.visitDate ? ` · visit expected ${fmtDay(v.visitDate)}` : ''}
       </p>
       <div className="flex flex-wrap gap-1.5">
         <Step done label="Redirected" detail={fmtDay(v.createdAt)} />
@@ -67,31 +80,32 @@ function RedirectRow({ v, result }: { v: EcVisit; result?: RedirectTickets }) {
   );
 }
 
-export function RedirectToEc({ firm, contactName, phones, sourceTeam, leadRef, clientId }: {
+export function EcRedirectForm({ firm, contactName, phones, sourceTeam, leadRef, clientId, enquiry, onSent, onCancel }: {
   firm: string;
   contactName?: string;
   phones: string[];
   sourceTeam: B2BTeam;
   leadRef: string;
   clientId?: string;
+  enquiry?: RedirectEnquiry;
+  onSent: (v: EcVisit) => void;
+  onCancel: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [ec, setEc] = useState<{ ecName?: string; ecBmName?: string }>({});
   const [purpose, setPurpose] = useState('');
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const numbers = phones.filter((p) => p.length === 10);
-  const { redirects, loadError, tickets, add } = useClientRedirects(leadRef, numbers);
+  const numbers = uniquePhones(enquiry?.phone ? [enquiry.phone] : phones);
 
   const submit = async () => {
-    const missing = [!ec.ecName && 'the EC', !purpose.trim() && 'a purpose', !numbers.length && 'a 10-digit mobile on the lead'].filter(Boolean);
+    const missing = [!ec.ecName && 'the EC',!purpose.trim() && 'a purpose', !numbers.length && 'a 10-digit mobile'].filter(Boolean);
     if (missing.length) { setError(`Needs ${missing.join(', ')}.`); return; }
     setBusy(true);
     setError(null);
     try {
-      const saved = await saveEcVisit({
+      onSent(await saveEcVisit({
         id: newB2BId('ECR'),
         kind: 'redirect',
         status: 'Directed',
@@ -104,26 +118,70 @@ export function RedirectToEc({ firm, contactName, phones, sourceTeam, leadRef, c
         bmName: ec.ecBmName,
         sourceTeam,
         leadRef,
+        enqId: enquiry?.enqId,
         purpose: purpose.trim(),
         note: note.trim() || undefined,
         visitDate: date || undefined,
-      });
-      add(saved);
-      setOpen(false);
-      setEc({}); setPurpose(''); setDate(''); setNote('');
+      }));
     } catch (e) {
       setError(`Not sent: ${e instanceof Error ? e.message : 'save failed'}`);
-    } finally {
       setBusy(false);
     }
   };
 
   return (
+    <div className="flex flex-col gap-3">
+      <EcPicker ecName={ec.ecName} ecBmName={ec.ecBmName} onChange={(p) => setEc((cur) => ({ ...cur, ...p }))} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Purpose" required>
+          <input value={purpose} onChange={(e) => setPurpose(e.target.value)} list="ec-redirect-purposes" placeholder="Why they are going" className={inputCls} />
+          <datalist id="ec-redirect-purposes">{PURPOSES.map((p) => <option key={p} value={p} />)}</datalist>
+        </Field>
+        <Field label="Expected visit" hint="Optional. With a date, the store sees it in the Appointment Tracker.">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        </Field>
+      </div>
+      <Field label="Note for the EC">
+        <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What they want to see, budget, who is coming" className={inputCls + ' resize-none'} />
+      </Field>
+      <p className="text-[11px] text-gray-500">
+        {enquiry ? `Sends ${enquiry.enqId} only. ` : ''}Number sent: {numbers.length ? numbers.join(', ') : 'none, add a mobile first'}
+      </p>
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-500 bg-white">Cancel</button>
+        <button onClick={submit} disabled={busy} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white disabled:opacity-50">{busy ? 'Sending…' : 'Send to EC'}</button>
+      </div>
+    </div>
+  );
+}
+
+export function sentLine(v: EcVisit): string {
+  return `Sent to ${v.branch}${v.bmName ? ` (${v.bmName})` : ''}${v.enqId ? ` · ${v.enqId}` : ''} · ${v.purpose}. It is in the EC Directed tab.`;
+}
+
+export function RedirectToEc({ enquiries, enquiriesState, ...lead }: {
+  firm: string;
+  contactName?: string;
+  phones: string[];
+  sourceTeam: B2BTeam;
+  leadRef: string;
+  clientId?: string;
+  enquiries: RedirectEnquiry[];
+  enquiriesState: 'loading' | 'failed' | 'ready';
+}) {
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState('');
+  const { redirects, loadError, tickets, add } = useClientRedirects(lead.leadRef, uniquePhones(lead.phones));
+  const enquiry = enquiries.find((e) => e.enqId === pick);
+  const noCart = enquiriesState === 'ready' && !enquiries.length;
+
+  return (
     <SectionCard
-      title="Redirect to an EC"
+      title="Send a cart or PI to an EC"
       owner="crm"
-      subtitle="Every redirect of this client from any team, matched on its numbers, with carts and orders at that EC since."
-      right={!open && <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline whitespace-nowrap">+ Redirect</button>}
+      subtitle="Pick the cart or PI and the BM who takes it. Every redirect of this client from any team is listed, with carts and orders at that EC since."
+      right={!open && enquiriesState !== 'loading' && <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline whitespace-nowrap">+ Send to EC</button>}
     >
       {loadError && <p className="text-[11.5px] text-amber-700 mb-2">Redirects did not load: {loadError}. Whether this client was sent to an EC is unknown.</p>}
       {!!redirects?.length && (
@@ -134,27 +192,27 @@ export function RedirectToEc({ firm, contactName, phones, sourceTeam, leadRef, c
       )}
       {open ? (
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <EcPicker ecName={ec.ecName} ecBmName={ec.ecBmName} onChange={(p) => setEc((cur) => ({ ...cur, ...p }))} />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Purpose" required>
-              <input value={purpose} onChange={(e) => setPurpose(e.target.value)} list="ec-redirect-purposes" placeholder="Why they are going" className={inputCls} />
-              <datalist id="ec-redirect-purposes">{PURPOSES.map((p) => <option key={p} value={p} />)}</datalist>
+          {noCart ? (
+            <p className="text-[11px] text-gray-500">No open cart or PI on this lead yet, so the client is sent without one.</p>
+          ) : enquiriesState === 'failed' ? (
+            <p className="text-[11px] text-blue-700">The carts could not be read, so the client is sent without one.</p>
+          ) : (
+            <Field label="Cart or PI" required>
+              <select value={pick} onChange={(e) => setPick(e.target.value)} className={inputCls}>
+                <option value="">Pick one</option>
+                {enquiries.map((e) => <option key={e.enqId} value={e.enqId}>{enquiryLabel(e)}</option>)}
+              </select>
             </Field>
-            <Field label="Expected visit" hint="Optional. With a date, the store sees it in the Appointment Tracker.">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
-            </Field>
-          </div>
-          <Field label="Note for the EC">
-            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What they want to see, budget, who is coming" className={inputCls + ' resize-none'} />
-          </Field>
-          <p className="text-[11px] text-gray-500">Numbers sent: {numbers.length ? numbers.join(', ') : 'none — add a mobile first'}</p>
-          {error && <p className="text-[11px] text-red-600">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <button onClick={() => { setOpen(false); setError(null); }} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-500 bg-white">Cancel</button>
-            <button onClick={submit} disabled={busy} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white disabled:opacity-50">{busy ? 'Sending…' : 'Redirect'}</button>
-          </div>
+          )}
+          {(enquiry || noCart || enquiriesState === 'failed') && (
+            <EcRedirectForm
+              key={pick}
+              {...lead}
+              enquiry={enquiry}
+              onSent={(v) => { add(v); setOpen(false); setPick(''); }}
+              onCancel={() => { setOpen(false); setPick(''); }}
+            />
+          )}
         </div>
       ) : redirects === null ? !loadError && <p className="text-[11.5px] text-gray-400">Loading redirects…</p>
         : !redirects.length && <p className="text-[11.5px] text-gray-400">Not sent to an EC by any team yet.</p>}

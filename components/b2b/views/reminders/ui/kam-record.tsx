@@ -23,7 +23,7 @@ export function KamRecord({ clientId, data, team, viewer, onClose }: {
   onClose: () => void;
 }) {
   const today = istToday();
-  const { allKams } = useB2BReps(team);
+  const { allKams, byTeam } = useB2BReps(team);
   const me = useMemo(() => ({ name: viewer.member?.name || viewer.name, phone: viewer.phone }), [viewer.member, viewer.name, viewer.phone]);
   const [clients, setClients] = useState<ClientEntity[]>(data.clients);
   const [orders, setOrders] = useState<KamOrder[]>(data.kam);
@@ -70,6 +70,7 @@ export function KamRecord({ clientId, data, team, viewer, onClose }: {
         row={row}
         assignAs={viewer.isManager ? me.name : undefined}
         kams={allKams}
+        people={byTeam}
         clients={clients}
         historyFor={historyFor}
         orders={orders.filter((o) => o.clientId === client.id)}

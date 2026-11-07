@@ -138,7 +138,7 @@ export default function EcDirected({ viewer }: { viewer: Viewer }) {
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">{v.sourceTeam ? B2B_TEAM_LABEL[v.sourceTeam] : '—'}<div className="text-[10.5px] text-gray-400">{v.scheduledBy}</div></td>
                 <td className="px-3 py-2 whitespace-nowrap">{v.branch}{v.bmName && <div className="text-[10.5px] text-gray-400">{v.bmName}</div>}</td>
-                <td className="px-3 py-2 max-w-[220px]">{v.purpose}{v.note && <div className="text-[10.5px] text-gray-400 break-words">{v.note}</div>}</td>
+                <td className="px-3 py-2 max-w-[220px]">{v.enqId && <div className="font-mono text-[10.5px] text-gray-600">{v.enqId}</div>}{v.purpose}{v.note && <div className="text-[10.5px] text-gray-400 break-words">{v.note}</div>}</td>
                 <td className="px-3 py-2">
                   <select value={v.status} disabled={busy.has(v.id)} onChange={(e) => setStatus(v, e.target.value as EcVisitStatus)}
                     className="px-1.5 py-1 text-[11px] border border-gray-200 rounded-md bg-white">

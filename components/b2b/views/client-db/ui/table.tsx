@@ -6,10 +6,11 @@ import { useStudioLogins } from '../../../hooks/use-studio-logins';
 import { firmHandover } from '../../../models/kam';
 import { fmtShortINR } from '../../../models/mock-data';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
-import { SORT_FIRST_DIR } from '../constants';
+import { CLIENT_COLUMNS, SORT_FIRST_DIR } from '../constants';
 import { SpocSources } from '../hooks/use-spoc-sources';
-import { ClientColumn, ClientListRow, SortKey, SortState } from '../types';
+import { ClientColumn, ClientFilters, ClientListRow, FilterKey, FilterOption, SortKey, SortState } from '../types';
 import { sinceLabel } from '../utils';
+import { ColumnFilter } from './filters';
 
 function More({ n }: { n: number }) {
   if (n <= 0) return null;
@@ -90,7 +91,7 @@ function SpocCell({ role, spocs, source }: { role: SpocRole; spocs?: FirmSpoc[];
   return <span className="text-gray-300" title={logged?.detail}>—</span>;
 }
 
-export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked, onPick, onPickPage, visible, spocs, spocSource }: {
+export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked, onPick, onPickPage, visible, spocs, spocSource, f, options, onFilter }: {
   rows: ClientListRow[];
   today: string;
   studio: ReturnType<typeof useStudioLogins>;
@@ -103,7 +104,20 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
   visible: Set<ClientColumn>;
   spocs: Map<string, FirmSpoc[]>;
   spocSource: SpocSources;
+  f: ClientFilters;
+  options: Partial<Record<FilterKey, FilterOption[]>>;
+  onFilter: (k: FilterKey, v: string) => void;
 }) {
+  const unreadFilter: Partial<Record<FilterKey, string | undefined>> = {
+    studio: !studio.loading && !studio.logins ? 'Studio Space could not be read' : undefined,
+    inboundSpoc: spocSource.failed ? 'The Inbound and Outreach leads could not be read' : undefined,
+    outreachSpoc: spocSource.failed ? 'The Inbound and Outreach leads could not be read' : undefined,
+  };
+  const filterCell = (k: FilterKey, className = 'px-3') => (
+    <th key={k} className={`${className} pb-2 font-normal`}>
+      <ColumnFilter k={k} value={f[k] ?? ''} options={options[k]} disabled={unreadFilter[k]} onChange={(v) => onFilter(k, v)} />
+    </th>
+  );
   const show = (c: ClientColumn) => visible.has(c);
   const TH = 'text-left font-semibold px-3 py-2.5';
   const TEXT = 'px-3 py-2.5 whitespace-nowrap text-gray-700';
@@ -112,7 +126,7 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
     <div className="overflow-x-auto">
       <table className="w-full text-[12px]" style={{ minWidth: 360 + visible.size * 105 }}>
         <thead>
-          <tr className="group/th bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider border-b border-gray-200">
+          <tr className="group/th bg-gray-50 text-gray-400 text-[9px] uppercase tracking-wider">
             {picked && (
               <th className="pl-4 w-6"><input type="checkbox" checked={allOnPage} onChange={onPickPage} aria-label="Select this page" /></th>
             )}
@@ -135,6 +149,12 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
             {show('segment') && <th className={TH}>Segment</th>}
             {show('source') && <th className={TH}>Source</th>}
             <th className="w-6" />
+          </tr>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            {picked && <th />}
+            {filterCell('firm', 'px-4')}
+            {CLIENT_COLUMNS.filter((c) => show(c.key)).map((c) => filterCell(c.key, c.key === 'lastOrder' ? 'px-3 pl-5' : 'px-3'))}
+            <th />
           </tr>
         </thead>
         <tbody>

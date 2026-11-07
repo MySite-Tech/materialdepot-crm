@@ -334,8 +334,8 @@ asked to book meeting 2 again. Unlocking a saved meeting is not built.
 A Converted lead's revenue goes to its BM, unless a manager credits someone else
 with a reason (`ui/credit-picker.tsx`, `revenueCredit`, 2026-10-30). The
 Leadership Board honours the credit. The Outreach tab's own scorecard still
-counts by BM. A lead also carries a **Redirect to an EC** card
-(`ec-directed.md`).
+counts by BM. A lead also carries a **Send a cart or PI to an EC** card
+(`ec-directed.md` §One cart or PI at a time).
 
 
 `Closed` is still the stored stage (see above on renaming stored values); it is
