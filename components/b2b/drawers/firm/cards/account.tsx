@@ -7,16 +7,26 @@ import { liveRepName, repNames, sameRep } from '../../../models/outreach/handove
 import { Rep } from '../../../models/outreach/intake';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnPrimary } from '../../../constants/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-export function AccountCard({ client, reassignReason, assignAs, kams, onSave }: {
+export function AccountCard({ client, reassignReason, assignAs, kams, openNonce, onSave }: {
   client: ClientEntity;
   reassignReason: string;
   assignAs?: string;
   kams: Rep[];
+  openNonce: number;
   onSave: (c: ClientEntity) => Promise<string | null>;
 }) {
   const [reassigning, setReassigning] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const handled = useRef(openNonce);
+
+  useEffect(() => {
+    if (openNonce === handled.current || assignAs === undefined) return;
+    handled.current = openNonce;
+    setReassigning(true);
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [openNonce, assignAs]);
   const held = client.kam ? liveRepName(client.kam, kams) : '';
   const [nextKam, setNextKam] = useState(held);
   const [busy, setBusy] = useState(false);
@@ -37,7 +47,7 @@ export function AccountCard({ client, reassignReason, assignAs, kams, onSave }: 
 
   return (
     <SectionCard title="Account">
-      <div className="flex items-center justify-between gap-2 border border-gray-100 rounded-md px-3 py-2">
+      <div ref={ref} className="flex items-center justify-between gap-2 border border-gray-100 rounded-md px-3 py-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${client.kam ? 'bg-[#0F766E] text-white' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
             {client.kam ? client.kam.slice(0, 2).toUpperCase() : '?'}

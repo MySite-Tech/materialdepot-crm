@@ -5,9 +5,9 @@ import { InboundLead, LeadNote } from '../../../models/mock-data';
 import { saveInboundLead } from '@/lib/b2b';
 import { useState } from 'react';
 
-export interface ConnectedForm { durationMin: string; followUpDate: string; note: string }
+export interface ConnectedForm { durationMin: string; followUpDate: string; followUpTime: string; note: string }
 
-const EMPTY_FORM: ConnectedForm = { durationMin: '', followUpDate: '', note: '' };
+const EMPTY_FORM: ConnectedForm = { durationMin: '', followUpDate: '', followUpTime: '', note: '' };
 
 export function useCallLog(
   base: () => InboundLead,
@@ -35,10 +35,11 @@ export function useCallLog(
     return true;
   };
 
-  const withAttempt = (attempt: CallAttempt, stage: InboundStatus, followUpDate: string): InboundLead => ({
+  const withAttempt = (attempt: CallAttempt, stage: InboundStatus, followUpDate: string, followUpTime?: string): InboundLead => ({
     ...draft,
     callAttempts: [...(draft.callAttempts || []), attempt],
     followUpDate,
+    followUpTime,
     stage,
     statusChangedAt: stage !== draft.stage ? attempt.at : draft.statusChangedAt,
   });
@@ -60,9 +61,10 @@ export function useCallLog(
     const attempt: CallAttempt = {
       n: nextAttemptNumber(draft.callAttempts), outcome: 'Connected', at, by, byPhone,
       note: form.note.trim(), durationMin: Number(form.durationMin), followUpDate: form.followUpDate,
+      followUpTime: form.followUpTime || undefined,
     };
     const stage: InboundStatus = draft.stage === 'New' ? 'Connected - Need nurturing' : draft.stage;
-    if (await persist(withAttempt(attempt, stage, form.followUpDate), 'Could not save the call')) {
+    if (await persist(withAttempt(attempt, stage, form.followUpDate, form.followUpTime || undefined), 'Could not save the call')) {
       setForm(null);
     }
   };

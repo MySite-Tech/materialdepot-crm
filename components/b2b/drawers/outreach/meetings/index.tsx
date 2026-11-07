@@ -62,7 +62,7 @@ export function MeetingTimeline({ meetings, locked, stored, onCheckIn, draft, se
                   onDone={forced ? undefined : () => toggle(m.n, false)}
                 />
               ) : (
-                <MeetingEntry m={m} gap={gapLabel(m, prev)} followUp={isLastHeld ? draft.followUpDate : undefined} onEdit={() => toggle(m.n, true)} />
+                <MeetingEntry m={m} gap={gapLabel(m, prev)} followUp={isLastHeld ? draft.followUpDate : undefined} followUpTime={isLastHeld ? draft.followUpTime : undefined} onEdit={() => toggle(m.n, true)} />
               )}
             </div>
           </li>

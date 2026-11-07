@@ -4,7 +4,8 @@ import { EnqLookup } from '@/lib/b2b';
 import { INBOUND_INVALID_REASONS, INBOUND_LOST_REASONS, INBOUND_STATUSES, INBOUND_STATUS_HINT, INVALID_NOTE_MIN, LOST_REASON_NEEDS, isFollowUpStatus } from '../../../constants/inbound';
 import { InboundLead, LeadDeal, fmtINR } from '../../../models/mock-data';
 import { ClosureReadiness, InboundStatus } from '../../../types/inbound';
-import { Empty, Field, SectionCard, Spinner, errorInputCls, fmtDay, inputCls } from '../../../ui/inbound-chips';
+import { Empty, Field, SectionCard, Spinner, errorInputCls, inputCls } from '../../../ui/inbound-chips';
+import { fmtFollowUp } from '../../../models/reminders';
 import { Loaded } from '../hooks/use-inbound-detail';
 import { Dispatch, SetStateAction } from 'react';
 
@@ -42,7 +43,7 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
         {isFollowUpStatus(draft.stage) && (
           <Field label="Next follow-up" error={gateFor('followUpDate')} hint="Set from the call log — log a call to change it.">
             <div className="px-3 py-2 rounded-md bg-gray-50 text-[13px] text-gray-700">
-              {draft.followUpDate ? fmtDay(draft.followUpDate) : '—'}
+              {draft.followUpDate ? fmtFollowUp(draft.followUpDate, draft.followUpTime) : '—'}
             </div>
           </Field>
         )}

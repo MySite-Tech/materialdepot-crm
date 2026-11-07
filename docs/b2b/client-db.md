@@ -87,6 +87,46 @@ it does now, and the Firm page uses it.
 The KAM shown on the Firm page is the account's KAM **today**. Nothing in this
 stack records who held the account at the time.
 
+### The Firm page lists deal tickets, and many orders have none (2026-11-04)
+
+The Enquiries & orders card can only list what `/crm/leads/` returns, and that
+endpoint is rooted on Django's **deal tickets**. An `estimate` that no deal ticket
+points at (by the ticket's estimate, or another revision of the same ENQ id) is
+invisible to it, while `client-order-history` counts it. So a firm could show
+"1 order" under each number and "No placed order on these numbers yet" in the
+card below. Measured on production 2026-11-04 over non-deleted, unrevised
+estimates since 1 Jan 2026: about a quarter of placed orders and nearly every
+Quote Approval Pending PI have no deal ticket.
+
+- **The card says so.** `unlistedOrders` (`drawers/firm/utils.ts`) compares each
+  number's aggregate order count with the ordered rows listed for it. When the
+  aggregate is higher, the Orders tab names how many orders are missing and why,
+  and its empty text becomes "None with a deal ticket". It costs no request.
+- **The fix is Django's** (`docs/backends.md` §Owed by Django row 18). The CRM
+  already sends `estimates=1` on the Firm page's per-phone and GST reads
+  (`fetchLeadsByPhone`, `fetchOrdersByGst`). Django ignores it today, so nothing
+  changes until it ships, and then the missing rows arrive with no CRM change
+  and the notice goes away by itself. They dedupe against tickets on
+  `ticketId ?? enqId`, so a ticketless row must carry no `ticketId`.
+- **PI shared is its own tab:** Orders · PI shared · Open carts · Lost. PI shared
+  is an open row in `QUOTED_STATUSES` (Quote Approval Pending, Availability Check,
+  Hold Stock, Payment Pending), the same set the Overview funnel calls quoted.
+  `orderTab` is the one function both the tab counts and the lists read.
+
+### A B2B SPoC and an EC on each open cart or PI (2026-11-04)
+
+The user wants carts and PIs handled one at a time, not the whole firm. Each open
+row's expanded card (`EnquiryActions` in `cards/orders.tsx`) has two lines:
+
+- **B2B SPoC on this cart / PI**, picked from everyone on the live B2B team.
+  Stored as `enquiry_spocs` (`{enqId, name, at, by}`), append-only, an unmapped
+  meta key like `spoc_log`, so no migration. The latest entry wins
+  (`enquirySpoc`). Only managers (`assignAs`) set it, like the firm's SPoCs. It
+  does not feed Sales by SPoC yet.
+- **Send this cart / PI to an EC**, with an EC and an optional BM
+  (`ec-directed.md` §One cart or PI at a time). The KAM tab's whole-firm
+  Redirect card was removed for it.
+
 ### The Firm page: one drawer for Client DB and the KAM tab
 
 `components/b2b/drawers/firm/` is the page `sales-tab-redesign.md` §KAM calls
@@ -120,6 +160,12 @@ filled as the firm moves along, so we can see what each SPoC sold and whether
 sales drop after a move. A firm joining at Outreach has no Inbound SPoC, and
 that is not a gap.
 
+- **A manager picks a SPoC, never types one (2026-11-04).** Inbound and Outreach
+  list the live team's members of that team (`useB2BReps().byTeam`), keeping a
+  stored name that left the team as an extra option. Typing is the fallback only
+  when the team list did not load, and the form says so. The KAM slot's Change
+  opens the Account card's picker, so the firm still has one KAM control. EC stays
+  typed, because a store BM is not on the B2B team.
 - **A slot fills itself where a link exists, and a manager can log one.**
   `firmSpocs` reads Inbound and Outreach from the leads on the firm's numbers,
   KAM from `client.kam`, EC from the BM on the last order. An entry in
@@ -146,6 +192,27 @@ that is not a gap.
   already loaded, so it costs no extra order request. Across all firms it would be
   one request per phone, which the request budget forbids. That roll-up waits on
   #8. Opening the drawer adds no request when the all-rows read is cached.
+
+### Every column filters (2026-11-04)
+
+The user found three dropdowns (segment, client type, KAM) too few to find a firm.
+The table now has a filter row under its headings, one control per visible column:
+text for Firm, Primary contact and EC SPoC, and a dropdown for the rest (thresholds
+for counts and amounts, windows for Last order, the five statuses, Studio access,
+KAM and the Inbound / Outreach SPoCs with a "none" option, type, segment, source).
+
+- **Filters run after the metrics,** on the `ClientListRow` (`rowMatchesFilters`),
+  so order figures, status and Studio access can be filtered. The tiles and the
+  list header count the filtered set, as before.
+- **A filter on a hidden column still applies** and stays as a removable chip,
+  so hiding a column never hides why a firm is missing.
+- **The table stays on screen when nothing matches,** so its filter row can be
+  changed. The empty message sits under it.
+- **SPoC filters scan the leads per firm,** lazily and cached per load
+  (`spocsOf`), only for firms a SPoC filter actually checks. The page-only rule
+  below still holds for the columns themselves.
+- A filter on data that did not load (Studio Space, the Inbound and Outreach
+  leads) is disabled and reads Unknown rather than matching nothing.
 
 ### Choosing the list's columns (2026-10-31)
 
@@ -255,10 +322,9 @@ estimate, which `/crm/leads/` also does not return.
 
 ### GST: what can and cannot be linked
 
-Tickets carry **no GSTIN**, and no Django endpoint filters by GST (`lib/api`
-has none). So an enquiry billed to one of the firm's GSTINs, but raised on a
-number that is not on the firm, cannot be found. The GST card says so in amber,
-and names the ask: a `gst=` filter on `/crm/leads/`. Do not join GST to
+Since 2026-11-03 Django filters `/crm/leads/` by exact GSTIN, and the Firm page
+folds those enquiries in (§The GST per order above). Only deal tickets come
+back, the same gap as §The Firm page lists deal tickets. Do not join GST to
 enquiries by firm name or by PAN on the frontend. That is the name-merge
 mistake §Parent companies rules out.
 
@@ -597,6 +663,7 @@ blank SPoC, segment and client type. The user wanted them here, not in Leads.
   Rows have no owner, `source` Existing, and `import_batch` in `extra`. GSTINs that
   fail `GSTIN_SHAPE` were left off.
 - **It was a one-time copy.** Later edits to `client_master` do not reach this tab.
+  New firms are now found on orders and reviewed by a manager (next section).
   Four names differ only by case or spacing and were kept, because their phones
   differ. Use Merge.
 - **Reading it:** `/client-master` is staff-only and Cloudflare challenges curl. A
@@ -604,3 +671,67 @@ blank SPoC, segment and client type. The user wanted them here, not in Leads.
   `POST /b2b/rows/bulk` with `only_new`, tested first with fake rows on :3100.
 - **Verified on production:** the tab reads 1,278 firms, all loading their order
   status through the batched history calls.
+
+## Review new firms: found on orders, decided by a manager (2026-11-07)
+
+Client Database → **Review new firms** (managers only) lists every firm billed with a
+GSTIN on a placed order in the last 12 calendar months that is on no B2B board. A
+manager ticks firms and sends them on, or marks them **Not a client**. Nothing joins a
+board without that click. The rule for finding firms is the one below.
+
+| Call | Endpoint | When |
+|---|---|---|
+| `fetchReviewQueue()` | `GET /api/b2b/client-import` → Django `/crm/leads/?order_from&order_to&branch_basis=estimate` (12 calendar-month windows, 3 at a time) + backend `GET /rows` + `GET /client-review` | On opening Review new firms. The orders are cached server-side for 30 minutes, one global key, and a read in flight is shared. Rows and decisions are read fresh every time. **Refresh** re-reads the orders |
+| Add to Client Database / KAM | `POST /rows/bulk` (client rows) | KAM writes a Pending assignment that the KAM accepts on the KAM tab (`kam.md` §Admin assigns firms) |
+| Outreach | `GET /rows` once for round-robin load, then `POST /rows/bulk {only_new}` | Source **Store orders**, a pending intake that the BM accepts or rejects |
+| Inbound | `GET /rows` once for round-robin load (CRM rows only, no Kylas), then `POST /rows/bulk {only_new}` | A `crm-` lead, stage New, source Walk-in, owned at once. Nothing is written to Kylas |
+| Not a client / Undo | `POST /b2b/client-review`, `DELETE /b2b/client-review/{key}` (b2b-backend migration 0025) | Relay is manager-only for reads and writes |
+
+- **Why review, not auto-import.** PR #45 first added every new GST firm on Client
+  Database open. On 2026-11-06 that ran on the local real-data copy and added 161
+  firms from 14 days of orders. 88 had their first-ever order in that fortnight and
+  89 GSTINs were individuals or proprietors: mostly store walk-ins who asked for a
+  GST bill. A Client Database firm with no SPoC counts as **EC Direct** with its
+  whole history (`overview.md` §Four revenue channels), so the order that qualified
+  a firm was also counted as its B2B revenue. Locally, November's B2B revenue
+  roughly doubled against production, and past months rose too, because a firm's
+  older orders count as well. The user asked for a list to verify by hand instead
+  (real figures are in memory, not here). Accepting a firm still brings its
+  whole history into EC Direct: that rule is unchanged and is the user's to change.
+- **Firms already on a board are left out,** by any number or GSTIN on a client row,
+  an Inbound lead (`inboundPhones`, `gstNumber`) or an Outreach lead
+  (`outreachPhones`, `gstNumber`), Lost and Invalid leads included. The user chose
+  this on 2026-11-07 over listing them with a chip. It keeps an Inbound lead from
+  being copied to Outreach, which the user ruled out (`outreach.md`).
+- **Only Not a client is stored.** Every other choice creates a row on a board,
+  which takes the firm off the list. A decision matches a firm by its key
+  (`CLI-GST-<first GSTIN>`) or by any GSTIN or number it saved, so a firm that gains
+  a second number or GSTIN later stays rejected. Undo deletes the decision.
+- **One firm per connected set of GSTINs and numbers.** Two numbers billed to one
+  GSTIN, or one number billing two GSTINs, are one row (union-find over both). It is
+  named after the client on its most recent order, which is often a person's name.
+  A firm with no 10-digit number is counted and left out.
+- **Type comes from the GSTIN's PAN** (its 4th letter, GSTIN position 6): C company,
+  F partnership or LLP, P an individual (a proprietor), anything else Other.
+- **The GST is the order's (`estimate.client_gst`), not the profile's.** The
+  2026-10-31 export read `users_user.gst_number`, and that field has almost stopped
+  being filled. Phones first qualifying by it fell from 120 (May 2026) to 42, 9, 6, 3,
+  3 and 0 (November), while by either GST it was 126, 172, 214, 247, 247 and 213.
+  `/crm/leads/` carries only the order's GST, so a firm whose GST is only on its
+  profile is missed. That is 0–3 a month now, and the 2026-10-31 copy holds the
+  older ones. Of the 161 firms above, 3 had a profile GST.
+- **The GSTIN must pass `GSTIN_SHAPE`.** The export's `GST IS NOT NULL` let `''`
+  through (474 orders), which is why about 125 of the 1,200 firms have no GST.
+- **The five internal-BM numbers the export dropped are not filtered.** Over 360
+  days they decided 1 firm, and listing them would put staff phone numbers in this
+  public repo. A manager can mark such a firm Not a client.
+- **Only a B2B manager can open it**, server-checked, because Django's `/crm/leads/`
+  answers from the caller's token and the read must be company-wide.
+- **Verified** on synthetic orders through the compiled `utils/queue.ts` (grouping,
+  board exclusion by client GST, Inbound `+91` number and Outreach alternate number,
+  a decision matched by number under another key, non-orders, bad GSTINs, no phone).
+  On `npm run dev:sandbox` the manager sent one firm each to Outreach (one person),
+  KAM (round robin), the Client Database and Inbound (round robin). The manager also
+  marked one firm, undid it, re-marked it and reloaded. The Inbound persona gets 403
+  from both routes. **Not yet run on real data,** where PR #45's preview measured roughly
+  950 firms. The first read takes up to a minute.

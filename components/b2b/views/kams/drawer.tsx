@@ -1,8 +1,7 @@
 'use client';
 
 import { FirmDrawer } from '../../drawers/firm';
-import { ClientEntity, InteractionType, contactNumbers, currentUpcomingProject, openCheckIn, primaryContact, sortedInteractions } from '../../models/client';
-import { RedirectToEc, uniquePhones } from '../../ui/redirect-to-ec';
+import { ClientEntity, InteractionType, currentUpcomingProject, openCheckIn, sortedInteractions } from '../../models/client';
 import { CheckInLine } from '../../ui/check-in-capture';
 import { AssignedClientRow, KAM_ORDER_STATUS_COLORS, KamOrder, temperatureMismatch } from '../../models/kam';
 import { fmtINR } from '../../models/mock-data';
@@ -11,8 +10,10 @@ import { TemperatureChip } from '../../ui/client-chips';
 import { EscalationSection } from './panels/escalations';
 import { Rep } from '../../models/outreach/intake';
 import { ClientOrderHistory } from '@/lib/b2b';
+import type { B2BTeam } from '@/lib/b2b/team/types';
+import { fmtFollowUp } from '../../models/reminders';
 
-export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, kams, onClose, onLogInteraction, onCheckIn, onSaveClient, onOpenOrder, onAddOrder }: {
+export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, kams, people, onClose, onLogInteraction, onCheckIn, onSaveClient, onOpenOrder, onAddOrder }: {
   row: AssignedClientRow;
   clients: ClientEntity[];
   orders: KamOrder[];
@@ -24,6 +25,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
   onSaveClient: (c: ClientEntity) => Promise<string | null>;
   assignAs?: string;
   kams: Rep[];
+  people: Record<B2BTeam, Rep[]>;
   onOpenOrder: (o: KamOrder) => void;
   onAddOrder: () => void;
 }) {
@@ -47,6 +49,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
       onSave={onSaveClient}
       assignAs={assignAs}
       kams={kams}
+      people={people}
     >
       {mismatch && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
@@ -54,15 +57,6 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
           <span className="text-amber-700">It stays your call — nothing is changed for you (PRD open question #5).</span>
         </p>
       )}
-
-      <RedirectToEc
-        firm={client.company}
-        contactName={primaryContact(client.contacts)?.name}
-        phones={uniquePhones(contactNumbers(client.contacts))}
-        sourceTeam="kam"
-        leadRef={client.id}
-        clientId={client.id}
-      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         <SectionCard
@@ -102,7 +96,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
                   {i.checkIn && <div className="mt-1"><CheckInLine c={i.checkIn} /></div>}
                   {i.summary && <p className="text-[12px] text-gray-600 mt-1 break-words">{i.summary}</p>}
                   {i.upcomingProject && <p className="text-[11px] text-gray-500 mt-1"><span className="text-gray-400">Upcoming:</span> {i.upcomingProject}</p>}
-                  <p className="text-[10px] text-gray-400 mt-1">{i.nextFollowUpDate ? `Next follow-up ${i.nextFollowUpDate}` : 'No next follow-up set'}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{i.nextFollowUpDate ? `Next follow-up ${fmtFollowUp(i.nextFollowUpDate, i.nextFollowUpTime)}` : 'No next follow-up set'}</p>
                 </div>
               ))}
             </div>
@@ -131,7 +125,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
                     {o.enqId ? <span className="font-mono font-semibold text-gray-600">{o.enqId}</span> : 'no Enq ID'}
                     {o.orderValue !== undefined ? ` · ${fmtINR(o.orderValue)} from Procurement` : o.estimatedValue ? ` · ${fmtINR(o.estimatedValue)} estimated` : ''}
                     {o.expectedClosure && ` · closes ${o.expectedClosure}`}
-                    {o.followUpDate && o.status !== 'Closed' && o.status !== 'Lost' && ` · follow up ${o.followUpDate}`}
+                    {o.followUpDate && o.status !== 'Closed' && o.status !== 'Lost' && ` · follow up ${fmtFollowUp(o.followUpDate, o.followUpTime)}`}
                   </div>
                 </button>
               ))}

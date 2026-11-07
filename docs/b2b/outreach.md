@@ -129,9 +129,12 @@ a focus aid, not confidentiality (same caveat as Inbound).
 
 ### Lead sources
 
-`Inbound | EC B2B Referral | EC referral | Dormant form | Own research`.
+`Inbound | EC B2B Referral | EC referral | Store orders | Dormant form | Own research`.
 **EC B2B Referral** comes only from the store form (`ec-referral.md`) and cannot
-be picked in + New lead. "Dormant form" is the
+be picked in + New lead. **Store orders** (2026-11-07) comes only from the Client
+Database's Review new firms list (`client-db.md` §Review new firms): a manager sends
+a firm billed with a GSTIN on store orders, with its orders in a note. It cannot be
+picked in + New lead either, and it is not a coverage source. "Dormant form" is the
 user's "existing forms that are inactive": there is no integration for those
 forms, so a BM enters each one by hand with `Source` set.
 Inbound and both EC sources are what the **coverage** KPI is measured on.
@@ -231,7 +234,10 @@ CRM adherence KPI cannot disagree:
   because an Inbound lead arrives without most of this.
 - **Next follow-up** shows for every open stage now, not just Follow up and PI
   Shared, and again inside the latest held meeting. A held meeting is where
-  the BM knows the next step.
+  the BM knows the next step. Since 2026-11-06 an optional time sits beside it
+  everywhere (status card, meeting editor, Move modal, new lead), and the
+  follow-up and every scheduled meeting appear on the BM's Reminders tab
+  (`reminders.md`).
 
 An alternate number must be a different 10-digit mobile, and since 2026-10-29
 it also needs the name and role of the person on it (`alt_name`, `alt_role`).
@@ -328,8 +334,8 @@ asked to book meeting 2 again. Unlocking a saved meeting is not built.
 A Converted lead's revenue goes to its BM, unless a manager credits someone else
 with a reason (`ui/credit-picker.tsx`, `revenueCredit`, 2026-10-30). The
 Leadership Board honours the credit. The Outreach tab's own scorecard still
-counts by BM. A lead also carries a **Redirect to an EC** card
-(`ec-directed.md`).
+counts by BM. A lead also carries a **Send a cart or PI to an EC** card
+(`ec-directed.md` §One cart or PI at a time).
 
 
 `Closed` is still the stored stage (see above on renaming stored values); it is

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from './session';
 import { canUseB2B, isB2BManager } from '@/lib/b2b/team/utils';
 
-const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access', 'studio-number']);
+const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access', 'studio-number', 'client-review']);
 
 class AccessError extends Error {}
 
@@ -13,7 +13,7 @@ function authorise(caller: Caller): void {
 }
 
 function managersOnly(path: string[], method: string, search: URLSearchParams): boolean {
-  if (path[0] === 'studio-number') return true;
+  if (path[0] === 'studio-number' || path[0] === 'client-review') return true;
   return path[0] === 'rows' && method === 'DELETE' && (search.get('pipeline') ?? 'client') === 'client';
 }
 

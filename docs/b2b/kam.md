@@ -323,6 +323,12 @@ overdue date is visible in the orders table, not yet in the tiles. A PI Shared
 order saved before this has neither date and is refused on its next save until
 both are filled. That is intended.
 
+**An optional time (2026-11-06).** The interaction log and the PI modal take a
+time beside the next follow-up date (`nextFollowUpTime` on the interaction,
+`follow_up_time` paired with its date on the order). The tiles above still bucket
+by date. The time drives the Reminders tab, where both the firm's and each PI's
+follow-up show for the KAM (`reminders.md`).
+
 ### A meeting starts with a check-in (built 2026-10-30)
 
 The user, 2026-10-30: a rep checks in on arrival with their exact location, and

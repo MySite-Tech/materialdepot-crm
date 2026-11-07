@@ -9,6 +9,7 @@ import EcPicker from '../../../ui/ec-picker';
 import { Empty, Field, SectionCard } from '../../../ui/inbound-chips';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { EC_VISIT_STATUSES, EcVisit, EcVisitStatus } from '@/lib/b2b/ec-visits';
+import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
 import { useState } from 'react';
 
 const STATUS_COLOR: Record<EcVisitStatus, string> = {
@@ -19,8 +20,8 @@ const STATUS_COLOR: Record<EcVisitStatus, string> = {
   'No show': 'text-amber-700 bg-amber-50 border-amber-200',
 };
 
-export function EcVisitsCard({ client }: { client: ClientEntity }) {
-  const { visits, loading, error, save } = useEcVisits(client.id);
+export function EcVisitsCard({ client, ec }: { client: ClientEntity; ec: ReturnType<typeof useEcVisits> }) {
+  const { visits, loading, error, save } = ec;
   const [scheduling, setScheduling] = useState(false);
   const today = istToday();
   const upcoming = visits.filter((v) => v.status === 'Scheduled' && (v.visitDate || '') >= today).length;
@@ -140,10 +141,10 @@ function VisitRow({ visit, onSave }: { visit: EcVisit; onSave: (v: EcVisit) => P
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[12px] font-semibold text-gray-800">
-            {fmtDate(visit.visitDate)}{visit.visitTime ? ` · ${visit.visitTime}` : ''} · {visit.branch}
+            {visit.visitDate ? fmtDate(visit.visitDate) : `Sent ${fmtDate(String(visit.createdAt || '').slice(0, 10))}`}{visit.visitTime ? ` · ${visit.visitTime}` : ''} · {visit.branch}
           </div>
           <div className="text-[11px] text-gray-500 mt-0.5">
-            {[visit.contactName, visit.bmName && `BM ${visit.bmName}`, visit.scheduledBy && `booked by ${visit.scheduledBy}`].filter(Boolean).join(' · ')}
+            {[visit.kind === 'redirect' && `Redirected from ${visit.sourceTeam ? B2B_TEAM_LABEL[visit.sourceTeam] : 'a lead'}`, visit.contactName, visit.bmName && `BM ${visit.bmName}`, visit.scheduledBy && `${visit.kind === 'redirect' ? 'sent' : 'booked'} by ${visit.scheduledBy}`].filter(Boolean).join(' · ')}
           </div>
           {visit.purpose && <div className="text-[11px] text-gray-600 mt-0.5">{visit.purpose}</div>}
           {visit.outcome && <div className="text-[11px] text-gray-600 mt-0.5">Outcome: {visit.outcome}</div>}

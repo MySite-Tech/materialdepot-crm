@@ -36,6 +36,7 @@ export interface KamOrder {
 
   expectedClosure?: string;
   followUpDate?: string;
+  followUpTime?: string;
 
   lostReason?: string;
   kam: string;
