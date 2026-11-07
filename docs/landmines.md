@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-83 entries. They live in one file because they cross-reference each other —
+84 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -94,6 +94,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A merged firm showed a rejection one of its source firms had received
 - Pausing a rep in the round robin left leads on the intake owner, because the import keeps Kylas's owner
 - A settings row saved from a stale page switched a rep's round robin back on
+- A redirect card listed only what this session had sent, so every saved redirect read "not redirected"
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1289,3 +1290,16 @@ a row edit sends only the changed field and `saveMember` fills the rest from the
 stored row. Nothing kept history, so whether this is what re-enabled Hardi at
 08:04 UTC on 6 Nov is not known; the row now prints who changed it last. Same
 shape as the Inbound whole-row save (§A save sends a change, not a row).
+
+### A redirect card listed only what this session had sent, so every saved redirect read "not redirected" (2026-11-06)
+
+An Outreach BM sent a client to an EC, and the lead's drawer later said "Not
+redirected from here yet." The redirect was saved. The card's list was
+`useState([])`, filled only by its own submit, and it never read the stored
+rows, so any reload, any other person and any other team saw nothing. It also
+matched nothing across teams, because each drawer passed only its own record id.
+The card now loads every redirect whose `lead_ref`, `client_id` or any phone
+matches the record, and shows the cart and order steps at that EC
+(`docs/b2b/ec-directed.md` §Every redirect shows on the client). The shape to
+watch for: a list seeded empty and appended to on save looks right the moment
+you test it, and is wrong from the first reload.
