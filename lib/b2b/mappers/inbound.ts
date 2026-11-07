@@ -1,4 +1,4 @@
-import { B2BLeadRow, InboundRowChange } from '../data/rows';
+import { B2BLeadRow, InboundRowChange, pairTime, unpairTime } from '../data/rows';
 import { CallAttempt, InboundStatus, clientTypeFromKylas, decomposeLegacyStage, locationFromPincode, normalizeStatus } from '@/components/b2b/models/inbound';
 import { InboundLead } from '@/components/b2b/models/mock-data';
 import { INVALID_ENQUIRY_REASON } from '@/components/b2b/constants/inbound';
@@ -148,6 +148,7 @@ export function rowToInbound(r: B2BLeadRow): InboundLead {
     calls: [],
   } as unknown as InboundLead;
   out.company = inboundDisplayName(out);
+  out.followUpTime = unpairTime(m.follow_up_time, out.followUpDate);
 
   out.timeline = out.urgency;
   out.requirementBrief = out.leadSummary;
@@ -157,6 +158,7 @@ export function rowToInbound(r: B2BLeadRow): InboundLead {
 export function inboundToRow(l: InboundLead): B2BLeadRow {
   const meta: Record<string, unknown> = {};
   for (const f of ALL_INBOUND_META) meta[f.db] = writeMeta(l, f);
+  meta.follow_up_time = pairTime(l.followUpDate, l.followUpTime) ?? '';
   return {
     id: l.id,
     pipeline: 'inbound',

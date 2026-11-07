@@ -95,6 +95,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Pausing a rep in the round robin left leads on the intake owner, because the import keeps Kylas's owner
 - A settings row saved from a stale page switched a rep's round robin back on
 - A redirect card listed only what this session had sent, so every saved redirect read "not redirected"
+- A column the CRM stopped writing still held old values, so reading it again would have attached them to new dates
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1303,3 +1304,15 @@ matches the record, and shows the cart and order steps at that EC
 (`docs/b2b/ec-directed.md` §Every redirect shows on the client). The shape to
 watch for: a list seeded empty and appended to on save looks right the moment
 you test it, and is wrong from the first reload.
+
+### A column the CRM stopped writing still held old values, so reading it again would have attached them to new dates (2026-11-06)
+
+On 2026-10-30 the follow-up time was dropped from the types and mappers, so the
+CRM stopped writing `follow_up_time`. It did not clear it. When the time came back
+on 2026-11-06, 18 real rows still held a bare `HH:MM`, some of them noise (00:29,
+02:56) and most under a follow-up date set since. Reading the column as it was would
+have shown a rep "call at 2:56 am" on a date they never gave a time for. The time is
+now stored as `<date>T<time>` and read only when the date matches
+(`docs/b2b/reminders.md`). When a field comes back, check what the backend kept
+while nothing was writing it, and tie a dependent value to the value it depends on
+rather than trusting the two to move together.

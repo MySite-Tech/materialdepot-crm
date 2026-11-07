@@ -1,4 +1,4 @@
-import { B2BLeadRow, MetaSpec, arr, num, str } from '../data/rows';
+import { B2BLeadRow, MetaSpec, arr, num, pairTime, str, unpairTime } from '../data/rows';
 import { Escalation } from '@/components/b2b/models/account-health';
 import { ClientSource } from '@/components/b2b/models/client';
 import { KamOrder, isLegacyKamStage, normalizeKamOrderStatus } from '@/components/b2b/models/kam';
@@ -35,6 +35,7 @@ export function rowToKamOrder(r: B2BLeadRow): KamOrder {
     (o as unknown as Record<string, unknown>)[key] = spec.read(m[spec.col]);
   }
   o.status = normalizeKamOrderStatus(r.stage);
+  o.followUpTime = unpairTime(m.follow_up_time, o.followUpDate);
   if (isLegacyKamStage(r.stage)) o.legacyStage = r.stage;
 
   o.estimatedValue = num(m.estimated_value) ?? num(r.value);
@@ -51,6 +52,7 @@ export function kamOrderToRow(o: KamOrder): B2BLeadRow {
     const v = o[key];
     meta[spec.col] = v === undefined ? null : v;
   }
+  meta.follow_up_time = pairTime(o.followUpDate, o.followUpTime);
   meta.estimated_value = o.estimatedValue ?? null;
 
   meta.escalations = o.legacyEscalations || [];

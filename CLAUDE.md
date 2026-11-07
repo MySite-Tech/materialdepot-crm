@@ -139,6 +139,13 @@ from the snapshot `~/Projects/crm-dummy` (`reclone` refreshes and reseeds it)
 against `crm_dummy` (:8801). Opening Inbound runs round robin with no click, so
 `in_rotation` stays false in `crm_real`. A 403 "Blocked" there is the guard.
 **Supabase is not guarded:** saves on its tabs are production writes.
+**`crm_real` goes stale.** It is a copy from the last `refresh-crm-real.py` run,
+so work done on production since then is missing on :3001, and that reads like
+lost data. On 2026-11-06 the user reported a lead's EC redirects and progress
+"lost"; the copy was from 3 Nov. Run `~/Projects/ss-local-stack/venv/bin/python
+~/Projects/ss-local-stack/refresh-crm-real.py` before judging any figure on :3001.
+It only upserts, never deletes, so firms merged or deleted on production stay
+locally (1,447 local vs 1,263 production clients that day).
 
 **For B2B, use `npm run dev:sandbox` instead** (`docs/b2b/sandbox.md`). It runs
 the same Django stub plus a stubbed FastAPI b2b-backend and Kylas, seeded with
@@ -191,7 +198,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups; the meeting check-in, built 2026-10-30) · `ec-directed` (leads sent to an EC, and the assisted revenue they bring) · `ec-referral` (the store form that hands a walk-in B2B client to Outreach) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
+| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups; the meeting check-in, built 2026-10-30) · `ec-directed` (leads sent to an EC, and the assisted revenue they bring) · `ec-referral` (the store form that hands a walk-in B2B client to Outreach) · `reminders` (every person's follow-ups with an optional time, an hour-before window and opt-in desktop alerts, 2026-11-06) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 16-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -565,6 +572,16 @@ from 2026-11-07 from `~/Projects/crm-combined`. When
 an edit does not show there, check whose tree it runs:
 `lsof -a -p $(lsof -tiTCP:3001 -sTCP:LISTEN) -d cwd`. To restore it, stop :3001 and
 run `~/Projects/ss-local-stack/crm-local.sh up`.
+
+**Reminders and the follow-up time (2026-11-06), branch `b2b-follow-up-reminders`,
+pushed, no PR yet, no backend PR.** The user asked for an optional time beside every
+follow-up date (Inbound, Outreach, KAM, PI) and a Reminders tab for every B2B
+person, where a timed follow-up moves into Due now an hour before. This reverses
+the 2026-10-30 "no follow-up time" decision. Open shows the lead or firm drawer on
+the Reminders tab itself. The time is stored paired with its date
+(`2026-11-08T17:00`) because 18 production rows held stale bare times. Read
+`docs/b2b/reminders.md` before touching it. Seen on the sandbox only, not signed
+in on real data.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment

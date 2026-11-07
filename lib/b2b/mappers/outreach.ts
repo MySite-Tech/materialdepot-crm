@@ -1,4 +1,4 @@
-import { B2BLeadRow, MetaSpec, arr, num, str } from '../data/rows';
+import { B2BLeadRow, MetaSpec, arr, num, pairTime, str, unpairTime } from '../data/rows';
 import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbound';
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
 import { RevenueCredit } from '@/components/b2b/models/credit';
@@ -70,6 +70,7 @@ export function rowToOutreach(r: B2BLeadRow): OutreachLead {
   }
 
   lead.status = normalizeOutreachStatus(r.stage);
+  lead.followUpTime = unpairTime(m.follow_up_time, lead.followUpDate);
 
   lead.value = Number(lead.orderValue) || 0;
   return lead;
@@ -81,6 +82,7 @@ export function outreachToRow(l: OutreachLead): B2BLeadRow {
     const v = l[key];
     meta[spec.col] = v === undefined ? null : v;
   }
+  meta.follow_up_time = pairTime(l.followUpDate, l.followUpTime);
   return {
     id: l.id,
 

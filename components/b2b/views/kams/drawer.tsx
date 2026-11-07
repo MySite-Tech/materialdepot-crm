@@ -11,6 +11,7 @@ import { TemperatureChip } from '../../ui/client-chips';
 import { EscalationSection } from './panels/escalations';
 import { Rep } from '../../models/outreach/intake';
 import { ClientOrderHistory } from '@/lib/b2b';
+import { fmtFollowUp } from '../../models/reminders';
 
 export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs, kams, onClose, onLogInteraction, onCheckIn, onSaveClient, onOpenOrder, onAddOrder }: {
   row: AssignedClientRow;
@@ -102,7 +103,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
                   {i.checkIn && <div className="mt-1"><CheckInLine c={i.checkIn} /></div>}
                   {i.summary && <p className="text-[12px] text-gray-600 mt-1 break-words">{i.summary}</p>}
                   {i.upcomingProject && <p className="text-[11px] text-gray-500 mt-1"><span className="text-gray-400">Upcoming:</span> {i.upcomingProject}</p>}
-                  <p className="text-[10px] text-gray-400 mt-1">{i.nextFollowUpDate ? `Next follow-up ${i.nextFollowUpDate}` : 'No next follow-up set'}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{i.nextFollowUpDate ? `Next follow-up ${fmtFollowUp(i.nextFollowUpDate, i.nextFollowUpTime)}` : 'No next follow-up set'}</p>
                 </div>
               ))}
             </div>
@@ -131,7 +132,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
                     {o.enqId ? <span className="font-mono font-semibold text-gray-600">{o.enqId}</span> : 'no Enq ID'}
                     {o.orderValue !== undefined ? ` · ${fmtINR(o.orderValue)} from Procurement` : o.estimatedValue ? ` · ${fmtINR(o.estimatedValue)} estimated` : ''}
                     {o.expectedClosure && ` · closes ${o.expectedClosure}`}
-                    {o.followUpDate && o.status !== 'Closed' && o.status !== 'Lost' && ` · follow up ${o.followUpDate}`}
+                    {o.followUpDate && o.status !== 'Closed' && o.status !== 'Lost' && ` · follow up ${fmtFollowUp(o.followUpDate, o.followUpTime)}`}
                   </div>
                 </button>
               ))}

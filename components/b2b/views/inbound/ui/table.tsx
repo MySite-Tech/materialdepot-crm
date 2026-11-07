@@ -8,6 +8,7 @@ import { CrmAddedTag, Empty, FollowUpChip, LeadName, PriorityChip, StatusBadge, 
 import { LENS, LIST_PAGE_SIZE, OUTCOME_LENSES } from '../constants';
 import { Lens } from '../types';
 import { gapsFor } from '../utils';
+import { fmtFollowUp } from '../../../models/reminders';
 
 const SINGLE_STATUS: Lens[] = ['new', 'nurture', 'followup', 'pi', 'closed', 'lost', 'invalid'];
 
@@ -26,7 +27,7 @@ function When({ lead, today }: { lead: InboundLead; today: string }) {
       <div className="flex flex-col items-start gap-0.5">
         <FollowUpChip date={lead.followUpDate} today={today} />
         {lead.followUpDate && (
-          <span className="text-[10.5px] text-gray-400">{fmtDay(lead.followUpDate)}</span>
+          <span className="text-[10.5px] text-gray-400">{fmtFollowUp(lead.followUpDate, lead.followUpTime)}</span>
         )}
       </div>
     );

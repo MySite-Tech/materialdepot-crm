@@ -272,12 +272,13 @@ written to Kylas**.
   there under the key owner's name.
 
 
-- **No follow-up time anywhere (2026-10-30).** The user said the time of a
-  call is not needed, so the optional time beside every next-follow-up date is
-  gone: the call log, the Move modal, the Outreach status card and the meeting
-  editor. `followUpTime` is out of the types and both mappers, so
-  `follow_up_time` is no longer read or written. Meeting times stay, because a
-  meeting is an appointment.
+- **The follow-up time is back, optional (2026-11-06).** It was removed on
+  2026-10-30 because the user said a call needs no time. On 2026-11-06 they asked
+  for it again: clients say "call me at 5 pm on 8 November", and the new
+  Reminders tab brings a timed follow-up forward an hour before. It sits beside
+  every next-follow-up date and is never gated. It is stored paired with its
+  date, because the column still held stale bare times from before the removal
+  (`reminders.md` §The time is stored paired with its date).
 - **Each call stores the caller's phone (`byPhone`, 2026-10-30)** as well as
   the name. Leadership credits a call by that phone first (`leadership.md`).
 - **Reassigning a lead in the drawer saves the last saved copy** (`saved.current`),
@@ -605,9 +606,11 @@ eight were empty on all 151 live rows when this shipped, so a hard block would
 just stop the board being used. Dragging a card into a gated column opens
 `MoveModal` to collect the field rather than writing an incomplete status.
 
-There is **no reminder service in this stack**. The follow-up date's reminder is
-the Due today and Overdue tiles and the card badge. Do not word either as if a notification was
-sent.
+There is **no server-side reminder service in this stack**. The follow-up's
+reminder is the Due today and Overdue tiles, the card badge, and since 2026-11-06
+the Reminders tab with its opt-in desktop alert, which fires only while a CRM tab
+is open (`reminders.md`). Do not word any of them as if a message was sent to the
+client or to a phone.
 
 ### Enq ID → order value
 

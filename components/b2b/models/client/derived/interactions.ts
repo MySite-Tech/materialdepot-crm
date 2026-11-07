@@ -45,10 +45,10 @@ export function currentUpcomingProject(list: ClientInteraction[] | undefined): {
   return undefined;
 }
 
-export function nextFollowUp(list: ClientInteraction[] | undefined): { date: string; from: ClientInteraction } | undefined {
+export function nextFollowUp(list: ClientInteraction[] | undefined): { date: string; time?: string; from: ClientInteraction } | undefined {
   const open = openCheckIn(list);
   const latest = latestInteraction((list || []).filter((i) => i !== open));
   const date = String(latest?.nextFollowUpDate || '').slice(0, 10);
-  return latest && date ? { date, from: latest } : undefined;
+  return latest && date ? { date, time: latest.nextFollowUpTime || undefined, from: latest } : undefined;
 }
 

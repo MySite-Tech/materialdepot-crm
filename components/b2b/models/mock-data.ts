@@ -97,6 +97,7 @@ export interface InboundLead {
 
   statusChangedAt?: string;
   followUpDate?: string;
+  followUpTime?: string;
   enqId?: string;
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
@@ -158,6 +159,7 @@ export interface OutreachLead {
 
   statusChangedAt?: string;
   followUpDate?: string;
+  followUpTime?: string;
   quoteSharedAt?: string;
   enqId?: string;
 

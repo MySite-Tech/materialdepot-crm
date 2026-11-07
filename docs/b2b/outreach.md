@@ -231,7 +231,10 @@ CRM adherence KPI cannot disagree:
   because an Inbound lead arrives without most of this.
 - **Next follow-up** shows for every open stage now, not just Follow up and PI
   Shared, and again inside the latest held meeting. A held meeting is where
-  the BM knows the next step.
+  the BM knows the next step. Since 2026-11-06 an optional time sits beside it
+  everywhere (status card, meeting editor, Move modal, new lead), and the
+  follow-up and every scheduled meeting appear on the BM's Reminders tab
+  (`reminders.md`).
 
 An alternate number must be a different 10-digit mobile, and since 2026-10-29
 it also needs the name and role of the person on it (`alt_name`, `alt_role`).

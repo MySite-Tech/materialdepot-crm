@@ -4,7 +4,8 @@ import { LOST_STALLED, LOST_UNREACHABLE, MIN_ATTEMPTS_BEFORE_CLOSE, READY_RNR_CO
 import { callTally } from '../../../models/inbound';
 import { InboundLead } from '../../../models/mock-data';
 import { ClosureReadiness } from '../../../types/inbound';
-import { Empty, Field, GateErrors, SectionCard, errorInputCls, fmtDay, fmtLeadDateTime, inputCls } from '../../../ui/inbound-chips';
+import { Empty, Field, GateErrors, SectionCard, errorInputCls, fmtLeadDateTime, inputCls } from '../../../ui/inbound-chips';
+import { fmtFollowUp } from '../../../models/reminders';
 import { useCallLog } from '../hooks/use-call-log';
 
 const btn = 'px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap disabled:opacity-50';
@@ -29,7 +30,7 @@ export function InboundCallsCard({ draft, calls, readiness, onClose }: {
         <div className="text-[12px]">
           <span className="text-gray-400">Next follow-up </span>
           {draft.followUpDate
-            ? <strong className={draft.followUpDate < today ? 'text-red-600' : 'text-gray-800'}>{fmtDay(draft.followUpDate)}</strong>
+            ? <strong className={draft.followUpDate < today ? 'text-red-600' : 'text-gray-800'}>{fmtFollowUp(draft.followUpDate, draft.followUpTime)}</strong>
             : <strong className="text-gray-500">not set</strong>}
           <span className="text-gray-400"> · set by the last call, with {draft.owner || 'the owner'}</span>
         </div>
@@ -83,6 +84,9 @@ export function InboundCallsCard({ draft, calls, readiness, onClose }: {
               <input type="date" min={today} value={form.followUpDate} onChange={(e) => calls.patchForm({ followUpDate: e.target.value })}
                 className={error && !form.followUpDate ? errorInputCls : inputCls} />
             </Field>
+            <Field label="Time" hint="Optional. Reminders show it an hour before.">
+              <input type="time" value={form.followUpTime} onChange={(e) => calls.patchForm({ followUpTime: e.target.value })} className={inputCls} />
+            </Field>
           </div>
           <Field label="What was discussed" required hint="Outreach and the KAM read this later — write it for them.">
             <textarea value={form.note} onChange={(e) => calls.patchForm({ note: e.target.value })} rows={3}
@@ -112,7 +116,7 @@ export function InboundCallsCard({ draft, calls, readiness, onClose }: {
                   <span className="text-[10.5px] text-gray-400">{fmtLeadDateTime(a.at)}{a.by ? ` · ${a.by}` : ''}</span>
                 </div>
                 {a.note && <p className="text-[11.5px] text-gray-700 mt-0.5 whitespace-pre-wrap">{a.note}</p>}
-                {a.followUpDate && <p className="text-[10.5px] text-gray-400 mt-0.5">Next follow-up → {fmtDay(a.followUpDate)}</p>}
+                {a.followUpDate && <p className="text-[10.5px] text-gray-400 mt-0.5">Next follow-up → {fmtFollowUp(a.followUpDate, a.followUpTime)}</p>}
               </div>
             </li>
           ))}

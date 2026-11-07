@@ -1,4 +1,4 @@
-import { DEAL_ORDER_STATUSES, INBOUND_CLOSED_STATUSES } from '../../constants/inbound';
+import { DEAL_ORDER_STATUSES, INBOUND_CLOSED_STATUSES, isOpenStatus } from '../../constants/inbound';
 import { CallAttempt, FollowUpBucket, InboundStatus, OutreachReferral } from '../../types/inbound';
 import { istToday } from '../../utils/inbound';
 import { isCrmAddedLead } from './kylas';
@@ -54,6 +54,9 @@ export const lastCallDay = (l: LifecycleLead): string => {
 };
 
 export const sentToOutreach = (l: LifecycleLead): boolean => !!l.outreachReferral?.at;
+
+export const awaitsFollowUp = (l: LifecycleLead): boolean =>
+  isOpenStatus(l.stage) && !(l.stage === 'New' && !(l.callAttempts || []).length);
 
 export function withStatusStamps<T extends LifecycleLead>(before: LifecycleLead, after: T, now: string): T {
   if (after.stage === before.stage) return after;

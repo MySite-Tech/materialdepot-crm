@@ -45,6 +45,7 @@ export interface CallAttempt {
   note?: string;
   durationMin?: number;
   followUpDate?: string;
+  followUpTime?: string;
 }
 
 export interface ContactPerson {

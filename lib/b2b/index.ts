@@ -1,4 +1,5 @@
 export { B2B_FRESH_START } from './data/rows';
+export { onB2BWrite } from './data/cache';
 export { fetchB2BData, fetchClients, fetchInboundBoard, fetchInboundLinks, inboundBoardMatches, fetchKamOrders, fetchOutreachLeads } from './data/reads';
 export type { B2BData } from './data/reads';
 export { istToday } from './stats/pipeline';
