@@ -72,7 +72,7 @@ function OrdersTable({ rows, onOpen }: { rows: RevenueOrder[]; onOpen: (o: Reven
             </td>
             <td className={CELL}>
               {o.person || '—'}
-              {o.team && <div className="text-[10.5px] text-gray-400">{B2B_TEAM_LABEL[o.team]}</div>}
+              {o.team && <div className="text-[10.5px] text-gray-400">{B2B_TEAM_LABEL[o.team]}{o.credit ? ' · set by a manager' : ''}</div>}
             </td>
             <td className={CELL}>
               {o.placedBy || '—'}

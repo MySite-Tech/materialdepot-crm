@@ -24,9 +24,8 @@ import { Spinner } from '../../ui/inbound-chips';
 import { SaveState } from '../../types/inbound-drawer';
 import { EnqLookup, inboundPhones, lookupEnqId, saveInboundLead } from '@/lib/b2b';
 import { hasTeamEdits } from '@/lib/b2b/mappers/inbound';
-import { CreditPicker } from '../../ui/credit-picker';
+import { OrderCreditLine } from '../../order-credit/ui/credit-line';
 import { RedirectToEc, openEnquiries, uniquePhones } from '../../ui/redirect-to-ec';
-import { creditOf } from '../../models/credit';
 import { SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const GATE_TEXT: Record<GateField, string> = {
@@ -45,7 +44,7 @@ const withContactDefaults = (l: InboundLead): InboundLead => ({
 });
 
 export default function InboundDrawer({
-  lead, onClose, onSaved, actorName, actorPhone, members, people, canReassign, canCredit,
+  lead, onClose, onSaved, actorName, actorPhone, members, people, canReassign,
 }: {
   lead: InboundLead;
   onClose: () => void;
@@ -54,7 +53,6 @@ export default function InboundDrawer({
   members: TeamMember[];
   people: Rep[];
   canReassign: boolean;
-  canCredit: boolean;
   onSaved: (updated: InboundLead) => void;
 }) {
   const [draft, setDraft] = useState<InboundLead>(() => withContactDefaults(lead));
@@ -244,16 +242,7 @@ export default function InboundDrawer({
             <InboundPlacedUnderCard draft={draft} people={people} setPlaced={setPlaced} />
           )}
 
-          {draft.stage === 'Closed' && (
-            <CreditPicker
-              owner={draft.owner}
-              credit={creditOf(draft.revenueCredit)}
-              people={members.filter((m) => m.active)}
-              canEdit={canCredit}
-              actor={actorName}
-              onChange={(c) => set('revenueCredit', c)}
-            />
-          )}
+          {draft.stage === 'Closed' && !!draft.enqId && <OrderCreditLine enquiryId={draft.enqId} rule={draft.owner} />}
 
           <InboundOutreachCard
             draft={draft}

@@ -278,6 +278,16 @@ still `CT…`) has no PI and skips it. While it loads the card says so, and a
 failed read says the PI could not be read rather than passing categories off as
 items.
 
+**The ticket's own fields say they are the ticket's (2026-11-12).** "Assigned to"
+is now **Ticket owner (store)** and "Created" is **Ticket opened**, and the table's
+column is **Branch · ticket owner**. Both are Django's deal ticket, which a store
+opens on a client's first visit and every later cart attaches to. On
+ENQ20261107102736 they read a Yelahanka salesperson and 12 Aug, for a cart built on
+7 Nov that a KAM had worked. The user took them for B2B attribution and asked why
+the KAM was missing. Who the revenue is credited to is the line above them,
+**Revenue credited to**, and a row credited by a manager says so under its branch
+(`overview.md` §A manager credits one order).
+
 **Round robin only shares out firms with no KAM (2026-10-30).** The user:
 after one round robin, the next one should take the new, unassigned firms, not
 the database again. `useFirmAssign` drops every selected firm that has a KAM

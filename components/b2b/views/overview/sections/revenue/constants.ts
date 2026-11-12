@@ -1,23 +1,24 @@
+import { CHANNEL_LABELS } from '@/lib/b2b/revenue';
 import type { HolderKind, OrderType, RevenueChannel } from '@/lib/b2b/revenue';
 
 export const CHANNEL_META: Record<RevenueChannel, { label: string; color: string; hint: string }> = {
   direct: {
-    label: 'Direct',
+    label: CHANNEL_LABELS.direct,
     color: '#4F46E5',
     hint: 'Every order placed on the B2B branch, whoever held the cart: HQ until June 2026, the B2B branch from July. Referred clients are counted in Referred instead. At HQ, a walk-in on no B2B record is not counted, because HQ is also a store.',
   },
   redirected: {
-    label: 'Studio EC Redirected',
+    label: CHANNEL_LABELS.redirected,
     color: '#DB2777',
     hint: 'Booked at a store by a firm the B2B team already works with: a B2B rep on the cart, or a number held by a KAM, an Inbound or Outreach SPoC or lead, or a logged redirect. These orders are also in that store\'s own revenue.',
   },
   ecDirect: {
-    label: 'EC Direct',
+    label: CHANNEL_LABELS.ecDirect,
     color: '#0891B2',
     hint: 'Booked at a store by a Client Database firm that has no KAM and no Inbound or Outreach SPoC: firms buying from the store on their own, before any B2B tie-up. These orders are also in that store\'s own revenue.',
   },
   referred: {
-    label: 'Referred clients',
+    label: CHANNEL_LABELS.referred,
     color: '#65A30D',
     hint: 'Orders from clients a Studio Space partner referred, from the day of the referral, wherever they were booked. Always credited to KAM.',
   },

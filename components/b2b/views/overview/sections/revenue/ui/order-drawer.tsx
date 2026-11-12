@@ -5,7 +5,8 @@ import { fmtDateTime, fmtPhone } from '../../../../../drawers/firm/utils';
 import { dealIsOrder } from '../../../../../models/client';
 import { fmtINR, fmtL } from '../../../../../models/mock-data';
 import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
-import { REVENUE_CHANNELS, RevenueOrder, channelSplits } from '@/lib/b2b/revenue';
+import { REVENUE_CHANNELS, RevenueOrder, applyCredits, channelSplits } from '@/lib/b2b/revenue';
+import { useOrderCredits } from '../../../../../order-credit/hooks/use-order-credits';
 import { useEffect, useMemo, useState } from 'react';
 import { CHANNEL_META, HELD_BY, TYPE_META } from '../constants';
 
@@ -53,20 +54,22 @@ function OrderRow({ o, startOpen, explain }: { o: RevenueOrder; startOpen: boole
             {!dealIsOrder(o.status) && !why.funnel && <span className="font-semibold">{o.status || 'This status'} is not an order yet, so this is not in B2B revenue. Once placed it would count this way. </span>}
             <span className="font-semibold">Why {why.label}:</span> {why.reason}
           </p>
-          <EnquiryDetail r={o.ticket} />
+          <EnquiryDetail r={o.ticket} creditRule={o.rule?.person ?? o.person} />
         </div>
       )}
     </div>
   );
 }
 
-export function OrderDrawer({ title, orders, note, explain, onClose }: {
+export function OrderDrawer({ title, orders: given, note, explain, onClose }: {
   title: string;
   note?: React.ReactNode;
   orders: RevenueOrder[];
   explain?: (o: RevenueOrder) => Explained;
   onClose: () => void;
 }) {
+  const { credits } = useOrderCredits();
+  const orders = useMemo(() => applyCredits(given, credits), [given, credits]);
   const splits = useMemo(() => channelSplits(orders.filter((o) => dealIsOrder(o.status))), [orders]);
   const notOrders = orders.filter((o) => !dealIsOrder(o.status)).length;
   const total = useMemo(() => orders.reduce((s, o) => s + o.value, 0), [orders]);

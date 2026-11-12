@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-87 entries. They live in one file because they cross-reference each other —
+89 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -97,6 +97,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A redirect card listed only what this session had sent, so every saved redirect read "not redirected"
 - A column the CRM stopped writing still held old values, so reading it again would have attached them to new dates
 - A firm's page said "No placed order" under numbers that each showed an order
+- A Django ticket's owner and date on the enquiry card read as B2B attribution
+- My performance and the Overview counted revenue two different ways, so a rep's own figure never matched
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1332,3 +1334,27 @@ on one screen. Before trusting an empty list, compare it with a figure on the sa
 page. The card now names the orders it cannot list (`docs/b2b/client-db.md`
 §The Firm page lists deal tickets), and the real fix is `docs/backends.md` §Owed
 by Django row 18.
+
+### A Django ticket's owner and date on the enquiry card read as B2B attribution (2026-11-12)
+
+The user opened ENQ20261107102736 on a firm's page and asked why "Assigned to" was a
+Yelahanka salesperson and "Created" was 12 Aug, when a KAM had done everything. Both
+were right, about Django's deal ticket: the store opened it on the client's first
+visit in August, and the 7 Nov cart attached to it, built by the same salesperson
+(the sheet's EC SPoC process). The card printed them under B2B-sounding labels with
+nothing saying who the revenue went to. They now read **Ticket owner (store)** and
+**Ticket opened**, and **Revenue credited to** sits above them (`docs/b2b/client-db.md`
+§One enquiry). The shape: a field from another system shown beside your own data needs
+a label that names its system, or it will be read as yours.
+
+### My performance and the Overview counted revenue two different ways, so a rep's own figure never matched (2026-11-12)
+
+The Overview credits every placed order to a person through the number book. My
+performance counted Inbound's Closed leads and the KAM board's Closed orders, with a
+per-record `revenueCredit`. A KAM's store-booked orders were on the Overview under
+their name and nowhere on their own page, and a manager's credit on one screen never
+reached the other. Both now read `creditedOrders` over the same report, and a credit
+is per enquiry (`docs/b2b/leadership.md` §Revenue is the Overview's per-order rule).
+The shape is the "one number, one function" rule across two tabs, not two tiles: when
+two screens show "revenue" for one person, they must call one function.
+

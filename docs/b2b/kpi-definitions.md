@@ -204,3 +204,23 @@ them here so no future session re-derives them from scratch:
   shared definition pattern (mandatory-field-completeness % + same-day
   logging %) — build it once, reuse across Inbound/Outreach/KAM views,
   per the "one number, one function" house style rule.
+
+## Re-pulled 2026-11-12: the team sheet and its weights
+
+The user's current sheet is a different file, with one tab per team (Inbound,
+Outreach, KAM) plus the plans; its link is in the session that read it, not here.
+Read 2026-11-12, read only. Targets are unchanged from the transcription above,
+with two additions:
+
+- **Every KPI has a weight, totalling 100% per team.** Inbound: coverage 10,
+  calls 20, adherence 10, revenue 40, qualified 20. Outreach: new meetings,
+  follow-ups, adherence and coverage 10 each; conversions, waitlist, handover and
+  revenue 15 each. KAM: meetings 10, coverage 10, handover 5, adherence 5, calls 10,
+  active rate new 10, active rate old 10, revenue 30, Studio Space onboarding 10.
+  Implemented as `weight` on each def and the weighted score
+  (`leadership.md` §Weighted score).
+- **Hyderabad has its own Outreach and KAM tables.** Outreach's targets are the
+  same as Bangalore's. The Hyderabad KAM's meetings (18) and calls (250) are half,
+  and its revenue target is "TBD". The engines carry Bangalore's figures as the
+  defaults, so a Hyderabad person's halves are set per person under Leadership
+  Board → Set targets.

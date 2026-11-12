@@ -32,7 +32,6 @@ function InboundRecord({ lead, team, viewer, onClose }: { lead: InboundLead; tea
       members={teamMembers(team.members, 'inbound')}
       people={everyone}
       canReassign={viewer.isManager || !!membershipIn(viewer, 'inbound')}
-      canCredit={viewer.isManager}
       onSaved={setCurrent}
     />
   );

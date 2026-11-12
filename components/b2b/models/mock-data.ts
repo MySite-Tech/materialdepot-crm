@@ -7,7 +7,6 @@ import {
   type OutreachStatus, type OutreachMeeting, type MeetingStatus, type CompanyType,
   type EcReferral, type OutreachSource, type TeamSize, type OutreachContact, type OutreachIntake, type OutreachHandover, type JourneyEvent,
 } from './outreach';
-import type { RevenueCredit } from './credit';
 import type { RequirementVersion } from './requirement';
 
 type AccountType = 'Interior Designer' | 'Architect' | 'Builder' | 'Modular Factory' | 'OSR' | 'Contractor' | 'Retailer';
@@ -101,7 +100,6 @@ export interface InboundLead {
   enqId?: string;
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
-  revenueCredit?: RevenueCredit;
   lostReason?: string;
   invalidReason?: string;
   invalidNote?: string;
@@ -165,7 +163,6 @@ export interface OutreachLead {
 
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
-  revenueCredit?: RevenueCredit;
   dealStatus?: string;
   expectedClosure?: string;
   lostReason?: string;

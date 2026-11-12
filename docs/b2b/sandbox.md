@@ -74,6 +74,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | B2B calls (RNR / Connected), client details, status, team notes, Send to Outreach | backend `POST /b2b/rows` (pipeline `inbound`). Nothing is written to Kylas since 2026-10-29 | backend stub |
 | Enq ID and deal tickets | Django `/crm/leads/?enquiry_ids=` and `?q=<phone>` | Django stub, seven `ENQ-9001xx` tickets |
 | Review new firms | Django `/crm/leads/?order_from` → `/api/b2b/client-import`; backend `/client-review` | Django stub and the backend stub. Eight tickets carry dummy GSTINs: Mockup Interiors and Template Builders are already clients, and four firms are left to review (one on two numbers, one a proprietor, one in Telangana). Not-a-client decisions land in `backend.clientReview` |
+| Order credits | backend `GET/POST /b2b/order-credits`, `DELETE /b2b/order-credits/{id}` | Backend stub, kept in `backend.orderCredits` with `history`, like production. The Django stub sends `orderPlacedAt` on every order (the order's closure or created day, 06:30 UTC), so My performance can place an order on a day |
 | BM / EC pickers | Django `/crm/available-bms/`, `/orgainsation-branch/` | Django stub |
 | Outreach pool, accept, meetings, handover | backend rows (pipeline `outbound`, id `OR-IN-<kylas id>`) | backend stub |
 | Studio Space waitlist | backend `GET /b2b/waitlist` | backend stub, two sign-ups: one on Mockup Interiors' mobile (Waitlist tile 1), one matching no lead |

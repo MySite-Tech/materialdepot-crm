@@ -4,6 +4,8 @@ import type { KamOrder } from '../kam';
 import type { WaitlistSignup } from '../outreach';
 import type { Period } from '../outreach/kpis';
 import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
+import type { OrderCredit, RevenueChannel, RevenueOrder } from '@/lib/b2b/revenue';
+import type { EcVisit } from '@/lib/b2b/ec-visits';
 
 export type PerfUnit = 'count' | '%' | 'L';
 
@@ -17,6 +19,7 @@ export interface PerfKpiDef {
   per?: 'day' | 'month';
   daily: boolean;
   rule: string;
+  weight?: number;
 }
 
 export interface PerfRow {
@@ -32,6 +35,8 @@ export interface PerfValue {
   unknown?: boolean;
   sub?: string;
   rows: PerfRow[];
+  orders?: RevenueOrder[];
+  channels?: Record<RevenueChannel, number>;
 }
 
 export type PerfCard = Record<string, PerfValue>;
@@ -57,6 +62,20 @@ export interface PerfData {
   assigned?: Record<string, number | null>;
   members?: TeamMember[];
   today: string;
+  revenue: RevenueOrder[] | null;
+  revenueWindow: Period | null;
+  credits: Map<string, OrderCredit> | null;
+  redirects: EcVisit[] | null;
+}
+
+export type ActivityKind = 'Call' | 'Meeting' | 'Note' | 'EC redirect' | 'Sent to Outreach' | 'Lead update' | 'Enquiry';
+
+export interface ActivityItem {
+  id: string;
+  at: string;
+  kind: ActivityKind;
+  title: string;
+  detail: string;
 }
 
 export interface TeamEngine {
@@ -67,6 +86,7 @@ export interface TeamEngine {
   notMeasured: string[];
   people: (data: PerfData, members: TeamMember[], live: boolean) => Person[];
   card: (data: PerfData, people: Person[], period: Period) => PerfCard;
+  activity: (data: PerfData, people: Person[], period: Period, card: PerfCard) => ActivityItem[];
 }
 
 export type Goals = Record<string, Record<string, number>>;

@@ -6,7 +6,12 @@ import { KamOrder } from '../../../models/kam';
 import { InboundLead, OutreachLead } from '../../../models/mock-data';
 import { WaitlistSignup } from '../../../models/outreach';
 import { waitlistIndex } from '../../../models/outreach/kpis';
+import { Period } from '../../../models/outreach/kpis';
 import { PerfData, Source, TargetStore } from '../../../models/performance/types';
+import { useOrderCredits } from '../../../order-credit/hooks/use-order-credits';
+import { useMonthReport } from '../../overview/hooks/use-month-report';
+import { EcVisit, fetchEcVisits } from '@/lib/b2b/ec-visits';
+import { applyCredits, fetchRevenueReport } from '@/lib/b2b/revenue';
 import { fetchClients, fetchKamOrders, fetchOutreachLeads, fetchTargets, kamEnquiryIdsToResolve, resolveKamOrders } from '@/lib/b2b';
 import { fetchInboundForOutreach, fetchStudioWaitlist } from '@/lib/b2b/outreach';
 import type { B2BTeam } from '@/lib/b2b/team/types';
@@ -22,13 +27,17 @@ interface Base {
 
 export type LoadState = 'loading' | 'ready';
 
-export function usePerformanceData(team: B2BTeam | null, today: string) {
+export function usePerformanceData(team: B2BTeam | null, today: string, period: Period) {
   const [base, setBase] = useState<Base | null>(null);
   const [waitlist, setWaitlist] = useState<WaitlistSignup[] | null | undefined>(undefined);
   const [targets, setTargets] = useState<TargetStore | null>(null);
   const [targetsOk, setTargetsOk] = useState(true);
   const [historyState, setHistoryState] = useState<'idle' | LoadState>('idle');
   const { load: loadHistories, metricsFor } = useClientAggregates();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const sales = useMonthReport(fetchRevenueReport, period.from, period.to, true, refreshKey, 'Orders could not be read');
+  const { credits, state: creditsState } = useOrderCredits();
+  const [redirects, setRedirects] = useState<EcVisit[] | null | undefined>(undefined);
 
   const load = useCallback(() => {
     setBase(null);
@@ -48,6 +57,14 @@ export function usePerformanceData(team: B2BTeam | null, today: string) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchEcVisits({ kind: 'redirect' })
+      .then((v) => { if (alive) setRedirects(v); })
+      .catch((e) => { console.error('[b2b] performance: redirects failed', e); if (alive) setRedirects(null); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -73,16 +90,31 @@ export function usePerformanceData(team: B2BTeam | null, today: string) {
       .finally(() => setHistoryState('ready'));
   }, [team, base, historyState, loadHistories]);
 
+  const revenue = useMemo(() => (sales.report ? applyCredits(sales.report.orders, credits) : null), [sales.report, credits]);
+
   const data = useMemo<PerfData | null>(() => base && {
     ...base,
     waitlist: waitlistIndex(waitlist ?? null),
     metricsFor,
     today,
-  }, [base, waitlist, metricsFor, today]);
+    revenue,
+    revenueWindow: sales.report ? { from: sales.report.from, to: sales.report.to } : null,
+    credits,
+    redirects: redirects ?? null,
+  }, [base, waitlist, metricsFor, today, revenue, sales.report, credits, redirects]);
 
   const pending = !base
     || (team === 'outreach' && waitlist === undefined)
     || (team === 'kam' && historyState !== 'ready');
 
-  return { data, pending, reload: load, targets, targetsOk, setTargets };
+  const reload = useCallback(() => { load(); setRefreshKey((k) => k + 1); }, [load]);
+
+  return {
+    data, pending, reload, targets, targetsOk, setTargets,
+    revenueBusy: sales.busy || creditsState === 'loading',
+    revenueError: sales.error,
+    creditsFailed: creditsState === 'failed',
+    redirectsFailed: redirects === null,
+    report: sales.report,
+  };
 }

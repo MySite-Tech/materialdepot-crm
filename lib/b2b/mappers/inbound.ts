@@ -45,7 +45,6 @@ const INBOUND_META: MetaField[] = [
   { ui: 'outreachReferral',   db: 'outreach_referral',    kind: 'object' },
 
   { ui: 'placedUnder',        db: 'placed_under',         kind: 'object' },
-  { ui: 'revenueCredit',      db: 'revenue_credit',       kind: 'object' },
   { ui: 'kam',                db: 'kam',                  kind: 'string' },
   { ui: 'addedBy',            db: 'added_by',             kind: 'string' },
 

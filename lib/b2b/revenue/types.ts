@@ -48,6 +48,36 @@ export interface RevenueOrder {
   redirectLogged: boolean;
   status: string;
   value: number;
+  credit?: OrderCredit;
+  rule?: { person: string; team: B2BTeam | null };
+}
+
+export interface CreditEntry {
+  name: string;
+  phone?: string;
+  team: B2BTeam | null;
+  reason: string;
+  by: string;
+  at: string;
+}
+
+export interface OrderCredit extends CreditEntry {
+  enquiryId: string;
+  history: CreditEntry[];
+}
+
+export interface CreditEntryRow {
+  name: string;
+  phone: string | null;
+  team: B2BTeam | null;
+  reason: string;
+  credited_by: string;
+  credited_at: string;
+}
+
+export interface OrderCreditRow extends CreditEntryRow {
+  enquiry_id: string;
+  history: CreditEntryRow[];
 }
 
 export interface RevenueReport {

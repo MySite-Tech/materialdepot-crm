@@ -331,10 +331,11 @@ asked to book meeting 2 again. Unlocking a saved meeting is not built.
 
 ### Converted = first order, and only a fetched order counts
 
-A Converted lead's revenue goes to its BM, unless a manager credits someone else
-with a reason (`ui/credit-picker.tsx`, `revenueCredit`, 2026-10-30). The
-Leadership Board honours the credit. The Outreach tab's own scorecard still
-counts by BM. A lead also carries a **Send a cart or PI to an EC** card
+A Converted lead's revenue goes to its BM, unless a manager credits the lead's
+enquiry to someone else (`overview.md` §A manager credits one order, 2026-11-12;
+it replaced the per-lead `revenueCredit`). The Leadership Board's New revenue KPI
+honours that credit through the lead's Enq ID. The Outreach tab's own scorecard
+still counts by BM. A lead also carries a **Send a cart or PI to an EC** card
 (`ec-directed.md` §One cart or PI at a time).
 
 

@@ -422,8 +422,6 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
           clients={manager && kamFilter === 'all' ? clients : scopedClients}
           kam={manager && kamFilter !== 'all' && kamFilter !== 'unassigned' ? kamFilter : me.name}
           actor={me.name}
-          creditPeople={allKams}
-          canCredit={viewer.isManager}
           onClose={() => setOrderModal(null)}
           onSave={saveOrder}
         />

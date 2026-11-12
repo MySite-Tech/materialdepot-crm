@@ -88,10 +88,12 @@ because §4.1 says one "is required … before it can be saved". Scoped to a cal
 which is the word the document uses; a meeting is prompted instead, since a site
 visit ending in "we'll call when the drawings land" has no honest date to give.
 
-**Revenue credit (2026-10-30).** A Closed KAM order's revenue goes to its KAM by
-default. A manager or B2B admin can credit someone else, with a reason, from the
-order modal (`ui/credit-picker.tsx`, `revenueCredit` on the order, see
-`leadership.md`).
+**Revenue credit is per enquiry (2026-11-12).** A KAM's revenue is every placed
+order the Overview credits to them, not the KAM board's Closed orders
+(`leadership.md` §Revenue is the Overview's per-order rule). A manager moves one
+order to anyone on the team from the enquiry card, the order modal or the Overview
+drawer (`order-credit/ui/credit-line.tsx`, `overview.md` §A manager credits one
+order). The per-record `revenueCredit` of 2026-10-30 is gone; production held none.
 
 **Enquiry is a third interaction type (2026-10-30).** It is the client asking
 for something. It needs what they asked for and a next follow-up date, the same

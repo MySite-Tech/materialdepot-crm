@@ -70,7 +70,8 @@ function leadsPage(deals, query) {
     .filter((d) => !onEstimate || ((!query.get('branch') || d.branch === query.get('branch'))
       && orderDay(d) >= (query.get('order_from') || '') && orderDay(d) <= (query.get('order_to') || '9')))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { results: rows.slice((n - 1) * size, n * size), count: rows.length, page: n, pageSize: size, totalPages: Math.max(1, Math.ceil(rows.length / size)) };
+  const placed = (d) => ({ ...d, orderPlacedAt: d.orderPlacedAt ?? (isOrder(d.status) ? `${orderDay(d)}T06:30:00.000Z` : null) });
+  return { results: rows.slice((n - 1) * size, n * size).map(placed), count: rows.length, page: n, pageSize: size, totalPages: Math.max(1, Math.ceil(rows.length / size)) };
 }
 
 function byPhone(deals, phones) {

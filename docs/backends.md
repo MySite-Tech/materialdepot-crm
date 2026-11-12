@@ -122,6 +122,17 @@ decisions could not be read, and Not a client fails. Sending firms on does not n
 It was run up, down and up on a scratch database stamped at 0024, and the three routes
 were exercised over HTTP there.
 
+**Migration `0026_b2b_order_credit`** (b2b-backend branch `nov12-b2b-backend-changes`,
+2026-11-12) adds `b2b_order_credit` and `GET/POST /b2b/order-credits`, `DELETE
+/b2b/order-credits/{enquiry_id}`: a manager's credit of one order to a person
+(`b2b/overview.md` §A manager credits one order). The relay allows `order-credits`
+and lets only a B2B manager write it. **Deploy it first.** Without it the credits
+read fails, every credit line reads Unknown, and the Overview and My performance say
+their figures follow the rule only; revenue itself still loads. The whole chain
+0001→0026 was run on an empty scratch database, the routes were exercised over HTTP
+(set, replace into `history`, bad team refused, case-insensitive key, clear), and
+0026 then ran on local `crm_real` and `crm_dummy`.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against

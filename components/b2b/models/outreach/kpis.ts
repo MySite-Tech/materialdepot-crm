@@ -2,7 +2,6 @@ import { OutreachLead, fmtINR } from '../mock-data';
 import { COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, WaitlistSignup, completedMeetings, followUpMeetings } from '.';
 import { isMobile, orderVerified, signedOffWithinTat } from './handover';
 import { istDay, outreachAdherence } from './reminders';
-import { creditNote } from '../credit';
 import { normalisePhone } from '@/lib/org/utils';
 
 export type OutreachKpiKey =
@@ -17,17 +16,18 @@ export interface OutreachKpiDef {
   target: number;
   unit: 'count' | '%' | 'L';
   rule: string;
+  weight: number;
 }
 
 export const OUTREACH_KPIS: OutreachKpiDef[] = [
-  { key: 'newMeetings',      kind: 'Effort', label: 'New-lead meetings',     short: 'New meetings',  target: 50,  unit: 'count', rule: 'Unique firms whose first meeting was held in the period, with notes, an owner/designer name and a 10-digit mobile.' },
-  { key: 'followUpMeetings', kind: 'Effort', label: 'Follow-up meetings',    short: 'Follow-ups',    target: 30,  unit: 'count', rule: `Unique firms with a follow-up meeting held in the period. A firm is fully followed up after ${FOLLOW_UPS_REQUIRED} follow-ups or an order.` },
-  { key: 'adherence',        kind: 'Effort', label: 'CRM adherence',         short: 'CRM adherence', target: 100, unit: '%',     rule: 'Leads touched in the period with every mandatory field and log in place ÷ leads touched.' },
-  { key: 'coverage',         kind: 'Effort', label: 'Inbound & EC coverage', short: 'Coverage',      target: 100, unit: '%',     rule: 'Inbound and EC-referral leads assigned in the period that have had an in-person meeting ÷ those assigned.' },
-  { key: 'conversions',      kind: 'Output', label: 'New conversions',       short: 'Conversions',   target: 15,  unit: 'count', rule: 'Leads moved to Converted in the period whose first order was fetched from its Enq ID.' },
-  { key: 'waitlist',         kind: 'Output', label: 'Studio Space waitlist', short: 'Waitlist',      target: 30,  unit: 'count', rule: 'Waitlist sign-ups in the period whose mobile exactly matches a lead\'s mobile.' },
-  { key: 'handover',         kind: 'Output', label: 'KAM handover',          short: 'KAM handover',  target: 100, unit: '%',     rule: 'Leads converted in the period that a KAM has signed off ÷ leads converted in the period.' },
-  { key: 'revenue',          kind: 'Output', label: 'New revenue',           short: 'New revenue',   target: 5,   unit: 'L',     rule: 'First-order value of the period\'s verified conversions, excluding numbers that ordered in the 6 months before.' },
+  { key: 'newMeetings',      kind: 'Effort', label: 'New-lead meetings',     short: 'New meetings',  target: 50,  unit: 'count', rule: 'Unique firms whose first meeting was held in the period, with notes, an owner/designer name and a 10-digit mobile.', weight: 10 },
+  { key: 'followUpMeetings', kind: 'Effort', label: 'Follow-up meetings',    short: 'Follow-ups',    target: 30,  unit: 'count', rule: `Unique firms with a follow-up meeting held in the period. A firm is fully followed up after ${FOLLOW_UPS_REQUIRED} follow-ups or an order.`, weight: 10 },
+  { key: 'adherence',        kind: 'Effort', label: 'CRM adherence',         short: 'CRM adherence', target: 100, unit: '%',     rule: 'Leads touched in the period with every mandatory field and log in place ÷ leads touched.', weight: 10 },
+  { key: 'coverage',         kind: 'Effort', label: 'Inbound & EC coverage', short: 'Coverage',      target: 100, unit: '%',     rule: 'Inbound and EC-referral leads assigned in the period that have had an in-person meeting ÷ those assigned.', weight: 10 },
+  { key: 'conversions',      kind: 'Output', label: 'New conversions',       short: 'Conversions',   target: 15,  unit: 'count', rule: 'Leads moved to Converted in the period whose first order was fetched from its Enq ID.', weight: 15 },
+  { key: 'waitlist',         kind: 'Output', label: 'Studio Space waitlist', short: 'Waitlist',      target: 30,  unit: 'count', rule: 'Waitlist sign-ups in the period whose mobile exactly matches a lead\'s mobile.', weight: 15 },
+  { key: 'handover',         kind: 'Output', label: 'KAM handover',          short: 'KAM handover',  target: 100, unit: '%',     rule: 'Leads converted in the period that a KAM has signed off ÷ leads converted in the period.', weight: 15 },
+  { key: 'revenue',          kind: 'Output', label: 'New revenue',           short: 'New revenue',   target: 5,   unit: 'L',     rule: 'First-order value of the period\'s verified conversions, excluding numbers that ordered in the 6 months before.', weight: 15 },
 ];
 
 export interface Period { from: string; to: string }
@@ -146,7 +146,7 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
   const revenue: KpiRow[] = converted.filter(orderVerified).map((l) => ({
     lead: l, counts: l.newOnboarding !== false, at: l.convertedAt || l.statusChangedAt,
     note: l.newOnboarding === false ? 'Repeat client — ordered in the 6 months before'
-      : `${fmtINR(Number(l.orderValue) || 0)}${l.newOnboarding === undefined ? ' · prior orders not checked' : ''}${creditNote(l.revenueCredit)}`,
+      : `${fmtINR(Number(l.orderValue) || 0)}${l.newOnboarding === undefined ? ' · prior orders not checked' : ''}`,
   }));
   const revenueSum = revenue.filter((r) => r.counts).reduce((a, r) => a + (Number(r.lead.orderValue) || 0), 0);
   const repeat = revenue.length - counted(revenue);

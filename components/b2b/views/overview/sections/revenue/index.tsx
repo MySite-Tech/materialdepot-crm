@@ -1,7 +1,8 @@
 'use client';
 
 import { fmtL } from '../../../../models/mock-data';
-import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, channelSplits, fetchRevenueReport, matchesFilter, monthWindows, revenueTotal } from '@/lib/b2b/revenue';
+import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, applyCredits, channelSplits, fetchRevenueReport, matchesFilter, monthWindows, revenueTotal } from '@/lib/b2b/revenue';
+import { useOrderCredits } from '../../../../order-credit/hooks/use-order-credits';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMonthReport } from '../../hooks/use-month-report';
 import { useRevenueTrend } from '../../hooks/use-revenue-trend';
@@ -37,7 +38,8 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
     }
   }, [report, monthKey, months]);
 
-  const orders = useMemo(() => report?.orders ?? [], [report]);
+  const { credits, state: creditsState } = useOrderCredits();
+  const orders = useMemo(() => applyCredits(report?.orders ?? [], credits), [report, credits]);
   const isCurrent = monthKey === months[0].key;
   const total = useMemo(() => revenueTotal(orders), [orders]);
   const pace = useMemo(() => monthPace(total, target, new Date()), [total, target]);
@@ -102,6 +104,9 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
       )}
       {report && !report.redirectsOk && (
         <div className="mt-4"><Notice title="EC redirects did not load.">Redirects logged in the CRM are left out, so Studio EC Redirected may read low and EC Direct high.</Notice></div>
+      )}
+      {report && creditsState === 'failed' && (
+        <div className="mt-4"><Notice title="Manual order credits did not load.">People show who each order is credited to by the rule only, without any manager's change.</Notice></div>
       )}
       {report?.truncated && (
         <div className="mt-4"><Notice title="This month has more orders than one read covers.">The figures are incomplete.</Notice></div>

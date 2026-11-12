@@ -2,7 +2,7 @@
 
 ## Leadership Board / My performance (rebuilt 2026-10-28)
 
-**Covers:** `components/b2b/views/leadership/**` · `components/b2b/models/performance/**` · `lib/b2b/stats/targets.ts`
+**Covers:** `components/b2b/views/leadership/**` · `components/b2b/models/performance/**` · `components/b2b/order-credit/**` · `lib/b2b/stats/targets.ts` · `lib/b2b/revenue/credits/**`
 
 ## Data
 
@@ -13,7 +13,14 @@
 | `fetchStudioWaitlist` | `GET /api/b2b/waitlist` | Outreach team only, once |
 | `fetchB2BBulk` via `useClientAggregates` | Django `/crm/leads/b2b-bulk/` | KAM team only, once |
 | `fetchTargets` | backend `GET /target` (one `b2b_target` row), shared through the B2B cache | On open |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to`, the Overview's report, server-cached per caller | Once per period picked; latest request wins (`useMonthReport`) |
+| `fetchOrderCredits` | backend `GET /b2b/order-credits` through the relay | Once per session, shared with every tab (`OrderCreditsProvider`) |
+| `fetchEcVisits({ kind: 'redirect' })` | backend `GET /b2b/ec-visits?kind=redirect` | On open, for Everything logged |
 | `saveTargets` | backend `POST /target` | Set targets, a manager pressing Save targets |
+
+On the sandbox on 2026-11-12, opening it as a manager made nine `/api/b2b/*`
+reads (team, rows, target, order-credits, two revenue windows, trend, studio-access,
+ec-visits); the trend and one revenue window are the Overview's, opened first.
 
 Opening the Inbound board as a manager on 2026-10-28 took 6 Kylas counts plus
 one automatic 429 retry and the waitlist call. The Supabase read was a cache hit
@@ -92,6 +99,85 @@ count with no target. `per: 'day'` still exists in `targetFor` but no KPI uses i
 (25 L), Inbound qualified (30) and KAM revenue (50 L) have no frequency in the
 sheet. They are treated as monthly here; that is an assumption to confirm.**
 
+## Revenue is the Overview's per-order rule (2026-11-12)
+
+The user: KAMs, Inbound and Outreach could not track their own progress, and a KAM
+whose order was on a firm assigned to someone else saw it counted for that person.
+Revenue on this page now comes from the same per-order report as the Overview
+(`/api/b2b/revenue` for the picked period), so the two can never disagree, and it is
+split into the Overview's four channels.
+
+- **`creditedOrders(data, team, people, period)`** (`models/performance/measures/revenue.ts`)
+  is the one function the hero, the Inbound and KAM Revenue KPI, the compare table
+  and every day-by-day cell read. An order is a person's when its `team` is the
+  engine's team and either a manager credited it to them (phone first, then name) or
+  the rule put their name on it (`o.person`, `sameRep`).
+- **What it replaced.** Inbound counted Closed leads with a fetched Enq value, KAM
+  counted Closed KAM-board orders. Both missed every order a store booked for the
+  firm (the KAM sheet's "Everything: EC, self and referrals"), which the KAM
+  engine had listed under Not scored. Outreach keeps its **New revenue (M0)** KPI,
+  because the sheet defines it as first orders of new conversions only; the hero
+  above it shows everything credited to the BM, and says so.
+- **A day claims an order through `ticket.placedAt` only.** If any of the person's
+  orders came with no placement time (Django not sending `orderPlacedAt`), each day's
+  revenue reads Unknown with the reason, never ₹0. The whole period does not need it:
+  the report is already windowed on the order date. The sandbox stub sends
+  `orderPlacedAt` since this change; before, every day read ₹0 beside a ₹3.4L total.
+- **KAM Ordering still reads KAM-board orders and the last-order date.** It is a
+  count of firms, not money, and was left as it was.
+
+### A manager credits one order to anyone
+
+The rule cannot see who closed an order a store booked on an old ticket. The case
+that raised it (ENQ20261107102736, 12 Nov): the deal ticket was opened on 12 Aug by
+a Yelahanka store salesperson, who also built the 7 Nov cart. Django's ticket owner,
+"Assigned to" on the card, is that person, and it never changed. The KAM who did the
+work built no cart (one in 90 days), as the sheet's EC SPoC process intends. The
+number sits on a Client Database firm whose first KAM assignment was 9 Nov, two days
+after the order.
+
+A B2B manager now overrides any order from its enquiry card (`OrderCreditLine`,
+`overview.md` §A manager credits one order). The credit is per enquiry, not per
+firm or lead, so it never moves other orders. It replaced the per-record
+`revenueCredit` and `ui/credit-picker.tsx` of 2026-10-30, which production had
+never used (0 rows on 12 Nov).
+
+## The page, top to bottom (2026-11-12)
+
+The user asked for the page to be "very nicely done". Order: header with period
+chips (Today, Yesterday, This week, This month, Last month, Last 30 days, Custom);
+the summary strip (who, team, period, weighted score); the revenue hero (total,
+target and pace marker, a stacked channel bar, four channel tiles that open the
+orders behind them in the Overview's `OrderDrawer`); Effort and Results KPI tiles,
+each with a status label (On pace, Target met, Slightly behind, Behind), not colour
+alone; the rows panel; the compare table (managers); Everything logged; Day by day.
+The Inbound and KAM Revenue tile is hidden because the hero shows the same number.
+A manager also gets a **person filter** beside the team buttons: everyone on all three
+teams, grouped by team. Picking someone on another team switches to that team and
+opens their card; "Everyone on …" goes back to the team. Clicking a compare-table row
+does the same for the current team.
+Last 7 days was dropped from the presets.
+
+### Everything logged
+
+`engine.activity(data, people, period, card)` lists what the person logged: calls
+and meetings straight from their KPI rows (so the counts match the tiles), Inbound
+and Outreach notes by author, Outreach journey events by `by` (status, handover,
+BM change; meeting events come from the meetings themselves), KAM `Enquiry`
+interactions, leads sent to Outreach, and EC redirects by `scheduledBy`. Redirects
+are one extra read, `GET /b2b/ec-visits?kind=redirect`. Before this, notes, journey
+events and redirects showed nowhere on the page.
+
+### Weighted score
+
+The KPI sheet gives every KPI a weight (Inbound 20/10/10/40/20, Outreach 10×4 and
+15×4, KAM 10/10/5/5/10/10/10/30/10). `weightedScore` is Σ weight × min(1, value ÷
+target paced to today) over the KPIs with a target and a value, divided by the
+weight covered. It shows only for a whole month, because the sheet's targets are
+monthly, and it says how much of the sheet's weight it covers: KAM covers 75%,
+since Handover, Active rate of new accounts and Studio Space onboarding are not
+scored. The weights are `weight` on each def.
+
 ## Set targets (2026-10-30; replaced the Targets tab)
 
 The user's call: targets are set by leadership and the results already live on
@@ -168,17 +254,9 @@ matches nothing sees a notice, not an empty card.
 - **Inbound qualified** credits `intake.inboundOwner` (the owner at hand-off)
   once Outreach accepted *and* the lead converted or had 2 follow-ups. Rejected
   and waiting rows are listed and not counted.
-- **Revenue goes to the owner at close, unless a manager credits someone else**
-  (2026-10-30, the user's rule). `revenueCredit {name, phone, kylasUserId,
-  reason, by, at}` on the inbound lead, Outreach lead or KAM order is set from
-  `ui/credit-picker.tsx` by a manager or B2B admin only, with a reason. All three
-  engines read it through `creditOf`, matching phone, then Kylas id, then name.
-  The row note says who changed it and why. Work done before a reassignment is
-  never moved: calls, meetings and interactions are credited to whoever logged
-  them. **Test `creditOf(x)`, never the object.** Inbound stores it as an
-  object meta field, which reads back `{}` when cleared.
-- **Revenue (Inbound and KAM) counts only Enq-fetched values**
-  (`orderValueSource === 'deal'`). Typed values are listed as "not counted".
+- **Revenue is the Overview's per-order rule (2026-11-12).** See §Revenue is the
+  Overview's per-order rule below. Work done before a reassignment is never moved:
+  calls, meetings and interactions are credited to whoever logged them.
 - **KAM meetings and calls are one per firm per day**, credited to
   `interaction.loggedBy` when that person is on the KAM team list, otherwise
   (or when empty) to the firm's KAM. Same rule as Inbound calls, same reason. Same dedupe as
@@ -201,7 +279,9 @@ matches nothing sees a notice, not an empty card.
 
 - KAM Studio Space onboarding: no Studio Space status on a firm.
 - KAM active rate of last month's handovers: no handover date on a firm.
-- KAM revenue from EC/self orders: waits on Django GST matching.
+- KAM revenue from an order under a number the firm record does not hold (a site
+  supervisor, the end client): waits on Django GST matching. EC and self orders on
+  the firm's own numbers count since 2026-11-12.
 - Inbound dead-lead automation: not built.
 
 ## Follow-ups worth doing

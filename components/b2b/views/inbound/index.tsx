@@ -407,7 +407,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           members={teamMembers(team.members, 'inbound')}
           people={everyone}
           canReassign={canReassign}
-          canCredit={viewer.isManager}
           onSaved={(updated) => {
             setOpened(updated);
             setLeads((prev) => (prev.some((l) => l.id === updated.id) ? prev.map((l) => (l.id === updated.id ? updated : l)) : [updated, ...prev]));

@@ -13,6 +13,7 @@ import StudioSpace from './studio-space/index';
 import TeamView from './team/index';
 import Reminders from './reminders/index';
 import { useB2BTeam } from '../hooks/use-b2b-team';
+import { OrderCreditsProvider } from '../order-credit';
 import { useReminders } from '../hooks/use-reminders';
 import { useReminderAlerts } from '../hooks/use-reminder-alerts';
 import { viewerFor } from '@/lib/b2b/team/utils';
@@ -101,6 +102,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
       </div>
 
       <main className="flex-1 overflow-y-auto min-w-0">
+        <OrderCreditsProvider team={team} viewer={viewer}>
         {team.loading && !viewer.isManager ? <p className="p-6 text-sm text-gray-400">Loading your B2B team…</p> : <>
         {view === 'reminders' && <Reminders reminders={reminders} team={team} viewer={viewer} alerts={alerts} />}
         {view === 'overview' && <B2BOverview team={team} onNavigate={setView} />}
@@ -114,6 +116,7 @@ export default function B2BSalesCRM({ currentUser }: { currentUser: AppUser | nu
         {view === 'studio' && <StudioSpace />}
         {view === 'team' && viewer.canManageTeam && <TeamView team={team} viewer={viewer} />}
         </>}
+        </OrderCreditsProvider>
       </main>
     </div>
   );

@@ -28,9 +28,8 @@ import { OutreachScope, SaveLead } from '../../views/outreach/types';
 import { EnqLookup, fetchKamLoad, lookupEnqId, outreachPhones } from '@/lib/b2b';
 import { fetchFirmDeals } from '@/lib/api';
 import { CheckInCapture } from '../../ui/check-in-capture';
-import { CreditPicker } from '../../ui/credit-picker';
+import { OrderCreditLine } from '../../order-credit/ui/credit-line';
 import { RedirectToEc, openEnquiries, uniquePhones } from '../../ui/redirect-to-ec';
-import { creditOf } from '../../models/credit';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function OutreachDrawer({
@@ -320,16 +319,7 @@ export default function OutreachDrawer({
             setDraft={setDraft}
           />
 
-          {draft.status === 'Closed' && (
-            <CreditPicker
-              owner={draft.bm}
-              credit={creditOf(draft.revenueCredit)}
-              people={scope.reps}
-              canEdit={scope.isManager}
-              actor={scope.me.name}
-              onChange={(c) => set('revenueCredit', c)}
-            />
-          )}
+          {draft.status === 'Closed' && !!draft.enqId && <OrderCreditLine enquiryId={draft.enqId} rule={draft.bm} />}
 
           <OutreachNotesCard addNote={addNote} draft={draft} noteText={noteText} setNoteText={setNoteText} />
 
