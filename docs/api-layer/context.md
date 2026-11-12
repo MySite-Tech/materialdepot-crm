@@ -154,15 +154,20 @@ server-only `x-sync-key: B2B_BACKEND_SECRET`. Routes with their own shaping
 same credential instead. **A successful answer is streamed through untouched
 (2026-11-06).** It used to be parsed and re-encoded, which on `rows` (3.2 MB)
 cost CPU and memory on every B2B tab open. Only an error body is parsed now,
-for its message. Four things the relay deliberately does:
+for its message. Five things the relay deliberately does:
 
 - **Refuses two things to anyone but a manager or admin (2026-10-31).**
   `managersOnly` covers `studio-number` and a client-row `DELETE`, so hiding the
   buttons is not the only check. Adding a client row is not on the list, because
   Outreach's handover creates firms through the same call
-  (`docs/b2b/client-db.md` §Who can add, merge and delete).
+  (`docs/b2b/client-db.md` §Who can add, merge and delete). `client-review` and
+  every non-GET on `order-credits` (2026-11-12) are managers-only too.
+- **Stamps `by` on an `order-credits` write from the session (2026-11-12).** The
+  browser's body is passed through with `by` replaced by the caller's Django name,
+  so a credit always names who really set it (`docs/b2b/overview.md` §A manager
+  credits one order). Other relayed writes still carry the actor the browser sends.
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`, `studio-number`) so the catch-all is a defined surface, not an open proxy to
+  `studio-access`, `studio-number`, `client-review`, `order-credits`) so the catch-all is a defined surface, not an open proxy to
   the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`

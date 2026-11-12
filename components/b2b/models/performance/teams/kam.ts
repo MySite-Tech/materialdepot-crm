@@ -1,20 +1,20 @@
 import { ACTIVE_DAYS, ClientEntity, ClientInteraction, clientStatus } from '../../client';
-import { creditMatches, creditNote, creditOf } from '../../credit';
-import { KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET, KamOrder } from '../../kam';
-import { fmtINR } from '../../mock-data';
+import { KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET } from '../../kam';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
-import { PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, lakhs, memberPeople, onTeamList, pct, withDataPeople } from '../utils';
+import { fromKpi, newestFirst, redirectsBy } from '../measures/activity';
+import { creditedOrders, revenueValue } from '../measures/revenue';
+import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
+import { countValue, counted, isPerson, memberPeople, onTeamList, pct, withDataPeople } from '../utils';
 import type { TeamMember } from '@/lib/b2b/team/types';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'meetings',  kind: 'Effort', label: 'Account meetings',        short: 'Meetings',       unit: 'count', target: KAM_MONTHLY_MEETING_TARGET, per: 'month', daily: true,  rule: 'Meetings they logged in the period, one per firm per day. One logged by someone not on the KAM team list goes to the firm\'s KAM.' },
-  { key: 'coverage',  kind: 'Effort', label: 'Meeting coverage',        short: 'Coverage',       unit: '%',     target: 50,                daily: false, rule: `Active firms assigned to them (an order in the last ${ACTIVE_DAYS} days, as of today) that they met in the period ÷ their active firms. Repeat meetings with one firm add nothing.` },
-  { key: 'calls',     kind: 'Effort', label: 'Calls',                   short: 'Calls',          unit: 'count', target: KAM_MONTHLY_CALL_TARGET, per: 'month', daily: true, rule: `Calls they logged in the period, one per firm per day; one logged by someone not on the KAM team list goes to the firm's KAM. Target ${KAM_MONTHLY_CALL_TARGET} a month per head.` },
-  { key: 'adherence', kind: 'Effort', label: 'CRM adherence',           short: 'CRM adherence',  unit: '%',     target: 100,               daily: true,  rule: 'Calls and meetings they logged in the period with notes and a next follow-up date ÷ all they logged. Profile completeness is not in it yet.' },
-  { key: 'revenue',   kind: 'Output', label: 'Revenue',                 short: 'Revenue',        unit: 'L',     target: 50,  per: 'month', daily: true,  rule: 'Order value of KAM-board orders they own that moved to Closed in the period, counted only when the value was fetched from the Enq ID.' },
-  { key: 'ordering',  kind: 'Output', label: 'Accounts ordering',       short: 'Ordering',       unit: '%',     target: 60,                daily: false, rule: 'Firms assigned to them that placed an order in the period (a Closed KAM order, or a last order date in the period) ÷ firms assigned whose order history loaded.' },
+  { key: 'meetings',  kind: 'Effort', label: 'Account meetings',        short: 'Meetings',       unit: 'count', target: KAM_MONTHLY_MEETING_TARGET, per: 'month', daily: true,  rule: 'Meetings they logged in the period, one per firm per day. One logged by someone not on the KAM team list goes to the firm\'s KAM.', weight: 10 },
+  { key: 'coverage',  kind: 'Effort', label: 'Meeting coverage',        short: 'Coverage',       unit: '%',     target: 50,                daily: false, rule: `Active firms assigned to them (an order in the last ${ACTIVE_DAYS} days, as of today) that they met in the period ÷ their active firms. Repeat meetings with one firm add nothing.`, weight: 10 },
+  { key: 'calls',     kind: 'Effort', label: 'Calls',                   short: 'Calls',          unit: 'count', target: KAM_MONTHLY_CALL_TARGET, per: 'month', daily: true, rule: `Calls they logged in the period, one per firm per day; one logged by someone not on the KAM team list goes to the firm's KAM. Target ${KAM_MONTHLY_CALL_TARGET} a month per head.`, weight: 10 },
+  { key: 'adherence', kind: 'Effort', label: 'CRM adherence',           short: 'CRM adherence',  unit: '%',     target: 100,               daily: true,  rule: 'Calls and meetings they logged in the period with notes and a next follow-up date ÷ all they logged. Profile completeness is not in it yet.', weight: 5 },
+  { key: 'revenue',   kind: 'Output', label: 'Revenue',                 short: 'Revenue',        unit: 'L',     target: 50,  per: 'month', daily: true,  rule: 'Every order placed in the period and credited to them, in four channels: EC, self and referrals. An order is theirs when they were the B2B rep on the cart, the number is on a firm they hold, it is a client their firm referred, or a manager credited the enquiry to them. The same per-order rule as the Overview.', weight: 30 },
+  { key: 'ordering',  kind: 'Output', label: 'Accounts ordering',       short: 'Ordering',       unit: '%',     target: 60,                daily: false, rule: 'Firms assigned to them that placed an order in the period (a Closed KAM order, or a last order date in the period) ÷ firms assigned whose order history loaded.', weight: 10 },
 ];
 
 const inProgress = (i: ClientInteraction) => i.type === 'Meeting' && !!i.checkIn && !String(i.summary || '').trim();
@@ -56,17 +56,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
       return { id: `${c.id}:${i.id}`, title: `${c.company} · ${i.type}`, at: i.date, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : 'Complete' };
     }));
 
-  const credited = (o: KamOrder) => { const c = creditOf(o.revenueCredit); return c ? people.some((p) => creditMatches(c, p)) : isPerson(people, o.kam); };
-  const closed = data.kamOrders.filter((o) => o.status === 'Closed' && credited(o) && inPeriod(o.statusChangedAt, period));
-  const revenue: PerfRow[] = closed.map((o) => {
-    const fetched = o.orderValueSource === 'deal' && Number(o.orderValue) > 0;
-    return {
-      id: o.id, title: o.company, at: o.statusChangedAt, counts: fetched,
-      note: (fetched ? `${fmtINR(Number(o.orderValue))} · ${o.enqId || ''}`.trim() : o.enqId ? `Enq ID ${o.enqId} not fetched — typed value not counted` : 'No Enq ID yet') + creditNote(o.revenueCredit),
-    };
-  });
-  const revenueSum = closed.filter((o, i) => revenue[i].counts).reduce((a, o) => a + Number(o.orderValue), 0);
-
+  const closed = data.kamOrders.filter((o) => o.status === 'Closed' && isPerson(people, o.kam) && inPeriod(o.statusChangedAt, period));
   const orderedFirms = new Set(closed.map((o) => o.clientId).filter(Boolean) as string[]);
   const ordering: PerfRow[] = statuses
     .map(({ c, status }) => {
@@ -87,10 +77,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
     },
     calls: countValue(calls, calls.length ? `${new Set(calls.map((r) => r.title)).size} firms called` : undefined),
     adherence: { value: pct(counted(adherence), adherence.length), rows: adherence, sub: adherence.length ? `${counted(adherence)} of ${adherence.length} logged with notes and a follow-up` : 'Nothing logged in the period' },
-    revenue: {
-      value: lakhs(revenueSum), rows: revenue,
-      sub: revenue.length > counted(revenue) ? `${revenue.length - counted(revenue)} closed with no fetched order value` : undefined,
-    },
+    revenue: revenueValue(creditedOrders(data, 'kam', people, period)),
     ordering: {
       value: pct(counted(ordering), ordering.length), unknown: !ordering.length && unknown > 0, rows: ordering,
       sub: [ordering.length ? `${counted(ordering)} of ${ordering.length} firms ordered` : 'No firms assigned', unknownNote].filter(Boolean).join(' · '),
@@ -103,6 +90,18 @@ function people(data: PerfData, members: TeamMember[], live: boolean): Person[] 
   return withDataPeople(live ? memberPeople(members, 'kam') : [], names, !live);
 }
 
+function activity(data: PerfData, people: Person[], period: Period, c: PerfCard): ActivityItem[] {
+  const enquiries: ActivityItem[] = data.clients.flatMap((f) => (f.interactions || [])
+    .filter((i) => i.type === 'Enquiry' && inPeriod(i.date, period) && isPerson(people, actor(data, f, i)))
+    .map((i) => ({ id: `enquiry:${f.id}:${i.id}`, at: i.date, kind: 'Enquiry' as const, title: f.company, detail: String(i.summary || '').trim() || 'No notes' })));
+  return newestFirst([
+    ...fromKpi(c, 'meetings', 'Meeting'),
+    ...fromKpi(c, 'calls', 'Call'),
+    ...enquiries,
+    ...redirectsBy(data, people, period),
+  ]);
+}
+
 export const KAM_ENGINE: TeamEngine = {
   team: 'kam',
   label: 'KAM',
@@ -111,8 +110,9 @@ export const KAM_ENGINE: TeamEngine = {
   notMeasured: [
     'Studio Space onboarding (no Studio Space status is stored on a firm yet)',
     'Active rate of last month\'s handovers (no handover date is stored on a firm yet)',
-    'Orders placed at an EC or by the firm itself count toward Ordering only through the last order date, and not toward Revenue, until Django matches orders by GST',
+    'An order placed under a number the firm record does not hold (a site supervisor, the end client) is not credited to the firm\'s KAM until Django matches orders by GST',
   ],
   people,
   card,
+  activity,
 };

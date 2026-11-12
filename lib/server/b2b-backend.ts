@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireCaller, sessionErrorResponse, type Caller } from './session';
 import { canUseB2B, isB2BManager } from '@/lib/b2b/team/utils';
 
-const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access', 'studio-number', 'client-review']);
+const ALLOW = new Set(['rows', 'kam-load', 'target', 'studio-access', 'studio-number', 'client-review', 'order-credits']);
 
 class AccessError extends Error {}
 
@@ -14,6 +14,7 @@ function authorise(caller: Caller): void {
 
 function managersOnly(path: string[], method: string, search: URLSearchParams): boolean {
   if (path[0] === 'studio-number' || path[0] === 'client-review') return true;
+  if (path[0] === 'order-credits') return method !== 'GET';
   return path[0] === 'rows' && method === 'DELETE' && (search.get('pipeline') ?? 'client') === 'client';
 }
 
@@ -66,12 +67,14 @@ export async function relayB2B(
   path: string[],
   init?: { method?: string; body?: unknown },
 ): Promise<Response> {
+  let sent = init?.body;
   try {
     const caller = await requireCaller(request);
     authorise(caller);
     if (managersOnly(path, init?.method ?? 'GET', new URL(request.url).searchParams) && !isB2BManager(caller)) {
       throw new AccessError('Only a B2B manager or an admin can do this');
     }
+    if (path[0] === 'order-credits' && sent && typeof sent === 'object') sent = { ...sent, by: caller.name || caller.phone };
   } catch (err) {
     return sessionErrorResponse(err) ?? accessErrorResponse(err) ?? Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
@@ -84,13 +87,13 @@ export async function relayB2B(
   if (target instanceof Response) return target;
 
   const search = new URL(request.url).search;
-  const hasBody = init?.body !== undefined;
+  const hasBody = sent !== undefined;
   let res: Response;
   try {
     res = await fetch(`${target.base}/b2b/${path.join('/')}${search}`, {
       method: init?.method ?? 'GET',
       headers: { 'x-sync-key': target.secret, ...(hasBody ? { 'Content-Type': 'application/json' } : {}) },
-      body: hasBody ? JSON.stringify(init?.body) : undefined,
+      body: hasBody ? JSON.stringify(sent) : undefined,
       cache: 'no-store',
     });
   } catch {

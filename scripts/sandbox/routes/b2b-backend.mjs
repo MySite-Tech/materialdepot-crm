@@ -181,6 +181,25 @@ export function backendRoutes(db) {
       db.clientReview = (db.clientReview ?? []).filter((d) => d.key !== id('/client-review/'));
       return { deleted: before - db.clientReview.length };
     }
+    if (path === '/order-credits' && method === 'GET') return { credits: db.orderCredits ?? [] };
+    if (path === '/order-credits' && method === 'POST') {
+      const key = String(body?.enquiry_id ?? '').trim().toUpperCase();
+      if (!key || !body?.name || !body?.reason || !body?.by) return reply(400, { error: 'enquiry_id, name, reason and by are required' });
+      const old = (db.orderCredits ?? []).find((c) => c.enquiry_id === key);
+      const { enquiry_id: _k, history: _h, ...prev } = old ?? {};
+      const credit = {
+        enquiry_id: key, name: body.name, phone: body.phone ?? null, team: body.team ?? null, reason: body.reason,
+        credited_by: body.by, credited_at: new Date().toISOString(), history: old ? [...old.history, prev] : [],
+      };
+      db.orderCredits = [credit, ...(db.orderCredits ?? []).filter((c) => c.enquiry_id !== key)];
+      return { credit };
+    }
+    if (path.startsWith('/order-credits/') && method === 'DELETE') {
+      const key = decodeURIComponent(id('/order-credits/')).toUpperCase();
+      const before = (db.orderCredits ?? []).length;
+      db.orderCredits = (db.orderCredits ?? []).filter((c) => c.enquiry_id !== key);
+      return { deleted: before - db.orderCredits.length };
+    }
     if (path === '/assignments/last-round-robin') return lastRoundRobin(db);
     if (path === '/assignments/lead-ids') {
       const since = query.get('since') || '';

@@ -113,8 +113,6 @@ export function KamRecord({ clientId, data, team, viewer, onClose }: {
           clients={viewer.isManager ? clients : clients.filter((c) => ownsFirm(c, me))}
           kam={client.kam || me.name}
           actor={me.name}
-          creditPeople={allKams}
-          canCredit={viewer.isManager}
           onClose={() => setOrderModal(null)}
           onSave={saveOrder}
         />

@@ -159,6 +159,31 @@ scopes this read for a non-admin token, and `/api/b2b/revenue` itself against re
 data. Only the classifier ran on real rows; the route ran on the sandbox and answered
 401 without a session. Check the route first once it is deployed or running on :3001.
 
+## A manager credits one order (2026-11-12)
+
+Each order's person comes from `classifyOrder`: the B2B rep on the cart, else the
+holder of the number (a firm's current KAM ranks above an Inbound or Outreach lead).
+That holder has no date gate for firms, so an order follows whoever holds the firm
+today. A B2B manager can now credit any enquiry to anyone on the team, with a
+reason, from every enquiry card (Firm page, this drawer, Inbound and Outreach
+drawers, the KAM order modal): `order-credit/ui/credit-line.tsx`.
+
+- **Stored in b2b-backend `b2b_order_credit`** (migration 0026), keyed on the
+  enquiry id, with every earlier credit kept in `history`. Routes: `GET`/`POST
+  /b2b/order-credits`, `DELETE /b2b/order-credits/{enquiry_id}` (Back to the rule).
+  The relay lets only a B2B manager write, and stamps `by` with the signed-in
+  caller's name, so the browser cannot claim to be someone else.
+- **Applied in the browser, not in the report.** `applyCredits(orders, credits)`
+  runs over the cached report, so a credit shows the moment it saves and the server
+  cache never needs busting. It is idempotent (an order keeps its rule person in
+  `rule`), and `OrderDrawer` re-applies it on render, so an open drawer follows a
+  credit changed inside it. The channel never changes: a credit moves who, not how
+  the order came. The trend's channel totals are therefore unaffected.
+- **One read per session** (`OrderCreditsProvider` in the B2B shell, loaded on first
+  use). If it fails, the Overview and My performance say the figures follow the rule
+  only, and every credit line reads Unknown.
+- The Orders table's Credited to column adds "set by a manager" under a credited row.
+
 ## Why the revenue sections were slow, and the cache (2026-11-06)
 
 The user found the Overview slow. The :3001 dev log over several days

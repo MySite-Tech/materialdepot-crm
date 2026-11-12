@@ -1,23 +1,24 @@
 import { isEndConsumer } from '../../../constants/inbound';
-import { creditMatches, creditNote, creditOf } from '../../credit';
 import { CallAttempt } from '../../../types/inbound';
-import { InboundLead, fmtINR } from '../../mock-data';
+import { InboundLead } from '../../mock-data';
 import { FOLLOW_UPS_REQUIRED, followUpMeetings } from '../../outreach';
 import { isMobile, sameRep } from '../../outreach/handover';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
-import { PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, lakhs, memberPeople, onTeamList, pct, personKey, teamMemberByPhone } from '../utils';
+import { fromKpi, newestFirst, notesBy, redirectsBy } from '../measures/activity';
+import { creditedOrders, revenueValue } from '../measures/revenue';
+import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
+import { countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, memberPeople, onTeamList, pct, personKey, teamMemberByPhone } from '../utils';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by someone not on the Inbound team list (a manager, say) goes to the lead owner. Target 1,500 a month per head.' },
+  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by someone not on the Inbound team list (a manager, say) goes to the lead owner. Target 1,500 a month per head.', weight: 20 },
   { key: 'firstCalls', kind: 'Effort', label: 'New leads called',       short: 'First calls',    unit: 'count', target: null,               daily: true,  rule: 'Leads they own whose first ever call attempt fell in the period.' },
-  { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).' },
-  { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with contact name, mobile, firm name, segment, client type, city, a status past New, a next follow-up date while open, and a note on every call ÷ leads they called.' },
-  { key: 'revenue',    kind: 'Output', label: 'Revenue',                short: 'Revenue',        unit: 'L',     target: 25,   per: 'month', daily: true,  rule: 'Order value of leads they own that moved to Closed in the period, counted only when the value was fetched from the Enq ID. EC orders placed for their lead count.' },
-  { key: 'qualified',  kind: 'Output', label: 'Qualified for Outreach', short: 'Qualified',      unit: 'count', target: 30,   per: 'month', daily: true,  rule: `Their leads an Outreach BM accepted in the period, credited once the lead converted or Outreach held ${FOLLOW_UPS_REQUIRED} follow-ups. Rejections are listed with the reason.` },
+  { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).', weight: 10 },
+  { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with contact name, mobile, firm name, segment, client type, city, a status past New, a next follow-up date while open, and a note on every call ÷ leads they called.', weight: 10 },
+  { key: 'revenue',    kind: 'Output', label: 'Revenue',                short: 'Revenue',        unit: 'L',     target: 25,   per: 'month', daily: true,  rule: 'Every order placed in the period and credited to them, in four channels: they were the B2B rep on the cart, the number was on a lead they own from before the cart, or a manager credited the enquiry to them. EC orders count. The same per-order rule as the Overview, so the two always agree.', weight: 40 },
+  { key: 'qualified',  kind: 'Output', label: 'Qualified for Outreach', short: 'Qualified',      unit: 'count', target: 30,   per: 'month', daily: true,  rule: `Their leads an Outreach BM accepted in the period, credited once the lead converted or Outreach held ${FOLLOW_UPS_REQUIRED} follow-ups. Rejections are listed with the reason.`, weight: 20 },
 ];
 
 const OPEN_NEEDS_DATE: InboundLead['stage'][] = ['Follow up', 'PI Shared', 'Connected - Need nurturing'];
@@ -91,17 +92,6 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
     return { id: l.id, title: title(l), at: theirs[theirs.length - 1].at, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : 'Complete' };
   });
 
-  const credited = (l: InboundLead) => { const c = creditOf(l.revenueCredit); return c ? people.some((p) => creditMatches(c, p)) : owns(l); };
-  const closed = data.inbound.filter((l) => l.stage === 'Closed' && inPeriod(l.statusChangedAt, period) && credited(l));
-  const revenue: PerfRow[] = closed.map((l) => {
-    const fetched = l.orderValueSource === 'deal' && Number(l.orderValue) > 0;
-    return {
-      id: l.id, title: title(l), at: l.statusChangedAt, counts: fetched,
-      note: (fetched ? `${fmtINR(Number(l.orderValue))} · ${l.enqId || ''}`.trim() : filled(l.enqId) ? `Enq ID ${l.enqId} not fetched — typed value not counted` : 'No Enq ID yet') + creditNote(l.revenueCredit),
-    };
-  });
-  const revenueSum = closed.filter((l, i) => revenue[i].counts).reduce((a, l) => a + Number(l.orderValue), 0);
-
   const inboundById = new Map(data.inbound.map((l) => [l.id, l]));
   const qualified: PerfRow[] = [];
   for (const l of data.outreach) {
@@ -138,10 +128,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
         : `${counted(coverageRows)} of ${den} new leads called · ${sameDay} the same day${den > coverageRows.length ? ` · ${den - coverageRows.length} never opened in the CRM` : ''}`,
     },
     adherence: { value: pct(counted(adherence), adherence.length), rows: adherence, sub: adherence.length ? `${counted(adherence)} of ${adherence.length} leads called` : 'No calls in the period' },
-    revenue: {
-      value: lakhs(revenueSum), rows: revenue,
-      sub: revenue.length > counted(revenue) ? `${revenue.length - counted(revenue)} closed with no fetched order value` : undefined,
-    },
+    revenue: revenueValue(creditedOrders(data, 'inbound', people, period)),
     qualified: countValue(qualified, qualified.length ? `${accepted} accepted · ${counted(qualified)} credited · ${rejected} rejected` : undefined),
   };
 }
@@ -162,6 +149,18 @@ function people(data: PerfData, members: Parameters<TeamEngine['people']>[1], li
   return out;
 }
 
+function activity(data: PerfData, people: Person[], period: Period, c: PerfCard): ActivityItem[] {
+  const sent: ActivityItem[] = data.outreach
+    .filter((l) => l.intake?.from === 'Inbound' && inPeriod(l.intake.assignedAt, period) && (l.intake.inboundOwner ? isPerson(people, l.intake.inboundOwner) : false))
+    .map((l) => ({ id: `sent:${l.id}`, at: l.intake!.assignedAt, kind: 'Sent to Outreach' as const, title: l.company, detail: `To ${l.bm || 'Outreach'}${l.intake!.acceptedAt ? ' · accepted' : l.intake!.rejectedAt ? ' · rejected' : ' · waiting on sign-off'}` }));
+  return newestFirst([
+    ...fromKpi(c, 'calls', 'Call'),
+    ...notesBy(data.inbound, (l) => l.notes, title, (l) => l.id, people, period),
+    ...sent,
+    ...redirectsBy(data, people, period),
+  ]);
+}
+
 export const INBOUND_ENGINE: TeamEngine = {
   team: 'inbound',
   label: 'Inbound',
@@ -170,4 +169,5 @@ export const INBOUND_ENGINE: TeamEngine = {
   notMeasured: ['Dead-lead automation (5 calls in 7 days) is not built, so it is not scored'],
   people,
   card,
+  activity,
 };

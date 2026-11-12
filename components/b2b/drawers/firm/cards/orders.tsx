@@ -5,6 +5,8 @@ import { OrderTab, fmtDate, fmtDateTime, fmtPhone, orderTab, unlistedOrders } fr
 import { fmtINR, fmtShortINR } from '../../../models/mock-data';
 import { SectionCard, Spinner } from '../../../ui/inbound-chips';
 import { EnquiryDetail } from './enquiry';
+import { useOrderCredits } from '../../../order-credit/hooks/use-order-credits';
+import { creditKey } from '@/lib/b2b/revenue';
 import { useEcVisits } from '../hooks/use-ec-visits';
 import { ClientEntity, enquirySpoc, primaryContact } from '../../../models/client';
 import { repNames } from '../../../models/outreach/handover';
@@ -177,6 +179,7 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
     [details, via, phones, historyFor],
   );
 
+  const { credits } = useOrderCredits();
   useEffect(() => { setPage(1); setOpenEnq(null); }, [tab, via]);
 
   const list = byTab[tab];
@@ -239,7 +242,7 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                   {showVia && <th className="text-left font-semibold px-1 py-1.5">Via</th>}
                   {showCompany && <th className="text-left font-semibold px-1 py-1.5">Company on order</th>}
                   {showGst && <th className="text-left font-semibold px-1 py-1.5">GST on order</th>}
-                  <th className="text-left font-semibold px-1 py-1.5">Branch · SPOC</th>
+                  <th className="text-left font-semibold px-1 py-1.5">Branch · ticket owner</th>
                 </tr>
               </thead>
               <tbody>
@@ -268,6 +271,9 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                     <td className="px-1 py-1.5 text-gray-600">
                       {[r.branch, r.spoc].filter(Boolean).join(' · ') || <span className="text-gray-300">—</span>}
                       <span className="ml-1 text-gray-300">{expanded ? '▴' : '▾'}</span>
+                      {credits?.get(creditKey(r.enqId)) && (
+                        <div className="text-[10px] font-semibold text-teal-800 mt-0.5">Credited to {credits.get(creditKey(r.enqId))!.name}</div>
+                      )}
                     </td>
                   </tr>
                   {expanded && (

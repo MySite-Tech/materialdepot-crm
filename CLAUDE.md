@@ -598,6 +598,23 @@ to a minute) and Not a client sticks after a reload. None of it has been seen si
 on production data: the firm-orders work and the review list ran on the sandbox and
 local copies only.
 
+**START HERE for B2B (2026-11-12): My performance and per-order credit, live.** CRM
+branch `nov12-crm-dashboard` → `main` with b2b-backend PR #28 (migration 0026,
+`/b2b/order-credits`), merged on the user's ask. Start new work from `origin/main`.
+- My performance and the Leadership Board read revenue from the Overview's per-order
+  report in its four channels, list everything a person logged, and show the sheet's
+  weighted score. A manager filters by any person across the three teams
+  (`docs/b2b/leadership.md`).
+- A B2B manager credits any one order to anyone on the team from its enquiry card
+  (`docs/b2b/overview.md` §A manager credits one order). The per-record
+  `revenueCredit` is gone.
+- The enquiry card's "Ticket owner (store)" and "Ticket opened" are Django's deal
+  ticket, not B2B attribution (`docs/landmines.md`).
+- **Seen on the sandbox only, not signed in on production.** After deploy, sign in as
+  a manager, credit ENQ20261107102736 to its KAM, and check that it moves on the
+  Overview's People table and on that KAM's My performance. Hyderabad KAM targets
+  (half of Bangalore's) are set per person under Set targets.
+
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
 sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees which firm). Never match

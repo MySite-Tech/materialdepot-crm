@@ -9,6 +9,13 @@ export const B2B_BOOKING: B2BBooking[] = [
 
 export const REVENUE_CHANNELS: RevenueChannel[] = ['direct', 'redirected', 'ecDirect', 'referred'];
 
+export const CHANNEL_LABELS: Record<RevenueChannel, string> = {
+  direct: 'Direct',
+  redirected: 'Studio EC Redirected',
+  ecDirect: 'EC Direct',
+  referred: 'Referred clients',
+};
+
 export const CHANNEL_TYPES: Record<RevenueChannel, OrderType[]> = {
   direct: [1, 3, 6, 7],
   redirected: [2, 4],

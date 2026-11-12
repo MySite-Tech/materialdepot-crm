@@ -28,6 +28,7 @@ function Tile({ def, k, target, period, today, loading, on, onPick }: {
   const hint = loading ? undefined : hintFor(def, k, elapsedDays(period, today).length);
   const title = [
     `${def.label}: ${def.rule}`,
+    def.weight ? `Weight in the KPI sheet: ${def.weight}%.` : '',
     target === null && def.target !== null ? 'No target for a part-month period: the sheet sets monthly targets.' : '',
     loading ? '' : k.sub,
     'Click to see what is behind this number.',
@@ -35,25 +36,27 @@ function Tile({ def, k, target, period, today, loading, on, onPick }: {
 
   return (
     <button onClick={onPick} title={title}
-      className={`relative text-left px-3.5 pt-1 pb-3 min-w-0 border-l border-gray-100 first:border-l-0 transition-colors ${on ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
-      <div className={`text-[11.5px] font-semibold truncate ${on ? 'text-gray-900' : 'text-gray-500'}`}>{def.short}</div>
-      <div className="flex items-baseline gap-1 mt-0.5 min-w-0">
-        <span className={`text-[22px] leading-tight font-bold tabular-nums truncate ${loading ? 'text-gray-300' : t.text}`}>
+      className={`text-left rounded-xl border bg-white px-3.5 pt-3 pb-3 min-w-0 transition-all cursor-pointer ${on ? 'border-gray-900 ring-1 ring-gray-900 shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'}`}>
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span className="text-[11.5px] font-semibold text-gray-500 truncate">{def.short}</span>
+        {t.label && <span className={`shrink-0 text-[9.5px] font-bold uppercase tracking-wide border rounded-full px-1.5 py-px ${t.chip}`}>{t.label}</span>}
+      </div>
+      <div className="flex items-baseline gap-1.5 mt-1 min-w-0">
+        <span className={`text-[24px] leading-tight font-bold tabular-nums truncate ${loading ? 'text-gray-300' : t.text}`}>
           {loading ? '…' : fmtValue(def, k)}
         </span>
-        {target !== null && k.value !== null && !loading && <span className="text-[11px] text-gray-400 whitespace-nowrap">/ {fmtNumber(def, target)}</span>}
+        {target !== null && k.value !== null && !loading && <span className="text-[11.5px] text-gray-400 whitespace-nowrap">of {fmtNumber(def, target)}</span>}
       </div>
-      <div className="relative h-1 rounded bg-gray-100 mt-1.5">
-        <div className="h-full rounded" style={{ width: `${width}%`, background: t.bar }} />
-        {pace !== null && !loading && <span className="absolute -top-[3px] w-[2px] h-[10px] rounded bg-gray-500" style={{ left: `calc(${Math.round(pace * 100)}% - 1px)` }} />}
+      <div className="relative h-1.5 rounded-full bg-gray-100 mt-2">
+        <div className="h-full rounded-full transition-all" style={{ width: `${width}%`, background: t.bar }} />
+        {pace !== null && !loading && <span title="Where you should be today" className="absolute -top-[3px] w-[2px] h-[12px] rounded bg-gray-700" style={{ left: `calc(${Math.round(pace * 100)}% - 1px)` }} />}
       </div>
-      <div className={`text-[10.5px] truncate h-[15px] mt-1 ${hint?.warn ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>{hint?.text}</div>
-      {on && <span className="absolute inset-x-0 bottom-0 h-[3px] bg-[#1A1A1A]" />}
+      <div className={`text-[10.5px] truncate h-[15px] mt-1.5 ${hint?.warn ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>{hint?.text ?? (loading ? '' : k.sub)}</div>
     </button>
   );
 }
 
-export function Scorecard({ defs, card, team, people, goals, period, today, loading, active, onPick }: {
+export function Scorecard({ defs, card, team, people, goals, period, today, loading, active, onPick, hide = [] }: {
   defs: PerfKpiDef[];
   card: PerfCard;
   team: B2BTeam;
@@ -64,15 +67,20 @@ export function Scorecard({ defs, card, team, people, goals, period, today, load
   loading: (key: string) => boolean;
   active: string | null;
   onPick: (key: string) => void;
+  hide?: string[];
 }) {
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+    <div className="flex flex-col gap-4">
       {(['Effort', 'Output'] as const).map((kind) => {
-        const list = defs.filter((d) => d.kind === kind);
+        const list = defs.filter((d) => d.kind === kind && !hide.includes(d.key));
+        if (!list.length) return null;
         return (
-          <section key={kind} className="bg-white rounded-lg border border-gray-200 min-w-0 overflow-hidden">
-            <div className="px-3.5 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{kind}</div>
-            <div className={`grid grid-cols-2 ${list.length > 3 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+          <section key={kind} className="min-w-0">
+            <div className="flex items-baseline gap-2 mb-2">
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-gray-700">{kind === 'Effort' ? 'Effort' : 'Results'}</h2>
+              <span className="text-[11px] text-gray-400">{kind === 'Effort' ? 'what you put in: calls, meetings, how complete the CRM is' : 'what it produced'}</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
               {list.map((d) => (
                 <Tile key={d.key} def={d} k={card[d.key]} target={targetFor(d, team, people, goals, period, today)} period={period} today={today}
                   loading={loading(d.key)} on={active === d.key} onPick={() => onPick(d.key)} />

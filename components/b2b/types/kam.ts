@@ -1,4 +1,3 @@
-import type { RevenueCredit } from '../models/credit';
 import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, ClientStatus, InteractionType, TemperatureBand } from '../models/client';
 import { FollowUpBucket, Segment } from '../models/inbound';
 import type { RequirementVersion } from '../models/requirement';
@@ -30,7 +29,6 @@ export interface KamOrder {
 
   orderValue?: number;
   orderValueSource?: 'deal' | 'manual';
-  revenueCredit?: RevenueCredit;
 
   dealStatus?: string;
 

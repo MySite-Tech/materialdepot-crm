@@ -1,8 +1,10 @@
 import { b2bBackendGet } from '../data/backend';
 import type { FunnelReport, RevenueReport, RevenueTrend } from './types';
 
-export type { BookedOn, ChannelSplit, FunnelBucket, FunnelCell, FunnelEnquiry, FunnelReport, FunnelRow, FunnelStage, HolderKind, MonthWindow, OrderType, RevenueChannel, RevenueFilter, RevenueOrder, RevenueReport, RevenueTrend, RollupRow, TrendMonth } from './types';
-export { CHANNEL_TYPES, FUNNEL_BUCKETS, FUNNEL_STAGES, REVENUE_CHANNELS } from './constants';
+export type { BookedOn, ChannelSplit, CreditEntry, FunnelBucket, FunnelCell, FunnelEnquiry, FunnelReport, FunnelRow, FunnelStage, HolderKind, MonthWindow, OrderCredit, OrderType, RevenueChannel, RevenueFilter, RevenueOrder, RevenueReport, RevenueTrend, RollupRow, TrendMonth } from './types';
+export { applyCredits, clearOrderCredit, creditKey, fetchOrderCredits, saveOrderCredit } from './credits';
+export type { CreditInput } from './credits';
+export { CHANNEL_LABELS, CHANNEL_TYPES, FUNNEL_BUCKETS, FUNNEL_STAGES, REVENUE_CHANNELS } from './constants';
 export { funnelRows } from './utils/funnel';
 export { monthWindows } from './utils/months';
 export { channelSplits, matchesFilter, revenueTotal, rollupBy, rollupOrders } from './utils/rollup';

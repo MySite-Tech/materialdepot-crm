@@ -3,6 +3,7 @@
 import { fmtDate, fmtDateTime, fmtPhone } from '../utils';
 import { fmtINR } from '../../../models/mock-data';
 import { useEnquiryItems } from '../hooks/use-enquiry-items';
+import { OrderCreditLine } from '../../../order-credit/ui/credit-line';
 import { ClientOrderRow } from '@/lib/b2b';
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
@@ -14,7 +15,7 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function EnquiryDetail({ r, actions }: { r: ClientOrderRow; actions?: React.ReactNode }) {
+export function EnquiryDetail({ r, actions, creditRule }: { r: ClientOrderRow; actions?: React.ReactNode; creditRule?: string }) {
   const { items, state } = useEnquiryItems(r);
   const cartTotal = r.cart.reduce((n, i) => n + (i.price && i.qty ? i.price * i.qty : i.price || 0), 0);
   const remarks = [...r.remarks].sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
@@ -23,6 +24,7 @@ export function EnquiryDetail({ r, actions }: { r: ClientOrderRow; actions?: Rea
   return (
     <div className="bg-gray-50 border border-gray-100 rounded-md p-3 flex flex-col gap-3">
       {actions}
+      {!r.lost && !!r.enqId && <OrderCreditLine enquiryId={r.enqId} rule={creditRule} />}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
         <Fact label="Cart value" value={fmtINR(r.orderValue)} />
         <Fact label="Excl. GST" value={r.cartValueExclGst !== undefined ? fmtINR(r.cartValueExclGst) : undefined} />
@@ -30,12 +32,12 @@ export function EnquiryDetail({ r, actions }: { r: ClientOrderRow; actions?: Rea
         <Fact label="Status" value={[r.status, r.lostReason].filter(Boolean).join(' · ')} />
         <Fact label="Raised on" value={fmtPhone(r.contactNumber) + (r.contactName ? ` · ${r.contactName}` : '')} />
         {r.ordered && <Fact label="Order placed" value={fmtDateTime(r.placedAt)} />}
-        <Fact label="Created" value={fmtDate(r.createdAt)} />
+        <Fact label="Ticket opened" value={fmtDate(r.createdAt)} />
         <Fact label="Follow-up" value={fmtDate(r.followUpDate)} />
         <Fact label="Closure date (set by hand on the deal)" value={fmtDate(r.closureDate)} />
         <Fact label="Marked lost" value={fmtDate(r.lostMarkDate)} />
         <Fact label="Branch" value={r.branch} />
-        <Fact label="Assigned to" value={r.spoc} />
+        <Fact label="Ticket owner (store)" value={r.spoc} />
         <Fact label="Client type" value={r.clientType} />
         <Fact label="Property" value={[r.propertyType, r.projectPhase].filter(Boolean).join(' · ')} />
         <Fact label="Architect involved" value={r.architectInvolved === undefined ? undefined : r.architectInvolved ? 'Yes' : 'No'} />

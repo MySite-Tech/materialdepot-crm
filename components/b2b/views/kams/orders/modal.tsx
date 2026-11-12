@@ -9,18 +9,15 @@ import { LostReasonSelect } from '../../../ui/lost-reason-select';
 import { Field } from '../ui';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { lookupEnqId } from '@/lib/b2b';
-import { CreditPicker } from '../../../ui/credit-picker';
-import { Creditable, creditOf } from '../../../models/credit';
+import { OrderCreditLine } from '../../../order-credit/ui/credit-line';
 import { useState } from 'react';
 
-export function OrderModal({ order, isNew, clients, kam, actor, creditPeople, canCredit, onClose, onSave }: {
+export function OrderModal({ order, isNew, clients, kam, actor, onClose, onSave }: {
   order: KamOrder;
   isNew?: boolean;
   clients: ClientEntity[];
   kam: string;
   actor: string;
-  creditPeople: Creditable[];
-  canCredit: boolean;
   onClose: () => void;
   onSave: (o: KamOrder) => Promise<string | null>;
 }) {
@@ -212,16 +209,7 @@ export function OrderModal({ order, isNew, clients, kam, actor, creditPeople, ca
             </Field>
           )}
 
-          {draft.status === 'Closed' && (
-            <CreditPicker
-              owner={draft.kam}
-              credit={creditOf(draft.revenueCredit)}
-              people={creditPeople}
-              canEdit={canCredit}
-              actor={actor}
-              onChange={(c) => set('revenueCredit', c)}
-            />
-          )}
+          {draft.status === 'Closed' && !!draft.enqId && <OrderCreditLine enquiryId={draft.enqId} rule={draft.kam} />}
 
           {!!errors.length && (
             <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
