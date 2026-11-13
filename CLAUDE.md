@@ -612,8 +612,12 @@ branch `nov12-crm-dashboard` → `main` with b2b-backend PR #28 (migration 0026,
   ticket, not B2B attribution (`docs/landmines.md`).
 - **Seen on the sandbox only, not signed in on production.** After deploy, sign in as
   a manager, credit ENQ20261107102736 to its KAM, and check that it moves on the
-  Overview's People table and on that KAM's My performance. Hyderabad KAM targets
-  (half of Bangalore's) are set per person under Set targets.
+  Overview's People table and on that KAM's My performance.
+- **Hyderabad KAM (2026-11-13, production data, no code).** The sheet's Hyderabad KAM
+  is Sai Suresh, who was only an inactive Inbound row. At the user's request he was
+  added to the KAM team (active, round robin off) with 18 meetings and 250 calls a
+  month under Set targets. Revenue stays at the ₹50 L default until Hyderabad's is
+  decided, which moved the B2B target from ₹2.90 Cr to ₹3.40 Cr.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
