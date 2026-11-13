@@ -223,4 +223,8 @@ with two additions:
   same as Bangalore's. The Hyderabad KAM's meetings (18) and calls (250) are half,
   and its revenue target is "TBD". The engines carry Bangalore's figures as the
   defaults, so a Hyderabad person's halves are set per person under Leadership
-  Board → Set targets.
+  Board → Set targets. Done on 2026-11-13: the sheet names Sai Suresh, who was on no
+  CRM KAM row, so he was added to the KAM team (round robin off) and given 18 and
+  250. His revenue target is still the ₹50 L default, at the user's choice, until the
+  sheet's "TBD" is decided. Changing it raises or lowers the B2B target by the same
+  amount, because that target is the sum of everyone's.
