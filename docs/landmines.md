@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-91 entries. They live in one file because they cross-reference each other —
+92 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -101,6 +101,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - My performance and the Overview counted revenue two different ways, so a rep's own figure never matched
 - A rep whose Django name differs from the team list earned ₹0 on every cart they raised
 - A column that shows only hand-logged values reads empty when nobody logs, and its filter matches nothing
+- A KPI that reads only the receiving team's rows misses every hand-off that team has not picked up
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1383,3 +1384,14 @@ last order at an EC (`docs/b2b/client-db.md` §Choosing the list's columns). The
 a list column and the detail page must derive a field the same way, or the list reads
 as missing data the page plainly has.
 
+### A KPI that reads only the receiving team's rows misses every hand-off that team has not picked up (2026-11-14)
+
+The user, for Vikas: leads he qualified for Outreach do not show on his Qualified tile.
+It read 0 with "+2 not counted", while he had sent ten leads since 30 Oct. The KPI walked
+Outreach rows with an intake link, so a lead still in Outreach's unassigned pool (four of
+his) and a lead a BM had re-entered by hand as Own research (two, which `inboundPool` then
+hides by phone) did not exist for it. It also judged "converted" on the Outreach row
+alone, so two hand-offs Inbound itself had closed read "0 of 2 follow-ups". It now
+starts from the sender's own leads (`docs/b2b/leadership.md` §KPI rules). The shape: a
+hand-off KPI must start from the sender's records, because the receiver's table only
+holds what the receiver has already acted on.

@@ -1,8 +1,9 @@
 import { isEndConsumer } from '../../../constants/inbound';
 import { CallAttempt } from '../../../types/inbound';
 import { sentToOutreach } from '../../inbound';
-import { InboundLead } from '../../mock-data';
+import { InboundLead, OutreachLead } from '../../mock-data';
 import { FOLLOW_UPS_REQUIRED, followUpMeetings } from '../../outreach';
+import { INBOUND_POOL_STAGES } from '../../outreach/intake';
 import { isMobile, sameRep } from '../../outreach/handover';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
@@ -12,6 +13,7 @@ import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngi
 import { countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, memberPeople, onTeamList, pct, personKey, teamMemberByPhone } from '../utils';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
+import { inboundPhones, outreachPhones } from '@/lib/b2b/leads/unified';
 
 const DEFS: PerfKpiDef[] = [
   { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by someone not on the Inbound team list (a manager, say) goes to the lead owner. Target 1,500 a month per head.', weight: 20 },
@@ -19,7 +21,7 @@ const DEFS: PerfKpiDef[] = [
   { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).', weight: 10 },
   { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with contact name, mobile, firm name, segment, client type, city, a status past New, a next follow-up date while open and not sent to Outreach, and a note on every call ÷ leads they called.', weight: 10 },
   { key: 'revenue',    kind: 'Output', label: 'Revenue',                short: 'Revenue',        unit: 'L',     target: 25,   per: 'month', daily: true,  rule: 'Every order placed in the period and credited to them, in four channels: they were the B2B rep on the cart, the number was on a lead they own from before the cart, or a manager credited the enquiry to them. EC orders count. The same per-order rule as the Overview, so the two always agree.', weight: 40 },
-  { key: 'qualified',  kind: 'Output', label: 'Qualified for Outreach', short: 'Qualified',      unit: 'count', target: 30,   per: 'month', daily: true,  rule: `Their leads an Outreach BM accepted in the period, credited once the lead converted or Outreach held ${FOLLOW_UPS_REQUIRED} follow-ups. Rejections are listed with the reason.`, weight: 20 },
+  { key: 'qualified',  kind: 'Output', label: 'Qualified for Outreach', short: 'Qualified',      unit: 'count', target: 30,   per: 'month', daily: true,  rule: `Every lead they sent to Outreach is listed. One counts once an Outreach BM took it (accepted the hand-off, or added its number as a lead after it was sent) and it converted, at Inbound or Outreach, or Outreach held ${FOLLOW_UPS_REQUIRED} follow-ups. Leads still waiting for a BM and rejections are listed with the reason.`, weight: 20 },
 ];
 
 const OPEN_NEEDS_DATE: InboundLead['stage'][] = ['Follow up', 'PI Shared', 'Connected - Need nurturing'];
@@ -54,6 +56,67 @@ function assignedTotal(data: PerfData, people: Person[]): number | null {
     linked += 1;
   }
   return linked ? sum : null;
+}
+
+interface Handoff {
+  src?: InboundLead;
+  row?: OutreachLead;
+  linked: boolean;
+}
+
+function handoffs(data: PerfData, people: Person[], owns: (l: InboundLead) => boolean): Handoff[] {
+  const inboundById = new Map(data.inbound.map((l) => [l.id, l]));
+  const out: Handoff[] = [];
+  const linkedIds = new Set<string>();
+  for (const row of data.outreach) {
+    const intake = row.intake;
+    if (!intake || intake.from !== 'Inbound' || !intake.inboundLeadId) continue;
+    linkedIds.add(intake.inboundLeadId);
+    const src = inboundById.get(intake.inboundLeadId);
+    if (intake.inboundOwner ? isPerson(people, intake.inboundOwner) : !!src && owns(src)) out.push({ src, row, linked: true });
+  }
+  const unlinked = data.outreach.filter((r) => !r.intake?.inboundLeadId);
+  for (const src of data.inbound) {
+    if (!sentToOutreach(src) || linkedIds.has(src.id) || !owns(src)) continue;
+    const nums = new Set(inboundPhones(src));
+    const row = unlinked
+      .filter((r) => outreachPhones(r).some((p) => nums.has(p)))
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+    out.push({ src, row, linked: false });
+  }
+  return out;
+}
+
+const convertedNote = (src: InboundLead | undefined, row: OutreachLead): string | null =>
+  row.status === 'Closed' ? 'converted' : src?.stage === 'Closed' ? 'order placed at Inbound' : null;
+
+function creditNote(src: InboundLead | undefined, row: OutreachLead): { counts: boolean; note: string } {
+  const won = convertedNote(src, row);
+  if (won) return { counts: true, note: won };
+  const fu = followUpMeetings(row.meetings).length;
+  return fu >= FOLLOW_UPS_REQUIRED
+    ? { counts: true, note: `${fu} follow-ups held` }
+    : { counts: false, note: `${fu} of ${FOLLOW_UPS_REQUIRED} follow-ups, not credited yet` };
+}
+
+function qualifiedRow({ src, row, linked }: Handoff): PerfRow {
+  const sentAt = src?.outreachReferral?.at;
+  if (row && linked) {
+    const intake = row.intake!;
+    if (intake.acceptedAt) {
+      const c = creditNote(src, row);
+      return { id: row.id, title: row.company, at: intake.acceptedAt, counts: c.counts, note: `Accepted by ${row.bm} · ${c.note}` };
+    }
+    if (intake.rejectedAt) return { id: row.id, title: row.company, at: intake.rejectedAt, counts: false, note: `Rejected by ${row.bm}${intake.rejectReason ? `: ${intake.rejectReason}` : ''}` };
+    return { id: row.id, title: row.company, at: intake.assignedAt, counts: false, note: `Waiting on ${row.bm || 'a BM'} to sign off` };
+  }
+  const lead = src!;
+  if (row && istDay(row.createdAt) >= istDay(sentAt)) {
+    const c = creditNote(lead, row);
+    return { id: lead.id, title: title(lead), at: row.createdAt, counts: c.counts, note: `Added by ${row.bm || 'Outreach'} as a separate Outreach lead on ${istDay(row.createdAt)}, not through the hand-off · ${c.note}` };
+  }
+  if (row) return { id: lead.id, title: title(lead), at: sentAt, counts: false, note: `Outreach already had this number (${row.bm || 'no BM'}, since ${istDay(row.createdAt)})` };
+  return { id: lead.id, title: title(lead), at: sentAt, counts: false, note: INBOUND_POOL_STAGES.includes(lead.stage) ? 'Sent, waiting for an Outreach manager to assign it' : `Sent, then marked ${lead.stage} at Inbound` };
 }
 
 function card(data: PerfData, people: Person[], period: Period): PerfCard {
@@ -93,28 +156,8 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
     return { id: l.id, title: title(l), at: theirs[theirs.length - 1].at, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : 'Complete' };
   });
 
-  const inboundById = new Map(data.inbound.map((l) => [l.id, l]));
-  const qualified: PerfRow[] = [];
-  for (const l of data.outreach) {
-    const intake = l.intake;
-    if (!intake || intake.from !== 'Inbound' || !intake.inboundLeadId) continue;
-    const src = inboundById.get(intake.inboundLeadId);
-    const theirs = intake.inboundOwner ? isPerson(people, intake.inboundOwner) : !!src && owns(src);
-    if (!theirs) continue;
-    if (intake.acceptedAt && inPeriod(intake.acceptedAt, period)) {
-      const fu = followUpMeetings(l.meetings).length;
-      const credited = l.status === 'Closed' || fu >= FOLLOW_UPS_REQUIRED;
-      qualified.push({
-        id: l.id, title: l.company, at: intake.acceptedAt, counts: credited,
-        note: l.status === 'Closed' ? `Accepted by ${l.bm} · converted` : credited ? `Accepted by ${l.bm} · ${fu} follow-ups held` : `Accepted by ${l.bm} · ${fu} of ${FOLLOW_UPS_REQUIRED} follow-ups, not credited yet`,
-      });
-    } else if (intake.rejectedAt && inPeriod(intake.rejectedAt, period)) {
-      qualified.push({ id: l.id, title: l.company, at: intake.rejectedAt, counts: false, note: `Rejected by ${l.bm}${intake.rejectReason ? `: ${intake.rejectReason}` : ''}` });
-    } else if (!intake.acceptedAt && !intake.rejectedAt && inPeriod(intake.assignedAt, period)) {
-      qualified.push({ id: l.id, title: l.company, at: intake.assignedAt, counts: false, note: `Waiting on ${l.bm || 'a BM'} to sign off` });
-    }
-  }
-  const accepted = qualified.filter((r) => r.note.startsWith('Accepted')).length;
+  const qualified = handoffs(data, people, owns).map((h) => qualifiedRow(h)).filter((r) => r.at && inPeriod(r.at, period));
+  const accepted = qualified.filter((r) => r.note.startsWith('Accepted') || r.note.startsWith('Added by')).length;
   const rejected = qualified.filter((r) => r.note.startsWith('Rejected')).length;
 
   return {
@@ -151,9 +194,10 @@ function people(data: PerfData, members: Parameters<TeamEngine['people']>[1], li
 }
 
 function activity(data: PerfData, people: Person[], period: Period, c: PerfCard): ActivityItem[] {
-  const sent: ActivityItem[] = data.outreach
-    .filter((l) => l.intake?.from === 'Inbound' && inPeriod(l.intake.assignedAt, period) && (l.intake.inboundOwner ? isPerson(people, l.intake.inboundOwner) : false))
-    .map((l) => ({ id: `sent:${l.id}`, at: l.intake!.assignedAt, kind: 'Sent to Outreach' as const, title: l.company, detail: `To ${l.bm || 'Outreach'}${l.intake!.acceptedAt ? ' · accepted' : l.intake!.rejectedAt ? ' · rejected' : ' · waiting on sign-off'}` }));
+  const sent: ActivityItem[] = handoffs(data, people, ownsLead(people))
+    .map((h) => ({ h, at: h.src?.outreachReferral?.at || h.row?.intake?.assignedAt }))
+    .filter(({ at }) => at && inPeriod(at, period))
+    .map(({ h, at }) => ({ id: `sent:${h.src?.id || h.row!.id}`, at: at!, kind: 'Sent to Outreach' as const, title: h.row?.company || title(h.src!), detail: qualifiedRow(h).note }));
   return newestFirst([
     ...fromKpi(c, 'calls', 'Call'),
     ...notesBy(data.inbound, (l) => l.notes, title, (l) => l.id, people, period),
