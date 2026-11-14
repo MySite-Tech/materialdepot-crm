@@ -622,8 +622,9 @@ branch `nov12-crm-dashboard` → `main` with b2b-backend PR #28 (migration 0026,
   decided, which moved the B2B target from ₹2.90 Cr to ₹3.40 Cr.
 
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
-CRM PRs #50, #51, #52 and #53, all merged to `main` on 2026-11-14 (`decaa36`). No
-backend PR, and b2b-backend has nothing open. Start new work from `origin/main`.
+CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
+`b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in
+the CRM either. Start new work from `origin/main`.
 - **A lead sent to Outreach leaves Inbound's lists (#52).** Sending never changed
   its status, so a sent Connected lead stayed in Connected, Pipeline, Due/Overdue and
   Reminders. `withInbound` (open and not sent) now gates those lists and the board's
@@ -679,6 +680,19 @@ backend PR, and b2b-backend has nothing open. Start new work from `origin/main`.
 - **Hardi's "only 4 calls" (14 Nov) was not a bug.** Production held 10 calls under
   her number and the engine counted 10. Kylas had no calls by her that day. Calls
   count only when logged in the CRM.
+- **CRM adherence is fair and follows the stage (CRM PR #58, merged 14 Nov,
+  `b96e09c`).** Hardi read 0% (0 of 46): the rule asked for notes on RNR calls (no
+  note field exists), a status past New after an RNR, and firm details for clients
+  never reached. Now it asks only for what a rep could have entered by that point,
+  and each stage's needs are one list read by both the save gate and the score
+  (`INBOUND_STAGE_NEEDS`, `OUTREACH_STAGE_NEEDS`). Stage needs count only for a
+  stage the CRM stamped (`statusChangedAt`); older stages are noted, not scored.
+  The Inbound gate now needs an Enq ID to set Closed. Scores read the record's
+  current state, so filling a gap clears past days too, which the user wants.
+  Production figures and the rules are in `docs/b2b/leadership.md` §KPI rules.
+  Seen on production rows through the compiled engine, not on screen. **Open:** no
+  KAM meeting has been logged in November (28 in October). Ask the user whether
+  the compulsory check-in is blocking KAMs before changing anything.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
