@@ -254,13 +254,28 @@ matches nothing sees a notice, not an empty card.
   period. The Kylas count is stage-filtered (the two inbound stages), so the
   denominator is clamped to at least the CRM rows found. It shows Unknown if any
   person's count failed.
-- **Inbound CRM adherence** is the sheet's mandatory list as fields exist today:
-  contact name, mobile, firm name, segment, client type, city, a status past
-  New, a follow-up date while open and not sent to Outreach (2026-11-14), and a
-  note on every call. GST and address
-  are left out (GST is "where available", and no address field exists). On
-  2026-10-28 it read 1 of 267 for Hardi, mostly missing firm name and call
-  notes. That is the real gap against the sheet, not a bug.
+- **Inbound CRM adherence asks only for what the rep could have captured
+  (2026-11-14).** Every lead called in the period needs a mobile (the Kylas number
+  or the drawer's) and a follow-up date while open and not sent to Outreach. Once a
+  call has connected, and unless the lead was closed Lost or Invalid, it also needs
+  contact name (`primaryContactName`, the drawer's field, or Kylas's
+  `contactName`), firm name, segment, client type, city and a status past New. A
+  connected call needs its note. GST and address are left out (GST is "where
+  available", and no address field exists).
+  Until 14 Nov it asked every lead for everything, and that made Hardi read **0 of
+  46** on a day she logged 47 calls. Three things the rule asked for could not be
+  done in the CRM: the RNR button saves with no note field, an RNR leaves a New lead
+  at New by design (`use-call-log.ts`), and nobody can learn the firm, segment or
+  city of a client who never picked up. The rule also read the contact name from
+  Kylas's `contactName` only, not from the drawer's "Primary person — name". On the
+  same production rows she now reads 42 of 46, and the 4 left are connected, open
+  leads with no segment. A firm name is Kylas's `company` only when it is not the
+  phone number or the contact's name, which is what Kylas puts there in about 1,470
+  of 1,870 rows. The 28 Oct note that 1 of 267 was "the real gap, not a bug" was
+  wrong for the same reasons.
+- **A % tile's footer uses the KPI's own denominator** (`PerfValue.den`). Inbound
+  coverage divides by Kylas's new-lead count, which can exceed the leads opened in
+  the CRM. The footer counted rows, so Hardi's tile read "50%" over "6 of 6".
 - **Inbound qualified** credits `intake.inboundOwner` (the owner at hand-off)
   once Outreach accepted *and* the lead converted or had 2 follow-ups. Rejected
   and waiting rows are listed and not counted. **Since 2026-11-14 it starts from

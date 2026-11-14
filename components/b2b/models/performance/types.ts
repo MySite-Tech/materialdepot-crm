@@ -32,6 +32,7 @@ export interface PerfRow {
 
 export interface PerfValue {
   value: number | null;
+  den?: number;
   unknown?: boolean;
   sub?: string;
   rows: PerfRow[];

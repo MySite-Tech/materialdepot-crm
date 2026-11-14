@@ -371,7 +371,8 @@ primary person and segment carry `firmOnly` in `ENRICHMENT_CHECKS`, and
 `enrichmentGaps` skips them when the client type is End Consumer. So a home
 owner no longer sits in Needs enrichment, and the drawer header counts 5
 fields for them, not 8. The CRM-adherence KPI (`performance/teams/inbound.ts`)
-waives firm name and segment by the same `isEndConsumer`. Contractor, Others
+waives firm name and segment by the same `isEndConsumer`, and asks for client
+details only once a call has connected (`docs/b2b/leadership.md` §KPI rules). Contractor, Others
 and the rest are asked for everything. A lead with no client type yet is asked
 for everything too, because client type is itself the first gap.
 

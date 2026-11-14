@@ -13,7 +13,10 @@ function hintFor(def: PerfKpiDef, k: PerfValue, days: number): { text: string; w
   if (k.unknown) return { text: 'Not readable', warn: true };
   if (k.value === null) return { text: 'none in period' };
   if (def.per === 'day' && days > 1) return { text: `${Math.round((k.value / days) * 10) / 10} a day` };
-  if (def.unit === '%') return { text: k.rows.length ? `${counted(k.rows)} of ${k.rows.length}` : 'none in period' };
+  if (def.unit === '%') {
+    const den = k.den ?? k.rows.length;
+    return { text: den ? `${counted(k.rows)} of ${den}` : 'none in period' };
+  }
   const missed = k.rows.length - counted(k.rows);
   if (missed) return { text: `+${missed} not counted`, warn: true };
   return undefined;

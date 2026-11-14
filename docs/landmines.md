@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-92 entries. They live in one file because they cross-reference each other —
+93 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -102,6 +102,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A rep whose Django name differs from the team list earned ₹0 on every cart they raised
 - A column that shows only hand-logged values reads empty when nobody logs, and its filter matches nothing
 - A KPI that reads only the receiving team's rows misses every hand-off that team has not picked up
+- A KPI that asks for what the screen never lets you enter scores everyone at zero
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1395,3 +1396,18 @@ alone, so two hand-offs Inbound itself had closed read "0 of 2 follow-ups". It n
 starts from the sender's own leads (`docs/b2b/leadership.md` §KPI rules). The shape: a
 hand-off KPI must start from the sender's records, because the receiver's table only
 holds what the receiver has already acted on.
+
+### A KPI that asks for what the screen never lets you enter scores everyone at zero (2026-11-14)
+
+The user, on Hardi's My performance: CRM adherence read **0% (0 of 46)** on a day
+she logged 47 calls, and reps are judged on it daily. The Inbound rule demanded a
+note on every call, but the RNR button saves with no note field. It demanded a status
+past New, but an RNR leaves a New lead at New by design. It demanded firm, segment and
+city for clients who never picked up, and read the contact name from Kylas only, not
+from the drawer's field. Outreach had the same shape: role, team size, client type and
+office address on leads not yet visited, which the drawer itself asks for only at the
+visit. Both now ask only for what could have been captured
+(`docs/b2b/leadership.md` §KPI rules, `docs/b2b/outreach.md`): Hardi 0% → 91%,
+pratham 73% → 100%, on the same production rows. The shape: before scoring a field,
+find the control that captures it and the moment it appears, and check the KPI reads
+the field that control writes.
