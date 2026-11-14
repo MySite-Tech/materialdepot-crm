@@ -640,10 +640,20 @@ Start new work from `origin/main`.
   14 Nov, and `scripts/inbound-kylas-owner-backfill.mjs --apply` then corrected 606
   Kylas owners (a re-run found 0 differing). 40 leads Kylas holds with presales
   were left there.
-- **Still open, all needing Django or Metabase:** whether Procurement's "created
-  by" and "assigned to" read the Kylas owner at all (no Django repo here, and
-  Metabase was down on 14 Nov). Krishna's November orders were not tied out on
-  real data. #50 is live: sign in as a manager and check his My performance.
+- **Procurement's "Assigned to" and "Created by" do not come from Kylas** (checked in
+  Metabase, 14 Nov). They are Django's deal ticket `owner_id` and `created_by_id`: the
+  login that opened the client's first deal ticket, often a store rep, or Hardi
+  opening enquiries in working hours. A later cart attaches to that ticket and keeps
+  its owner. Django sends ticket owners to Kylas deals (`crm_log` `create_deal`,
+  through `user_organisation.crm_id`), never the other way, and its 31k weekly lead
+  updates carry no owner. So the Kylas owner write fixes Kylas, not Procurement.
+  Vikas's login has no `crm_id`: `docs/backends.md` §Owed by Django row 19.
+- **Krishna's revenue ties out on the live report (14 Nov).** His orders whose ticket
+  belongs to a store rep credit him as the firm's KAM. One whose ticket another KAM
+  owns goes to that KAM. A manager moves such an order with the per-order credit.
+- **Team rows now point at the right Kylas users (14 Nov):** Varun Jha keeps 73312
+  (Kylas renamed it from "Emma Maria"), pratham pandey's wrong link to another
+  team's user was removed, and Sai Suresh has no Kylas account to link.
 - **Hardi's "only 4 calls" (14 Nov) was not a bug.** Production held 10 calls under
   her number and the engine counted 10. Kylas had no calls by her that day. Calls
   count only when logged in the CRM.
