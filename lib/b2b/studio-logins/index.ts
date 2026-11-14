@@ -9,6 +9,7 @@ interface LoginRow {
   role: string;
   visible_tabs: string[] | null;
   power: boolean;
+  tier?: 'power' | 'normal';
 }
 
 interface FirmRow {
@@ -18,6 +19,7 @@ interface FirmRow {
   gsts: string[];
   logins: number;
   power: boolean;
+  tier?: 'power' | 'normal';
   orders: { enq_id: string; phone: string | null; source: string; value: number; ordered_on: string | null; status: string | null }[];
   referrals: { name: string; phone: string; status: string; referred_on: string | null; orders: number; value: number }[];
 }
@@ -34,10 +36,10 @@ export function fetchStudioAccess(): Promise<StudioAccessData> {
   const promise = b2bBackendGet<{ logins: LoginRow[]; firms?: FirmRow[] }>('/studio-access').then((b) => {
     const logins: StudioLogins = {};
     for (const r of b.logins) {
-      logins[r.phone] = { phone: r.phone, firmName: r.firm_name || undefined, role: r.role, visibleTabs: r.visible_tabs, power: r.power };
+      logins[r.phone] = { phone: r.phone, firmName: r.firm_name || undefined, role: r.role, visibleTabs: r.visible_tabs, power: r.power, tier: r.tier };
     }
     return { logins, firms: (b.firms ?? []).map((f) => ({
-      partnerId: f.partner_id, firmName: f.firm_name, phones: f.phones, gsts: f.gsts, logins: f.logins, power: f.power,
+      partnerId: f.partner_id, firmName: f.firm_name, phones: f.phones, gsts: f.gsts, logins: f.logins, power: f.power, tier: f.tier,
       orders: (f.orders ?? []).map((o) => ({ enqId: o.enq_id, phone: o.phone, source: o.source, value: o.value, orderedOn: o.ordered_on, status: o.status })),
       referrals: (f.referrals ?? []).map((r) => ({ name: r.name, phone: r.phone, status: r.status, referredOn: r.referred_on, orders: r.orders, value: r.value })),
     })) };

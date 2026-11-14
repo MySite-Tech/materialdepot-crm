@@ -1,6 +1,6 @@
 import { ClientEntity, FirmStudioState } from '../../../models/client';
 
-export type StudioLens = 'all' | 'onboarded' | 'none' | 'nopower' | 'unclassified';
+export type StudioLens = 'all' | 'onboarded' | 'power' | 'normal' | 'none' | 'unclassified';
 
 export interface StudioRow {
   client: ClientEntity;

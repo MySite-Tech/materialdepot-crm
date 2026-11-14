@@ -6,9 +6,18 @@ const compactName = (v: string | undefined) => String(v || '').toLowerCase().rep
 
 export const studioLoginOf = (c: ClientContact, logins: StudioLogins): StudioLogin | undefined => logins[normalizeContactNumber(c.number)];
 
+/**
+ * Power user or Normal user. Since 2026-11-14 this is the FIRM's tier on Studio
+ * Space (chosen at onboarding, b2b-backend 0029), so a power firm's teammate
+ * whose owner hid a tab is still a power user. An older backend sends no tier:
+ * then it is read from the login's own tabs, as before.
+ */
+const accessOf = (x: { tier?: 'power' | 'normal'; power: boolean }): StudioAccess =>
+  (x.tier ? x.tier === 'power' : x.power) ? 'power' : 'non-power';
+
 export function studioAccessOf(c: ClientContact, logins: StudioLogins): StudioAccess | undefined {
   const l = studioLoginOf(c, logins);
-  return l ? (l.power ? 'power' : 'non-power') : undefined;
+  return l ? accessOf(l) : undefined;
 }
 
 function firmHoldingKeys(client: ClientEntity, firms: StudioFirm[]): StudioFirm | undefined {
@@ -24,7 +33,7 @@ export function studioFirmOf(client: ClientEntity, firms: StudioFirm[]): StudioF
 
 export function firmStudioAccess(client: ClientEntity, logins: StudioLogins, firms: StudioFirm[]): StudioAccess | undefined {
   const firm = studioFirmOf(client, firms);
-  if (firm) return firm.power ? 'power' : 'non-power';
+  if (firm) return accessOf(firm);
   const all = (client.contacts || []).map((c) => studioAccessOf(c, logins));
   return all.includes('power') ? 'power' : all.includes('non-power') ? 'non-power' : undefined;
 }
@@ -38,6 +47,7 @@ export function firmStudioState(client: ClientEntity, logins: StudioLogins, firm
     power: access.filter((a) => a === 'power').length,
     unclassified: contacts.filter((c) => !String(c.label || '').trim()).length,
     firm: studioFirmOf(client, firms),
+    access: firmStudioAccess(client, logins, firms),
   };
 }
 

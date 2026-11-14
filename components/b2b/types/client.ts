@@ -23,6 +23,8 @@ export interface StudioLogin {
   role: string;
   visibleTabs: string[] | null;
   power: boolean;
+  /** The FIRM's Studio Space tier (b2b-backend 0029, 2026-11-14). Absent from an older backend. */
+  tier?: 'power' | 'normal';
 }
 
 export type StudioLogins = Record<string, StudioLogin>;
@@ -52,6 +54,8 @@ export interface StudioFirm {
   gsts: string[];
   logins: number;
   power: boolean;
+  /** Power user or Normal user, chosen when Studio Space onboarded the firm (0029). */
+  tier?: 'power' | 'normal';
   orders: StudioOrder[];
   referrals: StudioReferral[];
 }
@@ -62,6 +66,8 @@ export interface FirmStudioState {
   power: number;
   unclassified: number;
   firm: StudioFirm | null;
+  /** The firm's Studio Space access, Power or Normal (undefined = not on it). */
+  access?: StudioAccess;
 }
 
 type GstCheck = 'valid' | 'bad-format' | 'bad-checksum' | 'unknown-state' | 'empty';
