@@ -622,8 +622,15 @@ branch `nov12-crm-dashboard` → `main` with b2b-backend PR #28 (migration 0026,
   decided, which moved the B2B target from ₹2.90 Cr to ₹3.40 Cr.
 
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
-CRM PR #50 (live, `3f8433c`) and PR #51 (Kylas owner write-back), no backend PR.
-Start new work from `origin/main`.
+CRM PRs #50, #51, #52 and #53, all merged to `main` on 2026-11-14 (`decaa36`). No
+backend PR, and b2b-backend has nothing open. Start new work from `origin/main`.
+- **A lead sent to Outreach leaves Inbound's lists (#52).** Sending never changed
+  its status, so a sent Connected lead stayed in Connected, Pipeline, Due/Overdue and
+  Reminders. `withInbound` (open and not sent) now gates those lists and the board's
+  open columns. It shows only under Sent to Outreach, All leads or a Status filter.
+  An Outreach rejection does not bring it back. **GST and expected order value are
+  no longer Inbound enrichment fields** (`docs/b2b/inbound.md` §One tab, three tile
+  groups and §Client details). Seen on sample leads only, not signed in.
 - **Revenue matches a cart's rep by sign-in number.** Order rows carry only the
   Django name, and Krishna Jadhav's login is named "none" (Owed by Django row 15),
   so his own carts earned ₹0. `staffDirectory` maps a Django name to the team
