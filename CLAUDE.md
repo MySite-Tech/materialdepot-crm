@@ -647,14 +647,23 @@ backend PR, and b2b-backend has nothing open. Start new work from `origin/main`.
   14 Nov, and `scripts/inbound-kylas-owner-backfill.mjs --apply` then corrected 606
   Kylas owners (a re-run found 0 differing). 40 leads Kylas holds with presales
   were left there.
-- **Procurement's "Assigned to" and "Created by" do not come from Kylas** (checked in
-  Metabase, 14 Nov). They are Django's deal ticket `owner_id` and `created_by_id`: the
-  login that opened the client's first deal ticket, often a store rep, or Hardi
-  opening enquiries in working hours. A later cart attaches to that ticket and keeps
-  its owner. Django sends ticket owners to Kylas deals (`crm_log` `create_deal`,
-  through `user_organisation.crm_id`), never the other way, and its 31k weekly lead
-  updates carry no owner. So the Kylas owner write fixes Kylas, not Procurement.
-  Vikas's login has no `crm_id`: `docs/backends.md` §Owed by Django row 19.
+- **Procurement's "Assigned to" is the estimate's `assigned_to_id`, not the deal
+  ticket's owner (corrected 14 Nov, checked in Metabase).** Anyone signed in to
+  Procurement sets it under Order Details → Assigned To (`/order-details/<estimate
+  id>`), and it saves when picked. The CRM's revenue rule reads the **ticket owner**
+  (`ticket.owner_id`), which Procurement has no control for. That is the login that
+  opened the client's first deal ticket, often a store rep or Hardi, and a later cart
+  keeps it. So moving an order's revenue means a per-order credit in the CRM, and
+  fixing Procurement's column means its picker. Neither changes the other. Kylas
+  plays no part: Django sends ticket owners to Kylas deals through
+  `user_organisation.crm_id` and never reads them back. Vikas's `crm_id` is set now
+  (`docs/backends.md` §Owed by Django row 19, half done).
+- **Vikas's November orders (14 Nov, production data, no code).** Five closed orders
+  on his Inbound leads read as Hardi's, because Hardi owned each deal ticket. All
+  five were booked on the B2B branch, so they are Direct. At the user's request each
+  was credited to Vikas (Inbound) with the per-order credit, and the two with a blank
+  Procurement "Assigned to" were set to him. The other three already read Vikas.
+  Hardi stays ticket owner, so keep the credits.
 - **Krishna's revenue ties out on the live report (14 Nov).** His orders whose ticket
   belongs to a store rep credit him as the firm's KAM. One whose ticket another KAM
   owns goes to that KAM. A manager moves such an order with the per-order credit.
