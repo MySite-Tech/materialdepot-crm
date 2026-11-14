@@ -3,6 +3,6 @@ export { OWNER_LABEL, OWNER_CHIP, INBOUND_STATUSES, INBOUND_STATUS_COLORS, INBOU
 export { decomposeLegacyStage, normalizeStatus, istToday, daysUntil, nameIsJustThePhone, addDays, nextWorkingDay, inboundWorkDay } from '../../utils/inbound';
 export { CRM_INBOUND_ID_PREFIX, isCrmAddedLead, locationFromPincode, clientTypeFromKylas, kylasClientTypeIsAmbiguous, selectionsFromKylasLabels } from './kylas';
 export { nextAttemptNumber, lastAttempt, hasConnected, callTally, closureReadiness } from './calls';
-export { statusGateErrors, connectedCallErrors, enrichmentGaps } from './gates';
+export { statusGateErrors, missingForStage, connectedCallErrors, enrichmentGaps } from './gates';
 export { awaitsFollowUp, followUpBucket, nextKamRoundRobin, istDay, hasPi, piDay, lastCallDay, sentToOutreach, withInbound, withStatusStamps, clientSpocs } from './lifecycle';
 export type { Spoc, ClientSpocs } from './lifecycle';

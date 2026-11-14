@@ -677,7 +677,12 @@ them, and whoever the CRM gives a lead to must own it in Kylas too, so Django's
 `statusGateErrors` blocks the four the PRD states — follow-up date on
 `Follow up`, Enq ID **and** follow-up date on `PI Shared`, lost reason on `Lost`
 — plus the Lost reason rule (Ready to close, above) and Invalid's call, reason
-and note. Everything in §3.2/§3.3 is chased through `enrichmentGaps` and never blocks: the first
+and note. **Since 2026-11-14 `Closed` needs an Enq ID too**, because a Closed lead
+has been through PI Shared, which already asked for one. On production that day 6
+leads had been set Closed in the CRM in Sep–Oct with none. The data-presence part
+of the gate is one list, `INBOUND_STAGE_NEEDS`, and CRM adherence reads that same
+list, so what a stage asks for at the move and what the score checks cannot drift
+apart (`docs/b2b/leadership.md` §KPI rules). Everything in §3.2/§3.3 is chased through `enrichmentGaps` and never blocks: the first
 eight were empty on all 151 live rows when this shipped, so a hard block would
 just stop the board being used. Dragging a card into a gated column opens
 `MoveModal` to collect the field rather than writing an incomplete status.

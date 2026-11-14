@@ -1,7 +1,7 @@
 import { OutreachLead } from '../mock-data';
 import { withRequirementHistory } from '../requirement';
 import {
-  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting,
+  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting, outreachMissingForStage,
 } from '.';
 import { normalisePhone } from '@/lib/org/utils';
 import { HANDOVER_TAT_HOURS, handoverState, hoursSince, isMobile, orderVerified } from './handover';
@@ -143,7 +143,9 @@ export function outreachFieldGaps(l: OutreachLead): string[] {
 
 export function outreachAdherence(l: OutreachLead): string[] {
   const visited = l.status !== 'Lost' && completedMeetings(l.meetings).length > 0;
-  return ADHERENCE.filter((a) => (visited || !a.visited) && !a.ok(l)).map((a) => a.label);
+  const gaps = ADHERENCE.filter((a) => (visited || !a.visited) && !a.ok(l)).map((a) => a.label);
+  const stage = l.statusChangedAt ? outreachMissingForStage({ status: l.status, followUpDate: l.followUpDate, lostReason: l.lostReason }).map((n) => n.label) : [];
+  return [...gaps, ...stage.filter((label) => !gaps.includes(label))];
 }
 
 export type ReminderLevel = 'overdue' | 'today' | 'todo';

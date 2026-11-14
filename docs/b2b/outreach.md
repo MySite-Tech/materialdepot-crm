@@ -428,7 +428,10 @@ shown as each tile's tooltip; the non-obvious ones:
   fields nobody can know before the visit: on November's production rows that was
   all 51 of pratham's misses (73%, now 100%) and all 10 of Vilok's. The reminders
   still list every missing field (`outreachFieldGaps`), so a BM is nudged before
-  the visit without being scored on it.
+  the visit without being scored on it. It also asks what the current stage's
+  status gate asked for (`OUTREACH_STAGE_NEEDS`: a follow-up date at Follow up and
+  PI Shared, a reason at Lost), for a stage the CRM set (`docs/b2b/leadership.md`
+  §KPI rules).
 - **Handover %** denominator is *all* conversions in the period, verified or not.
 - **Revenue** is first-order value of verified, new-onboarding conversions only.
   Later orders from the same client are not in it — this CRM does not track

@@ -273,6 +273,23 @@ matches nothing sees a notice, not an empty card.
   phone number or the contact's name, which is what Kylas puts there in about 1,470
   of 1,870 rows. The 28 Oct note that 1 of 267 was "the real gap, not a bug" was
   wrong for the same reasons.
+- **Adherence follows the stage, on both teams, and is judged on the record as it
+  stands now (2026-11-14).** On top of the fields above, a lead needs what its
+  current stage asked for at the move, read from the same list the save gate uses
+  (`INBOUND_STAGE_NEEDS`, `OUTREACH_STAGE_NEEDS`). Inbound: an Enq ID at PI Shared and
+  Closed, a reason at Lost, a reason and a 15-character note at Invalid, and the
+  hand-off details (decision maker, meeting date, summary) once sent to Outreach.
+  Outreach: a follow-up date at Follow up and PI Shared, and a reason at Lost, on
+  top of the Enq ID and KAM handover it already asked of Closed. **This applies only
+  to a stage the CRM set** (`statusChangedAt` stamped). A stage carried over from
+  before the gates is noted on the row and not scored. On production on 14 Nov every
+  Inbound lead missing its stage data that a rep had called was unstamped: Lost with
+  no reason (never reached, so no reason passes today's gate) and PI Shared with no
+  Enq ID. Outreach had none. Because every figure is read from the record's current
+  state, filling a gap later also clears it on the past days that lead was counted.
+  The other percentages work the same way: Inbound coverage (a call on a lead now
+  theirs), Outreach coverage (a held meeting), handover (accepted), KAM coverage and
+  active rate are recomputed on every load. None is stored.
 - **A % tile's footer uses the KPI's own denominator** (`PerfValue.den`). Inbound
   coverage divides by Kylas's new-lead count, which can exceed the leads opened in
   the CRM. The footer counted rows, so Hardi's tile read "50%" over "6 of 6".
