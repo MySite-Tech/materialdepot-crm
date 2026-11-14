@@ -4,7 +4,7 @@ import type { DragEvent, RefObject } from 'react';
 import { useState } from 'react';
 
 import { INBOUND_STATUSES, INBOUND_STATUS_COLORS, INBOUND_STATUS_HINT } from '../../../constants/inbound';
-import { isFollowUpStatus, lastAttempt } from '../../../models/inbound';
+import { isFollowUpStatus, isOpenStatus, lastAttempt, withInbound } from '../../../models/inbound';
 import { InboundLead, fmtINR } from '../../../models/mock-data';
 import { InboundStatus } from '../../../types/inbound';
 import { CrmAddedTag, FollowUpChip, LeadName, LeadTypeChip, PriorityChip } from '../../../ui/inbound-chips';
@@ -98,7 +98,7 @@ export function InboundBoard({ leads, today, scroll, onOpen, onMove }: {
       onDrop={scroll.onDrop}
     >
       {INBOUND_STATUSES.map((s) => {
-        const items = leads.filter((l) => l.stage === s);
+        const items = leads.filter((l) => l.stage === s && (!isOpenStatus(s) || withInbound(l)));
         const isOver = dragOver === s;
         return (
           <div

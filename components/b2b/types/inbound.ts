@@ -98,13 +98,11 @@ export interface EnrichmentInput {
   companyName?: string;
   primaryContactName?: string;
   primaryContactPhone?: string;
-  gstNumber?: string;
   segment?: string;
   clientType?: string;
   leadType?: string;
   priority?: string;
   selections?: string[];
-  expectedOrderValue?: number;
   location?: string;
 }
 

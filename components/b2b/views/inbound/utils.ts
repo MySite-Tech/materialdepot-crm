@@ -1,6 +1,6 @@
 'use client';
 
-import { awaitsFollowUp, callTally, closureReadiness, enrichmentGaps, followUpBucket, inboundWorkDay, isOpenStatus, istDay, lastAttempt, lastCallDay, piDay, sentToOutreach } from '../../models/inbound';
+import { awaitsFollowUp, callTally, closureReadiness, enrichmentGaps, followUpBucket, inboundWorkDay, isOpenStatus, istDay, lastAttempt, lastCallDay, piDay, sentToOutreach, withInbound } from '../../models/inbound';
 import { FollowUpBucket } from '../../types/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { fmtLeadDateTime } from '../../ui/inbound-chips';
@@ -43,11 +43,11 @@ export function lensMatches(lens: Lens, l: InboundLead, today: string): boolean 
     case 'new':      return firstCallDue(l, today);
     case 'due':      return callBucket(l, today, 'today');
     case 'overdue':  return callBucket(l, today, 'overdue');
-    case 'ready':    return isOpenStatus(l.stage) && closureReadiness(l, today).ready;
-    case 'open':     return isOpenStatus(l.stage);
-    case 'nurture':  return l.stage === 'Connected - Need nurturing';
-    case 'followup': return l.stage === 'Follow up';
-    case 'pi':       return l.stage === 'PI Shared';
+    case 'ready':    return withInbound(l) && closureReadiness(l, today).ready;
+    case 'open':     return withInbound(l);
+    case 'nurture':  return withInbound(l) && l.stage === 'Connected - Need nurturing';
+    case 'followup': return withInbound(l) && l.stage === 'Follow up';
+    case 'pi':       return withInbound(l) && l.stage === 'PI Shared';
     case 'results':  return !isOpenStatus(l.stage) || sentToOutreach(l);
     case 'sent':     return sentToOutreach(l);
     case 'closed':   return l.stage === 'Closed';

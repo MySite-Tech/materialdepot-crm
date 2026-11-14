@@ -12,7 +12,7 @@ export const NO_FILTERS: InboundFilters = {
   location: 'all', kylasStage: 'all', createdFrom: '', createdTo: '',
 };
 
-const CALL_RULE = 'Open leads already called at least once';
+const CALL_RULE = 'Open leads not sent to Outreach, already called at least once';
 
 export const LENS: Record<Lens, LensMeta> = {
   today: {
@@ -47,13 +47,13 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   open: {
     title: 'Pipeline',
-    rule: 'Every open lead: New, Connected, Follow up or PI Shared.',
+    rule: 'Every open lead still with Inbound: New, Connected, Follow up or PI Shared. A lead sent to Outreach leaves the pipeline and counts only under Sent to Outreach.',
     empty: 'No open lead.',
     accent: '#6B7280',
   },
   nurture: {
     title: 'Connected',
-    rule: 'Spoke to them, nothing live yet. Moves to Follow up once there is a requirement.',
+    rule: 'Spoke to them, nothing live yet. Moves to Follow up once there is a requirement, and leaves once sent to Outreach.',
     empty: 'No connected lead waiting.',
     accent: INBOUND_STATUS_COLORS['Connected - Need nurturing'],
   },
@@ -125,7 +125,7 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   gaps: {
     title: 'Needs enrichment',
-    rule: 'Missing one or more of: company name, primary person, GST, segment, client type, lead type, priority, city, selection, expected value. An End Consumer is not asked for the first four.',
+    rule: 'Missing one or more of: company name, primary person, segment, client type, lead type, priority, city, selection. An End Consumer is not asked for the first three. GST and expected value are optional.',
     empty: 'Every lead is fully filled in.',
     accent: '#F59E0B',
   },
