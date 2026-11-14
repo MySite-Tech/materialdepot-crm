@@ -18,10 +18,12 @@ function StudioBadge({ login, firm, loading, failed }: { login?: StudioLogin; fi
   if (failed) return <div className={`${base} border-amber-200 text-amber-700`} title="Studio Space could not be reached, so access is unknown">Studio Space: unknown</div>;
   if (!login && firm) return <div className={`${base} border-gray-200 text-gray-600`} title={`${firm.firmName} is on Studio Space with ${firm.logins} login${firm.logins === 1 ? '' : 's'}. This number is not one of its numbers there.`}>Studio Space: firm on, number not</div>;
   if (!login) return <div className={`${base} border-gray-100 text-gray-400`} title="No Studio Space login uses this number">Studio Space: not onboarded</div>;
-  const access = STUDIO_ACCESS[login.power ? 'power' : 'non-power'];
+  // The firm's tier when Studio Space sends it (2026-11-14), else the login's own tabs.
+  const tier = (login.tier ? login.tier === 'power' : login.power) ? 'power' : 'non-power';
+  const access = STUDIO_ACCESS[tier];
   const tabs = login.visibleTabs?.length ? `Tabs on: ${login.visibleTabs.join(', ')}` : login.visibleTabs ? 'No optional tabs on' : '';
   return (
-    <div className={`${base} ${login.power ? 'border-teal-300 text-[#0F766E] font-semibold' : 'border-gray-200 text-gray-700'}`} title={[access.hint, tabs].filter(Boolean).join('. ')}>
+    <div className={`${base} ${tier === 'power' ? 'border-teal-300 text-[#0F766E] font-semibold' : 'border-gray-200 text-gray-700'}`} title={[access.hint, tabs].filter(Boolean).join('. ')}>
       Studio Space · {access.label}
     </div>
   );

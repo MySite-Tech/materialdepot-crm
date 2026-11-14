@@ -9,7 +9,9 @@ export function studioLensMatches(lens: StudioLens, r: StudioRow): boolean {
     case 'all':          return true;
     case 'onboarded':    return onStudio(r);
     case 'none':         return !onStudio(r);
-    case 'nopower':      return onStudio(r) && !r.studio.firm?.power && r.studio.power === 0;
+    // The firm's tier (2026-11-14): Power or Normal user on Studio Space.
+    case 'power':        return onStudio(r) && r.studio.access === 'power';
+    case 'normal':       return onStudio(r) && r.studio.access === 'non-power';
     case 'unclassified': return r.studio.unclassified > 0;
   }
 }

@@ -125,6 +125,26 @@ an assignment across.
 - **No order aggregates on mount.** The list needs none. A firm's metrics load
   when its page opens. Until then the Firm page reads "…", never Inactive.
 
+## Power user or Normal user (2026-11-14)
+
+Studio Space now onboards a firm as a **Power user** (every tab) or a **Normal
+user** (orders, clients and rewards only; the Power tabs show "Become a Power
+user" with the KAM's contact). It is the firm's own setting, chosen on Studio
+Space's onboarding form and changed on its console firm page (b2b-backend
+migration 0029, `partner.access_tier`).
+
+- `/studio-access` sends `tier` (`'power'` | `'normal'`) on every firm and
+  login. `accessOf()` in `models/client/derived/studio.ts` reads it first, so
+  the CRM's Power user / Normal user label is the firm's tier. A Power firm's
+  teammate whose owner hid a tab stays a Power user. With no `tier` (an older
+  backend) it falls back to the old reading (a login with every tab = power).
+- **Numbers by firm:** the "No power user" attention tile is gone (Normal is
+  now a choice, not a problem). Two lens tiles, **Power users** and **Normal
+  users**, count onboarded firms by tier.
+- **Client Database:** the Studio Space column and its filter (Power user /
+  Normal user / Not onboarded) use the same reading, so the filter splits by tier.
+- The CRM still never writes Studio Space: the tier is changed on Studio Space.
+
 ## Read from Studio Space, never written (2026-10-29)
 
 The list is Studio Space's own data. `useStudioLogins()` reads b2b-backend's

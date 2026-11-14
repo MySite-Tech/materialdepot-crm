@@ -74,7 +74,8 @@ export function StudioNumbers() {
       case 'all':          return numbers(scoped.reduce((s, r) => s + r.studio.numbers, 0));
       case 'onboarded':    return `${numbers(scoped.reduce((s, r) => s + r.studio.onboarded, 0))} · ${share}`;
       case 'none':         return share;
-      case 'nopower':      return n ? 'normal users only' : 'all have one';
+      case 'power':        return share;
+      case 'normal':       return share;
       case 'unclassified': return numbers(numbersUnclassified);
     }
   };
@@ -82,12 +83,13 @@ export function StudioNumbers() {
     key: k, title: STUDIO_LENS[k].title, rule: STUDIO_LENS[k].rule, accent: STUDIO_LENS[k].accent,
     value: loading ? '…' : loadError ? 'Unknown' : String(byLens[k].length),
     sub: loading ? 'loading' : loadError ? 'did not load' : tileSub(k),
-    warn: !!loadError || ((k === 'nopower' || k === 'unclassified') && byLens[k].length > 0),
+    warn: !!loadError || (k === 'unclassified' && byLens[k].length > 0),
     muted: !loading && !loadError && k !== 'all' && byLens[k].length === 0,
   });
   const tileGroups: LensTileGroup<StudioLens>[] = [
     { title: 'Firms on Studio Space', tiles: (['all', 'onboarded', 'none'] as StudioLens[]).map(tile) },
-    { title: 'Needs attention', tiles: (['nopower', 'unclassified'] as StudioLens[]).map(tile) },
+    { title: 'Power or Normal', tiles: (['power', 'normal'] as StudioLens[]).map(tile) },
+    { title: 'Needs attention', tiles: (['unclassified'] as StudioLens[]).map(tile) },
   ];
 
   const open = (c: ClientEntity) => { setOpenId(c.id); addPhones(contactNumbers(c.contacts)); };
@@ -110,7 +112,7 @@ export function StudioNumbers() {
     <div className="p-4 sm:p-6">
       <p className="text-xs text-gray-400 mb-4 max-w-[620px]">
         Which numbers at each firm are on the Studio Space dashboard, and with what access, read from Studio Space
-        itself. A power user sees the whole dashboard. A normal user is restricted, for example to order tracking.
+        itself. A Power user firm has every tab. A Normal user firm has orders, clients and rewards only.
       </p>
 
       {loadError && (
