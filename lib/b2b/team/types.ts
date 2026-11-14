@@ -54,6 +54,13 @@ export interface RotationOutcome {
   waiting: number;
   backlog: number;
   skipped?: string;
+  kylas?: KylasOwnerWrites;
+}
+
+export interface KylasOwnerWrites {
+  written: number;
+  failed: { leadId: string; error: string }[];
+  pending: number;
 }
 
 export interface SyncOutcome extends RotationOutcome {
@@ -64,6 +71,7 @@ export interface SyncOutcome extends RotationOutcome {
 export interface ReassignOutcome {
   moved: { leadId: string; name: string; kylasUserId: number }[];
   failed: { leadId: string; error: string }[];
+  kylas?: KylasOwnerWrites;
 }
 
 export interface B2BUser {

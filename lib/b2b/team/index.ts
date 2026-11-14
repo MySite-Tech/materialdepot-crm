@@ -1,6 +1,6 @@
 import { getToken, refreshSession } from '@/lib/api/core/client';
 import type { InboundLead } from '@/components/b2b/models/mock-data';
-import type { KylasUser, MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, SyncOutcome, TeamState } from './types';
+import type { KylasOwnerWrites, KylasUser, MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, SyncOutcome, TeamState } from './types';
 
 async function send<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   const headers: Record<string, string> = {
@@ -44,18 +44,18 @@ export const syncInbound = (full = false): Promise<SyncOutcome> =>
 export const reassignInboundLeads = (items: { leadId: string; toPhone: string }[], reason: string): Promise<ReassignOutcome> =>
   send<ReassignOutcome>('/api/b2b/inbound/assign', json('POST', { mode: 'reassign-many', items, reason }));
 
-export const reassignInboundLead = (leadId: string, toPhone: string, reason: string): Promise<{ to: string }> =>
-  send<{ to: string }>('/api/b2b/inbound/assign', json('POST', { mode: 'reassign', leadId, toPhone, reason }));
+export const reassignInboundLead = (leadId: string, toPhone: string, reason: string): Promise<{ to: string; kylas?: KylasOwnerWrites }> =>
+  send<{ to: string; kylas?: KylasOwnerWrites }>('/api/b2b/inbound/assign', json('POST', { mode: 'reassign', leadId, toPhone, reason }));
 
 export async function moveInboundLeads(
   plan: { lead: InboundLead; toPhone: string }[],
   reason: string,
-): Promise<{ moved: InboundLead[]; failed: ReassignOutcome['failed'] }> {
+): Promise<{ moved: InboundLead[]; failed: ReassignOutcome['failed']; kylas?: KylasOwnerWrites }> {
   const outcome = await reassignInboundLeads(plan.map(({ lead, toPhone }) => ({ leadId: lead.id, toPhone })), reason);
   const byId = new Map(outcome.moved.map((m) => [m.leadId, m]));
   const moved = plan.flatMap(({ lead }) => {
     const m = byId.get(lead.id);
     return m ? [{ ...lead, owner: m.name, ownerId: m.kylasUserId }] : [];
   });
-  return { moved, failed: outcome.failed };
+  return { moved, failed: outcome.failed, kylas: outcome.kylas };
 }

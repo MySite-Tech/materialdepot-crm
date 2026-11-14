@@ -40,10 +40,10 @@ export async function POST(request: NextRequest) {
         const items = body.items.map((i: { leadId?: unknown; toPhone?: unknown }) => ({ leadId: String(i?.leadId ?? ''), toPhone: String(i?.toPhone ?? '') }));
         return Response.json(await reassignInboundLeads(items, String(body.reason ?? ''), c.name));
       }
-      const to = await reassignInboundLead(
+      const { member, kylas } = await reassignInboundLead(
         String(body.leadId ?? ''), String(body.toPhone ?? ''), String(body.reason ?? ''), c.name,
       );
-      return Response.json({ to: to.name });
+      return Response.json({ to: member.name, kylas });
     }
     return bad("'mode' must be sync, rotate, reassign or reassign-many");
   } catch (err) {

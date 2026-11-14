@@ -484,7 +484,9 @@ Kylas's feed does not record owner changes, so it cannot prove what moved a lead
 
 **Inbound is CRM-owned (2026-11-03, CRM PR #38 from `b2b-inbound-crm-owned` → `main`,
 with b2b-backend PR #20; both merged 2026-11-03, the owner cutover below is now due).** The user decided a lead comes from Kylas once, and from
-then on only the CRM changes it. **Nothing writes to Kylas.** An insert-only import
+then on only the CRM changes it. **Only the owner is written back to Kylas** (since
+2026-11-14, so Django and orders follow the right rep; `docs/b2b/inbound.md` §The CRM's
+owner is written to Kylas). An insert-only import
 brings in new Kylas leads when the tab opens, every 5 minutes and on Sync. The board
 reads CRM rows only, so "Load more" is gone. A save sends only what changed, and
 calls and notes only append. The owner is the row's `owner_kylas_id`, which the
@@ -618,6 +620,33 @@ branch `nov12-crm-dashboard` → `main` with b2b-backend PR #28 (migration 0026,
   added to the KAM team (active, round robin off) with 18 meetings and 250 calls a
   month under Set targets. Revenue stays at the ₹50 L default until Hyderabad's is
   decided, which moved the B2B target from ₹2.90 Cr to ₹3.40 Cr.
+
+**START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
+CRM PR #50 (live, `3f8433c`) and PR #51 (Kylas owner write-back), no backend PR.
+Start new work from `origin/main`.
+- **Revenue matches a cart's rep by sign-in number.** Order rows carry only the
+  Django name, and Krishna Jadhav's login is named "none" (Owed by Django row 15),
+  so his own carts earned ₹0. `staffDirectory` maps a Django name to the team
+  member holding that login's number (`docs/b2b/overview.md` §Four revenue channels).
+- **The EC SPoC is never a B2B person** (`b2bSellerTest`). The Client Database column
+  and its filter fall back to the store rep on the last EC order in six months
+  (`/api/b2b/revenue/ec-spocs`, `docs/b2b/client-db.md`).
+- **Only a lead's owner is written back to Kylas**, after the round robin, a
+  reassign, and on each sync for leads Kylas still holds on Hardi. The user: the
+  round robin exists only because Kylas parks every qualified lead on Hardi. If
+  Kylas starts spreading leads itself, the round robin goes quiet with no change.
+  Never write stage, notes or calls (`docs/b2b/inbound.md` §The CRM's owner is
+  written to Kylas). Mandeep left: his 315 leads went to Hardi and Vikas in turn on
+  14 Nov, and `scripts/inbound-kylas-owner-backfill.mjs --apply` then corrected 606
+  Kylas owners (a re-run found 0 differing). 40 leads Kylas holds with presales
+  were left there.
+- **Still open, all needing Django or Metabase:** whether Procurement's "created
+  by" and "assigned to" read the Kylas owner at all (no Django repo here, and
+  Metabase was down on 14 Nov). Krishna's November orders were not tied out on
+  real data. #50 is live: sign in as a manager and check his My performance.
+- **Hardi's "only 4 calls" (14 Nov) was not a bug.** Production held 10 calls under
+  her number and the engine counted 10. Kylas had no calls by her that day. Calls
+  count only when logged in the CRM.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment

@@ -1,6 +1,6 @@
 import { normalisePhone } from '@/lib/org/utils';
 import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_REP_ROLE_TEAM, B2B_SALES_ROLES, PLACEHOLDER_NAMES } from './constants';
-import { B2BTeam, B2BUser, SignInGaps, TeamMember, Viewer } from './types';
+import { B2BTeam, B2BUser, KylasOwnerWrites, SignInGaps, TeamMember, Viewer } from './types';
 
 const perms = (u: B2BUser): string[] =>
   Array.isArray(u.individualPermissions) ? u.individualPermissions : [];
@@ -77,4 +77,14 @@ export function signInGaps(users: (B2BUser & { id: string | number; active?: boo
     noLogin: members.filter((m) => m.active && !loginPhones.has(m.phone)),
     placeholder: live.filter((u) => isPlaceholderName(u.name) && (teamPhones.has(normalisePhone(u.phone)) || u.role in B2B_REP_ROLE_TEAM)),
   };
+}
+
+export function kylasOwnerNote(k?: KylasOwnerWrites): string | null {
+  if (!k || (!k.failed.length && !k.pending)) return null;
+  const leads = (n: number) => `${n} lead${n === 1 ? '' : 's'}`;
+  const parts = [
+    k.failed.length ? `Kylas refused the new owner on ${leads(k.failed.length)} (${k.failed[0].error})` : '',
+    k.pending ? `${leads(k.pending)} not yet written to Kylas, because it is rate limiting` : '',
+  ].filter(Boolean);
+  return `${parts.join('. ')}. The CRM owner is right; Kylas still shows the old one.`;
 }

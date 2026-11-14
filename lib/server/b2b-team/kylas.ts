@@ -73,6 +73,17 @@ export function kylasUserForPhone(users: KylasUser[], phone: string): KylasUser 
   return hits.find((u) => u.active) ?? hits[0] ?? null;
 }
 
+export async function setLeadOwner(id: string, ownerId: number): Promise<void> {
+  const body = await kylas(`/leads/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json-patch+json' },
+    body: JSON.stringify([{ op: 'replace', path: '/ownerId', value: ownerId }]),
+  });
+  if (typeof body.ownerId === 'number' && body.ownerId !== ownerId) {
+    throw new Error(`Kylas kept the lead on user ${body.ownerId}`);
+  }
+}
+
 export async function intakePool(sinceIso: string): Promise<PoolLead[]> {
   const rule = {
     fields: B2B_INBOUND_FIELDS,
