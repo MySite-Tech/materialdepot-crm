@@ -690,9 +690,10 @@ the CRM either. Start new work from `origin/main`.
   The Inbound gate now needs an Enq ID to set Closed. Scores read the record's
   current state, so filling a gap clears past days too, which the user wants.
   Production figures and the rules are in `docs/b2b/leadership.md` §KPI rules.
-  Seen on production rows through the compiled engine, not on screen. **Open:** no
-  KAM meeting has been logged in November (28 in October). Ask the user whether
-  the compulsory check-in is blocking KAMs before changing anything.
+  The user checked it signed in on production on 14 Nov. **Open:** no KAM meeting
+  has been logged in November (28 in October). The user has no explanation yet.
+  Find out from the KAMs whether the compulsory check-in is stopping them before
+  changing the check-in or the meeting KPIs.
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
