@@ -55,8 +55,10 @@ export const lastCallDay = (l: LifecycleLead): string => {
 
 export const sentToOutreach = (l: LifecycleLead): boolean => !!l.outreachReferral?.at;
 
+export const withInbound = (l: LifecycleLead): boolean => isOpenStatus(l.stage) && !sentToOutreach(l);
+
 export const awaitsFollowUp = (l: LifecycleLead): boolean =>
-  isOpenStatus(l.stage) && !(l.stage === 'New' && !(l.callAttempts || []).length);
+  withInbound(l) && !(l.stage === 'New' && !(l.callAttempts || []).length);
 
 export function withStatusStamps<T extends LifecycleLead>(before: LifecycleLead, after: T, now: string): T {
   if (after.stage === before.stage) return after;

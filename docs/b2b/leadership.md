@@ -256,7 +256,8 @@ matches nothing sees a notice, not an empty card.
   person's count failed.
 - **Inbound CRM adherence** is the sheet's mandatory list as fields exist today:
   contact name, mobile, firm name, segment, client type, city, a status past
-  New, a follow-up date while open, and a note on every call. GST and address
+  New, a follow-up date while open and not sent to Outreach (2026-11-14), and a
+  note on every call. GST and address
   are left out (GST is "where available", and no address field exists). On
   2026-10-28 it read 1 of 267 for Hardi, mostly missing firm name and call
   notes. That is the real gap against the sheet, not a bug.

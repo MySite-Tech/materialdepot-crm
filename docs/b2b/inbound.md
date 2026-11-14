@@ -224,7 +224,19 @@ range bar and the PI-only lenses (Follow-up due, Converted, Dropped).
 
 Arrived today, Upcoming, No follow-up date, Needs enrichment and All leads are
 pills. One predicate (`lensMatches`) still gives each tile its count and its
-rows, and lenses still overlap on purpose (a sent lead is open *and* an outcome).
+rows.
+
+- **A lead sent to Outreach leaves Inbound's working lists (2026-11-14).** Sending
+  does not change its status, so until then a sent Connected lead sat in both
+  Connected and Sent to Outreach, and in Due today, Overdue and Reminders on its
+  old follow-up date. The user said that padded Inbound's lists and hurt their
+  numbers. Now `withInbound(l)` (open status and not `sentToOutreach`) gates
+  Pipeline, Connected, Follow up, PI shared, Ready to close, every follow-up lens
+  (through `awaitsFollowUp`, so Reminders too) and the board's open columns. A
+  sent lead shows under Sent to Outreach, All leads and an explicit Status filter.
+  The adherence KPI no longer asks a sent lead for a next follow-up date. An
+  Outreach rejection does not bring it back: `rejectIntake` marks the Outreach
+  row Lost, and nothing on Inbound reads that row.
 
 - **PI follow-ups are back in Due today / Overdue.** A PI is a call to make like
   any other; the separate PI chase tile existed only because of the PI tab.
@@ -348,11 +360,17 @@ refused to save. A Closed lead's revenue can be credited to someone other than
 the owner by a manager (`leadership.md`). A lead can be sent to an EC from its
 drawer (`ec-directed.md`).
 
+**GST and expected order value are optional for Inbound (2026-11-14).** The user
+asked that Inbound not be held to them. They stay in the drawer but are out of
+`ENRICHMENT_CHECKS`, so they no longer put a lead in Needs enrichment or count in
+the header. Outreach's own enrichment list (`outreachEnrichmentGaps`) is separate
+and unchanged.
+
 **An End Consumer is not asked for firm fields (2026-10-30).** Company name,
-primary person, GST and segment carry `firmOnly` in `ENRICHMENT_CHECKS`, and
+primary person and segment carry `firmOnly` in `ENRICHMENT_CHECKS`, and
 `enrichmentGaps` skips them when the client type is End Consumer. So a home
-owner no longer sits in Needs enrichment, and the drawer header counts 6
-fields for them, not 10. The CRM-adherence KPI (`performance/teams/inbound.ts`)
+owner no longer sits in Needs enrichment, and the drawer header counts 5
+fields for them, not 8. The CRM-adherence KPI (`performance/teams/inbound.ts`)
 waives firm name and segment by the same `isEndConsumer`. Contractor, Others
 and the rest are asked for everything. A lead with no client type yet is asked
 for everything too, because client type is itself the first gap.

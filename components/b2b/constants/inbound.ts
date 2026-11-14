@@ -149,13 +149,11 @@ export const isEndConsumer = (clientType: string | undefined) => clientType === 
 export const ENRICHMENT_CHECKS: { key: keyof EnrichmentInput; label: string; firmOnly?: true; filled: (l: EnrichmentInput) => boolean }[] = [
   { key: 'companyName',        label: 'Company name',   firmOnly: true, filled: (l) => !!String(l.companyName || '').trim() },
   { key: 'primaryContactName', label: 'Primary person', firmOnly: true, filled: (l) => !!String(l.primaryContactName || '').trim() && !!String(l.primaryContactPhone || '').trim() },
-  { key: 'gstNumber',          label: 'GST number',     firmOnly: true, filled: (l) => !!String(l.gstNumber || '').trim() },
   { key: 'segment',            label: 'Segment',        firmOnly: true, filled: (l) => !!l.segment },
   { key: 'clientType',         label: 'Client type',                   filled: (l) => !!l.clientType },
   { key: 'leadType',           label: 'Lead type',                     filled: (l) => !!l.leadType },
   { key: 'priority',           label: 'Priority',                      filled: (l) => !!l.priority },
   { key: 'selections',         label: 'Selection',                     filled: (l) => !!(l.selections || []).length },
-  { key: 'expectedOrderValue', label: 'Expected value',                filled: (l) => Number(l.expectedOrderValue || 0) > 0 },
   { key: 'location',           label: 'City',                          filled: (l) => !!l.location },
 ];
 

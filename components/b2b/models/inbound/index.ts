@@ -4,5 +4,5 @@ export { decomposeLegacyStage, normalizeStatus, istToday, daysUntil, nameIsJustT
 export { CRM_INBOUND_ID_PREFIX, isCrmAddedLead, locationFromPincode, clientTypeFromKylas, kylasClientTypeIsAmbiguous, selectionsFromKylasLabels } from './kylas';
 export { nextAttemptNumber, lastAttempt, hasConnected, callTally, closureReadiness } from './calls';
 export { statusGateErrors, connectedCallErrors, enrichmentGaps } from './gates';
-export { awaitsFollowUp, followUpBucket, nextKamRoundRobin, istDay, hasPi, piDay, lastCallDay, sentToOutreach, withStatusStamps, clientSpocs } from './lifecycle';
+export { awaitsFollowUp, followUpBucket, nextKamRoundRobin, istDay, hasPi, piDay, lastCallDay, sentToOutreach, withInbound, withStatusStamps, clientSpocs } from './lifecycle';
 export type { Spoc, ClientSpocs } from './lifecycle';
