@@ -8,6 +8,13 @@ const SESSION_TTL_MS = 30_000;
 const LAST_VERIFIED_TTL_MS = 3_600_000;
 const ROSTER_RETRY_MS = [400, 1200];
 const ROSTER_DOWN = 502;
+const STAFF_KEY = 'staff-directory';
+const STAFF_TTL_MS = 600_000;
+
+export interface StaffEntry {
+  name: string;
+  phone: string;
+}
 
 export class SessionError extends Error {
   readonly status: number;
@@ -145,6 +152,18 @@ export async function requireCaller(request: Request): Promise<Caller> {
   setCache(key, caller, SESSION_TTL_MS);
   setCache(lastKey, caller, LAST_VERIFIED_TTL_MS);
   return caller;
+}
+
+export async function staffDirectory(auth: string): Promise<StaffEntry[]> {
+  const cached = getCached(STAFF_KEY) as StaffEntry[] | null;
+  if (cached) return cached;
+  const rows = await fetchRoster(auth.replace(/^Bearer\s+/i, '').trim());
+  const staff = rows.map((r) => ({
+    name: [String(r.user?.f_name ?? '').trim(), String(r.user?.l_name ?? '').trim()].filter(Boolean).join(' '),
+    phone: String(r.user?.contact ?? ''),
+  }));
+  setCache(STAFF_KEY, staff, STAFF_TTL_MS);
+  return staff;
 }
 
 export function sessionErrorResponse(err: unknown): Response | null {

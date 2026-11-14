@@ -84,6 +84,15 @@ public repo. The route itself has run only on the sandbox.
   roster. Never `sameRep`.** Its prefix match made a team member equal to a store
   rep with the same first name and moved that rep's whole month into Direct. The
   two have different phones in `users_user`.
+- **The cart's rep is matched to the team by sign-in number too (2026-11-14).** Order
+  rows carry only Django's name for the rep. Krishna Jadhav's login is named "none"
+  (`backends.md` §Owed by Django row 15), so his own carts read person "none", matched
+  nobody, and his My performance read ₹0. `readHolders` now also reads Django's staff
+  list (`staffDirectory`, `/user-organisation/`, cached 10 minutes for everyone). A
+  Django name whose login number is an active team member's becomes an alias for that
+  member, with a doubled surname too (row 11). A name two logins share ("null") is
+  never aliased. `placedBy` and `person` both carry the team name. The list is the same
+  call `requireCaller` makes, and a failed read falls back to names only.
 - **A lead or redirect counts only for carts raised on or after its date,** so a
   store customer who later became a lead is not claimed. Firms have no such gate.
 - **The hero is at least the Orders section's Won, and the EC's own revenue overlaps it.**

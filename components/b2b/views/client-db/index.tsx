@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, b2bSellerTest, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { fmtShortINR } from '../../models/mock-data';
 import { repNames } from '../../models/outreach/handover';
@@ -48,7 +48,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
-  const { kams, allKams, byTeam } = useB2BReps(team);
+  const { kams, allKams, byTeam, everyone } = useB2BReps(team);
   const assigner = useFirmAssign(clients, viewer.member?.name || viewer.name, (list) => {
     const byId = new Map(list.map((c) => [c.id, c]));
     setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
@@ -85,17 +85,18 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
 
   const suggestions = useMemo(() => findDuplicates(clients), [clients]);
 
+  const isB2B = useMemo(() => b2bSellerTest(everyone.map((r) => r.name)), [everyone]);
   const spocsOf = useMemo(() => {
     const cache = new Map<string, FirmSpoc[]>();
     return (c: ClientEntity): FirmSpoc[] => {
       let s = cache.get(c.id);
       if (!s) {
-        s = firmSpocs(c, firmLinks(c, spocSource.inbound, spocSource.outreach), []);
+        s = firmSpocs(c, firmLinks(c, spocSource.inbound, spocSource.outreach), [], isB2B, latestEcSpoc(c, spocSource.ec, isB2B));
         cache.set(c.id, s);
       }
       return s;
     };
-  }, [spocSource.inbound, spocSource.outreach]);
+  }, [spocSource.inbound, spocSource.outreach, spocSource.ec, isB2B]);
 
   const filterCtx = useMemo<FilterContext>(() => ({
     today,

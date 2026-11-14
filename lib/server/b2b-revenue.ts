@@ -9,10 +9,12 @@ import { monthWindows } from '../b2b/revenue/utils/months';
 import { istToday } from '../b2b/stats/pipeline';
 import { channelSplits } from '../b2b/revenue/utils/rollup';
 import { B2B_BOOKING, B2B_BRANCH, FUNNEL_PAGES, PAST_MONTH_KEEP, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
-import type { B2BSourceRow, BookedOn, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
+import type { B2BSourceRow, BookedOn, EcSpocReport, EcSpocSeen, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
 import { getCached, setCache } from './cache';
 import { b2bBackendFetch } from './b2b-backend';
 import { readMembers } from './b2b-team';
+import { staffDirectory } from './session';
+import { isPlaceholderName } from '../b2b/team/utils';
 
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 8;
@@ -50,17 +52,18 @@ export async function allOrders(query: string, auth: string, maxPages = MAX_PAGE
   };
 }
 
-async function readHolders() {
-  const [rows, studio, redirects, team] = await Promise.all([
+async function readHolders(auth: string) {
+  const [rows, studio, redirects, team, staff] = await Promise.all([
     b2bBackendFetch<B2BSourceRow[]>('/rows'),
     b2bBackendFetch<{ firms?: StudioFirm[] }>('/studio-access').then((r) => r.firms ?? null).catch(() => null),
     b2bBackendFetch<{ visits: EcVisitRow[] }>('/ec-visits?kind=redirect').catch(() => null),
     readMembers().catch(() => null),
+    staffDirectory(auth).catch(() => []),
   ]);
   return {
     book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit)),
     clientDb: clientDbFirms(rows),
-    reps: buildRepTeams(team?.members ?? []),
+    reps: buildRepTeams(team?.members ?? [], staff),
     studioOk: !!studio,
     redirectsOk: !!redirects,
     teamOk: !!team,
@@ -92,7 +95,7 @@ export async function buildRevenueReport(from: string, to: string, auth: string,
   const [all, booked, { book, reps, studioOk, redirectsOk, teamOk }] = await Promise.all([
     allOrders(window(from, to), auth),
     readBooked(from, to, window, idOf, auth),
-    holders ?? readHolders(),
+    holders ?? readHolders(auth),
   ]);
 
   const unique = new Map([...all.orders, ...booked.orders].map((o) => [o.id, o]));
@@ -134,16 +137,20 @@ export function revenueReport(userId: string, from: string, to: string, auth: st
   return rebuild();
 }
 
-export async function buildRevenueTrend(userId: string, auth: string, fresh: boolean): Promise<RevenueTrend> {
+async function trendReports(userId: string, auth: string, fresh: boolean) {
   const windows = monthWindows(new Date(), TREND_MONTHS);
   let holders: Promise<Holders> | undefined;
-  const sharedHolders = () => (holders ??= readHolders());
+  const sharedHolders = () => (holders ??= readHolders(auth));
   const reports: RevenueReport[] = [];
   for (let start = 0; start < windows.length; start += TREND_PARALLEL) {
     const batch = windows.slice(start, start + TREND_PARALLEL).map((w) => revenueReport(userId, w.from, w.to, auth, fresh, sharedHolders));
     reports.push(...await Promise.all(batch));
   }
+  return { windows, reports };
+}
 
+export async function buildRevenueTrend(userId: string, auth: string, fresh: boolean): Promise<RevenueTrend> {
+  const { windows, reports } = await trendReports(userId, auth, fresh);
   return {
     months: windows.map((w, i) => {
       const split = channelSplits(reports[i].orders);
@@ -162,13 +169,27 @@ export async function buildRevenueTrend(userId: string, auth: string, fresh: boo
   };
 }
 
+const BY_B2B_REP = new Set([1, 2]);
+
+export async function buildEcSpocs(userId: string, auth: string): Promise<EcSpocReport> {
+  const { windows, reports } = await trendReports(userId, auth, false);
+  const spocs: Record<string, EcSpocSeen> = {};
+  for (const o of reports.flatMap((r) => r.orders)) {
+    if (o.bookedOnB2B || BY_B2B_REP.has(o.type) || !o.placedBy || !o.phone || isPlaceholderName(o.placedBy)) continue;
+    const at = o.ticket.placedAt || o.ticket.createdAt || '';
+    if (spocs[o.phone] && spocs[o.phone].at >= at) continue;
+    spocs[o.phone] = { name: o.placedBy, store: o.store, at, enquiryId: o.id };
+  }
+  return { from: windows[windows.length - 1].from, to: windows[0].to, spocs, generatedAt: new Date().toISOString() };
+}
+
 export async function buildFunnelReport(from: string, to: string, auth: string): Promise<FunnelReport> {
   const window = (f: string, t: string) => `created_from=${f}&created_to=${t}`;
   const rowKey = (o: OrderInput) => String(o.ticketId ?? o.id);
   const [all, booked, { book, reps, clientDb, studioOk, redirectsOk, teamOk }] = await Promise.all([
     allOrders(window(from, to), auth, FUNNEL_PAGES),
     readBooked(from, to, window, rowKey, auth, FUNNEL_PAGES),
-    readHolders(),
+    readHolders(auth),
   ]);
 
   const unique = new Map([...all.orders, ...booked.orders].map((o) => [rowKey(o), o]));

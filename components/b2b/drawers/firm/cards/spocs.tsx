@@ -1,7 +1,7 @@
 'use client';
 
 import { fmtDate } from '../utils';
-import { ClientEntity, FirmLinks, SpocLogEntry, SpocRole, firmSpocs, spocSales } from '../../../models/client';
+import { ClientEntity, FirmLinks, SpocLogEntry, SpocRole, b2bSellerTest, firmSpocs, spocSales } from '../../../models/client';
 import { fmtShortINR } from '../../../models/mock-data';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { btnPrimary, inputCls } from '../../../constants/ui';
@@ -34,8 +34,9 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const spocs = useMemo(() => firmSpocs(client, links, orders), [client, links, orders]);
-  const sales = useMemo(() => spocSales(client, spocs, orders, Date.now()), [client, spocs, orders]);
+  const isB2B = useMemo(() => b2bSellerTest(Object.values(people).flat().map((r) => r.name)), [people]);
+  const spocs = useMemo(() => firmSpocs(client, links, orders, isB2B), [client, links, orders, isB2B]);
+  const sales = useMemo(() => spocSales(client, spocs, orders, Date.now(), isB2B), [client, spocs, orders, isB2B]);
 
   const open = (role: SpocLogEntry['role'], current?: string) => {
     setEditing(role);
@@ -46,6 +47,10 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
 
   const save = async () => {
     if (!editing || !name.trim() || !from) return;
+    if (editing === 'ec' && isB2B(name)) {
+      setError(`${name.trim()} is on the B2B team. The EC SPoC is the store person who serves this firm at an Experience Centre.`);
+      return;
+    }
     setBusy(true);
     setError('');
     const entry: SpocLogEntry = { role: editing, name: name.trim(), from, at: new Date().toISOString(), by: assignAs };
@@ -150,7 +155,7 @@ export function SpocsCard({ client, links, linksLoading, linksFailed, orders, or
         )}
         {!ordersFailed && !ordersLoading && sales.byEc.length > 0 && (
           <p className="text-[11px] text-gray-500 mt-1">
-            The same orders by EC BM, not added to the above: {sales.byEc.map((e) => `${e.name} ${fmtShortINR(e.value)}`).join(' · ')}
+            Orders a store rep took, by EC SPoC, not added to the above: {sales.byEc.map((e) => `${e.name} ${fmtShortINR(e.value)}`).join(' · ')}
           </p>
         )}
         <p className="text-[11px] text-gray-400 mt-1">Each order counts for whoever held the firm when it was created. Read from the order list, so it can differ from the lifetime figure above.</p>

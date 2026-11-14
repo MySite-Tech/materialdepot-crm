@@ -2,7 +2,7 @@ import { ticketToOrderRow } from '../../orders/ticket';
 import { B2B_BRANCH } from '../constants';
 import type { B2BTeam } from '../../team/types';
 import type { BookedOn, Holder, NumberBook, OrderInput, OrderType, RepTeams, RevenueChannel, RevenueOrder } from '../types';
-import { phoneOf, repName, teamsOfRep } from './book';
+import { phoneOf, repName, repOf } from './book';
 
 const placedBefore = (h: Holder, cartDay: string) => !h.since || !cartDay || cartDay >= h.since;
 
@@ -21,7 +21,9 @@ export function classifyOrder(
   const phone = phoneOf(o.clientPhone);
   const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
-  const repTeams = teamsOfRep(o.assignedTo, reps);
+  const rep = repOf(o.assignedTo, reps);
+  const repTeams = rep?.teams ?? [];
+  const placedBy = rep?.name ?? repName(o.assignedTo);
   const byB2BRep = o.branch === B2B_BRANCH || repTeams.length > 0;
   const referred = held.find((h) => h.kind === 'referred');
 
@@ -39,7 +41,7 @@ export function classifyOrder(
     phone,
     heldBy: from?.kind ?? null,
     ticket: ticketToOrderRow(o, phone),
-    placedBy: repName(o.assignedTo),
+    placedBy,
     store: o.branch || 'Unknown',
     bookedOnB2B,
     redirectLogged: held.some((h) => h.kind === 'redirect'),
@@ -48,7 +50,7 @@ export function classifyOrder(
   });
 
   if (referred) return shape(5, 'kam', referred.owner, referred);
-  if (byB2BRep) return shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), repName(o.assignedTo), owned);
+  if (byB2BRep) return shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), placedBy, owned);
   if (owned) return shape(bookedOnB2B ? 3 : 4, owned.team, owned.owner, owned);
   const unowned = held.find((h) => h.kind === 'unowned');
   if (unowned) return shape(bookedOnB2B ? 6 : 8, null, '', unowned);

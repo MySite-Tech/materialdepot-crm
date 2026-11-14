@@ -166,9 +166,15 @@ that is not a gap.
   when the team list did not load, and the form says so. The KAM slot's Change
   opens the Account card's picker, so the firm still has one KAM control. EC stays
   typed, because a store BM is not on the B2B team.
+- **No B2B person is ever an EC SPoC (2026-11-14).** The user: B2B people can raise
+  and own orders, but they do it as Inbound, Outreach or KAM, never at an EC. The EC
+  SPoC is the store person who serves the firm offline. `b2bSellerTest` (team names,
+  the roster, a placeholder name like "none", or an order whose rep is homed on the
+  `B2B` branch) is applied to the logged entry, the derived one and the "by EC SPoC"
+  line, and Save refuses a B2B name in the EC slot.
 - **A slot fills itself where a link exists, and a manager can log one.**
   `firmSpocs` reads Inbound and Outreach from the leads on the firm's numbers,
-  KAM from `client.kam`, EC from the BM on the last order. An entry in
+  KAM from `client.kam`, EC from the store rep on the last placed order. An entry in
   `spoc_log` beats the derived value. The KAM slot has no log of its own:
   `assignments` already is one, so it changes under Account.
 - **Most firms will show empty slots, and that is correct.** Measured on real
@@ -183,7 +189,7 @@ that is not a gap.
 - **Sales by SPoC splits orders by who held the firm when the order was created**
   (`spocSales`). Every order lands in exactly one row, including "Before the
   first SPoC on record" for firms loaded with a history. Per month is what shows
-  a drop after a move. EC BMs are a separate line and never added, the same rule
+  a drop after a move. Store reps are a separate line and never added, the same rule
   as assisted revenue.
 - **The split stays on Created, not placement (2026-11-05).** It asks who held the
   firm when the cart was raised, the same gate the Overview's classifier uses. The
@@ -224,11 +230,16 @@ is per browser, stored as the hidden keys so a column added later shows up by it
 - **Inbound and Outreach SPoC use `firmLinks` and `firmSpocs`**, the Firm page's own
   rule, so the list and the page cannot disagree. They run on the visible page only,
   because each is a scan of every lead. This adds two reads on open.
-- **EC SPoC shows only a logged name here, else "Not logged".** The Firm page's
-  fallback, the BM on the last order, needs ticket rows, and the list would need one
-  request per firm. `/crm/leads/b2b-bulk/` could return that BM (`backends.md`
-  §Owed by Django row 13). Never read `firmSpocs`'s "No order at an EC yet" in the
-  list: it is passed no orders, so that text would be false.
+- **EC SPoC is a logged name, else the store rep on the firm's last order at an EC
+  in the last six months (2026-11-14).** Until then the list showed only logged names,
+  production had none logged, so every row read "Not logged" and the filter matched
+  nothing. `GET /api/b2b/revenue/ec-spocs` returns, per number, the newest order not
+  booked on the B2B branch and not raised by a B2B rep (types 1 and 2), from the six
+  monthly reports the Overview's trend already caches (`buildEcSpocs`). That is one
+  request on open, and no Django read when the trend is warm. A firm whose last store
+  order is older than six months reads "—". Older history still waits on
+  `backends.md` §Owed by Django row 13. While it loads or if it fails, the column and
+  its filter read "…" or Unknown.
 
 ### EC visits from the Firm page (2026-10-29)
 

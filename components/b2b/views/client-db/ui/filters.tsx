@@ -19,7 +19,7 @@ export function ColumnFilter({ k, value, options, disabled, onChange }: {
 }) {
   const placeholder = TEXT_FILTERS[k];
   if (placeholder !== undefined) {
-    return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={`Filter ${filterColumnLabel(k)}`} className={controlCls(!!value.trim())} />;
+    return <input value={value} disabled={!!disabled} title={disabled} onChange={(e) => onChange(e.target.value)} placeholder={disabled ? 'Unknown' : placeholder} aria-label={`Filter ${filterColumnLabel(k)}`} className={controlCls(!!value.trim()) + ' disabled:opacity-50'} />;
   }
   const list = [...(FIXED_FILTER_OPTIONS[k] ?? []), ...(options ?? [])];
   return (

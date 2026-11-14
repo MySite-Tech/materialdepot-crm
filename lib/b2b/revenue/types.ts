@@ -27,7 +27,12 @@ export interface Holder {
 
 export type NumberBook = Map<string, Holder[]>;
 
-export type RepTeams = Map<string, B2BTeam[]>;
+export interface B2BRepEntry {
+  name: string;
+  teams: B2BTeam[];
+}
+
+export type RepTeams = Map<string, B2BRepEntry>;
 
 export type OrderInput = CRMLeadRow;
 
@@ -151,6 +156,20 @@ export interface MonthWindow {
 export interface TrendMonth extends MonthWindow, Record<RevenueChannel, number> {
   orders: number;
   truncated: boolean;
+}
+
+export interface EcSpocSeen {
+  name: string;
+  store: string;
+  at: string;
+  enquiryId: string;
+}
+
+export interface EcSpocReport {
+  from: string;
+  to: string;
+  spocs: Record<string, EcSpocSeen>;
+  generatedAt: string;
 }
 
 export interface RevenueTrend {
