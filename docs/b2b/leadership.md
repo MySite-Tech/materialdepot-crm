@@ -263,7 +263,22 @@ matches nothing sees a notice, not an empty card.
   notes. That is the real gap against the sheet, not a bug.
 - **Inbound qualified** credits `intake.inboundOwner` (the owner at hand-off)
   once Outreach accepted *and* the lead converted or had 2 follow-ups. Rejected
-  and waiting rows are listed and not counted.
+  and waiting rows are listed and not counted. **Since 2026-11-14 it starts from
+  every lead the person sent** (`outreachReferral.at`), not only from Outreach rows
+  with an intake link, so nothing sent goes unlisted:
+  - still in Outreach's pool (no manager has assigned it) → "Sent, waiting for an
+    Outreach manager to assign it", dated the send, not counted;
+  - no intake link, but an Outreach row created on or after the send day holds one
+    of its numbers → the BM re-entered it by hand (Sai Suresh, as Own research, 6
+    and 9 Nov). Credited on the same rule as an accepted hand-off, dated the row's
+    creation. A row that predates the send reads "Outreach already had this
+    number", not counted. `inboundPool` hides both from the pool, which is why
+    they vanished entirely before;
+  - **an order placed at Inbound (`stage` Closed) counts as converted.** Before,
+    only the Outreach row's status was read, so Vikas's two closed hand-offs read
+    "0 of 2 follow-ups, not credited yet".
+  On production for 1–14 Nov Vikas went from 0 credited with 3 rows to 2 credited
+  with 9 rows. The activity feed's "Sent to Outreach" uses the same rows.
 - **Revenue is the Overview's per-order rule (2026-11-12).** See §Revenue is the
   Overview's per-order rule below. Work done before a reassignment is never moved:
   calls, meetings and interactions are credited to whoever logged them.

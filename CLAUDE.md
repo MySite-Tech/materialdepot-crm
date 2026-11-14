@@ -661,6 +661,12 @@ backend PR, and b2b-backend has nothing open. Start new work from `origin/main`.
 - **Team rows now point at the right Kylas users (14 Nov):** Varun Jha keeps 73312
   (Kylas renamed it from "Emma Maria"), pratham pandey's wrong link to another
   team's user was removed, and Sai Suresh has no Kylas account to link.
+- **Inbound Qualified lists every lead sent (CRM PR #56, 14 Nov, live).** Vikas's tile
+  read 0 while he had sent 10 leads. It read only Outreach rows with an intake link, so
+  leads in Outreach's unassigned pool and leads a BM re-entered as Own research were
+  invisible, and an order placed at Inbound did not count as converted. The counting rule
+  is unchanged (`docs/b2b/leadership.md` §KPI rules). Four of his leads (6–14 Nov) still
+  wait for an Outreach manager to assign them.
 - **Hardi's "only 4 calls" (14 Nov) was not a bug.** Production held 10 calls under
   her number and the engine counted 10. Kylas had no calls by her that day. Calls
   count only when logged in the CRM.
