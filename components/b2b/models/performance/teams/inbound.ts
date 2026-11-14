@@ -1,6 +1,6 @@
 import { isEndConsumer } from '../../../constants/inbound';
 import { CallAttempt } from '../../../types/inbound';
-import { sentToOutreach } from '../../inbound';
+import { missingForStage, sentToOutreach } from '../../inbound';
 import { InboundLead, OutreachLead } from '../../mock-data';
 import { FOLLOW_UPS_REQUIRED, followUpMeetings } from '../../outreach';
 import { INBOUND_POOL_STAGES } from '../../outreach/intake';
@@ -19,25 +19,60 @@ const DEFS: PerfKpiDef[] = [
   { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by someone not on the Inbound team list (a manager, say) goes to the lead owner. Target 1,500 a month per head.', weight: 20 },
   { key: 'firstCalls', kind: 'Effort', label: 'New leads called',       short: 'First calls',    unit: 'count', target: null,               daily: true,  rule: 'Leads they own whose first ever call attempt fell in the period.' },
   { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).', weight: 10 },
-  { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with contact name, mobile, firm name, segment, client type, city, a status past New, a next follow-up date while open and not sent to Outreach, and a note on every call ÷ leads they called.', weight: 10 },
+  { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with everything their current stage needs ÷ leads they called, judged on the lead as it stands now. Every lead: a mobile, and a next follow-up date while open and not sent to Outreach. Once a call connects, and unless the lead was closed Lost or Invalid: contact name, firm name, segment, client type, city and a status past New. Then, for a stage set in the CRM, what that stage needs, the same list its save gate checks: an Enq ID at PI Shared and Closed, a reason at Lost, a reason and a note at Invalid, and the hand-off details once sent to Outreach. A connected call needs its note. An RNR has no note field and leaves the lead at New, so neither counts against it.', weight: 10 },
   { key: 'revenue',    kind: 'Output', label: 'Revenue',                short: 'Revenue',        unit: 'L',     target: 25,   per: 'month', daily: true,  rule: 'Every order placed in the period and credited to them, in four channels: they were the B2B rep on the cart, the number was on a lead they own from before the cart, or a manager credited the enquiry to them. EC orders count. The same per-order rule as the Overview, so the two always agree.', weight: 40 },
   { key: 'qualified',  kind: 'Output', label: 'Qualified for Outreach', short: 'Qualified',      unit: 'count', target: 30,   per: 'month', daily: true,  rule: `Every lead they sent to Outreach is listed. One counts once an Outreach BM took it (accepted the hand-off, or added its number as a lead after it was sent) and it converted, at Inbound or Outreach, or Outreach held ${FOLLOW_UPS_REQUIRED} follow-ups. Leads still waiting for a BM and rejections are listed with the reason.`, weight: 20 },
 ];
 
 const OPEN_NEEDS_DATE: InboundLead['stage'][] = ['Follow up', 'PI Shared', 'Connected - Need nurturing'];
 
+const CLOSED_OUT: InboundLead['stage'][] = ['Lost', 'Invalid'];
+
 const filled = (v: string | undefined) => !!String(v || '').trim();
 
-const FIELDS: [string, (l: InboundLead) => boolean][] = [
-  ['contact name', (l) => filled(l.contactName)],
-  ['mobile', (l) => isMobile(l.phone)],
-  ['firm name', (l) => isEndConsumer(l.clientType) || filled(l.companyName)],
+const same = (a: string | undefined, b: string | undefined) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
+const kylasFirm = (l: InboundLead): boolean => {
+  const c = String(l.company || '').trim();
+  return !!c && c !== 'Unnamed lead' && !/^[\d\s+()-]+$/.test(c) && !same(c, l.contactName) && !same(c, l.primaryContactName);
+};
+
+type Check = [string, (l: InboundLead) => boolean];
+
+const ALWAYS: Check[] = [
+  ['mobile', (l) => isMobile(l.phone) || isMobile(l.primaryContactPhone)],
+  ['next follow-up', (l) => !OPEN_NEEDS_DATE.includes(l.stage) || sentToOutreach(l) || !!l.followUpDate],
+  ['hand-off details', (l) => {
+    const r = l.outreachReferral;
+    return !sentToOutreach(l) || (!!r && filled(r.decisionMaker) && !!r.meetingDate && (filled(r.summary) || filled(r.note)));
+  }],
+];
+
+const ONCE_REACHED: Check[] = [
+  ['contact name', (l) => filled(l.primaryContactName) || filled(l.contactName)],
+  ['firm name', (l) => isEndConsumer(l.clientType) || filled(l.companyName) || kylasFirm(l)],
   ['segment', (l) => isEndConsumer(l.clientType) || !!l.segment],
   ['client type', (l) => !!l.clientType],
   ['city', (l) => !!l.location],
   ['status', (l) => l.stage !== 'New'],
-  ['next follow-up', (l) => !OPEN_NEEDS_DATE.includes(l.stage) || sentToOutreach(l) || !!l.followUpDate],
 ];
+
+const reached = (l: InboundLead) => (l.callAttempts || []).some((a) => a.outcome === 'Connected');
+
+function adherenceRow(l: InboundLead, theirs: CallAttempt[]): PerfRow {
+  const asks = reached(l) && !CLOSED_OUT.includes(l.stage) ? [...ALWAYS, ...ONCE_REACHED] : ALWAYS;
+  const gaps = asks.filter(([, ok]) => !ok(l)).map(([label]) => label);
+  const stage = l.statusChangedAt
+    ? missingForStage({ status: l.stage, followUpDate: l.followUpDate, enqId: l.enqId, lostReason: l.lostReason, invalidReason: l.invalidReason, invalidNote: l.invalidNote })
+    : [];
+  gaps.push(...stage.map((n) => n.label).filter((label) => !gaps.includes(label) && !(label === 'next follow-up' && sentToOutreach(l))));
+  if (theirs.some((a) => a.outcome === 'Connected' && !filled(a.note))) gaps.push('call note');
+  const scope = [
+    !reached(l) ? 'not reached yet, so no client details asked' : CLOSED_OUT.includes(l.stage) ? `${l.stage}, so no client details asked` : '',
+    !l.statusChangedAt && l.stage !== 'New' ? `${l.stage} carried over from before the CRM's stage gates` : '',
+  ].filter(Boolean).map((t) => ` · ${t}`).join('');
+  return { id: l.id, title: title(l), at: theirs[theirs.length - 1].at, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : `Complete${scope}` };
+}
 
 const title = (l: InboundLead) => String(l.companyName || l.company || l.contactName || l.phone || l.id);
 
@@ -150,11 +185,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const handled = data.inbound
     .map((l) => ({ l, theirs: (l.callAttempts || []).filter((a) => inPeriod(a.at, period) && byThem(l, a)) }))
     .filter(({ theirs }) => theirs.length);
-  const adherence: PerfRow[] = handled.map(({ l, theirs }) => {
-    const gaps = FIELDS.filter(([, ok]) => !ok(l)).map(([label]) => label);
-    if (theirs.some((a) => !filled(a.note))) gaps.push('call note');
-    return { id: l.id, title: title(l), at: theirs[theirs.length - 1].at, counts: !gaps.length, note: gaps.length ? `Missing ${gaps.join(', ')}` : 'Complete' };
-  });
+  const adherence: PerfRow[] = handled.map(({ l, theirs }) => adherenceRow(l, theirs));
 
   const qualified = handoffs(data, people, owns).map((h) => qualifiedRow(h)).filter((r) => r.at && inPeriod(r.at, period));
   const accepted = qualified.filter((r) => r.note.startsWith('Accepted') || r.note.startsWith('Added by')).length;
@@ -165,6 +196,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
     firstCalls: countValue(firstCalls),
     coverage: {
       value: den === null ? null : pct(counted(coverageRows), den),
+      den: den ?? undefined,
       unknown: den === null,
       rows: coverageRows,
       sub: den === null

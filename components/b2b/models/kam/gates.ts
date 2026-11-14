@@ -65,9 +65,9 @@ export function interactionGateErrors(i: InteractionGateInput, today: string = i
 export function interactionPrompts(i: InteractionGateInput & { temperature?: number }): string[] {
   const prompts: string[] = [];
   if (i.type === 'Meeting' && !String(i.nextFollowUpDate || '').trim()) {
-    prompts.push('No next follow-up date. §4.1 only requires one on a call, so this meeting will not appear in Today\'s Calls or the Follow-up Queue.');
+    prompts.push('No next follow-up date. This meeting will not appear in Today\'s Calls or the Follow-up Queue, and CRM adherence counts it as incomplete.');
   }
-  if (i.type === 'Call' && !String(i.summary || '').trim()) prompts.push('No summary — §3.1 asks for one.');
+  if (i.type === 'Call' && !String(i.summary || '').trim()) prompts.push('No summary. §3.1 asks for one, and CRM adherence counts this call as incomplete.');
   if (typeof i.temperature !== 'number') prompts.push('No account temperature scored, so the account keeps its previous reading (§3.2).');
   return prompts;
 }

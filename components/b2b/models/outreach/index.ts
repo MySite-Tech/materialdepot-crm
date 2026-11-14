@@ -277,15 +277,15 @@ interface OutreachGateInput {
   lostReason?: string;
 }
 
+export const OUTREACH_STAGE_NEEDS: { label: string; stages: OutreachStatus[]; ok: (l: OutreachGateInput) => boolean; error: (s: OutreachStatus) => string }[] = [
+  { label: 'next follow-up date', stages: ['Follow up', 'PI Shared'], ok: (l) => !!l.followUpDate, error: (s) => `A next follow-up date is required to set ${s}.` },
+  { label: 'lost reason', stages: ['Lost'], ok: (l) => !!String(l.lostReason || '').trim(), error: () => 'A lost reason is required to set Lost.' },
+];
+
+export const outreachMissingForStage = (l: OutreachGateInput) => OUTREACH_STAGE_NEEDS.filter((n) => n.stages.includes(l.status) && !n.ok(l));
+
 export function outreachGateErrors(l: OutreachGateInput): string[] {
-  const errs: string[] = [];
-  if ((l.status === 'Follow up' || l.status === 'PI Shared') && !l.followUpDate) {
-    errs.push(`A next follow-up date is required to set ${l.status}.`);
-  }
-  if (l.status === 'Lost' && !String(l.lostReason || '').trim()) {
-    errs.push('A lost reason is required to set Lost.');
-  }
-  return errs;
+  return outreachMissingForStage(l).map((n) => n.error(l.status));
 }
 
 export function outreachStatusPrompts(l: {

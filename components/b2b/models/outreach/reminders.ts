@@ -1,7 +1,7 @@
 import { OutreachLead } from '../mock-data';
 import { withRequirementHistory } from '../requirement';
 import {
-  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting,
+  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting, outreachMissingForStage,
 } from '.';
 import { normalisePhone } from '@/lib/org/utils';
 import { HANDOVER_TAT_HOURS, handoverState, hoursSince, isMobile, orderVerified } from './handover';
@@ -123,11 +123,13 @@ export function outreachCaptureErrors(l: OutreachLead): string[] {
   return errs;
 }
 
-const ADHERENCE: { label: string; ok: (l: OutreachLead) => boolean }[] = [
+type FieldCheck = { label: string; ok: (l: OutreachLead) => boolean; visited?: true };
+
+const ADHERENCE: FieldCheck[] = [
   { label: 'firm name',      ok: (l) => !!String(l.company || '').trim() },
-  ...CAPTURE.filter((c) => c.label !== 'next follow-up date'),
-  { label: 'client type',    ok: (l) => !!l.companyType },
-  { label: 'office address', ok: (l) => !!String(l.officeAddress || '').trim() },
+  ...CAPTURE.filter((c) => c.label !== 'next follow-up date').map((c) => (c.label === 'mobile' ? c : { ...c, visited: true as const })),
+  { label: 'client type',    ok: (l) => !!l.companyType, visited: true },
+  { label: 'office address', ok: (l) => !!String(l.officeAddress || '').trim(), visited: true },
   { label: 'meeting notes',  ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('notes')) },
   { label: 'who they met',   ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('who you met')) },
   { label: 'next follow-up date', ok: (l) => !needsNextStep(l) },
@@ -135,8 +137,15 @@ const ADHERENCE: { label: string; ok: (l: OutreachLead) => boolean }[] = [
   { label: 'KAM handover', ok: (l) => l.status !== 'Closed' || !!l.handover },
 ];
 
-export function outreachAdherence(l: OutreachLead): string[] {
+export function outreachFieldGaps(l: OutreachLead): string[] {
   return ADHERENCE.filter((a) => !a.ok(l)).map((a) => a.label);
+}
+
+export function outreachAdherence(l: OutreachLead): string[] {
+  const visited = l.status !== 'Lost' && completedMeetings(l.meetings).length > 0;
+  const gaps = ADHERENCE.filter((a) => (visited || !a.visited) && !a.ok(l)).map((a) => a.label);
+  const stage = l.statusChangedAt ? outreachMissingForStage({ status: l.status, followUpDate: l.followUpDate, lostReason: l.lostReason }).map((n) => n.label) : [];
+  return [...gaps, ...stage.filter((label) => !gaps.includes(label))];
 }
 
 export type ReminderLevel = 'overdue' | 'today' | 'todo';
@@ -204,7 +213,7 @@ export function outreachReminders(
 
   if (held.length && ctx.onWaitlist === false) add('waitlist', 'todo', 'Not on the Studio Space waitlist yet — ask them to join');
 
-  const missing = outreachAdherence(l).filter((m) => m !== 'meeting notes' && m !== 'who they met' && m !== 'next follow-up date'
+  const missing = outreachFieldGaps(l).filter((m) => m !== 'meeting notes' && m !== 'who they met' && m !== 'next follow-up date'
     && m !== 'Enq ID of the first order' && m !== 'KAM handover');
   if (missing.length) add('fields', 'todo', `Missing ${missing.join(', ')}`);
 

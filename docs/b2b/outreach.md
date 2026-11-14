@@ -421,6 +421,17 @@ shown as each tile's tooltip; the non-obvious ones:
   Since 2026-10-29 it also needs the owner's role, team size and "who they
   met" (from the cut-over date), so the figure drops for leads touched before
   those were captured. That drop is the point, not a regression.
+  **The visit fields are asked only once a meeting is held and the lead is not Lost
+  (2026-11-14)**, the same gate as the drawer: owner name, role, segment, team
+  size, client type and office address. Before that, a touched lead needs a firm
+  name, a mobile and its logs. Until then every "Yet to Meet" lead failed for
+  fields nobody can know before the visit: on November's production rows that was
+  all 51 of pratham's misses (73%, now 100%) and all 10 of Vilok's. The reminders
+  still list every missing field (`outreachFieldGaps`), so a BM is nudged before
+  the visit without being scored on it. It also asks what the current stage's
+  status gate asked for (`OUTREACH_STAGE_NEEDS`: a follow-up date at Follow up and
+  PI Shared, a reason at Lost), for a stage the CRM set (`docs/b2b/leadership.md`
+  §KPI rules).
 - **Handover %** denominator is *all* conversions in the period, verified or not.
 - **Revenue** is first-order value of verified, new-onboarding conversions only.
   Later orders from the same client are not in it — this CRM does not track
