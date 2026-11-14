@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { runInboundRotation } from '@/lib/b2b/team';
 import { INBOUND_BACKLOG_BATCH } from '@/lib/b2b/team/constants';
 import type { RotationOutcome, TeamMember } from '@/lib/b2b/team/types';
+import { kylasOwnerNote } from '@/lib/b2b/team/utils';
 
 export function RotationPanel({ rotation }: { rotation: TeamMember[] }) {
   const [result, setResult] = useState<RotationOutcome | null>(null);
@@ -96,6 +97,14 @@ export function RotationPanel({ rotation }: { rotation: TeamMember[] }) {
               {result.failed.map((f) => (
                 <p key={f.leadId} className="text-red-600 font-mono text-[11.5px]">{f.leadId}: {f.error}</p>
               ))}
+              {result.kylas && (
+                <p className="mt-1.5 text-gray-500">
+                  {result.dryRun
+                    ? `${result.kylas.pending === 1 ? '1 lead' : `${result.kylas.pending} leads`} assigned in the CRM ${result.kylas.pending === 1 ? 'is' : 'are'} still on Hardi in Kylas and would be moved there too.`
+                    : `Kylas owner updated on ${result.kylas.written} lead${result.kylas.written === 1 ? '' : 's'}.`}
+                </p>
+              )}
+              {!result.dryRun && kylasOwnerNote(result.kylas) && <p className="text-amber-700">{kylasOwnerNote(result.kylas)}</p>}
             </>
           )}
         </div>

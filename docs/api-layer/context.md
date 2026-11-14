@@ -275,10 +275,12 @@ its Supabase half needs.
 
 Two things it does that `kylasFetch` callers do not:
 
-- **It only reads (2026-11-03).** The owner PATCH (`setLeadOwner`) and its read
-  back are gone: inbound ownership lives on the CRM row (`docs/b2b/inbound.md`
-  §The CRM owns a lead once it is imported). `kylas()` is exported for the import
-  in `lib/server/b2b-inbound/`, which searches and never writes.
+- **Its one write is the lead owner (2026-11-14).** `setLeadOwner` sends a JSON
+  Patch on `/ownerId` after the CRM deals or moves a lead, and checks the owner
+  Kylas answers with, without a second read. Ownership still lives on the CRM row,
+  and nothing reads it back from Kylas (`docs/b2b/inbound.md` §The CRM's owner is
+  written to Kylas). From 3 to 14 Nov it wrote nothing. `kylas()` is exported for
+  the import in `lib/server/b2b-inbound/`, which searches and never writes.
 - **The pool search asks for the full lead (2026-11-05)**, `B2B_INBOUND_FIELDS`
   rather than id, created and owner. That is what lets the round robin insert a
   lead the import never brought in, with no second Kylas call
@@ -297,8 +299,10 @@ Two things it does that `kylasFetch` callers do not:
   so it cannot name the caller. `docs/backends.md` §Owed by Django row 12 has the
   ask. The 15s total exists to outlast the cycle. `kylasFetch` now retries five
   times (15.5s) for the same reason.
-- **Reassign never reaches Kylas (2026-11-03).** It reads the CRM row, writes
-  the new owner onto it and logs the assignment, for `crm-…` and Kylas ids alike.
+- **Reassign writes the CRM row first, then the Kylas owner (2026-11-14).** The
+  row and the assignment log are the record; the Kylas write is best effort and
+  skipped for `crm-…` ids, which Kylas has never seen. A refused or rate-limited
+  write is returned as `kylas` on the outcome and shown, never thrown.
 
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 

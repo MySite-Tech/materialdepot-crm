@@ -2,14 +2,15 @@ import { normalisePhone } from '@/lib/org/utils';
 import {
   INBOUND_BACKLOG_BATCH,
   INBOUND_INTAKE_KYLAS_ID,
+  INBOUND_KYLAS_OWNER_WRITES,
   INBOUND_ROTATION_BATCH,
   INBOUND_ROTATION_START,
   INBOUND_ROTATION_WINDOW_DAYS,
 } from '@/lib/b2b/team/constants';
-import type { MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
+import type { KylasOwnerWrites, MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { B2BBackendError } from '@/lib/server/b2b-backend';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
-import { intakePool, kylasUserForPhone, listKylasUsers, type PoolLead } from './kylas';
+import { KylasBusy, intakePool, kylasUserForPhone, listKylasUsers, setLeadOwner, type PoolLead } from './kylas';
 import { importInbound, inboundOwnerNames, inboundRowFromKylas, ownerChange, readInboundRows, writeInbound, type ImportOutcome, type InboundRows } from '@/lib/server/b2b-inbound';
 import {
   assignedLeadIdsSince,
@@ -38,6 +39,39 @@ function untouchedOnIntake(rows: InboundRows): PoolLead[] {
       && !(Array.isArray(r.meta_data?.call_attempts) && r.meta_data.call_attempts.length))
     .map(([id, r]) => ({ id, createdAt: String(r.meta_data?.lead_created_at || r.created_at || '') }));
 }
+
+interface OwnerMove {
+  leadId: string;
+  kylasUserId: number;
+}
+
+const IN_KYLAS = /^\d+$/;
+
+async function writeKylasOwners(all: OwnerMove[]): Promise<KylasOwnerWrites> {
+  const moves = all.filter((m) => IN_KYLAS.test(m.leadId));
+  const out: KylasOwnerWrites = { written: 0, failed: [], pending: Math.max(0, moves.length - INBOUND_KYLAS_OWNER_WRITES) };
+  const now = moves.slice(0, INBOUND_KYLAS_OWNER_WRITES);
+  for (let i = 0; i < now.length; i++) {
+    try {
+      await setLeadOwner(now[i].leadId, now[i].kylasUserId);
+      out.written += 1;
+    } catch (e) {
+      if (e instanceof KylasBusy) {
+        out.pending += now.length - i;
+        break;
+      }
+      const error = e instanceof Error ? e.message : String(e);
+      console.error(`[b2b] Kylas owner write failed for lead ${now[i].leadId}: ${error}`);
+      out.failed.push({ leadId: now[i].leadId, error });
+    }
+  }
+  return out;
+}
+
+const crmOwnerId = (row: { meta_data?: Record<string, any> } | undefined): number | null => {
+  const id = Number(row?.meta_data?.owner_kylas_id);
+  return Number.isFinite(id) && id > 0 ? id : null;
+};
 
 function rotationSince(now = Date.now()): string {
   const start = new Date(INBOUND_ROTATION_START).getTime();
@@ -129,8 +163,14 @@ export async function rotateInbound(byName: string, dryRun: boolean, backlog: bo
   outcome.backlog = backlog ? 0 : older.length;
 
   const plan = planRotation(batch, order, await lastRoundRobinKylasId());
+  const dealt = new Set(plan.map(({ lead }) => lead.id));
+  const behind: OwnerMove[] = pool.flatMap((l) => {
+    const owner = crmOwnerId(rows.get(l.id));
+    return owner && owner !== INBOUND_INTAKE_KYLAS_ID && !dealt.has(l.id) ? [{ leadId: l.id, kylasUserId: owner }] : [];
+  });
   if (dryRun) {
     outcome.assigned = plan.map(({ lead, member }) => ({ leadId: lead.id, to: member.name }));
+    outcome.kylas = { written: 0, failed: [], pending: behind.length };
     return outcome;
   }
 
@@ -148,25 +188,31 @@ export async function rotateInbound(byName: string, dryRun: boolean, backlog: bo
     });
     if (claim != null) claimed.push({ leadId: lead.id, claim, member, raw: lead.raw });
   }
-  if (!claimed.length) return outcome;
-
   const release = async (ids: Set<string>, error: string) => {
     for (const c of claimed.filter((x) => ids.has(x.leadId))) {
       await releaseClaim(c.claim).catch(() => undefined);
       outcome.failed.push({ leadId: c.leadId, error });
     }
   };
-  try {
-    const names = inboundOwnerNames(members);
-    await writeInbound(claimed.map((c) => ({
-      id: c.leadId,
-      change: ownerChange(c.member.name, c.member.kylasUserId as number),
-      fallback: c.raw ? inboundRowFromKylas(c.raw, names) : undefined,
-    })));
-    for (const c of claimed) outcome.assigned.push({ leadId: c.leadId, to: c.member.name });
-  } catch (e) {
-    await release(new Set(claimed.map((c) => c.leadId)), e instanceof Error ? e.message : String(e));
+  const moves: OwnerMove[] = [];
+  if (claimed.length) {
+    try {
+      const names = inboundOwnerNames(members);
+      await writeInbound(claimed.map((c) => ({
+        id: c.leadId,
+        change: ownerChange(c.member.name, c.member.kylasUserId as number),
+        fallback: c.raw ? inboundRowFromKylas(c.raw, names) : undefined,
+      })));
+      for (const c of claimed) {
+        outcome.assigned.push({ leadId: c.leadId, to: c.member.name });
+        const inKylas = Number(c.raw?.ownerId) || INBOUND_INTAKE_KYLAS_ID;
+        if (c.member.kylasUserId !== inKylas) moves.push({ leadId: c.leadId, kylasUserId: c.member.kylasUserId as number });
+      }
+    } catch (e) {
+      await release(new Set(claimed.map((c) => c.leadId)), e instanceof Error ? e.message : String(e));
+    }
   }
+  outcome.kylas = await writeKylasOwners([...moves, ...behind]);
   return outcome;
 }
 
@@ -182,10 +228,10 @@ export async function reassignInboundLead(
   toPhone: string,
   reason: string,
   byName: string,
-): Promise<TeamMember> {
+): Promise<{ member: TeamMember; kylas?: KylasOwnerWrites }> {
   const out = await reassignInboundLeads([{ leadId, toPhone }], reason, byName);
   if (out.failed.length) throw new InputError(out.failed[0].error);
-  return memberForPhone(teamMembers((await readMembers()).members, 'inbound'), toPhone) as TeamMember;
+  return { member: memberForPhone(teamMembers((await readMembers()).members, 'inbound'), toPhone) as TeamMember, kylas: out.kylas };
 }
 
 export async function reassignInboundLeads(
@@ -228,5 +274,6 @@ export async function reassignInboundLeads(
     });
     outcome.moved.push({ leadId, name: to.name, kylasUserId: to.kylasUserId as number });
   }
+  outcome.kylas = await writeKylasOwners(planned.map(({ leadId, to }) => ({ leadId, kylasUserId: to.kylasUserId as number })));
   return outcome;
 }

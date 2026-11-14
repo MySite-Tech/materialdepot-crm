@@ -33,6 +33,8 @@ export const INBOUND_BACKLOG_BATCH = 50;
 
 export const INBOUND_ROTATION_MAX_PAGES = 3;
 
+export const INBOUND_KYLAS_OWNER_WRITES = 30;
+
 export const INBOUND_ROTATION_INTERVAL_MS = 300_000;
 
 export const INBOUND_ROTATION_RETRY_NOTE = 'The CRM tries again every 5 minutes while Inbound Leads is open.';

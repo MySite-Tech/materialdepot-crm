@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { reassignInboundLead } from '@/lib/b2b/team';
 import type { TeamMember } from '@/lib/b2b/team/types';
+import { kylasOwnerNote } from '@/lib/b2b/team/utils';
 import { InboundLead } from '../../../models/mock-data';
 import { SectionCard } from '../../../ui/inbound-chips';
 import { ClientSpocs } from '../../../models/inbound';
@@ -36,7 +37,7 @@ export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReass
     setSaving(true);
     setError(null);
     reassignInboundLead(draft.id, to.phone, reason)
-      .then(() => onReassigned(to))
+      .then(async ({ kylas }) => (await onReassigned(to)) || kylasOwnerNote(kylas))
       .then((failed) => { setToPhone(''); setReason(''); if (failed) setError(failed); })
       .catch((e) => setError(e instanceof Error ? e.message : 'Reassign failed'))
       .finally(() => setSaving(false));

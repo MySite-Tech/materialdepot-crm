@@ -87,7 +87,9 @@ fallback anywhere upstream of a write.
 ### The CRM owns a lead once it is imported (2026-11-03)
 
 The user's rule, after reps lost work on 2 Nov: **a lead comes from Kylas once,
-and from then on only the CRM changes it. Nothing is written to Kylas.** Before
+and from then on only the CRM changes it.** Nothing but the owner is written to
+Kylas, and Kylas never changes a CRM row (§The CRM's owner is written to Kylas,
+2026-11-14). Before
 this, the board was one Kylas page of 25 plus every CRM row, merged on every
 load. Three things followed from that, all seen on production data that day:
 
@@ -448,8 +450,9 @@ How it works without Kylas:
   only test. Never read `kylas_lead_id` as "this is in Kylas".
 - **Every Kylas read is skipped for these leads**: the Presales detail, notes and
   call logs (the drawer shows an "Added in the CRM" card instead). Since
-  2026-11-03 nothing writes to Kylas for any lead, so save and reassign treat
-  these the same as imported leads.
+  2026-11-03 a save writes nothing to Kylas for any lead. A reassign writes the
+  owner to Kylas for imported leads only: `writeKylasOwners` skips ids that are
+  not numeric.
 - The list and board tag them **CRM**.
 
 Verified 2026-10-30 in `npm run dev:sandbox`: add, the required-field errors,
@@ -567,9 +570,9 @@ production that day (Metabase db 38):
   her switch was turned back on from the Team tab, and she got one lead at 08:08.
   Nothing showed who had changed it, so each Team row now prints "changed by …"
   with the time (`updated_by`, `updated_at`).
-- **Kylas will always show Hardi.** It hands every qualified lead to the intake
-  user, and the CRM has written nothing to Kylas since 2026-11-03. Anyone reading
-  owners in Kylas sees Hardi on everything. The Team tab says so.
+- **Kylas showed Hardi on everything** until 2026-11-14. It hands every qualified
+  lead to the intake user, and from 3 to 14 Nov the CRM wrote nothing back. See
+  §The CRM's owner is written to Kylas.
 - **The real gap: 329 leads at New, never called and never dealt, owned by the
   intake id in the CRM** (by creation month: 33 Aug, 163 Sep, 133 Oct). The 3 Nov
   import inserts each lead under its Kylas owner, and the rotation only deals
@@ -595,6 +598,47 @@ member from the page's copy, so a stale page could switch someone's round robin
 back on while a manager changed their access. `saveMember` now reads the stored
 row and fills whatever the request leaves out. The same shape as §A save sends a
 change, not a row.
+
+### The CRM's owner is written to Kylas (2026-11-14)
+
+The user: the round robin exists only because Kylas parks every qualified lead on
+Hardi. Ideally Kylas would spread them itself. While it does not, the CRM deals
+them, and whoever the CRM gives a lead to must own it in Kylas too, so Django's
+"created by" and "assigned to" and the orders follow the right person. On 14 Nov,
+291 leads Vikas owned in the CRM were still Hardi's in Kylas.
+
+- **Only the owner, one way.** `setLeadOwner` is one JSON Patch on `/ownerId`. The
+  CRM never reads the owner back after import, so a Kylas workflow that moves a lead
+  again cannot change the CRM. Stage, requirement, calls and notes stay CRM-only,
+  because the 2 Nov owner jumps came seconds after a Requirement PATCH.
+- **When it writes** (`writeKylasOwners`, `lib/server/b2b-team/index.ts`): after a
+  round robin deal, unless the lead went to the user Kylas already shows; after
+  every reassign, single or bulk; and on each sync, for leads still on the intake id
+  in Kylas's 7-day pool whose CRM owner is someone else. That last case repairs a
+  write that failed earlier. At most `INBOUND_KYLAS_OWNER_WRITES` (30) a run, and it
+  stops at the first 429 and counts the rest as pending.
+- **Failures are said, not hidden.** The Team tab's round robin result, the bulk
+  reassign bar and the drawer's reassign say how many leads Kylas refused or did not
+  reach yet (`kylasOwnerNote`), and the server logs each one. The CRM owner stands
+  either way.
+- **If Kylas starts assigning reps itself,** nothing here needs switching off. The
+  round robin deals only leads Kylas left on the intake id, so it goes quiet.
+- **If a Kylas workflow moves leads back to Hardi** after these writes, each sync
+  would rewrite up to 30 of them every 5 minutes. Watch the server log for the same
+  ids repeating, and turn that workflow off in Kylas rather than adding a guard here.
+- **Older leads: `scripts/inbound-kylas-owner-backfill.mjs`**, dry run unless
+  `--apply`, needs `--backend`, `--secret` and `KYLAS_API_KEY`. It writes the CRM
+  owner on every Inbound lead where Kylas differs, but only where Kylas holds it with
+  a B2B person (the legacy six or a team member). A lead Kylas has with someone
+  outside B2B, such as presales, stays there. Dry run on production 14 Nov: 384 to
+  move (291 Hardi → Vikas, 54 Hardi → Mandeep, 16 Vikas → Vilok, 21 back to Hardi,
+  2 Hardi → Vilok), 39 left with presales, 1 CRM owner no longer active in Kylas.
+- **Mandeep's leads went to Hardi and Vikas (2026-11-14, production, the user's
+  ask: he has left).** All 315 rows he owned, open and closed, alternating within
+  each group by lead date, through `/rows/{id}/change` with an assignment-log row
+  each (`kind: reassign`): 195 open split 98 / 97, 120 closed 60 / 60. Closed ones
+  moved too, so an order from an old lead credits someone still here. The backfill
+  then ran with `--apply`: 606 owners written to Kylas, the 40 with presales left.
 
 ### Gates: the PRD's four, Invalid's three, nine soft
 

@@ -9,7 +9,7 @@ import { AssignTarget, AssignTeams, isRoundRobin } from '../ui/assign-bar';
 import { moveInboundLeads } from '@/lib/b2b/team';
 import { INBOUND_ROTATION_BATCH } from '@/lib/b2b/team/constants';
 import type { TeamMember } from '@/lib/b2b/team/types';
-import { teamMembers } from '@/lib/b2b/team/utils';
+import { kylasOwnerNote, teamMembers } from '@/lib/b2b/team/utils';
 
 const REASON = 'Reassigned from the Inbound tab';
 
@@ -58,12 +58,13 @@ export function useInboundReassign({ leads, members, onMoved }: {
     setBusy(true);
     setError(null);
     try {
-      const { moved, failed } = await moveInboundLeads(plan, REASON);
+      const { moved, failed, kylas } = await moveInboundLeads(plan, REASON);
       onMoved(moved);
       pickAll(failed.map((f) => f.leadId));
       const stayed = selected.length - plan.length;
       if (stayed) setNote(`${plural(moved.length)} moved. ${stayed} stayed where ${stayed === 1 ? 'it was' : 'they were'}: closed, lost, invalid, or already with that person.`);
       if (failed.length) setError(`${plural(moved.length)} moved, ${failed.length} did not: ${failed[0].error}`);
+      else if (kylasOwnerNote(kylas)) setError(kylasOwnerNote(kylas));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reassign failed');
     } finally {
