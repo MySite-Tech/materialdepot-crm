@@ -2,6 +2,10 @@ import { contactNumbers, normalizeContactNumber } from '../../utils/client';
 import { ClientEntity, EnquirySpoc, SpocLogEntry, SpocRole } from '../../../types/client';
 import { dealIsOrder } from './deals';
 import { sameRep } from '../../outreach/handover';
+import { B2B_ROSTER } from '../../roster';
+import { B2B_BRANCH } from '@/lib/b2b/revenue/constants';
+import type { EcSpocReport, EcSpocSeen } from '@/lib/b2b/revenue/types';
+import { isPlaceholderName } from '@/lib/b2b/team/utils';
 
 export interface InboundLink { id: string; owner?: string; createdAt?: string; phones: string[] }
 
@@ -34,7 +38,18 @@ export interface SpocSales {
   byEc: { name: string; orders: number; value: number }[];
 }
 
-interface SalesOrder { orderValue: number; status: string; createdAt?: string; spoc?: string }
+interface SalesOrder { orderValue: number; status: string; createdAt?: string; spoc?: string; branch?: string }
+
+export type B2BSellerTest = (spoc?: string, branch?: string) => boolean;
+
+const nameKey = (n?: string) => String(n ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+export function b2bSellerTest(teamNames: string[]): B2BSellerTest {
+  const names = new Set([...teamNames, ...B2B_ROSTER.flatMap((r) => [r.name, r.fullName])].map(nameKey).filter(Boolean));
+  return (spoc, branch) => branch === B2B_BRANCH || names.has(nameKey(spoc)) || isPlaceholderName(spoc);
+}
+
+const ecSeller = (isB2B: B2BSellerTest) => (o: SalesOrder) => dealIsOrder(o.status) && !!o.spoc && !isB2B(o.spoc, o.branch);
 
 const DAY_MS = 86_400_000;
 
@@ -54,7 +69,15 @@ export function firmLinks(client: ClientEntity, inbound: InboundLink[], outreach
   return { inbound: inboundRow, outreach: lead };
 }
 
-export function firmSpocs(client: ClientEntity, links: FirmLinks, orders: SalesOrder[]): FirmSpoc[] {
+export function latestEcSpoc(client: ClientEntity, report: EcSpocReport | null, isB2B: B2BSellerTest): EcSpocSeen | undefined {
+  if (!report) return undefined;
+  return contactNumbers(client.contacts)
+    .map((p) => report.spocs[normalizeContactNumber(p)])
+    .filter((s): s is EcSpocSeen => !!s && !isB2B(s.name))
+    .sort((a, b) => b.at.localeCompare(a.at))[0];
+}
+
+export function firmSpocs(client: ClientEntity, links: FirmLinks, orders: SalesOrder[], isB2B: B2BSellerTest, seen?: EcSpocSeen): FirmSpoc[] {
   const logged = (role: SpocLogEntry['role']) => latestEntry(client, role);
 
   const inLog = logged('inbound');
@@ -78,14 +101,17 @@ export function firmSpocs(client: ClientEntity, links: FirmLinks, orders: SalesO
     ? { role: 'kam', name: client.kam, since: held?.at, detail: held?.status === 'Pending' ? 'Waiting for KAM sign-off' : 'Owns the firm' }
     : { role: 'kam', detail: 'No KAM yet' };
 
-  const ecLog = logged('ec');
-  const lastOrder = orders.filter((o) => dealIsOrder(o.status) && o.spoc)
+  const ecLog = (client.spocLog || []).filter((e) => e.role === 'ec' && !isB2B(e.name))
+    .sort((a, b) => b.from.localeCompare(a.from))[0];
+  const lastOrder = orders.filter(ecSeller(isB2B))
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
   const ec: FirmSpoc = ecLog
     ? { role: 'ec', name: ecLog.name, since: ecLog.from, detail: `Set by ${ecLog.by || 'a manager'}` }
     : lastOrder
-      ? { role: 'ec', name: lastOrder.spoc, since: lastOrder.createdAt, detail: 'BM on the last order' }
-      : { role: 'ec', detail: 'No order at an EC yet' };
+      ? { role: 'ec', name: lastOrder.spoc, since: lastOrder.createdAt, detail: 'Store rep on the last order at an EC' }
+      : seen
+        ? { role: 'ec', name: seen.name, since: seen.at, detail: `Store rep on the last order at an EC (${seen.store}, ${seen.enquiryId})` }
+        : { role: 'ec', detail: 'No order with a store rep yet' };
 
   return [inbound, outreach, kam, ec];
 }
@@ -106,7 +132,7 @@ function spocStages(client: ClientEntity, spocs: FirmSpoc[]): SpocStage[] {
   return stages.sort((a, b) => a.from.localeCompare(b.from));
 }
 
-export function spocSales(client: ClientEntity, spocs: FirmSpoc[], orders: SalesOrder[], nowMs: number): SpocSales {
+export function spocSales(client: ClientEntity, spocs: FirmSpoc[], orders: SalesOrder[], nowMs: number, isB2B: B2BSellerTest): SpocSales {
   const stages = spocStages(client, spocs);
   const starts = stages.map((s) => Date.parse(s.from));
   const totals = stages.map(() => ({ orders: 0, value: 0 }));
@@ -118,7 +144,7 @@ export function spocSales(client: ClientEntity, spocs: FirmSpoc[], orders: Sales
   for (const o of orders) {
     if (!dealIsOrder(o.status)) continue;
     const value = Number(o.orderValue) || 0;
-    if (o.spoc) {
+    if (o.spoc && !isB2B(o.spoc, o.branch)) {
       if (!ec.has(o.spoc)) ec.set(o.spoc, { orders: 0, value: 0 });
       add(ec.get(o.spoc)!, value);
     }

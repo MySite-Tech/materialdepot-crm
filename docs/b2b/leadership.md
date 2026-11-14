@@ -16,6 +16,7 @@
 | `fetchRevenueReport` | `GET /api/b2b/revenue?from&to`, the Overview's report, server-cached per caller | Once per period picked; latest request wins (`useMonthReport`) |
 | `fetchOrderCredits` | backend `GET /b2b/order-credits` through the relay | Once per session, shared with every tab (`OrderCreditsProvider`) |
 | `fetchEcVisits({ kind: 'redirect' })` | backend `GET /b2b/ec-visits?kind=redirect` | On open, for Everything logged |
+| the reads above, again | the same calls | Refresh, on click |
 | `saveTargets` | backend `POST /target` | Set targets, a manager pressing Save targets |
 
 On the sandbox on 2026-11-12, opening it as a manager made nine `/api/b2b/*`
@@ -123,6 +124,14 @@ split into the Overview's four channels.
   revenue reads Unknown with the reason, never ₹0. The whole period does not need it:
   the report is already windowed on the order date. The sandbox stub sends
   `orderPlacedAt` since this change; before, every day read ₹0 beside a ₹3.4L total.
+- **A cart a rep raised counts for them even when their Django name differs from the
+  team list (2026-11-14).** The report matches the rep by their sign-in number
+  (`overview.md` §Four revenue channels). Krishna Jadhav's ₹0 was this.
+- **Refresh re-reads everything (2026-11-14).** The page reads once when opened, so
+  one left open all morning showed the morning's calls. Hardi's 14 Nov "only 4 calls"
+  was checked against production that afternoon: 10 calls carried her number, the
+  engine counted all 10, and Kylas held no call by her that day (all 265 were the
+  presales team's). Calls count only when logged in the CRM.
 - **KAM Ordering still reads KAM-board orders and the last-order date.** It is a
   count of firms, not money, and was left as it was.
 

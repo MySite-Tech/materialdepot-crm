@@ -85,7 +85,11 @@ function StudioCell({ client, studio }: { client: ClientEntity; studio: ReturnTy
 function SpocCell({ role, spocs, source }: { role: SpocRole; spocs?: FirmSpoc[]; source: SpocSources }) {
   const logged = spocs?.find((s) => s.role === role);
   if (logged?.name) return <span className="text-gray-700" title={logged.detail}>{logged.name}</span>;
-  if (role === 'ec') return <span className="text-gray-300" title="Nobody is logged. The BM on the last order shows on the Firm page: the list has no order rows, and reading them here would be one request per firm.">Not logged</span>;
+  if (role === 'ec') {
+    if (source.ecLoading) return <span className="text-gray-300">…</span>;
+    if (!source.ec) return <span className="text-[11px] text-amber-700" title="Orders for the last six months could not be read">Unknown</span>;
+    return <span className="text-gray-300" title={`No order taken by a store rep from ${source.ec.from} on any of this firm's numbers`}>—</span>;
+  }
   if (source.loading) return <span className="text-gray-300">…</span>;
   if (source.failed) return <span className="text-[11px] text-amber-700" title="The Inbound and Outreach leads could not be read">Unknown</span>;
   return <span className="text-gray-300" title={logged?.detail}>—</span>;
@@ -112,6 +116,7 @@ export function ClientTable({ rows, today, studio, sort, onSort, onOpen, picked,
     studio: !studio.loading && !studio.logins ? 'Studio Space could not be read' : undefined,
     inboundSpoc: spocSource.failed ? 'The Inbound and Outreach leads could not be read' : undefined,
     outreachSpoc: spocSource.failed ? 'The Inbound and Outreach leads could not be read' : undefined,
+    ecSpoc: spocSource.ecLoading ? 'Loading the store reps on each firm’s orders' : !spocSource.ec ? 'Orders for the last six months could not be read' : undefined,
   };
   const filterCell = (k: FilterKey, className = 'px-3') => (
     <th key={k} className={`${className} pb-2 font-normal`}>

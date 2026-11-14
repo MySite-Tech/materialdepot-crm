@@ -3,8 +3,8 @@ export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, INTERACTION_SUM
 export { clientTypeFromLead, contactLabel, normalizeContactNumber, isValidContactNumber, primaryContact, contactNumbers, normalizeGst, clampTemperature, normalizeCompanyName } from '../utils/client';
 export { validateGst, gstNumbers } from './rules/gst';
 export { clientMatchesSearch } from './derived/search';
-export { enquirySpoc, firmLinks, firmSpocs, spocSales } from './derived/spocs';
-export type { FirmLinks, FirmSpoc, InboundLink, SpocLinkLead, SpocSales, SpocStage } from './derived/spocs';
+export { b2bSellerTest, enquirySpoc, firmLinks, firmSpocs, latestEcSpoc, spocSales } from './derived/spocs';
+export type { B2BSellerTest, FirmLinks, FirmSpoc, InboundLink, SpocLinkLead, SpocSales, SpocStage } from './derived/spocs';
 export { dealIsOrder, dealIsOpen, averageOrderValue } from './derived/deals';
 export { studioLoginOf, studioAccessOf, firmStudioAccess, firmStudioState, studioFirmOf, studioFirmsNotInCrm, withStudioOrders } from './derived/studio';
 export { sortedInteractions, openCheckIn, withInteraction, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './derived/interactions';

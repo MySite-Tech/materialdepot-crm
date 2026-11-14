@@ -18,6 +18,7 @@ import { useInboundAssigned } from './hooks/use-inbound-assigned';
 import { usePerformanceData } from './hooks/use-performance-data';
 import { DailyTable } from './ui/daily';
 import { PeriodPicker } from './ui/period';
+import { btnGhost } from '../../constants/ui';
 import { RowsPanel, Scorecard } from './ui/scorecard';
 import { TargetsEditor } from './ui/targets-editor';
 import { TeamTable } from './ui/team-table';
@@ -133,6 +134,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
             </div>
           )}
           {!setting && <PeriodPicker value={preset} onChange={setPreset} custom={custom} setCustom={setCustom} today={today} />}
+          {!setting && <button onClick={reload} disabled={pending || revenueBusy} className={btnGhost} title="Read calls, meetings and orders again">Refresh</button>}
         </div>
       </div>
 

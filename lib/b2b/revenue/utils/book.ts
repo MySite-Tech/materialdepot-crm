@@ -19,20 +19,53 @@ export const repName = (name: unknown): string => {
 
 const ROSTER_TEAM: Record<string, B2BTeam | undefined> = { KAM: 'kam', Inbound: 'inbound', Outbound: 'outreach' };
 
-export function buildRepTeams(members: Pick<TeamMember, 'name' | 'team' | 'active'>[]): RepTeams {
-  const out: RepTeams = new Map();
-  const add = (name: string, team: B2BTeam | undefined) => {
-    if (!team) return;
-    const key = repKey(repName(name));
-    const held = out.get(key) ?? [];
-    if (!held.includes(team)) out.set(key, [...held, team]);
-  };
-  for (const m of members) if (m.active) add(m.name, m.team);
-  for (const r of B2B_ROSTER) add(r.fullName, ROSTER_TEAM[r.role]);
+const withDoubledSurname = (name: string): string[] => {
+  const words = name.split(' ');
+  return words.length > 1 ? [name, `${name} ${words[words.length - 1]}`] : [name];
+};
+
+function staffAliases(members: Pick<TeamMember, 'name' | 'phone' | 'active'>[], staff: Pick<TeamMember, 'name' | 'phone'>[]): Map<string, string> {
+  const memberByPhone = new Map(members.filter((m) => m.active && phoneOf(m.phone)).map((m) => [phoneOf(m.phone), m.name]));
+  const phonesByKey = new Map<string, Set<string>>();
+  for (const s of staff) {
+    const key = repKey(s.name);
+    if (key) phonesByKey.set(key, (phonesByKey.get(key) ?? new Set()).add(phoneOf(s.phone)));
+  }
+  const out = new Map<string, string>();
+  for (const s of staff) {
+    const member = memberByPhone.get(phoneOf(s.phone));
+    const key = repKey(s.name);
+    if (!member || !key || phonesByKey.get(key)!.size > 1) continue;
+    for (const alias of withDoubledSurname(key)) out.set(alias, member);
+  }
   return out;
 }
 
-export const teamsOfRep = (name: unknown, reps: RepTeams): B2BTeam[] => reps.get(repKey(repName(name))) ?? [];
+export function buildRepTeams(
+  members: Pick<TeamMember, 'name' | 'phone' | 'team' | 'active'>[],
+  staff: Pick<TeamMember, 'name' | 'phone'>[] = [],
+): RepTeams {
+  const out: RepTeams = new Map();
+  const add = (key: string, name: string, team: B2BTeam | undefined) => {
+    if (!team || !key) return;
+    const held = out.get(key) ?? { name, teams: [] };
+    if (!held.teams.includes(team)) out.set(key, { name: held.name, teams: [...held.teams, team] });
+  };
+  for (const m of members) {
+    if (!m.active) continue;
+    const name = repName(m.name);
+    for (const key of withDoubledSurname(repKey(name))) add(key, name, m.team);
+  }
+  for (const r of B2B_ROSTER) add(repKey(r.fullName), r.fullName, ROSTER_TEAM[r.role]);
+  const teamsOf = (name: string) => out.get(repKey(repName(name)))?.teams ?? [];
+  for (const [alias, member] of staffAliases(members, staff)) {
+    if (out.has(alias)) continue;
+    for (const team of teamsOf(member)) add(alias, repName(member), team);
+  }
+  return out;
+}
+
+export const repOf = (name: unknown, reps: RepTeams) => reps.get(repKey(repName(name)));
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 

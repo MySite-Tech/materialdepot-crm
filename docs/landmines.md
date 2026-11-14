@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-89 entries. They live in one file because they cross-reference each other —
+91 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -99,6 +99,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A firm's page said "No placed order" under numbers that each showed an order
 - A Django ticket's owner and date on the enquiry card read as B2B attribution
 - My performance and the Overview counted revenue two different ways, so a rep's own figure never matched
+- A rep whose Django name differs from the team list earned ₹0 on every cart they raised
+- A column that shows only hand-logged values reads empty when nobody logs, and its filter matches nothing
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1357,4 +1359,27 @@ reached the other. Both now read `creditedOrders` over the same report, and a cr
 is per enquiry (`docs/b2b/leadership.md` §Revenue is the Overview's per-order rule).
 The shape is the "one number, one function" rule across two tabs, not two tiles: when
 two screens show "revenue" for one person, they must call one function.
+
+### A rep whose Django name differs from the team list earned ₹0 on every cart they raised (2026-11-14)
+
+The user: Krishna Jadhav sells and his My performance revenue never moves. Order rows
+name the cart's rep only by Django's `f_name l_name`, and his login is named "none"
+(`docs/backends.md` §Owed by Django row 15). The classifier matched reps by name, so
+his own carts went to a person called "none", and nobody's card claims "none". The
+CRM had already fixed his B2B tab by matching the sign-in number on 3 Nov. The revenue
+report, a second reader of the same identity, still matched by name. It now aliases a
+Django name to the team member whose number that login holds
+(`docs/b2b/overview.md` §Four revenue channels). The shape is
+`docs/landmines.md` §the KAM login-number entry again: every place that turns a
+Django user into a B2B person must go through the number, not only the first one fixed.
+
+### A column that shows only hand-logged values reads empty when nobody logs, and its filter matches nothing (2026-11-14)
+
+The Client Database's EC SPoC column showed a name only when a manager had logged one.
+Production had none logged, so all 1,261 firms read "Not logged" and typing "ha" in its
+filter returned 0 firms, while the Firm page showed a store rep for the same firm. The
+user read it as a broken filter. The list now falls back to the store rep on the firm's
+last order at an EC (`docs/b2b/client-db.md` §Choosing the list's columns). The shape:
+a list column and the detail page must derive a field the same way, or the list reads
+as missing data the page plainly has.
 

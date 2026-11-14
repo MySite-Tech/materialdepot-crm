@@ -140,6 +140,13 @@ Four things worth knowing before reusing it:
 - **It fails closed.** Unreachable backend → `SessionError` at 502, not "allow".
   Pair it with `sessionErrorResponse(err)` to turn that into the response.
 
+**`staffDirectory(auth)` reads the same roster for names and numbers only
+(2026-11-14).** The B2B revenue report uses it to turn the Django name on a cart
+into a team member through the login's number (`b2b/overview.md` §Four revenue
+channels). It is cached 10 minutes under one key for every caller, which is safe
+because it keeps no role, branch or permission. Never use it to decide who may
+do something: that stays `requireCaller`, per token.
+
 ### `relayB2B` — the route-handler bridge to the FastAPI b2b-backend
 
 `lib/server/b2b-backend.ts`, used by `app/api/b2b/[...path]`. The B2B tab's data
