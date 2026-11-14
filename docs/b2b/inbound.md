@@ -639,6 +639,13 @@ them, and whoever the CRM gives a lead to must own it in Kylas too, so Django's
   each (`kind: reassign`): 195 open split 98 / 97, 120 closed 60 / 60. Closed ones
   moved too, so an order from an old lead credits someone still here. The backfill
   then ran with `--apply`: 606 owners written to Kylas, the 40 with presales left.
+- **This does not change Procurement (checked in Metabase, 14 Nov).** Procurement's
+  "Assigned to" and "Created by" are the Django deal ticket's `owner_id` and
+  `created_by_id`, set by whoever opened the client's first ticket. Django pushes
+  ticket owners into Kylas deals through `user_organisation.crm_id`, and never reads
+  owners from Kylas. On tickets since October for leads the CRM gave Vikas, none
+  named him: some were opened by Hardi during working hours, the rest by store reps.
+  His login has no `crm_id` (`docs/backends.md` §Owed by Django row 19).
 
 ### Gates: the PRD's four, Invalid's three, nine soft
 
