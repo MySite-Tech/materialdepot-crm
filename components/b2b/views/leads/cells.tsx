@@ -10,6 +10,23 @@ export function SourceChip({ lead }: { lead: UnifiedLead }) {
   return <Pill color={SOURCE_COLORS[s]}>{s}</Pill>;
 }
 
+export function ReferralEcCell({ lead }: { lead: UnifiedLead }) {
+  const o = lead.outreach;
+  const ec = o?.ecReferral?.ec || (o?.source === EC_B2B_REFERRAL ? o.ecName : undefined);
+  return ec ? <>{ec}</> : <span className="text-gray-300">—</span>;
+}
+
+export function ReferrerCell({ lead }: { lead: UnifiedLead }) {
+  const r = lead.outreach?.ecReferral;
+  if (!r?.by) return <span className="text-gray-300">—</span>;
+  return (
+    <>
+      <div>{r.by}</div>
+      {r.byPhone && <div className="text-[10.5px] text-gray-400 font-mono">{r.byPhone}</div>}
+    </>
+  );
+}
+
 export function UnifiedStatusCell({ lead }: { lead: UnifiedLead }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">

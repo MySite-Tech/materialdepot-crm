@@ -55,6 +55,16 @@ Inbound contributes `fetchInboundBoard()`, the same CRM rows the Inbound tab
 shows. Since 2026-11-03 every Kylas inbound lead is imported, so there is no
 "unactioned in Kylas" remainder to footnote.
 
+### Referred from EC and Referred by (2026-11-16)
+
+Two columns after Source, on the user's ask: with the EC B2B Referral filter on, the
+list did not say which EC a lead came from or who at the store referred it. Both read
+the Outreach row's `ecReferral {ec, by, byPhone}` (`ReferralEcCell`, `ReferrerCell`),
+so they cost no request. EC falls back to `ecName` on an EC B2B Referral row only.
+Every other lead, and the older hand-picked `EC referral` rows that have no
+`ecReferral` record, show "—" rather than a guess. Seen only as a type-checked change,
+not rendered.
+
 ### Assigning from this tab (2026-10-31)
 
 The user wants one shape on Leads and Client Database: assign straight to a

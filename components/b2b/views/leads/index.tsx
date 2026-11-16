@@ -6,7 +6,7 @@ import { repNames, sameRep } from '../../models/outreach/handover';
 import { EC_B2B_REFERRAL } from '../../models/outreach';
 import { AssignBar } from '../../ui/assign-bar';
 import { Empty, LeadName, Spinner, inputCls } from '../../ui/inbound-chips';
-import { ExpectedClosureCell, SourceChip, UnifiedStatusCell } from './cells';
+import { ExpectedClosureCell, ReferralEcCell, ReferrerCell, SourceChip, UnifiedStatusCell } from './cells';
 import { LeadSourceLabel, PAGE_SIZE } from './constants';
 import { DetailDrawer } from './drawer';
 import { useLeadAssign } from './hooks/use-lead-assign';
@@ -252,7 +252,7 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
                     <th className="pl-3 w-6"><input type="checkbox" checked={allOnPage} onChange={() => assigner.togglePage(rows.map((l) => l.key))} aria-label="Select this page" /></th>
                   )}
                   {['Company Name', 'GST', 'Contact Number', 'Enquiry ID', 'Order Value',
-                    'Expected Closure', 'KAM', 'Source', 'Spok', 'Status'].map((h, i) => (
+                    'Expected Closure', 'KAM', 'Source', 'Referred from EC', 'Referred by', 'Spok', 'Status'].map((h, i) => (
                     <th key={i} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -277,6 +277,8 @@ export default function LeadsTab({ team, viewer }: { team: B2BTeamLoad; viewer: 
                     <td className="px-3 py-2 whitespace-nowrap"><ExpectedClosureCell lead={l} /></td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.kam || <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2"><SourceChip lead={l} /></td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap"><ReferralEcCell lead={l} /></td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap"><ReferrerCell lead={l} /></td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{l.spok || <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2"><UnifiedStatusCell lead={l} /></td>
                   </tr>
