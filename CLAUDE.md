@@ -632,6 +632,21 @@ day outside the repo at the user's ask. That is not a feature:** the no-export r
 below stands, so don't build an export button, and do it again only when asked, never
 committing the file (this repo is public).
 
+**Reassign works on a lead with no CRM row (2026-11-16, CRM PR #63, merged and
+deployed the same day; no backend PR).** Inbound's drawer said "That lead is not in the
+CRM yet. Sync from Kylas, then try again." for a lead created in May, held in Kylas by
+Mandeep (who left). The import's created-date floor (`B2B_FRESH_START`) skips such
+leads and the round robin takes only the intake owner's, so Sync can never fix it. Any
+old lead a departed rep still holds is the same. Reassign now reads the leads it has no
+row for in one Kylas `in` search and inserts their rows with the new owner
+(`inboundLeadsByIds`, `docs/b2b/inbound.md` §The CRM's owner is written to Kylas,
+`docs/landmines.md`). **After deploy,** reassign that lead (phone ending 3834) to Vikas.
+The write has not run on production. **Open, undecided:** Client Database's assign bar
+keeps Outreach greyed out for firms. Someone asked to send no-KAM firms to Outreach.
+Ask whether that means a new Outreach lead for the firm or an Outreach BM owning the
+firm before building it, because Outreach refuses numbers already in the Client
+Database (`docs/b2b/ec-referral.md`).
+
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
 `b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in
