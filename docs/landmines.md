@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-93 entries. They live in one file because they cross-reference each other —
+94 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -103,6 +103,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A column that shows only hand-logged values reads empty when nobody logs, and its filter matches nothing
 - A KPI that reads only the receiving team's rows misses every hand-off that team has not picked up
 - A KPI that asks for what the screen never lets you enter scores everyone at zero
+- A lead the import's date floor skipped cannot be reassigned, and Sync never fixes it
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1411,3 +1412,16 @@ visit. Both now ask only for what could have been captured
 pratham 73% → 100%, on the same production rows. The shape: before scoring a field,
 find the control that captures it and the moment it appears, and check the KPI reads
 the field that control writes.
+
+### A lead the import's date floor skipped cannot be reassigned, and Sync never fixes it (2026-11-16)
+
+The Inbound drawer's Reassign said "That lead is not in the CRM yet. Sync from Kylas,
+then try again." and Sync from Kylas did nothing for it, however many times it ran.
+The lead was created in May, before `B2B_FRESH_START`, and a rep who has since left
+still held it in Kylas. The import takes only leads created after the floor, the
+round robin deals only the intake owner's, and Mandeep's 14 Nov move covered CRM rows
+only, so no path ever created its row, and Reassign refused without one. The shape: a
+guard that says "sync first" when no sync can satisfy it. `reassignInboundLeads` now
+reads the missing leads from Kylas in one `in` search and inserts their rows as part
+of the owner write (`docs/b2b/inbound.md` §The CRM's owner is written to Kylas). Check
+any "try X again" message for a path that can actually make X true.

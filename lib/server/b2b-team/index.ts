@@ -10,7 +10,7 @@ import {
 import type { KylasOwnerWrites, MemberInput, ReassignOutcome, RenumberOutcome, RotationOutcome, SavedMember, TeamMember } from '@/lib/b2b/team/types';
 import { B2BBackendError } from '@/lib/server/b2b-backend';
 import { memberForPhone, planRotation, rotationOrder, teamMembers } from '@/lib/b2b/team/utils';
-import { KylasBusy, intakePool, kylasUserForPhone, listKylasUsers, setLeadOwner, type PoolLead } from './kylas';
+import { KylasBusy, inboundLeadsByIds, intakePool, kylasUserForPhone, listKylasUsers, setLeadOwner, type PoolLead } from './kylas';
 import { importInbound, inboundOwnerNames, inboundRowFromKylas, ownerChange, readInboundRows, writeInbound, type ImportOutcome, type InboundRows } from '@/lib/server/b2b-inbound';
 import {
   assignedLeadIdsSince,
@@ -244,12 +244,21 @@ export async function reassignInboundLeads(
   const rows = await readInboundRows();
   const outcome: ReassignOutcome = { moved: [], failed: [] };
   const planned: { leadId: string; to: TeamMember }[] = [];
+  const fallbacks = new Map<string, NonNullable<ReturnType<typeof rows.get>>>();
+  const absent = items.map((i) => String(i.leadId ?? '').trim()).filter((id) => id && !rows.has(id));
+  const fromKylas = await inboundLeadsByIds(absent);
   for (const { leadId, toPhone } of items) {
     const id = String(leadId ?? '').trim();
     try {
       const to = await inboundTarget(toPhone, read);
-      const row = rows.get(id);
-      if (!row) throw new InputError('That lead is not in the CRM yet. Sync from Kylas, then try again.');
+      let row = rows.get(id);
+      if (!row) {
+        const raw = fromKylas.get(id);
+        if (!raw) throw new InputError('Kylas has no inbound lead with that id.');
+        row = inboundRowFromKylas(raw, inboundOwnerNames(read.members));
+        rows.set(id, row);
+        fallbacks.set(id, row);
+      }
       if (Number(row.meta_data?.owner_kylas_id) === to.kylasUserId) throw new InputError(`${to.name} already owns this lead`);
       planned.push({ leadId: id, to });
     } catch (e) {
@@ -258,7 +267,11 @@ export async function reassignInboundLeads(
   }
   if (!planned.length) return outcome;
 
-  await writeInbound(planned.map(({ leadId, to }) => ({ id: leadId, change: ownerChange(to.name, to.kylasUserId as number) })));
+  await writeInbound(planned.map(({ leadId, to }) => ({
+    id: leadId,
+    change: ownerChange(to.name, to.kylasUserId as number),
+    fallback: fallbacks.get(leadId),
+  })));
   for (const { leadId, to } of planned) {
     const row = rows.get(leadId) as NonNullable<ReturnType<typeof rows.get>>;
     const from = Number(row.meta_data?.owner_kylas_id);

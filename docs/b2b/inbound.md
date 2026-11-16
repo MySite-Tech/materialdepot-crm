@@ -181,6 +181,20 @@ Kylas. **Production still needs this run once, at deploy:** the log comes from
 order by lead_id, at desc, id desc` (Metabase db 38), as a `{lead_id: to}` JSON
 file. Dry-run it first.
 
+**A lead with no CRM row can be reassigned (2026-11-16).** The Inbound drawer showed
+"That lead is not in the CRM yet. Sync from Kylas, then try again." on Reassign, and
+Sync from Kylas never brought the lead in. Checked read-only in Kylas: the lead was
+created 12 May 2026, before `B2B_FRESH_START`, owned by Mandeep (who left), in an
+inbound stage. So the import's created-date floor skips it, the round robin's pool
+takes only the intake owner, and Mandeep's 14 Nov move covered CRM rows only. Any old
+lead a departed rep still holds in Kylas is in the same state. `reassignInboundLeads`
+now looks the leads without a row up in Kylas in one search (`inboundLeadsByIds`, inbound pipeline only) and
+inserts its row with the new owner through `writeInbound`'s `fallback`, the same path
+the round robin uses. A lead Kylas does not hold says "Kylas has no inbound lead with
+that id". Type-checked, and the id search was run read-only against Kylas; the write
+has not run on production. Saving a searched lead, with a company name filled, also
+inserts its row, as before.
+
 ### The lead window keeps unsaved work (2026-11-03)
 
 Calls and notes save the moment they are logged. Everything else waits for Save
