@@ -303,6 +303,12 @@ Two things it does that `kylasFetch` callers do not:
   row and the assignment log are the record; the Kylas write is best effort and
   skipped for `crm-…` ids, which Kylas has never seen. A refused or rate-limited
   write is returned as `kylas` on the outcome and shown, never thrown.
+- **Reassign reads the leads that have no CRM row in one search (2026-11-16).**
+  `inboundLeadsByIds` is a single `/search/lead` with an `in` rule on the ids and the
+  inbound pipeline, however many leads a bulk reassign holds (at most
+  `INBOUND_ROTATION_BATCH`), never a call per lead. Each hit becomes the write's
+  `fallback` row. A Kylas 429 fails the whole reassign with the usual busy message
+  rather than moving some leads and not others.
 
 ## `/crm/leads/stats/` — the date and branch a figure is counted by
 

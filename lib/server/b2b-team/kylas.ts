@@ -73,6 +73,28 @@ export function kylasUserForPhone(users: KylasUser[], phone: string): KylasUser 
   return hits.find((u) => u.active) ?? hits[0] ?? null;
 }
 
+export async function inboundLeadsByIds(ids: string[]): Promise<Map<string, Record<string, any>>> {
+  const nums = [...new Set(ids.map(Number).filter(Number.isFinite))];
+  const out = new Map<string, Record<string, any>>();
+  if (!nums.length) return out;
+  const body = await kylas(`/search/lead?page=0&size=${nums.length}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      fields: B2B_INBOUND_FIELDS,
+      jsonRule: {
+        condition: 'AND',
+        valid: true,
+        rules: [
+          { operator: 'in', id: 'id', field: 'id', type: 'long', value: nums },
+          { operator: 'equal', id: 'pipeline', field: 'pipeline', type: 'long', value: B2B_INBOUND_PIPELINE },
+        ],
+      },
+    }),
+  });
+  for (const l of Array.isArray(body.content) ? body.content : []) out.set(String(l.id), l);
+  return out;
+}
+
 export async function setLeadOwner(id: string, ownerId: number): Promise<void> {
   const body = await kylas(`/leads/${encodeURIComponent(id)}`, {
     method: 'PATCH',
