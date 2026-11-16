@@ -621,6 +621,17 @@ branch `nov12-crm-dashboard` → `main` with b2b-backend PR #28 (migration 0026,
   month under Set targets. Revenue stays at the ₹50 L default until Hyderabad's is
   decided, which moved the B2B target from ₹2.90 Cr to ₹3.40 Cr.
 
+**Leads tab: Referred from EC and Referred by (2026-11-16, CRM PR from
+`leads-referral-columns`, merged on Dhruv's ask; no backend PR).** Two columns after
+Source on B2B Sales → Leads, from the Outreach row's `ecReferral` (`docs/b2b/leads.md`).
+Older hand-picked "EC referral" rows have no record of either, so they read "—".
+**After deploy,** filter Source to EC B2B Referral and check both columns fill. If
+they read "—" on a referral row, the row has no `ecReferral` and the route that wrote
+it is the thing to look at. **A one-off Excel of the 129 Active firms was made that
+day outside the repo at the user's ask. That is not a feature:** the no-export rule
+below stands, so don't build an export button, and do it again only when asked, never
+committing the file (this repo is public).
+
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
 `b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in
