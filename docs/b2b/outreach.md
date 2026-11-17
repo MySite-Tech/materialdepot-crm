@@ -360,6 +360,10 @@ next meeting booked for the moved date. A Scheduled meeting with a check-in is
 re-dated to the check-in day. Each change appends a journey line by "CRM repair".
 On 17 Nov's rows: 92 leads, 84 meetings rebooked. For pratham, leads with no meeting
 booked went from 120 to 46. It does not mark anything held. Nobody wrote the notes.
+**Applied to production on 2026-11-17** (92 rows written, a re-run found 0). Only
+`meetings`, `journey` and the timestamps changed. It is safe to re-run: a repaired row
+no longer matches. A copy of the 352 Outreach rows from before the write is kept outside
+the repo, in `~/Projects/ss-local-stack/logs/`.
 
 ### Converted = first order, and only a fetched order counts
 
