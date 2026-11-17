@@ -62,6 +62,20 @@ Kylas `paymentName` is the name column of Part Payments, and a bare value is
 silently dropped. On sales deals `cfProjectPhase` still holds the customer's
 project phase, so read it as "Raised by" only on escalation/support tickets.
 
+## Sales raises only what sales can see
+
+"Delivery Attempted" (202383) and "Material not ready" (212551) are not in
+`RAISE_OPTIONS` (removed 2026-11-17): ops raises them, not the sales view. They
+are still valid Kylas options, so tickets already carrying them display as usual.
+
+## Status cards are titled like CS flow, not by deal name
+
+The status tab titles a ticket `#<deal id> · <ENQ> · <Support|Escalation> ·
+<first Raise Request>` (`dealHeading` in `escalation/utils.ts`), the same line
+CS flow shows. The ENQ is matched in the deal name or `cfEscalationItemDetails`;
+the type is Support only when `cfRequestType` says so. The full deal name stays
+on hover.
+
 ## Notes go to cfNotes, and a failed raise keeps them
 
 The optional note is sent as `notes` and stored verbatim as the ticket's

@@ -3,7 +3,7 @@
 import { CallLog, Deal } from '../../../../lib/types';
 import { TIMELINE_ICONS } from '../constants';
 import { TimelineEntry } from '../types';
-import { cfDisplayValue, outcomeStyle, relativeAge, relativeTimeBetween } from '../utils';
+import { cfDisplayValue, dealHeading, outcomeStyle, relativeAge, relativeTimeBetween } from '../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded, raisedBy, selectedDeal, setSelectedDeal, timelineMap }: {
@@ -31,7 +31,7 @@ export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded,
     
         <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200">
           <div className="flex-1 min-w-0 pr-3">
-            <p className="text-sm font-semibold text-gray-900 truncate">{selectedDeal.name}</p>
+            <p className="text-sm font-semibold text-gray-900 truncate" title={selectedDeal.name}>{dealHeading(selectedDeal)}</p>
             <p className="text-xs text-gray-500 mt-0.5">
               {selectedDeal.ownedBy?.name ?? "—"}
               {selectedDeal.pipelineStage?.name && (

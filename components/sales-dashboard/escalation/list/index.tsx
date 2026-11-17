@@ -2,7 +2,7 @@
 
 import { Deal } from '../../../../lib/types';
 import { TimelineEntry } from '../types';
-import { cardBorderColor, relativeAge, stagePillStyle } from '../utils';
+import { cardBorderColor, dealHeading, relativeAge, stagePillStyle } from '../utils';
 import { Dispatch, SetStateAction } from 'react';
 
 export function EscalationList({ contactMap, filteredDeals, handleAddNote, handleExpandDeal, handleUpload, lastAction, noteError, noteSuccess, noteTargetDeal, noteText, savingNote, selectedDeal, setNoteTargetDeal, setNoteText, setSelectedDeal, setUploadTargetDeal, uploadError, uploadSuccess, uploadTargetDeal, uploading }: {
@@ -50,8 +50,8 @@ export function EscalationList({ contactMap, filteredDeals, handleAddNote, handl
             <div className="p-3">
     
               <div className="flex items-start justify-between gap-2 mb-1.5">
-                <h3 className="text-sm font-bold text-gray-900 leading-tight truncate flex-1">
-                  {deal.name}
+                <h3 className="text-sm font-bold text-gray-900 leading-tight truncate flex-1" title={deal.name}>
+                  {dealHeading(deal)}
                 </h3>
                 {deal.pipelineStage?.name && (
                   <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${stagePillStyle(deal)}`}>

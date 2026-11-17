@@ -259,3 +259,20 @@ export function stagePillStyle(deal: Deal): string {
     default: return "bg-gray-200 text-gray-600";
   }
 }
+
+const firstName = (v: unknown): string => {
+  const x = Array.isArray(v) ? v[0] : v;
+  if (x && typeof x === 'object' && 'name' in x) return String((x as { name?: unknown }).name ?? '').trim();
+  return typeof x === 'string' ? x.trim() : '';
+};
+
+export function dealEnq(deal: Deal): string | null {
+  const cf = deal.customFieldValues ?? {};
+  return `${deal.name ?? ''} ${String(cf.cfEscalationItemDetails ?? '')}`.match(/ENQ\d{11,}/)?.[0] ?? null;
+}
+
+export function dealHeading(deal: Deal): string {
+  const cf = deal.customFieldValues ?? {};
+  const type = /^support$/i.test(String(cf.cfRequestType ?? '').trim()) ? 'Support' : 'Escalation';
+  return [`#${deal.id}`, dealEnq(deal), type, firstName(cf.cfRaiseEscalation)].filter(Boolean).join(' · ');
+}
