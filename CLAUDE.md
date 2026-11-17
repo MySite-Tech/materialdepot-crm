@@ -671,6 +671,26 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
+**START HERE for B2B (2026-11-17): CRM PR #67 (`outreach-handover-kam-firm`), merged on
+Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
+- **Accepting an Outreach handover creates the firm in the Client Database** with an
+  `Accepted` assignment to the KAM (`saveOutreachHandoverFirm`). The KAM tab reads only
+  `b2b_client`, so the only handover ever sent (accepted 14 Nov) could not be found in
+  KAM search. That firm predates the fix and still needs adding by hand (Client
+  Database → Add, assign to its KAM); the record is in memory, not here.
+- **A client may refuse the WhatsApp group:** a checkbox plus a reason passes the
+  handover gate (`whatsapp_group_declined`, `docs/b2b/outreach.md` §KAM handover).
+- **A teammate who opened the deal ticket no longer takes the lead owner's order.**
+  Hardi opens Inbound deal tickets, so orders Vikas closed were credited to her, and
+  the 14 Nov manual credits only patched five of them. `teammateLeadOwner` now gives
+  the order to the Inbound or Outreach lead's owner on the cart rep's team. KAM firms
+  are deliberately unchanged: including them moved seven November carts between KAMs.
+  Ask the user before extending it (`docs/b2b/overview.md` §A teammate's ticket).
+  On real November orders exactly six moved, all Hardi → Vikas.
+- **After deploy, check signed in:** Vikas's My performance includes the two leads'
+  orders from 12 and 16 Nov; a KAM accepting a handover finds the firm in KAM search.
+  Only the sandbox and the compiled classifier on real rows have run it.
+
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
 `b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in

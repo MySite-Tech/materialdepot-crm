@@ -2,7 +2,7 @@
 
 import { OutreachLead, fmtINR } from '../../../models/mock-data';
 import { OUTREACH_OPEN_STATUSES, companyTypeLabel, meetingLocation, nextScheduledMeeting } from '../../../models/outreach';
-import { HANDOVER_STATE_COLOR, HANDOVER_STATE_LABEL, handoverState, orderVerified } from '../../../models/outreach/handover';
+import { HANDOVER_STATE_COLOR, HANDOVER_STATE_LABEL, handoverState, orderVerified, whatsappDeclineReason } from '../../../models/outreach/handover';
 import { Reminder, ReminderLevel } from '../../../models/outreach/reminders';
 import { Pill, fmtDay } from '../../../ui/inbound-chips';
 import { MeetingDots, OutreachStatusBadge, WaitlistChip } from '../../../ui/outreach-chips';
@@ -166,7 +166,9 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { tod
           head: 'WhatsApp',
           cell: (r) => (r.lead.whatsappGroupLink
             ? <a href={r.lead.whatsappGroupLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-[11px] text-[#0F766E] hover:underline">Group</a>
-            : <span className="text-amber-600 text-[11px]">none</span>),
+            : whatsappDeclineReason(r.lead)
+              ? <span title={whatsappDeclineReason(r.lead)} className="text-gray-500 text-[11px]">Not willing</span>
+              : <span className="text-amber-600 text-[11px]">none</span>),
         },
       ];
     default:

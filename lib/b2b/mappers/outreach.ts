@@ -53,6 +53,7 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   officeAddress:      { col: 'office_address',   read: str },
   teamSize:           { col: 'team_size',        read: (v) => oneOf<TeamSize>(TEAM_SIZES)(v) },
   whatsappGroupLink:  { col: 'whatsapp_group_link', read: str },
+  whatsappGroupDeclined: { col: 'whatsapp_group_declined', read: str },
   convertedAt:        { col: 'converted_at',     read: str },
   newOnboarding:      { col: 'new_onboarding',   read: (v) => (typeof v === 'boolean' ? v : undefined) },
   intake:             { col: 'intake',           read: (v) => obj<OutreachIntake>(v) },

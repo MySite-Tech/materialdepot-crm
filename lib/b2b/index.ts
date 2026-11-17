@@ -12,7 +12,7 @@ export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClient
 export type { ClientOrderDetails } from './orders/details';
 export { byNewestOrder } from './orders/ticket';
 export type { BoqLine, CartLine, ClientOrderRow } from './orders/ticket';
-export { clientFromSeed, planClientSeed } from './leads/client-seed';
+export { clientFromSeed, planClientSeed, saveOutreachHandoverFirm } from './leads/client-seed';
 export type { ClientSeedPlan } from './leads/client-seed';
 export { deleteB2BRow, insertInboundLeads, saveInboundLead, upsertClient, upsertClients, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
 export { fetchTargets, saveTargets } from './stats/targets';

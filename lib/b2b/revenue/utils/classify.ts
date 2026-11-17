@@ -10,6 +10,16 @@ function directTeam(teams: B2BTeam[], held: Holder[]): B2BTeam | null {
   return held.find((h) => h.team && teams.includes(h.team))?.team ?? teams[0] ?? held.find((h) => h.team)?.team ?? null;
 }
 
+const LEAD_KINDS = new Set<Holder['kind']>(['outreach', 'inbound']);
+
+const samePerson = (a: string, b: string) => repName(a).toLowerCase() === repName(b).toLowerCase();
+
+export function teammateLeadOwner(held: Holder[], repTeams: B2BTeam[], placedBy: string): Holder | null {
+  const records = held.filter((h) => LEAD_KINDS.has(h.kind) && h.owner && h.team);
+  if (records.some((h) => samePerson(h.owner, placedBy))) return null;
+  return records.find((h) => repTeams.includes(h.team!)) ?? null;
+}
+
 export function classifyOrder(
   o: OrderInput,
   booked: BookedOn,
@@ -50,7 +60,12 @@ export function classifyOrder(
   });
 
   if (referred) return shape(5, 'kam', referred.owner, referred);
-  if (byB2BRep) return shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), placedBy, owned);
+  if (byB2BRep) {
+    const leadOwner = teammateLeadOwner(held, repTeams, placedBy);
+    return leadOwner
+      ? shape(bookedOnB2B ? 1 : 2, leadOwner.team, leadOwner.owner, leadOwner)
+      : shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), placedBy, owned);
+  }
   if (owned) return shape(bookedOnB2B ? 3 : 4, owned.team, owned.owner, owned);
   const unowned = held.find((h) => h.kind === 'unowned');
   if (unowned) return shape(bookedOnB2B ? 6 : 8, null, '', unowned);

@@ -25,7 +25,7 @@ import { Rep, assignLead } from '../../models/outreach/intake';
 import { newOnboardingFrom } from '../../models/outreach/kpis';
 import { istDay, outreachCaptureErrors, withRebooking } from '../../models/outreach/reminders';
 import { OutreachScope, SaveLead } from '../../views/outreach/types';
-import { EnqLookup, fetchKamLoad, lookupEnqId, outreachPhones } from '@/lib/b2b';
+import { EnqLookup, fetchKamLoad, lookupEnqId, outreachPhones, saveOutreachHandoverFirm } from '@/lib/b2b';
 import { fetchFirmDeals } from '@/lib/api';
 import { CheckInCapture } from '../../ui/check-in-capture';
 import { OrderCreditLine } from '../../order-credit/ui/credit-line';
@@ -233,7 +233,18 @@ export default function OutreachDrawer({
   };
 
   const respond = async (accept: boolean, reason?: string) => {
-    const next = respondToHandover(lead, accept, scope.me.name, nowIso(), reason);
+    if (save.saving) return;
+    const at = nowIso();
+    const next = respondToHandover(lead, accept, scope.me.name, at, reason);
+    if (accept) {
+      setSave({ saving: true });
+      const err = await saveOutreachHandoverFirm(next, at);
+      if (err) {
+        setSave({ saving: false, error: `Not accepted yet: the firm could not be added to the Client Database, so the KAM tab would not find it (${err}). Try again.` });
+        return;
+      }
+      setSave({ saving: false });
+    }
     if (await persist(next, false, false)) setDraft((d) => ({ ...d, handover: next.handover }));
   };
 

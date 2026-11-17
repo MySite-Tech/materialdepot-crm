@@ -289,7 +289,8 @@ a KAM, either by name or round robin. The KAM accepts or rejects from the
   leaving an active client with no KAM, which is why Reject was removed that day.
   On production on 3 Nov, 91 of the 92 pending firms had no earlier holder, so a
   reject sends them to No KAM. The Outreach-to-KAM handover has its own Reject,
-  unchanged.
+  unchanged. Its Accept writes this tab's firm with an `Accepted` entry, so it
+  never lands in Waiting for sign-off (2026-11-17, `outreach.md` §KAM handover).
 - **Assigning a firm to the KAM who already holds it is refused.** It used to write
   a pending entry and put the firm back in sign-off for nothing. The bar says it is
   already with them, and the Firm page closes the picker. Both compare with
