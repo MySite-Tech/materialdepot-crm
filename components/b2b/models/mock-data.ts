@@ -186,6 +186,7 @@ export interface OutreachLead {
   officeAddress?: string;
   teamSize?: TeamSize;
   whatsappGroupLink?: string;
+  whatsappGroupDeclined?: string;
   convertedAt?: string;
   newOnboarding?: boolean;
   intake?: OutreachIntake;

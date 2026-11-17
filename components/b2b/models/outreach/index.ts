@@ -127,7 +127,8 @@ export type HandoverStatus = 'Pending' | 'Accepted' | 'Rejected';
 export interface OutreachHandover {
   kam: string;
   kamPhone?: string;
-  whatsappGroupLink: string;
+  whatsappGroupLink?: string;
+  whatsappGroupDeclined?: string;
   sentAt: string;
   sentBy: string;
   status: HandoverStatus;

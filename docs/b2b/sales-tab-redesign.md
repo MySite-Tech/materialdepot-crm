@@ -655,8 +655,10 @@ Decisions taken (all overrulable; none is expensive to change):
 - **Converted stays the stored `Closed`**, relabelled. Only an Enq-ID-fetched
   first order counts as a conversion; new revenue additionally excludes numbers
   that ordered in the 6 months before.
-- **Handover hard gate** = WhatsApp group link + the sheet's payload; 48h KAM
-  sign-off is tracked and shown overdue, never auto-escalated.
+- **Handover hard gate** = WhatsApp group link (or, since 2026-11-17, a reason
+  the client will not join one) + the sheet's payload; 48h KAM sign-off is tracked
+  and shown overdue, never auto-escalated. Accepting creates or links the firm in
+  the Client Database with that KAM (2026-11-17, `outreach.md` §KAM handover).
 - **Meeting notes are a hard gate on a held meeting; the live pin is not.**
 - **Waitlist matching is exact 10-digit mobile only**, read through the sync
   bridge. The upstream read route does not exist yet, so the waitlist KPI shows
@@ -668,8 +670,6 @@ Open, for the user:
   needs building and deploying — contract in `outreach.md`.
 - Which "existing forms that are inactive" are meant, if an integration rather
   than CSV upload is wanted.
-- Whether a KAM accepting a handover should create the KAM-side client record
-  (belongs to the KAM sub-tab brief).
 - Should a manager's "Assign all round-robin" also run automatically on load,
   like Inbound's rotation? Not done: it writes, and this stack has no scheduler.
 

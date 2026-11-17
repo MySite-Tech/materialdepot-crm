@@ -12,13 +12,16 @@ export const WHATSAPP_GROUP_RE = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]{10
 export const isWhatsappGroupLink = (v: string | undefined): boolean =>
   WHATSAPP_GROUP_RE.test(String(v || '').trim());
 
+export const whatsappDeclineReason = (l: Pick<OutreachLead, 'whatsappGroupLink' | 'whatsappGroupDeclined'>): string | undefined =>
+  isWhatsappGroupLink(l.whatsappGroupLink) ? undefined : String(l.whatsappGroupDeclined || '').trim() || undefined;
+
 export const isMobile = (v: string | undefined): boolean => /^[6-9]\d{9}$/.test(normalisePhone(v));
 
 export const orderVerified = (l: Pick<OutreachLead, 'enqId' | 'orderValueSource'>): boolean =>
   !!String(l.enqId || '').trim() && l.orderValueSource === 'deal';
 
 const HANDOVER_REQUIRED: { label: string; ok: (l: OutreachLead) => boolean }[] = [
-  { label: 'WhatsApp group link (chat.whatsapp.com/…)', ok: (l) => isWhatsappGroupLink(l.whatsappGroupLink) },
+  { label: 'WhatsApp group link (chat.whatsapp.com/…), or why the client will not join one', ok: (l) => isWhatsappGroupLink(l.whatsappGroupLink) || !!whatsappDeclineReason(l) },
   { label: 'Contact person',   ok: (l) => !!String(l.contactPerson || '').trim() },
   { label: '10-digit mobile',  ok: (l) => isMobile(l.phone) },
   { label: 'Segment',          ok: (l) => !!l.segment },
@@ -89,7 +92,9 @@ export function sendHandover(
   const handover: OutreachHandover = {
     kam: kam.name,
     kamPhone: kam.phone,
-    whatsappGroupLink: String(l.whatsappGroupLink || '').trim(),
+    ...(isWhatsappGroupLink(l.whatsappGroupLink)
+      ? { whatsappGroupLink: String(l.whatsappGroupLink).trim() }
+      : { whatsappGroupDeclined: whatsappDeclineReason(l) }),
     sentAt: at,
     sentBy: by,
     status: 'Pending',

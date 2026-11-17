@@ -391,7 +391,8 @@ unchecked — it is never assumed new.
 
 Opens only on a converted lead. **Hard gate** (the payload the sheet says a
 handover "must carry"): WhatsApp group invite link (`https://chat.whatsapp.com/…`
-— the user named it as required for a proper handover), owner/designer,
+— the user named it as required for a proper handover; since 2026-11-17 a reason
+the client will not join one passes too, below), owner/designer,
 10-digit mobile, segment, client type, team size, office address, project
 details, ≥1 meeting held. **Soft** (prompted): order not fetched, no GST, no pin.
 KAM is picked from active, in-rotation KAM team members (roster KAMs if the
@@ -402,6 +403,28 @@ a rejected handover can be resent. The KAM's response is built from the saved
 lead and skips the BM's draft gates, so a BM's half-finished edit cannot block
 a KAM sign-off. Who may respond: the KAM it was sent to (by phone, else name),
 a manager, or anyone while the team table is not live.
+
+- **A client may refuse the WhatsApp group (2026-11-17).** The user: some people
+  are not ready for a group, and the handover must still go ahead. "Client is not
+  willing to join a WhatsApp group" swaps the link for a required reason (three
+  presets or Other, typed), stored as `whatsapp_group_declined` in the row's meta
+  (it lands in the backend's `extra`, so no migration). The gate takes a valid link
+  **or** a reason. A valid link always wins, so the handover record carries one or
+  the other, never both. The KAM sees the reason above Accept, with "call the
+  client yourself" in place of "join the group", and the journey says "without a
+  WhatsApp group". An empty reason is not stored as a refusal.
+- **Accepting creates the firm in the Client Database (2026-11-17).** The KAM tab
+  reads only `b2b_client`, and a handover lived only on the Outreach row. So
+  a Hyderabad firm accepted by Sai Suresh on 14 Nov could not be found in his KAM tab
+  (the only Outreach handover ever sent at that point). Accept now runs
+  `saveOutreachHandoverFirm` first: it reads the client list and matches the lead
+  by any of its numbers, then GST, then exact name (`firmForOutreachHandover`). It
+  creates a firm with source Outreach, or links the existing one, with an `Accepted` assignment to the
+  KAM, so no second sign-off follows on the KAM tab. A firm held by another KAM
+  moves to the handover's KAM, and Assignment history records it. If that write
+  fails, nothing is accepted and the drawer says why. It runs only on Accept, so a
+  handover accepted before this needs its firm added by hand (Client Database →
+  Add, then assign).
 
 ### Studio Space waitlist
 

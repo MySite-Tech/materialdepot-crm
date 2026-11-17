@@ -79,7 +79,9 @@ export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by
 
   const h0 = before.handover;
   const h1 = after.handover;
-  if (h1 && (!h0 || h0.sentAt !== h1.sentAt)) push('handover-sent', `Handed over to ${h1.kam} with the WhatsApp group`);
+  if (h1 && (!h0 || h0.sentAt !== h1.sentAt)) push('handover-sent', h1.whatsappGroupDeclined
+    ? `Handed over to ${h1.kam} without a WhatsApp group (client not willing: ${h1.whatsappGroupDeclined})`
+    : `Handed over to ${h1.kam} with the WhatsApp group`);
   if (h1 && h1.status !== h0?.status && h1.status === 'Accepted') push('handover-accepted', `${h1.kam} signed off the handover`);
   if (h1 && h1.status !== h0?.status && h1.status === 'Rejected') push('handover-rejected', `${h1.kam} rejected the handover: ${h1.rejectReason || 'no reason'}`);
   return ev;
@@ -227,7 +229,7 @@ export function outreachReminders(
   if (!open) {
     if (!orderVerified(l)) add('verify', 'overdue', 'Converted, but the first order is not fetched from its Enq ID');
     const hs = handoverState(l, ctx.nowMs);
-    if (hs === 'ready') add('handover', 'overdue', 'Converted — hand over to a KAM with the WhatsApp group');
+    if (hs === 'ready') add('handover', 'overdue', 'Converted — hand over to a KAM');
     if (hs === 'pending') add('handover', 'todo', `Waiting on ${l.handover!.kam} to sign off (${Math.floor(hoursSince(l.handover!.sentAt, ctx.nowMs))}h of ${HANDOVER_TAT_HOURS}h)`);
     if (hs === 'overdue') add('handover', 'overdue', `${l.handover!.kam} has not signed off in ${HANDOVER_TAT_HOURS}h — chase them`);
     if (hs === 'rejected') add('handover', 'overdue', `${l.handover!.kam} rejected the handover: ${l.handover!.rejectReason || 'no reason given'}`);

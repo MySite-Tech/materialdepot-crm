@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-95 entries. They live in one file because they cross-reference each other —
+96 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -105,6 +105,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A KPI that asks for what the screen never lets you enter scores everyone at zero
 - A lead the import's date floor skipped cannot be reassigned, and Sync never fixes it
 - A Postponed status with the date moved forward hid every rebooked meeting, and no meeting was ever marked held
+- An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1445,3 +1446,15 @@ meeting's day, a checked-in meeting has Mark held, and one not marked held is li
 on the scorecard as not counted (`docs/b2b/outreach.md` §Postponing rebooks).
 `scripts/outreach-meeting-repair.mjs` puts the existing rows back the same way.
 
+### An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched (2026-11-17)
+
+The user: a firm was handed from Outreach to KAM, and the KAM cannot find it in KAM
+search. Sai Suresh had accepted it on 14 Nov. Every read answered 200 and the search
+code was right: the KAM tab searches only Client Database firms (`b2b_client`), and
+the handover was written only to the Outreach row. No step ever created the firm, so
+an accepted handover was invisible to the very tab it handed to. The shape: a hand-off
+recorded on the sender's record only, while the receiver's screen reads another table.
+Accept now creates or links the firm with an `Accepted` assignment to the KAM before
+it saves the handover (`docs/b2b/outreach.md` §KAM handover). When a hand-off between
+two tabs looks lost, check which table the receiving tab reads before debugging its
+filters.
