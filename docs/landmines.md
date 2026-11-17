@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-96 entries. They live in one file because they cross-reference each other —
+97 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -106,6 +106,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A lead the import's date floor skipped cannot be reassigned, and Sync never fixes it
 - A Postponed status with the date moved forward hid every rebooked meeting, and no meeting was ever marked held
 - An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched
+- Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1458,3 +1459,17 @@ Accept now creates or links the firm with an `Accepted` assignment to the KAM be
 it saves the handover (`docs/b2b/outreach.md` §KAM handover). When a hand-off between
 two tabs looks lost, check which table the receiving tab reads before debugging its
 filters.
+
+### Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket (2026-11-17)
+
+The user, with two drawers on screen: Vikas's closed Inbound leads said "Revenue
+credited to Vikas", yet the orders did not count under him. Hardi Patel opens the
+Django deal ticket for Inbound clients, so she was the cart's rep, and the revenue
+rule put "a B2B rep on the cart" ahead of the lead's owner. The drawer's line used
+the lead owner, so the screen and the report disagreed. It was first patched on 14
+Nov by crediting five orders by hand, which is why it came back three days later.
+The shape: a hand fix applied to data when the rule itself was wrong, and two places
+stating one rule two ways. `teammateLeadOwner` now gives the order to a teammate who
+owns the lead (`docs/b2b/overview.md` §A teammate's ticket does not take the lead
+owner's order). When the same complaint comes back after a manual fix, look for the
+rule, not the record.

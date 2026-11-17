@@ -681,10 +681,11 @@ them, and whoever the CRM gives a lead to must own it in Kylas too, so Django's
   first said "Assigned to" was the ticket owner. That was wrong.) Django pushes
   ticket owners into Kylas deals through `user_organisation.crm_id`, and never reads
   owners from Kylas. Vikas's login has had its `crm_id` since 14 Nov
-  (`docs/backends.md` §Owed by Django row 19). An order on an Inbound lead whose
-  ticket another B2B rep owns is credited to that rep. A manager moves it with the
-  per-order credit (`overview.md` §A manager credits one order), as was done for
-  five of Vikas's orders on 14 Nov.
+  (`docs/backends.md` §Owed by Django row 19). **Since 2026-11-17 an order on an
+  Inbound lead whose ticket a teammate opened goes to the lead's owner**
+  (`overview.md` §A teammate's ticket does not take the lead owner's order). Before
+  that it went to the ticket's owner, and five of Vikas's orders were moved by
+  per-order credit on 14 Nov; the same thing recurred on 17 Nov.
 
 ### Gates: the PRD's four, Invalid's three, nine soft
 
