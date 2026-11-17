@@ -690,7 +690,10 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
 - **Checked signed in on production, 17 Nov:** Vikas's Leadership Board lists all six
   moved orders, including the 12 and 16 Nov ones the user reported, and KAM search
   finds the handed-over firm as Active with its KAM, not waiting for sign-off. No
-  console errors. A new handover's Accept has not yet run on production.
+  console errors. **A new handover's Accept was tested live the same day** on a dummy
+  Outreach lead with a pending handover and a WhatsApp refusal reason: Accept created
+  the firm with both numbers and an `Accepted` assignment, KAM search found it, and
+  both dummy rows were then deleted from production.
 
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
