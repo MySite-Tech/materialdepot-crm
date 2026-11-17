@@ -1,7 +1,7 @@
 import { OutreachLead, fmtINR } from '../mock-data';
 import { COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, WaitlistSignup, completedMeetings, followUpMeetings } from '.';
 import { isMobile, orderVerified, signedOffWithinTat } from './handover';
-import { istDay, outreachAdherence } from './reminders';
+import { checkInDay, checkedInNotHeld, istDay, outreachAdherence } from './reminders';
 import { normalisePhone } from '@/lib/org/utils';
 
 export type OutreachKpiKey =
@@ -94,8 +94,16 @@ function handoverNote(l: OutreachLead): string {
   return `Waiting on ${h.kam}`;
 }
 
+function notMarkedHeld(leads: OutreachLead[], period: Period, firstVisit: boolean): KpiRow[] {
+  return leads
+    .filter((l) => (completedMeetings(l.meetings).length === 0) === firstVisit)
+    .flatMap((l) => checkedInNotHeld(l.meetings)
+      .filter((m) => inPeriod(m.checkIn!.at, period))
+      .map((m) => ({ lead: l, counts: false, at: checkInDay(m), note: `Meeting ${m.n}: checked in ${checkInDay(m)}, not marked held yet` })));
+}
+
 export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Map<string, WaitlistSignup> | null): OutreachKpis {
-  const newMeetings: KpiRow[] = leads
+  const held: KpiRow[] = leads
     .map((l) => ({ l, m: completedMeetings(l.meetings)[0] }))
     .filter((x) => x.m && inPeriod(x.m.date, period))
     .map(({ l, m }) => {
@@ -109,16 +117,21 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
         note: missing.length ? `Missing ${missing.join(', ')}` : `Meeting ${m.n} held${m.pin ? '' : ' · no live pin'}`,
       };
     });
-  const noPin = newMeetings.filter((r) => r.counts && r.note.endsWith('no live pin')).length;
+  const noPin = held.filter((r) => r.counts && r.note.endsWith('no live pin')).length;
+  const firstUnmarked = notMarkedHeld(leads, period, true);
+  const newMeetings = [...held, ...firstUnmarked];
 
-  const followUps: KpiRow[] = leads
+  const fuHeld: KpiRow[] = leads
     .map((l) => ({ l, fu: followUpMeetings(l.meetings) }))
     .filter(({ fu }) => fu.some((m) => inPeriod(m.date, period)))
     .map(({ l, fu }) => ({
       lead: l, counts: true, at: fu.filter((m) => inPeriod(m.date, period)).pop()?.date,
       note: l.status === 'Closed' ? 'Order placed' : `${Math.min(fu.length, FOLLOW_UPS_REQUIRED)} of ${FOLLOW_UPS_REQUIRED} follow-ups held`,
     }));
-  const fuDone = followUps.filter((r) => r.note === 'Order placed' || followUpMeetings(r.lead.meetings).length >= FOLLOW_UPS_REQUIRED).length;
+  const fuUnmarked = notMarkedHeld(leads, period, false);
+  const followUps = [...fuHeld, ...fuUnmarked];
+  const fuDone = fuHeld.filter((r) => r.note === 'Order placed' || followUpMeetings(r.lead.meetings).length >= FOLLOW_UPS_REQUIRED).length;
+  const unmarkedSub = (n: number) => (n ? `${n} checked in but not marked held` : '');
 
   const adherence: KpiRow[] = leads
     .filter((l) => touchedIn(l, period) && !l.intake?.rejectedAt)
@@ -132,7 +145,10 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
       && inPeriod(l.intake?.assignedAt || l.createdAt, period))
     .map((l) => {
       const met = completedMeetings(l.meetings)[0];
-      return { lead: l, counts: !!met, at: l.intake?.assignedAt || l.createdAt, note: met ? `${l.source} · met ${met.date || ''}`.trim() : `${l.source} · not met yet` };
+      const visit = checkedInNotHeld(l.meetings)[0];
+      const note = met ? `${l.source} · met ${met.date || ''}`.trim()
+        : visit ? `${l.source} · checked in ${checkInDay(visit)}, not marked held yet` : `${l.source} · not met yet`;
+      return { lead: l, counts: !!met, at: l.intake?.assignedAt || l.createdAt, note };
     });
 
   const converted = leads.filter((l) => l.status === 'Closed' && inPeriod(l.convertedAt || l.statusChangedAt, period));
@@ -171,10 +187,13 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
   return {
     newMeetings: {
       value: counted(newMeetings), rows: newMeetings,
-      sub: [newMeetings.length - counted(newMeetings) ? `${newMeetings.length - counted(newMeetings)} more held but missing notes, name or mobile` : '', noPin ? `${noPin} with no live pin` : '']
+      sub: [held.length - counted(held) ? `${held.length - counted(held)} more held but missing notes, name or mobile` : '', unmarkedSub(firstUnmarked.length), noPin ? `${noPin} with no live pin` : '']
         .filter(Boolean).join(' · ') || undefined,
     },
-    followUpMeetings: { value: followUps.length, rows: followUps, sub: `${fuDone} reached ${FOLLOW_UPS_REQUIRED} follow-ups or an order` },
+    followUpMeetings: {
+      value: counted(followUps), rows: followUps,
+      sub: [`${fuDone} reached ${FOLLOW_UPS_REQUIRED} follow-ups or an order`, unmarkedSub(fuUnmarked.length)].filter(Boolean).join(' · '),
+    },
     adherence: { value: pct(counted(adherence), adherence.length), rows: adherence, sub: adherence.length ? `${counted(adherence)} of ${adherence.length} leads touched` : 'No leads touched yet' },
     coverage: { value: pct(counted(coverage), coverage.length), rows: coverage, sub: coverage.length ? `${counted(coverage)} of ${coverage.length} met in person` : 'None assigned in this period' },
     conversions: {

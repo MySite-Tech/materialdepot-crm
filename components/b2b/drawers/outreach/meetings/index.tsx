@@ -11,7 +11,7 @@ import { gapLabel, meetingsNewestFirst, startsExpanded } from './utils';
 export function MeetingTimeline({ meetings, locked, stored, onCheckIn, draft, set, patchMeeting, showGates, lastHeld, openLead, scheduledNext, followUpError, contactList }: {
   meetings: OutreachMeeting[];
   locked: Set<number>;
-  stored: Set<number>;
+  stored: Map<number, OutreachMeeting>;
   onCheckIn: (n: number) => void;
   draft: OutreachLead;
   set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
@@ -49,6 +49,7 @@ export function MeetingTimeline({ meetings, locked, stored, onCheckIn, draft, se
               {open ? (
                 <MeetingEditor
                   m={m}
+                  saved={stored.get(m.n)}
                   locked={locked.has(m.n)}
                   onCheckIn={stored.has(m.n) ? () => onCheckIn(m.n) : null}
                   draft={draft}

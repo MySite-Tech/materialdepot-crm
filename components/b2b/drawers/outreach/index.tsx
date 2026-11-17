@@ -23,7 +23,7 @@ import {
 import { isHandoverKam, respondToHandover, sameRep, sendHandover } from '../../models/outreach/handover';
 import { Rep, assignLead } from '../../models/outreach/intake';
 import { newOnboardingFrom } from '../../models/outreach/kpis';
-import { outreachCaptureErrors } from '../../models/outreach/reminders';
+import { istDay, outreachCaptureErrors, withRebooking } from '../../models/outreach/reminders';
 import { OutreachScope, SaveLead } from '../../views/outreach/types';
 import { EnqLookup, fetchKamLoad, lookupEnqId, outreachPhones } from '@/lib/b2b';
 import { fetchFirmDeals } from '@/lib/api';
@@ -130,13 +130,14 @@ export default function OutreachDrawer({
   const meetings = draft.meetings || [];
   const exhausted = meetingsStalled(meetings);
   const locked = useMemo(() => new Set((lead.meetings || []).filter((m) => m.status !== 'Scheduled').map((m) => m.n)), [lead.meetings]);
-  const stored = useMemo(() => new Set((lead.meetings || []).map((m) => m.n)), [lead.meetings]);
+  const stored = useMemo(() => new Map((lead.meetings || []).map((m) => [m.n, m])), [lead.meetings]);
   const [checkingIn, setCheckingIn] = useState<number | null>(null);
   const recordCheckIn = async (n: number, c: MeetingCheckIn): Promise<string | null> => {
-    const after = { ...lead, meetings: (lead.meetings || []).map((m) => (m.n === n ? { ...m, checkIn: c, updatedAt: nowIso() } : m)) };
+    const date = istDay(c.at);
+    const after = { ...lead, meetings: (lead.meetings || []).map((m) => (m.n === n ? { ...m, checkIn: c, date, updatedAt: nowIso() } : m)) };
     const err = await onSave(lead, after);
     if (err) return `The check-in was not saved: ${err}`;
-    patchMeeting(n, { checkIn: c });
+    patchMeeting(n, { checkIn: c, date });
     return null;
   };
   const met = hasMet(meetings);
@@ -209,6 +210,7 @@ export default function OutreachDrawer({
     const statusChanged = next.status !== lead.status;
     const toSave: OutreachLead = {
       ...next,
+      meetings: withRebooking(lead.meetings, next.meetings, nowIso()),
       company: next.company.trim(),
       statusChangedAt: statusChanged ? nowIso() : next.statusChangedAt,
       quoteSharedAt: next.status === 'Quote Share' && !next.quoteSharedAt ? nowIso() : next.quoteSharedAt,

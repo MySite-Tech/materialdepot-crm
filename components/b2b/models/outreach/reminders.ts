@@ -1,7 +1,7 @@
 import { OutreachLead } from '../mock-data';
 import { withRequirementHistory } from '../requirement';
 import {
-  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, openMeeting, outreachMissingForStage,
+  COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, JourneyEvent, OUTREACH_STATUS_LABEL, OutreachMeeting, completedMeetings, followUpMeetings, needsCheckIn, nextMeetingNumber, openMeeting, outreachMissingForStage,
 } from '.';
 import { normalisePhone } from '@/lib/org/utils';
 import { HANDOVER_TAT_HOURS, handoverState, hoursSince, isMobile, orderVerified } from './handover';
@@ -15,6 +15,27 @@ export const istDay = (iso: string | undefined): string => {
 };
 
 const meetingWord = (m: OutreachMeeting) => `Meeting ${m.n}${m.date ? ` (${m.date})` : ''}`;
+
+export const checkInDay = (m: OutreachMeeting): string => (m.checkIn ? istDay(m.checkIn.at) : '');
+
+export const checkedInNotHeld = (meetings: OutreachMeeting[] | undefined): OutreachMeeting[] =>
+  (meetings || []).filter((m) => m.status === 'Scheduled' && !!m.checkIn);
+
+export function withRebooking(saved: OutreachMeeting[] | undefined, draft: OutreachMeeting[] | undefined, at: string): OutreachMeeting[] | undefined {
+  const before = new Map((saved || []).map((m) => [m.n, m]));
+  const moved = (draft || []).find((m) => {
+    const s = before.get(m.n);
+    return s?.status === 'Scheduled' && m.status === 'Postponed' && !!s.date && String(m.date || '') > String(s.date);
+  });
+  if (!moved) return draft;
+  const s = before.get(moved.n)!;
+  const restored = (draft || []).map((m) => (m === moved ? { ...m, date: s.date, time: s.time } : m));
+  if (restored.some((m) => m.status === 'Scheduled')) return restored;
+  return [...restored, {
+    n: nextMeetingNumber(restored), date: moved.date, time: moved.time, area: moved.area, officeLocation: moved.officeLocation,
+    status: 'Scheduled', loggedBy: moved.loggedBy, updatedAt: at,
+  }];
+}
 
 export function journeyDiff(before: OutreachLead | null, after: OutreachLead, by: string, at: string): JourneyEvent[] {
   const ev: JourneyEvent[] = [];
@@ -174,7 +195,8 @@ export function outreachReminders(
 
   for (const m of scheduled) {
     const d = String(m.date || '').slice(0, 10);
-    if (d && d < ctx.today) add(`m${m.n}`, 'overdue', `${meetingWord(m)} has passed — mark it held or postponed`);
+    if (m.checkIn) add(`m${m.n}`, checkInDay(m) < ctx.today ? 'overdue' : 'today', `You checked in at ${meetingWord(m)} — mark it held and add the notes`);
+    else if (d && d < ctx.today) add(`m${m.n}`, 'overdue', `${meetingWord(m)} has passed — mark it held or postponed`);
     else if (d === ctx.today) add(`m${m.n}`, 'today', `Meeting ${m.n} today${m.time ? ` at ${m.time}` : ''}`);
   }
   for (const m of held) {
