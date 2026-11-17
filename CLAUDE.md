@@ -676,8 +676,8 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
 - **Accepting an Outreach handover creates the firm in the Client Database** with an
   `Accepted` assignment to the KAM (`saveOutreachHandoverFirm`). The KAM tab reads only
   `b2b_client`, so the only handover ever sent (accepted 14 Nov) could not be found in
-  KAM search. That firm predates the fix and still needs adding by hand (Client
-  Database → Add, assign to its KAM); the record is in memory, not here.
+  KAM search. That firm predated the fix and was written to production on 17 Nov with
+  the same function's output, on the user's ask.
 - **A client may refuse the WhatsApp group:** a checkbox plus a reason passes the
   handover gate (`whatsapp_group_declined`, `docs/b2b/outreach.md` §KAM handover).
 - **A teammate who opened the deal ticket no longer takes the lead owner's order.**
@@ -687,9 +687,10 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
   are deliberately unchanged: including them moved seven November carts between KAMs.
   Ask the user before extending it (`docs/b2b/overview.md` §A teammate's ticket).
   On real November orders exactly six moved, all Hardi → Vikas.
-- **After deploy, check signed in:** Vikas's My performance includes the two leads'
-  orders from 12 and 16 Nov; a KAM accepting a handover finds the firm in KAM search.
-  Only the sandbox and the compiled classifier on real rows have run it.
+- **Checked signed in on production, 17 Nov:** Vikas's Leadership Board lists all six
+  moved orders, including the 12 and 16 Nov ones the user reported, and KAM search
+  finds the handed-over firm as Active with its KAM, not waiting for sign-off. No
+  console errors. A new handover's Accept has not yet run on production.
 
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
