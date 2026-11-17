@@ -10,8 +10,9 @@ import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
 import { fmtMeetingDay } from './utils';
 
-export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, isLastHeld, scheduledNext, followUpError, contactList, onCheckIn, onDone }: {
+export function MeetingEditor({ m, saved, locked, draft, set, patchMeeting, showGates, isLastHeld, scheduledNext, followUpError, contactList, onCheckIn, onDone }: {
   m: OutreachMeeting;
+  saved: OutreachMeeting | undefined;
   locked: boolean;
   draft: OutreachLead;
   set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
@@ -26,6 +27,8 @@ export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, 
 }) {
   const gaps = meetingGaps(m);
   const mustCheckIn = needsCheckIn(m.date) && !m.checkIn;
+  const rebooking = !locked && m.status === 'Postponed' && saved?.status === 'Scheduled' && !!saved.date;
+  const dayFixed = !!m.checkIn && !rebooking;
   return (
     <div>
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -34,6 +37,9 @@ export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, 
           <MeetingStatusChip s={m.status} />
         </div>
         <div className="flex items-center gap-2">
+          {!locked && m.status === 'Scheduled' && m.checkIn && (
+            <button onClick={() => patchMeeting(m.n, { status: 'Completed' })} className="px-2.5 py-1 text-[11px] rounded-md bg-[#0F766E] text-white font-semibold">Mark held</button>
+          )}
           {!locked && (
             <select
               value={m.status}
@@ -57,12 +63,17 @@ export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, 
           {[fmtMeetingDay(m.date), m.time, m.area, m.officeLocation].filter(Boolean).join(' · ') || 'No date or place recorded'}
         </p>
       ) : (
+        <>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2.5">
-          <Field label="Date">
-            <input type="date" value={m.date || ''} onChange={(e) => patchMeeting(m.n, { date: e.target.value })} className={inputCls} />
+          <Field label={rebooking ? 'Rebook for' : 'Date'} hint={dayFixed ? 'The check-in day' : undefined}>
+            {dayFixed ? <ReadValue v={fmtMeetingDay(m.date)} /> : (
+              <input type="date" value={m.date || ''} onChange={(e) => patchMeeting(m.n, { date: e.target.value })} className={inputCls} />
+            )}
           </Field>
-          <Field label="Time">
-            <input type="time" value={m.time || ''} onChange={(e) => patchMeeting(m.n, { time: e.target.value })} className={inputCls} />
+          <Field label={rebooking ? 'New time' : 'Time'}>
+            {dayFixed ? <ReadValue v={m.time} /> : (
+              <input type="time" value={m.time || ''} onChange={(e) => patchMeeting(m.n, { time: e.target.value })} className={inputCls} />
+            )}
           </Field>
           <Field label="Area">
             <input value={m.area || ''} onChange={(e) => patchMeeting(m.n, { area: e.target.value })} className={inputCls} />
@@ -71,6 +82,13 @@ export function MeetingEditor({ m, locked, draft, set, patchMeeting, showGates, 
             <input value={m.officeLocation || ''} onChange={(e) => patchMeeting(m.n, { officeLocation: e.target.value })} className={inputCls} />
           </Field>
         </div>
+        {rebooking && (
+          <p className="text-[11px] text-amber-700 mt-1.5 leading-snug">
+            Meeting {m.n} stays postponed on {fmtMeetingDay(saved?.date)}. Pick a later date above and Save books the next meeting for it.
+            {' '}Leave the date as it is if there is no new date yet.
+          </p>
+        )}
+        </>
       )}
 
       <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[11px]">

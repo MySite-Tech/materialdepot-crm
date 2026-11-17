@@ -329,6 +329,42 @@ changed back before Save. The user had seen a held Meeting 2 with no notes
 forced open as a full form, next to "Schedule meeting 3", and read it as being
 asked to book meeting 2 again. Unlocking a saved meeting is not built.
 
+### Postponing rebooks, and a check-in fixes the day (2026-11-17)
+
+BMs used Postponed to mean "moved to this date": they changed the date and picked
+Postponed in one save. On 17 Nov that was 89 of the team's 102 Postponed meetings.
+A saved Postponed meeting is locked, so the new date was never a booking and nothing
+could be marked held on it (`docs/landmines.md`). Now:
+
+- **Postponed with a later date rebooks.** `withRebooking` (`reminders.ts`), run in
+  the drawer's save, puts the postponed meeting back on its booked date and adds the
+  next meeting, Scheduled, for the new date and time. With no date change, or with
+  another meeting already booked, it only postpones. While Postponed is picked, the
+  editor labels the date "Rebook for" and says what Save will do.
+- **The check-in day is the meeting's day.** A check-in writes its IST day onto the
+  meeting, and the date and time become read-only after it. To book the next visit,
+  mark this one held or postponed and schedule the next. A checked-in Scheduled
+  meeting shows **Mark held**, and its reminder reads "You checked in at Meeting N,
+  mark it held and add the notes".
+- **A check-in that was never marked held is shown, not counted.** New meetings
+  lists it (no held meeting yet), and Follow-ups (one held already), as a not-counted
+  row with the check-in day. Coverage's note says it too. It counts only once it is
+  marked held with notes, as before. On 17 Nov that surfaced three of pratham's
+  visits that the scorecard had not shown at all.
+
+`scripts/outreach-meeting-repair.mjs` (dry run by default, `--apply` to write)
+repairs the rows saved before this. A Postponed meeting dated after the day it was
+postponed goes back to its check-in day, else the date its journey says it was
+booked for, else the postpone day. An open lead whose last meeting it is gets the
+next meeting booked for the moved date. A Scheduled meeting with a check-in is
+re-dated to the check-in day. Each change appends a journey line by "CRM repair".
+On 17 Nov's rows: 92 leads, 84 meetings rebooked. For pratham, leads with no meeting
+booked went from 120 to 46. It does not mark anything held. Nobody wrote the notes.
+**Applied to production on 2026-11-17** (92 rows written, a re-run found 0). Only
+`meetings`, `journey` and the timestamps changed. It is safe to re-run: a repaired row
+no longer matches. A copy of the 352 Outreach rows from before the write is kept outside
+the repo, in `~/Projects/ss-local-stack/logs/`.
+
 ### Converted = first order, and only a fetched order counts
 
 A Converted lead's revenue goes to its BM, unless a manager credits the lead's
@@ -414,7 +450,12 @@ shown as each tile's tooltip; the non-obvious ones:
   owner/designer name and a valid mobile — the sheet's "genuine lead" test.
   Missing pins are counted in the sub-line, not excluded.
 - **Follow-up meetings** = unique firms with a non-first held meeting in the
-  period; each row says how far it got toward 2 follow-ups or an order.
+  period; each row says how far it got toward 2 follow-ups or an order. A
+  checked-in meeting not marked held is a not-counted row in this KPI or in New-lead
+  meetings (§Postponing rebooks).
+- **Coverage** reads 0 when it should: on 17 Nov, 56 Inbound and EC leads had been
+  assigned in November, 28 were still waiting for the BM to accept, and 1 had a
+  meeting booked.
 - **CRM adherence** = leads *touched* in the period (created, status change,
   meeting date or journey event in it) with zero gaps in
   `outreachAdherence` ÷ touched. GST is not in it (many firms have none).

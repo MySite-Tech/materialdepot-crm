@@ -655,6 +655,22 @@ Ask whether that means a new Outreach lead for the firm or an Outreach BM owning
 firm before building it, because Outreach refuses numbers already in the Client
 Database (`docs/b2b/ec-referral.md`).
 
+**Outreach meetings were never marked held (2026-11-17, CRM PR from
+`outreach-meeting-rebook`, merged on Dhruv's ask; no backend PR).** The user: BMs log
+meetings and the Outreach scorecard reads 0 meetings, 0 follow-ups and 0% coverage.
+The KPI code was right; on production rows it reproduced the screen exactly. BMs used
+Postponed as "rescheduled": 89 of 102 Postponed meetings had their date moved forward,
+and a saved Postponed meeting is locked, so the new date was never a booking and
+nothing could be marked held. pratham had 0 meetings marked held. Now Postponed with a
+later date books the next meeting, a check-in fixes the meeting's day and offers Mark
+held, and a checked-in meeting not marked held is a not-counted scorecard row
+(`docs/b2b/outreach.md` §Postponing rebooks). `scripts/outreach-meeting-repair.mjs`
+ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is real:
+28 of November's 56 Inbound/EC leads were not yet accepted, and 1 had a meeting.
+**Open:** the user has not decided whether a check-in alone (no notes) should count
+as a held meeting; today it does not. pratham's count stays 0 until he marks his
+checked-in visits held with notes. Not yet seen in a browser on production.
+
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
 `b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-94 entries. They live in one file because they cross-reference each other —
+95 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -104,6 +104,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A KPI that reads only the receiving team's rows misses every hand-off that team has not picked up
 - A KPI that asks for what the screen never lets you enter scores everyone at zero
 - A lead the import's date floor skipped cannot be reassigned, and Sync never fixes it
+- A Postponed status with the date moved forward hid every rebooked meeting, and no meeting was ever marked held
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1425,3 +1426,22 @@ guard that says "sync first" when no sync can satisfy it. `reassignInboundLeads`
 reads the missing leads from Kylas in one `in` search and inserts their rows as part
 of the owner write (`docs/b2b/inbound.md` §The CRM's owner is written to Kylas). Check
 any "try X again" message for a path that can actually make X true.
+
+### A Postponed status with the date moved forward hid every rebooked meeting, and no meeting was ever marked held (2026-11-17)
+
+The user, on the Outreach scorecard: BMs go to meetings and log them, and New meetings,
+Follow-ups and Coverage still read 0. The arithmetic was right. Run on the production
+rows, the KPI code reproduced the screen exactly. The meetings were never stored as
+held. 89 of the team's 102 Postponed meetings had their date moved **forward** in the
+same save, because a BM read Postponed as "reschedule to this date". A saved Postponed
+meeting is final and locked, so the new date was no booking. It never reached Meetings
+today and could never be marked held. pratham had 74 of them and not one meeting
+marked held. Nine meetings had a check-in, so the BM was physically there, but were
+still Scheduled or Postponed. Some had their date edited past the check-in day, which
+erased the visit day. The shape: a status that a user can read as "moved" but the
+model reads as "over". Now a Postponed meeting with a later date keeps its booked date
+and books the next meeting for the new one (`withRebooking`). A check-in fixes the
+meeting's day, a checked-in meeting has Mark held, and one not marked held is listed
+on the scorecard as not counted (`docs/b2b/outreach.md` §Postponing rebooks).
+`scripts/outreach-meeting-repair.mjs` puts the existing rows back the same way.
+

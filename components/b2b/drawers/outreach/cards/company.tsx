@@ -14,7 +14,7 @@ export function OutreachCompanyCard({ draft, set, showGates, exhausted, locked, 
   showGates: boolean;
   exhausted: boolean;
   locked: Set<number>;
-  stored: Set<number>;
+  stored: Map<number, OutreachMeeting>;
   onCheckIn: (n: number) => void;
   mArea: string;
   mDate: string;
