@@ -433,6 +433,14 @@ store caps a request at 50MB and Cloudflare at 100MB. `app/catalogue-pdf` joins
 the parts. After it deploys, upload one catalogue over 45MB on production and open
 it. A 400 means production's file host is missing from `PART_HOSTS`. The full
 account is in that repo's `docs/launches.md`.
+**Studio Space: a waiting team request's Edit saves again (b2b-dashboard PR #50,
+merged and deployed 2026-11-17 as `d9c661c`; no backend PR).** Settings → Team →
+Edit on a request waiting on Material Depot failed with "Their 10-digit mobile number
+is needed: every login has one" whenever the mobile was left unchanged. The screen
+sent the phone only when edited, and backend 0012 (2026-10-19) requires it on every
+save. Now it always sends the phone. A teammate's own Edit was never affected. That
+repo's `docs/landmines.md` has the shape. **After deploy,** edit only the email on a
+waiting request and check it saves. It has not been seen on production yet.
 
 **Branching while other sessions edit this tree: use a `git worktree`.**
 Switching branches here drags every session's uncommitted files along.
