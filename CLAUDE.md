@@ -689,6 +689,14 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
   but only if they held the firm when it was placed (`kamFrom`, `docs/b2b/overview.md`
   §A teammate's ticket). Four November orders moved to Krishna; three stayed because
   the firm was assigned after the order.
+- **Outreach scorecard follows orders and check-ins (2026-11-18, the user's choices).**
+  pratham read 0 meetings, 0 conversions and ₹0 while My performance credited him four
+  store orders. Conversions, KAM handover and Revenue now read the per-order report
+  through `teamOrders`, the same as My performance, whether or not the lead was moved
+  to Converted; a check-in counts as a held meeting (`heldMeetings`); a check-in with
+  no notes is an adherence gap. Run on his real November rows: 9 meetings, 2 converted
+  clients, revenue equal to the headline. Save gates and Mark held are unchanged
+  (`docs/b2b/outreach.md` §Conversions and revenue come from orders).
 - **Checked signed in on production, 17 Nov:** Vikas's Leadership Board lists all six
   moved orders, including the 12 and 16 Nov ones the user reported, and KAM search
   finds the handed-over firm as Active with its KAM, not waiting for sign-off. No

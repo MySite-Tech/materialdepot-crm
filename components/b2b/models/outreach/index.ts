@@ -237,6 +237,12 @@ export function completedMeetings(meetings: OutreachMeeting[] | undefined): Outr
     .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || a.n - b.n);
 }
 
+export function heldMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
+  return (meetings || [])
+    .filter((m) => m.status === 'Completed' || !!m.checkIn)
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || a.n - b.n);
+}
+
 export function followUpMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
   return completedMeetings(meetings).slice(1);
 }

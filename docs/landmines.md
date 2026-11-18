@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-97 entries. They live in one file because they cross-reference each other —
+98 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -107,6 +107,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A Postponed status with the date moved forward hid every rebooked meeting, and no meeting was ever marked held
 - An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched
 - Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket
+- An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1473,3 +1474,18 @@ stating one rule two ways. `teammateLeadOwner` now gives the order to a teammate
 owns the lead (`docs/b2b/overview.md` §A teammate's ticket does not take the lead
 owner's order). When the same complaint comes back after a manual fix, look for the
 rule, not the record.
+
+### An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders (2026-11-18)
+
+The user, with pratham's Outreach tab on screen: BMs say their orders show wrong. The
+Outreach scorecard read 0 meetings, 0 conversions and ₹0, while My performance's
+headline credited him four store orders on his EC-referral leads. Both were "right" by
+their own code: the headline reads the per-order report, the scorecard counted only
+leads moved to Converted with a fetched Enq ID, and none of his ordering clients' leads
+had left "Yet to Meet". His 9 check-ins counted for nothing either, because only a
+meeting marked held with notes did. The shape: one figure computed two ways on two
+screens, one of them gated on a manual step reps skip. Conversions, handover and
+revenue now read the same report through `teamOrders`, and a check-in counts as held
+(`docs/b2b/outreach.md` §Conversions and revenue come from orders, §Postponing
+rebooks). When a rep says a number is wrong, put the two screens' rules side by side
+before touching data.
