@@ -10,6 +10,8 @@ import { Spinner } from '../../ui/inbound-chips';
 import { LENS, NO_FILTERS } from './constants';
 import { useOutreachData } from './hooks/use-outreach-data';
 import { useOutreachLenses } from './hooks/use-outreach-lenses';
+import { useOutreachOrders } from './hooks/use-outreach-orders';
+import { teamOrders } from '../../models/performance/measures/revenue';
 import { useOutreachScope } from './hooks/use-outreach-scope';
 import { Assignments } from './intake';
 import { LensStrip } from './lenses';
@@ -85,7 +87,13 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const bmLeads = useMemo(() => (pickedRep ? scoped.filter(repOwns(pickedRep)) : scoped), [scoped, pickedRep]);
   const filtered = useMemo(() => bmLeads.filter((l) => matchesFilters(l, f)), [bmLeads, f]);
   const pipelineLeads = useMemo(() => (allTime || f.search.trim() ? filtered : filtered.filter((l) => inPeriod(l.createdAt, period))), [filtered, allTime, f.search, period]);
-  const kpis = useMemo(() => outreachKpis(bmLeads, period, waitIdx), [bmLeads, period, waitIdx]);
+  const sales = useOutreachOrders(period, !isKamView);
+  const outreachOrders = useMemo(() => teamOrders(sales.orders, 'outreach', null), [sales.orders]);
+  const bmOrders = useMemo(
+    () => teamOrders(outreachOrders, 'outreach', pickedRep ? [pickedRep] : scope.mode === 'mine' ? [scope.me] : null),
+    [outreachOrders, pickedRep, scope.mode, scope.me],
+  );
+  const kpis = useMemo(() => outreachKpis(bmLeads, period, waitIdx, bmOrders), [bmLeads, period, waitIdx, bmOrders]);
   const pool = useMemo(() => (data.inbound ? inboundPool(data.inbound, data.leads) : null), [data.inbound, data.leads]);
   const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, kpis, lens, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
 
@@ -244,10 +252,10 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
             )}
           </div>
           {scoreView === 'team' && canPickBm && !pickedRep ? (
-            <TeamTable leads={scoped} bms={bms} period={period} today={today} teamLive={teamLive} waitlist={waitIdx}
+            <TeamTable leads={scoped} orders={outreachOrders} bms={bms} period={period} today={today} teamLive={teamLive} waitlist={waitIdx}
               onPick={(name) => { setBm(name); setScoreView('tiles'); }} />
           ) : (
-            <Scorecard kpis={kpis} heads={heads} period={period} today={today} state={state} active={lens} onPick={pickLens} />
+            <Scorecard kpis={kpis} heads={heads} period={period} today={today} state={state} ordersState={sales.state} active={lens} onPick={pickLens} />
           )}
         </div>
       )}

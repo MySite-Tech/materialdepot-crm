@@ -676,20 +676,34 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
 - **Accepting an Outreach handover creates the firm in the Client Database** with an
   `Accepted` assignment to the KAM (`saveOutreachHandoverFirm`). The KAM tab reads only
   `b2b_client`, so the only handover ever sent (accepted 14 Nov) could not be found in
-  KAM search. That firm predates the fix and still needs adding by hand (Client
-  Database → Add, assign to its KAM); the record is in memory, not here.
+  KAM search. That firm predated the fix and was written to production on 17 Nov with
+  the same function's output, on the user's ask.
 - **A client may refuse the WhatsApp group:** a checkbox plus a reason passes the
   handover gate (`whatsapp_group_declined`, `docs/b2b/outreach.md` §KAM handover).
 - **A teammate who opened the deal ticket no longer takes the lead owner's order.**
   Hardi opens Inbound deal tickets, so orders Vikas closed were credited to her, and
   the 14 Nov manual credits only patched five of them. `teammateLeadOwner` now gives
-  the order to the Inbound or Outreach lead's owner on the cart rep's team. KAM firms
-  are deliberately unchanged: including them moved seven November carts between KAMs.
-  Ask the user before extending it (`docs/b2b/overview.md` §A teammate's ticket).
-  On real November orders exactly six moved, all Hardi → Vikas.
-- **After deploy, check signed in:** Vikas's My performance includes the two leads'
-  orders from 12 and 16 Nov; a KAM accepting a handover finds the firm in KAM search.
-  Only the sandbox and the compiled classifier on real rows have run it.
+  the order to the Inbound or Outreach lead's owner on the cart rep's team. On real
+  November orders exactly six moved, all Hardi → Vikas. **On 2026-11-18 the user
+  extended it to KAM firms:** the firm's KAM gets an order another KAM's ticket holds,
+  but only if they held the firm when it was placed (`kamFrom`, `docs/b2b/overview.md`
+  §A teammate's ticket). Four November orders moved to Krishna; three stayed because
+  the firm was assigned after the order.
+- **Outreach scorecard follows orders and check-ins (2026-11-18, the user's choices).**
+  pratham read 0 meetings, 0 conversions and ₹0 while My performance credited him four
+  store orders. Conversions, KAM handover and Revenue now read the per-order report
+  through `teamOrders`, the same as My performance, whether or not the lead was moved
+  to Converted; a check-in counts as a held meeting (`heldMeetings`); a check-in with
+  no notes is an adherence gap. Run on his real November rows: 9 meetings, 2 converted
+  clients, revenue equal to the headline. Save gates and Mark held are unchanged
+  (`docs/b2b/outreach.md` §Conversions and revenue come from orders).
+- **Checked signed in on production, 17 Nov:** Vikas's Leadership Board lists all six
+  moved orders, including the 12 and 16 Nov ones the user reported, and KAM search
+  finds the handed-over firm as Active with its KAM, not waiting for sign-off. No
+  console errors. **A new handover's Accept was tested live the same day** on a dummy
+  Outreach lead with a pending handover and a WhatsApp refusal reason: Accept created
+  the firm with both numbers and an `Accepted` assignment, KAM search found it, and
+  both dummy rows were then deleted from production.
 
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
@@ -736,8 +750,8 @@ the CRM either. Start new work from `origin/main`.
   Procurement "Assigned to" were set to him. The other three already read Vikas.
   Hardi stays ticket owner, so keep the credits.
 - **Krishna's revenue ties out on the live report (14 Nov).** His orders whose ticket
-  belongs to a store rep credit him as the firm's KAM. One whose ticket another KAM
-  owns goes to that KAM. A manager moves such an order with the per-order credit.
+  belongs to a store rep credit him as the firm's KAM. Since 18 Nov one whose ticket
+  another KAM owns is his too, if he held the firm when it was placed.
 - **Team rows now point at the right Kylas users (14 Nov):** Varun Jha keeps 73312
   (Kylas renamed it from "Emma Maria"), pratham pandey's wrong link to another
   team's user was removed, and Sai Suresh has no Kylas account to link.

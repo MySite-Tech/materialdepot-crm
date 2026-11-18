@@ -47,6 +47,10 @@ Non-obvious rules behind these numbers:
 - **A follow-up only counts once ≥2 follow-up meetings are logged** with
   notes and a next-follow-up date, continuing until either 2 are done or an
   order is placed.
+- **As built since 2026-11-18:** a conversion is a client with an order credited to
+  the BM in the period, from the per-order report, and revenue is every credited
+  order. A held meeting includes a check-in. Both are the user's choices on that
+  day (`outreach.md`). The sheet's wording below is kept as the source.
 - **Lead Conversion = first order placed**, validated by phone number, with
   ENQ ID and order details fetched and snapped into CRM, status flow
   PI Shared → Order Closed logged explicitly. **ENQ ID should auto-fetch

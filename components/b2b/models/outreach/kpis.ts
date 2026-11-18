@@ -1,8 +1,10 @@
 import { OutreachLead, fmtINR } from '../mock-data';
-import { COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, WaitlistSignup, completedMeetings, followUpMeetings } from '.';
-import { isMobile, orderVerified, signedOffWithinTat } from './handover';
-import { checkInDay, checkedInNotHeld, istDay, outreachAdherence } from './reminders';
+import { COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, WaitlistSignup, heldMeetings } from '.';
+import { isMobile, signedOffWithinTat } from './handover';
+import { istDay, outreachAdherence } from './reminders';
 import { normalisePhone } from '@/lib/org/utils';
+import { outreachPhones } from '@/lib/b2b/leads/unified';
+import type { RevenueOrder } from '@/lib/b2b/revenue';
 
 export type OutreachKpiKey =
   | 'newMeetings' | 'followUpMeetings' | 'adherence' | 'coverage'
@@ -20,15 +22,17 @@ export interface OutreachKpiDef {
 }
 
 export const OUTREACH_KPIS: OutreachKpiDef[] = [
-  { key: 'newMeetings',      kind: 'Effort', label: 'New-lead meetings',     short: 'New meetings',  target: 50,  unit: 'count', rule: 'Unique firms whose first meeting was held in the period, with notes, an owner/designer name and a 10-digit mobile.', weight: 10 },
-  { key: 'followUpMeetings', kind: 'Effort', label: 'Follow-up meetings',    short: 'Follow-ups',    target: 30,  unit: 'count', rule: `Unique firms with a follow-up meeting held in the period. A firm is fully followed up after ${FOLLOW_UPS_REQUIRED} follow-ups or an order.`, weight: 10 },
+  { key: 'newMeetings',      kind: 'Effort', label: 'New-lead meetings',     short: 'New meetings',  target: 50,  unit: 'count', rule: 'Unique firms whose first meeting was held in the period, marked held or checked in on site, with an owner/designer name and a 10-digit mobile. A check-in counts without notes; missing notes lower CRM adherence.', weight: 10 },
+  { key: 'followUpMeetings', kind: 'Effort', label: 'Follow-up meetings',    short: 'Follow-ups',    target: 30,  unit: 'count', rule: `Unique firms with a follow-up meeting held in the period, marked held or checked in on site. A firm is fully followed up after ${FOLLOW_UPS_REQUIRED} follow-ups or an order.`, weight: 10 },
   { key: 'adherence',        kind: 'Effort', label: 'CRM adherence',         short: 'CRM adherence', target: 100, unit: '%',     rule: 'Leads touched in the period with every mandatory field and log in place ÷ leads touched. Judged on the lead as it stands now. Before a meeting is held, and on a Lost lead, only the firm name, mobile and logs are asked: role, team size, segment, client type, office address and the owner\'s name are captured at the visit, as the drawer asks. Then, for a stage set in the CRM, what that stage needs, the same list its status gate checks: a next follow-up date at Follow up and PI Shared, a reason at Lost, and the first order\'s Enq ID and the KAM handover once Closed.', weight: 10 },
-  { key: 'coverage',         kind: 'Effort', label: 'Inbound & EC coverage', short: 'Coverage',      target: 100, unit: '%',     rule: 'Inbound and EC-referral leads assigned in the period that have had an in-person meeting ÷ those assigned.', weight: 10 },
-  { key: 'conversions',      kind: 'Output', label: 'New conversions',       short: 'Conversions',   target: 15,  unit: 'count', rule: 'Leads moved to Converted in the period whose first order was fetched from its Enq ID.', weight: 15 },
+  { key: 'coverage',         kind: 'Effort', label: 'Inbound & EC coverage', short: 'Coverage',      target: 100, unit: '%',     rule: 'Inbound and EC-referral leads assigned in the period that have had an in-person meeting (marked held or checked in) ÷ those assigned.', weight: 10 },
+  { key: 'conversions',      kind: 'Output', label: 'Converted clients',     short: 'Conversions',   target: 15,  unit: 'count', rule: 'Clients with an order placed in the period and credited to them in the per-order report, counted once each, whether or not the lead was moved to Converted. The same orders as the revenue figure.', weight: 15 },
   { key: 'waitlist',         kind: 'Output', label: 'Studio Space waitlist', short: 'Waitlist',      target: 30,  unit: 'count', rule: 'Waitlist sign-ups in the period whose mobile exactly matches a lead\'s mobile.', weight: 15 },
-  { key: 'handover',         kind: 'Output', label: 'KAM handover',          short: 'KAM handover',  target: 100, unit: '%',     rule: 'Leads converted in the period that a KAM has signed off ÷ leads converted in the period.', weight: 15 },
-  { key: 'revenue',          kind: 'Output', label: 'New revenue',           short: 'New revenue',   target: 5,   unit: 'L',     rule: 'First-order value of the period\'s verified conversions, excluding numbers that ordered in the 6 months before.', weight: 15 },
+  { key: 'handover',         kind: 'Output', label: 'KAM handover',          short: 'KAM handover',  target: 100, unit: '%',     rule: 'Their leads with an order credited in the period that a KAM has signed off ÷ those leads.', weight: 15 },
+  { key: 'revenue',          kind: 'Output', label: 'Revenue',               short: 'Revenue',       target: 5,   unit: 'L',     rule: 'Every order placed in the period and credited to them in the per-order report (the same rule as the Overview and My performance), in all four channels, including a manager\'s credit.', weight: 15 },
 ];
+
+export const ORDER_KPIS = new Set<OutreachKpiKey>(['conversions', 'handover', 'revenue']);
 
 export interface Period { from: string; to: string }
 
@@ -94,44 +98,51 @@ function handoverNote(l: OutreachLead): string {
   return `Waiting on ${h.kam}`;
 }
 
-function notMarkedHeld(leads: OutreachLead[], period: Period, firstVisit: boolean): KpiRow[] {
-  return leads
-    .filter((l) => (completedMeetings(l.meetings).length === 0) === firstVisit)
-    .flatMap((l) => checkedInNotHeld(l.meetings)
-      .filter((m) => inPeriod(m.checkIn!.at, period))
-      .map((m) => ({ lead: l, counts: false, at: checkInDay(m), note: `Meeting ${m.n}: checked in ${checkInDay(m)}, not marked held yet` })));
-}
+const leadMatcher = (leads: OutreachLead[]) => {
+  const byPhone = new Map<string, OutreachLead>();
+  for (const l of leads) for (const p of outreachPhones(l)) if (!byPhone.has(p)) byPhone.set(p, l);
+  return (o: RevenueOrder) => byPhone.get(o.phone);
+};
 
-export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Map<string, WaitlistSignup> | null): OutreachKpis {
+const fmtLakhs = (n: number) => Math.round((n / 1_00_000) * 100) / 100;
+
+export function outreachKpis(
+  leads: OutreachLead[],
+  period: Period,
+  waitlist: Map<string, WaitlistSignup> | null,
+  orders: RevenueOrder[] | null,
+): OutreachKpis {
   const held: KpiRow[] = leads
-    .map((l) => ({ l, m: completedMeetings(l.meetings)[0] }))
+    .map((l) => ({ l, m: heldMeetings(l.meetings)[0] }))
     .filter((x) => x.m && inPeriod(x.m.date, period))
     .map(({ l, m }) => {
       const missing = [
-        !String(m.notes || '').trim() && 'notes',
         !String(l.contactPerson || '').trim() && 'owner name',
         !isMobile(l.phone) && 'valid mobile',
       ].filter(Boolean);
+      const how = m.status === 'Completed' ? 'held' : 'checked in';
+      const extras = [!String(m.notes || '').trim() && 'no notes yet', !m.pin && 'no live pin'].filter(Boolean).join(' · ');
       return {
         lead: l, at: m.date, counts: !missing.length,
-        note: missing.length ? `Missing ${missing.join(', ')}` : `Meeting ${m.n} held${m.pin ? '' : ' · no live pin'}`,
+        note: missing.length ? `Missing ${missing.join(', ')}` : `Meeting ${m.n} ${how}${extras ? ` · ${extras}` : ''}`,
       };
     });
-  const noPin = held.filter((r) => r.counts && r.note.endsWith('no live pin')).length;
-  const firstUnmarked = notMarkedHeld(leads, period, true);
-  const newMeetings = [...held, ...firstUnmarked];
+  const fromCheckIn = (rows: KpiRow[]) => rows.filter((r) => r.counts && r.note.includes(' checked in')).length;
+  const noNotes = held.filter((r) => r.counts && r.note.includes('no notes yet')).length;
+  const newMeetings = held;
 
-  const fuHeld: KpiRow[] = leads
-    .map((l) => ({ l, fu: followUpMeetings(l.meetings) }))
+  const followUps: KpiRow[] = leads
+    .map((l) => ({ l, fu: heldMeetings(l.meetings).slice(1) }))
     .filter(({ fu }) => fu.some((m) => inPeriod(m.date, period)))
-    .map(({ l, fu }) => ({
-      lead: l, counts: true, at: fu.filter((m) => inPeriod(m.date, period)).pop()?.date,
-      note: l.status === 'Closed' ? 'Order placed' : `${Math.min(fu.length, FOLLOW_UPS_REQUIRED)} of ${FOLLOW_UPS_REQUIRED} follow-ups held`,
-    }));
-  const fuUnmarked = notMarkedHeld(leads, period, false);
-  const followUps = [...fuHeld, ...fuUnmarked];
-  const fuDone = fuHeld.filter((r) => r.note === 'Order placed' || followUpMeetings(r.lead.meetings).length >= FOLLOW_UPS_REQUIRED).length;
-  const unmarkedSub = (n: number) => (n ? `${n} checked in but not marked held` : '');
+    .map(({ l, fu }) => {
+      const last = fu.filter((m) => inPeriod(m.date, period)).pop()!;
+      return {
+        lead: l, counts: true, at: last.date,
+        note: `${l.status === 'Closed' ? 'Order placed' : `${Math.min(fu.length, FOLLOW_UPS_REQUIRED)} of ${FOLLOW_UPS_REQUIRED} follow-ups held`}${last.status === 'Completed' ? '' : ' · checked in'}`,
+      };
+    });
+  const fuDone = followUps.filter((r) => r.note.startsWith('Order placed') || heldMeetings(r.lead.meetings).length - 1 >= FOLLOW_UPS_REQUIRED).length;
+  const checkInSub = (n: number) => (n ? `${n} counted from a check-in, not yet marked held` : '');
 
   const adherence: KpiRow[] = leads
     .filter((l) => touchedIn(l, period) && !l.intake?.rejectedAt)
@@ -144,29 +155,37 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
     .filter((l) => l.source && COVERAGE_SOURCES.includes(l.source) && !l.intake?.rejectedAt
       && inPeriod(l.intake?.assignedAt || l.createdAt, period))
     .map((l) => {
-      const met = completedMeetings(l.meetings)[0];
-      const visit = checkedInNotHeld(l.meetings)[0];
-      const note = met ? `${l.source} · met ${met.date || ''}`.trim()
-        : visit ? `${l.source} · checked in ${checkInDay(visit)}, not marked held yet` : `${l.source} · not met yet`;
+      const met = heldMeetings(l.meetings)[0];
+      const note = met ? `${l.source} · ${met.status === 'Completed' ? 'met' : 'checked in'} ${met.date || ''}`.trim() : `${l.source} · not met yet`;
       return { lead: l, counts: !!met, at: l.intake?.assignedAt || l.createdAt, note };
     });
 
-  const converted = leads.filter((l) => l.status === 'Closed' && inPeriod(l.convertedAt || l.statusChangedAt, period));
-  const conversions: KpiRow[] = converted.map((l) => ({
-    lead: l, counts: orderVerified(l), at: l.convertedAt || l.statusChangedAt,
-    note: orderVerified(l) ? `Order ${l.enqId} fetched` : String(l.enqId || '').trim() ? `Enq ID ${l.enqId} not fetched` : 'No Enq ID yet',
-  }));
-  const handover: KpiRow[] = converted.map((l) => ({
+  const placed = (orders ?? []).filter((o) => inPeriod(o.ticket.placedAt, period));
+  const leadOf = leadMatcher(leads);
+  const ordersByLead = new Map<OutreachLead, RevenueOrder[]>();
+  const unmatched: RevenueOrder[] = [];
+  for (const o of placed) {
+    const l = leadOf(o);
+    if (l) ordersByLead.set(l, [...(ordersByLead.get(l) ?? []), o]);
+    else unmatched.push(o);
+  }
+  const otherClients = new Set(unmatched.map((o) => o.phone || o.firm || o.id)).size;
+  const sorted = (os: RevenueOrder[]) => [...os].sort((a, b) => String(a.ticket.placedAt || '').localeCompare(String(b.ticket.placedAt || '')));
+  const orderRows: KpiRow[] = [...ordersByLead].map(([l, os]) => {
+    const first = sorted(os)[0];
+    const total = os.reduce((a, o) => a + o.value, 0);
+    return {
+      lead: l, counts: true, at: first.ticket.placedAt,
+      note: `${os.length === 1 ? `Order ${first.id}` : `${os.length} orders, first ${first.id}`} · ${fmtINR(total)}${l.status === 'Closed' ? '' : ' · lead not moved to Converted yet'}`,
+    };
+  });
+  const notMarked = [...ordersByLead.keys()].filter((l) => l.status !== 'Closed').length;
+  const handover: KpiRow[] = [...ordersByLead.keys()].map((l) => ({
     lead: l, counts: l.handover?.status === 'Accepted', at: l.handover?.sentAt, note: handoverNote(l),
   }));
-  const revenue: KpiRow[] = converted.filter(orderVerified).map((l) => ({
-    lead: l, counts: l.newOnboarding !== false, at: l.convertedAt || l.statusChangedAt,
-    note: l.newOnboarding === false ? 'Repeat client — ordered in the 6 months before'
-      : `${fmtINR(Number(l.orderValue) || 0)}${l.newOnboarding === undefined ? ' · prior orders not checked' : ''}`,
-  }));
-  const revenueSum = revenue.filter((r) => r.counts).reduce((a, r) => a + (Number(r.lead.orderValue) || 0), 0);
-  const repeat = revenue.length - counted(revenue);
-  const unchecked = revenue.filter((r) => r.lead.newOnboarding === undefined).length;
+  const revenueSum = placed.reduce((a, o) => a + o.value, 0);
+  const elsewhere = unmatched.length ? `${unmatched.length} credited order${unmatched.length === 1 ? '' : 's'} on numbers not on these leads` : '';
+  const unknown = (what: string): KpiValue => ({ value: null, rows: [], sub: `Orders could not be read — ${what} unknown` });
 
   let waitlistKpi: KpiValue = { value: null, sub: 'Studio Space did not answer — count unknown', rows: [] };
   if (waitlist) {
@@ -175,7 +194,7 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
       const p = normalisePhone(l.phone);
       if (p.length === 10 && !byPhone.has(p)) byPhone.set(p, l);
     }
-    const ordered = new Set(leads.filter((l) => l.status === 'Closed').map((l) => normalisePhone(l.phone)));
+    const ordered = new Set(leads.filter((l) => l.status === 'Closed' || ordersByLead.has(l)).map((l) => normalisePhone(l.phone)));
     const rows: KpiRow[] = [...byPhone.entries()]
       .map(([p, lead]) => ({ p, lead, s: waitlist.get(p) }))
       .filter((x): x is { p: string; lead: OutreachLead; s: WaitlistSignup } => !!x.s && inPeriod(x.s.createdAt, period))
@@ -187,30 +206,29 @@ export function outreachKpis(leads: OutreachLead[], period: Period, waitlist: Ma
   return {
     newMeetings: {
       value: counted(newMeetings), rows: newMeetings,
-      sub: [held.length - counted(held) ? `${held.length - counted(held)} more held but missing notes, name or mobile` : '', unmarkedSub(firstUnmarked.length), noPin ? `${noPin} with no live pin` : '']
+      sub: [held.length - counted(held) ? `${held.length - counted(held)} more held but missing the owner's name or a mobile` : '', checkInSub(fromCheckIn(held)), noNotes ? `${noNotes} with no notes yet` : '']
         .filter(Boolean).join(' · ') || undefined,
     },
     followUpMeetings: {
       value: counted(followUps), rows: followUps,
-      sub: [`${fuDone} reached ${FOLLOW_UPS_REQUIRED} follow-ups or an order`, unmarkedSub(fuUnmarked.length)].filter(Boolean).join(' · '),
+      sub: [`${fuDone} reached ${FOLLOW_UPS_REQUIRED} follow-ups or an order`, checkInSub(fromCheckIn(followUps))].filter(Boolean).join(' · '),
     },
     adherence: { value: pct(counted(adherence), adherence.length), rows: adherence, sub: adherence.length ? `${counted(adherence)} of ${adherence.length} leads touched` : 'No leads touched yet' },
     coverage: { value: pct(counted(coverage), coverage.length), rows: coverage, sub: coverage.length ? `${counted(coverage)} of ${coverage.length} met in person` : 'None assigned in this period' },
-    conversions: {
-      value: counted(conversions), rows: conversions,
-      sub: converted.length > counted(conversions) ? `${converted.length - counted(conversions)} more awaiting a fetched Enq ID` : undefined,
+    conversions: orders === null ? unknown('conversions') : {
+      value: ordersByLead.size + otherClients, rows: orderRows,
+      sub: [notMarked ? `${notMarked} not moved to Converted yet` : '', elsewhere].filter(Boolean).join(' · ') || undefined,
     },
     waitlist: waitlistKpi,
-    handover: {
+    handover: orders === null ? unknown('handover') : {
       value: pct(counted(handover), handover.length), rows: handover,
       sub: handover.length
-        ? `${counted(handover)} of ${handover.length} signed off · ${converted.filter((l) => l.handover?.status === 'Accepted' && signedOffWithinTat(l.handover)).length} within 48h`
-        : 'Nothing converted yet',
+        ? `${counted(handover)} of ${handover.length} signed off · ${[...ordersByLead.keys()].filter((l) => l.handover?.status === 'Accepted' && signedOffWithinTat(l.handover)).length} within 48h`
+        : 'No orders on these leads yet',
     },
-    revenue: {
-      value: Math.round((revenueSum / 1_00_000) * 100) / 100, rows: revenue,
-      sub: [repeat ? `${repeat} repeat client(s) excluded` : '', unchecked ? `${unchecked} not checked for a prior order` : '']
-        .filter(Boolean).join(' · ') || undefined,
+    revenue: orders === null ? unknown('revenue') : {
+      value: fmtLakhs(revenueSum), rows: orderRows,
+      sub: [placed.length ? `${placed.length} order${placed.length === 1 ? '' : 's'}` : '', elsewhere].filter(Boolean).join(' · ') || undefined,
     },
   };
 }

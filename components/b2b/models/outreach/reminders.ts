@@ -153,7 +153,7 @@ const ADHERENCE: FieldCheck[] = [
   ...CAPTURE.filter((c) => c.label !== 'next follow-up date').map((c) => (c.label === 'mobile' ? c : { ...c, visited: true as const })),
   { label: 'client type',    ok: (l) => !!l.companyType, visited: true },
   { label: 'office address', ok: (l) => !!String(l.officeAddress || '').trim(), visited: true },
-  { label: 'meeting notes',  ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('notes')) },
+  { label: 'meeting notes',  ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('notes') && !(m.checkIn && !String(m.notes || '').trim())) },
   { label: 'who they met',   ok: (l) => (l.meetings || []).every((m) => !meetingGaps(m).includes('who you met')) },
   { label: 'next follow-up date', ok: (l) => !needsNextStep(l) },
   { label: 'Enq ID of the first order', ok: (l) => l.status !== 'Closed' || !!String(l.enqId || '').trim() },

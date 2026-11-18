@@ -27,10 +27,11 @@ export function tone(v: number | null, target: number | null, pace: number | nul
 
 export function tileHint(def: OutreachKpiDef, k: KpiValue): { text: string; warn?: boolean } | undefined {
   if (k.value === null && def.key === 'waitlist') return { text: 'Not reachable', warn: true };
+  if (k.value === null && k.sub?.startsWith('Orders could not be read')) return { text: 'Orders not read', warn: true };
   const counted = k.rows.filter((r) => r.counts).length;
   if (def.unit === '%') return { text: k.rows.length ? `${counted} of ${k.rows.length}` : 'none in period' };
   const missed = k.rows.length - counted;
   if (missed) return { text: `+${missed} not counted`, warn: true };
-  if (def.unit === 'L' && counted) return { text: `${counted} order${counted === 1 ? '' : 's'}` };
+  if (def.unit === 'L' && k.value) return { text: k.sub?.split(' · ')[0] || `${counted} client${counted === 1 ? '' : 's'}` };
   return undefined;
 }

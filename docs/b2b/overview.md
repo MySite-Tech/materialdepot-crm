@@ -180,12 +180,25 @@ user's 2026-10-30 rule that revenue goes to whoever owns the record at close.
 or Outreach lead on the number (from before the cart) is owned by someone else on a
 team the cart rep is on, the order is that lead owner's. The channel and type do not
 change. The cart rep keeps it when they own a lead on the number themselves, or no
-teammate does. **Firms are left out on purpose:** with firms included, seven
-November carts moved between KAMs (another KAM's cart on a firm Krishna or varun
-holds), which nobody asked for. That stays the documented behaviour until the user
-decides it. Run on every November order booked on the B2B branch (1–17 Nov, real
-holders, compiled classifier), exactly six orders moved, all from Hardi to Vikas, and
-no one else's figure changed. Manual credits still win over the rule.
+teammate does. Run on every November order booked on the B2B branch (1–17 Nov, real
+holders, compiled classifier), exactly six orders moved, all from Hardi to Vikas.
+Manual credits still win over the rule.
+
+**KAM firms too, but only the KAM at order time (2026-11-18, the user's choice).**
+Asked who gets a KAM firm's order when another KAM opened the deal ticket, the user
+picked the firm's KAM, but only if they held the firm when the order was placed, so
+a later reassignment never moves past orders. `teammateRecordOwner` takes firms as
+well as leads; a firm counts when its `kamFrom` (the start of the current KAM's
+unbroken run of `assignments` entries, Rejected skipped, built in `book.ts`) is at or
+before `orderPlacedAt` (else the cart date). A firm with no assignment entry naming
+its KAM has no known start and counts as held: those are KAM-sheet and import firms
+whose KAM predates the assignment log. Still team-matched: a cart opened by someone
+on another team (Vilok, Outreach, on Prafful's firm) stays with that person, which
+the user was not asked about. Store-rep carts are untouched: they already went to
+the firm's KAM with no date gate (type 3/4). On the same November orders: four moved
+to Krishna (on Sidhant's and Tharun's tickets), and three stayed with the
+ticket owner because the firm reached its KAM after the order (varun on 9 and 17 Nov,
+Krishna at 13:20 on 17 Nov against a 06:49 order).
 
 ## A manager credits one order (2026-11-12)
 

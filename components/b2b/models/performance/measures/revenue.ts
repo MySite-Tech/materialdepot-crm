@@ -1,4 +1,4 @@
-import { creditMatches } from '../../credit';
+import { Creditable, creditMatches } from '../../credit';
 import { fmtINR } from '../../mock-data';
 import { sameRep } from '../../outreach/handover';
 import { Period, inPeriod } from '../../outreach/kpis';
@@ -7,8 +7,11 @@ import { lakhs } from '../utils';
 import { CHANNEL_LABELS, REVENUE_CHANNELS, RevenueChannel, RevenueOrder, channelSplits } from '@/lib/b2b/revenue';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 
-const creditedTo = (o: RevenueOrder, people: Person[]): boolean =>
+const creditedTo = (o: RevenueOrder, people: Creditable[]): boolean =>
   o.credit ? people.some((p) => creditMatches(o.credit!, p)) : people.some((p) => sameRep(o.person, p.name));
+
+export const teamOrders = (orders: RevenueOrder[] | null, team: B2BTeam, people: Creditable[] | null): RevenueOrder[] | null =>
+  orders && orders.filter((o) => o.team === team && (!people || creditedTo(o, people)));
 
 export interface Credited {
   orders: RevenueOrder[];
@@ -19,7 +22,7 @@ export function creditedOrders(data: PerfData, team: B2BTeam, people: Person[], 
   const window = data.revenueWindow;
   if (!data.revenue || !window) return null;
   const whole = period.from <= window.from && period.to >= window.to;
-  const theirs = data.revenue.filter((o) => o.team === team && creditedTo(o, people));
+  const theirs = teamOrders(data.revenue, team, people) ?? [];
   return {
     orders: theirs
       .filter((o) => whole || inPeriod(o.ticket.placedAt, period))
