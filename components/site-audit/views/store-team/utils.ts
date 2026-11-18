@@ -1,8 +1,8 @@
 'use client';
 
-import { CITIES } from '../../shared';
-import { BLACKOUT_WHOLE_DAY, DAYS_SHORT, MORNING_CUTOFF_MIN, OPEN_SUNDAYS, SLOT_BLACKOUTS, SLOT_DEFS, STORE_CITY } from './constants';
-import { SlotDef } from './types';
+import { CITIES, siteAuditRoleFromPermissions } from '../../shared';
+import { DAYS_SHORT, MORNING_CUTOFF_MIN, SLOT_DEFS, STORE_CITY } from './constants';
+import type { Overrider } from './types';
 
 export const cityOfStore = (store: string | null) => (store && STORE_CITY[store]) || CITIES[0];
 
@@ -27,60 +27,14 @@ export function morningCutoffHit(date: string): boolean {
   return now.getHours() * 60 + now.getMinutes() >= MORNING_CUTOFF_MIN;
 }
 
-/** The slot ids withdrawn on a "YYYY-MM-DD" date — empty for an ordinary day, all six for a
- *  whole-day blackout. */
-export function blockedSlotIds(date: string): Set<string> {
-  const entry = SLOT_BLACKOUTS[date];
-  if (!entry) return new Set();
-  if (entry === BLACKOUT_WHOLE_DAY) return new Set(SLOT_DEFS.map((s) => s.id));
-  return new Set(entry);
-}
-
-export function isSlotBlocked(date: string, slotId: string): boolean {
-  return blockedSlotIds(date).has(slotId);
-}
-
 export function fmtSlotId(id: string) {
   const s = SLOT_DEFS.find((x) => x.id === id);
   return s ? s.label : '—';
 }
 
-function slotsConflict(slotA: SlotDef, slotB: SlotDef) {
-  const gapAB = slotB.startMin - slotA.endMin;
-  const gapBA = slotA.startMin - slotB.endMin;
-  if (gapAB < 0 && gapBA < 0) return true;
-  return (gapAB >= 0 && gapAB < 120) || (gapBA >= 0 && gapBA < 120);
-}
-
-export function getAvailability(slotId: string, dayOrders: any[], auditorCount: number, capBlocked: Set<string>) {
-  const slot = SLOT_DEFS.find((s) => s.id === slotId);
-  if (!slot) return { available: 0, total: auditorCount, used: 0 };
-  const blockedAuditors = new Set<string>(capBlocked);
-  let reservationConflicts = 0;
-  for (const o of dayOrders) {
-    if (o.status === 'deleted' || o.status === 'slot_converted') continue;
-    if (o.status === 'slot_reserved' && !o.auditor_id) {
-      const nm = (o.customer_name || '').trim().toLowerCase();
-      const absorbed = dayOrders.some(
-        (r) =>
-          r.slot === o.slot &&
-          r.status !== 'deleted' &&
-          r.status !== 'slot_reserved' &&
-          r.status !== 'slot_converted' &&
-          ((o.po && r.pi === o.po) || (nm && (r.customer_name || '').trim().toLowerCase() === nm))
-      );
-      if (absorbed) continue;
-    }
-    const oSlot = SLOT_DEFS.find((s) => s.id === o.slot);
-    if (!oSlot || !slotsConflict(slot, oSlot)) continue;
-    if (o.auditor_id) {
-      blockedAuditors.add(o.auditor_id);
-    } else {
-      reservationConflicts++;
-    }
-  }
-  const used = blockedAuditors.size + reservationConflicts;
-  return { available: Math.max(0, auditorCount - used), total: auditorCount, used };
+export function previousSlotLabel(id: string): string {
+  const i = SLOT_DEFS.findIndex((s) => s.id === id);
+  return i > 0 ? SLOT_DEFS[i - 1].label : '';
 }
 
 export function genSlotPI(store: string) {
@@ -89,16 +43,32 @@ export function genSlotPI(store: string) {
   return 'SRES-' + code + '-' + ts;
 }
 
-export function buildDateChips() {
-  const t = today;
-  const chips: Array<{ ds: string; lbl: string; num: number }> = [];
-  for (let i = 0; chips.length < 14 && i < 30; i++) {
-    const d = new Date(t);
-    d.setDate(t.getDate() + i);
+export function readOverrider(): Overrider {
+  try {
+    const raw = localStorage.getItem('materialdepot_user');
+    const user = raw ? JSON.parse(raw) : null;
+    if (!user) return { level: null, name: '' };
+    const role = siteAuditRoleFromPermissions(user.individualPermissions);
+    const level = role === 'admin' || user.role === 'admin' ? 'admin' : role === 'service_mgr' ? 'sm' : null;
+    return { level, name: user.name || '' };
+  } catch {
+    return { level: null, name: '' };
+  }
+}
+
+export function buildDateChips(openDates: string[], withClosedDays: boolean) {
+  const open = new Set(openDates);
+  const last = openDates[openDates.length - 1];
+  const chips: Array<{ ds: string; lbl: string; num: number; closed: boolean }> = [];
+  if (!last) return chips;
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
     const ds = dstr(d);
-    if (d.getDay() === 0 && !OPEN_SUNDAYS.has(ds)) continue;
+    if (ds > last) break;
+    if (!open.has(ds) && !withClosedDays) continue;
     const lbl = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : DAYS_SHORT[d.getDay()];
-    chips.push({ ds, lbl, num: d.getDate() });
+    chips.push({ ds, lbl, num: d.getDate(), closed: !open.has(ds) });
   }
   return chips;
 }

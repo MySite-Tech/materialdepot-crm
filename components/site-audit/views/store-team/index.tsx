@@ -1,21 +1,21 @@
 'use client';
 
-import { DEFAULT_CAP } from '../../audit-ops/constants';
-import { cityOf, mapCaps, rosterQuery, sbGet, sbPatch, staffCapOn } from '../../shared';
-import { ASSIGNED_STATUSES, SLOT_DEFS, STORES } from './constants';
+import { fetchStoreSlots, type StoreSlotCalendar } from '@/lib/api';
+import { cityOf, sbGet, sbPatch } from '../../shared';
+import { SLOT_DEFS, STORES } from './constants';
 import { BookingSheet } from './sheet';
 import { SlotContent } from './slot';
-import { buildDateChips, cityOfStore, dstr, isSlotBlocked, today } from './utils';
+import type { Overrider } from './types';
+import { buildDateChips, cityOfStore, dstr, readOverrider, today } from './utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteAuditStoreTeamView() {
-  const dateChips = useMemo(buildDateChips, []);
-
   const [myStore, setMyStore] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(dateChips[0].ds);
+  const [selectedDate, setSelectedDate] = useState(dstr(today));
   const [dayOrders, setDayOrders] = useState<any[]>([]);
-  const [auditorCount, setAuditorCount] = useState(3);
-  const [capBlocked, setCapBlocked] = useState<Set<string>>(() => new Set());
+  const [calendar, setCalendar] = useState<StoreSlotCalendar | null>(null);
+  const [overrider, setOverrider] = useState<Overrider>({ level: null, name: '' });
+  const [bookingNote, setBookingNote] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [storeOverlay, setStoreOverlay] = useState<null | 'boot' | 'header'>(null);
@@ -46,40 +46,22 @@ export default function SiteAuditStoreTeamView() {
       setLoadError(false);
     }
     try {
-      const [orders, auditors] = await Promise.all([
+      const store = myStoreRef.current;
+      if (!store) return;
+      const [orders, cal] = await Promise.all([
         sbGet(
           'audit_orders?select=id,pi,po,customer_name,phone,status,slot,date,auditor_id,bm,city,audit_ticked,log&date=eq.' +
             date +
             '&status=neq.deleted'
         ),
-
-        rosterQuery('id,active_from,weekly_off,leave_dates,city').then(({ select, filter }) => sbGet('profiles?select=' + select + '&role=in.(site_auditor,auditor_installer)' + filter)),
+        fetchStoreSlots(store),
       ]);
 
-      if (!Array.isArray(orders) || !Array.isArray(auditors)) throw new Error('slot availability unavailable');
+      if (!Array.isArray(orders)) throw new Error('bookings unavailable');
 
-      const storeCity = cityOfStore(myStoreRef.current);
-      const orderList = orders.filter((o: any) => cityOf(o) === storeCity);
-
-      const roster = auditors
-        .filter((a: any) => cityOf(a) === storeCity)
-        .map((a: any) => ({
-          id: a.id as string,
-          activeFrom: a.active_from || null,
-          weeklyOff: a.weekly_off == null ? null : a.weekly_off,
-          leaveDates: Array.isArray(a.leave_dates) ? a.leave_dates : [],
-          ...mapCaps(a),
-        }));
-      const workingToday = roster.filter((a) => staffCapOn(a, date, DEFAULT_CAP) >= 1);
-
-      const blocked = new Set<string>();
-      for (const a of workingToday) {
-        const load = orderList.filter((o: any) => o.auditor_id === a.id && ASSIGNED_STATUSES.includes(o.status)).length;
-        if (load >= staffCapOn(a, date, DEFAULT_CAP)) blocked.add(a.id);
-      }
-      setDayOrders(orderList);
-      setAuditorCount(workingToday.length);
-      setCapBlocked(blocked);
+      const storeCity = cityOfStore(store);
+      setDayOrders(orders.filter((o: any) => cityOf(o) === storeCity));
+      setCalendar(cal);
       setLoading(false);
     } catch (e) {
       if (!silent) {
@@ -88,6 +70,8 @@ export default function SiteAuditStoreTeamView() {
       }
     }
   }, []);
+
+  useEffect(() => { setOverrider(readOverrider()); }, []);
 
   useEffect(() => {
     if (!myStore) {
@@ -114,7 +98,20 @@ export default function SiteAuditStoreTeamView() {
     };
   }, []);
 
+  const openDates = useMemo(() => (calendar ? calendar.days.map((d) => d.date) : []), [calendar]);
+  const dateChips = useMemo(() => buildDateChips(openDates, overrider.level === 'admin'), [openDates, overrider.level]);
+  const daySlots = useMemo(() => {
+    const day = calendar && calendar.days.find((d) => d.date === selectedDate);
+    return day ? new Map(day.slots.map((sl) => [sl.id, sl])) : null;
+  }, [calendar, selectedDate]);
+
+  useEffect(() => {
+    if (!dateChips.length || dateChips.some((c) => c.ds === selectedDate)) return;
+    loadDay(dateChips[0].ds, true);
+  }, [dateChips, selectedDate, loadDay]);
+
   const selectStore = (s: string) => {
+    setCalendar(null);
     setMyStore(s);
     setStoreOverlay(null);
   };
@@ -149,10 +146,7 @@ export default function SiteAuditStoreTeamView() {
       })()
     : null;
 
-  // A blacked-out slot never renders a Book button, but the sheet is gated on the blackout too so
-  // a stale tab left open across a deploy cannot open it.
-  const bookingSlotDef =
-    bookingSlot && !isSlotBlocked(selectedDate, bookingSlot) ? SLOT_DEFS.find((s) => s.id === bookingSlot) : null;
+  const bookingSlotDef = bookingSlot ? SLOT_DEFS.find((s) => s.id === bookingSlot) : null;
 
   return (
     <div>
@@ -174,10 +168,13 @@ export default function SiteAuditStoreTeamView() {
           <div
             key={c.ds}
             onClick={() => onDateClick(c.ds)}
+            title={c.closed ? 'Closed day: admins can still book' : undefined}
             className={`flex flex-col items-center justify-center w-14 h-14 shrink-0 rounded-lg border cursor-pointer select-none ${
               c.ds === selectedDate
                 ? 'border-[#EAB308] bg-yellow-50 text-gray-900'
-                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                : c.closed
+                  ? 'border-dashed border-gray-300 bg-gray-50 text-gray-400'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
             <div className="text-[10px] font-semibold uppercase tracking-wide">{c.lbl}</div>
@@ -199,15 +196,15 @@ export default function SiteAuditStoreTeamView() {
           date={selectedDate}
           myStore={myStore}
           dayOrders={dayOrders}
-          auditorCount={auditorCount}
-          capBlocked={capBlocked}
-          storeCity={cityOfStore(myStore)}
+          poolLabel={calendar ? calendar.label : myStore || ''}
+          daySlots={daySlots}
+          overrider={overrider}
           myRes={myRes}
           allBooked={allBooked}
           nowMin={nowMin}
           isMyBooking={isMyBooking}
           cancellingId={cancellingId}
-          onBook={(slotId: string) => setBookingSlot(slotId)}
+          onBook={(slotId: string, note?: string) => { setBookingNote(note); setBookingSlot(slotId); }}
           onCancel={cancelReservation}
         />
       )}
@@ -250,6 +247,7 @@ export default function SiteAuditStoreTeamView() {
           slot={bookingSlotDef}
           date={selectedDate}
           myStore={myStore as string}
+          overrideNote={bookingNote}
           onClose={() => setBookingSlot(null)}
           onBooked={(name: string) => {
             setBookingSlot(null);

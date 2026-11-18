@@ -4,10 +4,10 @@ import { fmtDate } from '../../install-ops/utils';
 
 import { activeStaffFilter, sbGet, sbPost } from '../../shared';
 import { BookingSheetProps } from './types';
-import { genSlotPI } from './utils';
+import { cityOfStore, genSlotPI } from './utils';
 import { useEffect, useState } from 'react';
 
-export function BookingSheet({ slot, date, myStore, onClose, onBooked }: BookingSheetProps) {
+export function BookingSheet({ slot, date, myStore, overrideNote, onClose, onBooked }: BookingSheetProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [addr, setAddr] = useState('');
@@ -95,7 +95,8 @@ export function BookingSheet({ slot, date, myStore, onClose, onBooked }: Booking
         skus: [{ c: 'AUDIT', n: 'Site Audit', audit: true }],
         audit_ticked: cats,
         service: null,
-        log: [{ t: logNote, d: new Date().toISOString(), by: 'manual', who: myStore }],
+        city: cityOfStore(myStore),
+        log: [{ t: logNote + (overrideNote ? ' · ' + overrideNote : ''), d: new Date().toISOString(), by: 'manual', who: myStore }],
         created_by_email: 'store-team',
       });
       onBooked(nm);

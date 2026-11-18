@@ -1,8 +1,14 @@
 'use client';
 
+import { fetchSiteAuditECs } from '@/lib/api';
 import { downloadCsv } from '../../../data/cat-analytics';
+import { jobLeadKey } from '../../jobs/utils';
 import { Drill } from '../types';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+type EcLookup = { status: 'loading' | 'ok' | 'error'; byLead: Record<string, string> };
+
+const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
 export function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   const yes = drill.rows.filter((r) => r.hit === 'yes');
@@ -13,6 +19,27 @@ export function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => vo
 
   const ordered = [...yes, ...no, ...na];
 
+  const leadKeys = useMemo(
+    () => [...new Set(drill.rows.map((r) => jobLeadKey(r.pi)).filter((k) => /^ENQ/i.test(k)))].sort().join(','),
+    [drill.rows]
+  );
+  const [ec, setEc] = useState<EcLookup>({ status: 'loading', byLead: {} });
+  useEffect(() => {
+    if (!leadKeys) { setEc({ status: 'ok', byLead: {} }); return; }
+    let alive = true;
+    setEc({ status: 'loading', byLead: {} });
+    fetchSiteAuditECs(leadKeys.split(','))
+      .then((byLead) => { if (alive) setEc({ status: 'ok', byLead }); })
+      .catch(() => { if (alive) setEc({ status: 'error', byLead: {} }); });
+    return () => { alive = false; };
+  }, [leadKeys]);
+  const ecOf = (pi: string) => {
+    if (ec.status === 'loading') return '…';
+    if (ec.status === 'error') return 'Unknown';
+    const name = ec.byLead[jobLeadKey(pi)];
+    return name ? titleCase(name) : '—';
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -22,10 +49,10 @@ export function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => vo
   }, [onClose]);
 
   const download = () => {
-    const header = ['Enquiry ID', 'Customer', 'Phone', 'BM', 'Assigned to', 'Slot', 'Date', 'Counts', 'Result'];
+    const header = ['Enquiry ID', 'Customer', 'Phone', 'BM', 'EC', 'Assigned to', 'Slot', 'Date', 'Counts', 'Result'];
     downloadCsv(
       drill.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase(),
-      [header].concat(ordered.map((r) => [r.pi, r.customer, r.phone, r.bm, r.person, r.slot, r.date, r.hit === 'yes' ? 'yes' : r.hit === 'no' ? 'no' : 'n/a', r.result]))
+      [header].concat(ordered.map((r) => [r.pi, r.customer, r.phone, r.bm, ecOf(r.pi), r.person, r.slot, r.date, r.hit === 'yes' ? 'yes' : r.hit === 'no' ? 'no' : 'n/a', r.result]))
     );
   };
 
@@ -70,7 +97,7 @@ export function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => vo
             <table className="w-full border-collapse">
               <thead className="sticky top-0 bg-gray-50">
                 <tr>
-                  {['Enquiry ID', 'Customer', 'Phone', 'BM', 'Assigned to', 'Slot', 'Date', 'Result'].map((h) => (
+                  {['Enquiry ID', 'Customer', 'Phone', 'BM', 'EC', 'Assigned to', 'Slot', 'Date', 'Result'].map((h) => (
                     <th key={h} className="whitespace-nowrap px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {h}
                     </th>
@@ -92,6 +119,7 @@ export function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => vo
                       )}
                     </td>
                     <td className={cell}>{r.bm || '—'}</td>
+                    <td className={cell + ' whitespace-nowrap ' + (ec.status === 'error' ? 'text-amber-600' : '')} title={ec.status === 'error' ? 'Could not load ECs from the backend' : undefined}>{ecOf(r.pi)}</td>
                     <td className={cell}>{r.person || '—'}</td>
                     <td className={cell + ' whitespace-nowrap text-gray-500'}>{r.slot || '—'}</td>
                     <td className={cell + ' whitespace-nowrap text-gray-500'}>{r.date || '—'}</td>

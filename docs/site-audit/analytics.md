@@ -103,6 +103,11 @@ completed/partial attempts, MD Audit iterates distinct PIs, the ratings drills i
 map, and the arrival drills iterate the rows `_anArrivalStats` tags in the same loop that does the
 counting. A drill that disagrees with the tile it opened from is worse than no drill — so when you
 add a tile, derive its drill from the same variable, never from a fresh filter that looks right.
+
+Every drill shows an **EC** column (2026-11-18): the branch the PI's estimate was raised at, from
+one `POST /site-audit-ec-branches/` per opened drill (`fetchSiteAuditECs`, the same lookup as
+Jobs Overview). A failed call reads Unknown, never "—". The audit read in `execution.tsx` selects
+`customer_name` and `bm`; it did not before, so every audit drill showed "—" in both columns.
 (`iNoDelayLog` is literally `iDelayLog` with the verdict inverted, for that reason.) The ratings
 drills pass an explicit `summary`, because yes/(yes+no) there would be promoters over
 promoters-plus-detractors — not NPS, not anything.

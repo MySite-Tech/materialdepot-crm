@@ -9,3 +9,22 @@ export async function fetchSiteAuditECs(leadIds: string[]): Promise<Record<strin
   });
   return (data && data.results) || {};
 }
+
+export interface StoreSlot {
+  id: string;
+  available: number;
+  total: number;
+  booked: number;
+  buffer: number;
+}
+
+export interface StoreSlotCalendar {
+  label: string;
+  days: Array<{ date: string; slots: StoreSlot[] }>;
+}
+
+export async function fetchStoreSlots(store: string): Promise<StoreSlotCalendar> {
+  const data = await mdFetch('/site-audit-store-slots/?store=' + encodeURIComponent(store));
+  if (!data || !Array.isArray(data.days)) throw new Error('slot availability unavailable');
+  return { label: data.label || store, days: data.days };
+}

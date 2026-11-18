@@ -125,23 +125,42 @@ store absent from `STORE_CITY` has no city, and a store absent from `STORES`
 never appears in the picker at all. Keep the names in step with the branch's
 `OrganisationBranch.branch_name` — matching here is by display name, not id.
 
-## The slot blackout list lives in two repos and must move in both
+## Audit slots are counted per store, in Django only (2026-11-18)
 
-`SLOT_BLACKOUTS` (`views/store-team/constants.ts`) withdraws named slots on a
-named date — the lever for "no visits at 10, 11 or 1 on the 17th". It is a
-mirror, not the source: the customer app and website book through Django's
-`/site-audit-slots/`, which filters on its own `SITE_AUDIT_SLOT_BLACKOUTS`
-(`order/site_audit_slots.py`). Neither map reaches the other repo.
+The store kiosk (`/store-booking`) and the customer app both show what Django's
+`order/services/site_audit_pools.py` decides. The kiosk reads
+`GET /site-audit-store-slots/?store=` (public, no authentication at all, counts only)
+and the app reads `/site-audit-slots/`. The browser no longer counts anything, so
+there is no second copy of the rule to drift.
 
-**Blacking out a slot in only one of them leaves it bookable from the other**,
-and both are spending the same auditors' day — which is exactly how a "blocked"
-slot still took a CRM booking. Change the pair together, in the same breath as
-`SLOT_DEFS` / `SITE_AUDIT_SLOT_DEFS` if the windows themselves ever move.
-
-Blackouts are deliberately *not* modelled as capacity. Zeroing a roster
-(`leave_dates`) blanks the whole day, and fake `audit_orders` rows cannot block
-1 PM without also taking 2 PM down with them — `slotsConflict`'s 120-minute rule
-spills onto neighbours, and the rows show up as phantom jobs on the SM's board.
+- **One pool per store, one auditor each:** JP Nagar, Electronic City, Yelahanka +
+  Basaveshwara Nagar (shared), HSR Layout, Whitefield, Gachibowli, Kompally. The
+  roster, leave and daily caps no longer decide what is bookable. Sundays are closed.
+- **A booking takes its window and the next one** (the auditor's travel buffer). The
+  window before it stays bookable. The old rule blocked anything under two hours away,
+  both sides.
+- **Which store a booking is:** a kiosk PI carries it (`SRES-JPNAGA-…`); an audit that
+  replaced a pre-booking (its `pi` is the pre-booking's `po`) inherits it; anything
+  else is the client's sales BM's store, which Django reads off
+  `UserManagerAssignment` and the BM's branch. All 678 audits of the 60 days to
+  18 Nov had a BM with exactly one store. A BM at HQ, B2B or Commercial Street holds
+  no pool; such a customer is offered the city's pools summed, and their booking
+  takes no store's slot.
+- **Overrides are kiosk-only and screen-only.** A Service Manager signed in to the
+  CRM in the same browser gets "Book anyway" on a Buffer window; an admin also gets
+  Sundays and closed days. The booking's log says it was booked over the buffer and by
+  whom. A Booked window has no override. Nothing is stored, and the app never sees an
+  override.
+- **Blackouts and open Sundays are Django's only now** (`SITE_AUDIT_SLOT_BLACKOUTS`,
+  `SITE_AUDIT_OPEN_SUNDAYS`): the kiosk shows Django's days, so the CRM's mirror was
+  deleted. The CRM's `SLOT_DEFS` is only labels; the windows are Django's
+  `SITE_AUDIT_SLOT_DEFS`.
+- **A new store** goes in Django's `SITE_AUDIT_STORE_POOLS` (its branch names, exactly
+  as `OrganisationBranch.branch_name`) and in the kiosk's `STORES` / `STORE_CITY`. The
+  kiosk's PI code is the name without spaces, cut to six letters, so two stores must
+  not share their first six letters.
+- **If Django is down the kiosk says "Failed to load"** rather than guessing; the app
+  falls back to an uncounted grid as before.
 
 The reverse lever — a Sunday the team *does* work — is `OPEN_SUNDAYS`, mirrored
 by Django's `SITE_AUDIT_OPEN_SUNDAYS`; same two-repo rule. Opening the date only

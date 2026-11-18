@@ -55,8 +55,7 @@ refresh before Remove becomes enabled.
 **Both column sets are probe-gated, and it is the same guard for the same
 reason.** `rosterQuery(cols)` bundles `rosterSelect` (caps, migration 003) and
 `activeStaffFilter` (exit, 004): PostgREST fails the WHOLE select with `42703`
-on a missing column, and this is the query the assignment pickers and the public
-kiosk's slots-left count depend on, so naming `deleted_at` unconditionally would
+on a missing column, and this is the query the assignment pickers depend on, so naming `deleted_at` unconditionally would
 take out every roster in both field apps. Verified against the live DB on
 2026-09-03, where the columns genuinely do not exist yet: the bare roster query
 returns 200, the naive `&deleted_at=is.null` returns 42703. An *unknown* probe
@@ -74,7 +73,7 @@ carries a comment saying so:
 | Excludes retired | Keeps retired |
 |---|---|
 | both SM rosters + assignment pickers | `FoamPayoutViews` pay rates (a leaver's final payout uses the same override) |
-| the kiosk's availability + slots-left | `SiteAuditJobsView`'s email→name map (else a leaver's past jobs render with a blank assignee) |
+| (the kiosk's availability came off this roster until 2026-11-18; it is Django's store pools now, `gotchas.md`) | `SiteAuditJobsView`'s email→name map (else a leaver's past jobs render with a blank assignee) |
 | `SiteAuditLiveView` (a leaver has a stale pin, not a location) | `SiteAuditBranchManagerView`'s phone→profile identity map (else their historic orders unattribute) |
 | `SiteAuditPerfView` (else a wall of zeros reads as "did nothing") | |
 | Role Viewer's person picker, the kiosk's BM picker, shadower pools | |

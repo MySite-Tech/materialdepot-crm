@@ -47,7 +47,7 @@ export function ExecutionAnalyticsView({ city = 'all', execOnly = false }: { cit
 
           sbGetLong('install_orders_slim?select=id,pi,status,subjobs,service,delivery_date,created_at,city,customer_name,bm,phone&status=neq.deleted'),
           sbGetLong(
-            'audit_orders?select=id,pi,status,date,slot,auditor_name,auditor_email,phone,log,created_at,city&status=not.in.(deleted,slot_reserved,slot_converted)'
+            'audit_orders?select=id,pi,status,date,slot,auditor_name,auditor_email,customer_name,bm,phone,log,created_at,city&status=not.in.(deleted,slot_reserved,slot_converted)'
           ),
 
           sbGetLong('ratings?select=order_type,order_id,pi,q1_score,q2_score,q3_score,created_at,staff_name,staff_email'),
