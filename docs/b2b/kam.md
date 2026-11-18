@@ -291,6 +291,9 @@ a KAM, either by name or round robin. The KAM accepts or rejects from the
   reject sends them to No KAM. The Outreach-to-KAM handover has its own Reject,
   unchanged. Its Accept writes this tab's firm with an `Accepted` entry, so it
   never lands in Waiting for sign-off (2026-11-17, `outreach.md` §KAM handover).
+  The assignment dates also decide revenue: a firm's order goes to the KAM who held it
+  when the order was placed, even if another KAM opened the deal ticket (2026-11-18,
+  `overview.md` §A teammate's ticket).
 - **Assigning a firm to the KAM who already holds it is refused.** It used to write
   a pending entry and put the firm back in sign-off for nothing. The bar says it is
   already with them, and the Firm page closes the picker. Both compare with

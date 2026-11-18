@@ -59,7 +59,7 @@ export function OrderCreditLine({ enquiryId, rule }: { enquiryId: string; rule?:
         ) : (
           <span className="text-gray-700">
             {rule ? <strong>{rule}</strong> : <span className="text-gray-500">No one yet</span>}
-            <span className="text-gray-400"> · by the rule: the owner of this client's Inbound or Outreach lead when a teammate opened the ticket, else the B2B rep on the cart, else whoever holds this number</span>
+            <span className="text-gray-400"> · by the rule: when a teammate opened the ticket, the owner of this client's lead, or its firm's KAM if they held it when the order was placed; else the B2B rep on the cart; else whoever holds this number</span>
           </span>
         )}
         {canEdit && state === 'ready' && !editing && (

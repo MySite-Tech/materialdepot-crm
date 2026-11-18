@@ -683,10 +683,12 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
 - **A teammate who opened the deal ticket no longer takes the lead owner's order.**
   Hardi opens Inbound deal tickets, so orders Vikas closed were credited to her, and
   the 14 Nov manual credits only patched five of them. `teammateLeadOwner` now gives
-  the order to the Inbound or Outreach lead's owner on the cart rep's team. KAM firms
-  are deliberately unchanged: including them moved seven November carts between KAMs.
-  Ask the user before extending it (`docs/b2b/overview.md` §A teammate's ticket).
-  On real November orders exactly six moved, all Hardi → Vikas.
+  the order to the Inbound or Outreach lead's owner on the cart rep's team. On real
+  November orders exactly six moved, all Hardi → Vikas. **On 2026-11-18 the user
+  extended it to KAM firms:** the firm's KAM gets an order another KAM's ticket holds,
+  but only if they held the firm when it was placed (`kamFrom`, `docs/b2b/overview.md`
+  §A teammate's ticket). Four November orders moved to Krishna; three stayed because
+  the firm was assigned after the order.
 - **Checked signed in on production, 17 Nov:** Vikas's Leadership Board lists all six
   moved orders, including the 12 and 16 Nov ones the user reported, and KAM search
   finds the handed-over firm as Active with its KAM, not waiting for sign-off. No
@@ -740,8 +742,8 @@ the CRM either. Start new work from `origin/main`.
   Procurement "Assigned to" were set to him. The other three already read Vikas.
   Hardi stays ticket owner, so keep the credits.
 - **Krishna's revenue ties out on the live report (14 Nov).** His orders whose ticket
-  belongs to a store rep credit him as the firm's KAM. One whose ticket another KAM
-  owns goes to that KAM. A manager moves such an order with the per-order credit.
+  belongs to a store rep credit him as the firm's KAM. Since 18 Nov one whose ticket
+  another KAM owns is his too, if he held the firm when it was placed.
 - **Team rows now point at the right Kylas users (14 Nov):** Varun Jha keeps 73312
   (Kylas renamed it from "Emma Maria"), pratham pandey's wrong link to another
   team's user was removed, and Sai Suresh has no Kylas account to link.

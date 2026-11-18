@@ -220,7 +220,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
                 {engine.team === 'outreach' && card?.revenue && !pending && (
                   <>The <strong>New revenue</strong> KPI below counts only first orders of new conversions: {card.revenue.value === null ? 'Unknown' : fmtL((card.revenue.value ?? 0) * 1_00_000)}.{' '}</>
                 )}
-                An order counts here when they own the client&apos;s Inbound or Outreach lead (even if a teammate opened the deal ticket), were the B2B rep on the cart, held the client&apos;s number, or a manager credited the enquiry to them. Open any order to see why
+                An order counts here when they own the client&apos;s lead, or held its firm when the order was placed (even if a teammate opened the deal ticket), were the B2B rep on the cart, held the client&apos;s number, or a manager credited the enquiry to them. Open any order to see why
                 {manager ? ', and to credit it to someone else.' : '.'}
                 {creditsFailed && <span className="text-amber-700"> Manager credits could not be read, so this follows the rule only.</span>}
               </>}

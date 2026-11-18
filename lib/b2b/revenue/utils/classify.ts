@@ -10,12 +10,16 @@ function directTeam(teams: B2BTeam[], held: Holder[]): B2BTeam | null {
   return held.find((h) => h.team && teams.includes(h.team))?.team ?? teams[0] ?? held.find((h) => h.team)?.team ?? null;
 }
 
-const LEAD_KINDS = new Set<Holder['kind']>(['outreach', 'inbound']);
+const RECORD_KINDS = new Set<Holder['kind']>(['firm', 'outreach', 'inbound']);
 
 const samePerson = (a: string, b: string) => repName(a).toLowerCase() === repName(b).toLowerCase();
 
-export function teammateLeadOwner(held: Holder[], repTeams: B2BTeam[], placedBy: string): Holder | null {
-  const records = held.filter((h) => LEAD_KINDS.has(h.kind) && h.owner && h.team);
+const heldAtOrder = (h: Holder, orderMs: number) =>
+  h.kind !== 'firm' || !h.kamFrom || Number.isNaN(orderMs) || Date.parse(h.kamFrom) <= orderMs;
+
+export function teammateRecordOwner(held: Holder[], repTeams: B2BTeam[], placedBy: string, orderAt: string): Holder | null {
+  const orderMs = Date.parse(orderAt);
+  const records = held.filter((h) => RECORD_KINDS.has(h.kind) && h.owner && h.team && heldAtOrder(h, orderMs));
   if (records.some((h) => samePerson(h.owner, placedBy))) return null;
   return records.find((h) => repTeams.includes(h.team!)) ?? null;
 }
@@ -61,9 +65,9 @@ export function classifyOrder(
 
   if (referred) return shape(5, 'kam', referred.owner, referred);
   if (byB2BRep) {
-    const leadOwner = teammateLeadOwner(held, repTeams, placedBy);
-    return leadOwner
-      ? shape(bookedOnB2B ? 1 : 2, leadOwner.team, leadOwner.owner, leadOwner)
+    const recordOwner = teammateRecordOwner(held, repTeams, placedBy, String(o.orderPlacedAt || o.createdAt || ''));
+    return recordOwner
+      ? shape(bookedOnB2B ? 1 : 2, recordOwner.team, recordOwner.owner, recordOwner)
       : shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), placedBy, owned);
   }
   if (owned) return shape(bookedOnB2B ? 3 : 4, owned.team, owned.owner, owned);

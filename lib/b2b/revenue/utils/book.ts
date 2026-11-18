@@ -105,13 +105,27 @@ export function clientDbFirms(rows: B2BSourceRow[]): Map<string, string> {
   return out;
 }
 
+function kamFrom(owner: string, assignments: unknown): string {
+  const list = (Array.isArray(assignments) ? assignments as { kam?: unknown; at?: unknown; status?: unknown }[] : [])
+    .filter((a) => text(a.at))
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  let from = '';
+  for (let i = list.length - 1; i >= 0; i--) {
+    const a = list[i];
+    if (a.status === 'Rejected') continue;
+    if (repKey(repName(a.kam)) !== repKey(owner)) break;
+    from = String(a.at);
+  }
+  return from;
+}
+
 function holderOf(row: B2BSourceRow): Holder | null {
   const meta = row.meta_data ?? {};
   const owner = repName(row.owner);
   const firm = text(meta.company) || text(meta.firm_name);
   if (row.pipeline === 'client') {
     return owner
-      ? { kind: 'firm', team: 'kam', owner, firm, since: '' }
+      ? { kind: 'firm', team: 'kam', owner, firm, since: '', kamFrom: kamFrom(owner, meta.assignments) }
       : { kind: 'unowned', team: null, owner: '', firm, since: '' };
   }
   if (row.pipeline === 'kam') return { kind: 'firm', team: 'kam', owner, firm, since: '' };
