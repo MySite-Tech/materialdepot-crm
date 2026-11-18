@@ -4,6 +4,7 @@ export * from './core/auth';
 export * from './ops/escalation';
 export * from './crm/branches';
 export * from './ops/store-visit';
+export * from './ops/site-audit';
 export * from './b2b/inbound';
 export * from './crm/leads';
 export * from './crm/lead-details';

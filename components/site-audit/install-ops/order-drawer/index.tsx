@@ -15,12 +15,14 @@ import { DownloadJobCardBtn } from './sections/jobcard';
 import { SkuGroup } from './sections/skus';
 import { SjDeliveryRow, SplitPicker, SubjobCrewProgress } from './sections/subjobs';
 import { DraftState, Props } from './types';
-import { buildInitDraft } from './utils';
-import { useState } from 'react';
+import { buildInitDraft, withOmsAreas } from './utils';
+import { fetchSkuAreas } from '../../data/auto-import-audit-orders';
+import { useEffect, useState } from 'react';
 
 export default function OrderDrawer({ order: o, allOrders, installers, shadowerPool, city, slotsFl, slotsWp, attribution, installersErr, onRetryInstallers, onClose, onOpenOrder, onOpenRect, reload, reloadWithDeleted, toast }: Props) {
   const [draft, setDraft] = useState<DraftState>(() => buildInitDraft(o));
   const [splitSjId, setSplitSjId] = useState<string | null>(null);
+  useEffect(() => { let alive = true; fetchSkuAreas(o.pi).then((a) => { if (alive && a.size) setDraft((d) => withOmsAreas(d, a)); }).catch(() => {}); return () => { alive = false; }; }, [o.pi]);
   const [grpOn, setGrpOn] = useState(() => { const d = buildInitDraft(o); return { flooring: d.flooring.length > 0, wallpaper: d.wallpaper.length > 0, wallpanel: d.wallpanel.length > 0 }; });
   const [newDeliv, setNewDeliv] = useState(o.deliveryDate || '');
   const [fuDate, setFuDate] = useState((o.service && o.service.follow_up_date) || '');

@@ -1,4 +1,4 @@
-import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPost, syntheticSiteAuditEmail } from '../shared';
+import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from '../shared';
 import { autoLinkBmsFromRows } from './resolve-bm-from-backend';
 import { AUDIT_SKU } from '../audit-ops/constants';
 import { INSTALL_SKU } from '../install-ops/constants';
@@ -20,10 +20,11 @@ type BackendRow = {
 
   stage_status?: string | null;
   delivery_date?: string | null;
+  goods_delivery_date?: string | null;
   customer?: { name?: string; contact?: number | string } | null;
   shipping_address?: { address?: string; city?: string } | null;
   bm?: { name?: string; contact?: number | string } | null;
-  skus?: Array<{ variant_handle?: string; product_name?: string; category_name?: string; is_service?: boolean | null }> | null;
+  skus?: Array<{ variant_handle?: string; product_name?: string; category_name?: string; is_service?: boolean | null; area_sqft?: number | null }> | null;
 };
 
 function cityOfRow(r: BackendRow): string {
@@ -113,6 +114,10 @@ function serviceTrade(r: BackendRow): string | null {
   return null;
 }
 
+export function deliveryDateOf(r: { goods_delivery_date?: string | null; delivery_date?: string | null }): string | null {
+  return r.goods_delivery_date || r.delivery_date || null;
+}
+
 function installPayload(r: BackendRow, now: string, _bms: BmIndex): Record<string, any> {
   const trade = serviceTrade(r);
   const ordered = orderedSkus(r)
@@ -125,8 +130,8 @@ function installPayload(r: BackendRow, now: string, _bms: BmIndex): Record<strin
     ...common(r, now, 'Installation order imported automatically from the backend'),
     skus,
     matched_audit: false,
-    delivery_date: r.delivery_date || null,
-    original_delivery_date: r.delivery_date || null,
+    delivery_date: deliveryDateOf(r),
+    original_delivery_date: deliveryDateOf(r),
     custom_wp: custom,
 
     subjobs: null,
@@ -161,6 +166,24 @@ function leadKey(pi: unknown): string {
   return String(pi).trim().replace(/\s*-\s*(R|\d+)$/i, '');
 }
 
+export async function fetchSkuAreas(pi: string): Promise<Map<string, number>> {
+  const areas = new Map<string, number>();
+  const key = leadKey(pi);
+  if (!key) return areas;
+  const token = getToken();
+  const res = await fetch('/api/site-audit/install-pos?type=installation&page_size=20&search=' + encodeURIComponent(key), {
+    headers: token ? { Authorization: 'Bearer ' + token } : undefined,
+  }).catch(() => null);
+  const data = res ? await res.json().catch(() => null) : null;
+  for (const r of (data && Array.isArray(data.results) ? data.results : []) as BackendRow[]) {
+    if (leadKey(r.estimate_lead_id) !== key) continue;
+    for (const s of r.skus || []) {
+      if (s.variant_handle && s.area_sqft && !areas.has(s.variant_handle)) areas.set(s.variant_handle, s.area_sqft);
+    }
+  }
+  return areas;
+}
+
 async function confirmCompletedJobs(backend: BackendRow[], known: any[]): Promise<number> {
   const completed = new Set(
     known.filter((r: any) => String(r.status) === 'completed').map((r: any) => leadKey(r.pi)),
@@ -180,6 +203,41 @@ async function confirmCompletedJobs(backend: BackendRow[], known: any[]): Promis
   return confirmed;
 }
 
+function staleDeliveryDates(backend: BackendRow[], known: any[]): Map<string, string[]> {
+  const goods = new Map<string, string>();
+  for (const r of backend) {
+    if (r.estimate_lead_id && r.goods_delivery_date) goods.set(String(r.estimate_lead_id), r.goods_delivery_date);
+  }
+  const byDate = new Map<string, string[]>();
+  for (const k of known) {
+    const date = goods.get(String(k.pi));
+    if (!date || !k.id) continue;
+    if (k.status !== 'pending' || k.created_by_email !== AUTO_ATTRIBUTION) continue;
+    if ((k.delivery_date || null) !== (k.original_delivery_date || null)) continue;
+    if (k.delivery_date === date) continue;
+    byDate.set(date, [...(byDate.get(date) || []), String(k.id)]);
+  }
+  return byDate;
+}
+
+async function refreshDeliveryDates(backend: BackendRow[]): Promise<number> {
+  const pending = await sbGet(
+    'install_orders?select=id,pi,status,delivery_date,original_delivery_date,created_by_email'
+    + '&status=eq.pending&created_by_email=eq.' + encodeURIComponent(AUTO_ATTRIBUTION),
+  );
+  if (!Array.isArray(pending)) return 0;
+  let moved = 0;
+  for (const [date, ids] of Array.from(staleDeliveryDates(backend, pending))) {
+    moved += await sbPatchWhere(
+      'install_orders',
+      'id=in.(' + ids.join(',') + ')&status=eq.pending',
+      { delivery_date: date, original_delivery_date: date },
+    );
+  }
+  if (moved) console.info('[site-audit] moved ' + moved + ' install order(s) to their goods delivery date');
+  return moved;
+}
+
 async function reconcile(kind: Kind): Promise<number> {
   const [backend, known, bms] = await Promise.all([
     fetchBackendRows(kind),
@@ -196,6 +254,13 @@ async function reconcile(kind: Kind): Promise<number> {
     } catch { /* attribution is a repair, never a reason to fail the reconcile */ }
   }
 
+  let moved = 0;
+  if (kind.table === 'install_orders') {
+    try {
+      moved = await refreshDeliveryDates(backend);
+    } catch { /* a stale date is what the row showed before; try again next load */ }
+  }
+
   try {
     await confirmCompletedJobs(backend, known);
   } catch { /* the field app's own retry queue is the other path; try again next load */ }
@@ -207,7 +272,7 @@ async function reconcile(kind: Kind): Promise<number> {
     const at = r.created_at ? Date.parse(r.created_at.replace(' ', 'T')) : NaN;
     return !Number.isFinite(at) || at >= cutoff;
   });
-  if (!missing.length) return 0;
+  if (!missing.length) return moved;
 
   const now = new Date().toISOString();
   let added = 0;
@@ -220,7 +285,7 @@ async function reconcile(kind: Kind): Promise<number> {
          reason to abandon the rest of the batch. */
     }
   }
-  return added;
+  return added + moved;
 }
 
 const MIN_GAP_MS = 60000;

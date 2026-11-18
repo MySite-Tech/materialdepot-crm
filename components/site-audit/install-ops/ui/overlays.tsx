@@ -80,7 +80,7 @@ function Field({ label, children }: { label: React.ReactNode; children: React.Re
 }
 
 interface KylasRow {
-  po_number: string; po_status: string; delivery_date?: string; created_at?: string; estimate_lead_id?: string;
+  po_number: string; po_status: string; delivery_date?: string; goods_delivery_date?: string | null; created_at?: string; estimate_lead_id?: string;
   customer?: { name?: string; contact?: string }; bm?: { name?: string };
   shipping_address?: { address?: string; map_link?: string };
   skus?: Array<{ product_name?: string }>;
@@ -132,7 +132,7 @@ export function KylasOverlay({ open, orders, onClose, onUse }: { open: boolean; 
     const sa = r.shipping_address;
     const addr = sa && sa.address ? (sa.address.length > 80 ? sa.address.slice(0, 80) + '…' : sa.address) : '';
     const skuNames = (r.skus || []).slice(0, 2).map((s) => s.product_name).filter(Boolean).join(', ');
-    const date = (r.delivery_date || r.created_at || '').slice(0, 10);
+    const date = (r.goods_delivery_date || r.delivery_date || r.created_at || '').slice(0, 10);
     return (
       <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border mb-1.5 ${done ? 'border-gray-200 opacity-50' : 'border-blue-200 bg-blue-50/40'}`}>
         <div className="flex-1 min-w-0">

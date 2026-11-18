@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-99 entries. They live in one file because they cross-reference each other —
+100 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -109,6 +109,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket
 - An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
 - A firm's last order read a month old while its own page listed yesterday's order
+- An installation order's delivery date was the installer's date, so every new order read as due today
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1505,3 +1506,17 @@ now expires after 5 minutes (`docs/b2b/data-layer.md`). This is not the October
 `lastOrderDate` bug, which served future dates (`docs/b2b/client-db.md`). Before
 calling a stale figure a Django bug, call the endpoint fresh for that number and
 compare with `estimate`.
+
+### An installation order's delivery date was the installer's date, so every new order read as due today (2026-11-17)
+
+Install Dashboard → Need Action listed 33 operations calls due, each "today/overdue",
+on orders placed the day before. The auto-import copied the jobs feed's
+`delivery_date`, which is the SERVICE leg's own date: the installer's PO, or on OMS the
+SERVICE stage's `due_at`. On OMS that sits at about the order date, while the
+wallpaper or panels behind it were expected four to ten days later. It was also frozen
+at import, because the import only inserts. The shape: a field named `delivery_date`
+on a row that is not a delivery. Django now sends `goods_delivery_date` on the same feed
+(MaterialDepotDjangoBackend `order/services/site_audit_goods_delivery.py`): the earliest
+flooring, wallpaper or panel line, by its promised date. The import uses
+it, and each reconcile moves a still-pending, auto-imported, never re-dated order to it
+(`docs/site-audit/orders.md` §The delivery date is when the goods arrive).
