@@ -1,6 +1,6 @@
 'use client';
 
-import { OUTREACH_KPIS, OutreachKpiDef, OutreachKpiKey, OutreachKpis, Period, kpiTarget } from '../../../models/outreach/kpis';
+import { ORDER_KPIS, OUTREACH_KPIS, OutreachKpiDef, OutreachKpiKey, OutreachKpis, Period, kpiTarget } from '../../../models/outreach/kpis';
 import { Lens } from '../types';
 import { fmtTarget, fmtValue, paceFor, tileHint, tone } from './utils';
 
@@ -51,12 +51,13 @@ function KpiTile({ def, k, heads, period, today, state, on, onPick }: {
   );
 }
 
-export function Scorecard({ kpis, heads, period, today, state, active, onPick }: {
+export function Scorecard({ kpis, heads, period, today, state, ordersState, active, onPick }: {
   kpis: OutreachKpis;
   heads: number;
   period: Period;
   today: string;
   state: 'ready' | 'loading' | 'failed';
+  ordersState: 'ready' | 'loading' | 'failed';
   active: Lens | null;
   onPick: (lens: Lens) => void;
 }) {
@@ -74,7 +75,7 @@ export function Scorecard({ kpis, heads, period, today, state, active, onPick }:
                 heads={heads}
                 period={period}
                 today={today}
-                state={state}
+                state={ORDER_KPIS.has(d.key) && state === 'ready' ? ordersState : state}
                 on={active === `kpi:${d.key}`}
                 onPick={() => onPick(`kpi:${d.key}`)}
               />

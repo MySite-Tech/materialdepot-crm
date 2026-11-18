@@ -1,7 +1,8 @@
-import { fetchKamOrders } from '../data/reads';
+import { fetchClients, fetchKamOrders, fetchRows } from '../data/reads';
+import { upsertClient } from '../data/writes';
 import { rowToInbound } from '../mappers/inbound';
 import { rowToOutreach } from '../mappers/outreach';
-import { fetchRows } from '../data/reads';
+import { firmForOutreachHandover } from '@/components/b2b/models/kam/handover';
 import { ClientEntity, ClientEntityType, ClientSource, clientTypeFromLead, contactNumbers, normalizeContactNumber, normalizeGst } from '@/components/b2b/models/client';
 import { Segment } from '@/components/b2b/models/inbound';
 import { KamOrder } from '@/components/b2b/models/kam';
@@ -117,6 +118,16 @@ export async function planClientSeed(existing: ClientEntity[]): Promise<ClientSe
 
   create.sort((a, b) => a.company.localeCompare(b.company));
   return { create, alreadyLinked, unusable };
+}
+
+export async function saveOutreachHandoverFirm(l: OutreachLead, at: string): Promise<string | null> {
+  try {
+    const plan = firmForOutreachHandover(l, await fetchClients(), at);
+    return plan ? await upsertClient(plan.firm) : null;
+  } catch (e) {
+    console.error('[b2b] handover firm failed', e);
+    return e instanceof Error ? e.message : 'the Client Database did not load';
+  }
 }
 
 export function clientFromSeed(c: ClientSeedCandidate, now = new Date().toISOString()): ClientEntity {

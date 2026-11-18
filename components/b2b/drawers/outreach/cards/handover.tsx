@@ -3,7 +3,7 @@
 import { OutreachLead } from '../../../models/mock-data';
 import {
   HANDOVER_STATE_COLOR, HANDOVER_STATE_LABEL, HANDOVER_TAT_HOURS, handoverGateErrors, handoverPrompts, handoverState,
-  hoursSince, isWhatsappGroupLink,
+  hoursSince, isWhatsappGroupLink, whatsappDeclineReason,
 } from '../../../models/outreach/handover';
 import { Rep } from '../../../models/outreach/intake';
 import EcPicker from '../../../ui/ec-picker';
@@ -17,6 +17,14 @@ const HANDOVER_REJECT_REASONS = [
   'Not actually converted — no order found',
   'Wrong KAM / region',
 ] as const;
+
+const WHATSAPP_DECLINE_REASONS = [
+  'Prefers calls or one-to-one chats',
+  'Does not use WhatsApp for work',
+  'Does not want to be added to groups',
+] as const;
+
+const OTHER = 'Other';
 
 export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, busy, kamLoad, onAutoKam, onSend, onRespond, set, setDraft }: {
   draft: OutreachLead;
@@ -35,6 +43,10 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
   const [kamName, setKamName] = useState(saved.handover?.kam || draft.kam || '');
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  const declining = draft.whatsappGroupDeclined !== undefined && !isWhatsappGroupLink(draft.whatsappGroupLink);
+  const presetReason = (WHATSAPP_DECLINE_REASONS as readonly string[]).includes(draft.whatsappGroupDeclined || '');
+  const [otherReason, setOtherReason] = useState(declining && !!draft.whatsappGroupDeclined && !presetReason);
+  const declineMissing = declining && !whatsappDeclineReason(draft);
   const state = handoverState(saved, nowMs);
   const missing = handoverGateErrors(draft);
   const prompts = draft.status === 'Closed' ? handoverPrompts(draft) : [];
@@ -50,20 +62,64 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
       subtitle={`Round-robin to a KAM once converted · KAM signs off within ${HANDOVER_TAT_HOURS}h`}
       right={<Pill color={HANDOVER_STATE_COLOR[state]}>{HANDOVER_STATE_LABEL[state]}</Pill>}
     >
-      <Field
-        label="WhatsApp group link"
-        required={draft.status === 'Closed'}
-        hint="The group with the client, you and the KAM. Required for the handover."
-        error={linkBad ? 'That is not a WhatsApp group invite link (https://chat.whatsapp.com/…).' : undefined}
-      >
-        <div className="flex items-center gap-1.5">
-          <input value={draft.whatsappGroupLink || ''} onChange={(e) => set('whatsappGroupLink', e.target.value.trim() || undefined)}
-            placeholder="https://chat.whatsapp.com/…" className={linkBad ? errorInputCls : inputCls} />
-          {isWhatsappGroupLink(draft.whatsappGroupLink) && (
-            <a href={draft.whatsappGroupLink} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-[#0F766E] whitespace-nowrap hover:underline">Open</a>
-          )}
-        </div>
-      </Field>
+      {declining ? (
+        <Field
+          label="Why the client will not join a WhatsApp group"
+          required={draft.status === 'Closed'}
+          hint="The handover goes ahead without a group. The KAM sees this reason and calls the client directly."
+          error={declineMissing && draft.status === 'Closed' ? 'Pick a reason, or untick below and paste the group link.' : undefined}
+        >
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <select
+              value={otherReason ? OTHER : presetReason ? draft.whatsappGroupDeclined : ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setOtherReason(v === OTHER);
+                set('whatsappGroupDeclined', v === OTHER || !v ? '' : v);
+              }}
+              className={declineMissing && draft.status === 'Closed' ? errorInputCls : inputCls}
+            >
+              <option value="">Pick a reason</option>
+              {WHATSAPP_DECLINE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              <option value={OTHER}>Other (write it)</option>
+            </select>
+            {otherReason && (
+              <input value={draft.whatsappGroupDeclined || ''} onChange={(e) => set('whatsappGroupDeclined', e.target.value)}
+                placeholder="What the client said" className={inputCls} />
+            )}
+          </div>
+        </Field>
+      ) : (
+        <Field
+          label="WhatsApp group link"
+          required={draft.status === 'Closed'}
+          hint="The group with the client, you and the KAM. Required for the handover unless the client is not willing."
+          error={linkBad ? 'That is not a WhatsApp group invite link (https://chat.whatsapp.com/…).' : undefined}
+        >
+          <div className="flex items-center gap-1.5">
+            <input value={draft.whatsappGroupLink || ''} onChange={(e) => set('whatsappGroupLink', e.target.value.trim() || undefined)}
+              placeholder="https://chat.whatsapp.com/…" className={linkBad ? errorInputCls : inputCls} />
+            {isWhatsappGroupLink(draft.whatsappGroupLink) && (
+              <a href={draft.whatsappGroupLink} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-[#0F766E] whitespace-nowrap hover:underline">Open</a>
+            )}
+          </div>
+        </Field>
+      )}
+      <label className="mt-2 flex items-center gap-1.5 text-[11.5px] text-gray-600 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={declining}
+          onChange={(e) => {
+            setOtherReason(false);
+            setDraft((d) => ({
+              ...d,
+              whatsappGroupLink: e.target.checked ? undefined : d.whatsappGroupLink,
+              whatsappGroupDeclined: e.target.checked ? '' : undefined,
+            }));
+          }}
+        />
+        Client is not willing to join a WhatsApp group
+      </label>
 
       {draft.status !== 'Closed' ? (
         <p className="mt-3 text-[11.5px] text-gray-500 leading-snug">
@@ -76,6 +132,7 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
               {`Sent to ${h.kam} by ${h.sentBy} on ${h.sentAt.slice(0, 10)}`}
               {h.status === 'Pending' && ` · ${Math.floor(hoursSince(h.sentAt, nowMs))}h waiting`}
               {h.respondedAt && ` · ${h.status === 'Accepted' ? 'signed off' : 'rejected'} by ${h.respondedBy} on ${h.respondedAt.slice(0, 10)}`}
+              {h.whatsappGroupDeclined && <div className="text-amber-700 mt-0.5">{`No WhatsApp group: client not willing (${h.whatsappGroupDeclined})`}</div>}
               {h.rejectReason && <div className="text-red-700 mt-0.5">{`Reason: ${h.rejectReason}`}</div>}
             </div>
           )}
@@ -123,7 +180,9 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
           {canRespond && (state === 'pending' || state === 'overdue') && (
             <div className="mt-3 rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2.5">
               <p className="text-[11.5px] text-gray-700 leading-snug mb-2">
-                Sign off only once you have read the meeting history, joined the WhatsApp group and agreed your first meeting with the owner.
+                {h?.whatsappGroupDeclined
+                  ? `There is no WhatsApp group: the client was not willing (${h.whatsappGroupDeclined}). Sign off only once you have read the meeting history, called the client yourself and agreed your first meeting with the owner.`
+                  : 'Sign off only once you have read the meeting history, joined the WhatsApp group and agreed your first meeting with the owner.'}
               </p>
               {rejecting ? (
                 <div className="flex items-center gap-1.5 flex-wrap">

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-96 entries. They live in one file because they cross-reference each other —
+100 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -105,6 +105,10 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A KPI that asks for what the screen never lets you enter scores everyone at zero
 - A lead the import's date floor skipped cannot be reassigned, and Sync never fixes it
 - A Postponed status with the date moved forward hid every rebooked meeting, and no meeting was ever marked held
+- An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched
+- Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket
+- An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
+- A firm's last order read a month old while its own page listed yesterday's order
 - An installation order's delivery date was the installer's date, so every new order read as due today
 
 - **The Category Revenue tab was compared against Metabase for months while
@@ -1445,6 +1449,63 @@ and books the next meeting for the new one (`withRebooking`). A check-in fixes t
 meeting's day, a checked-in meeting has Mark held, and one not marked held is listed
 on the scorecard as not counted (`docs/b2b/outreach.md` §Postponing rebooks).
 `scripts/outreach-meeting-repair.mjs` puts the existing rows back the same way.
+
+### An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched (2026-11-17)
+
+The user: a firm was handed from Outreach to KAM, and the KAM cannot find it in KAM
+search. Sai Suresh had accepted it on 14 Nov. Every read answered 200 and the search
+code was right: the KAM tab searches only Client Database firms (`b2b_client`), and
+the handover was written only to the Outreach row. No step ever created the firm, so
+an accepted handover was invisible to the very tab it handed to. The shape: a hand-off
+recorded on the sender's record only, while the receiver's screen reads another table.
+Accept now creates or links the firm with an `Accepted` assignment to the KAM before
+it saves the handover (`docs/b2b/outreach.md` §KAM handover). When a hand-off between
+two tabs looks lost, check which table the receiving tab reads before debugging its
+filters.
+
+### Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket (2026-11-17)
+
+The user, with two drawers on screen: Vikas's closed Inbound leads said "Revenue
+credited to Vikas", yet the orders did not count under him. Hardi Patel opens the
+Django deal ticket for Inbound clients, so she was the cart's rep, and the revenue
+rule put "a B2B rep on the cart" ahead of the lead's owner. The drawer's line used
+the lead owner, so the screen and the report disagreed. It was first patched on 14
+Nov by crediting five orders by hand, which is why it came back three days later.
+The shape: a hand fix applied to data when the rule itself was wrong, and two places
+stating one rule two ways. `teammateLeadOwner` now gives the order to a teammate who
+owns the lead (`docs/b2b/overview.md` §A teammate's ticket does not take the lead
+owner's order). When the same complaint comes back after a manual fix, look for the
+rule, not the record.
+
+### An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders (2026-11-18)
+
+The user, with pratham's Outreach tab on screen: BMs say their orders show wrong. The
+Outreach scorecard read 0 meetings, 0 conversions and ₹0, while My performance's
+headline credited him four store orders on his EC-referral leads. Both were "right" by
+their own code: the headline reads the per-order report, the scorecard counted only
+leads moved to Converted with a fetched Enq ID, and none of his ordering clients' leads
+had left "Yet to Meet". His 9 check-ins counted for nothing either, because only a
+meeting marked held with notes did. The shape: one figure computed two ways on two
+screens, one of them gated on a manual step reps skip. Conversions, handover and
+revenue now read the same report through `teamOrders`, and a check-in counts as held
+(`docs/b2b/outreach.md` §Conversions and revenue come from orders, §Postponing
+rebooks). When a rep says a number is wrong, put the two screens' rules side by side
+before touching data.
+
+### A firm's last order read a month old while its own page listed yesterday's order (2026-11-18)
+
+The user, with screenshots: Client Database showed two firms' last orders as 19 Oct
+and 31 Oct, and each Firm page listed an order placed on 17 Nov. Django was not wrong.
+Called fresh on 18 Nov, `b2b-bulk` returned 17 Nov, and one firm's order count and
+revenue matched `estimate` exactly. The list's figures were the same totals minus the
+17 Nov order. The CRM's `orderHistoryCache` had no expiry, so a tab opened before the
+order kept serving its first read on every B2B tab, while the Firm page's order list
+reads `/crm/leads/` fresh. The shape: a per-page-load cache with no TTL in an app
+people leave open for days, beside a second source that is always fresh. The cache
+now expires after 5 minutes (`docs/b2b/data-layer.md`). This is not the October
+`lastOrderDate` bug, which served future dates (`docs/b2b/client-db.md`). Before
+calling a stale figure a Django bug, call the endpoint fresh for that number and
+compare with `estimate`.
 
 ### An installation order's delivery date was the installer's date, so every new order read as due today (2026-11-17)
 

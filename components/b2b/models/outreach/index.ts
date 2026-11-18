@@ -127,7 +127,8 @@ export type HandoverStatus = 'Pending' | 'Accepted' | 'Rejected';
 export interface OutreachHandover {
   kam: string;
   kamPhone?: string;
-  whatsappGroupLink: string;
+  whatsappGroupLink?: string;
+  whatsappGroupDeclined?: string;
   sentAt: string;
   sentBy: string;
   status: HandoverStatus;
@@ -233,6 +234,12 @@ export function openMeeting(meetings: OutreachMeeting[] | undefined): OutreachMe
 export function completedMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
   return (meetings || [])
     .filter((m) => m.status === 'Completed')
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || a.n - b.n);
+}
+
+export function heldMeetings(meetings: OutreachMeeting[] | undefined): OutreachMeeting[] {
+  return (meetings || [])
+    .filter((m) => m.status === 'Completed' || !!m.checkIn)
     .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || a.n - b.n);
 }
 

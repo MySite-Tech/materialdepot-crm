@@ -100,7 +100,7 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
             <p className="text-[11px] text-gray-500 leading-snug">
               Converted means the first order is placed. Open the lead afterwards to fetch the order from
               its Enq ID (the conversion only counts once fetched) and send the KAM handover with the
-              WhatsApp group.
+              WhatsApp group, or the reason the client will not join one.
             </p>
           )}
           {touched && errors.length > 0 && <GateErrors errors={errors} />}
@@ -325,7 +325,7 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
                 </select>
               ) : <input value={me.name} disabled className={inputCls} />}
             </Field>
-            <Field label="WhatsApp group" hint="Good to have now; required at KAM handover" className="sm:col-span-2">
+            <Field label="WhatsApp group" hint="Good to have now. The KAM handover needs it, or a reason the client will not join one" className="sm:col-span-2">
               <input value={whatsappGroupLink} onChange={(e) => setWhatsappGroupLink(e.target.value)} placeholder="https://chat.whatsapp.com/…" className={inputCls} />
             </Field>
           </div>

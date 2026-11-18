@@ -116,9 +116,9 @@ split into the Overview's four channels.
 - **What it replaced.** Inbound counted Closed leads with a fetched Enq value, KAM
   counted Closed KAM-board orders. Both missed every order a store booked for the
   firm (the KAM sheet's "Everything: EC, self and referrals"), which the KAM
-  engine had listed under Not scored. Outreach keeps its **New revenue (M0)** KPI,
-  because the sheet defines it as first orders of new conversions only; the hero
-  above it shows everything credited to the BM, and says so.
+  engine had listed under Not scored. Outreach's revenue and conversions KPIs read
+  the same credited orders as the hero since 2026-11-18 (`outreach.md` §Conversions
+  and revenue come from orders); its old first-order, new-onboarding KPI is gone.
 - **A day claims an order through `ticket.placedAt` only.** If any of the person's
   orders came with no placement time (Django not sending `orderPlacedAt`), each day's
   revenue reads Unknown with the reason, never ₹0. The whole period does not need it:

@@ -23,6 +23,7 @@ export interface Holder {
   owner: string;
   firm: string;
   since: string;
+  kamFrom?: string;
 }
 
 export type NumberBook = Map<string, Holder[]>;

@@ -168,9 +168,42 @@ scopes this read for a non-admin token, and `/api/b2b/revenue` itself against re
 data. Only the classifier ran on real rows; the route ran on the sandbox and answered
 401 without a session. Check the route first once it is deployed or running on :3001.
 
+## A teammate's ticket does not take the lead owner's order (2026-11-17)
+
+The user, twice (14 and 17 Nov): orders on Vikas's Inbound leads did not count under
+him. Hardi Patel opens the Django deal ticket for Inbound clients during working
+hours, so she is `ticket.owner_id` (the cart's rep) on orders Vikas closed. The rule
+put "a B2B rep on the cart" first, so each order was Hardi's. That contradicted the
+user's 2026-10-30 rule that revenue goes to whoever owns the record at close.
+
+`teammateLeadOwner` (`classify.ts`): when the cart's rep is a B2B rep, and an Inbound
+or Outreach lead on the number (from before the cart) is owned by someone else on a
+team the cart rep is on, the order is that lead owner's. The channel and type do not
+change. The cart rep keeps it when they own a lead on the number themselves, or no
+teammate does. Run on every November order booked on the B2B branch (1–17 Nov, real
+holders, compiled classifier), exactly six orders moved, all from Hardi to Vikas.
+Manual credits still win over the rule.
+
+**KAM firms too, but only the KAM at order time (2026-11-18, the user's choice).**
+Asked who gets a KAM firm's order when another KAM opened the deal ticket, the user
+picked the firm's KAM, but only if they held the firm when the order was placed, so
+a later reassignment never moves past orders. `teammateRecordOwner` takes firms as
+well as leads; a firm counts when its `kamFrom` (the start of the current KAM's
+unbroken run of `assignments` entries, Rejected skipped, built in `book.ts`) is at or
+before `orderPlacedAt` (else the cart date). A firm with no assignment entry naming
+its KAM has no known start and counts as held: those are KAM-sheet and import firms
+whose KAM predates the assignment log. Still team-matched: a cart opened by someone
+on another team (Vilok, Outreach, on Prafful's firm) stays with that person, which
+the user was not asked about. Store-rep carts are untouched: they already went to
+the firm's KAM with no date gate (type 3/4). On the same November orders: four moved
+to Krishna (on Sidhant's and Tharun's tickets), and three stayed with the
+ticket owner because the firm reached its KAM after the order (varun on 9 and 17 Nov,
+Krishna at 13:20 on 17 Nov against a 06:49 order).
+
 ## A manager credits one order (2026-11-12)
 
-Each order's person comes from `classifyOrder`: the B2B rep on the cart, else the
+Each order's person comes from `classifyOrder`: the B2B rep on the cart (unless a
+teammate owns the Inbound or Outreach lead, above), else the
 holder of the number (a firm's current KAM ranks above an Inbound or Outreach lead).
 That holder has no date gate for firms, so an order follows whoever holds the firm
 today. A B2B manager can now credit any enquiry to anyone on the team, with a

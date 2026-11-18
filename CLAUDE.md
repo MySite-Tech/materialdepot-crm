@@ -213,7 +213,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 87 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 99 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -292,7 +292,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 87 titles, so grep a title and read around the line you
+**Contents** list of all 99 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -671,6 +671,51 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
+**START HERE for B2B (2026-11-17): CRM PR #67 (`outreach-handover-kam-firm`), merged on
+Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
+- **Accepting an Outreach handover creates the firm in the Client Database** with an
+  `Accepted` assignment to the KAM (`saveOutreachHandoverFirm`). The KAM tab reads only
+  `b2b_client`, so the only handover ever sent (accepted 14 Nov) could not be found in
+  KAM search. That firm predated the fix and was written to production on 17 Nov with
+  the same function's output, on the user's ask.
+- **A client may refuse the WhatsApp group:** a checkbox plus a reason passes the
+  handover gate (`whatsapp_group_declined`, `docs/b2b/outreach.md` §KAM handover).
+- **A teammate who opened the deal ticket no longer takes the lead owner's order.**
+  Hardi opens Inbound deal tickets, so orders Vikas closed were credited to her, and
+  the 14 Nov manual credits only patched five of them. `teammateLeadOwner` now gives
+  the order to the Inbound or Outreach lead's owner on the cart rep's team. On real
+  November orders exactly six moved, all Hardi → Vikas. **On 2026-11-18 the user
+  extended it to KAM firms:** the firm's KAM gets an order another KAM's ticket holds,
+  but only if they held the firm when it was placed (`kamFrom`, `docs/b2b/overview.md`
+  §A teammate's ticket). Four November orders moved to Krishna; three stayed because
+  the firm was assigned after the order.
+- **Outreach scorecard follows orders and check-ins (2026-11-18, the user's choices).**
+  pratham read 0 meetings, 0 conversions and ₹0 while My performance credited him four
+  store orders. Conversions, KAM handover and Revenue now read the per-order report
+  through `teamOrders`, the same as My performance, whether or not the lead was moved
+  to Converted; a check-in counts as a held meeting (`heldMeetings`); a check-in with
+  no notes is an adherence gap. Run on his real November rows: 9 meetings, 2 converted
+  clients, revenue equal to the headline. Save gates and Mark held are unchanged
+  (`docs/b2b/outreach.md` §Conversions and revenue come from orders).
+- **Checked signed in on production, 17 Nov:** Vikas's Leadership Board lists all six
+  moved orders, including the 12 and 16 Nov ones the user reported, and KAM search
+  finds the handed-over firm as Active with its KAM, not waiting for sign-off. No
+  console errors. **A new handover's Accept was tested live the same day** on a dummy
+  Outreach lead with a pending handover and a WhatsApp refusal reason: Accept created
+  the firm with both numbers and an `Accepted` assignment, KAM search found it, and
+  both dummy rows were then deleted from production.
+
+**A firm's last order read weeks old on Client Database (2026-11-18, CRM PR from
+`b2b-order-history-ttl`, merged on Dhruv's ask; no backend PR).** Two firms showed a
+last order of 19 Oct and 31 Oct while their Firm pages listed orders from 17 Nov. Django
+was right: `b2b-bulk` called fresh returned 17 Nov, and one firm's count and revenue
+matched `estimate` to the rupee. The CRM's `orderHistoryCache` never expired, so a tab
+left open kept its first read on Client Database, KAM, Overview and EC Referral. Entries
+now expire after 5 minutes (`HISTORY_TTL_MS`, `docs/b2b/data-layer.md`). A view left open
+on screen still shows what it read at mount; refresh on focus was offered and not built.
+**Before calling a stale order figure a Django bug,** call `b2b-bulk` fresh for that
+number from a signed-in tab and compare with `estimate` in Metabase.
+
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
 `b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in
@@ -716,8 +761,8 @@ the CRM either. Start new work from `origin/main`.
   Procurement "Assigned to" were set to him. The other three already read Vikas.
   Hardi stays ticket owner, so keep the credits.
 - **Krishna's revenue ties out on the live report (14 Nov).** His orders whose ticket
-  belongs to a store rep credit him as the firm's KAM. One whose ticket another KAM
-  owns goes to that KAM. A manager moves such an order with the per-order credit.
+  belongs to a store rep credit him as the firm's KAM. Since 18 Nov one whose ticket
+  another KAM owns is his too, if he held the firm when it was placed.
 - **Team rows now point at the right Kylas users (14 Nov):** Varun Jha keeps 73312
   (Kylas renamed it from "Emma Maria"), pratham pandey's wrong link to another
   team's user was removed, and Sai Suresh has no Kylas account to link.

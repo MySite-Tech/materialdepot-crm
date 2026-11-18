@@ -4,14 +4,17 @@ import { OutreachLead } from '../../../models/mock-data';
 import { WaitlistSignup } from '../../../models/outreach';
 import { OUTREACH_KPIS, Period, kpiTarget, outreachKpis } from '../../../models/outreach/kpis';
 import { BmOption } from '../types';
+import { teamOrders } from '../../../models/performance/measures/revenue';
+import type { RevenueOrder } from '@/lib/b2b/revenue';
 import { repOwns } from '../../../models/outreach/handover';
 import { fmtTarget, fmtValue, paceFor, tone } from './utils';
 import { useMemo } from 'react';
 
 const th = 'px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap';
 
-export function TeamTable({ leads, bms, period, today, teamLive, waitlist, onPick }: {
+export function TeamTable({ leads, orders, bms, period, today, teamLive, waitlist, onPick }: {
   leads: OutreachLead[];
+  orders: RevenueOrder[] | null;
   bms: BmOption[];
   period: Period;
   today: string;
@@ -20,8 +23,8 @@ export function TeamTable({ leads, bms, period, today, teamLive, waitlist, onPic
   onPick: (name: string) => void;
 }) {
   const rows = useMemo(
-    () => bms.map((o) => ({ o, k: outreachKpis(leads.filter(repOwns(o.rep)), period, waitlist) })),
-    [leads, bms, period, waitlist],
+    () => bms.map((o) => ({ o, k: outreachKpis(leads.filter(repOwns(o.rep)), period, waitlist, teamOrders(orders, 'outreach', [o.rep])) })),
+    [leads, orders, bms, period, waitlist],
   );
   return (
     <div className="bg-white rounded-lg border border-gray-200 min-w-0 overflow-hidden">

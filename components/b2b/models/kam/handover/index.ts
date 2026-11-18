@@ -1,5 +1,7 @@
 import { normalisePhone } from '@/lib/org/utils';
-import { ClientEntity, KamAssignment } from '../../client';
+import { ClientContact, ClientEntity, KamAssignment, clientTypeFromLead, contactNumbers, normalizeContactNumber, normalizeGst } from '../../client';
+import { newB2BId } from '../../ids';
+import { OutreachLead } from '../../mock-data';
 import { HANDOVER_TAT_HOURS, hoursSince, sameRep } from '../../outreach/handover';
 import { Rep, spreadByLoad } from '../../outreach/intake';
 
@@ -72,7 +74,62 @@ export function planFirmRoundRobin(firms: ClientEntity[], kams: Rep[], all: Clie
   return spreadByLoad(firms, kams, load);
 }
 
-export const canRespondToFirm = (c: ClientEntity, me: Rep, isManager: boolean, teamLive: boolean): boolean => {
+const exactName = (v: string | undefined) => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+export function firmForOutreachHandover(l: OutreachLead, clients: ClientEntity[], at: string): { firm: ClientEntity; isNew: boolean } | null {
+  const h = l.handover;
+  if (!h || h.status !== 'Accepted') return null;
+  const people: ClientContact[] = [];
+  for (const [number, name] of [[l.phone, l.contactPerson], [l.altPhone, l.altName], ...(l.contacts || []).map((c) => [c.phone, c.name])]) {
+    const n = normalizeContactNumber(number);
+    if (n.length === 10 && !people.some((p) => p.number === n)) people.push({ number: n, name: String(name || '').trim() || undefined });
+  }
+  const phones = people.map((p) => p.number);
+  const gst = normalizeGst(l.gstNumber);
+  const name = exactName(l.company);
+  const hit = clients.find((c) => contactNumbers(c.contacts).some((p) => phones.includes(p)))
+    || (gst ? clients.find((c) => c.gsts.some((g) => normalizeGst(g.number) === gst)) : undefined)
+    || (name ? clients.find((c) => exactName(c.company) === name) : undefined);
+  const entry: KamAssignment = {
+    kam: h.kam, kamPhone: h.kamPhone, at, by: h.sentBy, how: 'manual', status: 'Accepted',
+    respondedAt: h.respondedAt || at, respondedBy: h.respondedBy, reason: `Outreach handover from ${l.bm}`,
+  };
+  if (!hit) {
+    return {
+      isNew: true,
+      firm: {
+        id: newB2BId('CLI'),
+        company: l.company.trim(),
+        contacts: people.map((p, i) => ({ ...p, primary: i === 0 })),
+        gsts: gst ? [{ number: gst }] : [],
+        segment: l.segment,
+        clientType: clientTypeFromLead(l.companyType),
+        clientTypeRaw: clientTypeFromLead(l.companyType) ? undefined : l.companyType,
+        source: 'Outreach',
+        kam: h.kam,
+        assignments: [entry],
+        interactions: [],
+        escalations: [],
+        createdAt: at,
+        updatedAt: at,
+      },
+    };
+  }
+  const known = contactNumbers(hit.contacts);
+  const added = people.filter((p) => !known.includes(p.number));
+  const held = sameRep(hit.kam, h.kam) && firmHandover(hit)?.status !== 'Pending';
+  if (held && !added.length) return null;
+  return {
+    isNew: false,
+    firm: {
+      ...hit,
+      contacts: [...hit.contacts, ...added],
+      ...(held ? {} : { kam: h.kam, assignments: [...(hit.assignments || []), entry] }),
+    },
+  };
+}
+
+export const canRespondToFirm =(c: ClientEntity, me: Rep, isManager: boolean, teamLive: boolean): boolean => {
   const h = firmHandover(c);
   if (!h || h.status !== 'Pending') return false;
   if (isManager || !teamLive) return true;

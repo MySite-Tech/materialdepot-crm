@@ -346,11 +346,16 @@ could be marked held on it (`docs/landmines.md`). Now:
   mark this one held or postponed and schedule the next. A checked-in Scheduled
   meeting shows **Mark held**, and its reminder reads "You checked in at Meeting N,
   mark it held and add the notes".
-- **A check-in that was never marked held is shown, not counted.** New meetings
-  lists it (no held meeting yet), and Follow-ups (one held already), as a not-counted
-  row with the check-in day. Coverage's note says it too. It counts only once it is
-  marked held with notes, as before. On 17 Nov that surfaced three of pratham's
-  visits that the scorecard had not shown at all.
+- **A check-in counts as a held meeting in the scorecard (2026-11-18, the user's
+  choice).** It was first shown as a not-counted row (17 Nov); then on 18 Nov pratham
+  still read 0 meetings with 9 November check-ins and no meeting marked held, and the
+  user ruled the check-in is proof of the visit. `heldMeetings` (Completed or checked
+  in) now feeds New meetings, Follow-ups, Coverage and My performance's activity list;
+  their rows and sub-lines say which ones came from a check-in. Notes are no longer
+  needed for New meetings to count, but a checked-in meeting with no notes is a
+  "meeting notes" gap in CRM adherence, and the drawer still asks for Mark held.
+  `completedMeetings` (status Completed only) still drives the save gates, the
+  handover gate and the drawer, which were not changed.
 
 `scripts/outreach-meeting-repair.mjs` (dry run by default, `--apply` to write)
 repairs the rows saved before this. A Postponed meeting dated after the day it was
@@ -365,21 +370,34 @@ booked went from 120 to 46. It does not mark anything held. Nobody wrote the not
 no longer matches. A copy of the 352 Outreach rows from before the write is kept outside
 the repo, in `~/Projects/ss-local-stack/logs/`.
 
-### Converted = first order, and only a fetched order counts
+### Conversions and revenue come from orders (2026-11-18)
 
-A Converted lead's revenue goes to its BM, unless a manager credits the lead's
-enquiry to someone else (`overview.md` §A manager credits one order, 2026-11-12;
-it replaced the per-lead `revenueCredit`). The Leadership Board's New revenue KPI
-honours that credit through the lead's Enq ID. The Outreach tab's own scorecard
-still counts by BM. A lead also carries a **Send a cart or PI to an EC** card
+The user, on pratham's scorecard: BMs see 0 conversions and ₹0 while their clients
+are ordering. The scorecard counted only leads moved to Converted with a fetched Enq
+ID, so four store orders on his EC-referral leads (all still "Yet to Meet") never
+reached it, while My performance's headline, which reads the per-order report,
+credited him. The user chose real orders. Conversions, KAM handover and Revenue now
+read the Overview's per-order report for the period (`/api/b2b/revenue`, with
+manager credits applied), filtered to the Outreach team and the BM in the filter bar
+by `teamOrders` (`models/performance/measures/revenue.ts`), the same filter My
+performance uses. An order is tied to a lead by any of the lead's numbers.
+**Conversions** = clients with a credited order in the period, once each, whether or
+not the lead was moved to Converted (the row says "not moved to Converted yet").
+**Revenue** = every credited order in the period, in all four channels; the old
+new-onboarding exclusion is gone, so the scorecard, the KPI tile and the headline are
+one figure. **KAM handover %** = those converted leads that a KAM signed off. A
+credited order on a number none of the BM's leads holds still counts, and the sub-line
+says how many. If the report fails, the three tiles read Unknown, never 0. The tab
+loads one report per period (server-cached) plus the session's order credits.
+A lead also carries a **Send a cart or PI to an EC** card
 (`ec-directed.md` §One cart or PI at a time).
 
 
 `Closed` is still the stored stage (see above on renaming stored values); it is
 labelled **Converted** everywhere via `OUTREACH_STATUS_LABEL`. `converted_at` is
-stamped once by `withJourney`. The move is not blocked, but the **conversion KPI
-only counts `orderVerified` leads** (Enq ID fetched from the deal ticket,
-`orderValueSource === 'deal'`); the rest show as "awaiting a fetched Enq ID".
+stamped once by `withJourney`. Moving a lead to Converted and fetching its Enq ID
+still matter for the handover and the lead's own order card, but no longer for the
+scorecard, which follows orders (above).
 
 **New onboarding** = no other ordered deal (`dealIsOrder`) on the same mobile in
 the 183 days before the converting order (`newOnboardingFrom`). Computed when
@@ -391,7 +409,8 @@ unchecked — it is never assumed new.
 
 Opens only on a converted lead. **Hard gate** (the payload the sheet says a
 handover "must carry"): WhatsApp group invite link (`https://chat.whatsapp.com/…`
-— the user named it as required for a proper handover), owner/designer,
+— the user named it as required for a proper handover; since 2026-11-17 a reason
+the client will not join one passes too, below), owner/designer,
 10-digit mobile, segment, client type, team size, office address, project
 details, ≥1 meeting held. **Soft** (prompted): order not fetched, no GST, no pin.
 KAM is picked from active, in-rotation KAM team members (roster KAMs if the
@@ -402,6 +421,28 @@ a rejected handover can be resent. The KAM's response is built from the saved
 lead and skips the BM's draft gates, so a BM's half-finished edit cannot block
 a KAM sign-off. Who may respond: the KAM it was sent to (by phone, else name),
 a manager, or anyone while the team table is not live.
+
+- **A client may refuse the WhatsApp group (2026-11-17).** The user: some people
+  are not ready for a group, and the handover must still go ahead. "Client is not
+  willing to join a WhatsApp group" swaps the link for a required reason (three
+  presets or Other, typed), stored as `whatsapp_group_declined` in the row's meta
+  (it lands in the backend's `extra`, so no migration). The gate takes a valid link
+  **or** a reason. A valid link always wins, so the handover record carries one or
+  the other, never both. The KAM sees the reason above Accept, with "call the
+  client yourself" in place of "join the group", and the journey says "without a
+  WhatsApp group". An empty reason is not stored as a refusal.
+- **Accepting creates the firm in the Client Database (2026-11-17).** The KAM tab
+  reads only `b2b_client`, and a handover lived only on the Outreach row. So
+  a Hyderabad firm accepted by Sai Suresh on 14 Nov could not be found in his KAM tab
+  (the only Outreach handover ever sent at that point). Accept now runs
+  `saveOutreachHandoverFirm` first: it reads the client list and matches the lead
+  by any of its numbers, then GST, then exact name (`firmForOutreachHandover`). It
+  creates a firm with source Outreach, or links the existing one, with an `Accepted` assignment to the
+  KAM, so no second sign-off follows on the KAM tab. A firm held by another KAM
+  moves to the handover's KAM, and Assignment history records it. If that write
+  fails, nothing is accepted and the drawer says why. It runs only on Accept, so a
+  handover accepted before this needs its firm added by hand (Client Database →
+  Add, then assign).
 
 ### Studio Space waitlist
 
@@ -446,13 +487,11 @@ judged against that pace, not the full target. Without that, every tile was red
 for most of every month. Exact definitions are in `OUTREACH_KPIS[].rule` and
 shown as each tile's tooltip; the non-obvious ones:
 
-- **New-lead meetings** counts the first held meeting only if it has notes, an
-  owner/designer name and a valid mobile — the sheet's "genuine lead" test.
-  Missing pins are counted in the sub-line, not excluded.
-- **Follow-up meetings** = unique firms with a non-first held meeting in the
-  period; each row says how far it got toward 2 follow-ups or an order. A
-  checked-in meeting not marked held is a not-counted row in this KPI or in New-lead
-  meetings (§Postponing rebooks).
+- **New-lead meetings** counts the first held or checked-in meeting if the lead has
+  an owner/designer name and a valid mobile. Missing notes and pins are in the
+  sub-line, not excluded (since 2026-11-18; notes were required before).
+- **Follow-up meetings** = unique firms with a non-first held or checked-in meeting in
+  the period; each row says how far it got toward 2 follow-ups or an order.
 - **Coverage** reads 0 when it should: on 17 Nov, 56 Inbound and EC leads had been
   assigned in November, 28 were still waiting for the BM to accept, and 1 had a
   meeting booked.
@@ -473,10 +512,9 @@ shown as each tile's tooltip; the non-obvious ones:
   status gate asked for (`OUTREACH_STAGE_NEEDS`: a follow-up date at Follow up and
   PI Shared, a reason at Lost), for a stage the CRM set (`docs/b2b/leadership.md`
   §KPI rules).
-- **Handover %** denominator is *all* conversions in the period, verified or not.
-- **Revenue** is first-order value of verified, new-onboarding conversions only.
-  Later orders from the same client are not in it — this CRM does not track
-  them per Outreach lead.
+- **Handover %** denominator is the leads with a credited order in the period.
+- **Revenue** is every order credited to the BM in the period (§Conversions and
+  revenue come from orders).
 
 The scorecard follows only the BM and the period in the filter bar. The filter panel and
 search narrow the work tiles and every list, a scorecard tile's list included,
