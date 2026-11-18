@@ -5,32 +5,37 @@ import { fmtDate } from '../../install-ops/utils';
 
 import { SLOT_DEFS } from './constants';
 import { SlotContentProps } from './types';
-import { blockedSlotIds, fmtSlotId, getAvailability, morningCutoffHit } from './utils';
+import { fmtSlotId, morningCutoffHit, previousSlotLabel } from './utils';
 
 export function SlotContent({
   date,
   myStore,
-  dayOrders,
-  auditorCount,
-  capBlocked,
-  storeCity,
+  poolLabel,
+  daySlots,
+  overrider,
   myRes,
   allBooked,
   nowMin,
   isMyBooking,
+  dayOrders,
   cancellingId,
   onBook,
   onCancel,
 }: SlotContentProps) {
   const anyContent = myRes.length || allBooked.length;
-  const blocked = blockedSlotIds(date);
+  const closedDay = !daySlots;
+  const canOverride = overrider.level === 'admin' || overrider.level === 'sm';
+  const who = overrider.name || (overrider.level === 'admin' ? 'admin' : 'Service Manager');
   return (
     <div className="flex flex-col gap-6">
+      {closedDay ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-[13px] px-4 py-3">
+          No audits are offered on this day. As an admin you can still book a slot below.
+        </div>
+      ) : null}
       {(['Morning', 'Afternoon', 'Evening'] as const).map((grp) => {
-        const cutMorning = grp === 'Morning' && morningCutoffHit(date);
-        const slots = cutMorning
-          ? []
-          : SLOT_DEFS.filter((s) => s.group === grp && (nowMin === null || s.startMin > nowMin) && !blocked.has(s.id));
+        const cutMorning = !closedDay && grp === 'Morning' && morningCutoffHit(date);
+        const slots = SLOT_DEFS.filter((s) => s.group === grp && (closedDay ? nowMin === null || s.startMin > nowMin : daySlots.has(s.id)));
         return (
           <div key={grp}>
             <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
@@ -45,34 +50,35 @@ export function SlotContent({
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
                 {slots.map((sl) => {
-                  const av = getAvailability(sl.id, dayOrders, auditorCount, capBlocked);
-                  const isFull = av.available <= 0;
+                  const cell = daySlots ? daySlots.get(sl.id) : undefined;
+                  const free = !!cell && cell.available > 0;
+                  const isBooked = !!cell && !free && cell.booked > 0;
+                  const isBuffer = !!cell && !free && !isBooked && cell.buffer > 0;
+                  const overrideNote = closedDay
+                    ? 'Booked on a closed day by ' + who
+                    : isBuffer
+                      ? 'Booked over the ' + previousSlotLabel(sl.id) + ' buffer by ' + who
+                      : undefined;
+                  const mayOverride = closedDay ? overrider.level === 'admin' : isBuffer && canOverride;
                   const myBookingsForSlot = myRes.filter((r) => r.slot === sl.id);
-                  const hasMyBooking = myBookingsForSlot.length > 0;
-                  const dotClass = isFull ? 'bg-red-500' : av.available === 1 ? 'bg-amber-500' : 'bg-green-500';
+                  const dotClass = free ? 'bg-green-500' : isBuffer ? 'bg-amber-500' : 'bg-red-500';
 
                   let availText: string;
-                  if (av.total === 0) {
-
-                    availText = `No ${storeCity} auditors are working this day`;
-                  } else if (isFull && !hasMyBooking) {
-                    availText = `Full — all ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} booked`;
-                  } else {
-                    availText = `${av.available} of ${av.total} ${storeCity} auditor${av.total !== 1 ? 's' : ''} available`;
-                  }
+                  if (closedDay) availText = 'Closed day';
+                  else if (free) availText = `${cell!.available} of ${cell!.total} ${poolLabel} auditor${cell!.total !== 1 ? 's' : ''} available`;
+                  else if (isBooked) availText = `Booked — ${poolLabel}'s auditor has a visit at this time`;
+                  else if (isBuffer) availText = `Buffer — travel time after the ${previousSlotLabel(sl.id)} visit`;
+                  else availText = `No ${poolLabel} auditor free`;
 
                   const otherResForSlot = dayOrders.filter(
                     (o) => o.status === 'slot_reserved' && !isMyBooking(o) && o.slot === sl.id
                   );
-                  const bookable = !isFull;
 
                   return (
                     <div
                       key={sl.id}
-                      onClick={bookable ? () => onBook(sl.id) : undefined}
-                      className={`flex items-center gap-3 px-4 py-3 ${
-                        bookable ? 'cursor-pointer hover:bg-gray-50' : 'opacity-70'
-                      }`}
+                      onClick={free ? () => onBook(sl.id) : undefined}
+                      className={`flex items-center gap-3 px-4 py-3 ${free ? 'cursor-pointer hover:bg-gray-50' : 'opacity-80'}`}
                     >
                       <div className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`}></div>
                       <div className="flex-1 min-w-0">
@@ -103,7 +109,7 @@ export function SlotContent({
                           </div>
                         )}
                       </div>
-                      {!isFull ? (
+                      {free ? (
                         <button
                           className="bg-[#EAB308] text-white border-none px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:opacity-90 shrink-0"
                           onClick={(e) => {
@@ -113,8 +119,20 @@ export function SlotContent({
                         >
                           Book
                         </button>
+                      ) : mayOverride ? (
+                        <button
+                          className="bg-white text-amber-700 border border-amber-300 px-3 py-2 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-amber-50 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onBook(sl.id, overrideNote);
+                          }}
+                        >
+                          Book anyway
+                        </button>
                       ) : (
-                        <span className="text-xs font-bold text-red-600 shrink-0">Full</span>
+                        <span className={`text-xs font-bold shrink-0 ${isBuffer ? 'text-amber-600' : 'text-red-600'}`}>
+                          {closedDay ? 'Closed' : isBuffer ? 'Buffer' : 'Booked'}
+                        </span>
                       )}
                     </div>
                   );
@@ -181,7 +199,7 @@ export function SlotContent({
             All confirmed bookings · {fmtDate(date)}
           </div>
           <div className="text-[12px] text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-3 py-2 mb-3">
-            These are already-assigned audit visits on this date. They are accounted for in the slot availability above.
+            Audit visits on this date across the city. Only this store's own bookings take its slots above.
           </div>
           <div className="flex flex-col gap-3">
             {allBooked.map((o) => (
