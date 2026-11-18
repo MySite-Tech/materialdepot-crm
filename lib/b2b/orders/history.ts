@@ -18,7 +18,7 @@ function normalizeClientPhone(phone: string | undefined): string {
 
 const orderHistoryCache = new Map<string, { at: number; history: ClientOrderHistory }>();
 
-const HISTORY_TTL_MS = 5 * 60 * 1000;
+export const HISTORY_TTL_MS = 5 * 60 * 1000;
 
 const HISTORY_BATCH = 300;
 
@@ -61,7 +61,7 @@ function zeroFill(keys: string[], out: Record<string, ClientOrderHistory>, unrea
   }
 }
 
-function splitCached(phones: (string | undefined)[]): {
+function splitCached(phones: (string | undefined)[], fresh: boolean): {
   out: Record<string, ClientOrderHistory>;
   missing: string[];
 } {
@@ -70,7 +70,7 @@ function splitCached(phones: (string | undefined)[]): {
   const missing: string[] = [];
   for (const key of wanted) {
     const cached = orderHistoryCache.get(key);
-    if (cached && Date.now() - cached.at < HISTORY_TTL_MS) out[key] = cached.history; else missing.push(key);
+    if (!fresh && cached && Date.now() - cached.at < HISTORY_TTL_MS) out[key] = cached.history; else missing.push(key);
   }
   return { out, missing };
 }
@@ -102,8 +102,9 @@ export interface B2BBulk {
 export async function fetchB2BBulk(
   phones: (string | undefined)[],
   enquiryIds: string[],
+  { fresh = false }: { fresh?: boolean } = {},
 ): Promise<B2BBulk> {
-  const { out, missing } = splitCached(phones);
+  const { out, missing } = splitCached(phones, fresh);
   const ids = [...new Set(enquiryIds.filter(Boolean))].slice(0, HISTORY_BATCH);
 
   const idBytes = ids.reduce((n, id) => n + encodeURIComponent(id).length + 3, 0);

@@ -67,9 +67,21 @@ They live here now because the code cannot carry them.
   listed orders from 17 Nov. `b2b-bulk` answered 17 Nov when called fresh the
   same morning, and matched `estimate` to the rupee. `HISTORY_TTL_MS` keeps tab
   switching inside five minutes free, and a view mounted after that reads again.
-  A view left open on screen still shows what it read at mount: there is no
-  poll. Before blaming Django for a stale figure, call `b2b-bulk` fresh for that
+  Before blaming Django for a stale figure, call `b2b-bulk` fresh for that
   number (`docs/landmines.md`).
+
+- **An open view re-reads its order figures (2026-11-18, the user's ask: no hard
+  refreshes).** `useClientAggregates` (Client Database, KAM, My performance,
+  Studio Space numbers, the Reminders KAM record) keeps the numbers it has read.
+  When the browser tab comes back into view, or on a one-minute check while it
+  stays visible, it re-reads them if the last read is `HISTORY_TTL_MS` (5
+  minutes) old. The re-read passes `fresh: true` to `fetchB2BBulk`, so it skips
+  the cache. It merges only the numbers that answered: a failed batch keeps the
+  figures on screen instead of turning those firms Unknown. It re-reads orders
+  only. The firm list itself and the Firm page do not poll. Cost: the same
+  `b2b-bulk` plus 300-number batches as the mount (about 7 calls for every
+  Client Database number), at most once per 5 minutes, and none in a hidden tab.
+  Overview and EC Referral call `fetchB2BBulk` directly and do not re-read.
 
 - **`B2BBulk.ok` is false when the request failed, and callers must not present
   that as data.** A client with unknown dates renders **"Unknown"**, never
