@@ -16,7 +16,9 @@ function normalizeClientPhone(phone: string | undefined): string {
   return (phone || '').replace(/\D/g, '').slice(-10);
 }
 
-const orderHistoryCache = new Map<string, ClientOrderHistory>();
+const orderHistoryCache = new Map<string, { at: number; history: ClientOrderHistory }>();
+
+const HISTORY_TTL_MS = 5 * 60 * 1000;
 
 const HISTORY_BATCH = 300;
 
@@ -45,7 +47,7 @@ function absorb(
   for (const [key, row] of Object.entries(batch)) {
     const history = toHistory(row);
     const normalized = normalizeClientPhone(key);
-    orderHistoryCache.set(normalized, history);
+    orderHistoryCache.set(normalized, { at: Date.now(), history });
     out[normalized] = history;
   }
 }
@@ -54,7 +56,7 @@ function zeroFill(keys: string[], out: Record<string, ClientOrderHistory>, unrea
   for (const key of keys) {
     if (out[key] || unread.has(key)) continue;
     const zero: ClientOrderHistory = { orders: 0, lifetimeValue: 0, openValue: 0, enquiries: 0, enquiryValue: 0, furthestStatus: null, firstOrderDate: null, firstOrderValue: null, lastOrderDate: null };
-    orderHistoryCache.set(key, zero);
+    orderHistoryCache.set(key, { at: Date.now(), history: zero });
     out[key] = zero;
   }
 }
@@ -68,7 +70,7 @@ function splitCached(phones: (string | undefined)[]): {
   const missing: string[] = [];
   for (const key of wanted) {
     const cached = orderHistoryCache.get(key);
-    if (cached) out[key] = cached; else missing.push(key);
+    if (cached && Date.now() - cached.at < HISTORY_TTL_MS) out[key] = cached.history; else missing.push(key);
   }
   return { out, missing };
 }

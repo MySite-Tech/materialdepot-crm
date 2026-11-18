@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-98 entries. They live in one file because they cross-reference each other —
+99 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -108,6 +108,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - An Outreach handover the KAM accepted never reached the KAM tab, so the firm could not be searched
 - Orders on one rep's Inbound leads credited to the colleague who opened the deal ticket
 - An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
+- A firm's last order read a month old while its own page listed yesterday's order
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1489,3 +1490,18 @@ revenue now read the same report through `teamOrders`, and a check-in counts as 
 (`docs/b2b/outreach.md` §Conversions and revenue come from orders, §Postponing
 rebooks). When a rep says a number is wrong, put the two screens' rules side by side
 before touching data.
+
+### A firm's last order read a month old while its own page listed yesterday's order (2026-11-18)
+
+The user, with screenshots: Client Database showed two firms' last orders as 19 Oct
+and 31 Oct, and each Firm page listed an order placed on 17 Nov. Django was not wrong.
+Called fresh on 18 Nov, `b2b-bulk` returned 17 Nov, and one firm's order count and
+revenue matched `estimate` exactly. The list's figures were the same totals minus the
+17 Nov order. The CRM's `orderHistoryCache` had no expiry, so a tab opened before the
+order kept serving its first read on every B2B tab, while the Firm page's order list
+reads `/crm/leads/` fresh. The shape: a per-page-load cache with no TTL in an app
+people leave open for days, beside a second source that is always fresh. The cache
+now expires after 5 minutes (`docs/b2b/data-layer.md`). This is not the October
+`lastOrderDate` bug, which served future dates (`docs/b2b/client-db.md`). Before
+calling a stale figure a Django bug, call the endpoint fresh for that number and
+compare with `estimate`.
