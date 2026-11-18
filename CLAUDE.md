@@ -213,7 +213,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 87 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 99 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -292,7 +292,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 87 titles, so grep a title and read around the line you
+**Contents** list of all 99 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -704,6 +704,17 @@ Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
   Outreach lead with a pending handover and a WhatsApp refusal reason: Accept created
   the firm with both numbers and an `Accepted` assignment, KAM search found it, and
   both dummy rows were then deleted from production.
+
+**A firm's last order read weeks old on Client Database (2026-11-18, CRM PR from
+`b2b-order-history-ttl`, merged on Dhruv's ask; no backend PR).** Two firms showed a
+last order of 19 Oct and 31 Oct while their Firm pages listed orders from 17 Nov. Django
+was right: `b2b-bulk` called fresh returned 17 Nov, and one firm's count and revenue
+matched `estimate` to the rupee. The CRM's `orderHistoryCache` never expired, so a tab
+left open kept its first read on Client Database, KAM, Overview and EC Referral. Entries
+now expire after 5 minutes (`HISTORY_TTL_MS`, `docs/b2b/data-layer.md`). A view left open
+on screen still shows what it read at mount; refresh on focus was offered and not built.
+**Before calling a stale order figure a Django bug,** call `b2b-bulk` fresh for that
+number from a signed-in tab and compare with `estimate` in Metabase.
 
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
