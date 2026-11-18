@@ -188,3 +188,71 @@ Note this puts a Django call inside the Site Audit tab, so
 `/site-audit-view?person=` (which never authenticates) now depends on a real
 session for these three steps — it already did via `fetchUsers()`, and a failure
 degrades to `unknown` rather than to a wrong answer.
+
+## The delivery date is when the goods arrive
+
+`install_orders.delivery_date` drives Need Action's operations calls (`opsCallDue`: three
+days out for custom wallpaper, one day otherwise). The auto-import fills it from the jobs
+feed's `goods_delivery_date`: the earliest **promised** date among the order's flooring,
+wallpaper and panel lines (OMS `SalesOrderLine.promised_delivery_date`, the "Promised"
+column on Procurement's demand lines; legacy `PO.delivery_date`). One date per order:
+with several trades it is the earliest, with one it is that trade's. The user chose the
+promised date over the allocation's `expected_delivery_date` on 2026-11-17, checked on a
+wallpaper order whose line promised 20 Nov while its allocation expected 23 Nov. The
+feed's own `delivery_date` is the installer's leg, and is only the fallback when Django
+sends no goods date. Categories decide the trade, so "Laminates", tiles and flooring
+accessories never count.
+
+Each install reconcile also re-dates existing rows, in one PATCH per distinct date, never
+per row, but only a row that is still `pending`, was created by the auto-import, and
+still has `delivery_date` equal to `original_delivery_date`. A date a person changed
+(Mark delivery delayed sets `deliv_delayed`) or typed into Add Order is never touched.
+`original_delivery_date` moves with it because the first one was wrong, not late, so the
+delay analytics would otherwise count every such order as delayed. A sub-job with its
+own date keeps it. The candidates come from their own filtered read
+(`status=eq.pending&created_by_email=eq.Auto-import (backend)`), not from the import's
+`install_orders?select=pi,status`: that read is unfiltered and Supabase stops it at 1,000
+rows, so the newest pending orders were not in it and nothing moved. A reconcile that
+re-dates or imports anything reloads the list.
+Landmine: §An installation order's delivery date was the installer's date.
+
+## Area of installation comes prefilled from OMS
+
+Opening an install order's drawer makes one request,
+`/api/site-audit/install-pos?type=installation&search=<PI without -R>`, and fills each
+**empty** Area box from that SKU's `area_sqft`. Nothing is saved until the user saves the
+service, and a typed area is never overwritten. Accessories (skirting, beading, profiles)
+stay blank.
+
+Django (`installable_areas`, from the PI's estimate items) takes the area from the
+order's **installation lines**, the area the job is sold for: a Sq. Ft. line as is, a
+wallpaper Roll line at 57 sq.ft a roll, each matched to flooring, wallpaper or panels by
+its handle. One SKU in the trade gets all of it; several share it by product coverage.
+With no installation line for a trade, the SKU's own coverage
+(`Variant.coverage_area × quantity`) stands. Billed area, not coverage, because that is
+what service managers typed by hand: on one order 170, from the installation line, while
+the 9 boxes cover 187 sq.ft. Whole sq.ft, because `totalRolls` is `ceil(sqft / 57)` and a
+57.41 sq.ft roll would otherwise read as 2 rolls.
+
+## Jobs Overview: EC, category filter, date and slot (2026-11-18)
+
+The **EC** column is the branch the PI's estimate was raised at (`estimate.branch`), from
+Django `POST /site-audit-ec-branches/` (`fetchSiteAuditECs`). Neither `audit_orders` nor
+`install_orders` stores an EC, and `bm` is a person, not a store. The page sends every
+job's PI (suffix `-R`/`-2` stripped) in ONE POST, because about two thousand ids fit no
+URL, and fetches again only when the set of PIs changes, not on the 30s poll. A failed
+call reads **Unknown** in amber, never "—", which means Django has no branch for that PI.
+Store pre-bookings (`SRES-…` PIs) have no estimate yet and read "—".
+
+The **category** select narrows to jobs with a flooring, wallpaper or panel category:
+an install's sub-job types, or its imported `skus[].type` before any sub-job exists. An
+audit has almost no category to show. It is booked with only the audit service SKU, so
+its own ticks, its `service` lists and the store pre-booking's ticks are all empty (all 16
+live audits on 2026-11-18). After the visit the categories sit in `audit_ticked.rooms`,
+which this page must not read in bulk (landmines: the `audit_ticked` reads time out), so
+audits read "—" and drop out of a category filter. **Date** is an audit's date and
+slot; for an install, the earliest booked installation day and its slot(s), or the
+delivery date marked "not booked yet" when nothing is booked. Slot ids go through
+`slotLabel` with this browser's slot config, so "13:00" reads "1:00 PM". The date filter
+still matches an install on any booked day. The CSV gains EC and Slot columns and drops
+the address.

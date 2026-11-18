@@ -18,3 +18,8 @@ export function buildInitDraft(o: InstallOrder): DraftState {
     wallpanel: sk.filter((s) => s.type === 'wallpanel').map((s) => ({ sku: s.c, name: s.n && s.n !== s.c ? s.n : '', sqft: '', link: '' })),
   };
 }
+
+export function withOmsAreas(d: DraftState, areas: Map<string, number>): DraftState {
+  const fill = (rows: DraftState['flooring']) => rows.map((r) => (!r.sqft && areas.has(r.sku) ? { ...r, sqft: String(areas.get(r.sku)) } : r));
+  return { flooring: fill(d.flooring), wallpaper: fill(d.wallpaper), wallpanel: fill(d.wallpanel) };
+}

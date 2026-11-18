@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from '../../data/oms-service';
-import { autoImportInstallOrders } from '../../data/auto-import-audit-orders';
+import { autoImportInstallOrders, deliveryDateOf } from '../../data/auto-import-audit-orders';
 import { EXIT_COLS, exitColumnsAvailable, inCity, mapCaps, mapExit, rosterQuery, sbGet, sbPatch, sbPost, type CityFilter, type StaffExit } from '../../shared';
 import OrdersView from '../../install-ops/views/orders';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from '../../install-ops/views/queue';
@@ -191,7 +191,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
     autoImportInstallOrders().then((added) => {
       if (!added) return;
       loadOrders();
-      toast(added + (added === 1 ? ' new installation order' : ' new installation orders') + ' imported from the backend');
+      toast(added + (added === 1 ? ' installation order' : ' installation orders') + ' imported or re-dated from the backend');
     });
 
     const poll = setInterval(() => { if (!document.hidden) { loadOrders(); if (installersErrRef.current) loadInstallers(); } }, 60000);
@@ -292,7 +292,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
       phone: r.customer && r.customer.contact ? String(r.customer.contact) : '',
       bm: (r.bm && r.bm.name) || '',
       addr: (r.shipping_address && r.shipping_address.address) || '',
-      delivery: r.delivery_date || '',
+      delivery: deliveryDateOf(r) || '',
     });
     if (skusRows.length) {
       setAoSkus(skusRows.map((sku: any) => ({ code: sku.variant_handle, type: (sku.product_name || '').toLowerCase().includes('wallpaper') ? 'wallpaper' : 'flooring', name: sku.product_name || '' })));
