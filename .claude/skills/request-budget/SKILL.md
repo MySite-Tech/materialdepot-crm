@@ -118,10 +118,11 @@ those clients reading **Unknown**, not **Inactive** — so `fetchB2BBulk` return
 an `ok` flag, `orderDatesFromAggregates(…, ok)` puts it in `loaded`, and
 `clientStatus` turns `loaded: false` into Unknown. Two related traps:
 
-- **A failure must not be cached as a zero.** `orderHistoryCache` has no TTL, so
-  zero-filling a phone we never got an answer for would pin it at zero until a
-  full page reload — the Refresh button would not clear it. `zeroFill` takes a
-  `cache` flag for exactly this.
+- **A failure must not be cached as a zero.** `orderHistoryCache` keeps an entry
+  for 5 minutes (`HISTORY_TTL_MS`; it had no TTL until 2026-11-18), so
+  zero-filling a phone we never got an answer for would pin it at zero across
+  every tab until it expires. `zeroFill` skips the numbers in `unread` for
+  exactly this.
 - **`kylasFetch` wrappers swallow errors.** `fetchB2BInboundLeads` returns
   `total: 0` on a 429, indistinguishable from "no leads". Never derive one
   number from another across that boundary: deriving the second owner's total as

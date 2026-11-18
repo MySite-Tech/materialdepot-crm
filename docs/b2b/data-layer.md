@@ -55,10 +55,21 @@ They live here now because the code cannot carry them.
   `fetchInboundOwnerTotals` went with the old board on 2026-10-28.
 
 - **Only cache a zero you actually received.** A phone the backend has no deals
-  for is a real zero and worth caching. A phone whose request failed is not —
-  the order-history cache has no TTL, so caching that would pin every card on
-  the page to zero until a full reload. `zeroFill` takes a `cache` flag for
-  exactly this.
+  for is a real zero and worth caching. A phone whose request failed is not.
+  Caching it would pin every card on the page to zero until the entry expires.
+  `zeroFill` skips the numbers in `unread` for exactly this.
+
+- **The order-history cache expires after 5 minutes (2026-11-18).**
+  `orderHistoryCache` (`lib/b2b/orders/history.ts`) is per page load and shared
+  by Client Database, KAM, Overview and EC Referral. It had no TTL, so a tab left
+  open kept serving the orders, revenue and last order it first read. On 18 Nov
+  two firms read their last order as 19 Oct and 31 Oct while their Firm pages
+  listed orders from 17 Nov. `b2b-bulk` answered 17 Nov when called fresh the
+  same morning, and matched `estimate` to the rupee. `HISTORY_TTL_MS` keeps tab
+  switching inside five minutes free, and a view mounted after that reads again.
+  A view left open on screen still shows what it read at mount: there is no
+  poll. Before blaming Django for a stale figure, call `b2b-bulk` fresh for that
+  number (`docs/landmines.md`).
 
 - **`B2BBulk.ok` is false when the request failed, and callers must not present
   that as data.** A client with unknown dates renders **"Unknown"**, never
