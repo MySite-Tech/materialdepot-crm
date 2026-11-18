@@ -107,10 +107,12 @@ keys on `[city]`, because it city-scopes the profile list first and then queries
 orders **for those emails** — there the chip genuinely changes what must be
 fetched. Confirm which case you have before removing a dep.
 
-**Polling is 30s or slower and gated on visibility.** The shape, used by all
-twelve pollers: `setInterval(() => { if (!document.hidden) load(); }, 30000)`
+**Polling is 30s or slower and gated on visibility.** The shape, used by the
+pollers: `setInterval(() => { if (!document.hidden) load(); }, 30000)`
 plus a `visibilitychange` listener that refreshes on focus, and a cleanup that
-clears both. A background tab must be silent.
+clears both. A background tab must be silent. A poller over a big read checks
+often and fetches rarely: `useClientAggregates` checks every minute and re-reads
+only when its last read is 5 minutes old (`docs/b2b/data-layer.md`).
 
 **Never present a failed request as data.** This is the one that bites hardest,
 because the wrong version looks fine. A dropped client-history call must leave

@@ -3,7 +3,7 @@ export { onB2BWrite } from './data/cache';
 export { fetchB2BData, fetchClients, fetchInboundBoard, fetchInboundLinks, inboundBoardMatches, fetchKamOrders, fetchOutreachLeads } from './data/reads';
 export type { B2BData } from './data/reads';
 export { istToday } from './stats/pipeline';
-export { fetchB2BBulk } from './orders/history';
+export { HISTORY_TTL_MS, fetchB2BBulk } from './orders/history';
 export type { ClientOrderHistory } from './orders/history';
 export { firmPhoneList, lookupEnqId } from './leads/enq-lookup';
 export type { EnqLookup } from './leads/enq-lookup';

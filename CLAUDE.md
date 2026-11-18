@@ -711,8 +711,10 @@ last order of 19 Oct and 31 Oct while their Firm pages listed orders from 17 Nov
 was right: `b2b-bulk` called fresh returned 17 Nov, and one firm's count and revenue
 matched `estimate` to the rupee. The CRM's `orderHistoryCache` never expired, so a tab
 left open kept its first read on Client Database, KAM, Overview and EC Referral. Entries
-now expire after 5 minutes (`HISTORY_TTL_MS`, `docs/b2b/data-layer.md`). A view left open
-on screen still shows what it read at mount; refresh on focus was offered and not built.
+now expire after 5 minutes (`HISTORY_TTL_MS`, `docs/b2b/data-layer.md`). **A view left open
+re-reads them (same day, CRM PR from `b2b-order-history-refresh`, the user's ask: no hard
+refreshes):** `useClientAggregates` re-reads its numbers when the tab comes back into view
+or every 5 minutes while visible, and keeps the old figures if a re-read fails.
 **Before calling a stale order figure a Django bug,** call `b2b-bulk` fresh for that
 number from a signed-in tab and compare with `estimate` in Metabase.
 
