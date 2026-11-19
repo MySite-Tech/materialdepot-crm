@@ -1,11 +1,12 @@
 'use client';
 
 import { ClientEntity, FirmLinks, firmLinks } from '../../../models/client';
+import { OutreachLead } from '../../../models/mock-data';
 import { fetchInboundLinks, fetchOutreachLeads } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 
 export function useFirmLinks(client: ClientEntity) {
-  const [links, setLinks] = useState<FirmLinks>({});
+  const [links, setLinks] = useState<FirmLinks<OutreachLead>>({});
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const key = `${client.id}|${(client.contacts || []).map((c) => c.number).join(',')}`;
