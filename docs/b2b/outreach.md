@@ -209,6 +209,32 @@ and every other lead a BM finds is entered one at a time in **+ New lead**, so
 each one starts with its capture fields filled. Do not bring back a CSV path
 without asking. It would create leads with none of the fields below.
 
+### One client, one lead (2026-11-19)
+
+"+ New lead" refuses a mobile already on an Outreach lead that is not Lost: the
+main number, the alternate or any extra contact, against every BM's leads, not only
+the viewer's (`leadOnNumber` in `models/outreach/intake.ts`, fed `data.leads`). The
+message names that lead's firm, BM and stage, and shows as soon as the number is
+typed. A Lost lead's number may be entered again. The user found a client twice on 19
+Nov (`docs/landmines.md`), and production then held 17 duplicate groups. The EC B2B
+Referral route already refused such a number.
+
+Rows that were already duplicated are merged one pair at a time with
+`scripts/outreach-merge-duplicate.mjs` (dry run unless `--apply`). It keeps the
+`--keep` row's stage, handover, order and every field, adds the other row's
+meetings (renumbered by date), notes, journey, new contact numbers and email, takes
+its follow-up only if that was set more recently, writes a merge note, then deletes
+the `--drop` row. `--skip-meetings <date>` leaves out a meeting that repeats one
+already on the kept row, quoting it in the merge note. It prints every field the two
+rows disagree on, which is the check before `--apply`: two leads on one number can
+be two firms (one pair on 19 Nov had different GSTINs). Keep the converted or
+handed-over row. Merging can turn the kept row's first meeting into a follow-up
+meeting, so the BM's new-meetings count may drop by one. Nothing else references an
+Outreach row's id (EC redirects match by number too), so the delete orphans nothing.
+On 19 Nov two pairs were merged this way on the user's ask, both converted leads
+with a stale Follow up twin under the same BM. 15 groups were left, several the
+same firm under two BMs, which needs a manager to say who keeps the client.
+
 ### What a BM must capture (2026-10-29)
 
 The user asked that every lead carry team size, segment, an alternate number,
