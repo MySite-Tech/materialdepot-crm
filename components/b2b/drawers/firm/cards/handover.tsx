@@ -37,7 +37,7 @@ export function HandoverCard({ lead, failed }: { lead?: OutreachLead; failed: bo
     ...(lead.contacts || []),
   ].filter((p) => String(p.name || '').trim() || String(p.phone || '').trim());
   const meetings = heldMeetings(lead.meetings);
-  const notes = [...(lead.notes || [])].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, NOTES_SHOWN);
+  const notes = (lead.notes || []).slice(-NOTES_SHOWN).reverse();
   const sent = `Sent by ${h.sentBy || lead.bm} to ${h.kam} on ${fmtDate(h.sentAt)}`;
   const answered = h.status === 'Accepted'
     ? `signed off by ${h.respondedBy || h.kam}${h.respondedAt ? ` on ${fmtDate(h.respondedAt)}` : ''}`
@@ -106,8 +106,8 @@ export function HandoverCard({ lead, failed }: { lead?: OutreachLead; failed: bo
           <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{`Latest Outreach notes (${notes.length} of ${lead.notes?.length})`}</div>
           <ul className="mt-1 flex flex-col gap-1">
             {notes.map((n) => (
-              <li key={`${n.ts}-${n.author}`} className="text-[12px] text-gray-800">
-                <span className="text-[11px] text-gray-500">{`${fmtDate(n.ts)} · ${n.author}: `}</span>{n.text}
+              <li key={`${n.ts}-${n.author}-${n.text.length}`} className="text-[12px] text-gray-800">
+                <span className="text-[11px] text-gray-500">{`${n.ts} · ${n.author}: `}</span>{n.text}
               </li>
             ))}
           </ul>

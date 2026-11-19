@@ -449,7 +449,9 @@ a manager, or anyone while the team table is not live.
   "Handover from Outreach" card under People on this firm: WhatsApp link or refusal
   reason, office address, city, BM, client type, segment, team size, email, GST, first
   order, project details, every contact, every held meeting with notes, and the latest
-  three notes. It reads the lead that `useFirmLinks` already fetches, so it costs no
+  three notes. A note's `ts` is an en-IN locale string ("6/11/2026, 2:27:22 pm"),
+  not ISO, so the card takes the last three by position and prints `ts` as stored,
+  as the Outreach drawer does; sorting `ts` as text put 6 Nov after 13 Nov. It reads the lead that `useFirmLinks` already fetches, so it costs no
   request. `firmLinks().handover` is the newest lead on the firm's numbers (phone,
   alt phone or any extra contact, the same numbers `firmForOutreachHandover` copies)
   with a handover not Rejected. A firm a KAM got by reassign, not by handover, has no
