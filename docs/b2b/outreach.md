@@ -506,7 +506,10 @@ shown as each tile's tooltip; the non-obvious ones:
   the period; each row says how far it got toward 2 follow-ups or an order.
 - **Coverage** reads 0 when it should: on 17 Nov, 56 Inbound and EC leads had been
   assigned in November, 28 were still waiting for the BM to accept, and 1 had a
-  meeting booked.
+  meeting booked. On 19 Nov 51 of 54 were accepted and 49 still had no meeting at
+  all. BMs' November meetings were almost all on Own research leads, which coverage
+  does not count. Coverage and handover have no target on a part-month period
+  (`MONTHLY_RATES`, `docs/b2b/leadership.md`).
 - **CRM adherence** = leads *touched* in the period (created, status change,
   meeting date or journey event in it) with zero gaps in
   `outreachAdherence` ÷ touched. GST is not in it (many firms have none).

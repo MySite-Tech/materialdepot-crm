@@ -1,12 +1,10 @@
 import { repOwns } from '../../outreach/handover';
-import { OUTREACH_KPIS, Period, outreachKpis } from '../../outreach/kpis';
+import { MONTHLY_RATES, OUTREACH_KPIS, Period, outreachKpis } from '../../outreach/kpis';
 import { journeyBy, newestFirst, notesBy, outreachMeetingsBy, redirectsBy } from '../measures/activity';
 import { creditedOrders } from '../measures/revenue';
 import { ActivityItem, PerfCard, PerfData, PerfKpiDef, Person, TeamEngine } from '../types';
 import { memberPeople, withDataPeople } from '../utils';
 import type { TeamMember } from '@/lib/b2b/team/types';
-
-const PER_DAY_MEANINGLESS = new Set(['coverage', 'handover']);
 
 const DEFS: PerfKpiDef[] = OUTREACH_KPIS.map((d) => ({
   key: d.key,
@@ -15,8 +13,8 @@ const DEFS: PerfKpiDef[] = OUTREACH_KPIS.map((d) => ({
   kind: d.kind,
   unit: d.unit,
   target: d.target,
-  per: d.unit === '%' ? undefined : 'month',
-  daily: !PER_DAY_MEANINGLESS.has(d.key),
+  per: d.unit === '%' && !MONTHLY_RATES.has(d.key) ? undefined : 'month',
+  daily: !MONTHLY_RATES.has(d.key),
   rule: d.rule,
   weight: d.weight,
 }));

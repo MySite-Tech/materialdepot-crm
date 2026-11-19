@@ -718,6 +718,20 @@ or every 5 minutes while visible, and keeps the old figures if a re-read fails.
 **Before calling a stale order figure a Django bug,** call `b2b-bulk` fresh for that
 number from a signed-in tab and compare with `estimate` in Metabase.
 
+**"Coverage reads 0 for everyone" (2026-11-19, CRM PR from `monthly-kpi-part-month`,
+merged on Dhruv's ask; no backend PR).** The user saw 0% BEHIND on Today for every
+KAM. Run on production rows, coverage was right, not a bug: Inbound 73–84% for
+November; Outreach 0–6% because 49 of 54 Inbound/EC hand-offs had no meeting booked
+and 59 of 69 BM meetings were on Own research leads; KAM about 1 firm each because 9
+of 12 meetings were at firms with no order in 30 days. The fix: KAM coverage and
+ordering, Outreach coverage and handover are monthly rates, so they show no target or
+badge on a part-month period (`docs/b2b/leadership.md` §Coverage is a monthly rate).
+Inbound coverage keeps its daily target. **Before calling a KPI wrong, run the engine
+on production rows** (GET `/b2b/rows`, compile `components/b2b/models/performance` with
+the recipe at the top of this file) and compare. **Open, not built:** counting a BM's
+Own research lead whose number is an Inbound lead as Inbound coverage, and counting
+KAM meetings with lapsed firms. The user declined both for now.
+
 **START HERE for B2B (2026-11-14): rep identity, EC SPoC and Kylas owner write-back.**
 CRM PRs #50–#53, #56, #57 and #58, all merged to `main` on 2026-11-14 (last
 `b96e09c`). No backend PR, and b2b-backend has nothing open. Nothing is open in
