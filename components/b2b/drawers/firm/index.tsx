@@ -4,6 +4,7 @@ import { AccountCard } from './cards/account';
 import { ContactsCard } from './cards/contacts';
 import { EcVisitsCard } from './cards/ec-visits';
 import { GstsCard } from './cards/gsts';
+import { HandoverCard } from './cards/handover';
 import { DeleteFirm } from './cards/delete-firm';
 import { EnquiryActions, OrdersCard } from './cards/orders';
 import { ReferredClientsCard } from './cards/referred-clients';
@@ -115,6 +116,8 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             onChangeKam={() => setKamPicker((n) => n + 1)}
             onSave={onSave}
           />
+
+          <HandoverCard lead={links.links.handover} failed={links.failed} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <ContactsCard client={client} clients={clients} canAddStudioNumber={canAddStudioNumber} historyFor={historyFor} via={via} onVia={setVia} onSave={onSave} />

@@ -443,6 +443,18 @@ a manager, or anyone while the team table is not live.
   fails, nothing is accepted and the drawer says why. It runs only on Accept, so a
   handover accepted before this needs its firm added by hand (Client Database →
   Add, then assign).
+- **The KAM sees the handover on the Firm page (2026-11-19).** The user: after a
+  handover, the KAM could not see the office address, WhatsApp link and the rest the
+  BM had to fill to send it. The Firm page (KAM and Client Database) now has a
+  "Handover from Outreach" card under People on this firm: WhatsApp link or refusal
+  reason, office address, city, BM, client type, segment, team size, email, GST, first
+  order, project details, every contact, every held meeting with notes, and the latest
+  three notes. It reads the lead that `useFirmLinks` already fetches, so it costs no
+  request. `firmLinks().handover` is the newest lead on the firm's numbers (phone,
+  alt phone or any extra contact, the same numbers `firmForOutreachHandover` copies)
+  with a handover not Rejected. A firm a KAM got by reassign, not by handover, has no
+  card: on 19 Nov the KAM's screenshot was such a firm, and the four firms Sai Suresh
+  had accepted from Outreach all matched their leads.
 
 ### Studio Space waitlist
 

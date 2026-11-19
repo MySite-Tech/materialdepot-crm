@@ -13,12 +13,14 @@ export interface SpocLinkLead {
   id: string;
   phone?: string;
   altPhone?: string;
+  contacts?: { phone?: string }[];
   bm?: string;
   createdAt?: string;
+  handover?: { status: string };
   intake?: { inboundLeadId?: string; inboundOwner?: string; assignedAt?: string; acceptedAt?: string; rejectedAt?: string };
 }
 
-export interface FirmLinks { inbound?: InboundLink; outreach?: SpocLinkLead }
+export interface FirmLinks<L extends SpocLinkLead = SpocLinkLead> { inbound?: InboundLink; outreach?: L; handover?: L }
 
 export interface FirmSpoc {
   role: SpocRole;
@@ -59,14 +61,16 @@ export const enquirySpoc = (client: ClientEntity, enqId: string): EnquirySpoc | 
 const latestEntry = (client: ClientEntity, role: SpocLogEntry['role']): SpocLogEntry | undefined =>
   (client.spocLog || []).filter((e) => e.role === role).sort((a, b) => b.from.localeCompare(a.from))[0];
 
-export function firmLinks(client: ClientEntity, inbound: InboundLink[], outreach: SpocLinkLead[]): FirmLinks {
+export function firmLinks<L extends SpocLinkLead>(client: ClientEntity, inbound: InboundLink[], outreach: L[]): FirmLinks<L> {
   const phones = new Set(contactNumbers(client.contacts));
   const on = (p: string | undefined) => !!p && phones.has(normalizeContactNumber(p));
-  const lead = outreach.filter((l) => !l.intake?.rejectedAt && (on(l.phone) || on(l.altPhone)))
-    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+  const mine = outreach.filter((l) => on(l.phone) || on(l.altPhone) || (l.contacts || []).some((c) => on(c.phone)))
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const lead = mine.find((l) => !l.intake?.rejectedAt);
+  const handover = mine.find((l) => l.handover && l.handover.status !== 'Rejected');
   const linked = lead?.intake?.inboundLeadId;
   const inboundRow = inbound.find((l) => l.id === linked) ?? inbound.find((l) => l.phones.some(on));
-  return { inbound: inboundRow, outreach: lead };
+  return { inbound: inboundRow, outreach: lead, handover };
 }
 
 export function latestEcSpoc(client: ClientEntity, report: EcSpocReport | null, isB2B: B2BSellerTest): EcSpocSeen | undefined {
