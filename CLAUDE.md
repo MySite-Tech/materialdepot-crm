@@ -671,6 +671,24 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
+**START HERE for B2B (2026-11-19): handover on the Firm page, one Outreach lead per
+client.** No backend PR. Start new work from `origin/main` once the open PRs below merge.
+- **The KAM sees the Outreach handover on the Firm page (CRM PR #73, merged and
+  checked signed in on production 19 Nov, `5cd27f7`).** A "Handover from Outreach"
+  card under People on this firm: WhatsApp link or refusal reason, office address,
+  client details, contacts, held meetings and notes (`docs/b2b/outreach.md` §KAM
+  handover). A firm a KAM got by reassignment has no card, which is correct: the
+  user's screenshot that day was such a firm. **PR #74 (open)** lists the card's notes
+  newest first: an Outreach note's `ts` is an en-IN locale string, not ISO.
+- **One client, one Outreach lead (PR from `outreach-no-duplicate-number`, open).**
+  A client showed twice in Outreach, converted beside a stale Follow up, because
+  "+ New lead" never checked the number. It now refuses a number on any BM's
+  non-Lost lead. Two pairs were merged on production on 19 Nov with the new
+  `scripts/outreach-merge-duplicate.mjs`. **15 duplicate groups remain, unmerged on
+  purpose:** several are one firm under two BMs (a manager decides who keeps it), and
+  one pair has different GSTINs. Dry-run each pair and ask before `--apply`
+  (`docs/b2b/outreach.md` §One client, one lead).
+
 **START HERE for B2B (2026-11-17): CRM PR #67 (`outreach-handover-kam-firm`), merged on
 Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
 - **Accepting an Outreach handover creates the firm in the Client Database** with an

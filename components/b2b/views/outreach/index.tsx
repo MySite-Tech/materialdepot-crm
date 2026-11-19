@@ -328,7 +328,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
       </div>
 
       {creating && (
-        <CreateLeadModal reps={scope.reps} me={scope.me} canPickBm={canPickBm} assigner={scope.isManager} onClose={() => setCreating(false)}
+        <CreateLeadModal reps={scope.reps} me={scope.me} canPickBm={canPickBm} assigner={scope.isManager} existing={data.leads} onClose={() => setCreating(false)}
           onCreate={async (lead) => {
             const err = await data.save(null, lead);
             if (!err) setCreating(false);

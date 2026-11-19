@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-100 entries. They live in one file because they cross-reference each other —
+101 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -110,6 +110,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
 - A firm's last order read a month old while its own page listed yesterday's order
 - An installation order's delivery date was the installer's date, so every new order read as due today
+- One client held two Outreach leads, so the converted one sat beside a stale Follow up
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1520,3 +1521,18 @@ on a row that is not a delivery. Django now sends `goods_delivery_date` on the s
 flooring, wallpaper or panel line, by its promised date. The import uses
 it, and each reconcile moves a still-pending, auto-imported, never re-dated order to it
 (`docs/site-audit/orders.md` §The delivery date is when the goods arrive).
+
+### One client held two Outreach leads, so the converted one sat beside a stale Follow up (2026-11-19)
+
+Outreach search for a client listed it twice under the same BM and number: one lead
+Converted and handed over to the KAM, the other still Follow up with a reminder for
+23 Nov. The BM had created the client on 30 Oct, then created it again on 4 Nov, and
+the meetings, notes and contacts were split across the two. Outreach has no merge.
+"+ New lead" checked nothing but the number's format, while the EC B2B Referral
+route already refused a number Outreach held. On 19 Nov production had 17 such
+groups out of 387 Outreach rows, several of them the same firm under two BMs. The
+shape: a create path that skips the duplicate check its sibling path has. "+ New
+lead" now refuses a mobile (main, alternate or extra contact) already on an Outreach
+lead that is not Lost, and names that lead, its BM and stage (`leadOnNumber`,
+`docs/b2b/outreach.md` §One client, one lead). It does not merge the rows that
+already exist.
