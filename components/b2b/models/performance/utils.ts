@@ -30,7 +30,7 @@ export function targetFor(def: PerfKpiDef, team: B2BTeam, people: Person[], goal
   if (def.target === null) return null;
   const each = people.length ? people.map((p) => goalFor(def, team, p, goals) as number) : [def.target];
   const total = each.reduce((a, b) => a + b, 0);
-  if (def.unit === '%') return Math.round(total / each.length);
+  if (def.unit === '%') return def.per === 'month' && !isWholeMonth(period) ? null : Math.round(total / each.length);
   if (def.per === 'day') {
     const days = elapsedDays(period, today).length;
     return days ? total * days : null;

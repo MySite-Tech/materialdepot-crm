@@ -21,6 +21,8 @@ export interface OutreachKpiDef {
   weight: number;
 }
 
+export const MONTHLY_RATES = new Set<OutreachKpiKey>(['coverage', 'handover']);
+
 export const OUTREACH_KPIS: OutreachKpiDef[] = [
   { key: 'newMeetings',      kind: 'Effort', label: 'New-lead meetings',     short: 'New meetings',  target: 50,  unit: 'count', rule: 'Unique firms whose first meeting was held in the period, marked held or checked in on site, with an owner/designer name and a 10-digit mobile. A check-in counts without notes; missing notes lower CRM adherence.', weight: 10 },
   { key: 'followUpMeetings', kind: 'Effort', label: 'Follow-up meetings',    short: 'Follow-ups',    target: 30,  unit: 'count', rule: `Unique firms with a follow-up meeting held in the period, marked held or checked in on site. A firm is fully followed up after ${FOLLOW_UPS_REQUIRED} follow-ups or an order.`, weight: 10 },
@@ -234,7 +236,7 @@ export function outreachKpis(
 }
 
 export function kpiTarget(def: OutreachKpiDef, heads: number, period: Period): number | null {
-  if (def.unit === '%') return def.target;
+  if (def.unit === '%') return MONTHLY_RATES.has(def.key) && !isWholeMonth(period) ? null : def.target;
   return isWholeMonth(period) ? def.target * Math.max(1, heads) : null;
 }
 

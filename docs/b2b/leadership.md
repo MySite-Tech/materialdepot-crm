@@ -290,6 +290,20 @@ matches nothing sees a notice, not an empty card.
   The other percentages work the same way: Inbound coverage (a call on a lead now
   theirs), Outreach coverage (a held meeting), handover (accepted), KAM coverage and
   active rate are recomputed on every load. None is stored.
+- **Coverage is a monthly rate, so it is not judged on a part month (2026-11-19).**
+  KAM coverage, KAM ordering, Outreach coverage and Outreach handover carry
+  `per: 'month'` (Outreach's two via `MONTHLY_RATES`), and `targetFor` gives a %
+  KPI with `per: 'month'` no target unless the period is a whole month. So Today,
+  Yesterday, This week and Last 30 days show the figure with no target and no
+  BEHIND badge. KAM coverage divides by every firm Active today, so on one day
+  it can only read the firms met that day: the user read "0% of 50%, BEHIND" on
+  Today for every KAM and took it for a bug. Inbound coverage keeps its target on
+  any period, because the sheet sets it daily. On production for 1–19 Nov the
+  real figures were Inbound 73% (Vikas) and 84% (Hardi); Outreach 0–6%, because
+  49 of the 54 Inbound and EC leads handed to BMs had no meeting booked (34 of
+  them arrived 15–19 Nov) and 59 of the 69 meetings BMs held were on Own research
+  leads whose numbers are on no Inbound lead; KAM about one firm each, because 9
+  of the 12 meetings were at firms with no order in 30 days.
 - **A % tile's footer uses the KPI's own denominator** (`PerfValue.den`). Inbound
   coverage divides by Kylas's new-lead count, which can exceed the leads opened in
   the CRM. The footer counted rows, so Hardi's tile read "50%" over "6 of 6".

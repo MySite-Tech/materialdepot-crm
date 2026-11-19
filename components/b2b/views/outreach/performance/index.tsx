@@ -23,7 +23,7 @@ function KpiTile({ def, k, heads, period, today, state, on, onPick }: {
   const title = [
     `${def.label} — ${def.rule}`,
     pace !== null && target !== null && k.value !== null ? `On pace: ${def.unit === 'L' ? `₹${Math.round(target * pace * 10) / 10}L` : Math.round(target * pace)} by today.` : '',
-    target === null ? 'No target for a custom period — the sheet sets monthly targets.' : '',
+    target === null ? 'No target for a part-month period: the sheet sets monthly targets.' : '',
     ready ? k.sub : '',
     'Click to see the leads behind this number.',
   ].filter(Boolean).join('\n');
