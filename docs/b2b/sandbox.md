@@ -94,7 +94,10 @@ with team and Presales notes; Follow up; PI Shared on `ENQ-900101`; Closed on
 accepted into Outreach (`OR-IN-7000116`, a meeting held and one booked); one
 waiting for Omkar's sign-off (`OR-IN-7000117`). Outreach also has a converted
 lead with a handover pending on Kavya and one she accepted, which became the
-client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago.
+client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago. `CLI-SBX-0003`
+(Dormant Builders, KAM Kavya) last ordered 250 days ago and `CLI-SBX-0004` (Lapsed
+Interiors, no KAM) 420 days ago, so Client Database can send them to Inbound or
+Outreach (`client-db.md` §Firms inactive over 6 months).
 `CLI-SBX-0001` has one EC visit booked at Whitefield for tomorrow
 (`ECV-SBX-0001`), so the Firm page card and the Appointment Tracker's B2B list
 both have something to show. Every name, firm

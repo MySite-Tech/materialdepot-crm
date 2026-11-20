@@ -623,6 +623,13 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   `client-db.md`). A KAM could not reject a firm at all until 2026-11-03, when the
   user asked for Reject back (`kam.md`). Tested in the sandbox on dummy data, stubbed Kylas. **Open:** real
   Kylas owner change from `reassign-many` is unproven.
+- **2026-11-20 (Client Database win-back)**: The user: the Client Database is not
+  only for KAMs; firms inactive over 6 months go to Outreach or Inbound, which is
+  why every firm has four SPoCs. Built on `client-db-win-back`: the assign bar
+  opens Inbound and Outreach for those firms, each send creates a lead in that
+  team's tab and logs the firm's SPoC, and the KAM is kept (`client-db.md`
+  §Firms inactive over 6 months go to Inbound or Outreach). Checked on the sandbox
+  only.
 
 ## Outreach: the brief (2026-10-28) and what was built
 

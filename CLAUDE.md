@@ -649,11 +649,8 @@ old lead a departed rep still holds is the same. Reassign now reads the leads it
 row for in one Kylas `in` search and inserts their rows with the new owner
 (`inboundLeadsByIds`, `docs/b2b/inbound.md` §The CRM's owner is written to Kylas,
 `docs/landmines.md`). **After deploy,** reassign that lead (phone ending 3834) to Vikas.
-The write has not run on production. **Open, undecided:** Client Database's assign bar
-keeps Outreach greyed out for firms. Someone asked to send no-KAM firms to Outreach.
-Ask whether that means a new Outreach lead for the firm or an Outreach BM owning the
-firm before building it, because Outreach refuses numbers already in the Client
-Database (`docs/b2b/ec-referral.md`).
+The write has not run on production. The Client Database Outreach question this
+paragraph used to leave open was answered and built on 2026-11-20 (below).
 
 **Outreach meetings were never marked held (2026-11-17, CRM PR from
 `outreach-meeting-rebook`, merged on Dhruv's ask; no backend PR).** The user: BMs log
@@ -670,6 +667,21 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 **Open:** the user has not decided whether a check-in alone (no notes) should count
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
+
+**START HERE for B2B (2026-11-20): Client Database sends long-inactive firms to
+Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no
+backend PR).** The user: the Client Database is not only for KAMs, and the four
+SPoCs exist for this. A manager selects firms inactive over 6 months (Inactive 6–12
+or 12+ months, `WIN_BACK_STATUSES`) and picks Inbound or Outreach on the assign bar.
+Each becomes a new lead in that team's tab (Outreach: source **Inactive firm**,
+a pending intake the BM accepts; Inbound: a `crm-` lead owned at once, no Kylas
+write) **and** a `spoc_log` entry naming that person as the firm's Inbound or
+Outreach SPoC from that day. The KAM is kept. A firm with an open lead on that team
+is skipped. Never ordered and recent firms stay KAM-only. Detail and the known gap
+(a BM's reject leaves the logged SPoC) are in `docs/b2b/client-db.md` §Firms inactive
+over 6 months go to Inbound or Outreach. **Seen on the sandbox only.** After deploy,
+sign in as a manager, send one 6+ month firm to an Outreach BM, and check the lead
+in that BM's pool and the SPoC on the Firm page.
 
 **START HERE for B2B (2026-11-17): CRM PR #67 (`outreach-handover-kam-firm`), merged on
 Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:

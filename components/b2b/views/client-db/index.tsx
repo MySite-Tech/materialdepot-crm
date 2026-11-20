@@ -10,7 +10,7 @@ import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { AssignBar } from '../../ui/assign-bar';
 import { useClientColumns } from './hooks/use-client-columns';
-import { useFirmAssign } from './hooks/use-firm-assign';
+import { WIN_BACK_RULE, useFirmAssign } from './hooks/use-firm-assign';
 import { useSpocSources } from './hooks/use-spoc-sources';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
@@ -48,12 +48,22 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
-  const { kams, allKams, byTeam, everyone } = useB2BReps(team);
-  const assigner = useFirmAssign(clients, viewer.member?.name || viewer.name, (list) => {
-    const byId = new Map(list.map((c) => [c.id, c]));
-    setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
-  });
+  const { allKams, byTeam, everyone } = useB2BReps(team);
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
+  const rowOf = useCallback((c: ClientEntity) => {
+    const metrics = metricsFor(c);
+    return { metrics, status: clientStatus(metrics, today) };
+  }, [metricsFor, today]);
+  const assigner = useFirmAssign({
+    clients,
+    team,
+    by: viewer.member?.name || viewer.name,
+    rowOf,
+    onSaved: (list) => {
+      const byId = new Map(list.map((c) => [c.id, c]));
+      setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
+    },
+  });
   const studio = useStudioLogins();
   const spocSource = useSpocSources();
   const { visible, setVisible } = useClientColumns();
@@ -338,9 +348,10 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             <AssignBar
               count={assigner.picked.size}
               noun="firm"
-              teams={{ kam: { reps: allKams, rotation: kams } }}
+              teams={assigner.teams}
+              closedWhy={{ inbound: `${WIN_BACK_RULE} None of the selected firms is.`, outreach: `${WIN_BACK_RULE} None of the selected firms is.` }}
               busy={assigner.busy}
-              rule="Bulk assignment takes only firms with no KAM, and round robin gives each to whichever of these people holds the fewest. To move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to. A firm moved from another KAM can only be accepted."
+              rule={`KAM: bulk assignment takes only firms with no KAM, and to move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to; one moved from another KAM can only be accepted. ${WIN_BACK_RULE} Each becomes a new lead for that person and sets the firm's SPoC for that team; a firm with an open lead on that team is left alone. Round robin gives each to whichever of these people holds the fewest.`}
               total={rows.length}
               onPickAll={() => assigner.pickAll(rows.map((r) => r.client.id))}
               onAssign={assigner.assign}

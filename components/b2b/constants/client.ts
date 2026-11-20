@@ -68,6 +68,8 @@ export const ORDER_BANDS: { status: ClientStatus; upTo: number }[] = [
 
 export const LONG_INACTIVE: ClientStatus[] = ['Inactive 3–6 months', 'Inactive 6–12 months', 'Inactive 12+ months'];
 
+export const WIN_BACK_STATUSES: ClientStatus[] = ['Inactive 6–12 months', 'Inactive 12+ months'];
+
 export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {
   colors: {
     Active: '#22C55E',
