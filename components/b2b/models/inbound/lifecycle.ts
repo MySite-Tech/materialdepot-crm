@@ -107,3 +107,12 @@ export function clientSpocs(
     : { detail: 'No order at an EC yet' };
   return { inbound, outreach: out, kam, ec };
 }
+
+export function openLeadLoad(leads: { stage: InboundStatus; ownerId?: number }[], members: { name: string; kylasUserId: number | null }[]): Map<string, number> {
+  const held = new Map<string, number>();
+  for (const l of leads) {
+    const m = isOpenStatus(l.stage) ? members.find((t) => t.kylasUserId === l.ownerId) : undefined;
+    if (m) held.set(m.name, (held.get(m.name) || 0) + 1);
+  }
+  return held;
+}

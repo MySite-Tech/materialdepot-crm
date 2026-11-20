@@ -35,6 +35,8 @@ function seedDeals() {
     deal('ENQ-900114', '9000020013', 'Placeholder Modular', 'Delivered', 95000, RAVI, 'JP Nagar', -40, { closureDate: istDay(-35), clientGst: '29AAFCP5555E1Z2' }),
     deal('ENQ-900115', '9000020014', 'Dummy Decor', 'Order Placed', 62000, IMRAN, 'HSR', -3, { closureDate: istDay(-2), clientGst: '29ABCPD6666F1Z7' }),
     deal('ENQ-900116', '9000020015', 'Stand-in Constructions', 'Delivered', 230000, SNEHA, 'Whitefield', -95, { closureDate: istDay(-90), clientGst: '36AAACS7777G1Z4' }),
+    deal('ENQ-900117', '9000020016', 'Dormant Builders', 'Delivered', 275000, RAVI, 'JP Nagar', -255, { closureDate: istDay(-250) }),
+    deal('ENQ-900118', '9000020017', 'Lapsed Interiors', 'Delivered', 88000, IMRAN, 'HSR', -425, { closureDate: istDay(-420) }),
   ];
 }
 
@@ -135,10 +137,10 @@ function clientRow(id, company, phone, source, created, meta) {
   const m = {
     company, contacts: [{ number: phone, name: meta.contactName, primary: true }], gsts: [], segment: '2',
     client_type: meta.clientType, client_type_raw: null, source,
-    assignments: [{ kam: KAVYA.name, at: created, by: MEERA.name, reason: meta.reason }],
+    assignments: meta.noKam ? [] : [{ kam: KAVYA.name, at: created, by: MEERA.name, reason: meta.reason }],
     remarks: null, interactions: meta.interactions ?? [], escalations: [], merged_from: [], created_at: created, updated_at: created,
   };
-  return { id, pipeline: 'client', stage: 'Client', kylas_lead_id: null, owner: KAVYA.name, value: 0, created_at: created, updated_at: created, meta_data: m };
+  return { id, pipeline: 'client', stage: 'Client', kylas_lead_id: null, owner: meta.noKam ? null : KAVYA.name, value: 0, created_at: created, updated_at: created, meta_data: m };
 }
 
 function kamRow(id, clientId, company, phone, stage, day, meta) {
@@ -162,6 +164,12 @@ function seedKam() {
     }),
     clientRow('CLI-SBX-0002', 'Exemplar Interiors', '9000020003', 'Existing', istAt(-90, 12), {
       contactName: 'Demo Owner C', clientType: 'Interior Designer', reason: 'Existing account',
+    }),
+    clientRow('CLI-SBX-0003', 'Dormant Builders', '9000020016', 'Existing', istAt(-300, 12), {
+      contactName: 'Demo Owner D', clientType: 'Builder', reason: 'Existing account',
+    }),
+    clientRow('CLI-SBX-0004', 'Lapsed Interiors', '9000020017', 'Existing', istAt(-450, 12), {
+      contactName: 'Demo Owner E', clientType: 'Interior Designer', noKam: true,
     }),
   ];
   const orders = [

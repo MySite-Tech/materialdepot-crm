@@ -51,10 +51,11 @@ function PeoplePicker({ reps, set, onChange }: { reps: Rep[]; set: Set<string>; 
   );
 }
 
-export function AssignBar({ count, noun, teams, busy, rule, total, onPickAll, onAssign, onClear }: {
+export function AssignBar({ count, noun, teams, closedWhy, busy, rule, total, onPickAll, onAssign, onClear }: {
   count: number;
   noun: string;
   teams: AssignTeams;
+  closedWhy?: Partial<Record<B2BTeam, string>>;
   busy: boolean;
   rule: string;
   total?: number;
@@ -91,7 +92,7 @@ export function AssignBar({ count, noun, teams, busy, rule, total, onPickAll, on
       <div className="inline-flex rounded-md border border-teal-200 overflow-hidden" aria-label="Team">
         {TEAM_LABELS.map(([k, label]) => (
           <button key={k} type="button" disabled={!teams[k]} onClick={() => setChosen(k)}
-            title={teams[k] ? undefined : `These ${noun}s cannot go to ${label} from here`}
+            title={teams[k] ? undefined : closedWhy?.[k] ?? `These ${noun}s cannot go to ${label} from here`}
             className={`${modeBtn(team === k)} disabled:text-gray-300 disabled:cursor-not-allowed`}>{label}</button>
         ))}
       </div>
