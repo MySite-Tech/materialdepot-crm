@@ -22,6 +22,7 @@ export interface SlotContentProps {
   date: string;
   myStore: string | null;
   poolLabel: string;
+  windows: SlotDef[];
   daySlots: Map<string, StoreSlot> | null;
   overrider: Overrider;
   myRes: any[];

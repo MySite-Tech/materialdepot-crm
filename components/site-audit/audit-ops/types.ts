@@ -47,7 +47,7 @@ export interface SlotDef { id: string; label: string }
 
 export type AuditViewKey =
   | 'orders' | 'schedule' | 'reschedule' | 'followups' | 'calendar'
-  | 'slots' | 'auditors' | 'deleted' | 'rectifications';
+  | 'slots' | 'auditors' | 'deleted' | 'rectifications' | 'nps';
 
 interface AuditService {
   flooring?: AuditSkuRow[];

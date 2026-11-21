@@ -159,7 +159,8 @@ export type ViewKey =
   | 'foam'
   | 'payouts'
   | 'deleted'
-  | 'rectifications';
+  | 'rectifications'
+  | 'nps';
 
 export interface FoamLedgerRow {
   id: string;

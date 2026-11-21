@@ -153,8 +153,26 @@ there is no second copy of the rule to drift.
   override.
 - **Blackouts and open Sundays are Django's only now** (`SITE_AUDIT_SLOT_BLACKOUTS`,
   `SITE_AUDIT_OPEN_SUNDAYS`): the kiosk shows Django's days, so the CRM's mirror was
-  deleted. The CRM's `SLOT_DEFS` is only labels; the windows are Django's
-  `SITE_AUDIT_SLOT_DEFS`.
+  deleted. The windows are Django's: each store's own, else `SITE_AUDIT_SLOT_DEFS`.
+- **Each store has its own hours (2026-11-20).** Audit Ops → Slots & timings
+  (`audit-ops/views/store-windows/`) edits them per store pool and saves the
+  Site Audit Supabase `app_settings` row `audit_store_slots`
+  (`{pool id: [{start, end}]}`). A store with no entry keeps the six standard
+  windows. Django reads it (`order/services/site_audit_windows.py`, cached 60s),
+  counts each store only on its own windows, puts its buffer on the next window
+  in that store's list, and accepts any store's window at cart checkout.
+  `/site-audit-store-slots/` returns the store's `windows` and the kiosk draws
+  from them (`windowsOf`). The CRM's `SLOT_DEFS` is now only the fallback for a
+  Django that does not send `windows` yet. `STORE_POOLS` in the editor is a copy
+  of Django's `SITE_AUDIT_STORE_POOLS` ids. A new store goes in both, or its
+  hours can't be set. A window's slot id is its start time, so an existing
+  booking keeps its time when hours change. A booking at a start that is no
+  longer one of the store's windows takes no capacity. Saving re-reads the row
+  first and writes only the chosen store's entry; if the read fails, nothing is
+  saved, so a failed load can't wipe other stores' hours. This replaced the old
+  per-device Wooden Flooring / Wallpaper lists, which no booking ever read (the
+  drawer's time is free-form). Their `md_audit_slots_*` copies still load, only
+  to label old orders.
 - **A new store** goes in Django's `SITE_AUDIT_STORE_POOLS` (its branch names, exactly
   as `OrganisationBranch.branch_name`) and in the kiosk's `STORES` / `STORE_CITY`. The
   kiosk's PI code is the name without spaces, cut to six letters, so two stores must

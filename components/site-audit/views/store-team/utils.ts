@@ -1,8 +1,9 @@
 'use client';
 
+import type { StoreSlotCalendar } from '@/lib/api';
 import { CITIES, siteAuditRoleFromPermissions } from '../../shared';
 import { DAYS_SHORT, MORNING_CUTOFF_MIN, SLOT_DEFS, STORE_CITY } from './constants';
-import type { Overrider } from './types';
+import type { Overrider, SlotDef } from './types';
 
 export const cityOfStore = (store: string | null) => (store && STORE_CITY[store]) || CITIES[0];
 
@@ -27,14 +28,23 @@ export function morningCutoffHit(date: string): boolean {
   return now.getHours() * 60 + now.getMinutes() >= MORNING_CUTOFF_MIN;
 }
 
-export function fmtSlotId(id: string) {
-  const s = SLOT_DEFS.find((x) => x.id === id);
-  return s ? s.label : '—';
+export function windowsOf(cal: StoreSlotCalendar | null): SlotDef[] {
+  if (!cal || !cal.windows.length) return SLOT_DEFS;
+  return cal.windows.map((w) => ({ id: w.id, label: w.label, rangeEnd: w.range_end, startMin: w.start_min, endMin: w.end_min, group: w.group }));
 }
 
-export function previousSlotLabel(id: string): string {
-  const i = SLOT_DEFS.findIndex((s) => s.id === id);
-  return i > 0 ? SLOT_DEFS[i - 1].label : '';
+export function fmtSlotId(id: string, windows: SlotDef[]) {
+  const s = windows.find((x) => x.id === id) || SLOT_DEFS.find((x) => x.id === id);
+  if (s) return s.label;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(id || '');
+  if (!m) return '—';
+  const h = Number(m[1]);
+  return (h % 12 || 12) + ':' + m[2] + ' ' + (h < 12 ? 'AM' : 'PM');
+}
+
+export function previousSlotLabel(id: string, windows: SlotDef[]): string {
+  const i = windows.findIndex((s) => s.id === id);
+  return i > 0 ? windows[i - 1].label : '';
 }
 
 export function genSlotPI(store: string) {

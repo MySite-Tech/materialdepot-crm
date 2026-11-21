@@ -14,6 +14,6 @@ This module's detail is split by topic so a question costs one part, not the who
 | [`roles.md`](roles.md) | The three overlapping role models — `profiles.role`, CRM role, and permissions | 43 |
 | [`staff.md`](staff.md) | Roster, joiners/leavers, daily caps and the probe-gated columns | 114 |
 | [`orders.md`](orders.md) | Order attribution (exact matching only), the BM order book, and conversion | 188 |
-| [`analytics.md`](analytics.md) | Analytics (two halves, two sources) and the review-score → NPS pipeline | 165 |
+| [`analytics.md`](analytics.md) | Analytics (two halves, two sources), the review-score → NPS pipeline, and the per-ENQ NPS tab (with score entry) in Audit Ops / Install Ops | 273 |
 | [`coe.md`](coe.md) | The COE dashboard's six tabs and the three things they share | 107 |
-| [`gotchas.md`](gotchas.md) | Pre-booking vs audit rows, empty-data-on-error, two render-loop guards, and what a revisit does to a finished sub-job | 112 |
+| [`gotchas.md`](gotchas.md) | Pre-booking vs audit rows, empty-data-on-error, two render-loop guards, and what a revisit does to a finished sub-job; per-store audit hours | 186 |
