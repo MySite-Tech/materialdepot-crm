@@ -230,7 +230,7 @@ export default function App() {
   });
   const isColVisible = (key: string) => visibleCols.includes(key);
 
-  const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
+  const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, totalCount, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
@@ -346,6 +346,7 @@ export default function App() {
         pipelineActive={pipelineActive}
         pipelineLost={pipelineLost}
         pipelineTotal={pipelineTotal}
+        totalCount={totalCount}
         pipelineWon={pipelineWon}
         pipelineExclGst={pipelineExclGst}
         runLeadsExport={runLeadsExport}

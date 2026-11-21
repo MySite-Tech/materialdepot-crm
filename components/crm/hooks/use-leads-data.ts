@@ -6,7 +6,7 @@ import { fetchUsers } from '../../../lib/api/crm/users';
 import { AppUser, Lead } from '../../../types/crm';
 import { BACKEND_SORTABLE_COLS } from '../constants';
 import { MainTab } from '../types';
-import { buildLeadsQuery } from '../utils';
+import { buildLeadsQuery, cachedLeadsStats, rememberLeadsStats } from '../utils';
 import { Dispatch, SetStateAction, useEffect } from 'react';
 
 export function useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, scopedBMs, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
@@ -106,10 +106,12 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUser || mainTab !== 'leads') return;
   let cancelled = false;
-  setStatsLoading(true);
-  fetchCRMLeadsStats(
-    buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }),
-  ).then((stats) => {
+  const query = buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  const cacheKey = `${currentUser.id}:${JSON.stringify(query)}`;
+  const cached = cachedLeadsStats(cacheKey);
+  if (cached) { setLeadsStats(cached); setStatsLoading(false); } else setStatsLoading(true);
+  fetchCRMLeadsStats(query).then((stats) => {
+    rememberLeadsStats(cacheKey, stats);
     if (!cancelled) { setLeadsStats(stats); setStatsLoading(false); }
   }).catch(() => { if (!cancelled) setStatsLoading(false); });
   return () => { cancelled = true; };
