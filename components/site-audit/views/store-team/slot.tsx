@@ -3,7 +3,6 @@
 import { fmtDate } from '../../install-ops/utils';
 
 
-import { SLOT_DEFS } from './constants';
 import { SlotContentProps } from './types';
 import { fmtSlotId, morningCutoffHit, previousSlotLabel } from './utils';
 
@@ -11,6 +10,7 @@ export function SlotContent({
   date,
   myStore,
   poolLabel,
+  windows,
   daySlots,
   overrider,
   myRes,
@@ -35,7 +35,7 @@ export function SlotContent({
       ) : null}
       {(['Morning', 'Afternoon', 'Evening'] as const).map((grp) => {
         const cutMorning = !closedDay && grp === 'Morning' && morningCutoffHit(date);
-        const slots = SLOT_DEFS.filter((s) => s.group === grp && (closedDay ? nowMin === null || s.startMin > nowMin : daySlots.has(s.id)));
+        const slots = windows.filter((s) => s.group === grp && (closedDay ? nowMin === null || s.startMin > nowMin : daySlots.has(s.id)));
         return (
           <div key={grp}>
             <div className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-100">
@@ -57,7 +57,7 @@ export function SlotContent({
                   const overrideNote = closedDay
                     ? 'Booked on a closed day by ' + who
                     : isBuffer
-                      ? 'Booked over the ' + previousSlotLabel(sl.id) + ' buffer by ' + who
+                      ? 'Booked over the ' + previousSlotLabel(sl.id, windows) + ' buffer by ' + who
                       : undefined;
                   const mayOverride = closedDay ? overrider.level === 'admin' : isBuffer && canOverride;
                   const myBookingsForSlot = myRes.filter((r) => r.slot === sl.id);
@@ -67,7 +67,7 @@ export function SlotContent({
                   if (closedDay) availText = 'Closed day';
                   else if (free) availText = `${cell!.available} of ${cell!.total} ${poolLabel} auditor${cell!.total !== 1 ? 's' : ''} available`;
                   else if (isBooked) availText = `Booked — ${poolLabel}'s auditor has a visit at this time`;
-                  else if (isBuffer) availText = `Buffer — travel time after the ${previousSlotLabel(sl.id)} visit`;
+                  else if (isBuffer) availText = `Buffer — travel time after the ${previousSlotLabel(sl.id, windows)} visit`;
                   else availText = `No ${poolLabel} auditor free`;
 
                   const otherResForSlot = dayOrders.filter(
@@ -156,7 +156,7 @@ export function SlotContent({
                 <div key={r.id} className="rounded-lg border border-gray-200 bg-white p-4">
                   <div className="flex items-start gap-3">
                     <div className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded-md px-2 py-1">
-                      {fmtSlotId(r.slot)}
+                      {fmtSlotId(r.slot, windows)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-sm text-black">{r.customer_name || '—'}</div>
@@ -206,7 +206,7 @@ export function SlotContent({
               <div key={o.id} className="rounded-lg border border-gray-200 bg-white p-4">
                 <div className="flex items-start gap-3">
                   <div className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border border-gray-100 rounded-md px-2 py-1">
-                    {fmtSlotId(o.slot)}
+                    {fmtSlotId(o.slot, windows)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm text-black">{o.customer_name || o.pi || '—'}</div>

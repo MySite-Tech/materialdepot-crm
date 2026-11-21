@@ -6,8 +6,9 @@ import { fetchUsers } from '@/lib/api';
 import { poFieldFor } from '../../data/oms-service';
 import { autoImportAuditOrders } from '../../data/auto-import-audit-orders';
 import AuditOrderDrawer from '../../audit-ops/order-drawer';
+import NpsTabView from '../../nps-tab';
 import {
-  AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, SlotsView, TodayView,
+  AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, StoreWindowsView, TodayView,
 } from '../../audit-ops/views';
 import { AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from '../../audit-ops/overlays';
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../../staff/staff-modals';
@@ -28,6 +29,7 @@ const TABS: Array<{ view: AuditViewKey; label: string }> = [
   { view: 'auditors', label: 'Auditors & caps' },
   { view: 'deleted', label: 'Deleted Orders' },
   { view: 'rectifications', label: 'Rectifications' },
+  { view: 'nps', label: 'NPS' },
 ];
 
 export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
@@ -290,7 +292,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       case 'calendar':
         return <CalendarView orders={orders} auditors={auditors} slots={slots} calSelDay={calSelDay} setCalSelDay={setCalSelDay} onOpenOrder={openOrder} />;
       case 'slots':
-        return <SlotsView slotsFl={slotsFl} slotsWp={slotsWp} setSlotsFl={setSlotsFl} setSlotsWp={setSlotsWp} toast={toast} />;
+        return <StoreWindowsView city={city} toast={toast} />;
       case 'auditors':
         return (
           <AuditorsView
@@ -305,6 +307,8 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
         return <DeletedView deleted={deleted} auditors={auditors} onRestore={restoreOrder} />;
       case 'rectifications':
         return <RectificationsView orders={orders} onOpenOrder={openOrder} />;
+      case 'nps':
+        return <NpsTabView kind="audit" city={city} onOpenOrder={openOrder} who={ATTRIBUTION} whoEmail={actorEmail} />;
       default:
         return null;
     }

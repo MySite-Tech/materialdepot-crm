@@ -1,4 +1,4 @@
-import { offDayReason, publishSlotConfig, staffCapOn } from '../shared';
+import { offDayReason, staffCapOn } from '../shared';
 import { CONFLICT_STATUSES, FOLLOWUP_ACTIVE_STATUSES } from './constants';
 import { DEFAULT_AUDIT_SLOTS_FL, DEFAULT_AUDIT_SLOTS_WP, DEFAULT_CAP, FLOW, today } from './constants';
 import { AuditOrder, Auditor, SlotDef } from './types';
@@ -52,13 +52,6 @@ export function loadAuditSlots(kind: 'fl' | 'wp'): SlotDef[] {
     }
   } catch { /* malformed override — use defaults */ }
   return fallback;
-}
-
-export function saveAuditSlots(kind: 'fl' | 'wp', slots: SlotDef[]) {
-  const key = kind === 'fl' ? 'md_audit_slots_fl' : 'md_audit_slots_wp';
-  try { localStorage.setItem(key, JSON.stringify(slots)); } catch { /* best-effort */ }
-
-  void publishSlotConfig(key, slots);
 }
 
 export function slotLabel(id: string | null | undefined, slots: SlotDef[]): string {

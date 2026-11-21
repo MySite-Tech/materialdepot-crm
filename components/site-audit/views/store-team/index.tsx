@@ -2,11 +2,11 @@
 
 import { fetchStoreSlots, type StoreSlotCalendar } from '@/lib/api';
 import { cityOf, sbGet, sbPatch } from '../../shared';
-import { SLOT_DEFS, STORES } from './constants';
+import { STORES } from './constants';
 import { BookingSheet } from './sheet';
 import { SlotContent } from './slot';
 import type { Overrider } from './types';
-import { buildDateChips, cityOfStore, dstr, readOverrider, today } from './utils';
+import { buildDateChips, cityOfStore, dstr, readOverrider, today, windowsOf } from './utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function SiteAuditStoreTeamView() {
@@ -100,6 +100,7 @@ export default function SiteAuditStoreTeamView() {
 
   const openDates = useMemo(() => (calendar ? calendar.days.map((d) => d.date) : []), [calendar]);
   const dateChips = useMemo(() => buildDateChips(openDates, overrider.level === 'admin'), [openDates, overrider.level]);
+  const windows = useMemo(() => windowsOf(calendar), [calendar]);
   const daySlots = useMemo(() => {
     const day = calendar && calendar.days.find((d) => d.date === selectedDate);
     return day ? new Map(day.slots.map((sl) => [sl.id, sl])) : null;
@@ -146,7 +147,7 @@ export default function SiteAuditStoreTeamView() {
       })()
     : null;
 
-  const bookingSlotDef = bookingSlot ? SLOT_DEFS.find((s) => s.id === bookingSlot) : null;
+  const bookingSlotDef = bookingSlot ? windows.find((s) => s.id === bookingSlot) : null;
 
   return (
     <div>
@@ -197,6 +198,7 @@ export default function SiteAuditStoreTeamView() {
           myStore={myStore}
           dayOrders={dayOrders}
           poolLabel={calendar ? calendar.label : myStore || ''}
+          windows={windows}
           daySlots={daySlots}
           overrider={overrider}
           myRes={myRes}
