@@ -191,3 +191,6 @@ export const LOST_AGE_BYPASS_ROLES = new Set(['admin', 'manager']);
 export const MARK_LOST_BYPASS_SLUG = 'crm.mark_lost_bypass_age';
 
 export const MARK_LOST_ELIGIBLE = new Set(['In Cart', 'Quote Approval Pending', 'Availability Check', 'Request for Availability Check']);
+
+export const LEADS_STATS_CACHE_KEY = 'crm-leads-stats';
+export const LEADS_STATS_CACHE_MAX = 20;

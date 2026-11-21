@@ -9,10 +9,10 @@ import { LeadsCardList } from './table/cards';
 import { LeadsStats } from './table/stats';
 import { LeadsTable } from './table';
 import { DateEditState, PipelineExclGst } from '../types';
-import { fmtINR } from '../utils';
+import { fmtINR, fmtINRShort } from '../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
-export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, offScopeBranches, requestedBranches, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalPages, userAllowedBranches, wonCount }: {
+export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, offScopeBranches, requestedBranches, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalCount, totalPages, userAllowedBranches, wonCount }: {
   ALL_COLUMNS: { key: string; label: string; }[];
   COL_COUNT: number;
   activeCount: number;
@@ -95,6 +95,7 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
   statsLoading: boolean;
   statusFilter: string[];
   taskFilter: string;
+  totalCount: number;
   totalPages: number;
   userAllowedBranches: string[];
   wonCount: number;
@@ -103,7 +104,6 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
     <div className="px-3 py-3 sm:px-6 sm:py-4">
       <LeadsStats
       activeCount={activeCount}
-      filtered={filtered}
       lostCount={lostCount}
       pctActive={pctActive}
       pctLost={pctLost}
@@ -114,6 +114,7 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
       pipelineTotal={pipelineTotal}
       pipelineWon={pipelineWon}
       statsLoading={statsLoading}
+      totalCount={totalCount}
       wonCount={wonCount}
     />
     
@@ -137,11 +138,11 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
                 : <div className="text-2xl font-bold text-gray-700">{ss.count}</div>
               }
               <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">{ss.status}</div>
-              <div className="font-mono text-[11px] font-semibold mt-1 min-h-[16px]" style={{ color: STATUS_COLORS[ss.status] }}>
-                {!statsLoading && ss.value > 0 ? fmtINR(ss.valueExclGst ?? ss.value) : ''}
+              <div className="font-mono text-[11px] font-semibold mt-1 min-h-[16px]" style={{ color: STATUS_COLORS[ss.status] }} title={!statsLoading && ss.value > 0 ? fmtINR(ss.valueExclGst ?? ss.value) : undefined}>
+                {!statsLoading && ss.value > 0 ? fmtINRShort(ss.valueExclGst ?? ss.value) : ''}
               </div>
               {!statsLoading && ss.value > 0 && (
-                <div className="font-mono text-[10px] text-gray-400">{ss.valueExclGst == null ? 'incl. GST' : `incl. GST ${fmtINR(ss.value)}`}</div>
+                <div className="font-mono text-[10px] text-gray-400" title={ss.valueExclGst == null ? undefined : fmtINR(ss.value)}>{ss.valueExclGst == null ? 'incl. GST' : `incl. GST ${fmtINRShort(ss.value)}`}</div>
               )}
             </div>
           );

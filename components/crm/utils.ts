@@ -1,7 +1,8 @@
 'use client';
 
+import { CRMLeadsStats } from '../../lib/api/crm/leads';
 import { AppUser, Lead } from '../../types/crm';
-import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
+import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LEADS_STATS_CACHE_KEY, LEADS_STATS_CACHE_MAX, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
 import { MainTab } from './types';
 import { B2B_SALES_ROLES } from '@/lib/b2b/team/constants';
 
@@ -118,6 +119,15 @@ export const mergeLead = (existing: Lead, incoming: Lead): Lead => {
 export const fmtINR = (n: number | null | undefined): string => {
   if (n == null || isNaN(n)) return '₹0';
   return '₹' + Number(n).toLocaleString('en-IN');
+};
+
+export const fmtINRShort = (n: number | null | undefined): string => {
+  if (n == null || isNaN(n)) return '₹0';
+  const abs = Math.abs(n);
+  const two = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  if (abs >= 1e7) return `₹${(n / 1e7).toLocaleString('en-IN', two)} Cr`;
+  if (abs >= 1e5) return `₹${(n / 1e5).toLocaleString('en-IN', two)} L`;
+  return fmtINR(n);
 };
 
 export const fmtDate = (d: string | null | undefined): string => {
@@ -259,3 +269,30 @@ export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, p
     priority: priorityFilter.length ? priorityFilter.join(',') : undefined,
   };
 }
+
+const readLeadsStatsCache = (): Record<string, CRMLeadsStats> => {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(LEADS_STATS_CACHE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+export const cachedLeadsStats = (key: string): CRMLeadsStats | null => {
+  const hit = readLeadsStatsCache()[key];
+  return hit && hit.total && hit.active && hit.won && hit.lost && Array.isArray(hit.byStatus) ? hit : null;
+};
+
+export const rememberLeadsStats = (key: string, stats: CRMLeadsStats): void => {
+  const all = readLeadsStatsCache();
+  delete all[key];
+  all[key] = stats;
+  const keys = Object.keys(all);
+  keys.slice(0, Math.max(0, keys.length - LEADS_STATS_CACHE_MAX)).forEach((k) => delete all[k]);
+  try {
+    sessionStorage.setItem(LEADS_STATS_CACHE_KEY, JSON.stringify(all));
+  } catch {
+    return;
+  }
+};

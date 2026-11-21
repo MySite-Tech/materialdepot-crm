@@ -226,3 +226,32 @@ and the inclusive one sits beside it in grey as "incl. GST". Data:
   existed — add a future column there too.
 - Not in the CSV export: `CSV_HEADERS` is shared with the import parser, so a
   new column would shift every imported field.
+
+## The Leads tab's pipeline figures: short form, real count, shown from the tab's last read
+
+Added 2026-11-21. Every pipeline and status-card figure reads `/crm/leads/stats/`, which
+with no filter sums every deal (57,608 on 2026-11-21). Three things about how it shows:
+
+- **Figures are short (`fmtINRShort`): ₹48.09 Cr, ₹20.32 L, the full figure under ₹1 L.**
+  Hovering shows the exact `fmtINR` figure. Rows in the table keep the full figure.
+- **"N leads" under Total Pipeline is `stats.total.count`.** It read `filtered.length`, the
+  page of 25 rows, until 2026-11-21.
+- **The last stats for the same filters show at once, then the fresh read replaces them.**
+  `cachedLeadsStats`/`rememberLeadsStats` keep up to 20 filter combinations per user in
+  `sessionStorage` (`crm-leads-stats`), so it dies with the tab. The request is still made
+  every time, so nothing is ever left stale. A failed read leaves the earlier figures
+  showing, the same as before.
+
+Django runs the two ex-GST ratio aggregates on worker threads while it reads the deal rows
+(`_stats_rows_with_excl_gst_ratios`, Django `order/crm/leads/repository/leads_query.py`).
+The figures are identical, only quicker. On production that day each ratio aggregate took
+about 0.4–0.5 s and the row read about 0.2 s, and they used to run one after another.
+
+**The headline is wrong while one cart is.** One deal ticket's `extra_data.cart_value` is
+about 2.4 × 10¹⁹, which made Total Pipeline about ₹2 × 10¹⁹, and 48 deals hold more than
+₹10 Cr in it (2026-11-21). Shortening the format does not fix that. The cause is 66 cart
+lines with a quantity over 1,00,000, many of them the client's phone number typed into the
+quantity box. `python manage.py remove_oversized_cart_lines --apply` (Django) removes those
+lines and re-saves each deal ticket's value. Until that runs on production the headline stays
+wrong. Django sets no upper limit on a cart quantity, so a new typo brings it back. Don't hide
+these carts in the CRM's code.
