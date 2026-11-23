@@ -683,6 +683,19 @@ over 6 months go to Inbound or Outreach. **Seen on the sandbox only.** After dep
 sign in as a manager, send one 6+ month firm to an Outreach BM, and check the lead
 in that BM's pool and the SPoC on the Firm page.
 
+**START HERE for B2B (2026-11-23): Outreach BMs log calls (CRM PR #83 from
+`outreach-call-log`, merged on Dhruv's ask; no backend PR).** The user: the Outreach
+scorecard showed only meetings, and BM calls were tracked nowhere. That was true on
+production: no Outreach lead had a structured call, and Kylas's call log holds only the
+presales dialer (no Outreach BM in it). BMs typed "Call done" into notes. Now the lead
+drawer has a Calls card (RNR saves at once, Connected needs a note, both save without
+Save changes) into `callAttempts` (meta `call_attempts`, Inbound's shape, kept in the
+row's `extra` jsonb). Calls is the first Effort tile and a By BM column, counted on the
+BM's leads. **It has no target and weight 0** until leadership gives one, so ask before
+inventing a number (`docs/b2b/outreach.md` §BMs log their calls). Counts start at deploy.
+**After deploy,** an Outreach BM logs one RNR and the Calls tile goes up by 1. Seen on
+the sandbox only.
+
 **START HERE for B2B (2026-11-17): CRM PR #67 (`outreach-handover-kam-firm`), merged on
 Dhruv's ask; no backend PR.** Start new work from `origin/main`. Three changes:
 - **Accepting an Outreach handover creates the firm in the Client Database** with an
