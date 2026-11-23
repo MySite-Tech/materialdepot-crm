@@ -74,6 +74,10 @@ export interface OrderSearchDeal extends Omit<Deal, 'id'> {
   estimateId: number;
 }
 
-export async function searchOrderDeals(q: string): Promise<{ content: OrderSearchDeal[]; tickets: OrderSearchTicket[] }> {
+export interface OrderSearchRaise extends RaiseEscalationStatus {
+  lead_id: string;
+}
+
+export async function searchOrderDeals(q: string): Promise<{ content: OrderSearchDeal[]; tickets: OrderSearchTicket[]; raises?: OrderSearchRaise[] }> {
   return mdFetch(`/crm/escalation/order-search/?q=${encodeURIComponent(q)}`);
 }
