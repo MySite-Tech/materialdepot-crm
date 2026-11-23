@@ -136,7 +136,7 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
         findSameIssue={findSameIssue}
         getOngoing={getOngoing}
         handleSubmit={handleSubmit}
-        raises={raises.filter((r) => r.leadId === selectedDeal.leadId)}
+        raises={raises.filter((r) => r.leadId === selectedDeal.leadId && r.status !== "success")}
         retryRaise={retryRaise}
         onViewDeal={onViewDeal}
         selectedDeal={selectedDeal}
