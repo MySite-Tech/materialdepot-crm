@@ -95,17 +95,17 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
               <span key={ex} className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">e.g. {ex}</span>
             ))}
           </div>
-          <p className="mt-4 text-xs text-gray-400">Only orders that are placed or later show up here.</p>
+          <p className="mt-4 text-xs text-gray-400">Orders from Payment Pending onwards show up here.</p>
         </div>
       ) : deals.length === 0 ? (
         <div className="mt-2 rounded-xl border border-gray-200 bg-white px-6 py-10 text-center">
-          <p className="text-sm font-semibold text-gray-900">No placed order found for &ldquo;{searched}&rdquo;</p>
+          <p className="text-sm font-semibold text-gray-900">No order found for &ldquo;{searched}&rdquo;</p>
           <p className="mt-1 text-sm text-gray-500">
-            Escalations can only be raised on orders that are placed or later.
+            Escalations can only be raised on orders that are Payment Pending or later.
           </p>
           <ul className="mx-auto mt-3 max-w-sm space-y-1 text-left text-xs text-gray-500">
             <li>• Check the ENQ id or phone number for typos.</li>
-            <li>• If the customer hasn&apos;t placed the order yet, it won&apos;t show here.</li>
+            <li>• Quotes and carts that haven&apos;t reached Payment Pending won&apos;t show here.</li>
             <li>• Try another number the customer uses.</li>
           </ul>
         </div>
