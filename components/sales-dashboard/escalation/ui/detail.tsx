@@ -6,7 +6,7 @@ import { TimelineEntry } from '../types';
 import { cfDisplayValue, dealHeading, outcomeStyle, relativeAge, relativeTimeBetween } from '../utils';
 import { Dispatch, SetStateAction } from 'react';
 
-export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded, raisedBy, selectedDeal, setSelectedDeal, timelineMap }: {
+export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded, onLoadTimeline, raisedBy, selectedDeal, setSelectedDeal, timelineLoading, timelineMap }: {
   dealNotes: { id: number; description: string; createdAt?: string | undefined; }[];
   expandedCallLogs: CallLog[];
   loadingExpanded: boolean;
@@ -14,7 +14,10 @@ export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded,
   selectedDeal: Deal;
   setSelectedDeal: Dispatch<SetStateAction<Deal | null>>;
   timelineMap: Record<number, TimelineEntry[]>;
+  timelineLoading: boolean;
+  onLoadTimeline: () => void;
 }) {
+  const timeline = timelineMap[selectedDeal.id];
   return (
     <>
     
@@ -97,7 +100,20 @@ export function EscalationDetail({ dealNotes, expandedCallLogs, loadingExpanded,
                 </div>
               </div>
     
-              {(timelineMap[selectedDeal.id] ?? []).length > 0 && (
+              {!timeline && (
+                <button
+                  type="button"
+                  onClick={onLoadTimeline}
+                  disabled={timelineLoading}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {timelineLoading ? "Loading timeline…" : "Show timeline ▸"}
+                </button>
+              )}
+              {timeline && timeline.length === 0 && (
+                <p className="text-xs text-gray-400">No timeline activity yet.</p>
+              )}
+              {(timeline ?? []).length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-2">Timeline</p>
                   <div className="relative ml-3">

@@ -1,23 +1,26 @@
 'use client';
 
-import { Deal } from '../../../../lib/types';
+import { OrderSearchDeal } from '../../../../lib/api/ops/escalation';
 import { RAISE_OPTIONS } from '../constants';
-import { EscSupportDeal } from '../types';
+import { EscSupportDeal, RaiseOption, RaiseProgress } from '../types';
+import { RaiseProgressView } from '../ui/progress';
 import { RaiseField } from '../ui/fields';
 import { Dispatch, SetStateAction } from 'react';
 
-export function DealPanel({ addNoteToTicket, expandedDealId, findSameIssue, getOngoing, handleSubmit, onViewDeal, selectedDeal, setSelectedDeal, submitError, submitSuccess, submitting }: {
+export function DealPanel({ addNoteToTicket, expandedDealId, raises, retryRaise, findSameIssue, getOngoing, handleSubmit, onViewDeal, selectedDeal, setSelectedDeal, submitError, submitSuccess, submitting }: {
   addNoteToTicket: (ticketId: number, text: string) => Promise<void>;
-  expandedDealId: number | null;
+  expandedDealId: string | null;
   findSameIssue: (dealName: string, reasonId: number) => EscSupportDeal | undefined;
   getOngoing: (dealName: string) => EscSupportDeal[];
-  handleSubmit: (dealId: number, selectedOptions: { id: number; name: string; requestType?: "Support" | "Escalation" | undefined; }[], notes?: string) => Promise<void>;
+  handleSubmit: (deal: OrderSearchDeal, options: RaiseOption[], notes?: string) => Promise<void>;
+  raises: RaiseProgress[];
+  retryRaise: (deal: OrderSearchDeal, progress: RaiseProgress) => Promise<void>;
   onViewDeal: (dealName: string) => void;
-  selectedDeal: Deal;
-  setSelectedDeal: Dispatch<SetStateAction<Deal | null>>;
+  selectedDeal: OrderSearchDeal;
+  setSelectedDeal: Dispatch<SetStateAction<OrderSearchDeal | null>>;
   submitError: string | null;
-  submitSuccess: number | null;
-  submitting: number | null;
+  submitSuccess: string | null;
+  submitting: string | null;
 }) {
   return (
     <>
@@ -88,22 +91,31 @@ export function DealPanel({ addNoteToTicket, expandedDealId, findSameIssue, getO
             <RaiseField
               label="Raise Request"
               options={RAISE_OPTIONS}
-              onSubmit={(opts, notes) => handleSubmit(selectedDeal.id, opts, notes)}
+              onSubmit={(opts, notes) => handleSubmit(selectedDeal, opts, notes)}
               findExisting={(reasonId) => findSameIssue(selectedDeal.name, reasonId)}
               onOpenExisting={(ticket) => { onViewDeal(ticket.name); setSelectedDeal(null); }}
               onAddNote={addNoteToTicket}
-              succeeded={submitSuccess === selectedDeal.id}
-              submitting={submitting === selectedDeal.id}
+              succeeded={submitSuccess === selectedDeal.leadId}
+              submitting={submitting === selectedDeal.leadId}
             />
           </div>
     
-          {submitSuccess === selectedDeal.id && (
-            <p className="text-xs text-green-600 font-medium">Escalation ticket created in Kylas</p>
+          {raises.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Raised from here ({raises.length})
+              </p>
+              <div className="space-y-2">
+                {raises.map((r) => (
+                  <RaiseProgressView key={r.requestId} progress={r} onRetry={() => retryRaise(selectedDeal, r)} />
+                ))}
+              </div>
+            </div>
           )}
           {/* No blanket "submit again" alongside this: a timed-out raise is
               usually still in flight, and inviting a resubmit is what raised
               duplicate tickets. Each message carries its own retry guidance. */}
-          {submitError && submitting === null && expandedDealId === selectedDeal.id && (
+          {submitError && submitting === null && expandedDealId === selectedDeal.leadId && (
             <p className="text-xs text-red-600">{submitError}</p>
           )}
         </div>

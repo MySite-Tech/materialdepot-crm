@@ -1,4 +1,5 @@
 import { mdFetch } from '../core/client';
+import { Deal } from '@/lib/types';
 
 export interface EscalationRaisedBy {
   raised_by: string | null;
@@ -6,10 +7,13 @@ export interface EscalationRaisedBy {
   reason?: string[] | null;
 }
 
+export type RaiseStepState = 'pending' | 'running' | 'retrying' | 'done' | 'failed';
+
 export interface RaiseEscalationStatus {
   request_id: number;
   status: 'pending' | 'retrying' | 'success' | 'failed';
-  deal_id: string;
+  deal_id: string | null;
+  steps?: { deal: RaiseStepState; ticket: RaiseStepState };
   escalation_deal_id: string | null;
   reason: string[];
   error: string | null;
@@ -17,15 +21,24 @@ export interface RaiseEscalationStatus {
 }
 
 export async function raiseEscalationDirect(
-  dealId: number | string,
+  dealId: number | string | null,
   reasons: string[],
   requestType?: string,
   notes?: string,
+  leadId?: string,
 ): Promise<{ request_id: number }> {
   return mdFetch('/crm/escalation/raise/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deal_id: String(dealId), reasons, request_type: requestType, notes: notes || undefined }),
+    body: JSON.stringify({ deal_id: dealId ? String(dealId) : undefined, lead_id: leadId, reasons, request_type: requestType, notes: notes || undefined }),
+  });
+}
+
+export async function retryRaiseEscalation(requestId: number): Promise<RaiseEscalationStatus> {
+  return mdFetch('/crm/escalation/raise-retry/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request_id: requestId }),
   });
 }
 
@@ -41,4 +54,26 @@ export async function getEscalationRaisedBy(dealId: number | string): Promise<Es
   } catch {
     return null;
   }
+}
+
+export interface OrderSearchTicket {
+  id: number;
+  name: string;
+  stage: string;
+  pipeline: string;
+  rca: string;
+  resolution: string;
+  closed: boolean;
+  updatedAt: string | null;
+  reasonIds: number[];
+}
+
+export interface OrderSearchDeal extends Omit<Deal, 'id'> {
+  id: number | null;
+  leadId: string;
+  estimateId: number;
+}
+
+export async function searchOrderDeals(q: string): Promise<{ content: OrderSearchDeal[]; tickets: OrderSearchTicket[] }> {
+  return mdFetch(`/crm/escalation/order-search/?q=${encodeURIComponent(q)}`);
 }
