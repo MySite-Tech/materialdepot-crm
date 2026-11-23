@@ -12,6 +12,7 @@
 | `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | Inbound intake only (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
 | `fetchLeadDeals(phone)` | Django `/crm/leads/?q=` | Drawer only, as before; now also feeds the 6-month new-onboarding check |
 | `fetchKamLoad()` | `b2b_lead` closed rows | Drawer only, on "Round-robin" |
+| Calls card (`logCall`) | the same `upsertOutreachLead()` | One write per call, at once; see §BMs log their calls |
 
 Mount cost: the `b2b_lead` read + the waitlist call, plus the shell's `/api/b2b/team`.
 
@@ -373,6 +374,37 @@ booked went from 120 to 46. It does not mark anything held. Nobody wrote the not
 no longer matches. A copy of the 352 Outreach rows from before the write is kept outside
 the repo, in `~/Projects/ss-local-stack/logs/`.
 
+### BMs log their calls (2026-11-23)
+
+The user: the Outreach scorecard showed only meetings, and calls BMs make were not
+tracked anywhere. Checked on production that day: no Outreach lead had a single
+structured call, and Kylas's call log held only the presales dialer's calls (none of
+the five Outreach BMs appeared in it). BMs had been writing "Call done…" or "rnr"
+into notes instead: 24 such notes in 1–23 Nov (Shahrukh 13, Sai Suresh 8, Vilok 3,
+pratham 0).
+
+- **The drawer has a Calls card**, above the meetings: **RNR** saves at once,
+  **Connected…** asks what was discussed and saves. Both save straight away, as the
+  check-in does (`onSave(lead, …)` on the saved lead, then patch the draft), so a
+  call is never lost to a forgotten Save changes. Each call stores `by` and
+  `byPhone` (the viewer).
+- **Storage is `callAttempts` (meta `call_attempts`), the Inbound `CallAttempt`
+  shape** with `n`, `outcome`, `at`, `by`, `byPhone`, `note`. The backend has no
+  Outreach column for it, so it lands in the row's `extra` jsonb. No migration.
+  Outreach saves are whole-row, so a stale copy saved over the row can still drop a
+  call. Inbound avoids this with the append-only `/rows/{id}/change`; Outreach does
+  not use it yet (the same holds for its notes).
+- **No journey event for a call.** The immediate save's journey entry would not reach
+  the open draft, and the next Save changes would write the draft's journey back over
+  it. The Calls card is the record.
+- **The Calls KPI** (`calls`, first Effort tile) counts every call in the period on
+  the BM's leads, the same lead set as their meetings, so a lead's calls move with it
+  on a reassignment (Inbound credits the caller instead). One row per lead, so the list
+  opens the lead. **It has no target and weight 0** (`target: null`), so the weighted
+  score is unchanged until leadership sets one. My performance lists each call in the
+  activity feed (`outreachCallsBy`).
+- **A call is not an adherence need.** Calling is not required before a stage.
+
 ### Conversions and revenue come from orders (2026-11-18)
 
 The user, on pratham's scorecard: BMs see 0 conversions and ₹0 while their clients
@@ -488,7 +520,7 @@ onboarding" in the KPI sub-line.
 
 ### KPIs (`models/outreach/kpis.ts`, `views/outreach/performance/`)
 
-One function, `outreachKpis(leads, period, waitlist)`, computes all eight for an
+One function, `outreachKpis(leads, period, waitlist)`, computes all nine (Calls since 2026-11-23) for an
 IST date period. **Each KPI returns its rows, not just a number**: one
 `KpiRow { lead, counts, note, at }` per lead it looked at, with `counts: false`
 and the reason in `note` for the ones it excluded. The value is derived from

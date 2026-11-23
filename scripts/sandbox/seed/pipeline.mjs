@@ -42,7 +42,7 @@ function seedDeals() {
 
 const OUTREACH_DEFAULTS = {
   designation: null, gst_number: null, segment: null, lead_type: null, company_type: null, company_type_other: null,
-  meetings: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null,
+  meetings: [], call_attempts: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null,
   quote_shared_at: null, enq_id: null, order_value: null, order_value_source: null, deal_status: null, expected_closure: null,
   lost_reason: null, kam: null, ec_name: null, ec_bm_name: null, notes: [], alt_phone: null, alt_name: null, alt_role: null, contacts: [], email: null,
   city: 'Bangalore', office_address: null, team_size: null, whatsapp_group_link: null, converted_at: null,
@@ -75,6 +75,11 @@ function seedOutreach() {
     meetings: [
       meeting(1, -6, 'Completed', { metWith: 'Owner / Principal', notes: 'Walked through laminate shades; quote requested.', pin: { lat: 12.97, lng: 77.64, at: istAt(-6, 11) } }),
       meeting(2, 2, 'Scheduled'),
+    ],
+    call_attempts: [
+      { n: 1, outcome: 'RNR', at: istAt(-8, 11), by: OMKAR.name, byPhone: OMKAR.phone },
+      { n: 2, outcome: 'Connected', at: istAt(-7, 16), by: OMKAR.name, byPhone: OMKAR.phone, note: 'Owner free on Thursday; booked the first visit.' },
+      { n: 3, outcome: 'Connected', at: istAt(-1, 12), by: OMKAR.name, byPhone: OMKAR.phone, note: 'Quote received; second visit to finalise shades.' },
     ],
     intake: {
       from: 'Inbound', inboundLeadId: String(leadId(16)), inboundOwner: BHARAT.name, inboundStage: 'Follow up',
