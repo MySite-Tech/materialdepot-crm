@@ -4,8 +4,11 @@ import { MainTab } from './types';
 import { CHECKLIST_PERMISSION_SLUG } from '@/lib/store-checklist/constants';
 import { EC_REFERRAL_SLUG } from '@/lib/b2b/ec-referral/constants';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/site-audit/shared';
+import { CORE_CATEGORIES, NON_CORE_CATEGORIES, SPECIAL_CATEGORIES } from '@/components/dashboard/category-revenue/constants';
 
 export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'Electronic City', 'HQ'];
+
+export const LEADS_FILTER_DEBOUNCE_MS = 400;
 
 export const LEAD_PRIORITIES = ['hot', 'warm', 'cold'] as const;
 
@@ -19,6 +22,14 @@ export const priorityLabelsToValues = (labels: string[]) =>
 
 export const priorityValuesToLabels = (values: string[]) =>
   values.map((v) => PRIORITY_FILTER_OPTIONS.find((o) => o.value === v)?.label ?? v);
+
+export const SEGMENT_CATEGORIES: Record<string, string[]> = {
+  'Core': CORE_CATEGORIES,
+  'Non-Core': NON_CORE_CATEGORIES,
+  'Special': SPECIAL_CATEGORIES,
+};
+
+export const SEGMENT_OPTIONS = Object.keys(SEGMENT_CATEGORIES);
 
 export const STATUSES = [
   'In Cart',

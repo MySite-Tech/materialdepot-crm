@@ -28,6 +28,11 @@ identical to callers. A `204` becomes `null`; an empty body becomes `null`.
 concurrent callers share one in-flight request. A rejected promise is evicted
 immediately, so a failure is not cached.
 
+A GET passed an `AbortSignal` skips this dedupe (2026-11-23, the Leads tab's two
+reads). A shared promise would carry one caller's abort to every caller holding
+it. Under React Strict Mode the dev re-run of an effect would then receive the
+promise its own cleanup had just aborted, and render nothing.
+
 **3. Any non-GET clears that entire cache** — not just the affected key. So a
 single PATCH invalidates every cached GET in the app. `saveToken` and
 `clearToken` clear it too, which is what stops a login from serving the previous

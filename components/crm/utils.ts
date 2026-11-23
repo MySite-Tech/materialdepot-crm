@@ -2,7 +2,7 @@
 
 import { CRMLeadsStats } from '../../lib/api/crm/leads';
 import { AppUser, Lead } from '../../types/crm';
-import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LEADS_STATS_CACHE_KEY, LEADS_STATS_CACHE_MAX, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
+import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LEADS_STATS_CACHE_KEY, LEADS_STATS_CACHE_MAX, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SEGMENT_CATEGORIES, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
 import { MainTab } from './types';
 import { B2B_SALES_ROLES } from '@/lib/b2b/team/constants';
 
@@ -223,6 +223,10 @@ export function offScopeLeadBranches(leads: Lead[], effectiveBranches: string[])
   return [...new Set(
     leads.map((l) => (l.branch || '').trim()).filter((b) => b && !wanted.has(b.toLowerCase())),
   )].sort();
+}
+
+export function leadsCategories(categoryFilter: string[], segmentFilter: string[]): string[] {
+  return [...new Set([...categoryFilter, ...segmentFilter.flatMap((s) => SEGMENT_CATEGORIES[s] ?? [])])];
 }
 
 export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {

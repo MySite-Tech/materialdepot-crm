@@ -252,6 +252,51 @@ about 2.4 × 10¹⁹, which made Total Pipeline about ₹2 × 10¹⁹, and 48 de
 ₹10 Cr in it (2026-11-21). Shortening the format does not fix that. The cause is 66 cart
 lines with a quantity over 1,00,000, many of them the client's phone number typed into the
 quantity box. `python manage.py remove_oversized_cart_lines --apply` (Django) removes those
-lines and re-saves each deal ticket's value. Until that runs on production the headline stays
-wrong. Django sets no upper limit on a cart quantity, so a new typo brings it back. Don't hide
-these carts in the CRM's code.
+lines and re-saves each deal ticket's value. It ran on production on 2026-11-21 and removed
+all 66 lines, but 28 of the deal tickets kept their old value: the CRM reads the ticket, not
+the cart, so the headline did not move. `--refresh` lists every ticket the fix touched that
+still disagrees with its live cart, and `--refresh --apply` re-saves them. Check `--refresh`
+before calling a pipeline figure fixed. Django sets no upper limit on a cart quantity, so a
+new typo brings it back. Don't hide these carts in the CRM's code.
+
+## A Leads filter change is one debounced pair of reads, and it used to take minutes
+
+Changed 2026-11-23. The user reported about 2 minutes per filter change. Most of it
+was Django: `_filter_by_category` and `_filter_by_branch` joined to-many rows and
+then ran `.distinct()`, and each stats call runs the filter three times. On the
+production replica the Core segment's stats rows took 8–12 s, and about 1–3 s after
+the rewrite to `Exists`, with identical deal counts and amounts. Detail is in Django's
+`order/docs/system-context/crm.md`. The browser made it worse:
+
+- **Every checkbox tick sent both reads at once,** and Django finishes a request even
+  after the browser stops listening. So ticking four categories ran about sixteen
+  copies of the slow query together. Now `index.tsx` builds the query once
+  (`buildLeadsQuery`, serialised as the key), debounces that key by
+  `LEADS_FILTER_DEBOUNCE_MS`, and `useLeadsData` reads from the debounced key only.
+  On the stub, four quick ticks sent one stats and one list request.
+- **Superseded reads are aborted** (`AbortController`, passed through `fetchCRMLeads`
+  and `fetchCRMLeadsStats`). This frees the browser only. It does not stop Django, so
+  the debounce is what actually protects the server.
+- **`page` is derived from the key**, not reset by an effect. The two `setPage(0)`
+  effects let a filter change on page 2 fetch page 2 and then page 1. Now it sends one
+  request for page 1.
+
+Don't add a filter whose state bypasses `buildLeadsQuery`. It would not be in the key,
+so changing it would not refetch.
+
+## The Leads tab's Segment filter is the Category Revenue registry, sent as categories
+
+Added 2026-11-21. Segment (Core / Non-Core / Special) has no Django parameter of its own.
+`leadsCategories` adds every category of each picked segment to the Category filter's picks,
+and the union goes out as the same `category=` CSV, so list, stats, stats cache and export
+all follow it. The lists are `CORE_CATEGORIES` / `NON_CORE_CATEGORIES` / `SPECIAL_CATEGORIES`
+in `components/dashboard/category-revenue/constants.ts`, imported through `SEGMENT_CATEGORIES`.
+Don't copy them: a category reassigned there must move on both tabs at once.
+
+`category=` matches a deal whose cart **contains** any listed category, so a mixed cart
+(tiles and wallpaper) counts under Core and under Special, and the three segments' lead
+counts add up to more than the unfiltered total. That is expected of a filter. Whether
+`/crm/leads/stats/` values such a cart at its category share, as `/crm/dashboard/` does
+(`docs/dashboard/context.md` §A mixed cart is split), or at the whole cart has not been
+checked. If the pipeline figure under one segment looks too high, that is the question,
+and the fix is in Django.
