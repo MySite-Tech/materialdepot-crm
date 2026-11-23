@@ -12,7 +12,7 @@ import { DateEditState, PipelineExclGst } from '../types';
 import { fmtINR, fmtINRShort } from '../utils';
 import { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 
-export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, offScopeBranches, requestedBranches, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalCount, totalPages, userAllowedBranches, wonCount }: {
+export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, offScopeBranches, requestedBranches, branchFilter, branches, cartValueGt, categoryFilter, segmentFilter, setSegmentFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, filtered, filteredTotal, followUpDateFrom, followUpDateTo, handleCsvFile, handleKylasSync, handleSort, isClosureOverdue, isColVisible, isOverdue, kylasSync, leads, leadsLoading, leadsTotal, lostCount, pageSize, paginatedRows, pctActive, pctLost, pctWon, personFilter, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, runLeadsExport, safePage, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setDateEditPopup, setDrawerLead, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPage, setPageSize, setPersonFilter, setSearch, setShowKylasModal, setShowMobileFilters, setStatusFilter, setTaskFilter, setVisibleCols, showMobileFilters, sortCol, sortDir, sorted, stageSummary, statsLoading, statusFilter, taskFilter, totalCount, totalPages, userAllowedBranches, wonCount }: {
   ALL_COLUMNS: { key: string; label: string; }[];
   COL_COUNT: number;
   activeCount: number;
@@ -23,6 +23,8 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
   branches: string[];
   cartValueGt: string;
   categoryFilter: string[];
+  segmentFilter: string[];
+  setSegmentFilter: Dispatch<SetStateAction<string[]>>;
   priorityFilter: string[];
   setPriorityFilter: Dispatch<SetStateAction<string[]>>;
   categoryOptions: CategoryOption[];
@@ -155,6 +157,8 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
       branches={branches}
       cartValueGt={cartValueGt}
       categoryFilter={categoryFilter}
+      segmentFilter={segmentFilter}
+      setSegmentFilter={setSegmentFilter}
       priorityFilter={priorityFilter}
       setPriorityFilter={setPriorityFilter}
       categoryOptions={categoryOptions}
@@ -193,6 +197,8 @@ export function LeadsPanel({ ALL_COLUMNS, COL_COUNT, activeCount, availableBMs, 
       branches={branches}
       cartValueGt={cartValueGt}
       categoryFilter={categoryFilter}
+      segmentFilter={segmentFilter}
+      setSegmentFilter={setSegmentFilter}
       priorityFilter={priorityFilter}
       setPriorityFilter={setPriorityFilter}
       categoryOptions={categoryOptions}

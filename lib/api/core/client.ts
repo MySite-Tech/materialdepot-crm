@@ -116,6 +116,7 @@ function clearGetCache() {
 const isGet = (init?: RequestInit) => !init?.method || init.method.toUpperCase() === 'GET';
 
 export async function mdFetch(path: string, init?: RequestInit, retried = false): Promise<any> {
+  if (isGet(init) && init?.signal) return mdFetchRaw(path, init, retried);
   if (!isGet(init)) {
     try {
       return await mdFetchRaw(path, init, retried);
