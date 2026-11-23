@@ -2,21 +2,23 @@
 
 import { Dispatch, FormEvent, SetStateAction } from 'react';
 
-export function EscalationSearch({ handleClear, handleSearch, inputValue, setInputValue }: {
+export function EscalationSearch({ handleClear, handleSearch, inputValue, loading, setInputValue }: {
   handleClear: () => void;
   handleSearch: (e: FormEvent<Element>) => void;
   inputValue: string;
+  loading: boolean;
   setInputValue: Dispatch<SetStateAction<string>>;
 }) {
   return (
-    <form onSubmit={handleSearch} className="mb-3">
-      <div className="relative">
+    <form onSubmit={handleSearch} className="mb-3 flex gap-2">
+      <div className="relative flex-1">
         <input
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Search ENQ, ticket, owner\u2026"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-9 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+          placeholder="Enter ENQ id, ticket id or customer phone"
+          autoFocus
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-9 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
         />
         {inputValue && (
           <button
@@ -30,6 +32,13 @@ export function EscalationSearch({ handleClear, handleSearch, inputValue, setInp
           </button>
         )}
       </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="px-4 py-2.5 rounded-lg bg-[#EAB308] text-gray-950 text-sm font-semibold disabled:opacity-50"
+      >
+        {loading ? "Searching…" : "Search"}
+      </button>
     </form>
   );
 }

@@ -3,32 +3,23 @@
 import { pacedFetch } from './net';
 
 import { EscalationDetail } from './ui/detail';
-import { EscalationFilters } from './ui/filters';
 import { EscalationList } from './list';
-import { EscalationPager } from './list/pager';
 import { EscalationSearch } from './ui/search';
-import { EscalationStats } from './list/stats';
 
 import { PAGE_SIZE } from './constants';
-import { DateFilter, MobileEscalationProps, NoteEntry, StatusFilter, TimelineEntry } from './types';
-import { buildBody, classifyStage, dateFilterLabel, dateFilterRange, endOfDay, isEscalationOrSupport, parseTimeline, startOfDay } from './utils';
+import { MobileEscalationProps, NoteEntry, TimelineEntry } from './types';
+import { buildBody, isEscalationOrSupport, parseTimeline } from './utils';
 import { getEscalationRaisedBy } from '@/lib/api';
 import { CallLog, Deal, DealsSearchResponse } from '@/lib/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function MobileEscalationClient({ jumpToSearch, userName }: MobileEscalationProps) {
   const hasJump = !!jumpToSearch;
   const [query, setQuery] = useState(hasJump ? jumpToSearch : "");
   const [inputValue, setInputValue] = useState(hasJump ? jumpToSearch : "");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const [exactMode, setExactMode] = useState(hasJump);
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [totalElements, setTotalElements] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [pageLoading, setPageLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [expandedDealId, setExpandedDealId] = useState<number | null>(null);
@@ -58,28 +49,21 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
     Record<number, { id: number; name: string } | null>
   >({});
 
-  const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
-  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilter>("all");
 
   const fetchDeals = useCallback(
-    async (searchQuery: string, fromStr: string, toStr: string, page: number = 0) => {
-      if (page === 0) setLoading(true);
-      else setPageLoading(true);
+    async (searchQuery: string) => {
+      setLoading(true);
       setError(null);
-      if (page === 0) {
-        setCallLogMap({});
-        setNoteMap({});
-        setContactMap({});
-      }
-      const fromIso = fromStr ? startOfDay(fromStr).toISOString() : null;
-      const toIso = toStr ? endOfDay(toStr).toISOString() : null;
+      setCallLogMap({});
+      setNoteMap({});
+      setContactMap({});
       try {
         const res = await fetch(
-          `/api/deals/search?page=${page}&size=${PAGE_SIZE}&sort=${encodeURIComponent("updatedAt,desc")}`,
+          `/api/deals/search?page=0&size=${PAGE_SIZE}&sort=${encodeURIComponent("updatedAt,desc")}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(buildBody(searchQuery, fromIso, toIso)),
+            body: JSON.stringify(buildBody(searchQuery, null, null)),
             cache: "no-store",
           }
         );
@@ -89,33 +73,20 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
         }
         const data: DealsSearchResponse = await res.json();
         let filtered = (data.content ?? []).filter(isEscalationOrSupport);
-        if (searchQuery.trim()) {
-          const q = searchQuery.trim().toUpperCase();
-          if (exactMode) filtered = filtered.filter((d) => d.name.toUpperCase() === q);
-          else filtered = filtered.filter((d) => d.name.toUpperCase().includes(q));
-        }
+        const q = searchQuery.trim().toUpperCase();
+        if (exactMode) filtered = filtered.filter((d) => d.name.toUpperCase() === q);
+        else filtered = filtered.filter((d) => d.name.toUpperCase().includes(q) || String(d.id) === q);
         setDeals(filtered);
-        setTotalElements(data.totalElements ?? filtered.length);
-        setTotalPages(data.totalPages ?? 0);
-        setCurrentPage(page);
         return filtered;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
         return [];
       } finally {
         setLoading(false);
-        setPageLoading(false);
       }
     },
     [exactMode]
   );
-
-  function goToPage(p: number) {
-    if (pageLoading || p < 0 || (totalPages > 0 && p >= totalPages)) return;
-    fetchDeals(query ?? "", from, to, p).then((deals) => populateContacts(deals));
-  }
-
-
 
   const populateContacts = useCallback((dealList: Deal[]) => {
     setContactMap((prev) => {
@@ -132,12 +103,52 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
   const fetchKeyRef = useRef("");
 
   useEffect(() => {
-    const key = `${query}|${from}|${to}`;
-    if (fetchKeyRef.current === key) return;
-    fetchKeyRef.current = key;
-    fetchDeals(query, from, to).then((deals) => populateContacts(deals));
-  }, [fetchDeals, populateContacts, query, from, to]);
+    if (!query.trim() || fetchKeyRef.current === query) return;
+    fetchKeyRef.current = query;
+    fetchDeals(query).then((deals) => populateContacts(deals));
+  }, [fetchDeals, populateContacts, query]);
 
+
+  const [timelineLoading, setTimelineLoading] = useState<number | null>(null);
+
+  async function loadTimeline(dealId: number) {
+    if (timelineMap[dealId] || timelineLoading === dealId) return;
+    setTimelineLoading(dealId);
+    try {
+      const feedsRes = await pacedFetch(
+        `/api/feeds/search?page=0&size=50&sort=performedAt%2Cdesc`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonRule: {
+              condition: "AND",
+              rules: [
+                { field: "related_to", operator: "equal", id: "related_to", type: "related_lookup", value: { entity: "deal", id: String(dealId) } },
+                { field: "systemDefault", operator: "equal", id: "systemDefault", type: "boolean", value: false },
+                { field: "category", operator: "equal", id: "category", type: "string", value: "ALL" },
+              ],
+              valid: true,
+            },
+          }),
+        }
+      );
+      const feedsData = feedsRes?.ok ? await feedsRes.json() : { content: [] };
+      setTimelineMap((prev) => ({ ...prev, [dealId]: parseTimeline(feedsData.content ?? []) }));
+    } catch {
+      setTimelineMap((prev) => ({ ...prev, [dealId]: [] }));
+    } finally {
+      setTimelineLoading(null);
+    }
+  }
+
+  function appendLocalNote(dealId: number, text: string) {
+    if (expandedDealId !== dealId) return;
+    setDealNotes((prev) => [
+      { id: -Date.now(), description: `[${userName ?? "Unknown"}] ${text}`, createdAt: new Date().toISOString() },
+      ...prev,
+    ]);
+  }
 
   async function handleExpandDeal(dealId: number) {
     if (expandedDealId === dealId) {
@@ -183,95 +194,28 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
 
       setLoadingExpanded(false);
 
-      if (!timelineMap[dealId]) {
-        try {
-          const feedsRes = await pacedFetch(
-            `/api/feeds/search?page=0&size=50&sort=performedAt%2Cdesc`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                jsonRule: {
-                  condition: "AND",
-                  rules: [
-                    { field: "related_to", operator: "equal", id: "related_to", type: "related_lookup", value: { entity: "deal", id: String(dealId) } },
-                    { field: "systemDefault", operator: "equal", id: "systemDefault", type: "boolean", value: false },
-                    { field: "category", operator: "equal", id: "category", type: "string", value: "ALL" },
-                  ],
-                  valid: true,
-                },
-              }),
-            }
-          );
-          if (feedsRes?.ok) {
-            const feedsData = await feedsRes.json();
-            setTimelineMap((prev) => ({ ...prev, [dealId]: parseTimeline(feedsData.content ?? []) }));
-          }
-        } catch { /* skip */ }
-      }
-
       if (!contactId) return;
 
       try {
-        const contactRes = await pacedFetch(`/api/contacts/${contactId}`);
-        const contactData = contactRes?.ok ? await contactRes.json() : null;
-        const phones = ((contactData?.phoneNumbers ?? []) as { value?: string; dialCode?: string }[])
-          .map((p) => (`${p.dialCode ?? ""}${p.value ?? ""}`).replace(/\D/g, ""))
-          .filter((p) => p.length >= 7);
-        const leadIds = ((contactData?.convertedLeads ?? []) as { id: number }[]).map((l) => l.id);
-
-        const allCalls: CallLog[] = [];
-        for (let pg = 1; pg <= 3; pg++) {
-          await new Promise((r) => setTimeout(r, 500));
-          const r = await pacedFetch(`/api/call-logs?size=500&page=${pg}`);
-          if (r?.ok) {
-            const d = await r.json();
-            allCalls.push(...(d.content ?? []));
-          }
-        }
-
-        const matched = allCalls
-          .filter((c) => {
-            const cands = [c.phoneNumber, c.originator, c.receiver]
-              .map((v) => (v ?? "").replace(/\D/g, ""))
-              .filter((s) => s.length >= 7);
-            const pMatch = cands.some((cn) => phones.some((ph) => cn.slice(-10) === ph.slice(-10)));
-            const rels = c.relatedTo ?? [];
-            const rMatch = rels.some(
-              (r) =>
-                (r.entity === "contact" && r.id === contactId) ||
-                (r.entity === "lead" && leadIds.includes(r.id))
-            );
-            return pMatch || rMatch;
-          })
+        const callRes = await pacedFetch(`/api/call-logs/search?page=1&size=10&sort=${encodeURIComponent("createdAt,desc")}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonRule: {
+              condition: "AND",
+              rules: [
+                { field: "related_to", operator: "equal", id: "related_to", type: "related_lookup", value: { entity: "contact", id: String(contactId) } },
+              ],
+              valid: true,
+            },
+          }),
+        });
+        const callData = callRes?.ok ? await callRes.json() : { content: [] };
+        const calls = ((callData.content ?? []) as CallLog[])
+          .slice()
           .sort((a, b) => new Date(b.startTime ?? b.createdAt).getTime() - new Date(a.startTime ?? a.createdAt).getTime());
-        setExpandedCallLogs(matched.slice(0, 10));
+        setExpandedCallLogs(calls.slice(0, 10));
       } catch { /* skip */ }
-    } catch { /* ignore */ }
-  }
-
-  async function reloadDealNotes(dealId: number) {
-    try {
-      const detail = await fetch(`/api/deals/${dealId}`, { cache: "no-store" }).then((r) => r.json());
-      const ownerId = detail.ownedBy?.id;
-      const noteParams = new URLSearchParams({
-        targetEntityId: String(dealId),
-        targetEntityType: "DEAL",
-        sort: "createdAt,desc",
-        page: "0",
-        size: "20",
-      });
-      if (ownerId) noteParams.set("targetEntityOwnerId", String(ownerId));
-      const notesRes = await fetch(`/api/notes/relation?${noteParams}`, { cache: "no-store" })
-        .then((r) => r.json())
-        .catch(() => ({ content: [] }));
-      setDealNotes(
-        (notesRes.content ?? []).map((n: { id: number; description?: string; createdAt?: string | number }) => ({
-          id: n.id,
-          description: (n.description ?? "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim(),
-          createdAt: typeof n.createdAt === "number" ? new Date(n.createdAt).toISOString() : n.createdAt,
-        }))
-      );
     } catch { /* ignore */ }
   }
 
@@ -300,7 +244,7 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
       setNoteTargetDeal(null);
       setLastAction((prev) => ({ ...prev, [dealId]: { type: "note", text: savedText } }));
       setTimeout(() => setNoteSuccess(false), 5000);
-      reloadDealNotes(dealId);
+      appendLocalNote(dealId, savedText);
     } catch (err) {
       setNoteError(err instanceof Error ? err.message : "Failed to add note");
     } finally {
@@ -330,7 +274,7 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
       }
 
       const fileNames = Array.from(files).map((f) => f.name).join(", ");
-      await fetch("/api/notes/relation/create", {
+      const noteRes = await fetch("/api/notes/relation/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -338,12 +282,12 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
           targetEntityId: String(dealId),
           targetEntityType: "DEAL",
         }),
-      }).catch(() => {});
+      }).catch(() => null);
       setUploadSuccess(true);
       setUploadTargetDeal(null);
       setLastAction((prev) => ({ ...prev, [dealId]: { type: "doc", text: fileNames } }));
       setTimeout(() => setUploadSuccess(false), 5000);
-      reloadDealNotes(dealId);
+      if (noteRes?.ok) appendLocalNote(dealId, `uploaded: ${fileNames}`);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -353,41 +297,21 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+    const q = inputValue.trim();
+    if (!q) return;
     setExactMode(false);
-    setQuery(inputValue);
+    fetchKeyRef.current = "";
+    setQuery(q);
   }
 
   function handleClear() {
     setInputValue("");
     setQuery("");
+    setDeals([]);
+    setError(null);
     setExactMode(false);
-    const r = dateFilterRange(activeDateFilter);
-    setFrom(r.from);
-    setTo(r.to);
+    fetchKeyRef.current = "";
   }
-
-  function handleDateChip(chip: DateFilter) {
-    setActiveDateFilter(chip);
-    const r = dateFilterRange(chip);
-    setFrom(r.from);
-    setTo(r.to);
-  }
-
-  const statusCounts = useMemo(() => {
-    const counts = { all: deals.length, open: 0, waiting: 0, resolved: 0 };
-    for (const d of deals) {
-      const cat = classifyStage(d.pipelineStage?.name ?? "");
-      if (cat === "open") counts.open++;
-      else if (cat === "waiting") counts.waiting++;
-      else if (cat === "resolved") counts.resolved++;
-    }
-    return counts;
-  }, [deals]);
-
-  const filteredDeals = useMemo(() => {
-    if (activeStatusFilter === "all") return deals;
-    return deals.filter((d) => classifyStage(d.pipelineStage?.name ?? "") === activeStatusFilter);
-  }, [deals, activeStatusFilter]);
 
   return (
     <div className="w-full">
@@ -396,34 +320,14 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
         handleClear={handleClear}
         handleSearch={handleSearch}
         inputValue={inputValue}
+        loading={loading}
         setInputValue={setInputValue}
-      />
-
-      <EscalationFilters
-        activeDateFilter={activeDateFilter}
-        handleDateChip={handleDateChip}
-      />
-
-      <EscalationStats
-        activeStatusFilter={activeStatusFilter}
-        setActiveStatusFilter={setActiveStatusFilter}
-        statusCounts={statusCounts}
-        totalElements={totalElements}
       />
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
-      )}
-
-      {!loading && !error && (
-        <p className="text-xs text-gray-500 mb-3">
-          {filteredDeals.length} request{filteredDeals.length !== 1 ? "s" : ""}
-          {" · "}
-          {dateFilterLabel(activeDateFilter)}
-          {query ? ` · "${query}"` : ""}
-        </p>
       )}
 
       {loading && (
@@ -434,10 +338,10 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
         </div>
       )}
 
-      {!loading && filteredDeals.length > 0 && (
+      {!loading && deals.length > 0 && (
         <EscalationList
         contactMap={contactMap}
-        filteredDeals={filteredDeals}
+        filteredDeals={deals}
         handleAddNote={handleAddNote}
         handleExpandDeal={handleExpandDeal}
         handleUpload={handleUpload}
@@ -460,20 +364,31 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
       />
       )}
 
-      {!loading && !error && filteredDeals.length === 0 && (
-        <div className="text-center py-16 text-gray-400 text-sm">
-          No requests found.
+      {!loading && !error && !query && (
+        <div className="mt-2 rounded-xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-yellow-50">
+            <svg className="h-5 w-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-gray-900">Track an escalation or support request</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Search to see its current stage, owner, notes and call history.
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+            {["ENQ20261123105648", "Ticket #5012823", "9876543210"].map((ex) => (
+              <span key={ex} className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">e.g. {ex}</span>
+            ))}
+          </div>
+          <p className="mt-4 text-xs text-gray-400">Just raised something? It shows up here within a minute.</p>
         </div>
       )}
 
-      {!loading && !error && totalPages > 1 && (
-        <EscalationPager
-        currentPage={currentPage}
-        goToPage={goToPage}
-        pageLoading={pageLoading}
-        totalElements={totalElements}
-        totalPages={totalPages}
-      />
+      {!loading && !error && query && deals.length === 0 && (
+        <div className="mt-2 rounded-xl border border-gray-200 bg-white px-6 py-10 text-center">
+          <p className="text-sm font-semibold text-gray-900">No requests found for &ldquo;{query}&rdquo;</p>
+          <p className="mt-1 text-sm text-gray-500">Check the ENQ id or ticket id. New requests can take a minute to appear.</p>
+        </div>
       )}
 
       {selectedDeal && (
@@ -485,6 +400,8 @@ export default function MobileEscalationClient({ jumpToSearch, userName }: Mobil
         selectedDeal={selectedDeal}
         setSelectedDeal={setSelectedDeal}
         timelineMap={timelineMap}
+        timelineLoading={timelineLoading === selectedDeal.id}
+        onLoadTimeline={() => loadTimeline(selectedDeal.id)}
       />
       )}
     </div>

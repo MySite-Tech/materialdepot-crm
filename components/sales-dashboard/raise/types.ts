@@ -1,5 +1,7 @@
 'use client';
 
+import type { RaiseStepState } from '@/lib/api/ops/escalation';
+
 export interface ContactResult {
   id: number;
   firstName?: string;
@@ -30,4 +32,19 @@ export interface EscSupportDeal {
 export interface Props {
   userName?: string;
   onViewDeal: (dealName: string) => void;
+}
+
+export interface RaiseOption {
+  id: number;
+  name: string;
+  requestType?: "Support" | "Escalation";
+}
+
+export interface RaiseProgress {
+  leadId: string;
+  requestId: number;
+  options: RaiseOption[];
+  status: "pending" | "retrying" | "success" | "failed" | "slow";
+  steps: { deal: RaiseStepState; ticket: RaiseStepState };
+  error: string | null;
 }
