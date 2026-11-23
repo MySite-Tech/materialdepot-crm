@@ -1,6 +1,6 @@
 'use client';
 
-import { makeRaiseActions } from './handlers';
+import { makeRaiseActions, toRaiseProgress } from './handlers';
 
 import { DealPanel } from './deals/panel';
 import { DealResults } from './deals/results';
@@ -26,10 +26,11 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
   const [raises, setRaises] = useState<RaiseProgress[]>([]);
 
   const submitLockRef = useRef(false);
+  const pollingRef = useRef<Set<number>>(new Set());
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const { addNoteToTicket, findSameIssue, getOngoing, handleSubmit, retryRaise } = makeRaiseActions({ escSupportDeals, setDeals, setRaises, setEscSupportDeals, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, submitLockRef });
+  const { addNoteToTicket, findSameIssue, getOngoing, handleSubmit, resumeRaises, retryRaise } = makeRaiseActions({ escSupportDeals, pollingRef, setDeals, setRaises, setEscSupportDeals, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, submitLockRef });
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -42,9 +43,16 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
     setError(null);
     try {
       const data = await searchOrderDeals(q);
-      setDeals(data.content ?? []);
+      const found = data.content ?? [];
+      const saved = (data.raises ?? []).map(toRaiseProgress);
+      setDeals(found);
       setEscSupportDeals(data.tickets ?? []);
+      setRaises((prev) => {
+        const savedIds = new Set(saved.map((r) => r.requestId));
+        return [...prev.filter((r) => !savedIds.has(r.requestId)), ...saved];
+      });
       setSearched(q);
+      resumeRaises(found, saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -54,7 +62,6 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
 
   function pickDeal(deal: OrderSearchDeal) {
     setSubmitError(null);
-    setRaises((prev) => prev.filter((r) => !(r.leadId === deal.leadId && r.status === "failed")));
     setSelectedDeal(deal);
     setExpandedDealId(deal.leadId);
   }

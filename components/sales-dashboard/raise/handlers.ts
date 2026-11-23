@@ -1,13 +1,31 @@
 'use client';
 
-import { OrderSearchDeal, getRaiseEscalationStatus, raiseEscalationDirect, retryRaiseEscalation } from '../../../lib/api/ops/escalation';
+import { OrderSearchDeal, OrderSearchRaise, getRaiseEscalationStatus, raiseEscalationDirect, retryRaiseEscalation } from '../../../lib/api/ops/escalation';
 import { Deal } from '@/lib/types';
-import { RAISE_POLL_INTERVAL_MS, RAISE_POLL_MAX_ATTEMPTS } from './constants';
+import { RAISE_OPTIONS, RAISE_POLL_INTERVAL_MS, RAISE_POLL_MAX_ATTEMPTS } from './constants';
 import { EscSupportDeal, RaiseOption, RaiseProgress } from './types';
 import { Dispatch, RefObject, SetStateAction } from 'react';
 
-export function makeRaiseActions({ escSupportDeals, setDeals, setRaises, setEscSupportDeals, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, submitLockRef }: {
+const optionKey = (name: string) => name.replace(/\s+/g, "").toLowerCase();
+
+export function toRaiseProgress(raise: OrderSearchRaise): RaiseProgress {
+  const options: RaiseOption[] = (raise.reason ?? []).map((name) => {
+    const known = RAISE_OPTIONS.find((o) => optionKey(o.name) === optionKey(name));
+    return known ? { id: known.id, name: known.name, requestType: known.requestType } : { id: 0, name };
+  });
+  return {
+    leadId: raise.lead_id,
+    requestId: raise.request_id,
+    options,
+    status: raise.status,
+    steps: raise.steps ?? { deal: "done", ticket: raise.status === "success" ? "done" : "running" },
+    error: raise.error,
+  };
+}
+
+export function makeRaiseActions({ escSupportDeals, pollingRef, setDeals, setRaises, setEscSupportDeals, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, submitLockRef }: {
   escSupportDeals: EscSupportDeal[];
+  pollingRef: RefObject<Set<number>>;
   setDeals: Dispatch<SetStateAction<OrderSearchDeal[]>>;
   setRaises: Dispatch<SetStateAction<RaiseProgress[]>>;
   setEscSupportDeals: Dispatch<SetStateAction<EscSupportDeal[]>>;
@@ -88,6 +106,24 @@ function markRaised(deal: OrderSearchDeal, progress: RaiseProgress, salesDealId:
 }
 
 async function pollRaise(deal: OrderSearchDeal, start: RaiseProgress) {
+  if (pollingRef.current.has(start.requestId)) return;
+  pollingRef.current.add(start.requestId);
+  try {
+    await pollRaiseUntilDone(deal, start);
+  } finally {
+    pollingRef.current.delete(start.requestId);
+  }
+}
+
+function resumeRaises(deals: OrderSearchDeal[], raises: RaiseProgress[]) {
+  for (const raise of raises) {
+    if (raise.status !== "pending" && raise.status !== "retrying") continue;
+    const deal = deals.find((d) => d.leadId === raise.leadId);
+    if (deal) void pollRaise(deal, raise);
+  }
+}
+
+async function pollRaiseUntilDone(deal: OrderSearchDeal, start: RaiseProgress) {
   let last = start;
   for (let attempt = 0; attempt < RAISE_POLL_MAX_ATTEMPTS; attempt++) {
     await new Promise((r) => setTimeout(r, RAISE_POLL_INTERVAL_MS));
@@ -175,5 +211,5 @@ async function retryRaise(deal: OrderSearchDeal, progress: RaiseProgress) {
   await pollRaise(deal, restarting);
 }
 
-  return { addNoteToTicket, findSameIssue, getOngoing, handleSubmit, retryRaise };
+  return { addNoteToTicket, findSameIssue, getOngoing, handleSubmit, resumeRaises, retryRaise };
 }

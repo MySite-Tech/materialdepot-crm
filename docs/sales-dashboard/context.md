@@ -32,7 +32,11 @@ creates the deal first, then the ticket. `raise-status/` reports this as two
 steps, `steps.deal` and `steps.ticket`, and the panel draws them as Deal in
 Kylas, then Escalation ticket. A failed step offers "Retry from this step"
 (`raise-retry/`), which reruns only what failed, so a deal that already exists
-is never created again. For a Payment Pending / Order Placed order with no ENQ
+is never created again. The progress cards survive a refresh: `order-search/`
+also returns `raises` (each order's raise requests from the last 24 hours, same
+shape as `raise-status/` plus `lead_id`), the search seeds the cards from them
+and resumes polling the pending ones, and opening an order no longer drops its
+failed cards, so Retry stays reachable. For a Payment Pending / Order Placed order with no ENQ
 deal yet, the customer's cart deal is synced with the order (renamed to the
 ENQ) and then linked to that ENQ in `CRMIntegration`. Before that link existed
 the cart deal stayed "the cart deal", got reused and renamed for the next cart
