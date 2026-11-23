@@ -1,4 +1,4 @@
-import { LeadNote } from '../../mock-data';
+import { LeadNote, OutreachLead } from '../../mock-data';
 import { heldMeetings } from '../../outreach';
 import { sameRep } from '../../outreach/handover';
 import { Period, inPeriod } from '../../outreach/kpis';
@@ -27,6 +27,12 @@ export function outreachMeetingsBy(data: PerfData, people: Person[], period: Per
       id: `meeting:${l.id}:${m.n}`, at: m.date!, kind: 'Meeting' as const, title: l.company,
       detail: [m.n === 1 ? 'First meeting' : `Meeting ${m.n}`, m.status !== 'Completed' && 'checked in', m.metWith && `met ${m.metWith}`, m.notes].filter(Boolean).join(' · '),
     })));
+}
+
+export function outreachCallsBy(leads: OutreachLead[], period: Period): ActivityItem[] {
+  return leads.flatMap((l) => (l.callAttempts || [])
+    .filter((a) => inPeriod(a.at, period))
+    .map((a) => ({ id: `call:${l.id}:${a.n}:${a.at}`, at: a.at, kind: 'Call' as const, title: l.company, detail: [a.outcome, a.by && !sameRep(a.by, l.bm) && `by ${a.by}`, a.note].filter(Boolean).join(' · ') })));
 }
 
 export function journeyBy(data: PerfData, people: Person[], period: Period): ActivityItem[] {

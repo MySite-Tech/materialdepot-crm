@@ -146,6 +146,7 @@ export interface OutreachLead {
   createdAt?: string;
 
   meetings?: OutreachMeeting[];
+  callAttempts?: CallAttempt[];
 
   selections?: Selection[];
   requirement?: string;

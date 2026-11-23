@@ -1,5 +1,6 @@
 'use client';
 
+import { OutreachCallsCard } from './cards/calls';
 import { OutreachClientCard } from './cards/client';
 import { OutreachCompanyCard } from './cards/company';
 import { OutreachDealsCard } from './cards/deals';
@@ -15,6 +16,7 @@ import { nowIso } from './utils';
 
 import { LeadDeal, LeadNote, OutreachLead } from '../../models/mock-data';
 import { dealIsOrder } from '../../models/client';
+import { CallAttempt, CallAttemptOutcome, nextAttemptNumber } from '../../models/inbound';
 import {
   MeetingCheckIn, OutreachMeeting, Selection, WaitlistSignup, hasMet, istToday,
   meetingsStalled, nextKamRoundRobin, nextMeetingNumber, outreachEnrichmentGaps, outreachGateErrors,
@@ -141,6 +143,17 @@ export default function OutreachDrawer({
     return null;
   };
   const met = hasMet(meetings);
+
+  const logCall = async (outcome: CallAttemptOutcome, note: string): Promise<string | null> => {
+    const attempt: CallAttempt = {
+      n: nextAttemptNumber(lead.callAttempts), outcome, at: nowIso(),
+      by: scope.me.name || undefined, byPhone: scope.me.phone || undefined, note: note || undefined,
+    };
+    const err = await onSave(lead, { ...lead, callAttempts: [...(lead.callAttempts || []), attempt] });
+    if (err) return `The call was not saved: ${err}`;
+    setDraft((d) => ({ ...d, callAttempts: [...(d.callAttempts || []), attempt] }));
+    return null;
+  };
 
   const [scheduling, setScheduling] = useState(false);
   const [mDate, setMDate] = useState('');
@@ -275,6 +288,8 @@ export default function OutreachDrawer({
             enquiries={openEnquiries(deals ?? [])}
             enquiriesState={!deals ? 'loading' : dealsFailed ? 'failed' : 'ready'}
           />
+
+          <OutreachCallsCard draft={draft} onLog={logCall} />
 
           <OutreachCompanyCard
             draft={draft}

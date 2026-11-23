@@ -59,6 +59,8 @@ with `counts` and a reason, the same contract as `outreachKpis`.
 
 - **Outreach is not re-derived.** Its engine filters leads with `repOwns` and
   calls `outreachKpis`, so this tab and the Outreach scorecard cannot disagree.
+  Its Calls KPI (2026-11-23) has no target and weight 0 (`outreach.md` §BMs log
+  their calls).
   Checked 2026-10-28: Sai Suresh's row matched the Outreach tab's By BM row
   exactly. `repOwns` moved from `views/outreach/utils.ts` into
   `models/outreach/handover.ts` for this.
