@@ -681,8 +681,9 @@ for whoever logged it on any team (a removed rep's past calls no longer move to 
 lead's current owner, `docs/landmines.md`), and a cover has no default target. Read
 `docs/b2b/sales-tab-redesign.md` §Primary team and covers and `leadership.md` §Who the
 people are before touching team membership. **Still to do on production:** pick a
-primary for the two people already on two teams, and add Varun's Inbound cover with
-his dates. Driven end to end on the sandbox only.
+primary for the three people the backfill left without one (Team tab, "No primary
+team"), and add Varun's Inbound cover with his dates. Production answered 0031 at
+2026-11-26 (16 rows, 9 primaries). Driven end to end on the sandbox only.
 
 **START HERE for B2B (2026-11-20): Client Database sends long-inactive firms to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no

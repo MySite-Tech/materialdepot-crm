@@ -301,7 +301,9 @@ Inbound that week). Every person has metrics on all three teams.
   others), a **cover** (`starts_on`/`ends_on`, inclusive IST days, never primary), or
   a standing second team (neither). The migration marked a primary only where a phone
   had one row. People already on two teams read "No primary team" on the Team tab
-  until a manager picks; on the 12 Nov `crm_real` copy that was two people.
+  until a manager picks; on production after the deploy (2026-11-26) that was three
+  people, one of whom also has a switched-off row (switched-off rows still count as "on
+  two teams" for the backfill).
 - **The dates decide who receives new work, nothing else.** `onDuty` (active and
   inside the window) gates the round robin (`rotationOrder`) and every assign picker
   (`useB2BReps`, `useAssignTeams`, Inbound reassign, Leads assign, Inbound "add lead"
