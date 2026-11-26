@@ -37,6 +37,9 @@ Django in that admin's browser, because nothing on the server can read Django
 without a person's token (b2b-backend's MD keys cover file uploads and invoices
 only; Owed by Django row 21). It pages every source at 1,000 rows, capped at 40
 pages each. Past the cap it saves nothing and names the source that overflowed.
+**Django's `/crm/leads/` sometimes answers 500 on a 1,000-row page** that read fine
+an hour earlier (26 Nov). Each page is therefore retried twice, then read as two
+500-row halves, and only then does the fetch stop, naming the source and page.
 Leads go up 1,000 per request, and a run is recorded only after every batch. A
 failed batch leaves earlier batches saved, and the next fetch completes them. On
 26 Nov one fetch read about 15,500 carts and 17,000 orders. The second fetch

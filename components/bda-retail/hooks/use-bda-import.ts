@@ -13,35 +13,74 @@ import { istToday, shiftDays } from '@/lib/bda-retail/utils';
 
 const PAGE = 1000;
 const MAX_PAGES = 40;
+const RETRY_WAITS_MS = [1500, 4000];
 const B2B_BRANCH = /^b2b$/i;
+const FINAL = /Session expired|do not have access/;
 
 class Capped extends Error {}
 
-async function allLeads(label: string, query: CRMLeadsQuery, step: (s: string) => void): Promise<CRMLeadRow[]> {
-  const rows: CRMLeadRow[] = [];
+interface Page<T> {
+  rows: T[];
+  totalPages: number;
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function withRetry<T>(get: () => Promise<T>): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await get();
+    } catch (err) {
+      if (i >= RETRY_WAITS_MS.length || (err instanceof Error && FINAL.test(err.message))) throw err;
+      await wait(RETRY_WAITS_MS[i]);
+    }
+  }
+}
+
+async function pageOf<T>(get: (page: number, size: number) => Promise<Page<T>>, page: number): Promise<Page<T>> {
+  try {
+    return await withRetry(() => get(page, PAGE));
+  } catch (err) {
+    if (err instanceof Error && FINAL.test(err.message)) throw err;
+    const half = PAGE / 2;
+    const a = await withRetry(() => get(page * 2 - 1, half));
+    const b = a.totalPages >= page * 2 ? await withRetry(() => get(page * 2, half)) : { rows: [], totalPages: a.totalPages };
+    return { rows: [...a.rows, ...b.rows], totalPages: Math.ceil(a.totalPages / 2) };
+  }
+}
+
+async function paged<T>(label: string, get: (page: number, size: number) => Promise<Page<T>>, step: (s: string) => void): Promise<T[]> {
+  const rows: T[] = [];
   for (let page = 1; ; page++) {
     step(`${label}: page ${page}`);
-    const res = await fetchCRMLeads({ ...query, page, pageSize: PAGE });
-    rows.push(...res.results);
-    if (page >= res.totalPages || res.results.length === 0) break;
+    let res: Page<T>;
+    try {
+      res = await pageOf(get, page);
+    } catch (err) {
+      throw new Error(`${label}, page ${page}: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+    rows.push(...res.rows);
+    if (page >= res.totalPages || res.rows.length === 0) break;
     if (page >= MAX_PAGES) throw new Capped(`${label} has more than ${MAX_PAGES * PAGE} rows. Nothing was saved.`);
   }
+  return rows;
+}
+
+async function allLeads(label: string, query: CRMLeadsQuery, step: (s: string) => void): Promise<CRMLeadRow[]> {
+  const rows = await paged(label, async (page, pageSize) => {
+    const res = await fetchCRMLeads({ ...query, page, pageSize });
+    return { rows: res.results, totalPages: res.totalPages };
+  }, step);
   return rows.filter((r) => !B2B_BRANCH.test(r.branch ?? '') && !B2B_BRANCH.test(r.bookedBranch ?? ''));
 }
 
 type FootfallList = typeof fetchFootfallNoCart | typeof fetchFootfallNonConverted;
 
-async function allFootfall(label: string, list: FootfallList, from: string, to: string, step: (s: string) => void): Promise<NoCartVisit[]> {
-  const rows: NoCartVisit[] = [];
-  for (let page = 1; ; page++) {
-    step(`${label}: page ${page}`);
-    const res = await list({ dateFrom: from, dateTo: to, page, pageSize: PAGE });
-    rows.push(...(res.results as unknown as NoCartVisit[]));
-    if (page >= (res.total_pages || 1) || res.results.length === 0) break;
-    if (page >= MAX_PAGES) throw new Capped(`${label} has more than ${MAX_PAGES * PAGE} rows. Nothing was saved.`);
-  }
-  return rows;
-}
+const allFootfall = (label: string, list: FootfallList, from: string, to: string, step: (s: string) => void): Promise<NoCartVisit[]> =>
+  paged(label, async (page, pageSize) => {
+    const res = await list({ dateFrom: from, dateTo: to, page, pageSize });
+    return { rows: res.results as unknown as NoCartVisit[], totalPages: res.total_pages || 1 };
+  }, step);
 
 const tally = <T,>(rows: T[], f: (r: T) => string): Record<string, number> => {
   const out: Record<string, number> = {};
