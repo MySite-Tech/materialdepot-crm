@@ -14,6 +14,8 @@ const STAFF_TTL_MS = 600_000;
 export interface StaffEntry {
   name: string;
   phone: string;
+  role: string;
+  active: boolean;
 }
 
 export class SessionError extends Error {
@@ -161,6 +163,8 @@ export async function staffDirectory(auth: string): Promise<StaffEntry[]> {
   const staff = rows.map((r) => ({
     name: [String(r.user?.f_name ?? '').trim(), String(r.user?.l_name ?? '').trim()].filter(Boolean).join(' '),
     phone: String(r.user?.contact ?? ''),
+    role: roleFromPermission(r.user_permission_detail),
+    active: r.status !== false,
   }));
   setCache(STAFF_KEY, staff, STAFF_TTL_MS);
   return staff;

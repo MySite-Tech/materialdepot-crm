@@ -5,6 +5,7 @@ import { AppUser, Lead } from '../../types/crm';
 import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LEADS_STATS_CACHE_KEY, LEADS_STATS_CACHE_MAX, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SEGMENT_CATEGORIES, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
 import { MainTab } from './types';
 import { B2B_SALES_ROLES } from '@/lib/b2b/team/constants';
+import { canUseBdaRetail, isBda } from '@/lib/bda-retail/utils';
 
 // `id` is the lead's business key (cart number, or the estimate's ENQ id) and the
 // APIs take it as such — but it is NOT unique per row: a client with several deal
@@ -27,6 +28,7 @@ export const roleLabel = (role?: string | null): string => {
 };
 
 export const defaultPermissionsForRole = (role: string): string[] => {
+  if (isBda({ role })) return [];
   const tabs = new Set(defaultTabsForRole(role));
 
   if (!SITE_AUDIT_ONLY_ROLES.has(role)) tabs.add('storeDisplay');
@@ -54,16 +56,20 @@ const defaultTabsForRole = (role: string): Array<MainTab> => {
   return tabs;
 };
 
+const withBdaRetail = (user: AppUser | null | undefined, tabs: Array<MainTab>): Array<MainTab> =>
+  canUseBdaRetail(user) ? [...tabs, 'bdaRetail'] : tabs;
+
 export const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   if (SITE_AUDIT_ONLY_ROLES.has(user?.role ?? '')) return ['siteAudit'];
+  if (isBda(user)) return ['bdaRetail'];
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
     const tabs = PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
-    return tabs.includes('ecB2bReferral') ? tabs : [...tabs, 'ecB2bReferral'];
+    return withBdaRetail(user, tabs.includes('ecB2bReferral') ? tabs : [...tabs, 'ecB2bReferral']);
   }
 
-  return defaultTabsForRole(user?.role ?? '');
+  return withBdaRetail(user, defaultTabsForRole(user?.role ?? ''));
 };
 
 export const canAdminStoreDisplay = (user?: AppUser | null): boolean => {
