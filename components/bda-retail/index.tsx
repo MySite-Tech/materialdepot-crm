@@ -16,12 +16,12 @@ import { TeamView } from './views/team';
 
 type View = 'overview' | 'queue' | 'performance' | 'bank' | 'team';
 
-const NAV: Array<{ key: View; label: string; adminOnly?: boolean }> = [
-  { key: 'overview', label: 'Overview', adminOnly: true },
-  { key: 'queue', label: 'My queue' },
-  { key: 'performance', label: 'My performance' },
-  { key: 'bank', label: 'Lead bank', adminOnly: true },
-  { key: 'team', label: 'Team', adminOnly: true },
+const NAV: Array<{ key: View; label: string; who: 'admin' | 'bda' }> = [
+  { key: 'overview', label: 'Overview', who: 'admin' },
+  { key: 'team', label: 'Team performance', who: 'admin' },
+  { key: 'bank', label: 'Lead bank', who: 'admin' },
+  { key: 'queue', label: 'My queue', who: 'bda' },
+  { key: 'performance', label: 'My performance', who: 'bda' },
 ];
 
 export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) {
@@ -29,7 +29,7 @@ export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) 
   const importer = useBdaImport(reload);
   const [picked, setView] = useState<View | null>(null);
   const admin = access === 'admin';
-  const nav = NAV.filter((item) => admin || !item.adminOnly);
+  const nav = NAV.filter((item) => item.who === (admin ? 'admin' : 'bda'));
   const view: View = picked && nav.some((item) => item.key === picked) ? picked : admin ? 'overview' : 'queue';
   const [openKey, setOpenKey] = useState<string | null>(null);
   const today = istToday();
@@ -138,7 +138,7 @@ export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) 
         {view === 'performance' && bank && (
           <PerformanceView views={views} phone={currentUser.phone} name={currentUser.name} today={today} />
         )}
-        {view === 'team' && admin && <TeamView views={views} today={today} access={admins} />}
+        {view === 'team' && admin && <TeamView views={views} today={today} access={admins} onOpen={browse} />}
         {loading && !bank && view !== 'bank' && <p className="p-6 text-sm text-gray-400">Loading the lead bank…</p>}
       </main>
 

@@ -3,14 +3,13 @@
 import { useMemo, useState } from 'react';
 import { Empty } from '../../b2b/ui/inbound-chips';
 import { LensPills, LensTileGroup, LensTiles } from '../../b2b/ui/lens-tiles';
+import { PLAN_DIALS_A_DAY } from '@/lib/bda-retail/constants';
 import type { LeadView } from '@/lib/bda-retail/types';
 import { isConnected, istDate, shiftDays, statsByBda } from '@/lib/bda-retail/utils';
 import { normalisePhone } from '@/lib/org/utils';
 import { PageHead } from '../ui/chips';
 
 type Period = 'today' | 'week' | 'month';
-
-const PLAN_DIALS_A_DAY = 110;
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
 

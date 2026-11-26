@@ -42,9 +42,10 @@ the old 15-page cap is the likely cause, not confirmed.
 
 Two kinds of people, by the user's decision on 2026-11-26:
 
-- **Admins: the five names in `BDA_RETAIL_ACCESS`.** They get Overview, My queue,
-  My performance, Lead bank and Team, the whole bank, fetching, the plan and
-  returning a lead to the queue. Matching is by the exact Django name. The route
+- **Admins: the five names in `BDA_RETAIL_ACCESS`.** They get Overview, Team
+  performance and Lead bank, plus the whole bank, fetching, the plan and returning
+  a lead to the queue. They have no My queue or My performance, because admins do
+  not call (the user, 2026-11-26). Matching is by the exact Django name. The route
   refuses a name that more than one roster login shares, so a namesake cannot get
   in. Team → "Who can open BDA Retail" shows each name's match. "No login has this
   exact name" means a spelling difference: fix the list, not the check.
@@ -59,7 +60,7 @@ Two kinds of people, by the user's decision on 2026-11-26:
 
 There is no permission slug, on purpose, so Admin > Users cannot grant the admin
 views to anyone else. Checked on the Django stub and a local b2b-backend on
-2026-11-26: an admin saw all five views and 7,822 leads. A `bda_retail` user saw
+2026-11-26: an admin saw the admin views and 7,822 leads. A `bda_retail` user saw
 only this tab, the two views and 2,372 leads, and got 403 on fetch, plan and
 release. Their call saved and showed on My performance. A name on neither list
 gets no tab and a 403.
@@ -123,3 +124,18 @@ A call needs an outcome. Connected outcomes need a note, and follow-up outcomes
 need a date. Three unanswered calls with no connection make a lead Unreachable.
 "Said they'll order" is the BDA's word, not a matched order. Conversions against
 real orders are not built.
+
+## Team performance
+
+The admins' view of the team, every figure from logged calls in one pass
+(`views/team/utils.ts` `teamStats`, so a tile and its table cannot disagree).
+It shows team totals against plan, then a row per BDA that opens their own page
+(day by day, cohorts, due and overdue follow-ups, and their latest 40 calls with
+notes for the TL's call audits). Below that come cohort, outcome-mix, hour-of-day
+and day tables. The plan figures are the B Plan sheet's, in `constants.ts`:
+about 110 dials a BDA a day, connectivity 65 / 60 / 55% for P1 / P2 / P3, and 3.2%
+of connected customers converting. "First attempt" is a lead's first call by
+anyone. "Said they'll order" is the BDA's outcome, not a matched order: no
+conversion or revenue figure exists until called phones are matched to Django
+orders (not built). A matching pass would cost one `client-order-history` call
+per 300 phones, so it needs its own request plan.
