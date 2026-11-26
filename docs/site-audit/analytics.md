@@ -253,8 +253,8 @@ the user decided, and so what not to "fix":
   so the tab reads `audit_orders` (completed) or `install_orders_slim` through `sbGetPaged` with
   1,000-row pages. A plain `sbGet` stopped at Supabase's 1,000-row cap: on 2026-11-19
   `install_orders_slim` held 1,128 non-deleted rows and the first draft silently lost 128. The
-  ops dashboards' own `install_orders_slim?select=*` load and `views/coe/index.tsx` still use plain
-  `sbGet` and are past the cap too.
+  ops dashboards' order loads, `views/coe/index.tsx` and the auto-import's "already known" read
+  page the same way since 2026-11-26 (see `docs/landmines.md`).
 - **Default range is All time.** No Category Ops review call was logged after 2026-10-19 (the
   `ratings` table's newest row is the same day), so a last-30-days default opened on a blank NPS.
   Checked on real rows 2026-11-19: audit NPS 95 (119 scored of 937), install NPS 75 (97 scored of

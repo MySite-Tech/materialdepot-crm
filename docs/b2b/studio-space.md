@@ -122,6 +122,11 @@ an assignment across.
   (`kpi-definitions.md`). It is counted here as a firm matched to a studio ÷
   firms with that KAM. A firm with no KAM is listed on its
   own line, never folded into someone's denominator.
+- **A KAM onboards their own firms (2026-11-26).** In the framed console a KAM
+  now verifies a form, declines it and issues the firm's login, not only files
+  it (b2b-dashboard `docs/roles.md` §A KAM onboards a firm end to end, b2b-backend
+  `require_onboarder`). So a KAM's onboarding count no longer waits on an admin.
+  No CRM code changed.
 - **No order aggregates on mount.** The list needs none. A firm's metrics load
   when its page opens. Until then the Firm page reads "…", never Inactive.
 

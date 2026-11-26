@@ -443,6 +443,16 @@ save. Now it always sends the phone. A teammate's own Edit was never affected. T
 repo's `docs/landmines.md` has the shape. **After deploy,** edit only the email on a
 waiting request and check it saves. It has not been seen on production yet.
 
+**Studio Space: a KAM onboards firms end to end (2026-11-26, b2b-dashboard PR #63 and
+b2b-backend PR #41, both `kam-onboard-firms`, merged and deployed on Dhruv's ask; CRM
+PR #86 is the doc note; no migration).** In the console framed in the Studio Space tab, a
+KAM now verifies a form, declines it and issues the firm's login, not only files it. Only
+for forms in a market they cover or that they filed. A KAM-issued form with no proposed KAM
+gets that KAM. Reading back or resetting a password stays admin-only, so a KAM copies it
+from the panel when issuing. Outreach and inbound still only file. **After deploy,** a KAM
+verifies and issues one real form, and the firm shows under their My firms. Not yet seen
+signed in as a KAM on production (`docs/b2b/studio-space.md`).
+
 **Branching while other sessions edit this tree: use a `git worktree`.**
 Switching branches here drags every session's uncommitted files along.
 `git worktree add -b <branch> <scratchpad>/<dir> origin/main` leaves the shared

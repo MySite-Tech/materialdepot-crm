@@ -1551,3 +1551,18 @@ fails. **Before adding a Kylas or Django read to a save path, check whether this
 needs it; that key's budget is shared with everything else (`docs/backends.md` §Owed by
 Django row 12).**
 
+
+### The Install Dashboard read "Cannot connect to server" and every load re-imported hundreds of orders (2026-11-26)
+
+Two faults on one screen. One wallpanel sub-job (ENQ20261119105079) was saved with
+`jobcard.rooms: null`. `install_orders_slim` expands `rooms` as an array, and JSON `null` is a
+scalar to Postgres, so the whole view answered `400 cannot extract elements from a scalar` and
+the dashboard showed 0 orders and retried every 8 s. The row was repaired to `rooms: []`; the
+view still trusts every row, so **one non-array `rooms` takes the whole Install Dashboard down
+again**. Separately, `install_orders` (1,275) and `audit_orders` (1,373) had passed Supabase's
+1,000-row cap. The auto-import read "which PIs do we already have" with a plain `sbGet`, saw
+only 1,000, and re-POSTed every other order on each load: hundreds of 409s on
+`*_orders_pi_key`, harmless but noisy. The ops, install-ops and COE order loads were capped
+the same way, so the Orders tile read exactly 1000. All of them now page with `sbGetPaged`.
+**Any read of a whole site-audit table must page; a plain `sbGet` is wrong once it passes
+1,000 rows, and it gives no error when it is.**

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from '../../data/oms-service';
 import { autoImportInstallOrders, deliveryDateOf } from '../../data/auto-import-audit-orders';
-import { EXIT_COLS, exitColumnsAvailable, inCity, mapCaps, mapExit, rosterQuery, sbGet, sbPatch, sbPost, type CityFilter, type StaffExit } from '../../shared';
+import { EXIT_COLS, exitColumnsAvailable, inCity, mapCaps, mapExit, rosterQuery, sbGet, sbGetPaged, sbPatch, sbPost, type CityFilter, type StaffExit } from '../../shared';
 import OrdersView from '../../install-ops/views/orders';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from '../../install-ops/views/queue';
 import { CalendarView, ScheduleView } from '../../install-ops/views/schedule';
@@ -159,7 +159,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
 
   const loadOrders = useCallback(async () => {
     try {
-      const rows = await sbGet('install_orders_slim?select=*&status=neq.deleted&order=created_at.desc');
+      const rows = await sbGetPaged('install_orders_slim?select=*&status=neq.deleted', 1000, 50, 'created_at.desc,id');
       if (!Array.isArray(rows)) {
         setConnErr(true);
         if (!retryTid.current) retryTid.current = setTimeout(() => { retryTid.current = null; loadOrders(); }, 8000);

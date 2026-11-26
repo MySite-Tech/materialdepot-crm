@@ -63,11 +63,11 @@ export async function sbGetLong(q: string): Promise<any> {
   return withCache(q, 45000);
 }
 
-export async function sbGetPaged(q: string, pageSize = 50, maxPages = 200): Promise<any[] | null> {
+export async function sbGetPaged(q: string, pageSize = 50, maxPages = 200, order = 'id'): Promise<any[] | null> {
   const sep = q.includes('?') ? '&' : '?';
   const out: any[] = [];
   for (let page = 0; page < maxPages; page++) {
-    const rows = await sbGetLong(`${q}${sep}order=id&limit=${pageSize}&offset=${page * pageSize}`);
+    const rows = await sbGetLong(`${q}${sep}order=${order}&limit=${pageSize}&offset=${page * pageSize}`);
     if (!Array.isArray(rows)) return null;
     out.push(...rows);
     if (rows.length < pageSize) return out;
