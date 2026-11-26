@@ -30,6 +30,8 @@ type MemberRow = {
   is_primary?: boolean;
   starts_on?: string | null;
   ends_on?: string | null;
+  paused_from?: string | null;
+  paused_to?: string | null;
   updated_at: string | null;
   updated_by: string | null;
 };
@@ -46,6 +48,8 @@ const toMember = (r: MemberRow): TeamMember => ({
   primary: r.is_primary === true,
   from: r.starts_on ?? null,
   to: r.ends_on ?? null,
+  pausedFrom: r.paused_from ?? null,
+  pausedTo: r.paused_to ?? null,
   updatedAt: r.updated_at,
   updatedBy: r.updated_by,
 });
@@ -53,15 +57,20 @@ const toMember = (r: MemberRow): TeamMember => ({
 export async function readMembers(): Promise<TeamState> {
   try {
     const { members } = await call<{ members: MemberRow[] }>('/team');
-    return { members: members.map(toMember), tableMissing: false, coverReady: !members.length || 'is_primary' in members[0] };
+    return {
+      members: members.map(toMember),
+      tableMissing: false,
+      coverReady: !members.length || 'is_primary' in members[0],
+      pauseReady: !members.length || 'paused_from' in members[0],
+    };
   } catch (e) {
-    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true, coverReady: false };
+    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true, coverReady: false, pauseReady: false };
     throw e;
   }
 }
 
-type MemberWrite = Omit<TeamMember, 'updatedAt' | 'isAdmin' | 'primary' | 'from' | 'to'>
-  & { isAdmin?: boolean; cover?: Pick<TeamMember, 'primary' | 'from' | 'to'> };
+type MemberWrite = Omit<TeamMember, 'updatedAt' | 'isAdmin' | 'primary' | 'from' | 'to' | 'pausedFrom' | 'pausedTo'>
+  & { isAdmin?: boolean; cover?: Pick<TeamMember, 'primary' | 'from' | 'to'>; pause?: Pick<TeamMember, 'pausedFrom' | 'pausedTo'> };
 
 export async function upsertMember(m: MemberWrite): Promise<TeamMember> {
   const row = await call<MemberRow>('/team', {
@@ -76,6 +85,7 @@ export async function upsertMember(m: MemberWrite): Promise<TeamMember> {
       active: m.active,
       is_admin: m.isAdmin,
       ...(m.cover ? { is_primary: m.cover.primary, starts_on: m.cover.from, ends_on: m.cover.to } : {}),
+      ...(m.pause ? { paused_from: m.pause.pausedFrom, paused_to: m.pause.pausedTo } : {}),
       updated_by: m.updatedBy,
     },
   });

@@ -224,7 +224,14 @@ way: the store sends them only when a save is about the person's primary team or
 cover, so a round-robin toggle never wipes cover dates. Whether the backend has them
 is read off the GET (`coverReady`: the rows carry `is_primary`). A backend before 0031
 would silently drop them, so `saveMember` refuses cover fields with that reason
-instead of reporting a save that did not happen.
+instead of reporting a save that did not happen. `paused_from`/`paused_to` (0032)
+follow the same rule, read off the GET as `pauseReady`.
+
+**A team save reads Kylas's user list only when it links a Kylas user** (a new row, or
+a picked `kylasUserId`). Until 2026-11-26 every save did, which is two pages at about
+1.2 s each plus the 429 retries, so a round robin checkbox took seconds and sometimes
+over ten (`docs/landmines.md`). The Team tab also flips a row at once and puts it back
+if the save fails, instead of waiting for a full re-read.
 
 **A server route reads the backend through `/b2b/*`, never `/sync/*`.** Cloudflare
 answered `/sync/*` 403 from a script with the right key on 2026-10-31 and let `/b2b/*`

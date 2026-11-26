@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-101 entries. They live in one file because they cross-reference each other —
+102 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -111,6 +111,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A firm's last order read a month old while its own page listed yesterday's order
 - An installation order's delivery date was the installer's date, so every new order read as due today
 - A rep's past calls moved to the lead's current owner the moment their team row was switched off
+- A round robin checkbox took seconds to answer because every team save listed every Kylas user
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1536,4 +1537,17 @@ the caller's credit (`onB2BTeam`, `b2bMemberByPhone`, `docs/b2b/leadership.md` �
 rules); only someone on no team falls back to the owner. **Who did a piece of work must
 never depend on the roster's current state.** Check this when anything filters people
 by `active` or by team before crediting history.
+
+### A round robin checkbox took seconds to answer because every team save listed every Kylas user (2026-11-26)
+
+The user, on the Team tab: the checkbox "takes way too long to select or deselect".
+`saveMember` called `listKylasUsers` on every save to refresh the Kylas name, though only
+a new row or a picked Kylas user needs it. Kylas's `/users` is two pages of about 1.2 s
+each on the shared, rate-limited key, which answered 429 on one try in three that day,
+and each 429 waits 1, 2, 4 then 8 s. The backend PUT itself, Studio KAM sync included,
+took about 20 ms. The box then flipped only after a full team re-read. Now the list is
+read only when linking, and the row flips at once and reverts with a message if the save
+fails. **Before adding a Kylas or Django read to a save path, check whether this save
+needs it; that key's budget is shared with everything else (`docs/backends.md` §Owed by
+Django row 12).**
 

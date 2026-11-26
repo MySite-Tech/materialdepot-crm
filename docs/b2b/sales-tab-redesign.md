@@ -324,6 +324,13 @@ Inbound that week). Every person has metrics on all three teams.
   and the round robin and Inbound sync re-run, 0 changed and the cover kept its lead;
   2 new leads then went to the two regulars only. Don't add an automatic "return the
   cover's leads" step: the user wants that done by hand.
+- **Pausing for set days (2026-11-26, migration 0032).** The user: a member who is off
+  should get no leads on those days only. "pause for days" under the round robin
+  checkbox stores `paused_from`/`paused_to` (both or neither). `getsWork` (on duty, round
+  robin ticked, not inside the pause) is the one rule the Inbound round robin and every
+  rotation list (Inbound, Outreach, KAM) read, so the person rejoins by themselves the
+  day after. The checkbox stays the open-ended pause. A single-person assign can still
+  pick a paused person, as before. Nothing they already hold moves.
 - **Landing tab:** the team they are covering today, else the primary
   (`viewer.member`).
 - **Adding a person:** their first row becomes primary; "For: A cover, for set days"

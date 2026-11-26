@@ -31,6 +31,12 @@ export const isCover = (m: Pick<TeamMember, 'from' | 'to'>): boolean => !!(m.fro
 export const onDuty = (m: TeamMember, day: string = istDay()): boolean =>
   m.active && (!m.from || m.from <= day) && (!m.to || day <= m.to);
 
+export const pausedOn = (m: Pick<TeamMember, 'pausedFrom' | 'pausedTo'>, day: string = istDay()): boolean =>
+  !!m.pausedFrom && !!m.pausedTo && m.pausedFrom <= day && day <= m.pausedTo;
+
+export const getsWork = (m: TeamMember, day: string = istDay()): boolean =>
+  onDuty(m, day) && m.inRotation && !pausedOn(m, day);
+
 export const onDutyIn = (members: TeamMember[], team: B2BTeam, day: string = istDay()): TeamMember[] =>
   members.filter((m) => m.team === team && onDuty(m, day));
 
@@ -42,6 +48,14 @@ export const coverState = (m: Window, day: string = istDay()): CoverState | null
   !isCover(m) ? null : m.from && day < m.from ? 'upcoming' : m.to && day > m.to ? 'ended' : 'covering';
 
 const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+export function pauseLabel(m: Pick<TeamMember, 'pausedFrom' | 'pausedTo'>, day: string = istDay()): string | null {
+  if (!m.pausedFrom || !m.pausedTo || day > m.pausedTo) return null;
+  const span = m.pausedFrom === m.pausedTo ? fmtDay(m.pausedFrom) : `${fmtDay(m.pausedFrom)} – ${fmtDay(m.pausedTo)}`;
+  return day >= m.pausedFrom ? `Off ${span}, back ${fmtDay(nextDay(m.pausedTo))}` : `Off ${span}`;
+}
+
+const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
 export function coverLabel(m: Window, day: string = istDay()): string {
   const span = m.from && m.to ? `${fmtDay(m.from)} – ${fmtDay(m.to)}` : m.from ? `from ${fmtDay(m.from)}` : `until ${fmtDay(m.to as string)}`;
@@ -75,7 +89,7 @@ export const teamMembers = (members: TeamMember[], team: B2BTeam): TeamMember[] 
     .sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone));
 
 export const rotationOrder = (members: TeamMember[], day: string = istDay()): TeamMember[] =>
-  teamMembers(members, 'inbound').filter((m) => onDuty(m, day) && m.inRotation);
+  teamMembers(members, 'inbound').filter((m) => getsWork(m, day));
 
 export function planRotation<T>(
   leads: T[],
