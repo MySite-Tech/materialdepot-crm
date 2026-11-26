@@ -121,6 +121,8 @@ export const CALL_OUTCOMES: Array<{ key: CallOutcome; label: string; connected: 
 
 export const PAGE_SIZE = 25;
 
+export const AUTO_REFRESH_HOURS = 20;
+
 export const PLAN_DIALS_A_DAY = 110;
 export const PLAN_CONNECTIVITY: Record<Priority, number> = { P1: 0.65, P2: 0.6, P3: 0.55 };
 export const PLAN_CONVERSION = 0.032;

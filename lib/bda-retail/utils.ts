@@ -1,4 +1,4 @@
-import { BDA_RETAIL_ACCESS, BDA_ROLE, CALL_OUTCOMES, COHORT_BY_KEY, COHORTS, MAX_PLAUSIBLE_VALUE, MAX_UNANSWERED, PLAN_PRIORITIES } from './constants';
+import { AUTO_REFRESH_HOURS, BDA_RETAIL_ACCESS, BDA_ROLE, CALL_OUTCOMES, COHORT_BY_KEY, COHORTS, MAX_PLAUSIBLE_VALUE, MAX_UNANSWERED, PLAN_PRIORITIES } from './constants';
 import { normalisePhone } from '../org/utils';
 import type { BankState, CallLog, CallOutcome, CohortKey, LeadStage, LeadView, Priority } from './types';
 
@@ -160,3 +160,6 @@ export const calledToday = (views: LeadView[], phone: string, today: string): Le
 
 export const dialsOn = (views: LeadView[], phone: string, day: string): number =>
   views.reduce((n, l) => n + l.calls.filter((c) => mineOn(c, phone, day)).length, 0);
+
+export const bankIsStale = (imports: { at: string }[], now: number): boolean =>
+  !imports.length || now - Date.parse(imports[0].at) > AUTO_REFRESH_HOURS * 3_600_000;

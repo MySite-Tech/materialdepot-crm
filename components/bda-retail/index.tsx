@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppUser } from '@/types/crm';
 import type { LeadView } from '@/lib/bda-retail/types';
-import { BankLens, isMine, istToday, planPriorities, queueFor } from '@/lib/bda-retail/utils';
+import { BankLens, bankIsStale, isMine, istToday, planPriorities, queueFor } from '@/lib/bda-retail/utils';
 import { useBdaBank } from './hooks/use-bda-bank';
 import { useBdaImport } from './hooks/use-bda-import';
 import { Notice } from './ui/chips';
@@ -29,6 +29,15 @@ export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) 
   const importer = useBdaImport(reload);
   const [picked, setView] = useState<View | null>(null);
   const admin = access === 'admin';
+  const autoRan = useRef(false);
+  const stale = !!bank && bankIsStale(bank.imports, Date.now());
+
+  const { run: runImport, running: importing } = importer;
+  useEffect(() => {
+    if (!admin || !stale || autoRan.current || importing) return;
+    autoRan.current = true;
+    void runImport();
+  }, [admin, stale, importing, runImport]);
   const nav = NAV.filter((item) => item.who === (admin ? 'admin' : 'bda'));
   const view: View = picked && nav.some((item) => item.key === picked) ? picked : admin ? 'overview' : 'queue';
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -98,6 +107,13 @@ export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) 
       </div>
 
       <main className="flex-1 overflow-y-auto min-w-0">
+        {importer.running && (
+          <div className="px-4 sm:px-6 pt-4">
+            <Notice tone="amber">
+              Refreshing the lead bank from Django: {importer.progress || 'starting'}. This runs by itself when the bank is empty or a day old, and takes about a minute. Keep this tab open until it finishes.
+            </Notice>
+          </div>
+        )}
         {(error || importer.error || importer.summary) && (
           <div className="px-4 sm:px-6 pt-4">
             {error && <Notice tone="red">{error}</Notice>}

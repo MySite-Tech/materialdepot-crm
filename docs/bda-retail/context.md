@@ -27,7 +27,12 @@ or a lead's `enteredOn`. Who may see what is decided in `app/api/bda-retail`.
 | EC visits, no cart | `/crm/footfall-no-cart/`, 30 days | No cart created |
 
 On mount the tab makes one request (`GET /api/bda-retail`; the route makes one or
-two backend calls). **Fetch new leads** is an admin's click, not a mount. It reads
+two backend calls). **For an admin, the fetch also runs by itself** when the bank
+is empty or its last fetch is over 20 hours old (`AUTO_REFRESH_HOURS`), once per
+page load. The user asked on 2026-11-26 never to press it. That is a deliberate
+exception to the ten-request budget: once a day, one admin's tab spends about
+20–40 Django reads, after the tab has rendered. The button stays for an
+on-demand refresh. **Fetch new leads** is otherwise an admin's click, not a mount. It reads
 Django in that admin's browser, because nothing on the server can read Django
 without a person's token (b2b-backend's MD keys cover file uploads and invoices
 only; Owed by Django row 21). It pages every source at 1,000 rows, capped at 40
