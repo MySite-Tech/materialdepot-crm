@@ -680,8 +680,8 @@ keeps what they were dealt. Every person has a card on all three teams, work cou
 for whoever logged it on any team (a removed rep's past calls no longer move to the
 lead's current owner, `docs/landmines.md`), and a cover has no default target. Read
 `docs/b2b/sales-tab-redesign.md` §Primary team and covers and `leadership.md` §Who the
-people are before touching team membership. **Same day, CRM branch `b2b-team-pause` with
-b2b-backend branch `b2b-team-pause` (migration 0032, deploy backend first):** the round
+people are before touching team membership. **Same day, CRM PR #85 with b2b-backend PR #40
+(migration 0032, confirmed live on production), both merged on Dhruv's ask:** the round
 robin checkbox answers at once (each save had read every Kylas user), and "pause for
 days" holds a member's new work for set days, rejoining by itself after (§Pausing for
 set days). **Still to do on production:** pick a
