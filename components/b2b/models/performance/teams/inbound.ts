@@ -10,13 +10,13 @@ import { istDay } from '../../outreach/reminders';
 import { fromKpi, newestFirst, notesBy, redirectsBy } from '../measures/activity';
 import { creditedOrders, revenueValue } from '../measures/revenue';
 import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, memberPeople, onTeamList, pct, personKey, teamMemberByPhone } from '../utils';
+import { b2bMemberByPhone, countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, memberPeople, onB2BTeam, pct, personKey, withHelpers } from '../utils';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
 import { inboundPhones, outreachPhones } from '@/lib/b2b/leads/unified';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by someone not on the Inbound team list (a manager, say) goes to the lead owner. Target 1,500 a month per head.', weight: 20 },
+  { key: 'calls',      kind: 'Effort', label: 'Calls',                  short: 'Calls',          unit: 'count', target: 1500, per: 'month', daily: true,  rule: 'Call attempts logged in the period by this person. A call logged by anyone on a B2B team counts for them, whichever team is theirs; one logged by someone on no team (a manager, say) goes to the lead owner. Target 1,500 a month per head.', weight: 20 },
   { key: 'firstCalls', kind: 'Effort', label: 'New leads called',       short: 'First calls',    unit: 'count', target: null,               daily: true,  rule: 'Leads they own whose first ever call attempt fell in the period.' },
   { key: 'coverage',   kind: 'Effort', label: 'Coverage of new leads',  short: 'Coverage',       unit: '%',     target: 100,                daily: false, rule: 'Leads created in the period and owned by them now that have at least one logged call ÷ all such leads in Kylas (the two inbound stages).', weight: 10 },
   { key: 'adherence',  kind: 'Effort', label: 'CRM adherence',          short: 'CRM adherence',  unit: '%',     target: 100,                daily: true,  rule: 'Leads they called in the period with everything their current stage needs ÷ leads they called, judged on the lead as it stands now. Every lead: a mobile, and a next follow-up date while open and not sent to Outreach. Once a call connects, and unless the lead was closed Lost or Invalid: contact name, firm name, segment, client type, city and a status past New. Then, for a stage set in the CRM, what that stage needs, the same list its save gate checks: an Enq ID at PI Shared and Closed, a reason at Lost, a reason and a note at Invalid, and the hand-off details once sent to Outreach. A connected call needs its note. An RNR has no note field and leaves the lead at New, so neither counts against it.', weight: 10 },
@@ -158,8 +158,8 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const owns = ownsLead(people);
   const mine = data.inbound.filter(owns);
   const byThem = (l: InboundLead, a: CallAttempt) => {
-    if (a.byPhone && teamMemberByPhone(data, 'inbound', a.byPhone)) return isPersonByPhone(people, a.byPhone);
-    return a.by && onTeamList(data, 'inbound', a.by) ? isPerson(people, a.by) : owns(l);
+    if (a.byPhone && b2bMemberByPhone(data, a.byPhone)) return isPersonByPhone(people, a.byPhone);
+    return a.by && onB2BTeam(data, a.by) ? isPerson(people, a.by) : owns(l);
   };
 
   const calls: PerfRow[] = data.inbound.flatMap((l) => (l.callAttempts || [])
@@ -210,8 +210,12 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
 }
 
 function people(data: PerfData, members: Parameters<TeamEngine['people']>[1], live: boolean): Person[] {
+  const actors = data.inbound.flatMap((l) => [
+    { name: l.owner, kylasUserId: l.ownerId },
+    ...(l.callAttempts || []).map((a) => ({ name: a.by, phone: a.byPhone })),
+  ]);
   const out: Person[] = live
-    ? memberPeople(members, 'inbound')
+    ? withHelpers(memberPeople(members, 'inbound'), members, 'inbound', actors)
     : B2B_INBOUND_OWNER_LIST.map((o) => ({ key: personKey(o.name), name: o.name, kylasUserId: o.id, onTeam: true }));
   for (const l of data.inbound) {
     const name = String(l.owner || '').trim();

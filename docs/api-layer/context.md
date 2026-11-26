@@ -219,6 +219,13 @@ client, or one that only flips round robin, cannot clear someone's B2B admin
 flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
 reads as false.
 
+`is_primary`, `starts_on` and `ends_on` (migration 0031, 2026-11-26) work the same
+way: the store sends them only when a save is about the person's primary team or a
+cover, so a round-robin toggle never wipes cover dates. Whether the backend has them
+is read off the GET (`coverReady`: the rows carry `is_primary`). A backend before 0031
+would silently drop them, so `saveMember` refuses cover fields with that reason
+instead of reporting a save that did not happen.
+
 **A server route reads the backend through `/b2b/*`, never `/sync/*`.** Cloudflare
 answered `/sync/*` 403 from a script with the right key on 2026-10-31 and let `/b2b/*`
 through. `lib/server/b2b-revenue.ts` pages Django's `/crm/leads/`

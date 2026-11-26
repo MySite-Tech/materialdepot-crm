@@ -2,6 +2,7 @@ import { sameRep } from '../outreach/handover';
 import { Period, isWholeMonth } from '../outreach/kpis';
 import { Goals, PerfCard, PerfData, PerfKpiDef, PerfRow, PerfValue, Person } from './types';
 import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
+import { isCover, primaryOf } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 
 const DAY_MS = 86_400_000;
@@ -23,12 +24,14 @@ export const goalKey = (team: B2BTeam, person: Person): string => `${team}|${per
 export function goalFor(def: PerfKpiDef, team: B2BTeam, person: Person, goals: Goals): number | null {
   if (def.target === null) return null;
   const set = goals[goalKey(team, person)]?.[def.key];
-  return typeof set === 'number' && Number.isFinite(set) ? set : def.target;
+  if (typeof set === 'number' && Number.isFinite(set)) return set;
+  return person.onTeam && !person.cover ? def.target : null;
 }
 
 export function targetFor(def: PerfKpiDef, team: B2BTeam, people: Person[], goals: Goals, period: Period, today: string): number | null {
   if (def.target === null) return null;
-  const each = people.length ? people.map((p) => goalFor(def, team, p, goals) as number) : [def.target];
+  const each = people.length ? people.map((p) => goalFor(def, team, p, goals)).filter((g): g is number => g !== null) : [def.target];
+  if (!each.length) return null;
   const total = each.reduce((a, b) => a + b, 0);
   if (def.unit === '%') return def.per === 'month' && !isWholeMonth(period) ? null : Math.round(total / each.length);
   if (def.per === 'day') {
@@ -82,10 +85,34 @@ export const personKey = (name: string, phone?: string): string => {
 export const isPerson = (people: Person[], name: string | undefined): boolean =>
   people.some((p) => sameRep(name, p.name));
 
+export function personFrom(m: TeamMember, members: TeamMember[], team: B2BTeam, onTeam: boolean): Person {
+  const rows = members.filter((x) => x.phone === m.phone);
+  return {
+    key: personKey(m.name, m.phone),
+    name: m.name,
+    phone: m.phone,
+    kylasUserId: m.kylasUserId ?? rows.find((x) => x.kylasUserId != null)?.kylasUserId ?? null,
+    onTeam,
+    cover: m.team === team && isCover(m) ? { from: m.from, to: m.to } : undefined,
+    primaryTeam: primaryOf(rows)?.team ?? null,
+  };
+}
+
 export function memberPeople(members: TeamMember[], team: TeamMember['team']): Person[] {
-  return members
-    .filter((m) => m.team === team && m.active)
-    .map((m) => ({ key: personKey(m.name, m.phone), name: m.name, phone: m.phone, kylasUserId: m.kylasUserId, onTeam: true }));
+  return members.filter((m) => m.team === team && m.active).map((m) => personFrom(m, members, team, true));
+}
+
+export function withHelpers(people: Person[], members: TeamMember[], team: B2BTeam, actors: { name?: string; phone?: string; kylasUserId?: number | null }[]): Person[] {
+  const out = [...people];
+  for (const a of actors) {
+    const phone = normalisePhone(a.phone);
+    const m = (phone.length === 10 ? members.find((x) => x.phone === phone) : undefined)
+      ?? (a.kylasUserId != null ? members.find((x) => x.kylasUserId === a.kylasUserId) : undefined)
+      ?? (a.name && !isPlaceholderName(a.name) ? members.find((x) => sameRep(a.name, x.name)) : undefined);
+    if (!m || out.some((p) => (!!p.phone && normalisePhone(p.phone) === m.phone) || sameRep(p.name, m.name))) continue;
+    out.push(personFrom(m, members, team, false));
+  }
+  return out;
 }
 
 export function withDataPeople(people: Person[], names: (string | undefined)[], onTeam: boolean): Person[] {
@@ -98,17 +125,17 @@ export function withDataPeople(people: Person[], names: (string | undefined)[], 
   return out;
 }
 
-export function teamMemberByPhone(data: PerfData, team: B2BTeam, phone: string | undefined): TeamMember | undefined {
+export function b2bMemberByPhone(data: PerfData, phone: string | undefined): TeamMember | undefined {
   const p = phone ? normalisePhone(phone) : '';
   if (!p) return undefined;
-  return (data.members || []).find((m) => m.team === team && m.active && normalisePhone(m.phone) === p);
+  return (data.members || []).find((m) => normalisePhone(m.phone) === p);
 }
 
 export const isPersonByPhone = (people: Person[], phone: string): boolean =>
   people.some((p) => !!p.phone && normalisePhone(p.phone) === normalisePhone(phone));
 
-export function onTeamList(data: PerfData, team: B2BTeam, name: string | undefined): boolean {
-  const list = (data.members || []).filter((m) => m.team === team && m.active);
+export function onB2BTeam(data: PerfData, name: string | undefined): boolean {
+  const list = data.members || [];
   return !list.length || list.some((m) => sameRep(name, m.name));
 }
 

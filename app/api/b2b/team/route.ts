@@ -55,6 +55,8 @@ export async function PUT(request: NextRequest) {
   if (body.kylasUserId !== undefined && body.kylasUserId !== null && !Number.isInteger(body.kylasUserId)) {
     return bad("'kylasUserId' must be an integer, null, or absent");
   }
+  const day = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
+  if (!day(body.from) || !day(body.to)) return bad("'from' and 'to' must be YYYY-MM-DD, null, or absent");
 
   try {
     return Response.json(await saveMember({
@@ -64,6 +66,9 @@ export async function PUT(request: NextRequest) {
       inRotation: typeof body.inRotation === 'boolean' ? body.inRotation : undefined,
       active: typeof body.active === 'boolean' ? body.active : undefined,
       isAdmin: typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined,
+      primary: typeof body.primary === 'boolean' ? body.primary : undefined,
+      from: body.from,
+      to: body.to,
       kylasUserId: body.kylasUserId,
     }, c.name));
   } catch (err) {

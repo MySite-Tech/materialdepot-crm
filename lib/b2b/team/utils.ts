@@ -1,5 +1,5 @@
 import { normalisePhone } from '@/lib/org/utils';
-import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_REP_ROLE_TEAM, B2B_SALES_ROLES, PLACEHOLDER_NAMES } from './constants';
+import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_REP_ROLE_TEAM, B2B_SALES_ROLES, IST_OFFSET_MS, PLACEHOLDER_NAMES } from './constants';
 import { B2BTeam, B2BUser, KylasOwnerWrites, SignInGaps, TeamMember, Viewer } from './types';
 
 const perms = (u: B2BUser): string[] =>
@@ -24,15 +24,44 @@ export const membershipsForPhone = (members: TeamMember[], phone: string): TeamM
   return want.length === 10 ? members.filter((m) => m.phone === want && m.active) : [];
 };
 
+export const istDay = (ms = Date.now()): string => new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+
+export const isCover = (m: Pick<TeamMember, 'from' | 'to'>): boolean => !!(m.from || m.to);
+
+export const onDuty = (m: TeamMember, day: string = istDay()): boolean =>
+  m.active && (!m.from || m.from <= day) && (!m.to || day <= m.to);
+
+export const onDutyIn = (members: TeamMember[], team: B2BTeam, day: string = istDay()): TeamMember[] =>
+  members.filter((m) => m.team === team && onDuty(m, day));
+
+export type CoverState = 'upcoming' | 'covering' | 'ended';
+
+type Window = Pick<TeamMember, 'from' | 'to'>;
+
+export const coverState = (m: Window, day: string = istDay()): CoverState | null =>
+  !isCover(m) ? null : m.from && day < m.from ? 'upcoming' : m.to && day > m.to ? 'ended' : 'covering';
+
+const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+export function coverLabel(m: Window, day: string = istDay()): string {
+  const span = m.from && m.to ? `${fmtDay(m.from)} – ${fmtDay(m.to)}` : m.from ? `from ${fmtDay(m.from)}` : `until ${fmtDay(m.to as string)}`;
+  const state = coverState(m, day);
+  return state === 'ended' ? `Cover ended ${fmtDay(m.to as string)}` : state === 'upcoming' ? `Covers ${span}` : `Covering ${span}`;
+}
+
+export const primaryOf = (rows: TeamMember[]): TeamMember | null =>
+  rows.find((m) => m.primary) ?? null;
+
 export const viewerFor = (user: B2BUser | null, members: TeamMember[]): Viewer => {
   const memberships = user ? membershipsForPhone(members, user.phone) : [];
   const canManageTeam = user ? isB2BManager(user) : false;
+  const today = istDay();
   return {
     name: user?.name ?? '',
     phone: normalisePhone(user?.phone),
     isManager: canManageTeam || memberships.some((m) => m.isAdmin),
     canManageTeam,
-    member: memberships[0] ?? null,
+    member: memberships.find((m) => coverState(m, today) === 'covering') ?? primaryOf(memberships) ?? memberships[0] ?? null,
     memberships,
   };
 };
@@ -45,8 +74,8 @@ export const teamMembers = (members: TeamMember[], team: B2BTeam): TeamMember[] 
     .filter((m) => m.team === team && m.kylasUserId != null)
     .sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone));
 
-export const rotationOrder = (members: TeamMember[]): TeamMember[] =>
-  teamMembers(members, 'inbound').filter((m) => m.active && m.inRotation);
+export const rotationOrder = (members: TeamMember[], day: string = istDay()): TeamMember[] =>
+  teamMembers(members, 'inbound').filter((m) => onDuty(m, day) && m.inRotation);
 
 export function planRotation<T>(
   leads: T[],

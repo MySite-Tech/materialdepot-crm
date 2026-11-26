@@ -27,6 +27,9 @@ type MemberRow = {
   in_rotation: boolean;
   active: boolean;
   is_admin?: boolean;
+  is_primary?: boolean;
+  starts_on?: string | null;
+  ends_on?: string | null;
   updated_at: string | null;
   updated_by: string | null;
 };
@@ -40,6 +43,9 @@ const toMember = (r: MemberRow): TeamMember => ({
   inRotation: r.in_rotation,
   active: r.active,
   isAdmin: r.is_admin === true,
+  primary: r.is_primary === true,
+  from: r.starts_on ?? null,
+  to: r.ends_on ?? null,
   updatedAt: r.updated_at,
   updatedBy: r.updated_by,
 });
@@ -47,14 +53,17 @@ const toMember = (r: MemberRow): TeamMember => ({
 export async function readMembers(): Promise<TeamState> {
   try {
     const { members } = await call<{ members: MemberRow[] }>('/team');
-    return { members: members.map(toMember), tableMissing: false };
+    return { members: members.map(toMember), tableMissing: false, coverReady: !members.length || 'is_primary' in members[0] };
   } catch (e) {
-    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true };
+    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true, coverReady: false };
     throw e;
   }
 }
 
-export async function upsertMember(m: Omit<TeamMember, 'updatedAt' | 'isAdmin'> & { isAdmin?: boolean }): Promise<TeamMember> {
+type MemberWrite = Omit<TeamMember, 'updatedAt' | 'isAdmin' | 'primary' | 'from' | 'to'>
+  & { isAdmin?: boolean; cover?: Pick<TeamMember, 'primary' | 'from' | 'to'> };
+
+export async function upsertMember(m: MemberWrite): Promise<TeamMember> {
   const row = await call<MemberRow>('/team', {
     method: 'PUT',
     body: {
@@ -66,6 +75,7 @@ export async function upsertMember(m: Omit<TeamMember, 'updatedAt' | 'isAdmin'> 
       in_rotation: m.inRotation,
       active: m.active,
       is_admin: m.isAdmin,
+      ...(m.cover ? { is_primary: m.cover.primary, starts_on: m.cover.from, ends_on: m.cover.to } : {}),
       updated_by: m.updatedBy,
     },
   });

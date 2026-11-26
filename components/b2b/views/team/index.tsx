@@ -5,12 +5,13 @@ import { fetchUsers } from '@/lib/api';
 import { changeTeamMemberNumber, fetchKylasUsers, saveTeamMember } from '@/lib/b2b/team';
 import { B2B_TEAM_LABEL, B2B_TEAMS } from '@/lib/b2b/team/constants';
 import type { B2BTeam, B2BTeamLoad, KylasUser, MemberInput, TeamMember, Viewer } from '@/lib/b2b/team/types';
-import { canUseB2B, rotationOrder, signInGaps } from '@/lib/b2b/team/utils';
+import { canUseB2B, coverLabel, coverState, istDay, rotationOrder, signInGaps } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 import type { AppUser } from '@/types/crm';
 import { MemberRow } from './ui/member-row';
 import { RotationPanel } from './ui/rotation-panel';
 import { SignInCheck } from './ui/sign-in-check';
+import { CoverDates, coverValid } from './ui/team-role';
 
 const memberKey = (m: Pick<TeamMember, 'phone' | 'team'>) => `${m.phone}|${m.team}`;
 
@@ -20,6 +21,9 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
   const [kylasUsers, setKylasUsers] = useState<KylasUser[] | null>(null);
   const [pickPhone, setPickPhone] = useState('');
   const [pickTeam, setPickTeam] = useState<B2BTeam>('inbound');
+  const [asCover, setAsCover] = useState(false);
+  const [coverFrom, setCoverFrom] = useState(istDay());
+  const [coverTo, setCoverTo] = useState('');
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'warn' | 'error'; text: string } | null>(null);
 
@@ -52,6 +56,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
     return out;
   }, [team.members]);
   const rotation = useMemo(() => rotationOrder(team.members), [team.members]);
+  const withPrimary = useMemo(() => new Set(team.members.filter((m) => m.active && m.primary).map((m) => m.phone)), [team.members]);
+  const ended = useMemo(() => team.members.filter((m) => m.active && coverState(m) === 'ended'), [team.members]);
   const gaps = useMemo(() => (users ? signInGaps(users, team.members) : null), [users, team.members]);
 
   const save = (m: MemberInput) => {
@@ -81,8 +87,9 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
   const add = () => {
     const u = candidates.find((c) => normalisePhone(c.phone) === pickPhone);
     if (!u) return;
-    save({ phone: pickPhone, name: u.name, team: pickTeam, inRotation: true, active: true });
+    save({ phone: pickPhone, name: u.name, team: pickTeam, inRotation: true, active: true, ...(asCover ? { from: coverFrom || null, to: coverTo } : {}) });
     setPickPhone('');
+    setAsCover(false);
   };
 
   return (
@@ -90,7 +97,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       <div>
         <h2 className="text-[18px] font-bold text-gray-900">B2B team</h2>
         <p className="text-[12.5px] text-gray-500 mt-0.5">
-          Who is on Inbound, Outreach and KAM. One person can be on several teams; add them once per team, and switch each team&apos;s round robin on or off separately.
+          Who is on Inbound, Outreach and KAM. Everyone has one primary team, and can be put on another team as a cover for set days when that team is short.
+          A cover gets that team&apos;s new work (round robin and the assign pickers) only on those days, keeps what it was given after them, and has no target there unless one is set.
           Each person sees their own leads and accounts. Admins, B2B managers and anyone marked B2B admin here see everyone.
           People are added from the existing CRM users. Their Kylas user is found by phone number.
         </p>
@@ -103,6 +111,17 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
         </p>
       )}
       {team.error && <p className="text-[12.5px] text-red-600">{team.error}</p>}
+      {!team.loading && !team.tableMissing && !team.coverReady && (
+        <p className="text-[12.5px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+          Primary teams and covers need b2b-backend migration 0031, which is not deployed yet. Until it is, everyone on a team is on it every day.
+        </p>
+      )}
+      {!!ended.length && (
+        <p className="text-[12.5px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+          {ended.map((m) => `${m.name}: ${B2B_TEAM_LABEL[m.team]} ${coverLabel(m).replace(/^Cover/, 'cover')}`).join('; ')}.{' '}
+          A finished cover gets no new work, but whatever it was given is still theirs. Reassign it on that team&apos;s tab, then Remove the row here.
+        </p>
+      )}
       {notice && (
         <p className={`text-[12.5px] rounded px-3 py-2 border ${notice.tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-red-50 border-red-200 text-red-700'}`}>
           {notice.text}
@@ -135,8 +154,24 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
             {B2B_TEAMS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
         </label>
+        {team.coverReady && (
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            For
+            <select value={asCover ? 'cover' : 'team'} onChange={(e) => setAsCover(e.target.value === 'cover')}
+              className="border border-gray-200 rounded px-2 py-1.5 text-[13px] font-normal normal-case tracking-normal text-gray-800">
+              <option value="team">Their team</option>
+              <option value="cover">A cover, for set days</option>
+            </select>
+          </label>
+        )}
+        {asCover && (
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            Days
+            <CoverDates from={coverFrom} to={coverTo} setFrom={setCoverFrom} setTo={setCoverTo} />
+          </label>
+        )}
         <button
-          disabled={!pickPhone || !!busyKey}
+          disabled={!pickPhone || !!busyKey || (asCover && !coverValid(coverFrom, coverTo))}
           onClick={add}
           className="px-4 py-1.5 text-[13px] font-semibold rounded bg-[#EAB308] text-[#1A1A1A] disabled:opacity-40"
         >
@@ -188,6 +223,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                         key={m.phone}
                         member={m}
                         otherTeams={(teamsOf.get(m.phone) || []).filter((x) => x !== m.team)}
+                        hasPrimary={withPrimary.has(m.phone)}
+                        coverReady={team.coverReady}
                         busy={busyKey === memberKey(m)}
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}

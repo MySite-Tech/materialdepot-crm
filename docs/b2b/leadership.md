@@ -38,9 +38,9 @@ One sub-tab with two faces, chosen by `viewer.isManager` (`b2b.manager`, or role
   row per person (sortable on any KPI), and a day-by-day table. Clicking a person
   opens their own card and day-by-day table.
 - **Everyone else: "My performance".** The nav label changes too. It shows the
-  same card and day-by-day table for the viewer only. There is no team picker
-  unless their name turns up on more than one team, no compare table and no team
-  total. **This is a focus aid, not confidentiality:** the rows are read with keys
+  same card and day-by-day table for the viewer only, with Inbound · Outreach · KAM
+  buttons for anyone on a team (2026-11-26), opening on the team they cover today or
+  their primary. No compare table and no team total. **This is a focus aid, not confidentiality:** the rows are read with keys
   the browser holds, the same as every other B2B tab (`sales-tab-redesign.md`
   §Visibility).
 
@@ -163,10 +163,11 @@ orders behind them in the Overview's `OrderDrawer`); Effort and Results KPI tile
 each with a status label (On pace, Target met, Slightly behind, Behind), not colour
 alone; the rows panel; the compare table (managers); Everything logged; Day by day.
 The Inbound and KAM Revenue tile is hidden because the hero shows the same number.
-A manager also gets a **person filter** beside the team buttons: everyone on all three
-teams, grouped by team. Picking someone on another team switches to that team and
-opens their card; "Everyone on …" goes back to the team. Clicking a compare-table row
-does the same for the current team.
+A manager also gets a **person filter** beside the team buttons: everyone once,
+grouped by primary team, with any cover named ("Covering 26 Nov – 30 Nov on Inbound").
+Picking someone opens the team they cover today, else their primary, and the team
+buttons then keep that person, so their card can be read on all three teams; "← Whole
+… team" goes back. Clicking a compare-table row does the same for the current team.
 Last 7 days was dropped from the presets.
 
 ### Everything logged
@@ -225,10 +226,29 @@ uses firm and order `kam`. Placeholder names ("Unassigned") are dropped.
 
 **One person can be on several teams (2026-10-30).** The roster is one row per
 person per team (b2b-backend migration 0023, primary key `(phone, team)`), each
-with its own `in_rotation`. So someone on Inbound and Outreach gets a card for
-each on My performance. `viewer.memberships` holds every active row and
-`membershipIn(viewer, team)` picks one. `viewer.member` is the first, kept for
-the display name. The B2B admin flag is written to every row of that person.
+with its own `in_rotation`. `viewer.memberships` holds every active row and
+`membershipIn(viewer, team)` picks one. `viewer.member` is today's cover, else the
+primary, else the first. The B2B admin flag is written to every row of that person.
+
+**Everyone has a card on every team, and covers are marked (2026-11-26).** The user:
+anyone can do anyone's work, with a primary team and short covers
+(`sales-tab-redesign.md` §Primary team and covers). So:
+
+- `Person` carries `cover` (that team's window) and `primaryTeam`. The compare
+  table, summary and targets editor tag a cover ("Covering 26 Nov – 30 Nov") and
+  someone who logged work while on another team ("KAM is their team").
+- **A team's people include anyone on any B2B team who did its work**
+  (`withHelpers`): Inbound adds callers and lead owners matched by phone, Kylas user
+  or name; KAM adds whoever logged an interaction. Before this, a KAM's call on an
+  Inbound lead counted for nobody, and the team total missed it.
+- **Only a permanent member carries the sheet's default target** (`goalFor`). A cover
+  or a helper reads "—" for target unless a manager sets one under Set targets
+  (`toGoals` keeps a cover's value even when it equals the sheet). Otherwise adding
+  Varun to Inbound for five days would have added ₹25L to the B2B monthly target and
+  1,500 calls to Inbound's. The primary team's targets are not reduced for the days
+  covered; that is the user's call if it comes up.
+- A cover stays on the compare table after it ends. Remove the row on the Team tab
+  and the person still appears through their logged work, tagged with their team.
 
 An individual is matched through `viewer.memberships` when they are on the list. Otherwise they are
 matched by phone, or by name, against each team's people (`selfOn`). Someone who
@@ -237,15 +257,17 @@ matches nothing sees a notice, not an empty card.
 ## KPI rules that are not obvious from the defs
 
 - **A call carrying `byPhone` is credited by phone first (2026-10-30).** If that
-  phone is an active Inbound team member, the call counts for whoever has that
-  phone and nobody else. Otherwise the name rule below applies. Names come from
+  phone is on any B2B team row, any team, active or not (since 2026-11-26; it was an
+  active Inbound row), the call counts for whoever has that phone and nobody else. Otherwise the name rule below applies. Names come from
   two Django sources (the profile's `name` at write time, the roster's
   `f_name l_name` frozen into the team list), and `sameRep` only tolerates case,
   a whole-word prefix and a roster `name`/`fullName` pair. So a rep whose two names differ never saw their own
   calls count. Calls logged before this carry no phone and still go by name.
 - **Inbound calls are credited to `CallAttempt.by`, the caller — unless the
-  caller is not on the Inbound team list, then to the lead's owner**
-  (`onTeamList`, 2026-10-30). Before that, a call a manager logged on Asha's
+  caller is on no B2B team at all, then to the lead's owner** (`onB2BTeam`; it was
+  "not on the Inbound team list" from 2026-10-30 to 2026-11-26, which threw away a
+  KAM's Inbound calls and, once a rep's row was switched off, moved all their past
+  calls to whoever owned the lead by then: `landmines.md`). Before that, a call a manager logged on Asha's
   lead counted for the manager, who is on no team, so it counted for nobody:
   the user logged one as Meera and saw Asha's Calls not move. With no team
   list (table missing) the caller is always credited. Rows before 2026-10-28
@@ -331,8 +353,8 @@ matches nothing sees a notice, not an empty card.
   Overview's per-order rule below. Work done before a reassignment is never moved:
   calls, meetings and interactions are credited to whoever logged them.
 - **KAM meetings and calls are one per firm per day**, credited to
-  `interaction.loggedBy` when that person is on the KAM team list, otherwise
-  (or when empty) to the firm's KAM. Same rule as Inbound calls, same reason. Same dedupe as
+  `interaction.loggedBy` when that person is on any B2B team (since 2026-11-26; was
+  the KAM list), otherwise (or when empty) to the firm's KAM. Same rule as Inbound calls, same reason. Same dedupe as
   `callsLoggedOn`.
   **`loggedBy` is the viewer since 2026-10-30.** Before that the Log an
   interaction modal wrote the firm's KAM (or `KAMS[0]` when the firm had none),

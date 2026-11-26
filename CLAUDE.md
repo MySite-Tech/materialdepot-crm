@@ -213,7 +213,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 99 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 101 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
@@ -292,7 +292,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 99 titles, so grep a title and read around the line you
+**Contents** list of all 101 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -667,6 +667,23 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 **Open:** the user has not decided whether a check-in alone (no notes) should count
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
+
+**START HERE for B2B (2026-11-26): primary team and covers (CRM branch
+`b2b-team-cover` → `main` with b2b-backend PR #39, migration 0031, both merged on
+Dhruv's ask).** Start new work from `origin/main`. The user: anyone can do anyone's
+work. Each person has one primary team, and a manager puts them on another team as a
+cover for set days on the Team tab (Varun, KAM, covering Inbound). The dates decide
+only who receives new work: new leads rotate among the on-duty people with round robin
+ticked, and **nothing already assigned is ever re-dealt automatically**; moving it is
+a manual reassign on that team's tab (the user's rule). After a cover ends the person
+keeps what they were dealt. Every person has a card on all three teams, work counts
+for whoever logged it on any team (a removed rep's past calls no longer move to the
+lead's current owner, `docs/landmines.md`), and a cover has no default target. Read
+`docs/b2b/sales-tab-redesign.md` §Primary team and covers and `leadership.md` §Who the
+people are before touching team membership. **Still to do on production:** pick a
+primary for the three people the backfill left without one (Team tab, "No primary
+team"), and add Varun's Inbound cover with his dates. Production answered 0031 at
+2026-11-26 (16 rows, 9 primaries). Driven end to end on the sandbox only.
 
 **START HERE for B2B (2026-11-20): Client Database sends long-inactive firms to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no

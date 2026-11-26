@@ -133,6 +133,15 @@ their figures follow the rule only; revenue itself still loads. The whole chain
 (set, replace into `history`, bad team refused, case-insensitive key, clear), and
 0026 then ran on local `crm_real` and `crm_dummy`.
 
+**Migration `0031_b2b_team_cover`** (b2b-backend branch `b2b-team-cover`, 2026-11-26)
+adds `is_primary`, `starts_on` and `ends_on` to `b2b_team_member`
+(`b2b/sales-tab-redesign.md` §Primary team and covers). `PUT /b2b/team` accepts them,
+clears the person's other primary, and demotes a row that is given dates. **Deploy it
+first.** Without it the Team tab says so and works as before, with no covers. It was
+run on a `TEMPLATE crm_real` copy (0026 → 0031, down one, up again) and `PUT /team`
+was exercised over HTTP there: a cover kept its dates through an old-style save,
+reversed and malformed dates and a dated primary were refused with 400.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against

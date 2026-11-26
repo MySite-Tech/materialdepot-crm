@@ -9,6 +9,9 @@ export interface TeamMember {
   inRotation: boolean;
   active: boolean;
   isAdmin: boolean;
+  primary: boolean;
+  from: string | null;
+  to: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -16,6 +19,7 @@ export interface TeamMember {
 export interface TeamState {
   members: TeamMember[];
   tableMissing: boolean;
+  coverReady: boolean;
 }
 
 export interface KylasUser {
@@ -33,6 +37,9 @@ export interface MemberInput {
   active?: boolean;
   kylasUserId?: number | null;
   isAdmin?: boolean;
+  primary?: boolean;
+  from?: string | null;
+  to?: string | null;
 }
 
 export interface SavedMember {

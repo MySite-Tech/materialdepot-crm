@@ -31,7 +31,7 @@ Log in with the phone and any four-digit OTP. Any other phone logs in as a local
 | 9000000001 | Asha (Inbound) | `b2b_sales` | inbound, in rotation | 990001 |
 | 9000000002 | Bharat (Inbound) | `b2b_sales` | inbound, in rotation | 990002 |
 | 9000000011 | Omkar (Outreach) | `b2b_sales` | outreach | — |
-| 9000000021 | Kavya (KAM) | `b2b_KAM` | kam | — |
+| 9000000021 | Kavya (KAM) | `b2b_KAM` | kam | 990021 (so she can cover Inbound) |
 | 9000000099 | Meera (B2B Manager) | `b2b_manager` | — (manager) | — |
 
 Kylas also has Hardi (`81181`, the intake owner), and Django has three EC BMs
