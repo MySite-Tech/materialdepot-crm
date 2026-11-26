@@ -419,3 +419,6 @@ against an older API it is silently dropped, not an error.
 - Never call `fetch` against Django directly — you lose the envelope unwrap, the
   dedupe and the token refresh, all silently.
 - The request budget and the four permitted egress paths are in `CLAUDE.md`.
+- `lib/server/bda-retail.ts` is BDA Retail's b2b-backend client (`/b2b/bda/*`
+  through `b2bBackendFetch`). The route above it, not the backend, decides who
+  may see what (`docs/bda-retail/context.md`).

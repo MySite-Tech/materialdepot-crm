@@ -83,7 +83,7 @@ sign in, a session cannot. For an unattended look, `npm run dev:stub`
 `/login-otp/`, `/verify-otp/`, `/crm/user-profile/` and `/user-organisation/`,
 then the app on `:3100` pointed at it. Any phone and any four-digit code get in
 as `admin` (`STUB_ROLE=b2b_KAM` etc. to change it, `STUB_PERMISSIONS=` for a
-comma list of slugs), and **only Django is stubbed** — Supabase stays real.
+comma list of slugs, `STUB_NAME=` for the user's name), and **only Django is stubbed** — Supabase stays real.
 `node scripts/django-stub.mjs --stub-only` starts just the stub, for the clone
 below.
 
@@ -215,6 +215,7 @@ reading the module.
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
 | Shipped-and-fixed bugs | `docs/landmines.md` | 102 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
+| BDA Retail | `docs/bda-retail/context.md` | Retail leads the stores missed, in four cohorts with priorities, stored in b2b-backend (0033). Five named admins see everything; the `bda_retail` role sees only its queue and performance. Django's cart rows carry no `visits`, and carts over ₹1 Cr are typos |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
 
 ### A code change is not done until its doc matches

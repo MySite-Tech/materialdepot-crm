@@ -82,6 +82,9 @@ app/api/store-checklist/|docs/store-checklist/|Store checklist
 components/store-display/|docs/store-display/|Store display
 components/sales-dashboard/|docs/sales-dashboard/|Sales dashboard
 components/dashboard/|docs/dashboard/|Retail overview
+components/bda-retail/|docs/bda-retail/|BDA Retail
+lib/bda-retail/|docs/bda-retail/|BDA Retail
+app/api/bda-retail/|docs/bda-retail/|BDA Retail
 "
 
 seen_docs=""
