@@ -1,5 +1,10 @@
 import { Period, monthPeriod } from '../../models/outreach/kpis';
+import { ENGINES, TEAM_ORDER } from '../../models/performance';
+import { PerfData, Person } from '../../models/performance/types';
 import { addDays } from '../../models/performance/utils';
+import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
+import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
+import { coverLabel, coverState } from '@/lib/b2b/team/utils';
 
 const shiftMonth = (ym: string, n: number): string => {
   const [y, m] = ym.split('-').map(Number);
@@ -22,3 +27,29 @@ export const fmtDay = (d: string, weekday = false): string =>
   new Date(`${d}T00:00:00Z`).toLocaleString('en-IN', { ...(weekday ? { weekday: 'short' } : {}), day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 export const fmtPeriod = (p: Period): string => (p.from === p.to ? fmtDay(p.from) : `${fmtDay(p.from)} – ${fmtDay(p.to)}`);
+
+export function personTag(p: Person, team: B2BTeam): string | null {
+  if (p.cover) return coverLabel(p.cover);
+  if (p.primaryTeam && p.primaryTeam !== team) return `${B2B_TEAM_LABEL[p.primaryTeam]} is their team`;
+  return null;
+}
+
+export interface RosterEntry { person: Person; now: B2BTeam; tags: string[] }
+
+export function rosterOf(data: PerfData, members: TeamMember[], live: boolean): { team: B2BTeam; people: RosterEntry[] }[] {
+  const seen = new Map<string, RosterEntry & { home: B2BTeam }>();
+  for (const t of TEAM_ORDER) {
+    for (const p of ENGINES[t].people(data, members, live)) {
+      const tag = p.cover ? `${coverLabel(p.cover)} on ${B2B_TEAM_LABEL[t]}` : null;
+      const covering = !!p.cover && coverState(p.cover) === 'covering';
+      const hit = seen.get(p.key);
+      if (!hit) seen.set(p.key, { person: p, home: p.primaryTeam ?? t, now: covering ? t : p.primaryTeam ?? t, tags: tag ? [tag] : [] });
+      else {
+        if (tag) hit.tags.push(tag);
+        if (covering) hit.now = t;
+      }
+    }
+  }
+  const all = [...seen.values()].sort((a, b) => a.person.name.localeCompare(b.person.name));
+  return TEAM_ORDER.map((team) => ({ team, people: all.filter((e) => e.home === team) }));
+}

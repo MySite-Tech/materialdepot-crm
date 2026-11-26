@@ -22,7 +22,7 @@ import { btnGhost } from '../../constants/ui';
 import { RowsPanel, Scorecard } from './ui/scorecard';
 import { TargetsEditor } from './ui/targets-editor';
 import { TeamTable } from './ui/team-table';
-import { fmtPeriod, periodFor } from './utils';
+import { fmtPeriod, periodFor, personTag, rosterOf } from './utils';
 import type { B2BTeam, B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 
@@ -45,7 +45,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
   const period = useMemo(() => periodFor(preset, today, custom), [preset, today, custom]);
 
   const [teamKey, setTeamKey] = useState<B2BTeam | null>(manager ? viewer.member?.team ?? 'inbound' : viewer.member?.team ?? null);
-  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  const [pickedRef, setPickedRef] = useState<Person | null>(null);
   const [lens, setLens] = useState<string | null>(null);
   const [mode, setMode] = useState<'performance' | 'targets'>('performance');
   const setting = manager && mode === 'targets';
@@ -69,10 +69,10 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
     return engine.people(data, team.members, live);
   }, [engine, data, manager, selves, team.members, team.loading, live]);
 
-  const picked = manager ? people.find((p) => p.key === pickedKey) ?? null : people[0] ?? null;
-  const roster = useMemo(() => (manager && data && !team.loading
-    ? TEAM_ORDER.map((t) => ({ team: t, people: [...ENGINES[t].people(data, team.members, live)].sort((a, b) => a.name.localeCompare(b.name)) }))
-    : []), [manager, data, team.loading, team.members, live]);
+  const picked = useMemo(() => (manager
+    ? pickedRef && (people.find((p) => p.key === pickedRef.key) ?? { ...pickedRef, onTeam: false, cover: undefined })
+    : people[0] ?? null), [manager, pickedRef, people]);
+  const roster = useMemo(() => (manager && data && !team.loading ? rosterOf(data, team.members, live) : []), [manager, data, team.loading, team.members, live]);
   const focus = useMemo(() => (picked ? [picked] : people), [picked, people]);
 
   const kylas = useInboundAssigned(people, period, teamKey === 'inbound' && !!data);
@@ -95,7 +95,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
     ? { targetL: targetFor(revenueDef, engine.team, focus, goals, period, today), pace: paceFor(revenueDef, period, today) }
     : { targetL: null, pace: null };
 
-  useEffect(() => setLens(null), [teamKey, pickedKey]);
+  useEffect(() => setLens(null), [teamKey, pickedRef]);
 
   const failed = engine && data ? failedSources(engine, data) : [];
   const teams = manager ? TEAM_ORDER : selves.map((s) => s.team);
@@ -143,7 +143,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
           {teams.length > 1 && (
             <div className="flex items-center gap-1 flex-wrap">
               {teams.map((t) => (
-                <button key={t} onClick={() => { setTeamKey(t); setPickedKey(null); }}
+                <button key={t} onClick={() => setTeamKey(t)}
                   className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border cursor-pointer ${teamKey === t ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
                   {ENGINES[t].label}
                 </button>
@@ -151,18 +151,19 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
             </div>
           )}
           {manager && !setting && (
-            <select aria-label="Person" value={picked && teamKey ? `${teamKey}|${picked.key}` : ''}
+            <select aria-label="Person" value={picked?.key ?? ''}
               onChange={(e) => {
-                const [t, ...key] = e.target.value.split('|');
-                if (!e.target.value) { setPickedKey(null); return; }
-                setTeamKey(t as B2BTeam);
-                setPickedKey(key.join('|'));
+                const hit = roster.flatMap((g) => g.people).find((r) => r.person.key === e.target.value);
+                setPickedRef(hit?.person ?? null);
+                if (hit) setTeamKey(hit.now);
               }}
               className="px-3 py-1.5 text-[12px] font-semibold rounded-md border border-gray-200 bg-white text-gray-700 cursor-pointer outline-none focus:border-[#0F766E] max-w-[260px]">
               <option value="">Everyone on {engine?.label ?? 'the team'}</option>
               {roster.map(({ team: t, people: list }) => (
                 <optgroup key={t} label={ENGINES[t].label}>
-                  {list.map((p) => <option key={`${t}|${p.key}`} value={`${t}|${p.key}`}>{p.name}{p.onTeam ? '' : ' (not on team)'}</option>)}
+                  {list.map(({ person: p, tags }) => (
+                    <option key={p.key} value={p.key}>{p.name}{p.onTeam || p.primaryTeam ? '' : ' (not on team)'}{tags.length ? ` · ${tags.join(', ')}` : ''}</option>
+                  ))}
                 </optgroup>
               ))}
             </select>
@@ -200,13 +201,13 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
         <>
           {manager && picked && (
             <div className="flex items-center gap-2 text-[13px]">
-              <button onClick={() => setPickedKey(null)} className="font-semibold text-gray-500 hover:text-gray-900 cursor-pointer">← Whole {engine.label} team</button>
+              <button onClick={() => setPickedRef(null)} className="font-semibold text-gray-500 hover:text-gray-900 cursor-pointer">← Whole {engine.label} team</button>
               <span className="text-gray-300">/</span>
               <span className="font-bold text-gray-900">{picked.name}</span>
             </div>
           )}
 
-          <Summary name={who} team={B2B_TEAM_LABEL[engine.team]} period={fmtPeriod(period)} score={score} wholeMonth={isWholeMonth(period)} manager={manager} />
+          <Summary name={who} team={picked && personTag(picked, engine.team) ? `${B2B_TEAM_LABEL[engine.team]} (${personTag(picked, engine.team)})` : B2B_TEAM_LABEL[engine.team]} period={fmtPeriod(period)} score={score} wholeMonth={isWholeMonth(period)} manager={manager} />
 
           {sales && (
             <RevenueHero
@@ -236,7 +237,7 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
           {manager && !picked && (
             <>
               <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-2">Compare people · click a row to open their card</div>
-              <TeamTable defs={engine.defs} team={engine.team} goals={goals} rows={rows} total={card} people={people} period={period} today={today} teamLive={live} loading={loading} onPick={(p) => setPickedKey(p.key)} />
+              <TeamTable defs={engine.defs} team={engine.team} goals={goals} rows={rows} total={card} people={people} period={period} today={today} teamLive={live} loading={loading} onPick={setPickedRef} />
             </>
           )}
 

@@ -3,6 +3,7 @@
 import { B2B_ROSTER } from '../models/mock-data';
 import { Rep } from '../models/outreach/intake';
 import type { B2BTeam, B2BTeamLoad } from '@/lib/b2b/team/types';
+import { istDay, onDuty } from '@/lib/b2b/team/utils';
 import { useMemo } from 'react';
 
 const rosterReps = (role: 'Outbound' | 'KAM'): Rep[] =>
@@ -11,8 +12,9 @@ const rosterReps = (role: 'Outbound' | 'KAM'): Rep[] =>
 export function useB2BReps(team: B2BTeamLoad): { live: boolean; reps: Rep[]; rotationReps: Rep[]; kams: Rep[]; allKams: Rep[]; everyone: Rep[]; byTeam: Record<B2BTeam, Rep[]> } {
   return useMemo(() => {
     const live = !team.tableMissing && !team.error;
+    const today = istDay();
     const members = (t: B2BTeam, rotationOnly = false): Rep[] => team.members
-      .filter((m) => m.team === t && m.active && (!rotationOnly || m.inRotation))
+      .filter((m) => m.team === t && onDuty(m, today) && (!rotationOnly || m.inRotation))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((m) => ({ name: m.name, phone: m.phone }));
     const liveReps = members('outreach');

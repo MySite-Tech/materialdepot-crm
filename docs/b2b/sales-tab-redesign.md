@@ -290,6 +290,49 @@ Varun's empty tab the same day was not this: nothing was assigned to him.
   a migrated copy of the production snapshot: 92 firms and the Outreach rows moved,
   nothing else in any row changed, and the merge path deleted the duplicate row.
 
+### Primary team and covers (2026-11-26)
+
+The user: anyone can do anyone's work. Each person has one primary team, and when a
+team is short a manager puts someone else on it for set days (Varun, a KAM, covering
+Inbound that week). Every person has metrics on all three teams.
+
+- **A roster row is now one of three things** (b2b-backend migration 0031): the
+  person's **primary** team (`is_primary`, one per phone; setting it clears the
+  others), a **cover** (`starts_on`/`ends_on`, inclusive IST days, never primary), or
+  a standing second team (neither). The migration marked a primary only where a phone
+  had one row. People already on two teams read "No primary team" on the Team tab
+  until a manager picks; on the 12 Nov `crm_real` copy that was two people.
+- **The dates decide who receives new work, nothing else.** `onDuty` (active and
+  inside the window) gates the round robin (`rotationOrder`) and every assign picker
+  (`useB2BReps`, `useAssignTeams`, Inbound reassign, Leads assign, Inbound "add lead"
+  owners). Viewer memberships still include every active row, so after a cover ends
+  the person keeps seeing what they were dealt, and the Team tab lists the ended cover
+  for a manager to reassign its work and Remove the row. Shrinking visibility at the
+  end date was rejected: Inbound scopes "Mine" by the Inbound row's Kylas id, so the
+  leads would have stranded with nobody seeing them.
+- **Nothing already assigned is ever re-dealt (the user's rule, 2026-11-26).** New
+  leads in a period rotate among the on-duty, round-robin-ticked people; moving
+  anything already owned is a manual reassign on that team's tab. This holds because
+  the Inbound round robin only takes leads still on the intake owner, uncalled and not
+  in the assignment log, and the Studio KAM sync a team save triggers resolves an
+  owner to a phone, which a cover row does not change. Nothing runs when a cover ends;
+  the dates are only read when choosing who gets new work. Checked on the sandbox the
+  same day by snapshotting every Inbound owner: cover on, 3 waiting leads went one
+  each to the two regulars and the cover, 0 of 13 owned leads changed; cover ended
+  and the round robin and Inbound sync re-run, 0 changed and the cover kept its lead;
+  2 new leads then went to the two regulars only. Don't add an automatic "return the
+  cover's leads" step: the user wants that done by hand.
+- **Landing tab:** the team they are covering today, else the primary
+  (`viewer.member`).
+- **Adding a person:** their first row becomes primary; "For: A cover, for set days"
+  needs an end date. A cover's Kylas user falls back to the one on their other row.
+- **Until 0031 deploys** the CRM reads `coverReady: false` (no `is_primary` key on the
+  rows), hides every cover control, shows an amber notice, refuses cover fields with
+  that reason, and treats every row as on duty every day, which is the old behaviour.
+
+How covers count on the Leadership Board, and why a cover has no default target, is
+in `leadership.md` §Who the people are.
+
 ### The working surface: the Today view becomes the rep's day
 
 **Layout done 2026-10-28.** The tiles are now clickable lenses, and the First

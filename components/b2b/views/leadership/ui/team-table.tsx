@@ -4,6 +4,7 @@ import { Period } from '../../../models/outreach/kpis';
 import { Goals, PerfCard, PerfKpiDef, Person } from '../../../models/performance/types';
 import { fmtNumber, fmtValue, goalKey, paceFor, targetFor, tone } from '../../../models/performance/utils';
 import type { B2BTeam } from '@/lib/b2b/team/types';
+import { personTag } from '../utils';
 import { useMemo, useState } from 'react';
 
 const th = 'px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap select-none';
@@ -73,7 +74,9 @@ export function TeamTable({ defs, team, goals, rows, total, people, period, toda
               <tr key={person.key} onClick={() => onPick(person)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
                 <td className="px-3 py-2 font-semibold text-gray-900 whitespace-nowrap">
                   {person.name}
-                  {teamLive && !person.onTeam && (
+                  {personTag(person, team) ? (
+                    <span title={person.cover ? 'On this team for these days only. No target unless one is set for them.' : 'Logged work for this team while on another one.'} className="ml-1.5 text-[9.5px] font-semibold text-sky-700">{personTag(person, team)}</span>
+                  ) : teamLive && !person.onTeam && (
                     <span title="Holds work in the data but is not on this team's list. Add them under B2B → Team." className="ml-1.5 text-[9.5px] font-semibold text-amber-600">not on team</span>
                   )}
                 </td>

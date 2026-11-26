@@ -4,7 +4,7 @@ import { INBOUND_ENGINE } from './teams/inbound';
 import { KAM_ENGINE } from './teams/kam';
 import { OUTREACH_ENGINE } from './teams/outreach';
 import { DayRow, PerfCard, PerfData, Person, TargetStore, TeamEngine } from './types';
-import { MAX_DAILY_ROWS, elapsedDays, goalFor, memberPeople, personKey, unknownCard } from './utils';
+import { MAX_DAILY_ROWS, elapsedDays, goalFor, memberPeople, personFrom, unknownCard } from './utils';
 import type { B2BTeam, TeamMember, Viewer } from '@/lib/b2b/team/types';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -18,9 +18,11 @@ export const TEAM_ORDER: B2BTeam[] = ['inbound', 'outreach', 'kam'];
 
 export function selfOn(data: PerfData, viewer: Viewer, members: TeamMember[], live: boolean): { team: B2BTeam; person: Person }[] {
   if (viewer.memberships.length) {
-    return TEAM_ORDER.flatMap((team) => viewer.memberships.filter((m) => m.team === team)).map((m) => ({
-      team: m.team, person: { key: personKey(m.name, m.phone), name: m.name, phone: m.phone, kylasUserId: m.kylasUserId, onTeam: true },
-    }));
+    const home = viewer.member ?? viewer.memberships[0];
+    return TEAM_ORDER.map((team) => {
+      const row = viewer.memberships.find((m) => m.team === team);
+      return { team, person: personFrom(row ?? home, members, team, !!row) };
+    });
   }
   if (!viewer.name) return [];
   return TEAM_ORDER.flatMap((team) => {

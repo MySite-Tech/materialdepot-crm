@@ -81,17 +81,19 @@ function rotationSince(now = Date.now()): string {
 export async function saveMember(input: MemberInput, byName: string): Promise<SavedMember> {
   const phone = normalisePhone(input.phone);
   if (phone.length !== 10) throw new InputError('A team member needs a 10-digit phone number');
-  const { members } = await readMembers();
+  const { members, coverReady } = await readMembers();
   const stored = members.find((m) => m.phone === phone && m.team === input.team);
   const name = String(input.name ?? '').trim() || stored?.name || '';
   if (!name) throw new InputError('A team member needs a name');
+  const cover = coverFor(input, stored, members.filter((m) => m.phone === phone && m.team !== input.team), coverReady);
 
   let kylasUserId = input.kylasUserId !== undefined ? input.kylasUserId : stored?.kylasUserId ?? null;
   let kylasName: string | null = input.kylasUserId === undefined ? stored?.kylasName ?? null : null;
   let warning: string | undefined;
   const users = await listKylasUsers();
   if (input.kylasUserId === undefined && !stored) {
-    const hit = kylasUserForPhone(users, phone);
+    const linked = members.find((m) => m.phone === phone && m.kylasUserId != null)?.kylasUserId;
+    const hit = kylasUserForPhone(users, phone) ?? users.find((u) => u.id === linked) ?? null;
     kylasUserId = hit?.id ?? null;
     kylasName = hit?.name ?? null;
     if (!hit && input.team === 'inbound') warning = `No Kylas user has the phone ${phone}. Pick their Kylas user by hand, or they cannot own leads.`;
@@ -111,9 +113,25 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     inRotation: input.inRotation ?? stored?.inRotation ?? true,
     active: input.active ?? stored?.active ?? true,
     isAdmin: input.isAdmin,
+    cover,
     updatedBy: byName,
   });
   return { member, warning };
+}
+
+function coverFor(input: MemberInput, stored: TeamMember | undefined, others: TeamMember[], ready: boolean): Pick<TeamMember, 'primary' | 'from' | 'to'> | undefined {
+  const asked = input.primary !== undefined || input.from !== undefined || input.to !== undefined;
+  if (!ready) {
+    if (asked) throw new InputError('Primary teams and cover dates need b2b-backend migration 0031 deployed first');
+    return undefined;
+  }
+  const from = input.from !== undefined ? input.from : stored?.from ?? null;
+  const to = input.to !== undefined ? input.to : stored?.to ?? null;
+  if (from && to && to < from) throw new InputError('The cover ends before it starts');
+  if (from || to) return { primary: false, from, to };
+  const primary = input.primary ?? (stored ? stored.primary : !others.some((m) => m.active));
+  if (!asked && stored) return undefined;
+  return { primary, from: null, to: null };
 }
 
 export async function changeMemberNumber(fromPhone: string, toPhone: string, byName: string): Promise<RenumberOutcome> {

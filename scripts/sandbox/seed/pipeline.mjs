@@ -194,7 +194,8 @@ function seedKam() {
 function seedTeam(at) {
   const row = (p, team, inRotation) => ({
     phone: p.phone, name: p.name, team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
-    in_rotation: inRotation, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
+    in_rotation: inRotation, active: true, is_admin: false, is_primary: team === p.team, starts_on: null, ends_on: null,
+    updated_at: at, updated_by: MEERA.name,
   });
   const bharat = PERSONAS.find((p) => p.phone === '9000000002');
   return [...PERSONAS.filter((p) => p.team).map((p) => row(p, p.team, true)), row(bharat, 'outreach', false)];

@@ -23,6 +23,8 @@ export const B2B_TEAM_LABEL = Object.fromEntries(B2B_TEAMS.map((t) => [t.key, t.
 // Kylas user (Hardi) that every Presales-qualified B2B lead is created under.
 export const INBOUND_INTAKE_KYLAS_ID = 81181;
 
+export const IST_OFFSET_MS = 19_800_000;
+
 export const INBOUND_ROTATION_START = '2026-10-29T00:00:00+05:30';
 
 export const INBOUND_ROTATION_WINDOW_DAYS = 7;

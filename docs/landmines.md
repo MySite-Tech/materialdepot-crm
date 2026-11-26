@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-100 entries. They live in one file because they cross-reference each other —
+101 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -110,6 +110,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
 - A firm's last order read a month old while its own page listed yesterday's order
 - An installation order's delivery date was the installer's date, so every new order read as due today
+- A rep's past calls moved to the lead's current owner the moment their team row was switched off
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1520,3 +1521,19 @@ on a row that is not a delivery. Django now sends `goods_delivery_date` on the s
 flooring, wallpaper or panel line, by its promised date. The import uses
 it, and each reconcile moves a still-pending, auto-imported, never re-dated order to it
 (`docs/site-audit/orders.md` §The delivery date is when the goods arrive).
+
+### A rep's past calls moved to the lead's current owner the moment their team row was switched off (2026-11-26)
+
+Found while building covers, not reported. Inbound calls (and KAM interactions) were
+credited to the caller only while the caller was on that team's *active* list, else to
+the lead's owner. So switching a departed rep's row off, which is what Remove does,
+re-credited every call they ever logged to whoever owned each lead by then (Mandeep's
+leads went to Hardi and Vikas on 14 Nov, so their calls likely grew that day for work
+they never did), and a KAM's calls on an Inbound lead counted for nobody. The rule meant
+to stop a manager's call from counting for the manager had become "the list as it is
+today decides who did past work". Now any B2B team row, any team, active or not, keeps
+the caller's credit (`onB2BTeam`, `b2bMemberByPhone`, `docs/b2b/leadership.md` §KPI
+rules); only someone on no team falls back to the owner. **Who did a piece of work must
+never depend on the roster's current state.** Check this when anything filters people
+by `active` or by team before crediting history.
+
