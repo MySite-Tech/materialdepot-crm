@@ -53,20 +53,20 @@ export const STORE_ORDERS = 'Store orders';
 
 export const INACTIVE_FIRM = 'Inactive firm';
 
-export const CLOSED_INBOUND = 'Closed Inbound firm';
+export const CLIENT_DB_FIRM = 'Client Database firm';
 
-export const OUTREACH_SOURCES = ['Inbound', EC_B2B_REFERRAL, 'EC referral', STORE_ORDERS, INACTIVE_FIRM, CLOSED_INBOUND, 'Dormant form', 'Own research'] as const;
+export const OUTREACH_SOURCES = ['Inbound', EC_B2B_REFERRAL, 'EC referral', STORE_ORDERS, INACTIVE_FIRM, CLIENT_DB_FIRM, 'Dormant form', 'Own research'] as const;
 export type OutreachSource = typeof OUTREACH_SOURCES[number];
 
-export const OUTREACH_ENTRY_SOURCES = OUTREACH_SOURCES.filter((s) => s !== EC_B2B_REFERRAL && s !== STORE_ORDERS && s !== INACTIVE_FIRM && s !== CLOSED_INBOUND);
+export const OUTREACH_ENTRY_SOURCES = OUTREACH_SOURCES.filter((s) => s !== EC_B2B_REFERRAL && s !== STORE_ORDERS && s !== INACTIVE_FIRM && s !== CLIENT_DB_FIRM);
 
 export const OUTREACH_SOURCE_HINT: Record<OutreachSource, string> = {
   'Inbound':      'Handed over by the Inbound team for an in-person meeting',
   [EC_B2B_REFERRAL]: 'Sent by EC staff through the EC B2B Referral form',
   'EC referral':  'Referred by an Experience Centre',
   [STORE_ORDERS]: 'Billed with a GSTIN on store orders, and sent here from the Client Database review list',
-  [INACTIVE_FIRM]: 'A Client Database firm with no order in over 3 months, sent here by a manager to win it back',
-  [CLOSED_INBOUND]: 'A Client Database firm that came through Inbound and has ordered, sent here by a manager for a meeting',
+  [INACTIVE_FIRM]: 'A Client Database firm with no order in over 6 months, sent here by a manager before 27 Nov 2026',
+  [CLIENT_DB_FIRM]: 'A Client Database firm a manager sent here, whatever its order history',
   'Dormant form': 'From an older lead form that is no longer worked',
   'Own research': 'Found by the BM — field visit, directory, Instagram',
 };
