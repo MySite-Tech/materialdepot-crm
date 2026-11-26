@@ -12,7 +12,8 @@ import type { ImportDiag, ImportRun } from '@/lib/bda-retail/types';
 import { istToday, shiftDays } from '@/lib/bda-retail/utils';
 
 const PAGE = 1000;
-const MAX_PAGES = 40;
+const MAX_ROWS = 150_000;
+const MAX_PAGES = 400;
 const RETRY_WAITS_MS = [1500, 4000];
 const B2B_BRANCH = /^b2b$/i;
 const FINAL = /Session expired|do not have access/;
@@ -51,8 +52,9 @@ async function pageOf<T>(get: (page: number, size: number) => Promise<Page<T>>, 
 
 async function paged<T>(label: string, get: (page: number, size: number) => Promise<Page<T>>, step: (s: string) => void): Promise<T[]> {
   const rows: T[] = [];
+  let of = 0;
   for (let page = 1; ; page++) {
-    step(`${label}: page ${page}`);
+    step(`${label}: page ${page}${of ? ` of ${of}` : ''}`);
     let res: Page<T>;
     try {
       res = await pageOf(get, page);
@@ -60,8 +62,11 @@ async function paged<T>(label: string, get: (page: number, size: number) => Prom
       throw new Error(`${label}, page ${page}: ${err instanceof Error ? err.message : 'unknown error'}`);
     }
     rows.push(...res.rows);
+    of = res.totalPages;
     if (page >= res.totalPages || res.rows.length === 0) break;
-    if (page >= MAX_PAGES) throw new Capped(`${label} has more than ${MAX_PAGES * PAGE} rows. Nothing was saved.`);
+    if (rows.length > MAX_ROWS || page >= MAX_PAGES) {
+      throw new Capped(`${label} still had ${res.totalPages - page} pages to go after ${rows.length.toLocaleString('en-IN')} rows. Nothing was saved.`);
+    }
   }
   return rows;
 }

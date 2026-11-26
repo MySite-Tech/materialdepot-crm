@@ -35,8 +35,9 @@ exception to the ten-request budget: once a day, one admin's tab spends about
 on-demand refresh. **Fetch new leads** is otherwise an admin's click, not a mount. It reads
 Django in that admin's browser, because nothing on the server can read Django
 without a person's token (b2b-backend's MD keys cover file uploads and invoices
-only; Owed by Django row 21). It pages every source at 1,000 rows, capped at 40
-pages each. Past the cap it saves nothing and names the source that overflowed.
+only; Owed by Django row 21). It asks for 1,000 rows a page and stops a source past
+150,000 rows or 400 pages. It counts rows, not pages, because a page can come back
+smaller than asked: a page-based cap of 40 stopped a year of footfall on 26 Nov. Past the cap it saves nothing and names the source that overflowed.
 **Django's `/crm/leads/` sometimes answers 500 on a 1,000-row page** that read fine
 an hour earlier (26 Nov). Each page is therefore retried twice, then read as two
 500-row halves, and only then does the fetch stop, naming the source and page.
