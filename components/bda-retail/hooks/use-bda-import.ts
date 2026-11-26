@@ -130,8 +130,8 @@ export function useBdaImport(onDone: () => Promise<void>) {
       }, setProgress);
       const visits = await allFootfall('EC visits with no cart', fetchFootfallNoCart, shiftDays(today, -VISIT_WINDOW_DAYS), today, setProgress);
       const yearFrom = shiftDays(today, -EC_VISIT_LOOKBACK_DAYS);
-      const visitedNoCart = await allFootfall('EC visitors this year, no cart', fetchFootfallNoCart, yearFrom, today, setProgress);
-      const visitedWithCart = await allFootfall('EC visitors this year, cart not converted', fetchFootfallNonConverted, yearFrom, today, setProgress);
+      const visitedNoCart = await allFootfall('EC visitors, last 3 months, no cart', fetchFootfallNoCart, yearFrom, today, setProgress);
+      const visitedWithCart = await allFootfall('EC visitors, last 3 months, cart not converted', fetchFootfallNonConverted, yearFrom, today, setProgress);
 
       const carts = [...recent, ...inCart, ...quoted];
       const result = buildCohorts({ carts, orders: { civil, carpentry, decorative, earlier }, visits, ecVisitors: [...visitedNoCart, ...visitedWithCart], today });

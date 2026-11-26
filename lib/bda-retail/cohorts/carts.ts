@@ -81,7 +81,7 @@ export function cartCohorts(rows: CRMLeadRow[], ecVisitors: Set<string>, today: 
 
     if (!anyVisit && newestOpen >= cartFloor) {
       leads.push(lead(phone, top, 'cart_no_visit', newestOpen, value,
-        `${open.length} open cart${open.length > 1 ? 's' : ''}${value ? `, ${rupees(value)}` : ''}${oddText(odd)}${itemsText(top) ? ` · ${itemsText(top)}` : ''} · no EC visit in the last year`));
+        `${open.length} open cart${open.length > 1 ? 's' : ''}${value ? `, ${rupees(value)}` : ''}${oddText(odd)}${itemsText(top) ? ` · ${itemsText(top)}` : ''} · no EC visit in the last 3 months`));
       continue;
     }
 

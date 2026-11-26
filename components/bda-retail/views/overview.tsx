@@ -126,7 +126,7 @@ export function OverviewView({ bank, views, months, month, setMonth, active, pla
               </p>
               <p className="text-[11px] text-gray-400">
                 Read {n(last.read.carts ?? 0)} carts, {n((last.read.civil ?? 0) + (last.read.carpentry ?? 0) + (last.read.decorative ?? 0))} recent orders
-                {last.read.ecVisitors !== undefined && `, ${n(last.read.ecVisitors)} EC visitors this year`}.
+                {last.read.ecVisitors !== undefined && `, ${n(last.read.ecVisitors)} EC visitors in the last 3 months`}.
               </p>
               {Object.entries(last.byCohort).length > 0 && (
                 <ul className="text-[11px] text-gray-500 pt-1">

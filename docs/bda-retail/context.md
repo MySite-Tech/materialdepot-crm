@@ -22,8 +22,8 @@ or a lead's `enteredOn`. Who may see what is decided in `app/api/bda-retail`.
 | Carts, last 30 days | `/crm/leads/?created_from&created_to` | Added to cart, and pending carts |
 | Older open carts | `/crm/leads/?status=In Cart` and `?status=Quote Approval Pending`, 31–90 days | Pending carts |
 | Phase orders | `/crm/leads/?order_from&order_to&category=<phase list>`, one per phase | Upsell |
-| Earlier civil and carpentry | the same, 61–180 days back | Upsell, decorative only |
-| EC visitors this year | `/crm/footfall-no-cart/` and `/crm/footfall-non-converted/`, 365 days | "No EC visit" |
+| Earlier civil and carpentry | the same, 61–90 days back | Upsell, decorative only |
+| EC visitors, last 3 months | `/crm/footfall-no-cart/` and `/crm/footfall-non-converted/`, 90 days | "No EC visit" |
 | EC visits, no cart | `/crm/footfall-no-cart/`, 30 days | No cart created |
 
 On mount the tab makes one request (`GET /api/bda-retail`; the route makes one or
@@ -81,11 +81,13 @@ phone fits several cohorts the highest priority wins, then the order in
 days under another cohort (`samePerson`).
 
 - **Added to cart, no EC visit (P1):** an open cart created in the last 30 days, no
-  order since the newest one, and the phone is not among this year's EC visitors.
+  order since the newest one, and the phone is not among the last 3 months' EC visitors.
   **`/crm/leads/` rows carry no `visits`**, although `CRMLeadRow` types it. The
   first fetch trusted it and put every open cart here. Footfall's two drill-downs
   are the visitor list now. A visitor who converted is in neither list, so one
   with a newer cart can land here. That gap is accepted.
+- **Every lookback is at most 90 days** (the user, 2026-11-26: "just the last 3
+months"). A year of footfall had been the slowest read in a fetch.
 - **Pending carts:** an open cart whose last touch (created date or latest remark)
   is 7+ days old. Quote Approval Pending is P1, In Cart is P2.
 - **Upsell:** phases map Django categories (`PHASE_CATEGORIES`, the user approved
@@ -93,7 +95,7 @@ days under another cohort (`samePerson`).
   user's 30-day lag) and nothing in the next phase since. Carpentry → decorative
   is P1, civil → carpentry is P3, both by the user's rule. A civil buyer who
   skipped to decorative still counts, because they never bought carpentry.
-  Decorative-only (P3) means no civil or carpentry order in 180 days, so the call
+  Decorative-only (P3) means no civil or carpentry order in 90 days, so the call
   asks where those were bought. The `category` filter does filter: the three
   phase fetches returned different counts.
 - **EC visit, no cart (P3):** footfall's no-cart list for 30 days, minus anyone

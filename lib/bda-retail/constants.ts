@@ -16,7 +16,7 @@ export const COHORTS: CohortDef[] = [
     label: 'Added to cart, no EC visit',
     group: 'Added to cart',
     priority: 'P1',
-    rule: 'Cart in the last 30 days, has a phone, no Experience Centre visit in the last year, no order since.',
+    rule: 'Cart in the last 30 days, has a phone, no Experience Centre visit in the last 3 months, no order since.',
   },
   {
     key: 'pending_quote',
@@ -51,7 +51,7 @@ export const COHORTS: CohortDef[] = [
     label: 'Decorative only',
     group: 'Upsell',
     priority: 'P3',
-    rule: 'Ordered decorative 30+ days ago with no civil or carpentry order from us. Ask whether those were bought elsewhere.',
+    rule: 'Ordered decorative 30+ days ago with no civil or carpentry order from us in the last 3 months. Ask whether those were bought elsewhere.',
   },
   {
     key: 'visit_no_cart',
@@ -99,9 +99,9 @@ export const IDLE_DAYS = 7;
 export const PENDING_LOOKBACK_DAYS = 90;
 export const UPSELL_LAG_DAYS = 30;
 export const UPSELL_WINDOW_DAYS = 30;
-export const EARLIER_PHASE_LOOKBACK_DAYS = 180;
+export const EARLIER_PHASE_LOOKBACK_DAYS = 90;
 export const VISIT_WINDOW_DAYS = 30;
-export const EC_VISIT_LOOKBACK_DAYS = 365;
+export const EC_VISIT_LOOKBACK_DAYS = 90;
 export const ACTIVE_REMARK_DAYS = 7;
 export const MAX_UNANSWERED = 3;
 export const MAX_PLAUSIBLE_VALUE = 10_000_000;
