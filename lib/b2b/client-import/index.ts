@@ -4,6 +4,7 @@ import type { ReviewFirm, ReviewQueue } from './types';
 
 export { reviewToClient, reviewToInbound, reviewToOutreach } from './utils/convert';
 export { firmToInbound, firmToOutreach, winBackSummary } from './utils/win-back';
+export type { SendReason } from './utils/win-back';
 
 export async function fetchReviewQueue(refresh = false, retried = false): Promise<ReviewQueue> {
   const res = await fetch(`/api/b2b/client-import${refresh ? '?refresh=1' : ''}`, {

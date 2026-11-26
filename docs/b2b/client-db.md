@@ -177,8 +177,8 @@ that is not a gap.
   KAM from `client.kam`, EC from the store rep on the last placed order. An entry in
   `spoc_log` beats the derived value. The KAM slot has no log of its own:
   `assignments` already is one, so it changes under Account.
-- **Sending a firm inactive over 6 months to Inbound or Outreach fills that slot
-  (2026-11-20)** with a logged entry from that day, alongside a new lead in the
+- **Sending a firm to Inbound or Outreach from the assign bar fills that slot
+  (2026-11-20; Outreach's wider rule 2026-11-27)** with a logged entry from that day, alongside a new lead in the
   team's tab (§Firms inactive over 6 months go to Inbound or Outreach).
 - **Most firms will show empty slots, and that is correct.** Measured on real
   rows 2026-10-31: of 69 firms, 60 had a KAM, 8 linked to an Outreach lead, 2 to
@@ -480,8 +480,9 @@ scroll at 390px and no page errors.
 
 Managers get a checkbox column and an assign bar (`ui/assign-bar.tsx`, shared
 with Outreach's pool and the Leads tab). The bar picks the team first. KAM is always open, because a firm's owner is
-its `kam` field and sign-off is on the KAM tab. Inbound and Outreach open only for
-firms inactive over 6 months (§Firms inactive over 6 months go to Inbound or Outreach). One person lists every active KAM.
+its `kam` field and sign-off is on the KAM tab. Inbound opens only for firms inactive over 6 months; Outreach also for firms
+inactive over 3 months and for closed Inbound firms (§Firms inactive over 6 months go
+to Inbound or Outreach). One person lists every active KAM.
 Round robin starts from the in-rotation KAMs, and the manager ticks the set for
 that assignment (2026-10-31). Select all takes the whole lens, not just the
 page. Either choice writes a pending handover
@@ -497,14 +498,25 @@ The user: the Client Database is not only for KAMs. A firm with no order in over
 every firm has an Inbound, Outreach, KAM and EC SPoC. This settles the 16 Nov open
 question ("a new Outreach lead, or an Outreach BM owning the firm?"): **both.**
 
-- **Eligible:** `clientStatus` is Inactive 6–12 months or Inactive 12+ months
-  (`WIN_BACK_STATUSES`), and the firm has a number. Never ordered, Unknown and
-  anything ordered within 6 months stay KAM-only. The assign bar enables Inbound
-  and Outreach once any eligible firm is selected; its tooltip says why when not.
-  Ineligible firms in a mixed selection are skipped and counted in the note.
+- **Eligible, per team (2026-11-27).** The firm needs a number, and then:
+  - **Inbound:** `clientStatus` is Inactive 6–12 months or 12+ months
+    (`WIN_BACK_STATUSES`). Unchanged from 2026-11-20.
+  - **Outreach:** Inactive 3–6, 6–12 or 12+ months (`LONG_INACTIVE`), **or** a
+    closed Inbound firm: it has ordered in the last 3 months (`RECENTLY_ORDERED`:
+    Active or Inactive 1–3 months) and came through Inbound (`source` Inbound, or an
+    Inbound lead on any of its numbers, read from the Inbound links the SPoC column
+    already loads). A B2B manager asked for both on 2026-11-27: KAM firms quiet for
+    90–180 days, and Inbound leads that just closed, had no way to reach Outreach.
+  Never ordered and Unknown stay KAM-only, as does a firm ordered in the last 3
+  months that did not come through Inbound. Each team button opens on its own once
+  one selected firm qualifies for it; its tooltip states that team's rule. Firms in
+  a mixed selection that do not qualify for the picked team are skipped and counted
+  in the note. Until the Inbound links load, only a firm whose `source` is Inbound
+  counts as a closed Inbound firm.
 - **What a send writes**, in this order (`use-firm-assign.ts`):
   1. a new lead in that team's own tab, so the person actually sees it. Outreach:
-     source **Inactive firm**, a pending intake the BM accepts or rejects
+     source **Inactive firm**, or **Closed Inbound firm** for a closed Inbound firm
+     (its note says "for a meeting", not "to win it back"), a pending intake the BM accepts or rejects
      (`firmToOutreach`, `POST /rows/bulk {only_new}`). Inbound: a `crm-` lead,
      stage New, source Other, owned at once, nothing written to Kylas
      (`firmToInbound`, `insertInboundLeads`). The lead's note / summary says it came
@@ -530,6 +542,11 @@ question ("a new Outreach lead, or an Outreach BM owning the firm?"): **both.**
   to set the SPoC on each Firm page. Nothing rolls back.
 - **Known gap:** if an Outreach BM rejects the lead, the firm's logged Outreach SPoC
   still names them until a manager changes it on the Firm page or sends it again.
+- **2026-11-27, sandbox only:** `CLI-SBX-0005` (Quiet Studio, 130 days) and
+  `CLI-SBX-0006` (Fresh Inbound Interiors, source Inbound, ordered 10 days ago) both
+  opened Outreach and not Inbound; `CLI-SBX-0002` (45 days, Existing) stayed KAM-only.
+  One send of all three made an Inactive firm lead and a Closed Inbound firm lead and
+  skipped the third; a second send was refused for the open lead.
 - Seen on the sandbox only (two seeded firms, `CLI-SBX-0003` 250 days, `CLI-SBX-0004`
   420 days and no KAM): Outreach to one person, Inbound by round robin, a recent firm
   refused, a second Outreach send refused for the open lead, both SPoCs on the Firm

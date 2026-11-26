@@ -37,6 +37,8 @@ function seedDeals() {
     deal('ENQ-900116', '9000020015', 'Stand-in Constructions', 'Delivered', 230000, SNEHA, 'Whitefield', -95, { closureDate: istDay(-90), clientGst: '36AAACS7777G1Z4' }),
     deal('ENQ-900117', '9000020016', 'Dormant Builders', 'Delivered', 275000, RAVI, 'JP Nagar', -255, { closureDate: istDay(-250) }),
     deal('ENQ-900118', '9000020017', 'Lapsed Interiors', 'Delivered', 88000, IMRAN, 'HSR', -425, { closureDate: istDay(-420) }),
+    deal('ENQ-900119', '9000020018', 'Quiet Studio', 'Delivered', 120000, RAVI, 'JP Nagar', -135, { closureDate: istDay(-130) }),
+    deal('ENQ-900120', '9000020019', 'Fresh Inbound Interiors', 'Order Placed', 160000, { name: 'Asha (Inbound)', phone: '9000000001' }, 'B2B', -12, { closureDate: istDay(-10) }),
   ];
 }
 
@@ -175,6 +177,12 @@ function seedKam() {
     }),
     clientRow('CLI-SBX-0004', 'Lapsed Interiors', '9000020017', 'Existing', istAt(-450, 12), {
       contactName: 'Demo Owner E', clientType: 'Interior Designer', noKam: true,
+    }),
+    clientRow('CLI-SBX-0005', 'Quiet Studio', '9000020018', 'Existing', istAt(-200, 12), {
+      contactName: 'Demo Owner F', clientType: 'Interior Designer', reason: 'Existing account',
+    }),
+    clientRow('CLI-SBX-0006', 'Fresh Inbound Interiors', '9000020019', 'Inbound', istAt(-10, 12), {
+      contactName: 'Demo Owner G', clientType: 'Interior Designer', noKam: true,
     }),
   ];
   const orders = [

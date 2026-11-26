@@ -733,7 +733,10 @@ Each becomes a new lead in that team's tab (Outreach: source **Inactive firm**,
 a pending intake the BM accepts; Inbound: a `crm-` lead owned at once, no Kylas
 write) **and** a `spoc_log` entry naming that person as the firm's Inbound or
 Outreach SPoC from that day. The KAM is kept. A firm with an open lead on that team
-is skipped. Never ordered and recent firms stay KAM-only. Detail and the known gap
+is skipped. Never ordered and recent firms stay KAM-only. **Since 2026-11-27
+(`client-db-outreach-90d`) Outreach alone also takes firms inactive over 3 months and
+closed Inbound firms** (ordered in the last 3 months, came through Inbound; source
+**Closed Inbound firm**); Inbound keeps 6 months. Detail and the known gap
 (a BM's reject leaves the logged SPoC) are in `docs/b2b/client-db.md` §Firms inactive
 over 6 months go to Inbound or Outreach. **Seen on the sandbox only.** After deploy,
 sign in as a manager, send one 6+ month firm to an Outreach BM, and check the lead

@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, b2bSellerTest, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
+import { ACTIVE_DAYS, ClientEntity, b2bSellerTest, normalizeContactNumber, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { fmtShortINR } from '../../models/mock-data';
 import { repNames } from '../../models/outreach/handover';
@@ -10,7 +10,7 @@ import { useClientAggregates } from '../../hooks/use-client-aggregates';
 import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { AssignBar } from '../../ui/assign-bar';
 import { useClientColumns } from './hooks/use-client-columns';
-import { WIN_BACK_RULE, useFirmAssign } from './hooks/use-firm-assign';
+import { WIN_BACK_RULE, WIN_BACK_RULES, useFirmAssign } from './hooks/use-firm-assign';
 import { useSpocSources } from './hooks/use-spoc-sources';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
@@ -54,18 +54,21 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     const metrics = metricsFor(c);
     return { metrics, status: clientStatus(metrics, today) };
   }, [metricsFor, today]);
+  const spocSource = useSpocSources();
+  const inboundPhoneSet = useMemo(() => new Set(spocSource.inbound.flatMap((l) => l.phones.map(normalizeContactNumber))), [spocSource.inbound]);
+  const fromInbound = useCallback((c: ClientEntity) => c.source === 'Inbound' || contactNumbers(c.contacts).some((p) => inboundPhoneSet.has(p)), [inboundPhoneSet]);
   const assigner = useFirmAssign({
     clients,
     team,
     by: viewer.member?.name || viewer.name,
     rowOf,
+    fromInbound,
     onSaved: (list) => {
       const byId = new Map(list.map((c) => [c.id, c]));
       setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
     },
   });
   const studio = useStudioLogins();
-  const spocSource = useSpocSources();
   const { visible, setVisible } = useClientColumns();
 
   const load = useCallback(async () => {
@@ -349,7 +352,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
               count={assigner.picked.size}
               noun="firm"
               teams={assigner.teams}
-              closedWhy={{ inbound: `${WIN_BACK_RULE} None of the selected firms is.`, outreach: `${WIN_BACK_RULE} None of the selected firms is.` }}
+              closedWhy={{ inbound: `${WIN_BACK_RULES.inbound} None of the selected firms is.`, outreach: `${WIN_BACK_RULES.outreach} None of the selected firms is.` }}
               busy={assigner.busy}
               rule={`KAM: bulk assignment takes only firms with no KAM, and to move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to; one moved from another KAM can only be accepted. ${WIN_BACK_RULE} Each becomes a new lead for that person and sets the firm's SPoC for that team; a firm with an open lead on that team is left alone. Round robin gives each to whichever of these people holds the fewest.`}
               total={rows.length}

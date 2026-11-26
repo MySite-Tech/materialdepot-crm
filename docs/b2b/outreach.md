@@ -136,8 +136,11 @@ be picked in + New lead. **Store orders** (2026-11-07) comes only from the Clien
 Database's Review new firms list (`client-db.md` §Review new firms): a manager sends
 a firm billed with a GSTIN on store orders, with its orders in a note. It cannot be
 picked in + New lead either, and it is not a coverage source. **Inactive firm**
-(2026-11-20) is the same kind: a Client Database firm with no order in over 6 months
-that a manager sent to win back (`client-db.md` §Firms inactive over 6 months).
+(2026-11-20) is the same kind: a Client Database firm with no order in over 3 months
+(6 until 2026-11-27) that a manager sent to win back. **Closed Inbound firm**
+(2026-11-27) is a Client Database firm that came through Inbound and ordered in the
+last 3 months, sent for a meeting. Neither is a coverage source
+(`client-db.md` §Firms inactive over 6 months).
 "Dormant form" is the
 user's "existing forms that are inactive": there is no integration for those
 forms, so a BM enters each one by hand with `Source` set.

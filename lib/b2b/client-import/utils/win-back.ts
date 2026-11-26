@@ -2,19 +2,23 @@ import { ClientEntity, ClientOrderMetrics, ClientStatus } from '@/components/b2b
 import { newB2BId } from '@/components/b2b/models/ids';
 import { CRM_INBOUND_ID_PREFIX } from '@/components/b2b/models/inbound';
 import { InboundLead, OutreachLead, fmtShortINR } from '@/components/b2b/models/mock-data';
-import { INACTIVE_FIRM } from '@/components/b2b/models/outreach';
+import { CLOSED_INBOUND, INACTIVE_FIRM } from '@/components/b2b/models/outreach';
+
+export type SendReason = 'inactive' | 'inbound';
 
 const day = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : 'an unknown date');
 
-export function winBackSummary(c: ClientEntity, m: ClientOrderMetrics, status: ClientStatus, by: string): string {
+const PURPOSE: Record<SendReason, string> = { inactive: 'to win it back', inbound: 'for a meeting, as a firm that came through Inbound and has ordered' };
+
+export function winBackSummary(c: ClientEntity, m: ClientOrderMetrics, status: ClientStatus, by: string, reason: SendReason): string {
   const orders = m.orders ? `${m.orders} order${m.orders === 1 ? '' : 's'} worth ${fmtShortINR(m.totalRevenue || 0)} in all` : 'no order count on record';
   const kam = c.kam ? ` Its KAM is ${c.kam}.` : ' It has no KAM.';
-  return `Sent from the Client Database by ${by} to win it back: ${status.toLowerCase()}, last order on ${day(m.lastOrderPlaced)}, ${orders}.${kam}`;
+  return `Sent from the Client Database by ${by} ${PURPOSE[reason]}: ${status.toLowerCase()}, last order on ${day(m.lastOrderPlaced)}, ${orders}.${kam}`;
 }
 
 const people = (c: ClientEntity) => [...(c.contacts || [])].sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
 
-export function firmToOutreach(c: ClientEntity, summary: string, by: string, at: string): OutreachLead {
+export function firmToOutreach(c: ClientEntity, summary: string, by: string, at: string, reason: SendReason): OutreachLead {
   const [first, second] = people(c);
   return {
     id: newB2BId('OR'),
@@ -25,7 +29,7 @@ export function firmToOutreach(c: ClientEntity, summary: string, by: string, at:
     altName: second?.name,
     gstNumber: c.gsts?.[0]?.number,
     bm: '',
-    source: INACTIVE_FIRM,
+    source: reason === 'inbound' ? CLOSED_INBOUND : INACTIVE_FIRM,
     createdAt: at,
     status: 'Yet to Meet',
     statusChangedAt: at,
