@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react';
 import { Spinner, inputCls } from '../../b2b/ui/inbound-chips';
 import { LensTileGroup, LensTiles } from '../../b2b/ui/lens-tiles';
 import { COHORTS, PRIORITIES } from '@/lib/bda-retail/constants';
-import type { LeadStage, LeadView, Priority } from '@/lib/bda-retail/types';
+import type { BdaPerson, LeadStage, LeadView, Priority } from '@/lib/bda-retail/types';
 import { BankLens, COHORT_GROUPS, bankLensMatches, rupees } from '@/lib/bda-retail/utils';
 import { PRIORITY_COLOR, PageHead, labelCls, selectCls } from '../ui/chips';
+import { AssignBar } from '../ui/assign-bar';
 import { LeadTable } from '../ui/lead-table';
 
 const STAGES: Array<[LeadStage, string]> = [
@@ -18,7 +19,7 @@ export interface BankFilters {
   month: string;
 }
 
-export function BankView({ views, loading, months, filters, setFilters, onOpen, fetchButton }: {
+export function BankView({ views, loading, months, filters, setFilters, onOpen, fetchButton, bdas, onAssign }: {
   views: LeadView[];
   loading: boolean;
   months: string[];
@@ -26,6 +27,8 @@ export function BankView({ views, loading, months, filters, setFilters, onOpen, 
   setFilters: (f: BankFilters) => void;
   onOpen: (l: LeadView) => void;
   fetchButton: React.ReactNode;
+  bdas: BdaPerson[];
+  onAssign: (assignments: Array<{ key: string; phone: string }>, step: (s: string) => void) => Promise<number>;
 }) {
   const { lens, month } = filters;
   const [search, setSearch] = useState('');
@@ -33,6 +36,16 @@ export function BankView({ views, loading, months, filters, setFilters, onOpen, 
   const [stage, setStage] = useState<'' | LeadStage>('');
   const [branch, setBranch] = useState('');
   const [bda, setBda] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+
+  const toggle = (keys: string[], on: boolean) => {
+    const next = new Set(picked);
+    for (const k of keys) {
+      if (on) next.add(k);
+      else next.delete(k);
+    }
+    setPicked(next);
+  };
 
   const base = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -51,7 +64,7 @@ export function BankView({ views, loading, months, filters, setFilters, onOpen, 
   );
 
   const branches = useMemo(() => [...new Set(views.map((l) => l.branch).filter(Boolean))].sort(), [views]);
-  const bdas = useMemo(() => [...new Set(views.map((l) => l.claim?.by).filter((x): x is string => !!x))].sort(), [views]);
+  const workedBy = useMemo(() => [...new Set(views.map((l) => l.claim?.by).filter((x): x is string => !!x))].sort(), [views]);
 
   const groups: LensTileGroup<BankLens>[] = useMemo(() => COHORT_GROUPS.map((g) => {
     const head: BankLens = `group:${g}`;
@@ -132,7 +145,7 @@ export function BankView({ views, loading, months, filters, setFilters, onOpen, 
             <select value={bda} onChange={(e) => setBda(e.target.value)} className={selectCls}>
               <option value="">Anyone</option>
               <option value="-">Nobody yet</option>
-              {bdas.map((b) => <option key={b} value={b}>{b}</option>)}
+              {workedBy.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
           {active > 0 && (
@@ -152,7 +165,11 @@ export function BankView({ views, loading, months, filters, setFilters, onOpen, 
           showOwner
           empty={views.length ? 'No leads match these filters.' : 'The bank is empty. Fetch new leads to fill it.'}
           resetKey={`${lens}|${month}|${priority}|${stage}|${branch}|${bda}|${search}`}
+          picked={picked}
+          onToggle={toggle}
           head={(
+            <>
+            <AssignBar bdas={bdas} shown={shown} views={views} picked={picked} setPicked={setPicked} onAssign={onAssign} />
             <div className="flex items-baseline gap-3 px-4 py-2.5 border-b border-gray-100 flex-wrap">
               <span className="text-[11.5px] text-gray-600"><strong>{shown.length.toLocaleString('en-IN')}</strong> leads</span>
               <span className="text-[11.5px] text-gray-500">{totals.open.toLocaleString('en-IN')} not called</span>
@@ -160,6 +177,7 @@ export function BankView({ views, loading, months, filters, setFilters, onOpen, 
               <span className="text-[11.5px] text-gray-500">{totals.closed} closed</span>
               <span className="text-[11.5px] text-gray-700 font-mono">{rupees(totals.value)} cart and order value</span>
             </div>
+            </>
           )}
         />
       )}

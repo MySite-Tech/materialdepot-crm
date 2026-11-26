@@ -83,7 +83,7 @@ sign in, a session cannot. For an unattended look, `npm run dev:stub`
 `/login-otp/`, `/verify-otp/`, `/crm/user-profile/` and `/user-organisation/`,
 then the app on `:3100` pointed at it. Any phone and any four-digit code get in
 as `admin` (`STUB_ROLE=b2b_KAM` etc. to change it, `STUB_PERMISSIONS=` for a
-comma list of slugs, `STUB_NAME=` for the user's name), and **only Django is stubbed** — Supabase stays real.
+comma list of slugs, `STUB_NAME=` for the user's name, `STUB_EXTRA=Name:phone:role,…` for more roster logins, role defaulting to `bda_retail`), and **only Django is stubbed** — Supabase stays real.
 `node scripts/django-stub.mjs --stub-only` starts just the stub, for the clone
 below.
 
@@ -678,6 +678,30 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 **Open:** the user has not decided whether a check-in alone (no notes) should count
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
+
+**START HERE for BDA Retail (2026-11-26): a new top-level CRM tab, live.** CRM PR #87
+(branch `bda-retail`) with b2b-backend #42 (migration 0033, `bda_*` tables) and #43
+(`/b2b/bda/assign`), all merged on Dhruv's ask. Start new work from `origin/main`; read
+`docs/bda-retail/context.md` first. A central calling team for retail leads the stores
+missed, from the sheet "BDA Retail: B Plan- KPIs" (Google Sheet, needs sign-in; read it
+through Chrome). It has four cohorts with priorities (P1 cart with no EC visit, P1
+quote idle 7 days, P2 cart idle 7 days, P1 carpentry → decorative, P3 civil →
+carpentry, P3 decorative only, P3 EC visit with no cart) and a LIFO queue. The plan
+calls P1 in December, adds P2 from January and P3 from March.
+- **Who:** five admins by exact Django name (`BDA_RETAIL_ACCESS`: Dhruv Gangrade, Arpan
+  Banerjee, Sri Harsh Jakoo, Manish Reddy, Sarthak Agrawal) see Overview, Team
+  performance and Lead bank. The new role `bda_retail` ("BDA Retail" in Admin > Users)
+  sees only that tab, with My queue and My performance. No slug, on purpose. Whether
+  Django accepts `bda_retail` as a permission name is untested (Owed by Django row 21).
+- **Data:** lives in b2b-backend. An admin's tab refreshes it from Django when it is
+  empty or over 20 hours old, because the server has no Django read key. Every lookback
+  is at most 90 days. The first production fetch (26 Nov) saved 7,772 leads. The
+  follow-up-ahead exclusion was dropped the same day, so the next fetch adds about
+  3,000.
+- **Admins assign** leads to `bda_retail` logins on the Lead bank (one person or round
+  robin).
+- **After deploy:** give one BDA the role and check it saves, check Team performance →
+  "Who can open" for name mismatches, and check a BDA sees only their queue.
 
 **START HERE for B2B (2026-11-26): primary team and covers (CRM branch
 `b2b-team-cover` → `main` with b2b-backend PR #39, migration 0031, both merged on

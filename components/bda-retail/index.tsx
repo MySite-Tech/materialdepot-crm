@@ -25,7 +25,7 @@ const NAV: Array<{ key: View; label: string; who: 'admin' | 'bda' }> = [
 ];
 
 export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) {
-  const { bank, access, admins, views, error, loading, reload, claim, release, call, plan } = useBdaBank();
+  const { bank, access, admins, bdas, assign, views, error, loading, reload, claim, release, call, plan } = useBdaBank();
   const importer = useBdaImport(reload);
   const [picked, setView] = useState<View | null>(null);
   const admin = access === 'admin';
@@ -149,6 +149,8 @@ export default function BdaRetailTab({ currentUser }: { currentUser: AppUser }) 
             setFilters={setBankFilters}
             onOpen={browse}
             fetchButton={fetchButton}
+            bdas={bdas}
+            onAssign={assign}
           />
         )}
         {view === 'performance' && bank && (

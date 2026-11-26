@@ -105,6 +105,11 @@ export interface LeadView extends BankLead {
   nextOn: string;
 }
 
+export interface BdaPerson {
+  name: string;
+  phone: string;
+}
+
 export interface AccessRow {
   name: string;
   logins: number;

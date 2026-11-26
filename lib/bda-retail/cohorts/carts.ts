@@ -15,8 +15,6 @@ export const lastTouch = (r: CRMLeadRow): string => {
   return [istDate(r.createdAt), ...remarks].sort().pop() ?? '';
 };
 
-const followUpAhead = (r: CRMLeadRow, today: string): boolean => !!r.followUpDate && istDate(r.followUpDate) >= today;
-
 const recentRemark = (r: CRMLeadRow, today: string): boolean =>
   (r.remarks ?? []).some((m) => istDate(m.ts) >= shiftDays(today, -ACTIVE_REMARK_DAYS));
 
@@ -51,13 +49,12 @@ const oddText = (odd: CRMLeadRow[]): string =>
 const itemsText = (r: CRMLeadRow): string => String(r.cartItems ?? '').split(/[,\n]/).filter(Boolean).slice(0, 3).join(', ');
 
 export interface CartSkips {
-  followUp: number;
   remark: number;
 }
 
 export function cartCohorts(rows: CRMLeadRow[], ecVisitors: Set<string>, today: string): { leads: BankLead[]; skipped: CartSkips } {
   const leads: BankLead[] = [];
-  const skipped: CartSkips = { followUp: 0, remark: 0 };
+  const skipped: CartSkips = { remark: 0 };
   const cartFloor = shiftDays(today, -CART_WINDOW_DAYS);
   const idleBy = shiftDays(today, -IDLE_DAYS);
 
@@ -68,10 +65,6 @@ export function cartCohorts(rows: CRMLeadRow[], ecVisitors: Set<string>, today: 
     if (list.some((r) => isOrdered(r) && istDate(r.orderPlacedAt || r.createdAt) >= newestOpen)) continue;
     if (open.some((r) => recentRemark(r, today))) {
       skipped.remark += 1;
-      continue;
-    }
-    if (open.some((r) => followUpAhead(r, today))) {
-      skipped.followUp += 1;
       continue;
     }
     const top = [...open].sort((a, b) => plausible(b.cartValue) - plausible(a.cartValue))[0];

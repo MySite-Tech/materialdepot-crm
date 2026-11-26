@@ -9,10 +9,14 @@ const PERMISSIONS = (process.env.STUB_PERMISSIONS || '').split(',').map((s) => s
 const BASE = `http://localhost:${STUB_PORT}/apiV1`;
 
 const user = localUser(ROLE, PERMISSIONS);
+const EXTRA = (process.env.STUB_EXTRA || '').split(',').map((s) => s.trim()).filter(Boolean).map((entry, i) => {
+  const [name, phone, role = 'bda_retail'] = entry.split(':');
+  return { userId: 900100 + i, name, phone, role, permissions: [] };
+});
 const route = djangoRouter({
   userForPhone: user,
   userForId: () => user(),
-  roster: () => [user()],
+  roster: () => [user(), ...EXTRA],
 });
 
 serve(STUB_PORT, route, () => {

@@ -77,7 +77,7 @@ export function buildCohorts(input: {
   const visits = visitCohort(input.visits, input.carts, input.today);
   return {
     leads: onePerCustomer([...carts.leads, ...upsell, ...visits]),
-    skippedActive: carts.skipped.followUp + carts.skipped.remark,
+    skippedActive: carts.skipped.remark,
     read: {
       carts: input.carts.length,
       civil: input.orders.civil.length,
@@ -86,7 +86,6 @@ export function buildCohorts(input: {
       earlier: input.orders.earlier.length,
       visits: input.visits.length,
       ecVisitors: ecVisitors.size,
-      skippedFollowUp: carts.skipped.followUp,
       skippedRemark: carts.skipped.remark,
     },
   };

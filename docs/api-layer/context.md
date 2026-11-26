@@ -422,3 +422,6 @@ against an older API it is silently dropped, not an error.
 - `lib/server/bda-retail.ts` is BDA Retail's b2b-backend client (`/b2b/bda/*`
   through `b2bBackendFetch`). The route above it, not the backend, decides who
   may see what (`docs/bda-retail/context.md`).
+- `staffDirectory` (`lib/server/session.ts`) returns each roster login's `role`
+  and `active` as well as name and phone (2026-11-26), so a route can list the
+  people on a role without a second roster read. BDA Retail lists its BDAs this way.

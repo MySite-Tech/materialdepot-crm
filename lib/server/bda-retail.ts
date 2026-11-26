@@ -19,6 +19,9 @@ export const recordImport = async (run: Omit<ImportRun, 'at'>): Promise<ImportRu
 export const claimLead = async (key: string, by: string, phone: string): Promise<Claim> =>
   (await b2bBackendFetch<{ claim: Claim }>('/bda/claim', { method: 'POST', body: { key, by, phone } })).claim;
 
+export const assignLeads = async (assignments: Array<{ key: string; by: string; phone: string }>): Promise<number> =>
+  (await b2bBackendFetch<{ assigned: number }>('/bda/assign', { method: 'POST', body: { assignments } })).assigned;
+
 export const releaseLead = async (key: string): Promise<void> => {
   await b2bBackendFetch('/bda/release', { method: 'POST', body: { key } });
 };

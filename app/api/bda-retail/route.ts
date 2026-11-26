@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server';
-import { requireCaller, sessionErrorResponse, staffDirectory, type Caller } from '@/lib/server/session';
+import { requireCaller, sessionErrorResponse, staffDirectory, type Caller, type StaffEntry } from '@/lib/server/session';
 import { B2BBackendError } from '@/lib/server/b2b-backend';
-import { claimLead, importBatch, logCall, readBank, recordImport, releaseLead, setPlan } from '@/lib/server/bda-retail';
+import { assignLeads, claimLead, importBatch, logCall, readBank, recordImport, releaseLead, setPlan } from '@/lib/server/bda-retail';
 import { BDA_RETAIL_ACCESS, CALL_OUTCOMES, COHORT_BY_KEY, MAX_UNANSWERED, PRIORITIES } from '@/lib/bda-retail/constants';
-import type { AccessRow, BankLead, BdaAccess, CallOutcome, CohortKey, ImportDiag, Priority } from '@/lib/bda-retail/types';
+import type { AccessRow, BankLead, BdaAccess, BdaPerson, CallOutcome, CohortKey, ImportDiag, Priority } from '@/lib/bda-retail/types';
 import { accessName, cohortsFor, isBda, isBdaAdmin, istToday, planPriorities } from '@/lib/bda-retail/utils';
 import { normalisePhone } from '@/lib/org/utils';
 
@@ -25,7 +25,13 @@ interface Auth {
   phone: string;
   access: BdaAccess;
   admins: AccessRow[];
+  bdas: BdaPerson[];
 }
+
+const bdasOf = (staff: StaffEntry[]): BdaPerson[] => staff
+  .filter((s) => s.active && isBda(s) && normalisePhone(s.phone).length === 10)
+  .map((s) => ({ name: s.name || normalisePhone(s.phone), phone: normalisePhone(s.phone) }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 async function authorise(request: NextRequest): Promise<Auth | Response> {
   try {
@@ -36,9 +42,9 @@ async function authorise(request: NextRequest): Promise<Auth | Response> {
       if (loginsNamed(staff, caller.name) !== 1) {
         return bad(`More than one login is named ${caller.name}, so BDA Retail cannot tell which one was given access`, 403);
       }
-      return { caller, phone, access: 'admin', admins: BDA_RETAIL_ACCESS.map((name) => ({ name, logins: loginsNamed(staff, name) })) };
+      return { caller, phone, access: 'admin', admins: BDA_RETAIL_ACCESS.map((name) => ({ name, logins: loginsNamed(staff, name) })), bdas: bdasOf(staff) };
     }
-    if (isBda(caller)) return { caller, phone, access: 'bda', admins: [] };
+    if (isBda(caller)) return { caller, phone, access: 'bda', admins: [], bdas: [] };
     return bad('Your account does not have access to BDA Retail', 403);
   } catch (err) {
     return sessionErrorResponse(err) ?? bad('Not authenticated', 401);
@@ -89,7 +95,7 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
   try {
     if (auth.access === 'admin') {
-      return Response.json({ bank: await readBank(null), access: auth.access, admins: auth.admins, maxUnanswered: MAX_UNANSWERED });
+      return Response.json({ bank: await readBank(null), access: auth.access, admins: auth.admins, bdas: auth.bdas, maxUnanswered: MAX_UNANSWERED });
     }
     const mine = await readBank({ phone: auth.phone, cohorts: [] });
     const active = cohortsFor(planPriorities(istToday().slice(0, 7), mine.plan));
@@ -129,6 +135,19 @@ export async function POST(request: NextRequest) {
           diag: cleanDiag(body.diag),
         });
         return Response.json({ run });
+      }
+      case 'assign': {
+        if (!admin) return bad('Only a BDA Retail admin can assign leads', 403);
+        const raw = Array.isArray(body.assignments) ? body.assignments : [];
+        if (raw.length > MAX_BATCH) return bad(`Assign at most ${MAX_BATCH} leads at a time`);
+        const byPhone = new Map(auth.bdas.map((b) => [b.phone, b.name]));
+        const assignments = raw.map((a) => {
+          const r = (a ?? {}) as Record<string, unknown>;
+          const to = normalisePhone(text(r.phone, 20));
+          return { key: text(r.key, 120), phone: to, by: byPhone.get(to) ?? '' };
+        });
+        if (assignments.some((a) => !a.by)) return bad('Leads can only go to people with the BDA Retail role');
+        return Response.json({ assigned: await assignLeads(assignments) });
       }
       case 'claim':
         return Response.json({ claim: await claimLead(text(body.key, 120), caller.name, phone) });

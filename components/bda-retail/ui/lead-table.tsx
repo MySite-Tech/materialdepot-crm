@@ -9,13 +9,15 @@ import { PriorityChip, StageChip } from './chips';
 
 const dash = <span className="text-gray-300">—</span>;
 
-export function LeadTable({ leads, onOpen, showOwner, empty, resetKey, head }: {
+export function LeadTable({ leads, onOpen, showOwner, empty, resetKey, head, picked, onToggle }: {
   leads: LeadView[];
   onOpen: (l: LeadView) => void;
   showOwner?: boolean;
   empty: string;
   resetKey: string;
   head?: React.ReactNode;
+  picked?: Set<string>;
+  onToggle?: (keys: string[], on: boolean) => void;
 }) {
   const [page, setPage] = useState(0);
   const pages = Math.max(1, Math.ceil(leads.length / PAGE_SIZE));
@@ -34,6 +36,16 @@ export function LeadTable({ leads, onOpen, showOwner, empty, resetKey, head }: {
         <table className="w-full text-[12.5px]">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/60">
+              {picked && onToggle && (
+                <th className="pl-3 w-6">
+                  <input
+                    type="checkbox"
+                    checked={rows.length > 0 && rows.every((l) => picked.has(l.key))}
+                    onChange={(e) => onToggle(rows.map((l) => l.key), e.target.checked)}
+                    aria-label="Select this page"
+                  />
+                </th>
+              )}
               {cols.map((h) => (
                 <th key={h} className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 text-left whitespace-nowrap">{h}</th>
               ))}
@@ -42,6 +54,11 @@ export function LeadTable({ leads, onOpen, showOwner, empty, resetKey, head }: {
           <tbody>
             {rows.map((l) => (
               <tr key={l.key} onClick={() => onOpen(l)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
+                {picked && onToggle && (
+                  <td className="pl-3" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={picked.has(l.key)} onChange={(e) => onToggle([l.key], e.target.checked)} aria-label={`Select ${l.name || l.phone}`} />
+                  </td>
+                )}
                 <td className="px-3 py-2"><PriorityChip p={l.priority} /></td>
                 <td className="px-3 py-2 font-semibold text-gray-900 max-w-[200px] truncate">{l.name || dash}</td>
                 <td className="px-3 py-2 text-gray-500 font-mono whitespace-nowrap">{l.phone}</td>

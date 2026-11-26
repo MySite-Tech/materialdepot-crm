@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { claimLead, fetchBank, logCall, releaseLead, savePlan } from '@/lib/bda-retail/api';
-import type { AccessRow, BankState, BdaAccess, CallOutcome, Claim, Priority } from '@/lib/bda-retail/types';
+import { assignLeads, claimLead, fetchBank, logCall, releaseLead, savePlan } from '@/lib/bda-retail/api';
+import type { AccessRow, BankState, BdaAccess, BdaPerson, CallOutcome, Claim, Priority } from '@/lib/bda-retail/types';
 import { leadViews } from '@/lib/bda-retail/utils';
 
 const withClaim = (b: BankState, key: string, claim: Claim | null): BankState => ({
@@ -14,6 +14,7 @@ export function useBdaBank() {
   const [bank, setBank] = useState<BankState | null>(null);
   const [access, setAccess] = useState<BdaAccess | null>(null);
   const [admins, setAdmins] = useState<AccessRow[]>([]);
+  const [bdas, setBdas] = useState<BdaPerson[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +25,7 @@ export function useBdaBank() {
       setBank(res.bank);
       setAccess(res.access);
       setAdmins(res.admins);
+      setBdas(res.bdas);
       setError('');
     } catch (err) {
       setError(`The lead bank did not load: ${err instanceof Error ? err.message : 'unknown error'}`);
@@ -59,6 +61,18 @@ export function useBdaBank() {
     });
   }, []);
 
+  const assign = useCallback(async (assignments: Array<{ key: string; phone: string }>, step: (s: string) => void) => {
+    const assigned = await assignLeads(assignments, step);
+    const names = new Map(bdas.map((b) => [b.phone, b.name]));
+    const to = new Map(assignments.map((a) => [a.key, a.phone]));
+    const at = new Date().toISOString();
+    setBank((b) => (b ? {
+      ...b,
+      leads: b.leads.map((l) => (to.has(l.key) ? { ...l, claim: { by: names.get(to.get(l.key)!) ?? '', byPhone: to.get(l.key)!, at } } : l)),
+    } : b));
+    return assigned;
+  }, [bdas]);
+
   const plan = useCallback(async (month: string, priorities: Priority[] | null) => {
     await savePlan(month, priorities);
     setBank((b) => {
@@ -70,5 +84,5 @@ export function useBdaBank() {
     });
   }, []);
 
-  return { bank, access, admins, views, error, loading, reload: load, claim, release, call, plan };
+  return { bank, access, admins, bdas, assign, views, error, loading, reload: load, claim, release, call, plan };
 }

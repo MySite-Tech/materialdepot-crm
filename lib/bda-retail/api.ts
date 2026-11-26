@@ -1,5 +1,5 @@
 import { getToken, refreshSession } from '../api/core/client';
-import type { AccessRow, BankLead, BankState, BdaAccess, CallLog, CallOutcome, Claim, ImportDiag, ImportRun, Priority } from './types';
+import type { AccessRow, BankLead, BankState, BdaAccess, BdaPerson, CallLog, CallOutcome, Claim, ImportDiag, ImportRun, Priority } from './types';
 
 const ROUTE = '/api/bda-retail';
 const BATCH = 1000;
@@ -19,10 +19,19 @@ async function send(init: RequestInit = {}, retried = false): Promise<Record<str
 const post = (payload: Record<string, unknown>) =>
   send({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
-export const fetchBank = async (): Promise<{ bank: BankState; access: BdaAccess; admins: AccessRow[] }> => {
+export const fetchBank = async (): Promise<{ bank: BankState; access: BdaAccess; admins: AccessRow[]; bdas: BdaPerson[] }> => {
   const body = await send();
-  return { bank: body.bank as BankState, access: body.access as BdaAccess, admins: (body.admins as AccessRow[]) ?? [] };
+  return { bank: body.bank as BankState, access: body.access as BdaAccess, admins: (body.admins as AccessRow[]) ?? [], bdas: (body.bdas as BdaPerson[]) ?? [] };
 };
+
+export async function assignLeads(assignments: Array<{ key: string; phone: string }>, step: (s: string) => void): Promise<number> {
+  let assigned = 0;
+  for (let i = 0; i < assignments.length; i += BATCH) {
+    step(`Assigning ${Math.min(i + BATCH, assignments.length).toLocaleString('en-IN')} of ${assignments.length.toLocaleString('en-IN')}`);
+    assigned += Number((await post({ action: 'assign', assignments: assignments.slice(i, i + BATCH) })).assigned) || 0;
+  }
+  return assigned;
+}
 
 export async function importLeads(
   leads: BankLead[],

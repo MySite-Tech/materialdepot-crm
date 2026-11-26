@@ -79,6 +79,7 @@ export const isMine = (l: LeadView, phone: string): boolean => !!l.claim && norm
 
 export const queueFor = (views: LeadView[], phone: string, active: Priority[], today: string): {
   due: LeadView[];
+  assigned: LeadView[];
   fresh: LeadView[];
   retry: LeadView[];
 } => {
@@ -89,8 +90,9 @@ export const queueFor = (views: LeadView[], phone: string, active: Priority[], t
   const retry = views
     .filter((l) => isMine(l, phone) && l.stage === 'attempting' && istDate(l.calls[l.calls.length - 1].at) < today)
     .sort(lifo);
+  const assigned = views.filter((l) => isMine(l, phone) && l.stage === 'new').sort(lifo);
   const fresh = views.filter((l) => !l.claim && l.stage === 'new' && on.has(l.priority)).sort(lifo);
-  return { due, fresh, retry };
+  return { due, assigned, fresh, retry };
 };
 
 export interface BdaStats {
@@ -151,7 +153,7 @@ export const bankLensMatches = (lens: BankLens, l: LeadView): boolean =>
   lens === 'all'
   || (lens.startsWith('group:') ? COHORT_BY_KEY[l.cohort].group === lens.slice(6) : l.cohort === lens);
 
-export type QueueLens = 'due' | 'retry' | 'fresh' | 'today';
+export type QueueLens = 'due' | 'assigned' | 'retry' | 'fresh' | 'today';
 
 const mineOn = (c: CallLog, phone: string, day: string) => c.byPhone === normalisePhone(phone) && istDate(c.at) === day;
 
@@ -163,3 +165,18 @@ export const dialsOn = (views: LeadView[], phone: string, day: string): number =
 
 export const bankIsStale = (imports: { at: string }[], now: number): boolean =>
   !imports.length || now - Date.parse(imports[0].at) > AUTO_REFRESH_HOURS * 3_600_000;
+
+export const isOpen = (l: LeadView): boolean => l.stage !== 'closed' && l.stage !== 'unreachable';
+
+export function dealRoundRobin(keys: string[], phones: string[], views: LeadView[]): Array<{ key: string; phone: string }> {
+  const load = new Map(phones.map((p) => [p, 0]));
+  for (const l of views) {
+    const p = l.claim?.byPhone;
+    if (p && load.has(p) && isOpen(l)) load.set(p, (load.get(p) ?? 0) + 1);
+  }
+  return keys.map((key) => {
+    const phone = [...load.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))[0][0];
+    load.set(phone, (load.get(phone) ?? 0) + 1);
+    return { key, phone };
+  });
+}

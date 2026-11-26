@@ -122,7 +122,7 @@ export function OverviewView({ bank, views, months, month, setMonth, active, pla
               <p><strong className="text-gray-900">{n(last.added)}</strong> new, {n(last.refreshed)} already in the bank, {n(last.samePerson ?? 0)} already in under another cohort. By {last.by}.</p>
               <p>
                 Left out because a BM is on the cart: <strong className="text-gray-900">{n(last.skippedActive)}</strong>
-                {last.read.skippedRemark !== undefined && ` (${n(last.read.skippedRemark)} with a remark in the last 7 days, ${n(last.read.skippedFollowUp ?? 0)} with a follow-up date ahead)`}.
+                {last.read.skippedFollowUp ? ` (a follow-up date ahead also counted until 26 Nov: ${n(last.read.skippedFollowUp)} of these)` : ' (a remark on the cart in the last 7 days)'}.
               </p>
               <p className="text-[11px] text-gray-400">
                 Read {n(last.read.carts ?? 0)} carts, {n((last.read.civil ?? 0) + (last.read.carpentry ?? 0) + (last.read.decorative ?? 0))} recent orders

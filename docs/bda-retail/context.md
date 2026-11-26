@@ -104,11 +104,11 @@ months"). A year of footfall had been the slowest read in a fetch.
   `contact`, `bm` only), so these leads enter on the day of the fetch and cannot
   be sorted by most recent visit as the sheet asks. Owed by Django.
 
-**A cart a BM is working is left out:** a remark in the last 7 days, or a
-follow-up date today or later. On 26 Nov that left out about 6,000 customers. The
-Overview's Last fetch card splits it by rule. Check that split before trusting
-the cohort sizes: if most are "follow-up ahead", Django probably sets a default
-follow-up on every cart and the rule is too broad.
+**A cart a BM is working is left out: a remark on it in the last 7 days.** Only
+that. Until 26 Nov a follow-up date today or later also counted. The first
+production fetch left out 6,050 customers: 2,886 by remark and 3,164 by follow-up
+date alone. The user dropped the follow-up rule the same day, because a date in
+the future does not show anyone is calling. Don't re-add it.
 
 **A cart over ₹1 Cr is not a value** (`MAX_PLAUSIBLE_VALUE`). Real carts on
 26 Nov included ₹54 lakh crore and ₹3 lakh crore. 43 leads were over ₹10 L,
@@ -118,8 +118,9 @@ meaningless. Such a cart counts as no value, and its figure stays in the lead's
 
 ## The queue
 
-LIFO by the user's choice: follow-ups due, then retries (no answer on an earlier
-day), then **Next up**: unclaimed leads in the month's active priorities, P1
+LIFO by the user's choice: follow-ups due, then **Assigned to you** (leads an
+admin gave this BDA that they have not called yet), then retries (no answer on an
+earlier day), then **Next up**: unclaimed leads in the month's active priorities, P1
 first, newest `enteredOn` first, value only breaking ties. Opening a lead from My
 queue claims it. Opening from the Lead bank does not, so a manager browsing takes
 nothing. `enteredOn` is when the lead qualified: the newest cart date, last touch
@@ -136,7 +137,21 @@ need a date. Three unanswered calls with no connection make a lead Unreachable.
 "Said they'll order" is the BDA's word, not a matched order. Conversions against
 real orders are not built.
 
-## Team performance
+## Assigning leads to BDAs
+
+On the Lead bank an admin ticks leads, or clicks "Select all N shown" for
+everything the filters show. The admin then picks one BDA, or **Round robin
+across every BDA**, which deals each lead to whoever holds the fewest open leads
+at that moment (`dealRoundRobin`). The BDAs are every active login with the
+`bda_retail` role, read from Django's roster in the route (`bdasOf`), not a list
+kept here. With nobody on the role, the bar says so. Assigning sets the lead's
+claim, or moves it when another BDA already holds it (the bar counts how many
+will move). Calls already logged stay with whoever made them. Closed and
+unreachable leads are left out. b2b-backend `POST /b2b/bda/assign` (PR #43) does
+up to 2,000 per request, and the CRM sends 1,000 at a time. Checked on the stub
+with `STUB_EXTRA` roster users on 2026-11-26: four leads went round robin to the
+BDA holding the fewest, and showed in that BDA's Assigned to you.
+
 
 The admins' view of the team, every figure from logged calls in one pass
 (`views/team/utils.ts` `teamStats`, so a tile and its table cannot disagree).
