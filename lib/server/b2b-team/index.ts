@@ -81,16 +81,18 @@ function rotationSince(now = Date.now()): string {
 export async function saveMember(input: MemberInput, byName: string): Promise<SavedMember> {
   const phone = normalisePhone(input.phone);
   if (phone.length !== 10) throw new InputError('A team member needs a 10-digit phone number');
-  const { members, coverReady } = await readMembers();
+  const { members, coverReady, pauseReady } = await readMembers();
   const stored = members.find((m) => m.phone === phone && m.team === input.team);
   const name = String(input.name ?? '').trim() || stored?.name || '';
   if (!name) throw new InputError('A team member needs a name');
   const cover = coverFor(input, stored, members.filter((m) => m.phone === phone && m.team !== input.team), coverReady);
+  const pause = pauseFor(input, pauseReady);
 
   let kylasUserId = input.kylasUserId !== undefined ? input.kylasUserId : stored?.kylasUserId ?? null;
   let kylasName: string | null = input.kylasUserId === undefined ? stored?.kylasName ?? null : null;
   let warning: string | undefined;
-  const users = await listKylasUsers();
+  const linking = input.kylasUserId != null || (input.kylasUserId === undefined && !stored);
+  const users = linking ? await listKylasUsers() : [];
   if (input.kylasUserId === undefined && !stored) {
     const linked = members.find((m) => m.phone === phone && m.kylasUserId != null)?.kylasUserId;
     const hit = kylasUserForPhone(users, phone) ?? users.find((u) => u.id === linked) ?? null;
@@ -98,8 +100,8 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     kylasName = hit?.name ?? null;
     if (!hit && input.team === 'inbound') warning = `No Kylas user has the phone ${phone}. Pick their Kylas user by hand, or they cannot own leads.`;
     else if (hit && !hit.active) warning = `${hit.name} is deactivated in Kylas.`;
-  } else if (kylasUserId != null) {
-    const hit = users.find((u) => u.id === kylasUserId);
+  } else if (input.kylasUserId != null) {
+    const hit = users.find((u) => u.id === input.kylasUserId);
     if (!hit) throw new InputError(`Kylas has no user ${kylasUserId}`);
     kylasName = hit.name;
   }
@@ -114,9 +116,20 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     active: input.active ?? stored?.active ?? true,
     isAdmin: input.isAdmin,
     cover,
+    pause,
     updatedBy: byName,
   });
   return { member, warning };
+}
+
+function pauseFor(input: MemberInput, ready: boolean): Pick<TeamMember, 'pausedFrom' | 'pausedTo'> | undefined {
+  if (input.pausedFrom === undefined && input.pausedTo === undefined) return undefined;
+  if (!ready) throw new InputError('Pausing for set days needs b2b-backend migration 0032 deployed first');
+  const pausedFrom = input.pausedFrom ?? null;
+  const pausedTo = input.pausedTo ?? null;
+  if (!pausedFrom !== !pausedTo) throw new InputError('A pause needs a first and a last day');
+  if (pausedFrom && pausedTo && pausedTo < pausedFrom) throw new InputError('The pause ends before it starts');
+  return { pausedFrom, pausedTo };
 }
 
 function coverFor(input: MemberInput, stored: TeamMember | undefined, others: TeamMember[], ready: boolean): Pick<TeamMember, 'primary' | 'from' | 'to'> | undefined {

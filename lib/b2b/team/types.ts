@@ -12,6 +12,8 @@ export interface TeamMember {
   primary: boolean;
   from: string | null;
   to: string | null;
+  pausedFrom: string | null;
+  pausedTo: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -20,6 +22,7 @@ export interface TeamState {
   members: TeamMember[];
   tableMissing: boolean;
   coverReady: boolean;
+  pauseReady: boolean;
 }
 
 export interface KylasUser {
@@ -40,6 +43,8 @@ export interface MemberInput {
   primary?: boolean;
   from?: string | null;
   to?: string | null;
+  pausedFrom?: string | null;
+  pausedTo?: string | null;
 }
 
 export interface SavedMember {
@@ -101,6 +106,7 @@ export interface B2BTeamLoad extends TeamState {
   loading: boolean;
   error: string | null;
   reload: () => void;
+  patch: (m: TeamMember) => void;
 }
 
 export interface SignInGaps {

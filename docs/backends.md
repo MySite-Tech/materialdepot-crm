@@ -142,6 +142,13 @@ run on a `TEMPLATE crm_real` copy (0026 → 0031, down one, up again) and `PUT /
 was exercised over HTTP there: a cover kept its dates through an old-style save,
 reversed and malformed dates and a dated primary were refused with 400.
 
+**Migration `0032_b2b_team_pause`** (b2b-backend branch `b2b-team-pause`, 2026-11-26)
+adds `paused_from`/`paused_to` to `b2b_team_member` (both or neither, CHECK), the days
+a member gets no rotation work (`b2b/sales-tab-redesign.md` §Pausing for set days).
+**Deploy it first.** Without it the Team tab hides "pause for days" and everything else
+works. Run up, down and up on a `TEMPLATE crm_real` copy and over HTTP there: a round
+robin toggle kept the dates, a half or reversed window was refused with 400.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against

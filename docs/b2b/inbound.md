@@ -540,8 +540,8 @@ member is identified. The people who can hold it are the `inbound` rows of
   and skips that lead. Claims are written first, then one bulk owner write. If
   the write fails, its claim is deleted, so it is retried on the next run. A lead
   with no row is inserted, not skipped (the bullet above).
-- **Order** = in-rotation, Kylas-linked inbound members on duty today (active and,
-  for a cover, inside its dates: `onDuty`, `sales-tab-redesign.md` §Primary team and
+- **Order** = in-rotation, Kylas-linked inbound members on duty today and not inside a
+  pause for set days (active and, for a cover, inside its dates: `getsWork`, `sales-tab-redesign.md` §Primary team and
   covers), sorted by name,
   continuing after whoever got the last `round_robin` row (`planRotation`).
   "Paused" is how a manager takes someone out for the day. A paused person can

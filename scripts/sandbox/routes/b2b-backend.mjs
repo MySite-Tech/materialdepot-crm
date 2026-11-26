@@ -42,7 +42,7 @@ function kamLoad(db) {
   return load;
 }
 
-const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'is_admin', 'is_primary', 'starts_on', 'ends_on', 'updated_at', 'updated_by'];
+const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'is_admin', 'is_primary', 'starts_on', 'ends_on', 'paused_from', 'paused_to', 'updated_at', 'updated_by'];
 
 function putMember(db, body) {
   const phone = String(body?.phone ?? '').replace(/\D/g, '').slice(-10);
@@ -51,8 +51,9 @@ function putMember(db, body) {
   const row = Object.fromEntries(MEMBER_KEYS.map((k) => [k, body[k] ?? null]));
   row.phone = phone;
   row.is_admin = typeof body.is_admin === 'boolean' ? body.is_admin : i >= 0 && db.team[i].is_admin === true;
-  for (const k of ['starts_on', 'ends_on']) row[k] = k in body ? body[k] || null : i >= 0 ? db.team[i][k] ?? null : null;
+  for (const k of ['starts_on', 'ends_on', 'paused_from', 'paused_to']) row[k] = k in body ? body[k] || null : i >= 0 ? db.team[i][k] ?? null : null;
   if (row.starts_on && row.ends_on && row.ends_on < row.starts_on) return reply(400, { detail: 'ends_on is before starts_on' });
+  if (!row.paused_from !== !row.paused_to) return reply(400, { detail: 'A pause needs both paused_from and paused_to, or neither' });
   row.is_primary = typeof body.is_primary === 'boolean' ? body.is_primary : i >= 0 && db.team[i].is_primary === true;
   if (row.starts_on || row.ends_on) row.is_primary = false;
   row.updated_at = new Date().toISOString();

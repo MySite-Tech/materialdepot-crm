@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
 import type { B2BTeam, KylasUser, TeamMember } from '@/lib/b2b/team/types';
-import { isCover, onDuty } from '@/lib/b2b/team/utils';
+import { isCover, onDuty, pausedOn } from '@/lib/b2b/team/utils';
+import { PauseDays, PausePatch } from './pause-days';
 import { RolePatch, TeamRole } from './team-role';
 
 const ROTATION_ON: Record<B2BTeam, string> = { inbound: 'Gets new leads', outreach: 'Gets assigned leads', kam: 'Gets new firms' };
@@ -11,15 +12,16 @@ const ROTATION_ON: Record<B2BTeam, string> = { inbound: 'Gets new leads', outrea
 const changedAt = (iso: string) =>
   new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 
-export function MemberRow({ member, otherTeams, hasPrimary, coverReady, busy, kylasUsers, onLoadKylasUsers, onChange, onRenumber }: {
+export function MemberRow({ member, otherTeams, hasPrimary, coverReady, pauseReady, busy, kylasUsers, onLoadKylasUsers, onChange, onRenumber }: {
   member: TeamMember;
   otherTeams: B2BTeam[];
   hasPrimary: boolean;
   coverReady: boolean;
+  pauseReady: boolean;
   busy: boolean;
   kylasUsers: KylasUser[] | null;
   onLoadKylasUsers: () => void;
-  onChange: (patch: Partial<Pick<TeamMember, 'inRotation' | 'active' | 'kylasUserId' | 'isAdmin'>> & RolePatch) => void;
+  onChange: (patch: Partial<Pick<TeamMember, 'inRotation' | 'active' | 'kylasUserId' | 'isAdmin'>> & RolePatch & PausePatch) => void;
   onRenumber: (to: string) => void;
 }) {
   const [linking, setLinking] = useState(false);
@@ -94,9 +96,10 @@ export function MemberRow({ member, otherTeams, hasPrimary, coverReady, busy, ky
               checked={member.inRotation && member.active}
               onChange={() => onChange({ inRotation: !member.inRotation })}
             />
-            {member.inRotation && member.active ? ROTATION_ON[member.team] : 'Paused'}
+            {member.inRotation && member.active ? (pausedOn(member) ? 'Paused for set days' : ROTATION_ON[member.team]) : 'Paused'}
           </label>
         )}
+        {member.inRotation && <PauseDays member={member} ready={pauseReady} busy={busy} onChange={onChange} />}
         {member.active && isCover(member) && !onDuty(member) && (
           <span className="block text-[10.5px] text-gray-500">Gets no new work outside the cover days</span>
         )}

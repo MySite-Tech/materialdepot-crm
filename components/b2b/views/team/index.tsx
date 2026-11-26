@@ -61,14 +61,20 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
   const gaps = useMemo(() => (users ? signInGaps(users, team.members) : null), [users, team.members]);
 
   const save = (m: MemberInput) => {
+    const before = team.members.find((x) => x.phone === normalisePhone(m.phone) && x.team === m.team);
+    if (before) team.patch({ ...before, ...Object.fromEntries(Object.entries(m).filter(([k, v]) => v !== undefined && k in before)) });
     setBusyKey(memberKey(m));
     setNotice(null);
     saveTeamMember(m)
       .then((r) => {
         if (r.warning) setNotice({ tone: 'warn', text: r.warning });
-        team.reload();
+        team.patch(r.member);
+        if (m.primary !== undefined || m.isAdmin !== undefined) team.reload();
       })
-      .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Save failed' }))
+      .catch((e) => {
+        if (before) team.patch(before);
+        setNotice({ tone: 'error', text: `${e instanceof Error ? e.message : 'Save failed'}. Nothing was changed.` });
+      })
       .finally(() => setBusyKey(null));
   };
 
@@ -225,6 +231,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                         otherTeams={(teamsOf.get(m.phone) || []).filter((x) => x !== m.team)}
                         hasPrimary={withPrimary.has(m.phone)}
                         coverReady={team.coverReady}
+                        pauseReady={team.pauseReady}
                         busy={busyKey === memberKey(m)}
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}
