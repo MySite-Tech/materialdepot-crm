@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { inCity, phoneKey, sbGet, type CityFilter } from '../../shared';
+import { inCity, phoneKey, sbGet, sbGetPaged, type CityFilter } from '../../shared';
 import {
   AUDIT_COLS, AUDIT_TICKED_QUERY, INSTALL_COLS, RATING_COLS, applyCoeCategories, auditCategoryMap,
   mapCoeAudit, mapCoeInstall, type CoeInstall, type CoeOrder, type RatingRow,
@@ -38,9 +38,9 @@ export default function SiteAuditCoeView({ city, who, whoEmail }: { city?: CityF
 
   const load = useCallback(async () => {
     const [aRows, iRows, wRows, rRows] = await Promise.all([
-      sbGet('audit_orders?select=' + AUDIT_COLS + '&status=eq.completed&order=date.desc'),
+      sbGetPaged('audit_orders?select=' + AUDIT_COLS + '&status=eq.completed', 1000, 50, 'date.desc,id'),
 
-      sbGet('install_orders_slim?select=' + INSTALL_COLS + '&status=neq.deleted&order=created_at.desc'),
+      sbGetPaged('install_orders_slim?select=' + INSTALL_COLS + '&status=neq.deleted', 1000, 50, 'created_at.desc,id'),
       sbGet('wp_production?select=*&order=created_at.desc'),
 
       sbGet('ratings?select=' + RATING_COLS),
