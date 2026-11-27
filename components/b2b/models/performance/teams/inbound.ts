@@ -10,7 +10,7 @@ import { istDay } from '../../outreach/reminders';
 import { fromKpi, newestFirst, notesBy, redirectsBy } from '../measures/activity';
 import { creditedOrders, revenueValue } from '../measures/revenue';
 import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { b2bMemberByPhone, countValue, counted, isPerson, isPersonByPhone, isPlaceholderName, memberPeople, onB2BTeam, pct, personKey, withHelpers } from '../utils';
+import { b2bMemberByPhone, countValue, counted, formerPeople, isPerson, isPersonByNumberOn, isPlaceholderName, memberPeople, onB2BTeam, pct, personKey, withHelpers } from '../utils';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api/b2b/inbound/constants';
 import { B2B_FRESH_START } from '@/lib/b2b/data/rows';
 import { inboundPhones, outreachPhones } from '@/lib/b2b/leads/unified';
@@ -158,7 +158,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
   const owns = ownsLead(people);
   const mine = data.inbound.filter(owns);
   const byThem = (l: InboundLead, a: CallAttempt) => {
-    if (a.byPhone && b2bMemberByPhone(data, a.byPhone)) return isPersonByPhone(people, a.byPhone);
+    if (a.byPhone && b2bMemberByPhone(data, a.byPhone)) return isPersonByNumberOn(people, data.members || [], a.byPhone, a.at);
     return a.by && onB2BTeam(data, a.by) ? isPerson(people, a.by) : owns(l);
   };
 
@@ -215,7 +215,7 @@ function people(data: PerfData, members: Parameters<TeamEngine['people']>[1], li
     ...(l.callAttempts || []).map((a) => ({ name: a.by, phone: a.byPhone })),
   ]);
   const out: Person[] = live
-    ? withHelpers(memberPeople(members, 'inbound'), members, 'inbound', actors)
+    ? withHelpers([...memberPeople(members, 'inbound'), ...formerPeople(members, 'inbound')], members, 'inbound', actors)
     : B2B_INBOUND_OWNER_LIST.map((o) => ({ key: personKey(o.name), name: o.name, kylasUserId: o.id, onTeam: true }));
   for (const l of data.inbound) {
     const name = String(l.owner || '').trim();

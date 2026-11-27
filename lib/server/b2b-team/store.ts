@@ -19,6 +19,7 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
 }
 
 type MemberRow = {
+  id?: number;
   phone: string;
   name: string;
   team: B2BTeam;
@@ -39,6 +40,7 @@ type MemberRow = {
 };
 
 const toMember = (r: MemberRow): TeamMember => ({
+  id: r.id == null ? null : Number(r.id),
   phone: r.phone,
   name: r.name,
   team: r.team,
@@ -81,6 +83,7 @@ export async function upsertMember(m: MemberWrite): Promise<TeamMember> {
   const row = await call<MemberRow>('/team', {
     method: 'PUT',
     body: {
+      ...(m.id != null ? { id: m.id } : {}),
       phone: m.phone,
       name: m.name,
       team: m.team,

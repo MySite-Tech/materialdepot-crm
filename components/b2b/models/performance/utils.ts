@@ -2,7 +2,7 @@ import { sameRep } from '../outreach/handover';
 import { Period, isWholeMonth } from '../outreach/kpis';
 import { Goals, PerfCard, PerfData, PerfKpiDef, PerfRow, PerfValue, Person } from './types';
 import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
-import { isCover, primaryOf } from '@/lib/b2b/team/utils';
+import { holderOn, isCover, primaryOf } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 
 const DAY_MS = 86_400_000;
@@ -85,17 +85,28 @@ export const personKey = (name: string, phone?: string): string => {
 export const isPerson = (people: Person[], name: string | undefined): boolean =>
   people.some((p) => sameRep(name, p.name));
 
+export const memberKey = (m: Pick<TeamMember, 'name' | 'phone' | 'leftOn' | 'active'>): string =>
+  m.leftOn && !m.active ? `${personKey(m.name, m.phone)}|until:${m.leftOn}` : personKey(m.name, m.phone);
+
+const nameFits = (recorded: string | undefined, m: Pick<TeamMember, 'name'>): boolean =>
+  !recorded || isPlaceholderName(recorded) || sameRep(recorded, m.name);
+
 export function personFrom(m: TeamMember, members: TeamMember[], team: B2BTeam, onTeam: boolean): Person {
-  const rows = members.filter((x) => x.phone === m.phone);
+  const rows = members.filter((x) => x.phone === m.phone && memberKey(x) === memberKey(m));
   return {
-    key: personKey(m.name, m.phone),
+    key: memberKey(m),
     name: m.name,
     phone: m.phone,
     kylasUserId: m.kylasUserId ?? rows.find((x) => x.kylasUserId != null)?.kylasUserId ?? null,
     onTeam,
     cover: m.team === team && isCover(m) ? { from: m.from, to: m.to } : undefined,
     primaryTeam: primaryOf(rows)?.team ?? null,
+    ...(m.joinedOn || m.leftOn ? { tenure: { from: m.joinedOn, to: m.leftOn } } : {}),
   };
+}
+
+export function formerPeople(members: TeamMember[], team: B2BTeam): Person[] {
+  return members.filter((m) => m.team === team && !m.active && m.leftOn).map((m) => personFrom(m, members, team, false));
 }
 
 export function memberPeople(members: TeamMember[], team: TeamMember['team']): Person[] {
@@ -106,10 +117,10 @@ export function withHelpers(people: Person[], members: TeamMember[], team: B2BTe
   const out = [...people];
   for (const a of actors) {
     const phone = normalisePhone(a.phone);
-    const m = (phone.length === 10 ? members.find((x) => x.phone === phone) : undefined)
+    const m = (phone.length === 10 ? members.find((x) => x.phone === phone && nameFits(a.name, x)) : undefined)
       ?? (a.kylasUserId != null ? members.find((x) => x.kylasUserId === a.kylasUserId) : undefined)
       ?? (a.name && !isPlaceholderName(a.name) ? members.find((x) => sameRep(a.name, x.name)) : undefined);
-    if (!m || out.some((p) => (!!p.phone && normalisePhone(p.phone) === m.phone) || sameRep(p.name, m.name))) continue;
+    if (!m || out.some((p) => p.key === memberKey(m) || sameRep(p.name, m.name))) continue;
     out.push(personFrom(m, members, team, false));
   }
   return out;
@@ -131,8 +142,11 @@ export function b2bMemberByPhone(data: PerfData, phone: string | undefined): Tea
   return (data.members || []).find((m) => normalisePhone(m.phone) === p);
 }
 
-export const isPersonByPhone = (people: Person[], phone: string): boolean =>
-  people.some((p) => !!p.phone && normalisePhone(p.phone) === normalisePhone(phone));
+export function isPersonByNumberOn(people: Person[], members: TeamMember[], phone: string, at: string | undefined): boolean {
+  const day = at ? new Date(Date.parse(at) + 19_800_000).toISOString().slice(0, 10) : '';
+  const holder = holderOn(members, phone, Number.isNaN(Date.parse(at || '')) ? '' : day);
+  return !!holder && people.some((p) => p.key === memberKey(holder));
+}
 
 export function onB2BTeam(data: PerfData, name: string | undefined): boolean {
   const list = data.members || [];

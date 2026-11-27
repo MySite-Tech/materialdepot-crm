@@ -18,7 +18,7 @@ export function useB2BTeam(): B2BTeamLoad {
   useEffect(() => { reload(); }, [reload]);
 
   const patch = useCallback((m: TeamMember) => setState((s) => {
-    const at = s.members.findIndex((x) => x.phone === m.phone && x.team === m.team);
+    const at = s.members.findIndex((x) => (m.id != null && x.id != null ? x.id === m.id : x.phone === m.phone && x.team === m.team && !x.leftOn));
     return { ...s, members: at < 0 ? [...s.members, m] : s.members.map((x, i) => (i === at ? m : x)) };
   }), []);
 

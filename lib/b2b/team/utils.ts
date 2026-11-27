@@ -24,6 +24,16 @@ export const membershipsForPhone = (members: TeamMember[], phone: string): TeamM
   return want.length === 10 ? members.filter((m) => m.phone === want && m.active) : [];
 };
 
+export const coversDay = (m: Pick<TeamMember, 'joinedOn' | 'leftOn'>, day: string): boolean =>
+  (!m.joinedOn || day >= m.joinedOn) && (!m.leftOn || day <= m.leftOn);
+
+export function holderOn(members: TeamMember[], phone: string | undefined, day: string): TeamMember | undefined {
+  const want = normalisePhone(phone);
+  if (want.length !== 10) return undefined;
+  const rows = members.filter((m) => m.phone === want && (!day || coversDay(m, day)));
+  return rows.find((m) => m.joinedOn || m.leftOn) ?? rows.find((m) => m.active) ?? rows[0];
+}
+
 export const istDay = (ms = Date.now()): string => new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
 
 export const isCover = (m: Pick<TeamMember, 'from' | 'to'>): boolean => !!(m.from || m.to);

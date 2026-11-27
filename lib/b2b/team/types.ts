@@ -1,6 +1,7 @@
 export type B2BTeam = 'inbound' | 'outreach' | 'kam';
 
 export interface TeamMember {
+  id: number | null;
   phone: string;
   name: string;
   team: B2BTeam;
@@ -36,6 +37,7 @@ export interface KylasUser {
 }
 
 export interface MemberInput {
+  id?: number | null;
   phone: string;
   name: string;
   team: B2BTeam;

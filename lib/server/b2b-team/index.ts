@@ -78,21 +78,28 @@ function rotationSince(now = Date.now()): string {
   return new Date(Math.max(start, now - INBOUND_ROTATION_WINDOW_DAYS * DAY_MS)).toISOString();
 }
 
+const personName = (s: string | undefined) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
 export async function saveMember(input: MemberInput, byName: string): Promise<SavedMember> {
   const phone = normalisePhone(input.phone);
   if (phone.length !== 10) throw new InputError('A team member needs a 10-digit phone number');
   const { members, coverReady, pauseReady, tenureReady } = await readMembers();
-  const stored = members.find((m) => m.phone === phone && m.team === input.team);
+  const sameName = (m: TeamMember) => personName(m.name) === personName(input.name || m.name);
+  const stored = input.id != null
+    ? members.find((m) => m.id === input.id)
+    : members.find((m) => m.phone === phone && m.team === input.team && !m.leftOn && sameName(m));
+  if (input.id != null && !stored) throw new InputError('That team row no longer exists. Reload the Team tab.');
   const name = String(input.name ?? '').trim() || stored?.name || '';
   if (!name) throw new InputError('A team member needs a name');
-  const cover = coverFor(input, stored, members.filter((m) => m.phone === phone && m.team !== input.team), coverReady);
+  const cover = coverFor(input, stored, members.filter((m) => m.phone === phone && m.team !== input.team && !m.leftOn), coverReady);
   const pause = pauseFor(input, pauseReady);
   const tenure = tenureFor(input, stored, tenureReady);
 
   let kylasUserId = input.kylasUserId !== undefined ? input.kylasUserId : stored?.kylasUserId ?? null;
   let kylasName: string | null = input.kylasUserId === undefined ? stored?.kylasName ?? null : null;
   let warning: string | undefined;
-  const linking = input.kylasUserId != null || (input.kylasUserId === undefined && !stored);
+  const pastRecord = !stored && input.active === false && !!input.leftOn;
+  const linking = input.kylasUserId != null || (input.kylasUserId === undefined && !stored && !pastRecord);
   const users = linking ? await listKylasUsers() : [];
   if (input.kylasUserId === undefined && !stored) {
     const linked = members.find((m) => m.phone === phone && m.kylasUserId != null)?.kylasUserId;
@@ -108,6 +115,7 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
   }
 
   const member = await upsertMember({
+    id: stored?.id ?? null,
     phone,
     name,
     team: input.team,

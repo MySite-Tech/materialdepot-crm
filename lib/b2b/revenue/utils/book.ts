@@ -29,7 +29,8 @@ type RepMember = Pick<TeamMember, 'name' | 'phone' | 'team' | 'active'> & Partia
 const isDated = (m: RepMember) => !!(m.joinedOn || m.leftOn);
 
 function staffAliases(members: RepMember[], staff: Pick<TeamMember, 'name' | 'phone'>[]): Map<string, string> {
-  const memberByPhone = new Map(members.filter((m) => (m.active || isDated(m)) && phoneOf(m.phone)).map((m) => [phoneOf(m.phone), m.name]));
+  const memberByPhone = new Map(members.filter((m) => (m.active || isDated(m)) && phoneOf(m.phone))
+    .sort((a, b) => Number(a.active) - Number(b.active)).map((m) => [phoneOf(m.phone), m.name]));
   const phonesByKey = new Map<string, Set<string>>();
   for (const s of staff) {
     const key = repKey(s.name);

@@ -156,7 +156,12 @@ export function repNames(live: { name: string }[], stored: (string | undefined)[
   return [...new Set(names)].sort();
 }
 
+export const numberIsTheirs = (recordName: string | undefined, rep: { name: string }): boolean => {
+  const n = String(recordName ?? '').trim().toLowerCase();
+  return !n || n === 'none' || n === 'null' || /^\d+$/.test(n) || sameRep(recordName, rep.name);
+};
+
 export const repOwns = (rep: { name: string; phone?: string }) => (l: OutreachLead): boolean => {
   const p = normalisePhone(l.bmPhone);
-  return p.length === 10 && rep.phone ? p === normalisePhone(rep.phone) : sameRep(l.bm, rep.name);
+  return p.length === 10 && rep.phone ? p === normalisePhone(rep.phone) && numberIsTheirs(l.bm, rep) : sameRep(l.bm, rep.name);
 };

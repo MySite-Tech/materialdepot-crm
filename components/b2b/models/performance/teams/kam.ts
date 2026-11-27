@@ -5,7 +5,7 @@ import { istDay } from '../../outreach/reminders';
 import { fromKpi, newestFirst, redirectsBy } from '../measures/activity';
 import { creditedOrders, revenueValue } from '../measures/revenue';
 import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, memberPeople, onB2BTeam, pct, withDataPeople, withHelpers } from '../utils';
+import { countValue, counted, isPerson, formerPeople, memberPeople, onB2BTeam, pct, withDataPeople, withHelpers } from '../utils';
 import type { TeamMember } from '@/lib/b2b/team/types';
 
 const DEFS: PerfKpiDef[] = [
@@ -87,7 +87,7 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
 
 function people(data: PerfData, members: TeamMember[], live: boolean): Person[] {
   const names = [...data.clients.map((c) => c.kam), ...data.kamOrders.map((o) => o.kam)];
-  const base = live ? withHelpers(memberPeople(members, 'kam'), members, 'kam', data.clients.flatMap((c) => (c.interactions || []).map((i) => ({ name: i.loggedBy })))) : [];
+  const base = live ? withHelpers([...memberPeople(members, 'kam'), ...formerPeople(members, 'kam')], members, 'kam', data.clients.flatMap((c) => (c.interactions || []).map((i) => ({ name: i.loggedBy })))) : [];
   return withDataPeople(base, names, !live);
 }
 

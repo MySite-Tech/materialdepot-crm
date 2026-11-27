@@ -52,6 +52,7 @@ export async function PUT(request: NextRequest) {
   catch { return bad('Body must be JSON'); }
 
   if (!body.team || !TEAM_KEYS.has(body.team)) return bad("'team' must be inbound, outreach or kam");
+  if (body.id !== undefined && body.id !== null && !Number.isInteger(body.id)) return bad("'id' must be an integer, null, or absent");
   if (body.kylasUserId !== undefined && body.kylasUserId !== null && !Number.isInteger(body.kylasUserId)) {
     return bad("'kylasUserId' must be an integer, null, or absent");
   }
@@ -62,6 +63,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     return Response.json(await saveMember({
+      id: body.id ?? undefined,
       phone: String(body.phone ?? ''),
       name: String(body.name ?? ''),
       team: body.team,

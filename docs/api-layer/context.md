@@ -226,7 +226,9 @@ is read off the GET (`coverReady`: the rows carry `is_primary`). A backend befor
 would silently drop them, so `saveMember` refuses cover fields with that reason
 instead of reporting a save that did not happen. `paused_from`/`paused_to` (0032)
 follow the same rule, read off the GET as `pauseReady`, and so do `joined_on`/`left_on`
-(0034, `tenureReady`): each is sent only when the save names it.
+(0034, `tenureReady`): each is sent only when the save names it. A row's `id` (0035) is
+sent whenever the CRM knows it, so a save lands on that membership and not on whoever
+holds the number now.
 
 **A team save reads Kylas's user list only when it links a Kylas user** (a new row, or
 a picked `kylasUserId`). Until 2026-11-26 every save did, which is two pages at about

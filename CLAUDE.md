@@ -1188,7 +1188,11 @@ for it.
   matched none of his 117 firms. Fix it with the Team tab's Sign-in check and
   Change number, never by hand-editing rows (`docs/b2b/sales-tab-redesign.md`
   §Sign-in check and Change number). A KAM tab that is empty because nothing is
-  assigned (Varun, the same day) is correct.
+  assigned (Varun, the same day) is correct. **Since 2026-11-27 a number is a person
+  only between their team dates:** business numbers are reissued to joiners, so match a
+  dated record with `holderOn` and an undated one only when its name agrees
+  (`numberIsTheirs`). Never key a person on the phone alone again
+  (`docs/b2b/leadership.md` §People who left).
 
 - **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
   removed it from Client Database, Leads and Inbound for every role, admins
