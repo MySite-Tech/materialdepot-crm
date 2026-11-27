@@ -220,6 +220,12 @@ each band; `statusMonths` turns a band into its month range for tile subtitles
 `daysToLapse` counts to the 1st of the month the firm drops a band, for Active and
 Inactive 2–3 months only. `nextStatus` names that band on the Firm page.
 
+- **Checked signed in on production, 2026-11-27.** Client Database's six tiles (Active,
+  Inactive 2–3, 4–6, 7–12, over 12, Never ordered) summed to All firms, with no Unknown.
+  Each tile's count equalled its list. Each band's oldest and newest last orders fell
+  exactly on its month edges: Active 1 Oct–27 Nov, 2–3 Aug–Sep, 4–6 May–Jul, 7–12 2 Nov
+  2025–30 Apr 2026, and over 12 up to 25 Oct 2025. "4d left" showed on October and
+  September firms, which drop a band on 1 Dec.
 - **What moved against the day rule.** Active now covers between 27 and 61 days
   depending on the date, not a flat 30. On the 27th, a firm that ordered on the
   1st of last month is still Active; on the 1st of a month every firm from two

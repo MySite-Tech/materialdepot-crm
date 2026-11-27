@@ -545,6 +545,11 @@ question ("a new Outreach lead, or an Outreach BM owning the firm?"): **both.**
   last order, opened all three teams. One Outreach send of an Active, a 45-day and a
   130-day firm made three Client Database firm leads, and a second send was refused
   for the open lead.
+- **2026-11-27, signed in on production as a manager (read-only):** one firm from each
+  of Active, Inactive 2–3, 4–6, 7–12, over 12 months and Never ordered opened Inbound,
+  Outreach and KAM. The pickers listed 3, 4 and 5 people, and there were no console
+  errors. **No send has run on production yet.** The first should be one Active firm to
+  an Outreach BM, then check the BM's pool and the Firm page SPoC.
 - Seen on the sandbox only (two seeded firms, `CLI-SBX-0003` 250 days, `CLI-SBX-0004`
   420 days and no KAM): Outreach to one person, Inbound by round robin, a recent firm
   refused, a second Outreach send refused for the open lead, both SPoCs on the Firm
@@ -763,6 +768,10 @@ Client Database → **Review new firms** (managers only) lists every firm billed
 GSTIN on a placed order in the last 12 calendar months that is on no B2B board. A
 manager ticks firms and sends them on, or marks them **Not a client**. Nothing joins a
 board without that click. The rule for finding firms is the one below.
+
+**First opened on production on 2026-11-27,** signed in as a manager: the first read
+took under a minute and listed 945 firms to review, with 0 marked Not a client. Nobody
+has worked through it yet.
 
 | Call | Endpoint | When |
 |---|---|---|
