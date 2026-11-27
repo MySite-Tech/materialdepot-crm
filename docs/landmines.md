@@ -1572,6 +1572,18 @@ the same way, so the Orders tile read exactly 1000. All of them now page with `s
 **Any read of a whole site-audit table must page; a plain `sbGet` is wrong once it passes
 1,000 rows, and it gives no error when it is.**
 
+It came back on 2026-11-27 (ENQ20261121105431), and the cause was the ops screens, not the
+installer. `install_orders_slim` rebuilds each `jobcard` without `photos` and `installerSign`,
+and an aggregate over zero rooms returns NULL, so a signed card with `rooms: []` reads back as
+`rooms: null`. The order drawer and the assign section patched the whole `subjobs` array they had
+loaded from that view, so any SM action (a status change, a slot booking) wrote the slim job card
+over the real one: `null` rooms took the view down, and photos/installer sign-off were dropped.
+Both writers now go through `install-ops/patch-order.ts`, which re-reads the stored `subjobs` and
+keeps each sub-job's `jobcard`/`jobcard_history` as stored. 60 of 917 signed job cards had no
+`photos` key by then; there is no history to tell lost photos from cards that never had any.
+**Never write back `subjobs` read from a `_slim` view; re-read the table, as the installer app
+and `coe-ops/core/writes.ts` already do.**
+
 
 ### EC Direct read zero in every month because a firm's channel followed its KAM today (2026-11-27)
 
