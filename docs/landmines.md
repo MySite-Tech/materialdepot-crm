@@ -1583,6 +1583,9 @@ keeps each sub-job's `jobcard`/`jobcard_history` as stored. 60 of 917 signed job
 `photos` key by then; there is no history to tell lost photos from cards that never had any.
 **Never write back `subjobs` read from a `_slim` view; re-read the table, as the installer app
 and `coe-ops/core/writes.ts` already do.**
+The same row broke a third time at 13:47 that day, from an SM tab opened before the fix
+deployed. Every slim read now repairs `rooms: null` rows itself on that exact 400 and retries
+once (`shared/sb-client.ts`), so a stale tab costs one extra round trip, not an outage.
 
 
 ### EC Direct read zero in every month because a firm's channel followed its KAM today (2026-11-27)
