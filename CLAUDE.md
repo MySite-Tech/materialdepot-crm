@@ -964,8 +964,10 @@ the CRM either. Start new work from `origin/main`.
 **Live-site sweep, 2026-11-27 (signed in as Dhruv, read-only).** All 11 B2B Sales
 sub-tabs and all 16 top-level tabs loaded in 2–15 s with no console errors. One real
 bug: the Report Card's team table read "the stats call failed" for 114 of 150 people
-because Django caps `bm_groups` at 12; fixed in CRM PR `report-card-stats-cap`
-(`docs/report-card/context.md`, `docs/landmines.md`). Seen and expected, not bugs:
+because Django caps `bm_groups` at 12; fixed in CRM PR #102 (`report-card-stats-cap`,
+merged and deployed the same day as `4ba777d` on Dhruv's ask). Checked live after
+deploy: all 25 rows on page 1 have figures, the tiles cover all 150 people, and the
+page made 3 stats calls, all 200 (`docs/report-card/context.md`, `docs/landmines.md`). Seen and expected, not bugs:
 Studio Space's frame shows "No active Studio Space team login has this mobile" for
 Dhruv's number (the handoff answers 404; add the number on a Studio Space staff login
 to sign in automatically), one Kylas 429 (the shared rate limit, Owed by Django row 12),
