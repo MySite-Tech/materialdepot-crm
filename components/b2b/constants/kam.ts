@@ -1,4 +1,3 @@
-import { ACTIVE_DAYS, INACTIVE_DAYS } from './client';
 import { KamFirmLens, KamLens, KamLensMeta, KamOrderStatus, LegacyKamStage } from '../types/kam';
 export const KAM_ORDER_STATUSES: KamOrderStatus[] = [
   'Requirement Logged', 'Quote Shared', 'PI Shared', 'Closed', 'Lost',
@@ -67,9 +66,9 @@ export const KAM_LENS: Record<KamLens, KamLensMeta> = {
   nofollow: { title: 'No follow-up', rule: 'The latest interaction set no next follow-up date, or nothing is logged at all, so the firm never comes up as due.', empty: 'Every firm has a follow-up booked.', accent: '#9CA3AF' },
   called:   { title: 'Called today', rule: 'Firms with a Call logged today. Counted once per firm per day, against the §4.1 target, which is reported and not enforced.', empty: 'No call logged today yet.', accent: '#0F766E' },
   upcoming: { title: 'Upcoming', rule: 'Follow-up booked after today.', empty: 'No follow-up is booked ahead.', accent: '#0EA5E9' },
-  active:   { title: 'Active', rule: `Last order placed within the last ${ACTIVE_DAYS} days.`, empty: `No firm has ordered in the last ${ACTIVE_DAYS} days.`, accent: '#22C55E' },
-  lapsing:  { title: 'Inactive 1–3 months', rule: `No order in the last ${ACTIVE_DAYS} days, but one ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago. Closest to going fully inactive first.`, empty: 'No firm is 1–3 months past its last order.', accent: '#F59E0B' },
-  inactive: { title: 'Inactive 3+ months', rule: `Last order more than ${INACTIVE_DAYS} days ago. Firms with no order on record are under Never ordered.`, empty: 'No inactive firm.', accent: '#9CA3AF' },
+  active:   { title: 'Active', rule: 'Last order placed this calendar month or last (M-0 or M-1). A firm changes band only on the 1st of a month.', empty: 'No firm has ordered this month or last month.', accent: '#22C55E' },
+  lapsing:  { title: 'Inactive 2–3 months', rule: 'Last order two or three calendar months back (M-2 or M-3). Closest to going fully inactive first.', empty: 'No firm last ordered two or three months back.', accent: '#F59E0B' },
+  inactive: { title: 'Inactive 4+ months', rule: 'Last order four or more calendar months back (M-4 or older). Firms with no order on record are under Never ordered.', empty: 'No inactive firm.', accent: '#9CA3AF' },
   never:    { title: 'Never ordered', rule: 'No order on record for any of the firm’s numbers.', empty: 'Every firm has ordered at least once.', accent: '#D1D5DB' },
   open:     { title: 'Open orders', rule: 'Orders at Requirement Logged, Quote Shared or PI Shared.', empty: 'No open order.', accent: '#6366F1' },
   pipeline: { title: 'Pipeline', rule: 'Orders at Quote Shared or PI Shared. Ticket value and the KAM estimate are kept apart, never summed.', empty: 'No order is at Quote or PI.', accent: '#8B5CF6' },

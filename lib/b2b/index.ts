@@ -16,5 +16,5 @@ export { clientFromSeed, planClientSeed, saveOutreachHandoverFirm } from './lead
 export type { ClientSeedPlan } from './leads/client-seed';
 export { deleteB2BRow, insertInboundLeads, saveInboundLead, upsertClient, upsertClients, upsertKamOrder, upsertOutreachLead, upsertOutreachLeads } from './data/writes';
 export { fetchTargets, saveTargets } from './stats/targets';
-export { fetchUnifiedLeads, inboundPhones, inboundToUnified, outreachPhones, outreachToUnified } from './leads/unified';
+export { fetchUnifiedLeads, inboundPhones, inboundToUnified, isEcReferral, outreachPhones, outreachToUnified } from './leads/unified';
 export type { LeadSource, UnifiedLead, UnifiedStatus } from './leads/unified';

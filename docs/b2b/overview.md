@@ -11,12 +11,71 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 
 | Call | Endpoint | When |
 |---|---|---|
-| `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readBase`) |
-| `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/` | On open |
-| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
+| `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readInputs`) |
+| `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/`; a KAM order the bulk read does not match falls back to one `/crm/leads/?enquiry_ids=` and per-number `q=` reads (`lookupEnqId`, at most 60 orders) | On open. The page paints from the bulk match and runs the fallback after (below) |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; on Revenue analysis, one per month of the last six plus any month picked there. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
 | `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, three months at a time (two until 2026-11-06). No orders in the response |
 | `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
 | `fetchFunnelReport` | `GET /api/b2b/revenue/funnel?from&to` | Only once the Client Database funnel is opened (remembered per browser), then one per month picked; 5-minute server cache per caller. Reads `/crm/leads/?created_from&created_to` for the month, up to 30 pages of 1,000, 8 at a time |
+
+## Revenue analysis sub-tab (2026-11-27)
+
+The user: the Overview tells what revenue was, not why. They asked for a sub-tab to
+slice it by every parameter it can be attributed to (branch, BM, category and the
+rest), compare two months, and see what went right in a strong month and wrong in
+a weak one. Overview now has two sub-tabs, **Overview** (everything below) and
+**Revenue analysis** (`views/overview/analysis/`). The Overview card's "Analyse
+revenue" link opens it.
+
+**Opened signed in on production on 2026-11-27:** the headline (revenue, orders, firms
+ordering, average order) against October 1–27, the split into fewer vs smaller orders,
+What moved it per dimension and the six-month channel table all loaded, with no console
+errors. A second signed-in check the same day tied it out: the Revenue tile equalled
+the hero, the channels and order counts matched the hero's cards, the six reads all
+answered 200 from the server cache, and Analyse revenue, the drill from Channel to Branch
+and the Same days toggle worked.
+
+- **It reads only `fetchRevenueReport`, one per month,** the same per-order report
+  and server cache as the hero. Six months (the trend's window) plus any older
+  month picked, three at a time (`LOAD_PARALLEL`), so opening it costs 6 requests.
+  The Overview's own reads (`useOverviewData`, the trend, the funnel) do not run
+  on this sub-tab. A real month was a few hundred KB in November 2026, so six
+  months hold a couple of MB. If that is too heavy, drop remarks from the report first.
+- **Everything else is in memory** (`analysis/utils.ts`, no React, runnable with
+  the compile recipe in `CLAUDE.md`). Ten dimensions, each one function of an
+  order (`valuesOf`): channel, branch, rep on the cart, category, how B2B holds it
+  (the order type, with 3/4 split by `heldBy`), B2B team, credited to, client type,
+  order size and firm. Each filters, breaks down, and shows in What moved it.
+- **Branch is the cart rep's home branch, not where it was booked,** the same as
+  the Overview's branch filter. Django does not fill `bookedBranch` yet
+  (`backends.md` §Owed by Django row 10). For a store order the two agree.
+- **Category is the cart's category names.** `/crm/leads/` sends one string per
+  order ("Laminates, Tiles"), with no price per category, so a two-category order
+  counts in full under each and categories add up to more than the total. The
+  hint says so. A per-category value
+  split needs Django to send line totals by category.
+- **Client type is mostly blank** on real tickets (about two in three in October
+  2026). It shows as "Not recorded", never dropped.
+- **Rep on the cart is the "BM" for a store order.** It is `placedBy`, Django's
+  ticket owner. "Credited to" is the B2B person, after `teammateRecordOwner` and
+  any manager credit (`applyCredits`).
+- **Same days only** (on by default when the current month is one of the two):
+  both months are cut to days 1–N by IST placed date, so 27 days are not compared
+  with 31. The month-by-month table is always whole months.
+- **The revenue change splits exactly into volume and order size:**
+  `(orders now − orders before) × avg before` plus `orders now × (avg now − avg before)`.
+- **Clicking a name drills in.** It filters to that value and moves Break down by
+  to the next unfiltered dimension, so Channel → Branch → Rep → Category is one
+  click each. The filter lists are faceted: each lists only values left under the
+  other filters.
+
+Checked 2026-11-27 by running the compiled `utils.ts` in a signed-in production tab
+over real reports: November (1–27) equalled the hero's figure exactly, and so did
+October against the trend. The figures stay out of this public repo. The volume/size split, the per-channel changes and the
+per-branch rows each added back to the totals exactly. The screens were driven on
+the sandbox only (`npm run dev:sandbox`, Django and the B2B backend stubbed), with
+no console errors. **After deploy,** open it signed in as a manager and check that
+the Revenue tile for the current month equals the Overview hero.
 
 ## Four revenue channels (redefined 2026-11-03)
 
@@ -58,9 +117,36 @@ where it was booked decides the channel (`lib/b2b/revenue/utils/classify.ts`):
 - **Types 6 and 8 are the Client Database's firms with no KAM**, including the
   client_master import. Many of those designers bought at stores before anyone at
   B2B knew them, and the user wants that volume visible as EC Direct. A firm is
-  matched by any of its numbers with no date gate, so its whole history counts.
+  matched by any of its numbers with no date gate, so its whole history counts,
+  up to the day it gets a KAM (next bullet).
   An order placed under a number the firm record does not hold (a site supervisor,
   the end client) is missed: there is no GST or name match.
+- **A KAM holds a firm from its first KAM assignment, not for its whole history
+  (2026-11-27).** A Client Database firm with a KAM is types 3/4 only for orders
+  placed (`orderPlacedAt`, else the cart date) at or after its earliest assignment
+  that was not Rejected (`kamSince`, from `meta.assignments[].at`). Earlier orders
+  stay 6/8 with nobody credited, which is the 2026-10-30 rule that revenue follows
+  the owner at close. Before this, the check was "has a KAM today". About 400 firms
+  got their first KAM on 9 and 17–18 Nov, so every past store order of theirs moved
+  from EC Direct to Studio EC Redirected, and EC Direct read zero in every month on
+  the Overview and Revenue analysis while the totals stayed right. A firm with a KAM
+  but no dated assignment keeps its whole history as before. An Inbound or Outreach
+  SPoC, a redirect or a Studio Space number still makes the order 3/4 by its own
+  date. This also takes KAM credit off orders placed before the KAM held the firm;
+  a manager can still credit one order by hand (§A manager credits one order). The
+  date gate lives in `asOfOrder` (`classify.ts`) and was checked on hand-built cases
+  through the compiled classifier. **After it deploys,** every month's total and
+  order count must be unchanged and EC Direct must read above zero.
+- **A rep's team is the one they held on the order's day (2026-11-27).** Team rows carry
+  `joined_on`/`left_on` (b2b-backend 0034, set on the Team tab), and `repOf(name, reps,
+  day)` returns only the teams whose dates cover the order's IST day (`orderPlacedAt`,
+  else the cart date). A person with any dated row is judged by their dates alone: their
+  undated inactive rows, the static roster and `branch === 'B2B'` no longer make them a
+  B2B rep. A person with no dates keeps the old rule (active rows, roster, branch), so
+  nothing changes until they are dated. An order by someone on B2B that day reads
+  `store: B2B`, because the row's `branch` is the rep's home branch **today**: a KAM who
+  became a store manager had every past order filed under the new store
+  (`docs/landmines.md`). After their last day their orders are store orders like anyone's.
 - **The first match decides the type:** referred, then a B2B rep, then a number B2B
   holds, then a firm with no KAM, then the B2B branch.
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is
@@ -119,6 +205,13 @@ public repo. The route itself has run only on the sandbox.
   this reads Django's orders and not Studio's `referral_order`. On 2026-10-31 that
   was one small order. A firm's revenue on its page can differ from this report: that
   page is lifetime plus Studio orders on unlisted numbers.
+- **Referred also counts referrals made in the CRM (2026-11-27).** Any Inbound lead,
+  Outreach lead or firm can refer clients from its drawer (`studio-space.md` §Two-way
+  sync). Each becomes a `referred` holder on that number from the referral's date,
+  credited to the referring record's owner **on that record's team** (Inbound, Outreach
+  or KAM), so the Referred card is no longer KAM-only (`classifyOrder` uses the holder's
+  team). Studio referrals now count when `approved`, `active` or `dormant`; before,
+  only `approved` counted, so a referral Studio had moved to active silently stopped.
 - **`client_master.referred_clients` is empty and `user_refferred` was not used.** Only
   Studio Space referrals count, so a KAM's referral outside Studio Space is
   invisible. On 2026-10-31 18 referred numbers had one order each.
@@ -243,6 +336,32 @@ Django, 1,000 a page, so six months is six full scans. Two changes:
   keeps the 5-minute cache. The cache is per user and per server process, so a
   cold process still pays the full build once.
 
+**The Overview paints before the KAM order lookups (2026-11-27).** The user found the
+Overview took about a minute on a cold load. The time was not the revenue report: on
+production about 10 KAM orders' Enquiry IDs miss `b2b-bulk`'s deals, and
+`resolveKamOrders` then looks each one up (`/crm/leads/?enquiry_ids=`, then a `q=`
+search per firm number, 15 Django calls of 2–15 s), and `readBase` awaited all of it
+before anything rendered. Now `useOverviewData` resolves from the bulk match only
+(`resolveKamOrders(…, lookup = false)`), paints, and runs the per-order fallback in the
+background, then repaints. Until it finishes, an order it is still checking shows at
+its logged value and the KAM desk's "has not matched a deal ticket" note stays hidden
+(`unresolvedOrders: null`), so the note never shows a count that is about to drop. The
+request count is unchanged; only the wait moved. Checked on the sandbox with the bulk
+deals stripped and each lookup delayed 8 s: the page painted at 5 s and the KAM
+revenue filled in when the lookups landed. A Refresh mid-lookup drops the older run's
+result (`run` ref). The lasting fix is fewer misses: those orders' Enquiry IDs should
+match a ticket on the firm's numbers.
+
+On production after that change, a warm load painted at about 8 s, all of it waiting on
+`/api/b2b/rows` then `b2b-bulk`, and the revenue headline, whose own read answers in
+under half a second from the server cache, only started then because it rendered
+behind the same gate. So the revenue section and the client funnel now render at once,
+outside the `base` gate, in a tree whose shape never changes (so they never remount and
+fetch twice). The target, the pace figures and the rest of the page fill in when the B2B
+reads land; until then the target reads "—". Checked on the sandbox with rows and
+`b2b-bulk` delayed 6 s each: the headline showed at 4 s, the target at 14 s, and the
+revenue read ran once.
+
 **Still open:** sharing one report across managers would make a second
 manager's load instant. It needs proof that Django's `/crm/leads/` answers the
 same rows for callers with the same role and branches. Until then the key
@@ -340,7 +459,13 @@ three teams that do not share stages.
    shows its win rate instead,** because `kamFunnel` steps are cumulative
    ("standing here or beyond"), so Closed over their sum would be wrong. Each
    card's Open link switches the B2B sub-tab (`onNavigate`).
-4. **Client book · Needs attention.** The 30/60-day status as one stacked bar,
+4. **Client book · Needs attention.** The calendar-month status (`kam.md` §Account
+   status) as one stacked bar. Each firm's metrics are Client Database's: b2b-bulk
+   plus its Studio Space orders (`withStudioOrders`, from `fetchStudioAccess`, read in
+   parallel with the base data and shared through its 60 s cache). Until 2026-11-27 the
+   Overview skipped the Studio orders and read 190 Active against Client Database's 194
+   (`docs/landmines.md`). A failed Studio read falls back to b2b-bulk alone, as Client
+   Database does. Then
    new clients by month (the last 6), and one attention list with two tabs:
    Going inactive (`k.atRisk`) and Escalations (`health.attention`). Each shows
    6 rows and links to Client Database.

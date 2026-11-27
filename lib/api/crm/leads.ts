@@ -101,7 +101,7 @@ export async function fetchClientOrderHistoriesApi(
   return (data || {}) as Record<string, ClientOrderHistoryRow>;
 }
 
-export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pageSize'> = {}): Promise<CRMLeadsStats> {
+export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pageSize'> = {}, signal?: AbortSignal): Promise<CRMLeadsStats> {
   const params = new URLSearchParams();
   if (query.branch) params.set('branch', query.branch);
   if (query.bm) params.set('bm', query.bm);
@@ -131,7 +131,7 @@ export async function fetchCRMLeadsStats(query: Omit<CRMLeadsQuery, 'page' | 'pa
   if (query.category) params.set('category', query.category);
   if (query.priority) params.set('priority', query.priority);
   const qs = params.toString();
-  const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`);
+  const data = await mdFetch(`/crm/leads/stats/${qs ? `?${qs}` : ''}`, signal ? { signal } : undefined);
   return {
     total: data.total || { count: 0, value: 0 },
     active: data.active || { count: 0, value: 0 },
@@ -208,7 +208,7 @@ export async function fetchB2BBulkApi(
   };
 }
 
-export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeadsPage> {
+export async function fetchCRMLeads(query: CRMLeadsQuery = {}, signal?: AbortSignal): Promise<CRMLeadsPage> {
   const params = new URLSearchParams();
   if (query.page) params.set('page', String(query.page));
   if (query.pageSize) params.set('page_size', String(query.pageSize));
@@ -246,7 +246,7 @@ export async function fetchCRMLeads(query: CRMLeadsQuery = {}): Promise<CRMLeads
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.sortDir) params.set('sort_dir', query.sortDir);
   const qs = params.toString();
-  const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`);
+  const data = await mdFetch(`/crm/leads/${qs ? `?${qs}` : ''}`, signal ? { signal } : undefined);
   return {
     results: data.results || [],
     count: data.count || 0,

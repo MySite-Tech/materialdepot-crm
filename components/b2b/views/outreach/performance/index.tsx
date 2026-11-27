@@ -23,7 +23,7 @@ function KpiTile({ def, k, heads, period, today, state, on, onPick }: {
   const title = [
     `${def.label} — ${def.rule}`,
     pace !== null && target !== null && k.value !== null ? `On pace: ${def.unit === 'L' ? `₹${Math.round(target * pace * 10) / 10}L` : Math.round(target * pace)} by today.` : '',
-    target === null ? 'No target for a custom period — the sheet sets monthly targets.' : '',
+    def.target === null ? 'No target is set for this yet.' : target === null ? 'No target for a part-month period: the sheet sets monthly targets.' : '',
     ready ? k.sub : '',
     'Click to see the leads behind this number.',
   ].filter(Boolean).join('\n');
@@ -66,7 +66,7 @@ export function Scorecard({ kpis, heads, period, today, state, ordersState, acti
       {(['Effort', 'Output'] as const).map((kind) => (
         <section key={kind} className="bg-white rounded-lg border border-gray-200 min-w-0 overflow-hidden">
           <div className="px-3.5 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{kind}</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4">
+          <div className={`grid grid-cols-2 ${OUTREACH_KPIS.filter((d) => d.kind === kind).length > 4 ? 'sm:grid-cols-3 2xl:grid-cols-5' : 'sm:grid-cols-4'}`}>
             {OUTREACH_KPIS.filter((d) => d.kind === kind).map((d) => (
               <KpiTile
                 key={d.key}

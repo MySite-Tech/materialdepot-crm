@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { poFieldFor } from '../../data/oms-service';
 import { autoImportInstallOrders, deliveryDateOf } from '../../data/auto-import-audit-orders';
-import { EXIT_COLS, exitColumnsAvailable, inCity, mapCaps, mapExit, rosterQuery, sbGet, sbPatch, sbPost, type CityFilter, type StaffExit } from '../../shared';
+import { EXIT_COLS, exitColumnsAvailable, inCity, mapCaps, mapExit, rosterQuery, sbGet, sbGetPaged, sbPatch, sbPost, type CityFilter, type StaffExit } from '../../shared';
 import OrdersView from '../../install-ops/views/orders';
 import { CallsView, FollowupsView, NeedActionView, RescheduleView } from '../../install-ops/views/queue';
 import { CalendarView, ScheduleView } from '../../install-ops/views/schedule';
@@ -12,6 +12,7 @@ import { DeletedView, RectificationsView } from '../../install-ops/views/data';
 import { FoamView, PayoutsView } from '../../install-ops/foam-payout/views';
 import type { ShadowerOption } from '../../install-ops/ui/shadower-select';
 import OrderDrawer from '../../install-ops/order-drawer';
+import NpsTabView from '../../nps-tab';
 import { AddOrderOverlay, KylasOverlay, RectOverlay, type AoSkuRow, type AoState } from '../../install-ops/ui/overlays';
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../../staff/staff-modals';
 import { Toast } from '../../install-ops/ui';
@@ -34,6 +35,7 @@ const TABS: Array<{ view: ViewKey; label: string }> = [
   { view: 'payouts', label: 'Payouts' },
   { view: 'deleted', label: 'Deleted Orders' },
   { view: 'rectifications', label: 'Rectifications' },
+  { view: 'nps', label: 'NPS' },
 ];
 
 export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
@@ -157,7 +159,7 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
 
   const loadOrders = useCallback(async () => {
     try {
-      const rows = await sbGet('install_orders_slim?select=*&status=neq.deleted&order=created_at.desc');
+      const rows = await sbGetPaged('install_orders_slim?select=*&status=neq.deleted', 1000, 50, 'created_at.desc,id');
       if (!Array.isArray(rows)) {
         setConnErr(true);
         if (!retryTid.current) retryTid.current = setTimeout(() => { retryTid.current = null; loadOrders(); }, 8000);
@@ -374,6 +376,8 @@ export default function SiteAuditInstallOpsView({ city = 'all', attribution = SM
         return <DeletedView deleted={deleted} onRestore={restoreOrder} />;
       case 'rectifications':
         return <RectificationsView orders={orders} onOpenOrder={openOrder} />;
+      case 'nps':
+        return <NpsTabView kind="install" city={city} onOpenOrder={openOrder} who={attribution} whoEmail={actorEmail} />;
       default:
         return null;
     }

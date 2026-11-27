@@ -31,7 +31,7 @@ Log in with the phone and any four-digit OTP. Any other phone logs in as a local
 | 9000000001 | Asha (Inbound) | `b2b_sales` | inbound, in rotation | 990001 |
 | 9000000002 | Bharat (Inbound) | `b2b_sales` | inbound, in rotation | 990002 |
 | 9000000011 | Omkar (Outreach) | `b2b_sales` | outreach | — |
-| 9000000021 | Kavya (KAM) | `b2b_KAM` | kam | — |
+| 9000000021 | Kavya (KAM) | `b2b_KAM` | kam | 990021 (so she can cover Inbound) |
 | 9000000099 | Meera (B2B Manager) | `b2b_manager` | — (manager) | — |
 
 Kylas also has Hardi (`81181`, the intake owner), and Django has three EC BMs
@@ -94,7 +94,12 @@ with team and Presales notes; Follow up; PI Shared on `ENQ-900101`; Closed on
 accepted into Outreach (`OR-IN-7000116`, a meeting held and one booked); one
 waiting for Omkar's sign-off (`OR-IN-7000117`). Outreach also has a converted
 lead with a handover pending on Kavya and one she accepted, which became the
-client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago.
+client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago. `CLI-SBX-0003`
+(Dormant Builders, KAM Kavya) last ordered 250 days ago and `CLI-SBX-0004` (Lapsed
+Interiors, no KAM) 420 days ago. `CLI-SBX-0005` (Quiet Studio, KAM Kavya, 130 days)
+and `CLI-SBX-0006` (Fresh Inbound Interiors, source Inbound, no KAM, ordered 10 days
+ago) fill the gaps between them. Client Database can send any of them to Inbound,
+Outreach or a KAM (`client-db.md` §Any firm can go to Inbound, Outreach or a KAM).
 `CLI-SBX-0001` has one EC visit booked at Whitefield for tomorrow
 (`ECV-SBX-0001`), so the Firm page card and the Appointment Tracker's B2B list
 both have something to show. Every name, firm

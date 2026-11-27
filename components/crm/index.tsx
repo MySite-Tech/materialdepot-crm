@@ -22,21 +22,21 @@ import { CrmTabBar } from './shell/tab-bar';
 
 import { CRMLeadsStats, CategoryOption, fetchCategoryOptions, fetchLeadRemarks, fetchLeadVisits } from '../../lib/api';
 import { AppUser, Lead } from '../../types/crm';
-import { COLUMNS_ADDED_SINCE_PICKER, DEFAULT_BRANCHES } from './constants';
+import { COLUMNS_ADDED_SINCE_PICKER, DEFAULT_BRANCHES, LEADS_FILTER_DEBOUNCE_MS } from './constants';
 import { useDebouncedValue } from './hooks/use-debounced-value';
 import { LoginScreen } from './login';
 import { CsvRow, DateEditState, MainTab } from './types';
-import { effectiveLeadBranches, isSameLeadRow, offScopeLeadBranches, resolveAllowedTabs } from './utils';
+import { buildLeadsQuery, effectiveLeadBranches, isSameLeadRow, leadsCategories, offScopeLeadBranches, resolveAllowedTabs } from './utils';
 import { isSiteAuditOversightRole, siteAuditRoleFromPermissions } from '@/components/site-audit/shared';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 
 export default function App() {
   const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [permsLoaded, setPermsLoaded] = useState(false);
-  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'ecB2bReferral', 'sales', 'b2bSales', 'admin', 'nps', 'appointmentTracker', 'siteAudit', 'storeDisplay'];
+  const VALID_MAIN_TABS: MainTab[] = ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'ecB2bReferral', 'sales', 'b2bSales', 'bdaRetail', 'admin', 'nps', 'appointmentTracker', 'siteAudit', 'storeDisplay'];
   const tabFromUrl = searchParams.get('tab') as MainTab | null;
   const initialTab: MainTab = tabFromUrl && VALID_MAIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'leads';
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
@@ -83,6 +83,7 @@ export default function App() {
     setCartValueGt('');
     setTaskFilter('');
     setCategoryFilter([]);
+    setSegmentFilter([]);
     setPage(0);
 
     const firstTab = resolveAllowedTabs(userData)[0];
@@ -123,6 +124,7 @@ export default function App() {
   const [cartValueGt, setCartValueGt] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [segmentFilter, setSegmentFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
@@ -158,23 +160,11 @@ export default function App() {
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [, setDeleteLeadState] = useState<Lead | null>(null);
   const [dateEditPopup, setDateEditPopup] = useState<DateEditState | null>(null);
-  const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search.trim(), 600);
   const debouncedCartValueGt = useDebouncedValue(cartValueGt.trim(), 400);
-
-  useEffect(() => {
-    setPage(0);
-  }, [
-    debouncedSearch, branchFilter, personFilter, statusFilter, priorityFilter,
-    createdDateFrom, createdDateTo,
-    followUpDateFrom, followUpDateTo,
-    closureDateFrom, closureDateTo,
-    debouncedCartValueGt,
-    categoryFilter,
-  ]);
 
 
   const [csvPreview, setCsvPreview] = useState<CsvRow[] | null>(null);
@@ -230,7 +220,7 @@ export default function App() {
   });
   const isColVisible = (key: string) => visibleCols.includes(key);
 
-  const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
+  const { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, totalCount, userAllowedBranches, userAllowedBranchesLower, wonCount } = useLeadsView({ crmUsers, currentUser, leads, leadsStats, leadsTotal, sortCol, sortDir });
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
@@ -238,17 +228,27 @@ export default function App() {
     setPage(0);
   };
 
-  useEffect(() => { setPage(0); }, [search, statusFilter, personFilter, branchFilter, createdDateFrom, createdDateTo, followUpDateFrom, followUpDateTo, closureDateFrom, closureDateTo, cartValueGt, taskFilter]);
+  const { addRemark, filteredTotal, handleDateEditSave, handleKylasModalSync, handleKylasSync, saveLead } = makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDeleteLeadState, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast });
+
+  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase','Priority','Ticket ID'];
+
+  const categoryKey = [categoryFilter.join('|'), segmentFilter.join('|')].join('::');
+  const queryCategories = useMemo(() => leadsCategories(categoryFilter, segmentFilter), [categoryKey]);
+
+  const leadsQueryKey = JSON.stringify(buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter: queryCategories, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs: availableBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }));
+  const sentLeadsQueryKey = useDebouncedValue(leadsQueryKey, LEADS_FILTER_DEBOUNCE_MS);
+  const [pageAt, setPageAt] = useState({ key: '', page: 0 });
+  const page = pageAt.key === sentLeadsQueryKey ? pageAt.page : 0;
+  const setPage: Dispatch<SetStateAction<number>> = (next) => setPageAt((prev) => {
+    const current = prev.key === sentLeadsQueryKey ? prev.page : 0;
+    return { key: sentLeadsQueryKey, page: typeof next === 'function' ? next(current) : next };
+  });
 
   const totalPages = leadsTotalPages || (Math.ceil(sorted.length / pageSize) || 1);
   const safePage = Math.min(page, totalPages - 1);
   const paginatedRows = sorted;
 
-  const { addRemark, filteredTotal, handleDateEditSave, handleKylasModalSync, handleKylasSync, saveLead } = makeLeadActions({ bmNameToPhone, currentUser, dateEditPopup, filtered, kylasModalInput, leads, setDateEditPopup, setDeleteLeadState, setDrawerLead, setKylasModalResult, setKylasSync, setLeads, setShowAddDrawer, showSaveError, showToast });
-
-  const CSV_HEADERS = ['Lead ID','Client Name','Client Phone','Created Date','Assigned To','Branch','Status','Lost Reason','Cart Items','Cart Value','Follow-up Date','Closure Date','Remarks','Visits','Client Type','Property Type','Architect/Designer Involved','Project Phase','Priority','Ticket ID'];
-
-  const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, scopedBMs: availableBMs, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  const { handleCsvFile, importCsvLeads, runLeadsExport, today } = makeLeadsCsv({ CSV_HEADERS, bmNameToPhone, branchFilter, branches, categoryFilter: queryCategories, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, csvPreview, csvSelected, currentUser, debouncedCartValueGt, debouncedSearch, exporting, followUpDateFrom, followUpDateTo, leads, personFilter, scopedBMs: availableBMs, setCsvErrors, setCsvImportCount, setCsvPreview, setCsvSelected, setExportMenuOpen, setExporting, setLeads, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
 
   const isOverdue = (l: Lead): boolean => !!(l.followUpDate && l.followUpDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
   const isClosureOverdue = (l: Lead): boolean => !!(l.closureDate && l.closureDate < today && !['Order Placed', 'Order Confirmed', 'Partly Shipped', 'Shipped', 'Partly Delivered', 'Delivered', 'Refunded', 'Order Lost', 'Order Cancelled'].includes(l.status));
@@ -266,7 +266,7 @@ export default function App() {
     [leads, requestedBranches],
   );
 
-  useLeadsData({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, effectiveTab, followUpDateFrom, followUpDateTo, mainTab, page, pageSize, personFilter, scopedBMs: availableBMs, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower });
+  useLeadsData({ currentUser, effectiveTab, mainTab, page, pageSize, queryKey: sentLeadsQueryKey, setBranches, setBranchesLoaded, setCrmUsers, setDbReady, setLeads, setLeadsLoading, setLeadsStats, setLeadsTotal, setLeadsTotalPages, setStatsLoading, sortCol, sortDir });
 
   if (!userLoaded) return null;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
@@ -311,6 +311,8 @@ export default function App() {
         branches={branches}
         cartValueGt={cartValueGt}
         categoryFilter={categoryFilter}
+        segmentFilter={segmentFilter}
+        setSegmentFilter={setSegmentFilter}
         priorityFilter={priorityFilter}
         setPriorityFilter={setPriorityFilter}
         categoryOptions={categoryOptions}
@@ -346,6 +348,7 @@ export default function App() {
         pipelineActive={pipelineActive}
         pipelineLost={pipelineLost}
         pipelineTotal={pipelineTotal}
+        totalCount={totalCount}
         pipelineWon={pipelineWon}
         pipelineExclGst={pipelineExclGst}
         runLeadsExport={runLeadsExport}

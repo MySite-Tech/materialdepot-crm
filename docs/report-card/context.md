@@ -18,13 +18,16 @@ viewer's place in the ladder first and scopes everything to that.
 | Call | Endpoint | What it decides |
 |---|---|---|
 | `fetchUsers` | `GET /user-organisation/` | who is under the viewer (§ hierarchy) |
-| `fetchCRMLeadsStatsByBmGroup` | `GET /crm/leads/stats/?bm_groups=` | orders, sales value, AOV, pipeline, lost — **per person, keyed on contact** |
+| `fetchCRMLeadsStatsByBmGroup` (tiles) | `GET /crm/leads/stats/?bm_groups=team:<every filtered phone>` | the team tiles: orders, sales value, live pipeline — **one group holding the whole filtered team** |
+| `fetchCRMLeadsStatsByBmGroup` (rows) | `GET /crm/leads/stats/?bm_groups=` | the rows on the page shown: orders, sales value, AOV, pipeline, lost — **per person, keyed on contact, 12 groups a call** |
 | `fetchFootfallDashboard` | `GET /crm/footfall-dashboard/` | footfall, carts, cart %, conv % — **per person, keyed on name** |
 | `fetchReportCard` | `GET /crm/report-card/` | every number in sections 02–07 |
 | `fetchCategoryOptions` | `GET /category-list-all/` | the category filter |
 | `fetchAvailableBMs` | `GET /crm/available-bms/` | **only on the roster-failure fallback** |
 
-Five on mount, six for a team over 50 (see `STATS_BATCH`). `/user-organisation/`
+Seven or eight on mount: the four calls above, the tiles' one, and the rows' 1–3
+(25 rows a page at 12 a call). Changing page costs up to 3; changing a filter costs
+1 plus up to 3. `/user-organisation/`
 is usually already inside `mdFetch`'s 8 s GET cache because the Leads tab
 fetched it, and `/crm/available-bms/` is not called at all unless the roster
 failed.
@@ -123,7 +126,22 @@ a confident zero.
   team table in front of you the common way to hit it is clicking a Receptionist
   or a Store Manager, neither of whom owns leads. Their row in section 01 still
   carries real lead-stat numbers, which is the point of having both.
-- **`useTeamPerformance` keys its effect on `contactKey`, a joined string**, not
+- **Django answers at most 12 groups per `bm_groups=` call and silently drops the
+  rest (found on production 2026-11-27).** The table used to send 50 a call
+  (`STATS_BATCH`) for every person under the viewer: on a 150-person team only 36
+  rows had figures, the other 114 read "Unknown — the stats call failed" although
+  every call returned 200, and the tiles summed those 36 alone. Now `STATS_BATCH`
+  is 12, the rows ask only for the page shown (`useTeamLeadStats`), and the tiles
+  ask once with a single group of the whole filtered team. The tiles' group is
+  split every 250 phones and summed, so the query stays under the ~4 KB request-line
+  limit (150 phones is about 2,070 bytes). That single group was
+  checked on production the same day against the per-person sum for all 150: total,
+  won count and value, active and lost all equal. A row with no group in a
+  successful answer reads "Django sent no figures for this number", never "the call
+  failed" (`docs/landmines.md`). Shipped in CRM PR #102 (`4ba777d`) and checked live
+  the same day: 0 rows without figures on page 1 of 150, tiles team-wide.
+- **The team hooks key their effects on joined phone strings** (`contactKey`,
+  `filteredKey`, `pageKey`), not
   on the `people` array — that array is rebuilt on every render and depending on
   it re-fetches in a loop. Same reason `useTeam` takes `branchKey` as a string.
 - **Nothing is fetched until a person is selected.** `personPhone === ''` skips

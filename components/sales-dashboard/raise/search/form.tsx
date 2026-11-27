@@ -2,8 +2,7 @@
 
 import { Dispatch, FormEvent, SetStateAction } from 'react';
 
-export function SearchForm({ handleOpenKylasModal, handleSearch, inputValue, loading, setInputValue }: {
-  handleOpenKylasModal: () => void;
+export function SearchForm({ handleSearch, inputValue, loading, setInputValue }: {
   handleSearch: (e: FormEvent<Element>) => Promise<void>;
   inputValue: string;
   loading: boolean;
@@ -15,7 +14,8 @@ export function SearchForm({ handleOpenKylasModal, handleSearch, inputValue, loa
         type="text"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        placeholder="Search by contact or deal…"
+        placeholder="Enter ENQ id or customer phone number"
+        autoFocus
         className="w-full sm:flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
       />
       <div className="flex gap-2">
@@ -24,14 +24,7 @@ export function SearchForm({ handleOpenKylasModal, handleSearch, inputValue, loa
           disabled={loading}
           className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-[#EAB308] text-gray-950 text-sm font-semibold disabled:opacity-50"
         >
-          Search
-        </button>
-        <button
-          type="button"
-          onClick={handleOpenKylasModal}
-          className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-gray-900 text-yellow-400 text-sm font-semibold whitespace-nowrap"
-        >
-          Create Kylas Deal
+          {loading ? "Searching…" : "Search"}
         </button>
       </div>
     </form>

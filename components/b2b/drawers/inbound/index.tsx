@@ -26,6 +26,7 @@ import { EnqLookup, inboundPhones, lookupEnqId, saveInboundLead } from '@/lib/b2
 import { hasTeamEdits } from '@/lib/b2b/mappers/inbound';
 import { OrderCreditLine } from '../../order-credit/ui/credit-line';
 import { RedirectToEc, openEnquiries, uniquePhones } from '../../ui/redirect-to-ec';
+import { ReferralsCard } from '../../ui/referrals';
 import { SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const GATE_TEXT: Record<GateField, string> = {
@@ -261,6 +262,8 @@ export default function InboundDrawer({
             enquiries={openEnquiries(detail.deals.data)}
             enquiriesState={detail.deals.loading ? 'loading' : detail.deals.failed ? 'failed' : 'ready'}
           />
+
+          <ReferralsCard kind="inbound" referrerId={draft.id} referrerName={draft.companyName || draft.company} by={actorName} />
 
           <InboundNotesCard draft={draft} calls={calls} />
 

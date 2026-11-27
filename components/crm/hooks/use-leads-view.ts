@@ -53,6 +53,7 @@ const stageSummary = STATUSES.map((status) => {
   const row = statsByStatus.get(status);
   return { status, count: row?.count || 0, value: row?.value || 0, valueExclGst: row?.valueExclGst };
 });
+const totalCount = leadsStats?.total.count ?? 0;
 const activeCount = leadsStats?.active.count ?? 0;
 const wonCount = leadsStats?.won.count ?? 0;
 const lostCount = leadsStats?.lost.count ?? 0;
@@ -80,5 +81,5 @@ const sorted = [...filtered].sort((a, b) => {
 });
 
 
-  return { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, userAllowedBranches, userAllowedBranchesLower, wonCount };
+  return { activeCount, availableBMs, bmNameToPhone, filtered, lostCount, pctActive, pctLost, pctWon, pipelineActive, pipelineExclGst, pipelineLost, pipelineTotal, pipelineWon, sorted, stageSummary, totalCount, userAllowedBranches, userAllowedBranchesLower, wonCount };
 }

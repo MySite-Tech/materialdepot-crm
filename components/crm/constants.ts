@@ -3,9 +3,13 @@
 import { MainTab } from './types';
 import { CHECKLIST_PERMISSION_SLUG } from '@/lib/store-checklist/constants';
 import { EC_REFERRAL_SLUG } from '@/lib/b2b/ec-referral/constants';
+import { BDA_ROLE } from '@/lib/bda-retail/constants';
 import { CRM_ROLE_TO_SITE_AUDIT_ROLE, OVERSIGHT_CRM_ROLES } from '@/components/site-audit/shared';
+import { CORE_CATEGORIES, NON_CORE_CATEGORIES, SPECIAL_CATEGORIES } from '@/components/dashboard/category-revenue/constants';
 
 export const DEFAULT_BRANCHES = ['JP Nagar', 'Whitefield', 'Yelankha', 'Electronic City', 'HQ'];
+
+export const LEADS_FILTER_DEBOUNCE_MS = 400;
 
 export const LEAD_PRIORITIES = ['hot', 'warm', 'cold'] as const;
 
@@ -19,6 +23,14 @@ export const priorityLabelsToValues = (labels: string[]) =>
 
 export const priorityValuesToLabels = (values: string[]) =>
   values.map((v) => PRIORITY_FILTER_OPTIONS.find((o) => o.value === v)?.label ?? v);
+
+export const SEGMENT_CATEGORIES: Record<string, string[]> = {
+  'Core': CORE_CATEGORIES,
+  'Non-Core': NON_CORE_CATEGORIES,
+  'Special': SPECIAL_CATEGORIES,
+};
+
+export const SEGMENT_OPTIONS = Object.keys(SEGMENT_CATEGORIES);
 
 export const STATUSES = [
   'In Cart',
@@ -144,14 +156,14 @@ export const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
 export const TAB_LABELS: Record<MainTab, string> = {
   leads: 'Leads', dashboard: 'Dashboard', footfall: 'Footfall', weeklyFunnel: 'Weekly Funnel',
   reportCard: 'Report Card', remarksQuality: 'Remarks Quality', storeVisit: 'Store Visit Form', storeChecklist: 'Store Checklist', ecB2bReferral: 'EC B2B Referral',
-  sales: 'Escalation visibility', b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
+  sales: 'Escalation visibility', b2bSales: 'B2B Sales', bdaRetail: 'BDA Retail', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
   appointmentTracker: 'Appointment Tracker', storeDisplay: 'Store Display',
 };
 
 export const ROLE_OPTIONS: Array<string> = [
   'sales', 'team_leader', 'asst_store_manager', 'store_manager', 'cluster_head',
   'area_manager', 'manager', 'retail', 'admin', 'tech',
-  'b2b_sales', 'b2b_KAM', 'b2b_manager',
+  'b2b_sales', 'b2b_KAM', 'b2b_manager', BDA_ROLE,
   'field_worker', 'delivery', 'delivery_manager', 'post_sales', 'procurement',
   'pre_sales', 'customer_success', 'accounts', 'data',
 ];
@@ -161,6 +173,7 @@ export const ROLE_LABEL_OVERRIDES: Record<string, string> = {
   b2b_sales: 'B2B Sales',
   b2b_KAM: 'B2B KAM',
   b2b_manager: 'B2B Manager',
+  [BDA_ROLE]: 'BDA Retail',
   coe: 'Category Ops Executive',
 };
 
@@ -191,3 +204,6 @@ export const LOST_AGE_BYPASS_ROLES = new Set(['admin', 'manager']);
 export const MARK_LOST_BYPASS_SLUG = 'crm.mark_lost_bypass_age';
 
 export const MARK_LOST_ELIGIBLE = new Set(['In Cart', 'Quote Approval Pending', 'Availability Check', 'Request for Availability Check']);
+
+export const LEADS_STATS_CACHE_KEY = 'crm-leads-stats';
+export const LEADS_STATS_CACHE_MAX = 20;

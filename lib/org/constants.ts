@@ -88,4 +88,4 @@ export const STAKEHOLDER_ORDER: StakeholderRole[] =
 
 export const TEAM_PAGE_SIZE = 25;
 
-export const STATS_BATCH = 50;
+export const STATS_BATCH = 12;

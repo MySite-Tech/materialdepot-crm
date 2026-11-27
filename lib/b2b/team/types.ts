@@ -1,6 +1,7 @@
 export type B2BTeam = 'inbound' | 'outreach' | 'kam';
 
 export interface TeamMember {
+  id: number | null;
   phone: string;
   name: string;
   team: B2BTeam;
@@ -9,6 +10,13 @@ export interface TeamMember {
   inRotation: boolean;
   active: boolean;
   isAdmin: boolean;
+  primary: boolean;
+  from: string | null;
+  to: string | null;
+  pausedFrom: string | null;
+  pausedTo: string | null;
+  joinedOn: string | null;
+  leftOn: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -16,6 +24,9 @@ export interface TeamMember {
 export interface TeamState {
   members: TeamMember[];
   tableMissing: boolean;
+  coverReady: boolean;
+  pauseReady: boolean;
+  tenureReady: boolean;
 }
 
 export interface KylasUser {
@@ -26,6 +37,7 @@ export interface KylasUser {
 }
 
 export interface MemberInput {
+  id?: number | null;
   phone: string;
   name: string;
   team: B2BTeam;
@@ -33,6 +45,13 @@ export interface MemberInput {
   active?: boolean;
   kylasUserId?: number | null;
   isAdmin?: boolean;
+  primary?: boolean;
+  from?: string | null;
+  to?: string | null;
+  pausedFrom?: string | null;
+  pausedTo?: string | null;
+  joinedOn?: string | null;
+  leftOn?: string | null;
 }
 
 export interface SavedMember {
@@ -94,6 +113,7 @@ export interface B2BTeamLoad extends TeamState {
   loading: boolean;
   error: string | null;
   reload: () => void;
+  patch: (m: TeamMember) => void;
 }
 
 export interface SignInGaps {

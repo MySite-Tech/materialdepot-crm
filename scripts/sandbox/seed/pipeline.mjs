@@ -35,12 +35,16 @@ function seedDeals() {
     deal('ENQ-900114', '9000020013', 'Placeholder Modular', 'Delivered', 95000, RAVI, 'JP Nagar', -40, { closureDate: istDay(-35), clientGst: '29AAFCP5555E1Z2' }),
     deal('ENQ-900115', '9000020014', 'Dummy Decor', 'Order Placed', 62000, IMRAN, 'HSR', -3, { closureDate: istDay(-2), clientGst: '29ABCPD6666F1Z7' }),
     deal('ENQ-900116', '9000020015', 'Stand-in Constructions', 'Delivered', 230000, SNEHA, 'Whitefield', -95, { closureDate: istDay(-90), clientGst: '36AAACS7777G1Z4' }),
+    deal('ENQ-900117', '9000020016', 'Dormant Builders', 'Delivered', 275000, RAVI, 'JP Nagar', -255, { closureDate: istDay(-250) }),
+    deal('ENQ-900118', '9000020017', 'Lapsed Interiors', 'Delivered', 88000, IMRAN, 'HSR', -425, { closureDate: istDay(-420) }),
+    deal('ENQ-900119', '9000020018', 'Quiet Studio', 'Delivered', 120000, RAVI, 'JP Nagar', -135, { closureDate: istDay(-130) }),
+    deal('ENQ-900120', '9000020019', 'Fresh Inbound Interiors', 'Order Placed', 160000, { name: 'Asha (Inbound)', phone: '9000000001' }, 'B2B', -12, { closureDate: istDay(-10) }),
   ];
 }
 
 const OUTREACH_DEFAULTS = {
   designation: null, gst_number: null, segment: null, lead_type: null, company_type: null, company_type_other: null,
-  meetings: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null,
+  meetings: [], call_attempts: [], selections: [], requirement: null, expected_order_value: null, follow_up_date: null,
   quote_shared_at: null, enq_id: null, order_value: null, order_value_source: null, deal_status: null, expected_closure: null,
   lost_reason: null, kam: null, ec_name: null, ec_bm_name: null, notes: [], alt_phone: null, alt_name: null, alt_role: null, contacts: [], email: null,
   city: 'Bangalore', office_address: null, team_size: null, whatsapp_group_link: null, converted_at: null,
@@ -73,6 +77,11 @@ function seedOutreach() {
     meetings: [
       meeting(1, -6, 'Completed', { metWith: 'Owner / Principal', notes: 'Walked through laminate shades; quote requested.', pin: { lat: 12.97, lng: 77.64, at: istAt(-6, 11) } }),
       meeting(2, 2, 'Scheduled'),
+    ],
+    call_attempts: [
+      { n: 1, outcome: 'RNR', at: istAt(-8, 11), by: OMKAR.name, byPhone: OMKAR.phone },
+      { n: 2, outcome: 'Connected', at: istAt(-7, 16), by: OMKAR.name, byPhone: OMKAR.phone, note: 'Owner free on Thursday; booked the first visit.' },
+      { n: 3, outcome: 'Connected', at: istAt(-1, 12), by: OMKAR.name, byPhone: OMKAR.phone, note: 'Quote received; second visit to finalise shades.' },
     ],
     intake: {
       from: 'Inbound', inboundLeadId: String(leadId(16)), inboundOwner: BHARAT.name, inboundStage: 'Follow up',
@@ -135,10 +144,10 @@ function clientRow(id, company, phone, source, created, meta) {
   const m = {
     company, contacts: [{ number: phone, name: meta.contactName, primary: true }], gsts: [], segment: '2',
     client_type: meta.clientType, client_type_raw: null, source,
-    assignments: [{ kam: KAVYA.name, at: created, by: MEERA.name, reason: meta.reason }],
+    assignments: meta.noKam ? [] : [{ kam: KAVYA.name, at: created, by: MEERA.name, reason: meta.reason }],
     remarks: null, interactions: meta.interactions ?? [], escalations: [], merged_from: [], created_at: created, updated_at: created,
   };
-  return { id, pipeline: 'client', stage: 'Client', kylas_lead_id: null, owner: KAVYA.name, value: 0, created_at: created, updated_at: created, meta_data: m };
+  return { id, pipeline: 'client', stage: 'Client', kylas_lead_id: null, owner: meta.noKam ? null : KAVYA.name, value: 0, created_at: created, updated_at: created, meta_data: m };
 }
 
 function kamRow(id, clientId, company, phone, stage, day, meta) {
@@ -163,6 +172,18 @@ function seedKam() {
     clientRow('CLI-SBX-0002', 'Exemplar Interiors', '9000020003', 'Existing', istAt(-90, 12), {
       contactName: 'Demo Owner C', clientType: 'Interior Designer', reason: 'Existing account',
     }),
+    clientRow('CLI-SBX-0003', 'Dormant Builders', '9000020016', 'Existing', istAt(-300, 12), {
+      contactName: 'Demo Owner D', clientType: 'Builder', reason: 'Existing account',
+    }),
+    clientRow('CLI-SBX-0004', 'Lapsed Interiors', '9000020017', 'Existing', istAt(-450, 12), {
+      contactName: 'Demo Owner E', clientType: 'Interior Designer', noKam: true,
+    }),
+    clientRow('CLI-SBX-0005', 'Quiet Studio', '9000020018', 'Existing', istAt(-200, 12), {
+      contactName: 'Demo Owner F', clientType: 'Interior Designer', reason: 'Existing account',
+    }),
+    clientRow('CLI-SBX-0006', 'Fresh Inbound Interiors', '9000020019', 'Inbound', istAt(-10, 12), {
+      contactName: 'Demo Owner G', clientType: 'Interior Designer', noKam: true,
+    }),
   ];
   const orders = [
     kamRow('KAM-SBX-0001', 'CLI-SBX-0001', 'Template Builders', '9000020002', 'Closed', -30, {
@@ -181,7 +202,8 @@ function seedKam() {
 function seedTeam(at) {
   const row = (p, team, inRotation) => ({
     phone: p.phone, name: p.name, team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
-    in_rotation: inRotation, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
+    in_rotation: inRotation, active: true, is_admin: false, is_primary: team === p.team, starts_on: null, ends_on: null, paused_from: null, paused_to: null,
+    updated_at: at, updated_by: MEERA.name,
   });
   const bharat = PERSONAS.find((p) => p.phone === '9000000002');
   return [...PERSONAS.filter((p) => p.team).map((p) => row(p, p.team, true)), row(bharat, 'outreach', false)];

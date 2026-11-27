@@ -2,7 +2,8 @@
 
 import { revenueTargetL } from '../../../models/performance';
 import { Goals, PerfKpiDef, Person, TargetStore, TeamEngine } from '../../../models/performance/types';
-import { fmtNumber, goalKey } from '../../../models/performance/utils';
+import { fmtNumber, goalFor, goalKey } from '../../../models/performance/utils';
+import { personTag } from '../utils';
 import { saveTargets } from '@/lib/b2b';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { useEffect, useMemo, useState } from 'react';
@@ -22,7 +23,7 @@ function toGoals(goals: Goals, team: B2BTeam, people: Person[], defs: PerfKpiDef
       const raw = draft[key]?.[d.key];
       if (raw === undefined) continue;
       const n = Number(raw);
-      if (raw.trim() === '' || !Number.isFinite(n) || n < 0 || n === d.target) delete mine[d.key];
+      if (raw.trim() === '' || !Number.isFinite(n) || n < 0 || (n === d.target && !p.cover)) delete mine[d.key];
       else mine[d.key] = n;
     }
     if (Object.keys(mine).length) next[key] = mine;
@@ -46,7 +47,7 @@ export function TargetsEditor({ engine, people, store, totals, onSaved }: {
 
   const goals = useMemo(() => toGoals(store.goals, engine.team, people, defs, draft), [store.goals, engine.team, people, defs, draft]);
   const dirty = JSON.stringify(goals) !== JSON.stringify(store.goals);
-  const valueOf = (p: Person, d: PerfKpiDef): number => goals[goalKey(engine.team, p)]?.[d.key] ?? (d.target as number);
+  const valueOf = (p: Person, d: PerfKpiDef): number | null => goalFor(d, engine.team, p, goals);
   const shown = (p: Person, d: PerfKpiDef): string => {
     const key = goalKey(engine.team, p);
     const raw = draft[key]?.[d.key];
@@ -59,8 +60,9 @@ export function TargetsEditor({ engine, people, store, totals, onSaved }: {
     setDraft((cur) => ({ ...cur, [key]: { ...cur[key], [d.key]: v } }));
   };
   const teamTotal = (d: PerfKpiDef): number => {
-    const sum = people.reduce((a, p) => a + valueOf(p, d), 0);
-    return d.unit === '%' ? Math.round(sum / Math.max(1, people.length)) : Math.round(sum * 100) / 100;
+    const each = people.map((p) => valueOf(p, d)).filter((v): v is number => v !== null);
+    const sum = each.reduce((a, v) => a + v, 0);
+    return d.unit === '%' ? Math.round(sum / Math.max(1, each.length)) : Math.round(sum * 100) / 100;
   };
 
   const save = async () => {
@@ -126,12 +128,15 @@ export function TargetsEditor({ engine, people, store, totals, onSaved }: {
               <tbody>
                 {people.map((p) => (
                   <tr key={p.key} className="border-b border-gray-50 last:border-0">
-                    <td className="px-3 py-1.5 font-semibold text-gray-900 whitespace-nowrap">{p.name}</td>
+                    <td className="px-3 py-1.5 font-semibold text-gray-900 whitespace-nowrap">
+                      {p.name}
+                      {p.cover && <span className="block text-[10px] font-normal text-sky-700">{personTag(p, engine.team)} · no target unless set</span>}
+                    </td>
                     {defs.map((d) => {
                       const v = shown(p, d);
                       return (
                         <td key={d.key} className="px-3 py-1.5 text-right">
-                          <input type="number" min={0} value={v} placeholder={String(d.target)} onChange={(e) => edit(p, d, e.target.value)}
+                          <input type="number" min={0} value={v} placeholder={p.cover ? '—' : String(d.target)} onChange={(e) => edit(p, d, e.target.value)}
                             aria-label={`${p.name} ${d.label} target`}
                             className={`w-20 px-2 py-1 text-right font-mono text-[12px] rounded border outline-none focus:border-[#0F766E] placeholder:text-gray-300 ${v !== '' ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200'}`} />
                         </td>

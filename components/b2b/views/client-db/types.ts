@@ -1,6 +1,6 @@
 import { ClientEntity, ClientOrderMetrics, ClientStatus, FirmSpoc, StudioAccess } from '../../models/client';
 
-export type ClientLens = 'all' | 'active' | 'm1to3' | 'm3to6' | 'm6to12' | 'm12plus' | 'never' | 'unknown' | 'nokam' | 'pending';
+export type ClientLens = 'all' | 'active' | 'm2to3' | 'm4to6' | 'm7to12' | 'm12plus' | 'never' | 'unknown' | 'nokam' | 'pending';
 
 export interface ClientLensMeta {
   title: string;

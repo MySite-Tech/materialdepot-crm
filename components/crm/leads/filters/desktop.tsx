@@ -6,17 +6,19 @@ import { Download, FileSpreadsheet, FileText, FileType2 } from 'lucide-react';
 
 import { CategoryOption } from '../../../../lib/api/dashboards/weekly-funnel';
 import { Lead } from '../../../../types/crm';
-import { PRIORITY_FILTER_OPTIONS, STATUSES, priorityLabelsToValues, priorityValuesToLabels } from '../../constants';
+import { PRIORITY_FILTER_OPTIONS, SEGMENT_OPTIONS, STATUSES, priorityLabelsToValues, priorityValuesToLabels } from '../../constants';
 import { DateRangePicker, MultiSelect } from '../../ui/inputs';
 import { ChangeEvent, Dispatch, SetStateAction } from 'react';
 
-export function LeadsFiltersDesktop({ ALL_COLUMNS, availableBMs, branchFilter, branches, cartValueGt, categoryFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, followUpDateFrom, followUpDateTo, handleCsvFile, isColVisible, leads, leadsTotal, personFilter, runLeadsExport, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPersonFilter, setSearch, setShowKylasModal, setStatusFilter, setTaskFilter, setVisibleCols, statusFilter, taskFilter, userAllowedBranches }: {
+export function LeadsFiltersDesktop({ ALL_COLUMNS, availableBMs, branchFilter, branches, cartValueGt, categoryFilter, segmentFilter, setSegmentFilter, priorityFilter, setPriorityFilter, categoryOptions, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, csvFileRef, exportMenuOpen, exportScope, exporting, followUpDateFrom, followUpDateTo, handleCsvFile, isColVisible, leads, leadsTotal, personFilter, runLeadsExport, search, setBranchFilter, setCartValueGt, setCategoryFilter, setClosureDateFrom, setClosureDateTo, setCreatedDateFrom, setCreatedDateTo, setExportMenuOpen, setExportScope, setFollowUpDateFrom, setFollowUpDateTo, setKylasModalInput, setKylasModalResult, setPersonFilter, setSearch, setShowKylasModal, setStatusFilter, setTaskFilter, setVisibleCols, statusFilter, taskFilter, userAllowedBranches }: {
   ALL_COLUMNS: { key: string; label: string; }[];
   availableBMs: string[];
   branchFilter: string[];
   branches: string[];
   cartValueGt: string;
   categoryFilter: string[];
+  segmentFilter: string[];
+  setSegmentFilter: Dispatch<SetStateAction<string[]>>;
   priorityFilter: string[];
   setPriorityFilter: Dispatch<SetStateAction<string[]>>;
   categoryOptions: CategoryOption[];
@@ -136,6 +138,7 @@ export function LeadsFiltersDesktop({ ALL_COLUMNS, availableBMs, branchFilter, b
         <DateRangePicker label="Created" dateFrom={createdDateFrom} dateTo={createdDateTo} onChange={(from, to) => { setCreatedDateFrom(from); setCreatedDateTo(to); }} />
         <DateRangePicker label="Follow-up" dateFrom={followUpDateFrom} dateTo={followUpDateTo} onChange={(from, to) => { setFollowUpDateFrom(from); setFollowUpDateTo(to); }} />
         <DateRangePicker label="Closure" dateFrom={closureDateFrom} dateTo={closureDateTo} onChange={(from, to) => { setClosureDateFrom(from); setClosureDateTo(to); }} />
+        <MultiSelect options={SEGMENT_OPTIONS} selected={segmentFilter} onChange={setSegmentFilter} label="Segment" />
         <MultiSelect options={categoryOptions.map((c) => c.name)} selected={categoryFilter} onChange={setCategoryFilter} label="Category" searchable />
         <MultiSelect options={PRIORITY_FILTER_OPTIONS.map((o) => o.label)} selected={priorityValuesToLabels(priorityFilter)} onChange={(labels) => setPriorityFilter(priorityLabelsToValues(labels))} label="Priority" />
         <div className="flex items-center gap-1 border border-gray-200 rounded-md px-2 bg-white shrink-0">

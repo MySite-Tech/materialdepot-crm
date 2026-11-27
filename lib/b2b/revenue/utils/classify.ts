@@ -4,6 +4,8 @@ import type { B2BTeam } from '../../team/types';
 import type { BookedOn, Holder, NumberBook, OrderInput, OrderType, RepTeams, RevenueChannel, RevenueOrder } from '../types';
 import { phoneOf, repName, repOf } from './book';
 
+const IST_MS = 19_800_000;
+
 const placedBefore = (h: Holder, cartDay: string) => !h.since || !cartDay || cartDay >= h.since;
 
 function directTeam(teams: B2BTeam[], held: Holder[]): B2BTeam | null {
@@ -16,6 +18,11 @@ const samePerson = (a: string, b: string) => repName(a).toLowerCase() === repNam
 
 const heldAtOrder = (h: Holder, orderMs: number) =>
   h.kind !== 'firm' || !h.kamFrom || Number.isNaN(orderMs) || Date.parse(h.kamFrom) <= orderMs;
+
+const asOfOrder = (h: Holder, orderMs: number): Holder =>
+  h.kind !== 'firm' || !h.kamSince || Number.isNaN(orderMs) || Date.parse(h.kamSince) <= orderMs
+    ? h
+    : { ...h, kind: 'unowned', team: null, owner: '' };
 
 export function teammateRecordOwner(held: Holder[], repTeams: B2BTeam[], placedBy: string, orderAt: string): Holder | null {
   const orderMs = Date.parse(orderAt);
@@ -33,12 +40,14 @@ export function classifyOrder(
   const cartDay = String(o.createdAt || '').slice(0, 10);
   const bookedOnB2B = booked !== 'store';
   const phone = phoneOf(o.clientPhone);
-  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay));
+  const orderMs = Date.parse(String(o.orderPlacedAt || o.createdAt || ''));
+  const orderDay = Number.isNaN(orderMs) ? cartDay : new Date(orderMs + IST_MS).toISOString().slice(0, 10);
+  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay)).map((h) => asOfOrder(h, orderMs));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
-  const rep = repOf(o.assignedTo, reps);
+  const rep = repOf(o.assignedTo, reps, orderDay);
   const repTeams = rep?.teams ?? [];
   const placedBy = rep?.name ?? repName(o.assignedTo);
-  const byB2BRep = o.branch === B2B_BRANCH || repTeams.length > 0;
+  const byB2BRep = repTeams.length > 0 || (!rep?.dated && o.branch === B2B_BRANCH);
   const referred = held.find((h) => h.kind === 'referred');
 
   const channelOf = (type: OrderType): RevenueChannel =>
@@ -56,14 +65,14 @@ export function classifyOrder(
     heldBy: from?.kind ?? null,
     ticket: ticketToOrderRow(o, phone),
     placedBy,
-    store: o.branch || 'Unknown',
+    store: byB2BRep ? B2B_BRANCH : o.branch || 'Unknown',
     bookedOnB2B,
     redirectLogged: held.some((h) => h.kind === 'redirect'),
     status: o.status,
     value: Number(o.cartValue) || 0,
   });
 
-  if (referred) return shape(5, 'kam', referred.owner, referred);
+  if (referred) return shape(5, referred.team ?? 'kam', referred.owner, referred);
   if (byB2BRep) {
     const recordOwner = teammateRecordOwner(held, repTeams, placedBy, String(o.orderPlacedAt || o.createdAt || ''));
     return recordOwner

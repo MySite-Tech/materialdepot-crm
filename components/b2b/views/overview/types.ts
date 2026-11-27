@@ -14,7 +14,7 @@ export interface BaseData {
   health: HealthOverview<ClientEntity>;
   failed: B2BData['failed'];
   clientCount: number;
-  unresolvedOrders: number;
+  unresolvedOrders: number | null;
   targetStore: TargetStore;
   targetsOk: boolean;
 }

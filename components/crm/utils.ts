@@ -1,9 +1,11 @@
 'use client';
 
+import { CRMLeadsStats } from '../../lib/api/crm/leads';
 import { AppUser, Lead } from '../../types/crm';
-import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
+import { APPOINTMENT_TRACKER_ROLES, DEFAULT_ROLE_TABS, LEADS_STATS_CACHE_KEY, LEADS_STATS_CACHE_MAX, LOST_AGE_BYPASS_ROLES, MARK_LOST_BYPASS_SLUG, MIN_LOST_AGE_DAYS, PERMISSION_TAB_ORDER, ROLE_LABEL_OVERRIDES, ROLE_TABS, SEGMENT_CATEGORIES, SITE_AUDIT_ONLY_ROLES, SITE_AUDIT_ROLES, STORE_DISPLAY_ADMIN_ROLES, STORE_DISPLAY_ADMIN_SLUG } from './constants';
 import { MainTab } from './types';
 import { B2B_SALES_ROLES } from '@/lib/b2b/team/constants';
+import { canUseBdaRetail, isBda } from '@/lib/bda-retail/utils';
 
 // `id` is the lead's business key (cart number, or the estimate's ENQ id) and the
 // APIs take it as such — but it is NOT unique per row: a client with several deal
@@ -26,6 +28,7 @@ export const roleLabel = (role?: string | null): string => {
 };
 
 export const defaultPermissionsForRole = (role: string): string[] => {
+  if (isBda({ role })) return [];
   const tabs = new Set(defaultTabsForRole(role));
 
   if (!SITE_AUDIT_ONLY_ROLES.has(role)) tabs.add('storeDisplay');
@@ -53,16 +56,20 @@ const defaultTabsForRole = (role: string): Array<MainTab> => {
   return tabs;
 };
 
+const withBdaRetail = (user: AppUser | null | undefined, tabs: Array<MainTab>): Array<MainTab> =>
+  canUseBdaRetail(user) ? [...tabs, 'bdaRetail'] : tabs;
+
 export const resolveAllowedTabs = (user?: AppUser | null): Array<MainTab> => {
   if (SITE_AUDIT_ONLY_ROLES.has(user?.role ?? '')) return ['siteAudit'];
+  if (isBda(user)) return ['bdaRetail'];
   const perms = user?.individualPermissions;
   if (Array.isArray(perms) && perms.length > 0) {
     const set = new Set(perms);
     const tabs = PERMISSION_TAB_ORDER.filter(([slug]) => set.has(slug)).map(([, tab]) => tab);
-    return tabs.includes('ecB2bReferral') ? tabs : [...tabs, 'ecB2bReferral'];
+    return withBdaRetail(user, tabs.includes('ecB2bReferral') ? tabs : [...tabs, 'ecB2bReferral']);
   }
 
-  return defaultTabsForRole(user?.role ?? '');
+  return withBdaRetail(user, defaultTabsForRole(user?.role ?? ''));
 };
 
 export const canAdminStoreDisplay = (user?: AppUser | null): boolean => {
@@ -118,6 +125,15 @@ export const mergeLead = (existing: Lead, incoming: Lead): Lead => {
 export const fmtINR = (n: number | null | undefined): string => {
   if (n == null || isNaN(n)) return '₹0';
   return '₹' + Number(n).toLocaleString('en-IN');
+};
+
+export const fmtINRShort = (n: number | null | undefined): string => {
+  if (n == null || isNaN(n)) return '₹0';
+  const abs = Math.abs(n);
+  const two = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  if (abs >= 1e7) return `₹${(n / 1e7).toLocaleString('en-IN', two)} Cr`;
+  if (abs >= 1e5) return `₹${(n / 1e5).toLocaleString('en-IN', two)} L`;
+  return fmtINR(n);
 };
 
 export const fmtDate = (d: string | null | undefined): string => {
@@ -215,6 +231,10 @@ export function offScopeLeadBranches(leads: Lead[], effectiveBranches: string[])
   )].sort();
 }
 
+export function leadsCategories(categoryFilter: string[], segmentFilter: string[]): string[] {
+  return [...new Set([...categoryFilter, ...segmentFilter.flatMap((s) => SEGMENT_CATEGORIES[s] ?? [])])];
+}
+
 export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, priorityFilter, closureDateFrom, closureDateTo, createdDateFrom, createdDateTo, currentUser, debouncedCartValueGt, debouncedSearch, followUpDateFrom, followUpDateTo, personFilter, scopedBMs, statusFilter, taskFilter, userAllowedBranches, userAllowedBranchesLower }: {
   bmNameToPhone: Record<string, string>;
   branchFilter: string[];
@@ -259,3 +279,30 @@ export function buildLeadsQuery({ bmNameToPhone, branchFilter, categoryFilter, p
     priority: priorityFilter.length ? priorityFilter.join(',') : undefined,
   };
 }
+
+const readLeadsStatsCache = (): Record<string, CRMLeadsStats> => {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(LEADS_STATS_CACHE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+export const cachedLeadsStats = (key: string): CRMLeadsStats | null => {
+  const hit = readLeadsStatsCache()[key];
+  return hit && hit.total && hit.active && hit.won && hit.lost && Array.isArray(hit.byStatus) ? hit : null;
+};
+
+export const rememberLeadsStats = (key: string, stats: CRMLeadsStats): void => {
+  const all = readLeadsStatsCache();
+  delete all[key];
+  all[key] = stats;
+  const keys = Object.keys(all);
+  keys.slice(0, Math.max(0, keys.length - LEADS_STATS_CACHE_MAX)).forEach((k) => delete all[k]);
+  try {
+    sessionStorage.setItem(LEADS_STATS_CACHE_KEY, JSON.stringify(all));
+  } catch {
+    return;
+  }
+};

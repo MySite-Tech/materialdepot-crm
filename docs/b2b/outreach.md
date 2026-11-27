@@ -12,6 +12,7 @@
 | `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | Inbound intake only (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
 | `fetchLeadDeals(phone)` | Django `/crm/leads/?q=` | Drawer only, as before; now also feeds the 6-month new-onboarding check |
 | `fetchKamLoad()` | `b2b_lead` closed rows | Drawer only, on "Round-robin" |
+| Calls card (`logCall`) | the same `upsertOutreachLead()` | One write per call, at once; see §BMs log their calls |
 
 Mount cost: the `b2b_lead` read + the waitlist call, plus the shell's `/api/b2b/team`.
 
@@ -129,12 +130,17 @@ a focus aid, not confidentiality (same caveat as Inbound).
 
 ### Lead sources
 
-`Inbound | EC B2B Referral | EC referral | Store orders | Dormant form | Own research`.
+`Inbound | EC B2B Referral | EC referral | Store orders | Inactive firm | Dormant form | Own research`.
 **EC B2B Referral** comes only from the store form (`ec-referral.md`) and cannot
 be picked in + New lead. **Store orders** (2026-11-07) comes only from the Client
 Database's Review new firms list (`client-db.md` §Review new firms): a manager sends
 a firm billed with a GSTIN on store orders, with its orders in a note. It cannot be
-picked in + New lead either, and it is not a coverage source. "Dormant form" is the
+picked in + New lead either, and it is not a coverage source. **Client Database firm**
+(2026-11-27) is the same kind: any Client Database firm a manager sent here, whatever
+its order history. Rows sent from 20 to 27 Nov, when only firms with no order in over
+6 months could be sent, read **Inactive firm**. Neither is a coverage source
+(`client-db.md` §Any firm can go to Inbound, Outreach or a KAM).
+"Dormant form" is the
 user's "existing forms that are inactive": there is no integration for those
 forms, so a BM enters each one by hand with `Source` set.
 Inbound and both EC sources are what the **coverage** KPI is measured on.
@@ -396,6 +402,37 @@ booked went from 120 to 46. It does not mark anything held. Nobody wrote the not
 no longer matches. A copy of the 352 Outreach rows from before the write is kept outside
 the repo, in `~/Projects/ss-local-stack/logs/`.
 
+### BMs log their calls (2026-11-23)
+
+The user: the Outreach scorecard showed only meetings, and calls BMs make were not
+tracked anywhere. Checked on production that day: no Outreach lead had a single
+structured call, and Kylas's call log held only the presales dialer's calls (none of
+the five Outreach BMs appeared in it). BMs had been writing "Call done…" or "rnr"
+into notes instead: 24 such notes in 1–23 Nov (Shahrukh 13, Sai Suresh 8, Vilok 3,
+pratham 0).
+
+- **The drawer has a Calls card**, above the meetings: **RNR** saves at once,
+  **Connected…** asks what was discussed and saves. Both save straight away, as the
+  check-in does (`onSave(lead, …)` on the saved lead, then patch the draft), so a
+  call is never lost to a forgotten Save changes. Each call stores `by` and
+  `byPhone` (the viewer).
+- **Storage is `callAttempts` (meta `call_attempts`), the Inbound `CallAttempt`
+  shape** with `n`, `outcome`, `at`, `by`, `byPhone`, `note`. The backend has no
+  Outreach column for it, so it lands in the row's `extra` jsonb. No migration.
+  Outreach saves are whole-row, so a stale copy saved over the row can still drop a
+  call. Inbound avoids this with the append-only `/rows/{id}/change`; Outreach does
+  not use it yet (the same holds for its notes).
+- **No journey event for a call.** The immediate save's journey entry would not reach
+  the open draft, and the next Save changes would write the draft's journey back over
+  it. The Calls card is the record.
+- **The Calls KPI** (`calls`, first Effort tile) counts every call in the period on
+  the BM's leads, the same lead set as their meetings, so a lead's calls move with it
+  on a reassignment (Inbound credits the caller instead). One row per lead, so the list
+  opens the lead. **It has no target and weight 0** (`target: null`), so the weighted
+  score is unchanged until leadership sets one. My performance lists each call in the
+  activity feed (`outreachCallsBy`).
+- **A call is not an adherence need.** Calling is not required before a stage.
+
 ### Conversions and revenue come from orders (2026-11-18)
 
 The user, on pratham's scorecard: BMs see 0 conversions and ₹0 while their clients
@@ -475,7 +512,9 @@ a manager, or anyone while the team table is not live.
   "Handover from Outreach" card under People on this firm: WhatsApp link or refusal
   reason, office address, city, BM, client type, segment, team size, email, GST, first
   order, project details, every contact, every held meeting with notes, and the latest
-  three notes. It reads the lead that `useFirmLinks` already fetches, so it costs no
+  three notes. A note's `ts` is an en-IN locale string ("6/11/2026, 2:27:22 pm"),
+  not ISO, so the card takes the last three by position and prints `ts` as stored,
+  as the Outreach drawer does; sorting `ts` as text put 6 Nov after 13 Nov. It reads the lead that `useFirmLinks` already fetches, so it costs no
   request. `firmLinks().handover` is the newest lead on the firm's numbers (phone,
   alt phone or any extra contact, the same numbers `firmForOutreachHandover` copies)
   with a handover not Rejected. A firm a KAM got by reassign, not by handover, has no
@@ -511,7 +550,7 @@ onboarding" in the KPI sub-line.
 
 ### KPIs (`models/outreach/kpis.ts`, `views/outreach/performance/`)
 
-One function, `outreachKpis(leads, period, waitlist)`, computes all eight for an
+One function, `outreachKpis(leads, period, waitlist)`, computes all nine (Calls since 2026-11-23) for an
 IST date period. **Each KPI returns its rows, not just a number**: one
 `KpiRow { lead, counts, note, at }` per lead it looked at, with `counts: false`
 and the reason in `note` for the ones it excluded. The value is derived from
@@ -532,7 +571,10 @@ shown as each tile's tooltip; the non-obvious ones:
   the period; each row says how far it got toward 2 follow-ups or an order.
 - **Coverage** reads 0 when it should: on 17 Nov, 56 Inbound and EC leads had been
   assigned in November, 28 were still waiting for the BM to accept, and 1 had a
-  meeting booked.
+  meeting booked. On 19 Nov 51 of 54 were accepted and 49 still had no meeting at
+  all. BMs' November meetings were almost all on Own research leads, which coverage
+  does not count. Coverage and handover have no target on a part-month period
+  (`MONTHLY_RATES`, `docs/b2b/leadership.md`).
 - **CRM adherence** = leads *touched* in the period (created, status change,
   meeting date or journey event in it) with zero gaps in
   `outreachAdherence` ÷ touched. GST is not in it (many firms have none).

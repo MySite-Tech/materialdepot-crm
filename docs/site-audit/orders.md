@@ -84,6 +84,18 @@ pre-bookings — see the next section; has `bm_email`),
 column** — always resolves by name/phone), `wp_production` (custom wallpaper
 runs, has `bm_email`), `profiles`, `app_settings`, `foam_ledger`.
 
+`install_orders_slim` is read-only in shape: its job cards have no `photos` or
+`installerSign`, and a card with no rooms reads `rooms: null`. A write that sends
+`subjobs` must start from the table, not the view. The ops drawer and assign
+section go through `install-ops/patch-order.ts`, which keeps each sub-job's
+stored `jobcard`/`jobcard_history`; the installer app and COE re-read the row
+themselves (see `docs/landmines.md`, 2026-11-26).
+As a backstop, `sb-client.ts` repairs the data when the view fails with `cannot extract
+elements from a scalar`: it finds `install_orders` rows whose job card (or job-card
+history) has `rooms: null` through a JSON containment filter, rewrites them to `[]`
+and retries the read once. That covers tabs still running a pre-fix bundle, and any
+other writer that slips one through.
+
 ## The BM's order book: three tables, three drawers, one conversion funnel
 
 `SiteAuditBmView` is the BM dashboard; `components/site-audit/views/owned-orders/` holds the Installations

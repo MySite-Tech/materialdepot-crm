@@ -3,10 +3,8 @@
 import { Chip } from '../../order-drawer/ui/fields';
 import { today } from '../../constants';
 import { AuditOrder, Auditor, SlotDef } from '../../types';
-import { addDays, dailyTotalCap, dstr, saveAuditSlots, slotLabel } from '../../utils';
+import { addDays, dailyTotalCap, dstr, slotLabel } from '../../utils';
 import { Cats, Head } from '../cells';
-import { TH } from '../../constants';
-import { useState } from 'react';
 
 export function CalendarView({
   orders, auditors, slots, calSelDay, setCalSelDay, onOpenOrder,
@@ -74,57 +72,6 @@ export function CalendarView({
             </div>
           )) : <div className="py-8 text-center text-[13px] text-gray-400">No audits scheduled for this day.</div>}
         </div>
-      </div>
-    </>
-  );
-}
-
-export function SlotsView({
-  slotsFl, slotsWp, setSlotsFl, setSlotsWp, toast,
-}: {
-  slotsFl: SlotDef[]; slotsWp: SlotDef[]; setSlotsFl: (s: SlotDef[]) => void; setSlotsWp: (s: SlotDef[]) => void; toast: (m: string) => void;
-}) {
-  function Group({ kind, label, list, set, color }: { kind: 'fl' | 'wp'; label: string; list: SlotDef[]; set: (s: SlotDef[]) => void; color: string }) {
-    const [draft, setDraft] = useState<string[]>(list.map((s) => s.label));
-    return (
-      <div>
-        <div className="mb-2 flex items-center gap-2.5">
-          <h2 className={`m-0 text-sm font-bold ${color}`}>{label}</h2>
-          <button onClick={() => { const next = [...list, { id: kind + Date.now(), label: 'New window' }]; set(next); saveAuditSlots(kind, next); setDraft(next.map((s) => s.label)); toast(label + ' window added'); }} className="rounded-md border border-blue-500 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600">+ Add window</button>
-          <button onClick={() => { const next = list.map((s, i) => ({ ...s, label: draft[i] ?? s.label })); set(next); saveAuditSlots(kind, next); toast(label + ' slots saved'); }} className="rounded-md bg-[#1F3A5F] px-2.5 py-1 text-xs font-semibold text-white">Save</button>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="w-full">
-            <thead><tr>{['Window', 'Timing', ''].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
-            <tbody>
-              {list.map((s, i) => (
-                <tr key={s.id} className="border-t border-gray-100">
-                  <td className="px-3 py-2 text-[13px] font-bold">Window {i + 1}</td>
-                  <td className="px-3 py-2"><input value={draft[i] ?? s.label} onChange={(e) => setDraft((d) => d.map((x, xi) => (xi === i ? e.target.value : x)))} className="w-full max-w-[220px] rounded-md border border-gray-200 px-2 py-1.5 text-[13px]" /></td>
-                  <td className="px-3 py-2">
-                    <button
-                      onClick={() => {
-                        if (list.length <= 1) { toast('Keep at least one window'); return; }
-                        const next = list.filter((_, ii) => ii !== i);
-                        set(next); saveAuditSlots(kind, next); setDraft(next.map((x) => x.label)); toast(label + ' window deleted');
-                      }}
-                      className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600"
-                    >Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <>
-      <Head title="Slots & timings" sub="Configure audit windows separately for Wooden Flooring and Wallpaper. Stored on this device." />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Group kind="fl" label="Wooden Flooring" list={slotsFl} set={setSlotsFl} color="text-yellow-800" />
-        <Group kind="wp" label="Wallpapers" list={slotsWp} set={setSlotsWp} color="text-purple-700" />
       </div>
     </>
   );

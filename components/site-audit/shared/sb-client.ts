@@ -17,11 +17,58 @@ if (typeof window !== 'undefined') {
   }, CACHE_TTL_MS * 2);
 }
 
-async function cachedFetch(url: string, signal: AbortSignal): Promise<any> {
+const BAD_ROOMS_FILTERS = ['[{"jobcard":{"rooms":null}}]', '[{"jobcard_history":[{"rooms":null}]}]'];
+const HEAL_GAP_MS = 30000;
+let healRun: { at: number; promise: Promise<number> } | null = null;
+
+function roomsAsList(jc: any): any {
+  if (jc && typeof jc === 'object' && !Array.isArray(jc) && 'rooms' in jc && !Array.isArray(jc.rooms)) return { ...jc, rooms: [] };
+  return jc;
+}
+
+function healSubjobs(subjobs: any[]): any[] {
+  return subjobs.map((sj) => {
+    if (!sj || typeof sj !== 'object') return sj;
+    const out = { ...sj };
+    if ('jobcard' in out) out.jobcard = roomsAsList(out.jobcard);
+    if (Array.isArray(out.jobcard_history)) out.jobcard_history = out.jobcard_history.map(roomsAsList);
+    return out;
+  });
+}
+
+async function healNullRooms(): Promise<number> {
+  const ids = new Set<string>();
+  let fixed = 0;
+  for (const f of BAD_ROOMS_FILTERS) {
+    const r = await fetch(SB_URL + '/rest/v1/install_orders?select=id,subjobs&subjobs=cs.' + encodeURIComponent(f), { headers: H, cache: 'no-store' });
+    if (!r.ok) continue;
+    for (const row of await r.json()) {
+      if (!row || ids.has(String(row.id)) || !Array.isArray(row.subjobs)) continue;
+      ids.add(String(row.id));
+      const p = await fetch(SB_URL + '/rest/v1/install_orders?id=eq.' + encodeURIComponent(String(row.id)), {
+        method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ subjobs: healSubjobs(row.subjobs) }),
+      });
+      if (p.ok) fixed += 1;
+    }
+  }
+  if (fixed) console.warn('[siteAudit] repaired ' + fixed + ' install order(s) whose job card had rooms: null');
+  return fixed;
+}
+
+function healOnce(): Promise<number> {
+  if (healRun && Date.now() - healRun.at < HEAL_GAP_MS) return healRun.promise;
+  healRun = { at: Date.now(), promise: healNullRooms().catch(() => 0) };
+  return healRun.promise;
+}
+
+async function cachedFetch(url: string, signal: AbortSignal, healed = false): Promise<any> {
   try {
     const r = await fetch(url, { headers: H, signal });
     if (!r.ok) {
       const body = await r.text().catch(() => '');
+      if (!healed && r.status === 400 && url.includes('/install_orders_slim') && body.includes('cannot extract elements from a scalar') && (await healOnce()) > 0) {
+        return cachedFetch(url, signal, true);
+      }
       console.error(`[siteAudit] ${r.status} ${r.statusText} for ${url}${body ? ' — ' + body.slice(0, 300) : ''}`);
       return null;
     }
@@ -63,11 +110,11 @@ export async function sbGetLong(q: string): Promise<any> {
   return withCache(q, 45000);
 }
 
-export async function sbGetPaged(q: string, pageSize = 50, maxPages = 200): Promise<any[] | null> {
+export async function sbGetPaged(q: string, pageSize = 50, maxPages = 200, order = 'id'): Promise<any[] | null> {
   const sep = q.includes('?') ? '&' : '?';
   const out: any[] = [];
   for (let page = 0; page < maxPages; page++) {
-    const rows = await sbGetLong(`${q}${sep}order=id&limit=${pageSize}&offset=${page * pageSize}`);
+    const rows = await sbGetLong(`${q}${sep}order=${order}&limit=${pageSize}&offset=${page * pageSize}`);
     if (!Array.isArray(rows)) return null;
     out.push(...rows);
     if (rows.length < pageSize) return out;

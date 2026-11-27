@@ -5,7 +5,7 @@ import { KamSignoffTable } from './panels/signoff';
 import { KamOrdersView } from './orders';
 import { KamOrderTable } from './orders/table';
 
-import { ACTIVE_DAYS, CLIENT_SOURCES, ClientEntity, INACTIVE_DAYS, InteractionType, contactNumbers, istToday, openCheckIn, primaryContact, withInteraction } from '../../models/client';
+import { CLIENT_SOURCES, ClientEntity, InteractionType, contactNumbers, istToday, openCheckIn, primaryContact, statusMonths, withInteraction } from '../../models/client';
 import { applyAdvance, planAdvances } from '../../models/kam/auto-stage';
 import { AssignedClientRow, DAILY_CALL_TARGET, KAM_FIRM_LENSES, KAM_LENS, KAM_LENS_GROUPS, KAM_OPEN_STATUSES, KAM_SIDE_LENSES, KamFirmLens, KamLens, KamOrder, KamOrderLens, KamOrderStatus, SEGMENTS, assignedClientRows, canRespondToFirm, ownsFirm, firmHandoverState, firmLensMatches, isLegacyKamStage, kamPipeline, orderLensMatches, acceptFirmHandover, rejectFirmHandover, sortFirmsForLens } from '../../models/kam';
 import { newB2BId } from '../../models/ids';
@@ -198,9 +198,9 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
       case 'due':      return { value: String(n), sub: 'for today' };
       case 'nofollow': return { value: String(n), sub: 'none booked' };
       case 'assigned': return { value: String(n), sub: unread ? `${unread} status unknown` : 'firms in scope', warn: !!unread };
-      case 'active':   return { value: String(n), sub: unread ? `${unread} status unknown` : `last ${ACTIVE_DAYS} days`, warn: !!unread };
-      case 'lapsing':  return { value: String(n), sub: `${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
-      case 'inactive': return { value: String(n), sub: `over ${INACTIVE_DAYS} days ago` };
+      case 'active':   return { value: String(n), sub: unread ? `${unread} status unknown` : `ordered ${statusMonths('Active', today)}`, warn: !!unread };
+      case 'lapsing':  return { value: String(n), sub: `last order ${statusMonths('Inactive 2–3 months', today)}` };
+      case 'inactive': return { value: String(n), sub: `last order ${statusMonths('Inactive 4–6 months', today)?.split('–').pop()} or earlier` };
       case 'never':    return { value: String(n), sub: 'no order on record' };
       case 'pipeline': return { value: fmtL(pipeline.pipeline), sub: pipeline.estimatedPipeline ? `${fmtL(pipeline.estimatedPipeline)} est.` : `${n} at Quote/PI` };
       default:         return { value: String(n), sub: 'not closed' };

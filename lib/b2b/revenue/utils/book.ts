@@ -1,7 +1,7 @@
 import { B2B_ROSTER } from '../../../../components/b2b/models/roster';
 import { HOLDER_RANK } from '../constants';
 import type { B2BTeam, TeamMember } from '../../team/types';
-import type { B2BSourceRow, Holder, HolderKind, NumberBook, RedirectInput, RepTeams, StudioFirm } from '../types';
+import type { B2BRepEntry, B2BSourceRow, CrmReferralInput, Holder, HolderKind, NumberBook, RedirectInput, RepSpan, RepTeams, StudioFirm } from '../types';
 
 export const phoneOf = (raw: unknown): string => {
   const digits = String(raw ?? '').replace(/\D/g, '').slice(-10);
@@ -24,8 +24,13 @@ const withDoubledSurname = (name: string): string[] => {
   return words.length > 1 ? [name, `${name} ${words[words.length - 1]}`] : [name];
 };
 
-function staffAliases(members: Pick<TeamMember, 'name' | 'phone' | 'active'>[], staff: Pick<TeamMember, 'name' | 'phone'>[]): Map<string, string> {
-  const memberByPhone = new Map(members.filter((m) => m.active && phoneOf(m.phone)).map((m) => [phoneOf(m.phone), m.name]));
+type RepMember = Pick<TeamMember, 'name' | 'phone' | 'team' | 'active'> & Partial<Pick<TeamMember, 'joinedOn' | 'leftOn'>>;
+
+const isDated = (m: RepMember) => !!(m.joinedOn || m.leftOn);
+
+function staffAliases(members: RepMember[], staff: Pick<TeamMember, 'name' | 'phone'>[]): Map<string, string> {
+  const memberByPhone = new Map(members.filter((m) => (m.active || isDated(m)) && phoneOf(m.phone))
+    .sort((a, b) => Number(a.active) - Number(b.active)).map((m) => [phoneOf(m.phone), m.name]));
   const phonesByKey = new Map<string, Set<string>>();
   for (const s of staff) {
     const key = repKey(s.name);
@@ -41,31 +46,40 @@ function staffAliases(members: Pick<TeamMember, 'name' | 'phone' | 'active'>[], 
   return out;
 }
 
-export function buildRepTeams(
-  members: Pick<TeamMember, 'name' | 'phone' | 'team' | 'active'>[],
-  staff: Pick<TeamMember, 'name' | 'phone'>[] = [],
-): RepTeams {
+export function buildRepTeams(members: RepMember[], staff: Pick<TeamMember, 'name' | 'phone'>[] = []): RepTeams {
   const out: RepTeams = new Map();
-  const add = (key: string, name: string, team: B2BTeam | undefined) => {
+  const dated = new Set(members.filter(isDated).map((m) => repKey(repName(m.name))));
+  const add = (key: string, name: string, team: B2BTeam | undefined, span?: RepSpan) => {
     if (!team || !key) return;
     const held = out.get(key) ?? { name, teams: [] };
-    if (!held.teams.includes(team)) out.set(key, { name: held.name, teams: [...held.teams, team] });
+    const teams = held.teams.includes(team) ? held.teams : [...held.teams, team];
+    out.set(key, { name: held.name, teams, ...(span || held.spans ? { spans: [...(held.spans ?? []), ...(span ? [span] : [])] } : {}) });
   };
   for (const m of members) {
-    if (!m.active) continue;
     const name = repName(m.name);
-    for (const key of withDoubledSurname(repKey(name))) add(key, name, m.team);
+    const keyed = dated.has(repKey(name));
+    if (!m.active && !(keyed && isDated(m))) continue;
+    const span = keyed ? { team: m.team, from: m.joinedOn ?? null, to: m.leftOn ?? null } : undefined;
+    for (const key of withDoubledSurname(repKey(name))) add(key, name, m.team, span);
   }
-  for (const r of B2B_ROSTER) add(repKey(r.fullName), r.fullName, ROSTER_TEAM[r.role]);
-  const teamsOf = (name: string) => out.get(repKey(repName(name)))?.teams ?? [];
+  for (const r of B2B_ROSTER) if (!dated.has(repKey(r.fullName))) add(repKey(r.fullName), r.fullName, ROSTER_TEAM[r.role]);
   for (const [alias, member] of staffAliases(members, staff)) {
     if (out.has(alias)) continue;
-    for (const team of teamsOf(member)) add(alias, repName(member), team);
+    const entry = out.get(repKey(repName(member)));
+    if (entry) out.set(alias, entry);
   }
   return out;
 }
 
-export const repOf = (name: unknown, reps: RepTeams) => reps.get(repKey(repName(name)));
+const onDay = (s: RepSpan, day: string) => !day || ((!s.from || day >= s.from) && (!s.to || day <= s.to));
+
+export function repOf(name: unknown, reps: RepTeams, day = ''): (B2BRepEntry & { dated: boolean }) | undefined {
+  const entry = reps.get(repKey(repName(name)));
+  if (!entry) return undefined;
+  if (!entry.spans) return { ...entry, dated: false };
+  const teams = [...new Set(entry.spans.filter((s) => onDay(s, day)).map((s) => s.team))];
+  return { ...entry, teams, dated: true };
+}
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
@@ -119,13 +133,18 @@ function kamFrom(owner: string, assignments: unknown): string {
   return from;
 }
 
+function kamSince(assignments: unknown): string {
+  const list = Array.isArray(assignments) ? assignments as { at?: unknown; status?: unknown }[] : [];
+  return list.filter((a) => text(a.at) && a.status !== 'Rejected').map((a) => String(a.at)).sort()[0] ?? '';
+}
+
 function holderOf(row: B2BSourceRow): Holder | null {
   const meta = row.meta_data ?? {};
   const owner = repName(row.owner);
   const firm = text(meta.company) || text(meta.firm_name);
   if (row.pipeline === 'client') {
     return owner
-      ? { kind: 'firm', team: 'kam', owner, firm, since: '', kamFrom: kamFrom(owner, meta.assignments) }
+      ? { kind: 'firm', team: 'kam', owner, firm, since: '', kamFrom: kamFrom(owner, meta.assignments), kamSince: kamSince(meta.assignments) }
       : { kind: 'unowned', team: null, owner: '', firm, since: '' };
   }
   if (row.pipeline === 'kam') return { kind: 'firm', team: 'kam', owner, firm, since: '' };
@@ -137,7 +156,11 @@ function holderOf(row: B2BSourceRow): Holder | null {
 const firmHolderOf = (book: NumberBook, phone: string): Holder | undefined =>
   (book.get(phone) ?? []).find((h) => h.kind === 'firm');
 
-export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[]): NumberBook {
+const REFERRER_PIPELINE = { inbound: 'inbound', outreach: 'outbound', client: 'client' } as const;
+const REFERRER_TEAM = { inbound: 'inbound', outreach: 'outreach', client: 'kam' } as const;
+const LIVE_STUDIO_REFERRAL = new Set(['approved', 'active', 'dormant']);
+
+export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[], referrals: CrmReferralInput[] = []): NumberBook {
   const book: NumberBook = new Map();
   const hold = (raw: unknown, holder: Holder) => {
     const phone = phoneOf(raw);
@@ -158,12 +181,22 @@ export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | nul
     const referredNumber: Holder = { kind: 'referred', ...owned, since: '' };
     for (const p of f.phones) hold(p, ownNumber);
     for (const r of f.referrals) {
-      if (r.status === 'approved') hold(r.phone, { ...referredNumber, since: day(r.referred_on) });
+      if (LIVE_STUDIO_REFERRAL.has(r.status ?? '')) hold(r.phone, { ...referredNumber, since: day(r.referred_on ?? '') });
     }
     const listed = new Set(f.referrals.map((r) => phoneOf(r.phone)));
     for (const o of f.orders) {
       if (!listed.has(phoneOf(o.phone))) hold(o.phone, o.source === 'client' ? referredNumber : ownNumber);
     }
+  }
+
+  for (const r of referrals) {
+    const row = rows.find((x) => x.pipeline === REFERRER_PIPELINE[r.referrer_kind]
+      && (String(x.id ?? '') === r.referrer_id || String(x.kylas_lead_id ?? '') === r.referrer_id));
+    const from = row ? holderOf(row) : null;
+    hold(r.client_phone, {
+      kind: 'referred', team: REFERRER_TEAM[r.referrer_kind], owner: from?.owner ?? '',
+      firm: from?.firm || r.referrer_name || '', since: day(r.created_at),
+    });
   }
 
   for (const r of redirects) {

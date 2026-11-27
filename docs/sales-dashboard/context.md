@@ -6,17 +6,55 @@
 Mobile sales dashboard, two tabs: `raise` (raise an escalation) and
 `escalation` (status tracking).
 
-## Contact → deals is one request, not one per deal
+## The raise tab searches our backend, never Kylas
 
-`SEARCH_FIELDS` asks Kylas for `associatedContacts`, so the deal-search response
-already carries the association that the raise screen used to confirm with one
-`/api/deals/<id>` request **per deal** — up to 200 of them for a single contact,
-against a proxy with no dedupe cache. Match on the search payload; fall back to
-the batched per-deal fetch only for deals whose `associatedContacts` is
-`undefined` (absent from the response, not merely empty).
+The raise tab calls Django `crm/escalation/order-search/?q=` (ENQ, phone or CT)
+and builds every card from our own tables: the estimate (ENQ, value, customer,
+stage), the deal ticket owner, `CRMIntegration` for the Kylas deal id and
+`ci_escalation_deal` for existing tickets. It used to run a Kylas deal search on
+every open and every search, plus an auto-sync when nothing came back. Kylas
+rate-limits the whole tenant, roughly one call in three was refused in
+Nov 2026, and those refusals landed on people trying to raise escalations.
 
-`/api/deals/*` is a route handler with no caching layer, so a loop here is a
-loop of real network requests. See the request budget in `CLAUDE.md`.
+Orders from Payment Pending onwards are returned (Kylas already carries an ENQ
+deal at that stage), and there is no default list: the
+screen is a search box, so opening the tab costs nothing. Customer-name search
+was dropped on purpose, it scanned the estimate table and was the slow path.
+
+A card with no Kylas deal id (`id: null`) is still raisable. Do not send people
+to sync it first; the raise creates the deal itself (next section).
+
+## A raise creates the Kylas deal when the order has none
+
+When the order has no Kylas deal the raise POST sends `lead_id` instead of
+`deal_id`. The backend accepts it under a `lead:<ENQ>` key and its Celery task
+creates the deal first, then the ticket. `raise-status/` reports this as two
+steps, `steps.deal` and `steps.ticket`, and the panel draws them as Deal in
+Kylas, then Escalation ticket. A failed step offers "Retry from this step"
+(`raise-retry/`), which reruns only what failed, so a deal that already exists
+is never created again. The progress cards survive a refresh: `order-search/`
+also returns `raises` (each order's raise requests from the last 24 hours, same
+shape as `raise-status/` plus `lead_id`), the search seeds the cards from them
+and resumes polling the pending ones, and opening an order no longer drops its
+failed cards, so Retry stays reachable. "Raised from here" lists only raises
+still in progress or failed: once a raise succeeds its card is hidden, since the
+ticket already shows under ongoing requests. For a Payment Pending / Order Placed order with no ENQ
+deal yet, the customer's cart deal is synced with the order (renamed to the
+ENQ) and then linked to that ENQ in `CRMIntegration`. Before that link existed
+the cart deal stayed "the cart deal", got reused and renamed for the next cart
+or order, and a later raise could land on a different order. This replaced the
+"Create Kylas Deal" button and the
+auto-sync after an empty search, which both spent Kylas calls before anyone had
+decided to raise anything.
+
+Each raise gets its own progress card, and Submit unlocks once the request is
+accepted rather than once the ticket lands, so several reasons can be raised on
+one order back to back. A successful raise is added to "ongoing requests" on
+the spot, so the same-issue warning works without another search. Failed cards
+are dropped when the order is reopened.
+
+The backend cooldown is per **reason**, not per order: the same reason within
+five minutes is refused, a different reason goes through.
 
 ## A raise goes through our backend, not through the webhook
 
@@ -95,24 +133,27 @@ Closed means `actualClosureDate` set, stage Ticket Cancelled / Escalation
 Resolved, or installation status "Resolution Completed", the same rule the
 backend auto-resolve uses.
 
-## The deal list is filtered by Kylas, not by us
+## The status tab is a search, not a list
 
-The default list carries a `pipelineStage not_in [220516, 227603, 220520]` rule
-(New Deal, Availability Confirmed, Followup) alongside the pipeline rule, so
-only post-order deals come back. Filtering server-side is what keeps
-`totalElements` and the pager honest — a client-side filter on a fetched page
-makes both lie, and a page of 10 can render as 2 rows. An explicit search is
-deliberately unfiltered: searching a name is the user asking for that deal.
+The status tab no longer loads a dated list on open. It runs one Kylas deal
+search when someone searches (ENQ, ticket id or phone) and nothing before that.
+The date chips, stage counts and pager went with the list.
 
-The escalation status tab's server-side search filters by pipeline IDs (32620 for
-Escalation, 32616 for Support), but the client-side `isEscalationOrSupport`
-filter used to check pipeline names for substring matches. This mismatch caused
-deals with correct pipeline IDs but non-matching names to be silently dropped.
-Always filter by the same identifier type used in the search query.
+Opening a ticket costs three Kylas calls: the deal, its notes and its call
+history. Keep it there:
 
-The same issue existed in the raise tab's `extractEscSupport` and the
-`toAssociated` mapper in `handlers.ts` — both filtered by pipeline name when
-the search uses pipeline IDs. Fixed all three to check pipeline IDs directly.
+- Call history is one `call-logs/search` filtered by `related_to` the deal's
+  contact. It used to page through the company's latest 1,500 calls and filter
+  in the browser, which cost three calls and missed any customer whose calls
+  were older than that window. Calls logged only against a lead from before it
+  became a contact are not returned.
+- The timeline is fetched only when "Show timeline" is pressed.
+- A note or upload is added to the list locally instead of re-reading the deal
+  and all of its notes.
+
+The client-side `isEscalationOrSupport` filter checks pipeline IDs (32620
+Escalation, 32616 Support), the same identifier the search uses. It used to
+match pipeline names and silently dropped deals whose names did not match.
 
 ## "retrying" is not "failed" — do not invite a re-submit
 

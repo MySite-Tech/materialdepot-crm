@@ -1,13 +1,14 @@
 import { OutreachLead, fmtINR } from '../mock-data';
 import { COVERAGE_SOURCES, FOLLOW_UPS_REQUIRED, WaitlistSignup, heldMeetings } from '.';
-import { isMobile, signedOffWithinTat } from './handover';
+import { isMobile, sameRep, signedOffWithinTat } from './handover';
+import { callTally } from '../inbound/calls';
 import { istDay, outreachAdherence } from './reminders';
 import { normalisePhone } from '@/lib/org/utils';
 import { outreachPhones } from '@/lib/b2b/leads/unified';
 import type { RevenueOrder } from '@/lib/b2b/revenue';
 
 export type OutreachKpiKey =
-  | 'newMeetings' | 'followUpMeetings' | 'adherence' | 'coverage'
+  | 'calls' | 'newMeetings' | 'followUpMeetings' | 'adherence' | 'coverage'
   | 'conversions' | 'waitlist' | 'handover' | 'revenue';
 
 export interface OutreachKpiDef {
@@ -15,13 +16,16 @@ export interface OutreachKpiDef {
   label: string;
   short: string;
   kind: 'Effort' | 'Output';
-  target: number;
+  target: number | null;
   unit: 'count' | '%' | 'L';
   rule: string;
   weight: number;
 }
 
+export const MONTHLY_RATES = new Set<OutreachKpiKey>(['coverage', 'handover']);
+
 export const OUTREACH_KPIS: OutreachKpiDef[] = [
+  { key: 'calls',            kind: 'Effort', label: 'Calls logged',          short: 'Calls',         target: null, unit: 'count', rule: 'Calls logged in the period on their leads, from the Calls card in the lead drawer: every call counts, connected or RNR, so a lead called three times counts three. No target is set yet, and it carries no weight in the score.', weight: 0 },
   { key: 'newMeetings',      kind: 'Effort', label: 'New-lead meetings',     short: 'New meetings',  target: 50,  unit: 'count', rule: 'Unique firms whose first meeting was held in the period, marked held or checked in on site, with an owner/designer name and a 10-digit mobile. A check-in counts without notes; missing notes lower CRM adherence.', weight: 10 },
   { key: 'followUpMeetings', kind: 'Effort', label: 'Follow-up meetings',    short: 'Follow-ups',    target: 30,  unit: 'count', rule: `Unique firms with a follow-up meeting held in the period, marked held or checked in on site. A firm is fully followed up after ${FOLLOW_UPS_REQUIRED} follow-ups or an order.`, weight: 10 },
   { key: 'adherence',        kind: 'Effort', label: 'CRM adherence',         short: 'CRM adherence', target: 100, unit: '%',     rule: 'Leads touched in the period with every mandatory field and log in place ÷ leads touched. Judged on the lead as it stands now. Before a meeting is held, and on a Lost lead, only the firm name, mobile and logs are asked: role, team size, segment, client type, office address and the owner\'s name are captured at the visit, as the drawer asks. Then, for a stage set in the CRM, what that stage needs, the same list its status gate checks: a next follow-up date at Follow up and PI Shared, a reason at Lost, and the first order\'s Enq ID and the KAM handover once Closed.', weight: 10 },
@@ -112,6 +116,20 @@ export function outreachKpis(
   waitlist: Map<string, WaitlistSignup> | null,
   orders: RevenueOrder[] | null,
 ): OutreachKpis {
+  const callRows: KpiRow[] = leads
+    .map((l) => ({ l, theirs: (l.callAttempts || []).filter((a) => inPeriod(a.at, period)) }))
+    .filter(({ theirs }) => theirs.length)
+    .map(({ l, theirs }) => {
+      const t = callTally(theirs);
+      const last = theirs[theirs.length - 1];
+      const callers = [...new Set(theirs.map((a) => a.by).filter((b): b is string => !!b && !sameRep(b, l.bm)))];
+      return {
+        lead: l, counts: true, at: last.at,
+        note: [`${t.total} call${t.total === 1 ? '' : 's'}`, t.connected && `${t.connected} connected`, t.rnr && `${t.rnr} RNR`, callers.length && `by ${callers.join(', ')}`].filter(Boolean).join(' · '),
+      };
+    });
+  const callTotals = callTally(leads.flatMap((l) => (l.callAttempts || []).filter((a) => inPeriod(a.at, period))));
+
   const held: KpiRow[] = leads
     .map((l) => ({ l, m: heldMeetings(l.meetings)[0] }))
     .filter((x) => x.m && inPeriod(x.m.date, period))
@@ -204,6 +222,10 @@ export function outreachKpis(
   }
 
   return {
+    calls: {
+      value: callTotals.total, rows: callRows,
+      sub: callTotals.total ? `${callTotals.connected} connected · ${callTotals.rnr} RNR · ${callRows.length} lead${callRows.length === 1 ? '' : 's'}` : 'No calls logged in this period',
+    },
     newMeetings: {
       value: counted(newMeetings), rows: newMeetings,
       sub: [held.length - counted(held) ? `${held.length - counted(held)} more held but missing the owner's name or a mobile` : '', checkInSub(fromCheckIn(held)), noNotes ? `${noNotes} with no notes yet` : '']
@@ -234,7 +256,8 @@ export function outreachKpis(
 }
 
 export function kpiTarget(def: OutreachKpiDef, heads: number, period: Period): number | null {
-  if (def.unit === '%') return def.target;
+  if (def.target === null) return null;
+  if (def.unit === '%') return MONTHLY_RATES.has(def.key) && !isWholeMonth(period) ? null : def.target;
   return isWholeMonth(period) ? def.target * Math.max(1, heads) : null;
 }
 

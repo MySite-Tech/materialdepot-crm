@@ -9,7 +9,7 @@ import { monthWindows } from '../b2b/revenue/utils/months';
 import { istToday } from '../b2b/stats/pipeline';
 import { channelSplits } from '../b2b/revenue/utils/rollup';
 import { B2B_BOOKING, B2B_BRANCH, FUNNEL_PAGES, PAST_MONTH_KEEP, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
-import type { B2BSourceRow, BookedOn, EcSpocReport, EcSpocSeen, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
+import type { B2BSourceRow, BookedOn, CrmReferralInput, EcSpocReport, EcSpocSeen, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
 import { getCached, setCache } from './cache';
 import { b2bBackendFetch } from './b2b-backend';
 import { readMembers } from './b2b-team';
@@ -53,15 +53,16 @@ export async function allOrders(query: string, auth: string, maxPages = MAX_PAGE
 }
 
 async function readHolders(auth: string) {
-  const [rows, studio, redirects, team, staff] = await Promise.all([
+  const [rows, studio, redirects, team, staff, referrals] = await Promise.all([
     b2bBackendFetch<B2BSourceRow[]>('/rows'),
     b2bBackendFetch<{ firms?: StudioFirm[] }>('/studio-access').then((r) => r.firms ?? null).catch(() => null),
     b2bBackendFetch<{ visits: EcVisitRow[] }>('/ec-visits?kind=redirect').catch(() => null),
     readMembers().catch(() => null),
     staffDirectory(auth).catch(() => []),
+    b2bBackendFetch<{ referrals: CrmReferralInput[] }>('/referrals').then((r) => r.referrals).catch(() => null),
   ]);
   return {
-    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit)),
+    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit), referrals ?? []),
     clientDb: clientDbFirms(rows),
     reps: buildRepTeams(team?.members ?? [], staff),
     studioOk: !!studio,

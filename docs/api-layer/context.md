@@ -28,6 +28,11 @@ identical to callers. A `204` becomes `null`; an empty body becomes `null`.
 concurrent callers share one in-flight request. A rejected promise is evicted
 immediately, so a failure is not cached.
 
+A GET passed an `AbortSignal` skips this dedupe (2026-11-23, the Leads tab's two
+reads). A shared promise would carry one caller's abort to every caller holding
+it. Under React Strict Mode the dev re-run of an effect would then receive the
+promise its own cleanup had just aborted, and render nothing.
+
 **3. Any non-GET clears that entire cache** — not just the affected key. So a
 single PATCH invalidates every cached GET in the app. `saveToken` and
 `clearToken` clear it too, which is what stops a login from serving the previous
@@ -174,8 +179,12 @@ for its message. Five things the relay deliberately does:
   so a credit always names who really set it (`docs/b2b/overview.md` §A manager
   credits one order). Other relayed writes still carry the actor the browser sends.
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`, `studio-number`, `client-review`, `order-credits`) so the catch-all is a defined surface, not an open proxy to
-  the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
+  `studio-access`, `studio-number`, `client-review`, `order-credits`, `referrals`) so the catch-all is a defined surface, not an open proxy to
+  the backend. `referrals` (2026-11-27) is open to every B2B user, because any rep adds a
+  client's referral from their own drawer; on a firm linked to Studio Space the backend
+  also writes the studio's referral, which is why the route is allow-listed and not a
+  direct call (`docs/b2b/studio-space.md` §Two-way sync). The revenue report reads it
+  server-side too, as one more holder read beside `/rows`. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.
@@ -213,6 +222,23 @@ leaves the column untouched when the key is absent, so a save from an older
 client, or one that only flips round robin, cannot clear someone's B2B admin
 flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
 reads as false.
+
+`is_primary`, `starts_on` and `ends_on` (migration 0031, 2026-11-26) work the same
+way: the store sends them only when a save is about the person's primary team or a
+cover, so a round-robin toggle never wipes cover dates. Whether the backend has them
+is read off the GET (`coverReady`: the rows carry `is_primary`). A backend before 0031
+would silently drop them, so `saveMember` refuses cover fields with that reason
+instead of reporting a save that did not happen. `paused_from`/`paused_to` (0032)
+follow the same rule, read off the GET as `pauseReady`, and so do `joined_on`/`left_on`
+(0034, `tenureReady`): each is sent only when the save names it. A row's `id` (0035) is
+sent whenever the CRM knows it, so a save lands on that membership and not on whoever
+holds the number now.
+
+**A team save reads Kylas's user list only when it links a Kylas user** (a new row, or
+a picked `kylasUserId`). Until 2026-11-26 every save did, which is two pages at about
+1.2 s each plus the 429 retries, so a round robin checkbox took seconds and sometimes
+over ten (`docs/landmines.md`). The Team tab also flips a row at once and puts it back
+if the save fails, instead of waiting for a full re-read.
 
 **A server route reads the backend through `/b2b/*`, never `/sync/*`.** Cloudflare
 answered `/sync/*` 403 from a script with the right key on 2026-10-31 and let `/b2b/*`
@@ -400,3 +426,9 @@ against an older API it is silently dropped, not an error.
 - Never call `fetch` against Django directly — you lose the envelope unwrap, the
   dedupe and the token refresh, all silently.
 - The request budget and the four permitted egress paths are in `CLAUDE.md`.
+- `lib/server/bda-retail.ts` is BDA Retail's b2b-backend client (`/b2b/bda/*`
+  through `b2bBackendFetch`). The route above it, not the backend, decides who
+  may see what (`docs/bda-retail/context.md`).
+- `staffDirectory` (`lib/server/session.ts`) returns each roster login's `role`
+  and `active` as well as name and phone (2026-11-26), so a route can list the
+  people on a role without a second roster read. BDA Retail lists its BDAs this way.

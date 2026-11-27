@@ -10,9 +10,10 @@ Site Audit → Analytics is five tabs over two databases that are never mixed in
 | **Execution** — bookings, executions, TAT, arrival on time, NPS | ops DB (Site Audit Supabase) | `components/site-audit/views/analytics/index.tsx` |
 | **Category · Week on week · Penetration · Targets** — carts, orders, order value, attach rate, audit→order conversion, store penetration, targets | the ORDER BOOK (`materialdepot_azure` via Metabase) | `components/site-audit/ui/cat-analytics-panel.tsx` + `public/md-cat-analytics.js` |
 
-**Three surfaces now report field-service NPS, and they do not all read the same source** — worth
+**Four surfaces now report field-service NPS, and they do not all read the same source or bands** — worth
 settling before editing any of them, because "add NPS analytics" could plausibly mean any of the
-three. Execution (here) joins the **`ratings` projection** to the order; Category Ops →
+four. The fourth is the per-ENQ NPS tab in Audit Ops and Install Ops (§Audit Ops / Install Ops →
+NPS, below), which reads the call logs on textbook bands. Execution (here) joins the **`ratings` projection** to the order; Category Ops →
 ⭐ Review scores and Category Ops → 📊 NPS analytics both compute from the **call logs**, the
 record itself. So the COE tabs are the superset by construction: a score whose projection POST
 failed counts there and not here, which is exactly the gap `unprojectedScoredCalls` exists to find
@@ -225,3 +226,48 @@ signing time. Audit reads `audit_ticked->sign->>name`, install reads
 `iAttempts`, with one row per installer per attempt, the same set the Orders column counts. The Result column
 shows wallpaper as rolls (ceil per item, `SQFT_PER_ROLL`), and custom wallpaper (`sj.customWp`, else the order's)
 and wooden flooring as sq.ft. CSV export uses the drill modal's own button.
+
+## Audit Ops / Install Ops → NPS (added 2026-11-19)
+
+`components/site-audit/nps-tab/`, mounted as the last sub-tab of both `views/ops` (audit) and
+`views/install-ops`. One row per ENQ (`pi`): client, audit date / install completion date, auditor /
+installer, overall score (Q1) and site cleanliness (Q3), plus NPS tiles over the filtered set. What
+the user decided, and so what not to "fix":
+
+- **Textbook bands, on purpose:** promoter 9–10, neutral 7–8, **detractor 0–6**. The user chose this
+  over the house bands (detractor ≤7) the other three surfaces use, knowing the numbers will differ.
+  The bands live in `nps-tab/constants.ts`, never in `shared/format.ts`'s `npsBand`, and are printed
+  on the tab. Don't merge the two.
+- **Source is the call logs** (`coe_track.calls[]` / `subjobs[].coe_review.calls[]`), the same as the
+  Category Ops tabs, never the `ratings` projection. So pre-2026-08-24 on-site ratings, which exist
+  only in `ratings`, show as "Not scored yet" here.
+- **Latest scored call per job; an install ENQ averages its sub-jobs.** One install ENQ can have
+  several completed sub-jobs (11 of 811 on 2026-11-19), each with its own installer and call; the
+  row averages their latest Q1 and Q3, and the ENQ's band comes from that average. Sub-jobs are the
+  ones `installReviewRows` yields (completed, with a completion line in the order log), the same set
+  as Install Reviews.
+- **Every completed job is listed, scored or not.** The tiles count NPS over scored ENQs only, and
+  "Not scored yet" is its own tile and filter, so the list and the NPS denominator never disagree
+  silently.
+- **It loads its own data when opened.** The ops dashboards' order loads don't carry `coe_track`,
+  so the tab reads `audit_orders` (completed) or `install_orders_slim` through `sbGetPaged` with
+  1,000-row pages. A plain `sbGet` stopped at Supabase's 1,000-row cap: on 2026-11-19
+  `install_orders_slim` held 1,128 non-deleted rows and the first draft silently lost 128. The
+  ops dashboards' order loads, `views/coe/index.tsx` and the auto-import's "already known" read
+  page the same way since 2026-11-26 (see `docs/landmines.md`).
+- **Default range is All time.** No Category Ops review call was logged after 2026-10-19 (the
+  `ratings` table's newest row is the same day), so a last-30-days default opened on a blank NPS.
+  Checked on real rows 2026-11-19: audit NPS 95 (119 scored of 937), install NPS 75 (97 scored of
+  811 ENQs).
+- **A service manager adds a score from the tab (2026-11-20).** Each row's "+ Add score" opens
+  `nps-tab/score/`, which saves exactly what Category Ops' D+1 call form saves: a call with
+  `stage: 'd1', who: 'client', outcome: 'reached'` and Q1–Q3 appended through `patchCoe` /
+  `patchInstallReview`, then the `ratings` projection through `postJobRating`. So the score shows
+  on ⭐ Review scores and 📊 NPS analytics too, and **it closes the D+1 checkpoint in Category Ops'
+  Follow-ups / Install Reviews**, which is intended: the client was reached and scored. Don't give
+  it a separate store. An install is scored per sub-job (a picker when the ENQ has several). A job
+  already scored can be scored again, and the newer call becomes the latest. The note is optional
+  here, unlike Category Ops' form. There is no role check in the tab: only service managers get
+  these two dashboards (COE in its SM mode, admins through Preview). If the projection POST fails,
+  the call is still saved and the tab says to push it from ⭐ Review scores. The save path has
+  not been clicked on production; there is no staging Site Audit Supabase.

@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, sbPatch, type CityFilter, type Shadower } from '../../shared';
+import { inCity, isOffDay, joinShadowers, offDayReason, parseShadowers, type CityFilter, type Shadower } from '../../shared';
 import { useNoteModal } from '../../hooks/use-note-modal';
+import { patchInstallOrder } from '../patch-order';
 import ShadowerSelect, { type ShadowerOption } from './shadower-select';
 import { STATUS, today } from '../constants';
 import { allAssigneesDone, dateRange, dstr, fmtDate, installerById, installerDayCap, installerDayLoad, sjDeliveryDate, slotLabel, slotsForWp, syncParentStatus, totalRolls } from '../utils';
@@ -162,7 +163,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     const nextStatus = syncParentStatus(nextSubjobs, o.status);
     const logLabel = wasResched ? sj.type + ' slot rescheduled' + (remark ? ' — ' + remark : '') : sj.type + (revisit ? ' revisit slot booked' : ' slot booked');
     const nextLog = [...o.log, { t: logLabel + ': ' + fmtDate(d) + ' · ' + slotLabel(t, slotsFl, slotsWp) + delivOverride, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
-    if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
+    if (o.id) await patchInstallOrder(String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
     toast(wasResched ? 'Slot rescheduled' : 'Slot booked');
     onOpenOrder(o.pi);
@@ -175,7 +176,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     const nextSubjobs = replaceSubjob(nextSj);
     const nextStatus = syncParentStatus(nextSubjobs, o.status);
     const nextLog = [...o.log, { t: `${sj.type} slot cleared and installer released`, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
-    if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
+    if (o.id) await patchInstallOrder(String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
     toast('Slot cleared');
     onOpenOrder(o.pi);
@@ -270,7 +271,7 @@ export default function AssignSection({ order: o, allOrders, subjob: sj, install
     ];
     const noteSuffix = wasResched ? '' : ' — note: "' + assignNote + '"';
     const nextLog = [...o.log, ...shLogs, { t: logLabel + ': ' + valid.map((a) => a.installer_name).join(', ') + delivOverrideNote + availOverrideNote + noteSuffix, d: new Date().toISOString(), by: 'manual' as const, who: attribution }];
-    if (o.id) await sbPatch('install_orders', String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
+    if (o.id) await patchInstallOrder(String(o.id), { status: nextStatus, subjobs: nextSubjobs, log: nextLog });
     await reload();
     toast(wasResched ? 'Rescheduled' : 'Assignments saved');
     onOpenOrder(o.pi);

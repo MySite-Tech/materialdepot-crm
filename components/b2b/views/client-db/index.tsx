@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, b2bSellerTest, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
+import { ClientEntity, b2bSellerTest, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, statusMonths, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { fmtShortINR } from '../../models/mock-data';
 import { repNames } from '../../models/outreach/handover';
@@ -14,7 +14,7 @@ import { useFirmAssign } from './hooks/use-firm-assign';
 import { useSpocSources } from './hooks/use-spoc-sources';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
-import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
+import { CLIENT_LENS, LENS_DEFAULT_SORT, LENS_STATUS, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, FilterContext, FilterKey, FilterOption, SortState } from './types';
 import { clientLensMatches, filterChips, rowMatchesFilters, sortRows } from './utils';
 import { ClientFilterBar, ListHead } from './ui/filters';
@@ -48,12 +48,22 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [sortPick, setSortPick] = useState<SortState | null>(null);
 
   const today = istToday();
-  const { kams, allKams, byTeam, everyone } = useB2BReps(team);
-  const assigner = useFirmAssign(clients, viewer.member?.name || viewer.name, (list) => {
-    const byId = new Map(list.map((c) => [c.id, c]));
-    setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
-  });
+  const { allKams, byTeam, everyone } = useB2BReps(team);
   const { load: loadAggregates, addPhones, metricsFor, historyFor } = useClientAggregates();
+  const rowOf = useCallback((c: ClientEntity) => {
+    const metrics = metricsFor(c);
+    return { metrics, status: clientStatus(metrics, today) };
+  }, [metricsFor, today]);
+  const assigner = useFirmAssign({
+    clients,
+    team,
+    by: viewer.member?.name || viewer.name,
+    rowOf,
+    onSaved: (list) => {
+      const byId = new Map(list.map((c) => [c.id, c]));
+      setClients((prev) => prev.map((c) => byId.get(c.id) ?? c));
+    },
+  });
   const studio = useStudioLogins();
   const spocSource = useSpocSources();
   const { visible, setVisible } = useClientColumns();
@@ -87,12 +97,12 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
 
   const isB2B = useMemo(() => b2bSellerTest(everyone.map((r) => r.name)), [everyone]);
   const spocsOf = useMemo(() => {
-    const cache = new Map<string, FirmSpoc[]>();
+    const cache = new WeakMap<ClientEntity, FirmSpoc[]>();
     return (c: ClientEntity): FirmSpoc[] => {
-      let s = cache.get(c.id);
+      let s = cache.get(c);
       if (!s) {
         s = firmSpocs(c, firmLinks(c, spocSource.inbound, spocSource.outreach), [], isB2B, latestEcSpoc(c, spocSource.ec, isB2B));
-        cache.set(c.id, s);
+        cache.set(c, s);
       }
       return s;
     };
@@ -150,11 +160,11 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     const n = byLens[k].length;
     switch (k) {
       case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} status unknown` : ''}`, warn: !!unread };
-      case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_DAYS} days` };
-      case 'm1to3':    return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
-      case 'm3to6':    return { value: String(n), sub: `last order ${INACTIVE_DAYS + 1}–180 days ago` };
-      case 'm6to12':   return { value: String(n), sub: 'last order 181–365 days ago' };
-      case 'm12plus':  return { value: String(n), sub: 'last order over a year ago' };
+      case 'active':
+      case 'm2to3':
+      case 'm4to6':
+      case 'm7to12':
+      case 'm12plus':  return { value: String(n), sub: `last order ${statusMonths(LENS_STATUS[k]!, today)}` };
       case 'never':    return { value: String(n), sub: 'no order on record' };
       case 'unknown':  return { value: String(n), sub: futureDated ? `${futureDated} with a future order date` : 'orders did not load', warn: true };
       case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
@@ -338,9 +348,9 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
             <AssignBar
               count={assigner.picked.size}
               noun="firm"
-              teams={{ kam: { reps: allKams, rotation: kams } }}
+              teams={assigner.teams}
               busy={assigner.busy}
-              rule="Bulk assignment takes only firms with no KAM, and round robin gives each to whichever of these people holds the fewest. To move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to. A firm moved from another KAM can only be accepted."
+              rule={`KAM: bulk assignment takes only firms with no KAM, and to move a firm that has a KAM, select it on its own. A firm with no KAM can be rejected by the KAM it goes to; one moved from another KAM can only be accepted. Inbound and Outreach take any firm with a phone number, whatever its order history: each becomes a new lead for that person and sets the firm's SPoC for that team, and the KAM stays; a firm with an open lead on that team is left alone. Round robin gives each to whichever of these people holds the fewest.`}
               total={rows.length}
               onPickAll={() => assigner.pickAll(rows.map((r) => r.client.id))}
               onAssign={assigner.assign}
@@ -402,7 +412,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {`Active means an order placed in the last ${ACTIVE_DAYS} days. After that a firm is Inactive 1–3, 3–6 or 6–12 months, or over 12 months, counted back from today to its last order. The KAM tab uses the same rule: its Inactive 3+ months tile is the last three together.`}
+        {'Status is by calendar month, so a firm moves band only on the 1st. Active is a last order this month or last (M-0, M-1). Then Inactive 2–3 months (M-2, M-3), 4–6 months (M-4 to M-6), 7–12 months (M-7 to M-12) and over 12 months. The KAM tab uses the same rule: its Inactive 4+ months tile is the last three together.'}
       </p>
       </>)}
 

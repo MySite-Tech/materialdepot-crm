@@ -56,7 +56,7 @@ export function djangoRouter({ userForPhone, userForId, roster, extra = () => un
 }
 
 export function localUser(role, permissions) {
-  const user = { userId: 900001, name: `Local ${role}`, phone: '9999999999', role, permissions };
+  const user = { userId: 900001, name: process.env.STUB_NAME || `Local ${role}`, phone: '9999999999', role, permissions };
   return (phone) => {
     if (phone) user.phone = phone;
     return user;

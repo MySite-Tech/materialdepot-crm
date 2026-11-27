@@ -2,9 +2,9 @@
 
 import { HEALTH_META, HealthOverview, HealthStatus } from '../../../models/account-health';
 import type { KamDashboard } from '../../../models/analytics';
-import { ACTIVE_DAYS, CLIENT_STATUS_SCALE, ClientEntity, ClientStatus, INACTIVE_DAYS } from '../../../models/client';
+import { CLIENT_STATUS_ORDER, CLIENT_STATUS_SCALE, ClientEntity, ClientStatus } from '../../../models/client';
 import { fmtL } from '../../../models/mock-data';
-import { ATTENTION_ROWS, CLIENT_STATUS_ORDER, COHORT_MONTHS, TEAM_COLORS } from '../constants';
+import { ATTENTION_ROWS, COHORT_MONTHS, TEAM_COLORS } from '../constants';
 import { OverviewTarget } from '../types';
 import { Card, LinkButton, SectionHead, Segmented, StackBar } from '../ui';
 import { useState } from 'react';
@@ -25,7 +25,7 @@ function ClientBook({ clients, k, empty, onOpen }: {
     <Card>
       <SectionHead
         title="Client book"
-        hint={`Active = ordered in the last ${ACTIVE_DAYS} days. Then Inactive 1–3, 3–6, 6–12 and 12+ months. Never ordered is counted apart. Computed from deal tickets.`}
+        hint="Active = ordered this calendar month or last (M-0, M-1). Then Inactive 2–3, 4–6, 7–12 and over 12 months, by calendar month. Never ordered is counted apart. Computed from deal tickets."
         right={<LinkButton onClick={onOpen}>Client Database</LinkButton>}
       />
       {empty ? (
@@ -100,7 +100,7 @@ function Attention({ k, health, onOpen }: {
     <Card>
       <SectionHead
         title="Needs attention"
-        hint={`Going inactive: no order in ${ACTIVE_DAYS} days and no follow-up booked (or one overdue), with days left until ${INACTIVE_DAYS}. Escalations: firms scored Critical or At risk on the last 60 days of escalations.`}
+        hint={`Going inactive: last order two or three calendar months back and no follow-up booked (or one overdue), with days left until the firm reaches Inactive 4–6 months. Escalations: firms scored Critical or At risk on the last 60 days of escalations.`}
         right={<Segmented options={tabs} value={tab} onChange={setTab} />}
       />
 

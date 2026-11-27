@@ -22,7 +22,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInboundSync } from '../../hooks/use-inbound-sync';
 import { useInboundReassign } from '../../hooks/use-inbound-reassign';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
-import { membershipIn, teamMembers } from '@/lib/b2b/team/utils';
+import { membershipIn, onDutyIn, teamMembers } from '@/lib/b2b/team/utils';
 
 export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const { everyone } = useB2BReps(team);
@@ -58,7 +58,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const unlinked = !viewer.isManager && !myKylasId;
   const scope = viewer.isManager ? scopeChoice ?? (myKylasId ? 'mine' : 'all') : 'mine';
   const leadOwners = useMemo(
-    () => teamMembers(team.members, 'inbound').filter((m) => m.active && m.kylasUserId).map((m) => ({ id: m.kylasUserId as number, name: m.name })),
+    () => teamMembers(onDutyIn(team.members, 'inbound'), 'inbound').map((m) => ({ id: m.kylasUserId as number, name: m.name })),
     [team.members],
   );
   const canAdd = viewer.isManager ? leadOwners.length > 0 : !!myKylasId;

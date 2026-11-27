@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CITIES, EXIT_COLS, exitColumnsAvailable, fetchBmEmailsByPhone, inCity, mapCaps, mapExit, phoneKey, rosterQuery, sbGet, sbPatch, syntheticSiteAuditEmail, type CityFilter, type StaffExit } from '../../shared';
+import { CITIES, EXIT_COLS, exitColumnsAvailable, fetchBmEmailsByPhone, inCity, mapCaps, mapExit, phoneKey, rosterQuery, sbGet, sbGetPaged, sbPatch, syntheticSiteAuditEmail, type CityFilter, type StaffExit } from '../../shared';
 import { fetchUsers } from '@/lib/api';
 import { poFieldFor } from '../../data/oms-service';
 import { autoImportAuditOrders } from '../../data/auto-import-audit-orders';
 import AuditOrderDrawer from '../../audit-ops/order-drawer';
+import NpsTabView from '../../nps-tab';
 import {
-  AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, SlotsView, TodayView,
+  AuditorsView, CalendarView, DeletedView, FollowupsView, OrdersView, RectificationsView, RescheduleView, StoreWindowsView, TodayView,
 } from '../../audit-ops/views';
 import { AddOrderOverlay, EMPTY_AO, KylasOverlay, RectOverlay, type AoState } from '../../audit-ops/overlays';
 import { AddFieldStaffModal, RestoreStaffModal, RetireStaffModal, type RetireTarget } from '../../staff/staff-modals';
@@ -28,6 +29,7 @@ const TABS: Array<{ view: AuditViewKey; label: string }> = [
   { view: 'auditors', label: 'Auditors & caps' },
   { view: 'deleted', label: 'Deleted Orders' },
   { view: 'rectifications', label: 'Rectifications' },
+  { view: 'nps', label: 'NPS' },
 ];
 
 export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_ATTRIBUTION, actorEmail }: { city?: CityFilter; attribution?: string; actorEmail?: string | null } = {}) {
@@ -166,7 +168,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
 
   const loadOrders = useCallback(async () => {
     try {
-      const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');
+      const rows = await sbGetPaged('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted', 1000, 50, 'created_at.desc,id');
       if (!Array.isArray(rows)) {
         setConnErr(true);
         if (!retryTid.current) retryTid.current = setTimeout(() => { retryTid.current = null; loadOrders(); }, 8000);
@@ -290,7 +292,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
       case 'calendar':
         return <CalendarView orders={orders} auditors={auditors} slots={slots} calSelDay={calSelDay} setCalSelDay={setCalSelDay} onOpenOrder={openOrder} />;
       case 'slots':
-        return <SlotsView slotsFl={slotsFl} slotsWp={slotsWp} setSlotsFl={setSlotsFl} setSlotsWp={setSlotsWp} toast={toast} />;
+        return <StoreWindowsView city={city} toast={toast} />;
       case 'auditors':
         return (
           <AuditorsView
@@ -305,6 +307,8 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
         return <DeletedView deleted={deleted} auditors={auditors} onRestore={restoreOrder} />;
       case 'rectifications':
         return <RectificationsView orders={orders} onOpenOrder={openOrder} />;
+      case 'nps':
+        return <NpsTabView kind="audit" city={city} onOpenOrder={openOrder} who={ATTRIBUTION} whoEmail={actorEmail} />;
       default:
         return null;
     }

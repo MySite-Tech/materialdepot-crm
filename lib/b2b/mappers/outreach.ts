@@ -1,5 +1,5 @@
 import { B2BLeadRow, MetaSpec, arr, num, pairTime, str, unpairTime } from '../data/rows';
-import { LeadType, Segment, type Selection } from '@/components/b2b/models/inbound';
+import { LeadType, Segment, type CallAttempt, type Selection } from '@/components/b2b/models/inbound';
 import { LeadNote, OutreachLead } from '@/components/b2b/models/mock-data';
 import { RequirementVersion } from '@/components/b2b/models/requirement';
 import {
@@ -23,6 +23,7 @@ const OUTREACH_META: MetaSpec<OutreachLead> = {
   companyTypeOther:   { col: 'company_type_other', read: str },
   createdAt:          { col: 'created_at',       read: str },
   meetings:           { col: 'meetings',         read: (v) => arr<OutreachMeeting>(v) },
+  callAttempts:       { col: 'call_attempts',    read: (v) => arr<CallAttempt>(v) },
   selections:         { col: 'selections',       read: (v) => arr<Selection>(v) },
   requirement:        { col: 'requirement',      read: str },
   requirementHistory: { col: 'requirement_history', read: (v) => arr<RequirementVersion>(v) },

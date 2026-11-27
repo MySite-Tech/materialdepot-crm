@@ -1,281 +1,75 @@
 'use client';
 
-import { makeRaiseActions } from './handlers';
+import { makeRaiseActions, toRaiseProgress } from './handlers';
 
-import { ContactResults } from './search/contacts';
 import { DealPanel } from './deals/panel';
 import { DealResults } from './deals/results';
-import { RaiseModal } from './ui/modal';
 import { SearchForm } from './search/form';
 
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE, POST_ORDER_STAGE_RULE, SALES_PIPELINE_RULE, SEARCH_FIELDS, SYNC_INDEX_DELAY_MS, SYNC_INDEX_MAX_ATTEMPTS } from './constants';
-import { AssociatedDeal, ContactResult, EscSupportDeal, Props } from './types';
-import { extractEscSupport, isSalesDeal } from './utils';
-import { KylasDealInfo, SyncEstimateResult, syncEstimate } from '@/lib/api';
-import { Deal, DealsSearchResponse } from '@/lib/types';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { EscSupportDeal, Props, RaiseProgress } from './types';
+import { OrderSearchDeal, searchOrderDeals } from '@/lib/api';
+import { useRef, useState } from 'react';
 
 export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
-  const [, setQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [searched, setSearched] = useState("");
+  const [deals, setDeals] = useState<OrderSearchDeal[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [contacts, setContacts] = useState<ContactResult[]>([]);
-  const [loadingContacts, setLoadingContacts] = useState(false);
-
-  const [expandedContactId, setExpandedContactId] = useState<number | null>(null);
-  const [contactDeals, setContactDeals] = useState<AssociatedDeal[]>([]);
-  const [loadingContactDeals, setLoadingContactDeals] = useState(false);
-
-  const [expandedDealId, setExpandedDealId] = useState<number | null>(null);
-  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
-  const [dealContact, setDealContact] = useState<Record<number, string>>({});
+  const [expandedDealId, setExpandedDealId] = useState<string | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<OrderSearchDeal | null>(null);
 
   const [escSupportDeals, setEscSupportDeals] = useState<EscSupportDeal[]>([]);
 
-  const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [pageLoading, setPageLoading] = useState(false);
-  const [defaultRange, setDefaultRange] = useState<{ from: string; to: string } | null>(null);
-
-  const [submitting, setSubmitting] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [raises, setRaises] = useState<RaiseProgress[]>([]);
 
   const submitLockRef = useRef(false);
-  const [submitSuccess, setSubmitSuccess] = useState<number | null>(null);
+  const pollingRef = useRef<Set<number>>(new Set());
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [kylasModalOpen, setKylasModalOpen] = useState(false);
-  const [kylasInput, setKylasInput] = useState("");
-  const [kylasLoading, setKylasLoading] = useState(false);
-  const [kylasSyncResult, setKylasSyncResult] = useState<SyncEstimateResult | null>(null);
-  const [kylasDealInfo, setKylasDealInfo] = useState<KylasDealInfo | null>(null);
-  const [kylasError, setKylasError] = useState<string | null>(null);
-
-  const [autoSyncing, setAutoSyncing] = useState(false);
-  const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
-  const autoSyncAttempted = useRef<Set<string>>(new Set());
-
-  const fetchDeals = useCallback(async (q: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      let allSales: Deal[] = [];
-
-      if (q.trim()) {
-
-        const res = await fetch(
-          `/api/deals/search?page=0&size=${PAGE_SIZE}&sort=${encodeURIComponent("updatedAt,desc")}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fields: SEARCH_FIELDS,
-              jsonRule: {
-                condition: "AND",
-                rules: [{
-                  id: "multi_field", field: "multi_field", type: "multi_field",
-                  input: "multi_field", operator: "multi_field",
-                  value: q.trim(),
-                }],
-                valid: true,
-              },
-            }),
-            cache: "no-store",
-          }
-        );
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-        const data: DealsSearchResponse = await res.json();
-        const all = data.content ?? [];
-        allSales = all.filter(isSalesDeal);
-
-        const upper = q.trim().toUpperCase();
-        const exact = allSales.filter((d) => d.name.toUpperCase() === upper);
-        const partial = allSales.filter((d) => d.name.toUpperCase().includes(upper));
-        allSales = exact.length > 0 ? exact : partial.length > 0 ? partial : allSales;
-
-        setEscSupportDeals(extractEscSupport(all));
-        setTotalPages(0);
-        setTotalCount(0);
-        setCurrentPage(0);
-        setDefaultRange(null);
-      } else {
-
-        const now = new Date();
-        const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
-        const fromIso = sevenDaysAgo.toISOString();
-        const toIso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-
-        const res = await fetch(
-          `/api/deals/search?page=0&size=${DEFAULT_PAGE_SIZE}&sort=${encodeURIComponent("createdAt,desc")}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fields: SEARCH_FIELDS,
-              jsonRule: {
-                condition: "AND",
-                rules: [
-                  { id: "createdAt", field: "createdAt", type: "date", input: "date",
-                    operator: "between", value: [fromIso, toIso] },
-                  SALES_PIPELINE_RULE,
-                  POST_ORDER_STAGE_RULE,
-                ],
-                valid: true,
-              },
-            }),
-            cache: "no-store",
-          }
-        );
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-        const data: DealsSearchResponse = await res.json();
-        const content = data.content ?? [];
-        allSales = content.filter(isSalesDeal);
-
-        setEscSupportDeals([]);
-        setTotalPages(data.totalPages ?? 0);
-        setTotalCount(data.totalElements ?? content.length);
-        setCurrentPage(0);
-        setDefaultRange({ from: fromIso, to: toIso });
-      }
-
-      setDeals(allSales);
-      setLoading(false);
-
-      loadBackgroundData(allSales);
-      return allSales;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setLoading(false);
-      return null;
-    }
-  }, []);
-
-  const { addNoteToTicket, fetchContactDeals, findSameIssue, getOngoing, goToPage, handleFindKylasDeal, handleOpenKylasModal, handleSubmit, loadBackgroundData, searchContacts } = makeRaiseActions({ defaultRange, escSupportDeals, kylasInput, pageLoading, setContactDeals, setContacts, setCurrentPage, setDealContact, setDeals, setKylasDealInfo, setKylasError, setKylasInput, setKylasLoading, setKylasModalOpen, setKylasSyncResult, setLoadingContactDeals, setLoadingContacts, setPageLoading, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, setTotalCount, setTotalPages, submitLockRef, totalCount, totalPages });
-
-
-  useEffect(() => { fetchDeals(""); }, [fetchDeals]);
-
-  useEffect(() => {
-    if (!selectedDeal) return;
-    const base = selectedDeal.name.match(/((?:ENQ|MD|CT)\w+)/i)?.[1];
-    if (!base) return;
-
-    if (escSupportDeals.some((d) => d.name.toUpperCase().includes(base.toUpperCase()))) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/deals/search?page=0&size=50&sort=${encodeURIComponent("updatedAt,desc")}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fields: ["name", "pipeline", "pipelineStage", "id", "customFieldValues", "actualClosureDate", "createdAt", "updatedAt"],
-              jsonRule: {
-                condition: "AND",
-                rules: [{
-                  id: "multi_field", field: "multi_field", type: "multi_field",
-                  input: "multi_field", operator: "multi_field", value: base,
-                }],
-                valid: true,
-              },
-            }),
-            cache: "no-store",
-          }
-        );
-        if (!res.ok || cancelled) return;
-        const data: DealsSearchResponse = await res.json();
-        const found = extractEscSupport(data.content ?? []);
-        if (cancelled || found.length === 0) return;
-        setEscSupportDeals((prev) => {
-          const seen = new Set(prev.map((d) => d.id));
-          return [...prev, ...found.filter((d) => !seen.has(d.id))];
-        });
-      } catch { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedDeal?.id]);
-
-  function isSyncableId(q: string) {
-    return /^CT\w+$/i.test(q) || /^(?:ENQ|MD)\w+$/i.test(q);
-  }
-
-  async function autoSyncMissingDeal(q: string) {
-    const key = q.toUpperCase();
-
-    autoSyncAttempted.current.delete(key);
-    setAutoSyncing(true);
-    setAutoSyncError(null);
-    try {
-      const result = await syncEstimate(q);
-      if (result.success) {
-        autoSyncAttempted.current.add(key);
-
-        for (let i = 0; i < SYNC_INDEX_MAX_ATTEMPTS; i++) {
-          await new Promise((resolve) => setTimeout(resolve, SYNC_INDEX_DELAY_MS));
-          const found = await fetchDeals(q);
-          if (found && found.length > 0) return;
-        }
-        setAutoSyncError(
-          "Deal created in Kylas, but it hasn't appeared in search yet. Search again in a moment."
-        );
-      } else if (result.queued) {
-        setAutoSyncError("Rate limited by Kylas — queued for retry. Search again in a moment.");
-      } else {
-        setAutoSyncError(
-          `${result.message ?? result.error ?? "Could not create this deal in Kylas."} — search again to retry.`
-        );
-      }
-    } catch (err) {
-      setAutoSyncError(
-        `${err instanceof Error ? err.message : "Could not reach Kylas."} — search again to retry.`
-      );
-    } finally {
-      setAutoSyncing(false);
-    }
-  }
+  const { addNoteToTicket, findSameIssue, getOngoing, handleSubmit, resumeRaises, retryRaise } = makeRaiseActions({ escSupportDeals, pollingRef, setDeals, setRaises, setEscSupportDeals, setSelectedDeal, setSubmitError, setSubmitSuccess, setSubmitting, submitLockRef });
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = inputValue.trim();
-    setQuery(inputValue);
-    setContacts([]);
-    setExpandedContactId(null);
-    setAutoSyncError(null);
-    if (/^\d{10}$/.test(q)) {
-      searchContacts(inputValue);
-    } else {
-      setContacts([]);
+    if (q.length < 3) {
+      setError("Type at least 3 characters — ENQ id or phone number.");
+      return;
     }
-    const found = await fetchDeals(inputValue);
-    if (
-      found?.length === 0 &&
-      isSyncableId(q) &&
-      !autoSyncAttempted.current.has(q.toUpperCase())
-    ) {
-      autoSyncMissingDeal(q);
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await searchOrderDeals(q);
+      const found = data.content ?? [];
+      const saved = (data.raises ?? []).map(toRaiseProgress);
+      setDeals(found);
+      setEscSupportDeals(data.tickets ?? []);
+      setRaises((prev) => {
+        const savedIds = new Set(saved.map((r) => r.requestId));
+        return [...prev.filter((r) => !savedIds.has(r.requestId)), ...saved];
+      });
+      setSearched(q);
+      resumeRaises(found, saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setLoading(false);
     }
+  }
+
+  function pickDeal(deal: OrderSearchDeal) {
+    setSubmitError(null);
+    setSelectedDeal(deal);
+    setExpandedDealId(deal.leadId);
   }
 
   return (
     <div>
 
-      <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-[12px] leading-relaxed text-blue-900">
-        <div className="font-semibold mb-1">Can&apos;t find the deal you want to raise an escalation on?</div>
-        <div>There are 3 ways you can sync it from your end:</div>
-        <ol className="list-decimal ml-4 mt-1 space-y-0.5">
-          <li>If you have access to the <span className="font-semibold">Escalation Visibility</span> tab &rarr; use the <span className="font-semibold">Create Kylas Deal</span> button to sync.</li>
-          <li>If you have access to the <span className="font-semibold">Leads</span> tab &rarr; use the <span className="font-semibold">Kylas Sync</span> button.</li>
-          <li>If you do not have CRM access &rarr; use the <span className="font-semibold">Kylas Sync</span> button available on the <span className="font-semibold">Procurement PI / Order</span> page.</li>
-          <li>Also confirm that the lead id is for post order placement deals.</li>
-        </ol>
-      </div>
-
       <SearchForm
-        handleOpenKylasModal={handleOpenKylasModal}
         handleSearch={handleSearch}
         inputValue={inputValue}
         loading={loading}
@@ -286,75 +80,53 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
         <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      {(contacts.length > 0 || loadingContacts) && (
-        <ContactResults
-        contactDeals={contactDeals}
-        contacts={contacts}
-        expandedContactId={expandedContactId}
-        fetchContactDeals={fetchContactDeals}
-        loadingContactDeals={loadingContactDeals}
-        loadingContacts={loadingContacts}
-        onViewDeal={onViewDeal}
-        setExpandedContactId={setExpandedContactId}
-        setExpandedDealId={setExpandedDealId}
-      />
-      )}
-
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-        Ordered Deals {!loading && `(${deals.length})`}
-      </p>
-
-      {autoSyncing ? (
-        <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
-          <svg className="w-4 h-4 animate-spin text-yellow-500" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-          </svg>
-          syncing from Kylas…
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
           ))}
         </div>
-      ) : deals.length === 0 ? (
-        <div className="py-10 space-y-2">
-          <p className="text-center text-sm text-gray-400">
-            No ordered deals in the last 7 days. Deals before Order Placed are not listed —
-            search by ENQ / CT / deal name to find one.
+      ) : !searched ? (
+        <div className="mt-2 rounded-xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-yellow-50">
+            <svg className="h-5 w-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-gray-900">Find the order to raise an escalation on</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Search by ENQ id or customer phone number.
           </p>
-          {autoSyncError && (
-            <p className="text-center text-sm text-red-600 px-4">{autoSyncError}</p>
-          )}
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+            {["ENQ20261123105648", "9876543210"].map((ex) => (
+              <span key={ex} className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">e.g. {ex}</span>
+            ))}
+          </div>
+          <p className="mt-4 text-xs text-gray-400">Orders from Payment Pending onwards show up here.</p>
+        </div>
+      ) : deals.length === 0 ? (
+        <div className="mt-2 rounded-xl border border-gray-200 bg-white px-6 py-10 text-center">
+          <p className="text-sm font-semibold text-gray-900">No order found for &ldquo;{searched}&rdquo;</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Escalations can only be raised on orders that are Payment Pending or later.
+          </p>
+          <ul className="mx-auto mt-3 max-w-sm space-y-1 text-left text-xs text-gray-500">
+            <li>• Check the ENQ id or phone number for typos.</li>
+            <li>• Quotes and carts that haven&apos;t reached Payment Pending won&apos;t show here.</li>
+            <li>• Try another number the customer uses.</li>
+          </ul>
         </div>
       ) : (
-        <DealResults
-        currentPage={currentPage}
-        dealContact={dealContact}
-        deals={deals}
-        getOngoing={getOngoing}
-        goToPage={goToPage}
-        pageLoading={pageLoading}
-        selectedDeal={selectedDeal}
-        setExpandedDealId={setExpandedDealId}
-        setSelectedDeal={setSelectedDeal}
-        totalCount={totalCount}
-        totalPages={totalPages}
-      />
-      )}
-
-      {kylasModalOpen && (
-        <RaiseModal
-        handleFindKylasDeal={handleFindKylasDeal}
-        kylasDealInfo={kylasDealInfo}
-        kylasError={kylasError}
-        kylasInput={kylasInput}
-        kylasLoading={kylasLoading}
-        kylasSyncResult={kylasSyncResult}
-        setKylasInput={setKylasInput}
-        setKylasModalOpen={setKylasModalOpen}
-      />
+        <>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            Ordered Deals ({deals.length})
+          </p>
+          <DealResults
+            deals={deals}
+            onPick={pickDeal}
+            selectedName={selectedDeal?.name ?? null}
+          />
+        </>
       )}
 
       {selectedDeal && (
@@ -364,6 +136,8 @@ export default function MobileRaiseClient({ onViewDeal, userName }: Props) {
         findSameIssue={findSameIssue}
         getOngoing={getOngoing}
         handleSubmit={handleSubmit}
+        raises={raises.filter((r) => r.leadId === selectedDeal.leadId && r.status !== "success")}
+        retryRaise={retryRaise}
         onViewDeal={onViewDeal}
         selectedDeal={selectedDeal}
         setSelectedDeal={setSelectedDeal}

@@ -1,13 +1,13 @@
 'use client';
 
 import type { ClientEntity } from '../../../../models/client';
-import { isOpenStatus } from '../../../../models/inbound';
+import { openLeadLoad } from '../../../../models/inbound';
 import { assignFirm, planFirmRoundRobin } from '../../../../models/kam';
 import { Rep, assignLead, planRoundRobin, spreadByLoad } from '../../../../models/outreach/intake';
 import { withJourney } from '../../../../models/outreach/reminders';
-import { useB2BReps } from '../../../../hooks/use-b2b-reps';
+import { useAssignTeams } from '../../../../hooks/use-assign-teams';
 import { usePicked } from '../../../../hooks/use-picked';
-import { AssignTarget, AssignTeams, isRoundRobin } from '../../../../ui/assign-bar';
+import { AssignTarget, isRoundRobin } from '../../../../ui/assign-bar';
 import { fetchInboundBoard, fetchOutreachLeads, insertInboundLeads, istToday, upsertClients, upsertOutreachLeads } from '@/lib/b2b';
 import { markNotClient, reviewToClient, reviewToInbound, reviewToOutreach, undoNotClient } from '@/lib/b2b/client-import';
 import type { RejectedFirm, ReviewFirm } from '@/lib/b2b/client-import/types';
@@ -31,19 +31,7 @@ export function useReviewActions({ list, clients, team, by, onClients, settle, r
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const { reps, rotationReps, kams, allKams } = useB2BReps(team);
-
-  const inboundTeam = useMemo(() => team.members
-    .filter((m) => m.team === 'inbound' && m.active && m.kylasUserId != null)
-    .sort((a, b) => a.name.localeCompare(b.name)), [team.members]);
-  const teams = useMemo<AssignTeams>(() => {
-    const rep = (m: { name: string; phone: string }): Rep => ({ name: m.name, phone: m.phone });
-    return {
-      inbound: { reps: inboundTeam.map(rep), rotation: inboundTeam.filter((m) => m.inRotation).map(rep) },
-      outreach: { reps, rotation: rotationReps },
-      kam: { reps: allKams, rotation: kams },
-    };
-  }, [inboundTeam, reps, rotationReps, allKams, kams]);
+  const { teams, inboundTeam } = useAssignTeams(team);
 
   const selected = useMemo(() => list.filter((f) => picked.has(f.key)), [list, picked]);
 
@@ -89,12 +77,7 @@ export function useReviewActions({ list, clients, team, by, onClients, settle, r
   const toInbound = async (chosen: ReviewFirm[], to: AssignTarget, at: string) => {
     const board = isRoundRobin(to) ? await fetchInboundBoard() : null;
     if (board && !board.ok) throw new Error('Inbound leads could not be read, so the round robin could not be worked out');
-    const held = new Map<string, number>();
-    for (const l of board?.leads ?? []) {
-      const m = isOpenStatus(l.stage) ? inboundTeam.find((t) => t.kylasUserId === l.ownerId) : undefined;
-      if (m) held.set(m.name, (held.get(m.name) || 0) + 1);
-    }
-    const plan = isRoundRobin(to) ? spreadByLoad(chosen, to.among, held) : chosen.map((item) => ({ item, rep: to }));
+    const plan = isRoundRobin(to) ? spreadByLoad(chosen, to.among, openLeadLoad(board?.leads ?? [], inboundTeam)) : chosen.map((item) => ({ item, rep: to }));
     const leads = plan.map(({ item, rep }) => {
       const m = inboundTeam.find((t) => t.phone === rep.phone)!;
       return reviewToInbound(item, { name: m.name, kylasUserId: m.kylasUserId! }, by, at);

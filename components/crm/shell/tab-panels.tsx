@@ -3,6 +3,7 @@
 import type { ReadonlyURLSearchParams } from 'next/navigation';
 
 import AppointmentTrackerClient from '../../appointment-tracker/tracker';
+import BdaRetailTab from '../../bda-retail';
 import B2BSalesCRM from '../../b2b/views/b2-b-sales-crm';
 import EcB2bReferral from '../../b2b/views/ec-referral';
 import Dashboard from '../../dashboard/overview';
@@ -94,6 +95,8 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
     {effectiveTab === 'sales' && <MobileDashboard userName={currentUser?.name ?? ''} jumpTo={searchParams.get('ticket')} />}
     
     {effectiveTab === 'b2bSales' && <B2BSalesCRM currentUser={currentUser} />}
+
+    {effectiveTab === 'bdaRetail' && <BdaRetailTab currentUser={currentUser} />}
     
     {effectiveTab === 'appointmentTracker' && (
       <AppointmentTrackerClient currentUser={currentUser} branches={branchesLoaded ? branches : undefined} />
