@@ -82,6 +82,7 @@ export async function resolveKamOrders(
   orders: KamOrder[],
   deals: B2BDealRef[],
   clients: ClientEntity[] = [],
+  lookup = true,
 ): Promise<KamOrderResolveResult> {
   const firmNumbers = new Map(clients.map((c) => [c.id, contactNumbers(c.contacts)]));
   const phonesOf = (o: KamOrder) => firmPhoneList([o.phone, ...(o.clientId ? firmNumbers.get(o.clientId) ?? [] : [])]);
@@ -108,6 +109,7 @@ export async function resolveKamOrders(
     }
     // `otherPhone` set means the ticket carries this enquiry id but sits on a
     // number that is not on the firm. The bulk path above checks the same set.
+    if (!lookup) return { order: o, outcome: 'skipped' };
     const r = await lookupEnqId(phonesOf(o), o.enqId);
     if (r.status === 'matched' && !r.otherPhone) {
       return {

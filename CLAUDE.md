@@ -705,6 +705,11 @@ KAM-held only for orders placed on or after its first non-rejected KAM assignmen
 Earlier orders are EC Direct with nobody credited, so KAM credit on those orders goes
 too (the owner-at-close rule). Totals do not change (`docs/b2b/overview.md` §Four
 revenue channels, `docs/landmines.md`).
+**The Overview took about a minute to load (fixed the same day, CRM PR from
+`overview-fast-first-paint`, merged on Dhruv's ask).** It waited for one-by-one Django
+lookups of KAM orders whose Enquiry ID misses `b2b-bulk`. It now paints from the bulk
+match and finishes those in the background (`docs/b2b/overview.md` §The Overview paints
+before the KAM order lookups).
 
 **START HERE for BDA Retail (2026-11-26): a new top-level CRM tab, live.** CRM PR #87
 (branch `bda-retail`) with b2b-backend #42 (migration 0033, `bda_*` tables) and #43
