@@ -97,12 +97,12 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
 
   const isB2B = useMemo(() => b2bSellerTest(everyone.map((r) => r.name)), [everyone]);
   const spocsOf = useMemo(() => {
-    const cache = new Map<string, FirmSpoc[]>();
+    const cache = new WeakMap<ClientEntity, FirmSpoc[]>();
     return (c: ClientEntity): FirmSpoc[] => {
-      let s = cache.get(c.id);
+      let s = cache.get(c);
       if (!s) {
         s = firmSpocs(c, firmLinks(c, spocSource.inbound, spocSource.outreach), [], isB2B, latestEcSpoc(c, spocSource.ec, isB2B));
-        cache.set(c.id, s);
+        cache.set(c, s);
       }
       return s;
     };

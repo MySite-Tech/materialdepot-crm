@@ -62,6 +62,8 @@ export const ORDER_BANDS: { status: ClientStatus; upTo: number }[] = [
   { status: 'Inactive 7–12 months', upTo: 12 },
 ];
 
+export const CLIENT_STATUS_ORDER: ClientStatus[] = ['Active', 'Inactive 2–3 months', 'Inactive 4–6 months', 'Inactive 7–12 months', 'Inactive over 12 months', 'Never ordered', 'Unknown'];
+
 export const LONG_INACTIVE: ClientStatus[] = ['Inactive 4–6 months', 'Inactive 7–12 months', 'Inactive over 12 months'];
 
 export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {

@@ -1,4 +1,4 @@
-import { ClientStatus, CLIENT_ENTITY_TYPES, CLIENT_SOURCES, SEGMENTS, STUDIO_ACCESS } from '../../models/client';
+import { ClientStatus, CLIENT_ENTITY_TYPES, CLIENT_STATUS_ORDER, CLIENT_SOURCES, SEGMENTS, STUDIO_ACCESS } from '../../models/client';
 import { ClientColumn, ClientFilters, ClientLens, ClientLensMeta, SortKey, SortState, FilterKey, FilterOption } from './types';
 
 export const PAGE_SIZE = 25;
@@ -88,7 +88,7 @@ export const FIXED_FILTER_OPTIONS: Partial<Record<FilterKey, FilterOption[]>> = 
   avgOrder: AMOUNT,
   openCarts: [['0', 'None'], ...AMOUNT],
   lastOrder: [['7', 'Last 7 days'], ['30', 'Last 30 days'], ['90', 'Last 90 days'], ['180', 'Last 180 days'], ['over180', 'Over 180 days ago'], ['never', 'Never']],
-  status: (['Active', 'Inactive 1 month', 'Inactive', 'Never ordered', 'Unknown'] as const).map((s) => [s, s]),
+  status: CLIENT_STATUS_ORDER.map((s) => [s, s]),
   studio: [['power', STUDIO_ACCESS.power.label], ['non-power', STUDIO_ACCESS['non-power'].label], ['none', 'Not onboarded']],
   clientType: [...CLIENT_ENTITY_TYPES.map((t): FilterOption => [t, t]), ['none', 'Not set']],
   segment: [...SEGMENTS.map((s): FilterOption => [s, `Segment ${s}`]), ['none', 'Not set']],

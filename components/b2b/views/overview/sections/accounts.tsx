@@ -2,9 +2,9 @@
 
 import { HEALTH_META, HealthOverview, HealthStatus } from '../../../models/account-health';
 import type { KamDashboard } from '../../../models/analytics';
-import { CLIENT_STATUS_SCALE, ClientEntity, ClientStatus } from '../../../models/client';
+import { CLIENT_STATUS_ORDER, CLIENT_STATUS_SCALE, ClientEntity, ClientStatus } from '../../../models/client';
 import { fmtL } from '../../../models/mock-data';
-import { ATTENTION_ROWS, CLIENT_STATUS_ORDER, COHORT_MONTHS, TEAM_COLORS } from '../constants';
+import { ATTENTION_ROWS, COHORT_MONTHS, TEAM_COLORS } from '../constants';
 import { OverviewTarget } from '../types';
 import { Card, LinkButton, SectionHead, Segmented, StackBar } from '../ui';
 import { useState } from 'react';
