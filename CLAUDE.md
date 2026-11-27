@@ -206,14 +206,14 @@ reading the module.
 | Footfall | `docs/footfall/context.md` | Five endpoints, the funnel, repeat buckets, the data-driven breakdown grid |
 | NPS | `docs/nps/context.md` | Promoter/passive/detractor cutoffs, the NPS formula, per-customer dedupe |
 | Store hierarchy | `docs/org-hierarchy/context.md` | The seven-rung ladder and who may see whose numbers. **Reuse this rather than re-deriving "who is under me"** — visibility is `depth` + branch overlap, `reportsTo` is display-only, and four of the rungs may not exist in Django yet |
-| Report card | `docs/report-card/context.md` | Your own card plus a team performance table scoped to the hierarchy; the two bulk calls that replace one-request-per-person; `has_bm`; cart temperature vs closure stage |
+| Report card | `docs/report-card/context.md` | Your own card plus a team performance table scoped to the hierarchy; the bulk calls that replace one-request-per-person (**Django answers at most 12 `bm_groups` per call and drops the rest silently**); `has_bm`; cart temperature vs closure stage |
 | Weekly funnel | `docs/weekly-funnel/context.md` | Fixed value buckets, column-dynamic category tables, the shared filter-option calls |
 | Appointment tracker | `docs/appointment-tracker/context.md` | Kylas feed via a route handler, the rota table, EC-ready being per-browser, fuzzy branch matching |
 | Store visit | `docs/store-visit/context.md` | One endpoint doing lookup and write, the whole-body Kylas lead update |
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 105 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 106 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | BDA Retail | `docs/bda-retail/context.md` | Retail leads the stores missed, in four cohorts with priorities, stored in b2b-backend (0033). Five named admins see everything; the `bda_retail` role sees only its queue and performance. Django's cart rows carry no `visits`, and carts over ₹1 Cr are typos |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
@@ -293,7 +293,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 105 titles, so grep a title and read around the line you
+**Contents** list of all 106 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -959,6 +959,17 @@ the CRM either. Start new work from `origin/main`.
   has been logged in November (28 in October). The user has no explanation yet.
   Find out from the KAMs whether the compulsory check-in is stopping them before
   changing the check-in or the meeting KPIs.
+
+**Live-site sweep, 2026-11-27 (signed in as Dhruv, read-only).** All 11 B2B Sales
+sub-tabs and all 16 top-level tabs loaded in 2–15 s with no console errors. One real
+bug: the Report Card's team table read "the stats call failed" for 114 of 150 people
+because Django caps `bm_groups` at 12; fixed in CRM PR `report-card-stats-cap`
+(`docs/report-card/context.md`, `docs/landmines.md`). Seen and expected, not bugs:
+Studio Space's frame shows "No active Studio Space team login has this mobile" for
+Dhruv's number (the handoff answers 404; add the number on a Studio Space staff login
+to sign in automatically), one Kylas 429 (the shared rate limit, Owed by Django row 12),
+Site Audit users with no phone ("not set"), and a contact saved under the name
+"Unknown".
 
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment

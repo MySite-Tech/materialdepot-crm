@@ -2,12 +2,7 @@
 
 import { CRMLeadsStats, FootfallBMRow } from '@/lib/api';
 import { OrgPerson, normaliseName } from '@/lib/org';
-import { TeamMetrics } from './types';
-
-export interface FootfallIndex {
-  byName: Map<string, FootfallBMRow>;
-  ambiguous: Set<string>;
-}
+import { FootfallIndex, TeamMetrics } from './types';
 
 export const indexFootfallByName = (rows: FootfallBMRow[], people: OrgPerson[]): FootfallIndex => {
   const rowCounts = new Map<string, number>();
