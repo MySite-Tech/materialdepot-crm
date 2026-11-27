@@ -2,14 +2,15 @@
 
 import { buildHealthOverview } from '../../../models/account-health';
 import { ClientMetricsMap, computeDashboard, computeKamDashboard } from '../../../models/analytics';
-import { ClientEntity, contactNumbers } from '../../../models/client';
+import { ClientEntity, contactNumbers, withStudioOrders } from '../../../models/client';
 import { BaseData } from '../types';
 import { clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchTargets, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
+import { fetchStudioAccess } from '@/lib/b2b/studio-logins';
 import { useCallback, useEffect, useState } from 'react';
 
 async function readBase(): Promise<BaseData> {
   const now = new Date();
-  const [fetched, targets] = await Promise.all([fetchB2BData(), fetchTargets()]);
+  const [fetched, targets, studio] = await Promise.all([fetchB2BData(), fetchTargets(), fetchStudioAccess().catch(() => null)]);
   let data = fetched;
   const today = istToday(now);
 
@@ -27,7 +28,7 @@ async function readBase(): Promise<BaseData> {
   const dates = orderDatesFromAggregates(aggregates, clientPhones, unread);
   const clientMetrics: ClientMetricsMap = {};
   for (const c of data.clients) {
-    clientMetrics[c.id] = clientMetricsFrom(c.contacts, aggregates, dates);
+    clientMetrics[c.id] = withStudioOrders(clientMetricsFrom(c.contacts, aggregates, dates), c, studio?.firms ?? []);
   }
 
   return {

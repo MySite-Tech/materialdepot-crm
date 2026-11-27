@@ -226,6 +226,14 @@ Inactive 2–3 months only. `nextStatus` names that band on the Firm page.
   exactly on its month edges: Active 1 Oct–27 Nov, 2–3 Aug–Sep, 4–6 May–Jul, 7–12 2 Nov
   2025–30 Apr 2026, and over 12 up to 25 Oct 2025. "4d left" showed on October and
   September firms, which drop a band on 1 Dec.
+- **The Overview's client book matches since 2026-11-27.** It read 190 Active against
+  Client Database's 194 because it skipped Studio Space orders; it now adds them
+  (`docs/landmines.md`).
+- **111 firms waiting on a KAM (production, 2026-11-27) is not a bug.** All 111 are
+  Prafful's assignments to Krishna Jadhav (96 on 18 Nov, 15 on 20 Nov), with his current
+  number (…810), so they show on his sign-off list; he accepted others that week and on
+  27 Nov. Until he accepts or rejects, each firm has no KAM and counts under No KAM. A
+  manager can respond for him from the KAM tab.
 - **What moved against the day rule.** Active now covers between 27 and 61 days
   depending on the date, not a flat 30. On the 27th, a firm that ordered on the
   1st of last month is still Active; on the 1st of a month every firm from two
