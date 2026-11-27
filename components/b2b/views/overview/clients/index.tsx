@@ -3,7 +3,8 @@
 import { fmtL } from '../../../models/mock-data';
 import { CHURN_GAP, FlowMonth } from '@/lib/b2b/revenue';
 import { Fragment, ReactNode, useMemo, useState } from 'react';
-import { Card, Hint, Notice } from '../ui';
+import { Card, Notice } from '../ui';
+import { Hint } from '../../../ui/info-tip';
 import { FLOW_ROWS, GROUP_LABEL, SIDE_COLOR } from './constants';
 import { useClientFlow } from './hooks/use-client-flow';
 import type { FlowCell, FlowRowDef, Picked } from './types';

@@ -123,6 +123,8 @@ export const MIN_ATTEMPTS_BEFORE_CLOSE = 5;
 
 export const INBOUND_DAY_CUTOFF_HOUR = 19;
 
+export const INBOUND_WINDOW_START = '2026-11-10';
+
 export const NON_WORKING_WEEKDAYS = [0];
 
 export const DISCUSSION_NOTE_MIN = 10;
@@ -140,8 +142,8 @@ export const PLACED_UNDER_TITLE: Partial<Record<InboundStatus, string>> = {
 };
 
 export const PLACED_UNDER_SUBTITLE: Partial<Record<InboundStatus, string>> = {
-  'PI Shared': '§3.5 — who is working the PI; carried forward when it closes',
-  'Closed':    '§3.5 — captured on order won',
+  'PI Shared': 'Who is working the PI. Carried forward when it closes.',
+  'Closed':    'Who worked the lead, captured when the order is won.',
 };
 
 export const isEndConsumer = (clientType: string | undefined) => clientType === 'End Consumer';

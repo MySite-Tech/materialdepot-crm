@@ -63,6 +63,7 @@ export interface InboundLead {
   owner: string;
   ownerId?: number;
   leadCreatedAt?: string;
+  crmAddedOn?: string;
   qualificationTag?: string;
   presalesOwner?: string;
   leadSummary?: string;

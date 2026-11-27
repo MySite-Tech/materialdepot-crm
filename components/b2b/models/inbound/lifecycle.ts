@@ -1,4 +1,4 @@
-import { DEAL_ORDER_STATUSES, INBOUND_CLOSED_STATUSES, isOpenStatus } from '../../constants/inbound';
+import { DEAL_ORDER_STATUSES, INBOUND_CLOSED_STATUSES, INBOUND_WINDOW_START, isOpenStatus } from '../../constants/inbound';
 import { CallAttempt, FollowUpBucket, InboundStatus, OutreachReferral } from '../../types/inbound';
 import { istToday } from '../../utils/inbound';
 import { isCrmAddedLead } from './kylas';
@@ -59,6 +59,21 @@ export const withInbound = (l: LifecycleLead): boolean => isOpenStatus(l.stage) 
 
 export const awaitsFollowUp = (l: LifecycleLead): boolean =>
   withInbound(l) && !(l.stage === 'New' && !(l.callAttempts || []).length);
+
+interface ArrivalLead { leadCreatedAt?: string; crmAddedOn?: string }
+
+export const inboundArrivalDay = (l: ArrivalLead): string => {
+  const kylas = istDay(l.leadCreatedAt);
+  const crm = l.crmAddedOn || '';
+  return kylas > crm ? kylas : crm;
+};
+
+export const inInboundWindow = (l: ArrivalLead): boolean => inboundArrivalDay(l) >= INBOUND_WINDOW_START;
+
+export const requalifiedFrom = (l: ArrivalLead): string => {
+  const kylas = istDay(l.leadCreatedAt);
+  return kylas && l.crmAddedOn && kylas < l.crmAddedOn && kylas < INBOUND_WINDOW_START ? kylas : '';
+};
 
 export function withStatusStamps<T extends LifecycleLead>(before: LifecycleLead, after: T, now: string): T {
   if (after.stage === before.stage) return after;

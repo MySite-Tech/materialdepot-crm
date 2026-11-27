@@ -6,6 +6,7 @@ import {
   followUpBucket, daysUntil, nameIsJustThePhone, isCrmAddedLead,
   type InboundStatus, type Priority, type LeadType, type FieldOwner,
 } from '../models/inbound';
+import { Hint } from './info-tip';
 
 export const inputCls =
   'w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white focus:border-[#0F766E] disabled:bg-gray-50 disabled:text-gray-400';
@@ -92,23 +93,29 @@ export function ProvenanceChip({ owner }: { owner: FieldOwner }) {
   );
 }
 
+function SourceChip({ owner }: { owner?: FieldOwner }) {
+  return owner && owner !== 'crm' ? <ProvenanceChip owner={owner} /> : null;
+}
+
 export function SectionCard({
-  title, owner, subtitle, right, children, className = '',
+  title, owner, subtitle, info, right, children, className = '',
 }: {
   title: string;
   owner?: FieldOwner;
   subtitle?: string;
+  info?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={`bg-white rounded-lg border border-gray-200 ${className}`}>
-      <header className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 whitespace-nowrap">{title}</h3>
-          {owner && <ProvenanceChip owner={owner} />}
-          {subtitle && <span className="text-[10px] text-gray-400 truncate">{subtitle}</span>}
+      <header className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h3 className="text-[13px] font-semibold text-gray-900 whitespace-nowrap">{title}</h3>
+          <SourceChip owner={owner} />
+          {info && <Hint text={info} />}
+          {subtitle && <span className="text-[11px] text-gray-400 truncate">{subtitle}</span>}
         </div>
         {right}
       </header>
@@ -129,11 +136,11 @@ export function CollapsibleCard({
 }) {
   return (
     <details open={defaultOpen} className="group bg-white rounded-lg border border-gray-200">
-      <summary className="flex items-center justify-between gap-2 px-4 py-3.5 cursor-pointer list-none select-none">
-        <span className="flex items-center gap-2 min-w-0">
-          <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-600 whitespace-nowrap">{title}</h3>
-          {owner && <ProvenanceChip owner={owner} />}
-          {subtitle && <span className="text-[10px] text-gray-400 truncate">{subtitle}</span>}
+      <summary className="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer list-none select-none">
+        <span className="flex items-center gap-1.5 min-w-0">
+          <h3 className="text-[13px] font-semibold text-gray-900 whitespace-nowrap">{title}</h3>
+          <SourceChip owner={owner} />
+          {subtitle && <span className="text-[11px] text-gray-400 truncate">{subtitle}</span>}
         </span>
         <span className="flex items-center gap-2 min-w-0">
           {summary && <span className="text-[11px] text-gray-500 truncate group-open:hidden">{summary}</span>}
@@ -146,28 +153,30 @@ export function CollapsibleCard({
 }
 
 export function Field({
-  label, owner, hint, error, required, children, className = '',
+  label, owner, hint, info, error, required, children, className = '',
 }: {
   label: string;
   owner?: FieldOwner;
   hint?: string;
+  info?: string;
   error?: string;
   required?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <label className={`block ${className}`}>
+    <label className={`block min-w-0 ${className}`}>
       <span className="flex items-center gap-1.5 mb-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        <span className="text-[11.5px] font-medium text-gray-500">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </span>
-        {owner && <ProvenanceChip owner={owner} />}
+        <SourceChip owner={owner} />
+        {info && <Hint text={info} />}
       </span>
       {children}
-      {hint && !error && <span className="block text-[10px] text-gray-400 mt-1 leading-snug">{hint}</span>}
-      {error && <span className="block text-[10px] text-red-500 mt-1 leading-snug">{error}</span>}
+      {hint && !error && <span className="block text-[11px] text-gray-400 mt-1 leading-snug">{hint}</span>}
+      {error && <span className="block text-[11px] text-red-600 mt-1 leading-snug">{error}</span>}
     </label>
   );
 }

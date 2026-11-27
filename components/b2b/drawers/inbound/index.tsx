@@ -3,25 +3,25 @@
 import { InboundDrawerFooter } from './footer';
 import { InboundDrawerHeader } from './header';
 
-import { InboundCallsCard } from './cards/calls';
+import { InboundActivity } from './cards/calls';
 import { InboundClientCard } from './cards/client';
-import { InboundNotesCard } from './cards/notes';
-import { InboundOwnerCard } from './cards/owner';
+import { InboundPeople } from './cards/owner';
 import type { TeamMember } from '@/lib/b2b/team/types';
 import { InboundPlacedUnderCard } from './cards/placed-under';
 import { Rep } from '../../models/outreach/intake';
 import { InboundAddedCard, InboundPresalesCard } from './cards/presales';
 import { withRequirementHistory } from '../../models/requirement';
-import { InboundRequirementCard } from './cards/requirement';
 import { GateField, InboundStatusCard } from './cards/status';
 import { InboundOutreachCard } from './cards/outreach';
 import { useCallLog } from './hooks/use-call-log';
 import { useInboundDetail } from './hooks/use-inbound-detail';
 
-import { OutreachReferral, PlacedUnder, clientSpocs, isCrmAddedLead, closureReadiness, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, statusGateErrors, withStatusStamps } from '../../models/inbound';
+import { OutreachReferral, PlacedUnder, clientSpocs, sentToOutreach, isCrmAddedLead, closureReadiness, enrichmentGaps, hasConnected, istToday, kylasClientTypeIsAmbiguous, statusGateErrors, withStatusStamps } from '../../models/inbound';
 import { InboundLead } from '../../models/mock-data';
 import { Spinner } from '../../ui/inbound-chips';
-import { SaveState } from '../../types/inbound-drawer';
+import { DrawerTab, SaveState } from '../../types/inbound-drawer';
+import { dealIsOpen } from '../../models/client';
+import { TabDef } from './header';
 import { EnqLookup, inboundPhones, lookupEnqId, saveInboundLead } from '@/lib/b2b';
 import { hasTeamEdits } from '@/lib/b2b/mappers/inbound';
 import { OrderCreditLine } from '../../order-credit/ui/credit-line';
@@ -59,6 +59,7 @@ export default function InboundDrawer({
   const [draft, setDraft] = useState<InboundLead>(() => withContactDefaults(lead));
   const [save, setSave] = useState<SaveState>({ saving: false });
   const [showGates, setShowGates] = useState(false);
+  const [tab, setTab] = useState<DrawerTab>('activity');
 
   const set = <K extends keyof InboundLead>(k: K, v: InboundLead[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
@@ -153,7 +154,7 @@ export default function InboundDrawer({
 
   const handleSave = async (extra?: Partial<InboundLead>) => {
     if (save.saving) return;
-    if (gateErrors.length) { setShowGates(true); return; }
+    if (gateErrors.length) { setShowGates(true); setTab('deal'); return; }
     setSave({ saving: true });
 
     const at = new Date().toISOString();
@@ -191,91 +192,113 @@ export default function InboundDrawer({
     [draft, detail.outreach.data, detail.deals.data]);
   const presalesTypeUnmapped = kylasClientTypeIsAmbiguous(draft.presalesClientType);
 
+  const openDeals = detail.deals.data.filter((d) => dealIsOpen(d.status)).length;
+  const tabs: TabDef[] = [
+    { key: 'activity', label: 'Activity', badge: draft.callAttempts?.length ? String(draft.callAttempts.length) : undefined },
+    { key: 'client', label: 'Client', badge: gaps.length ? `${gaps.length} missing` : undefined, warn: true },
+    { key: 'deal', label: 'Deal', badge: detail.deals.loading ? undefined : openDeals ? `${openDeals} open` : undefined },
+    { key: 'handoff', label: 'Hand-offs', badge: sentToOutreach(draft) ? 'sent' : undefined },
+    { key: 'source', label: crmOnly ? 'Added in CRM' : 'Presales' },
+  ];
+
   return (
     <div className="fixed inset-0 z-[1200] flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={requestClose} />
-      <div className="relative w-full max-w-[780px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
-        <InboundDrawerHeader draft={draft} gaps={gaps} onClose={requestClose} today={today} />
+      <div className="relative w-full max-w-[760px] bg-[#F7F7F8] h-full overflow-y-auto shadow-2xl flex flex-col">
+        <InboundDrawerHeader
+          draft={draft}
+          gaps={gaps}
+          today={today}
+          tabs={tabs}
+          tab={tab}
+          onTab={setTab}
+          onClose={requestClose}
+          people={(
+            <InboundPeople
+              draft={draft}
+              spocs={spocs}
+              spocsLoading={detail.outreach.loading || detail.deals.loading}
+              members={members}
+              canReassign={canReassign}
+              onReassigned={async (to) => {
+                const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
+                saved.current = { ...saved.current, ...owned };
+                clean.current = { ...clean.current, ...owned };
+                setDraft((d) => ({ ...d, ...owned }));
+                onSaved(saved.current);
+                return undefined;
+              }}
+            />
+          )}
+        />
 
-        <div className="p-5 flex flex-col gap-4">
-          <InboundOwnerCard
-            draft={draft}
-            spocs={spocs}
-            spocsLoading={detail.outreach.loading || detail.deals.loading}
-            members={members}
-            canReassign={canReassign}
-            onReassigned={async (to) => {
-              const owned = { owner: to.name, ownerId: to.kylasUserId ?? undefined };
-              saved.current = { ...saved.current, ...owned };
-              clean.current = { ...clean.current, ...owned };
-              setDraft((d) => ({ ...d, ...owned }));
-              onSaved(saved.current);
-              return undefined;
-            }}
-          />
-
-          <InboundCallsCard
-            draft={draft}
-            calls={calls}
-            readiness={readiness}
-            onClose={(reason) => { setDraft((d) => ({ ...d, stage: 'Lost', lostReason: reason })); setShowGates(false); }}
-          />
-
-          <InboundClientCard draft={draft} presalesTypeUnmapped={presalesTypeUnmapped} set={set} />
-
-          <InboundRequirementCard draft={draft} set={set} />
-
-          <InboundStatusCard
-            checkEnq={checkEnq}
-            draft={draft}
-            enq={enq}
-            enqChecking={enqChecking}
-            gateFor={gateFor}
-            set={set}
-            setDraft={setDraft}
-            setShowGates={setShowGates}
-            deals={detail.deals}
-            readiness={readiness}
-            connected={connected}
-          />
-
-          {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
-            <InboundPlacedUnderCard draft={draft} people={people} setPlaced={setPlaced} />
+        <div className="p-4 flex flex-col gap-3">
+          {tab === 'activity' && (
+            <InboundActivity
+              draft={draft}
+              calls={calls}
+              readiness={readiness}
+              onClose={(reason) => { setDraft((d) => ({ ...d, stage: 'Lost', lostReason: reason })); setShowGates(false); }}
+            />
           )}
 
-          {draft.stage === 'Closed' && !!draft.enqId && <OrderCreditLine enquiryId={draft.enqId} rule={draft.owner} />}
+          {tab === 'client' && <InboundClientCard draft={draft} presalesTypeUnmapped={presalesTypeUnmapped} set={set} />}
 
-          <InboundOutreachCard
-            draft={draft}
-            actorName={actorName}
-            today={today}
-            saving={save.saving}
-            onSend={(referral: OutreachReferral) => handleSave({ outreachReferral: referral })}
-          />
+          {tab === 'deal' && (
+            <>
+              <InboundStatusCard
+                checkEnq={checkEnq}
+                draft={draft}
+                enq={enq}
+                enqChecking={enqChecking}
+                gateFor={gateFor}
+                set={set}
+                setDraft={setDraft}
+                setShowGates={setShowGates}
+                deals={detail.deals}
+                readiness={readiness}
+                connected={connected}
+              />
+              {(draft.stage === 'PI Shared' || draft.stage === 'Closed') && (
+                <InboundPlacedUnderCard draft={draft} people={people} setPlaced={setPlaced} />
+              )}
+              {draft.stage === 'Closed' && !!draft.enqId && <OrderCreditLine enquiryId={draft.enqId} rule={draft.owner} />}
+            </>
+          )}
 
-          <RedirectToEc
-            firm={draft.companyName || draft.company}
-            contactName={draft.primaryContactName || draft.contactName}
-            phones={uniquePhones([draft.primaryContactPhone, draft.phone, ...(draft.additionalContacts || []).map((c) => c.phone)])}
-            sourceTeam="inbound"
-            leadRef={draft.id}
-            enquiries={openEnquiries(detail.deals.data)}
-            enquiriesState={detail.deals.loading ? 'loading' : detail.deals.failed ? 'failed' : 'ready'}
-          />
+          {tab === 'handoff' && (
+            <>
+              <InboundOutreachCard
+                draft={draft}
+                actorName={actorName}
+                today={today}
+                saving={save.saving}
+                onSend={(referral: OutreachReferral) => handleSave({ outreachReferral: referral })}
+              />
+              <RedirectToEc
+                firm={draft.companyName || draft.company}
+                contactName={draft.primaryContactName || draft.contactName}
+                phones={uniquePhones([draft.primaryContactPhone, draft.phone, ...(draft.additionalContacts || []).map((c) => c.phone)])}
+                sourceTeam="inbound"
+                leadRef={draft.id}
+                enquiries={openEnquiries(detail.deals.data)}
+                enquiriesState={detail.deals.loading ? 'loading' : detail.deals.failed ? 'failed' : 'ready'}
+              />
+              <ReferralsCard kind="inbound" referrerId={draft.id} referrerName={draft.companyName || draft.company} by={actorName} />
+            </>
+          )}
 
-          <ReferralsCard kind="inbound" referrerId={draft.id} referrerName={draft.companyName || draft.company} by={actorName} />
-
-          <InboundNotesCard draft={draft} calls={calls} />
-
-          {crmOnly ? <InboundAddedCard draft={draft} /> : <InboundPresalesCard
-            detailFailed={detail.detailFailed}
-            detailLoading={detail.detailLoading}
-            draft={draft}
-            presalesTypeUnmapped={presalesTypeUnmapped}
-            calls={detail.presalesCalls}
-            notes={detail.presalesNotes}
-            openCallSummary={openCallSummary}
-          />}
+          {tab === 'source' && (crmOnly ? <InboundAddedCard draft={draft} /> : (
+            <InboundPresalesCard
+              detailFailed={detail.detailFailed}
+              detailLoading={detail.detailLoading}
+              draft={draft}
+              presalesTypeUnmapped={presalesTypeUnmapped}
+              calls={detail.presalesCalls}
+              notes={detail.presalesNotes}
+              openCallSummary={openCallSummary}
+            />
+          ))}
         </div>
 
         <InboundDrawerFooter

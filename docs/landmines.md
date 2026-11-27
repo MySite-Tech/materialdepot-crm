@@ -120,6 +120,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A person who left B2B still earned Direct, because Direct was the booking branch and Django kept booking them on it
 - Django's order read starts in April 2026, so any lookback before then reads as "no order"
 - One client held two Outreach leads, so the converted one sat beside a stale Follow up
+- An explanation in a native `title` shows only after the pointer rests, and never on a click
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1729,3 +1730,17 @@ lead" now refuses a mobile (main, alternate or extra contact) already on an Outr
 lead that is not Lost, and names that lead, its BM and stage (`leadOnNumber`,
 `docs/b2b/outreach.md` §One client, one lead). It does not merge the rows that
 already exist.
+
+### An explanation in a native `title` shows only after the pointer rests, and never on a click (2026-11-28)
+
+The user, on the Overview's Clients sub-tab: the "i" beside each row showed its
+meaning only after hovering still for some seconds, and clicking it did nothing. The
+"i" was a `<span title=…>`. The browser decides the delay and gives a click and a
+touch screen nothing. The Clients table also sits in an `overflow-x-auto` box, so a
+plain absolutely positioned popover there would have been clipped. `Hint`
+(`components/b2b/ui/info-tip.tsx`) now opens on hover or focus at once, a click pins
+it until a click elsewhere or Esc, and it renders in a portal at a fixed position so
+no scroll box clips it. `Field` and `SectionCard` take `info` to use it. **Put an
+explanation people are meant to read in `Hint`, not in `title`.** A `title` is still
+fine for a truncated value's full text.
+

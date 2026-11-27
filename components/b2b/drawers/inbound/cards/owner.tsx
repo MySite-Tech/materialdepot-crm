@@ -5,18 +5,18 @@ import { reassignInboundLead } from '@/lib/b2b/team';
 import type { TeamMember } from '@/lib/b2b/team/types';
 import { kylasOwnerNote } from '@/lib/b2b/team/utils';
 import { InboundLead } from '../../../models/mock-data';
-import { SectionCard } from '../../../ui/inbound-chips';
 import { ClientSpocs } from '../../../models/inbound';
 import { inputCls } from '../../../constants/ui';
+import { Hint } from '../../../ui/info-tip';
 
 const ROLES: { key: keyof ClientSpocs; label: string }[] = [
-  { key: 'inbound', label: 'Inbound SPoC' },
-  { key: 'outreach', label: 'Outreach SPoC' },
-  { key: 'kam', label: 'KAM SPoC' },
-  { key: 'ec', label: 'EC SPoC' },
+  { key: 'inbound', label: 'Inbound' },
+  { key: 'outreach', label: 'Outreach' },
+  { key: 'kam', label: 'KAM' },
+  { key: 'ec', label: 'EC' },
 ];
 
-export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReassign, onReassigned }: {
+export function InboundPeople({ draft, spocs, spocsLoading, members, canReassign, onReassigned }: {
   draft: InboundLead;
   spocs: ClientSpocs;
   spocsLoading: boolean;
@@ -24,12 +24,15 @@ export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReass
   canReassign: boolean;
   onReassigned: (to: TeamMember) => Promise<string | undefined>;
 }) {
+  const [open, setOpen] = useState(false);
   const [toPhone, setToPhone] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const options = members.filter((m) => m.active && m.kylasUserId !== draft.ownerId);
+  const loadingFor = (k: keyof ClientSpocs) => spocsLoading && k !== 'inbound';
+  const info = ['One SPoC per team, across the whole journey.', ...ROLES.map(({ key, label }) => `${label}: ${loadingFor(key) ? 'loading' : spocs[key].detail}`)].join('\n');
 
   const submit = () => {
     const to = options.find((m) => m.phone === toPhone);
@@ -38,49 +41,43 @@ export function InboundOwnerCard({ draft, spocs, spocsLoading, members, canReass
     setError(null);
     reassignInboundLead(draft.id, to.phone, reason)
       .then(async ({ kylas }) => (await onReassigned(to)) || kylasOwnerNote(kylas))
-      .then((failed) => { setToPhone(''); setReason(''); if (failed) setError(failed); })
+      .then((failed) => { setToPhone(''); setReason(''); setOpen(false); if (failed) setError(failed); })
       .catch((e) => setError(e instanceof Error ? e.message : 'Reassign failed'))
       .finally(() => setSaving(false));
   };
 
   return (
-    <SectionCard title="People on this client" subtitle="One SPoC per team, across the whole journey">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-[12px]">
         {ROLES.map(({ key, label }) => {
-          const s = spocs[key];
+          const name = loadingFor(key) ? '…' : spocs[key].name;
           return (
-            <div key={key} className="rounded-md border border-gray-100 bg-gray-50/60 px-2.5 py-2 min-w-0">
-              <div className="text-[9.5px] font-bold uppercase tracking-wider text-gray-400">{label}</div>
-              <div className={`text-[12.5px] font-semibold truncate ${s.name ? 'text-gray-800' : 'text-gray-400'}`}>
-                {spocsLoading && key !== 'inbound' ? '…' : s.name || '—'}
-              </div>
-              <div className="text-[10px] text-gray-400 leading-snug">{spocsLoading && key !== 'inbound' ? 'loading' : s.detail}</div>
-            </div>
+            <span key={key} className="whitespace-nowrap">
+              <span className="text-gray-400">{label} </span>
+              <span className={name ? 'font-medium text-gray-800' : 'text-gray-300'}>{name || '—'}</span>
+            </span>
           );
         })}
+        <Hint text={info} />
+        {canReassign && options.length > 0 && (
+          <button onClick={() => setOpen((o) => !o)} className="text-[12px] font-medium text-[#0F766E] hover:underline">
+            {open ? 'Cancel' : 'Reassign'}
+          </button>
+        )}
       </div>
-      {canReassign && options.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+      {open && (
+        <div className="flex flex-wrap items-center gap-2">
           <select value={toPhone} onChange={(e) => setToPhone(e.target.value)} className={inputCls + ' max-w-[200px]'}>
             <option value="">Hand over to…</option>
             {options.map((m) => <option key={m.phone} value={m.phone}>{m.name}</option>)}
           </select>
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Why (e.g. Hardi on leave)"
-            className={inputCls + ' flex-1 min-w-[160px]'}
-          />
-          <button
-            disabled={!toPhone || saving}
-            onClick={submit}
-            className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#1A1A1A] text-white disabled:opacity-40"
-          >
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (e.g. on leave)" className={inputCls + ' flex-1 min-w-[160px]'} />
+          <button disabled={!toPhone || saving} onClick={submit} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#1A1A1A] text-white disabled:opacity-40">
             {saving ? 'Reassigning…' : 'Reassign'}
           </button>
         </div>
       )}
-      {error && <p className="mt-2 text-[12px] text-red-600">{error}</p>}
-    </SectionCard>
+      {error && <p className="text-[12px] text-red-600">{error}</p>}
+    </div>
   );
 }

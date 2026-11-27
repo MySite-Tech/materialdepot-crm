@@ -3,7 +3,8 @@
 import { fmtL } from '../../../../models/mock-data';
 import type { RevenueOrder } from '@/lib/b2b/revenue';
 import { useEffect, useMemo, useState } from 'react';
-import { Hint, Segmented } from '../../ui';
+import { Segmented } from '../../ui';
+import { Hint } from '../../../../ui/info-tip';
 import { PAGE_SIZE } from '../../sections/revenue/constants';
 import { DIM_META, DROP, GAIN } from '../constants';
 import type { ChangeRow, ChangeSort, DimKey } from '../types';
