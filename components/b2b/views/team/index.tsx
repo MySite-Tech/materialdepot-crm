@@ -24,6 +24,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
   const [asCover, setAsCover] = useState(false);
   const [coverFrom, setCoverFrom] = useState(istDay());
   const [coverTo, setCoverTo] = useState('');
+  const [past, setPast] = useState<{ phone: string; team: B2BTeam; from: string; to: string } | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'warn' | 'error'; text: string } | null>(null);
 
@@ -88,6 +89,19 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       })
       .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Could not change the number' }))
       .finally(() => setBusyKey(null));
+  };
+
+  const pastCandidates = useMemo(() => {
+    if (!past) return [];
+    const onTeam = new Set(team.members.filter((m) => m.team === past.team).map((m) => m.phone));
+    return (users ?? []).filter((u) => normalisePhone(u.phone).length === 10 && !onTeam.has(normalisePhone(u.phone))).sort((a, b) => a.name.localeCompare(b.name));
+  }, [past, users, team.members]);
+
+  const addPast = () => {
+    const u = past && pastCandidates.find((c) => normalisePhone(c.phone) === past.phone);
+    if (!past || !u) return;
+    save({ phone: past.phone, name: u.name, team: past.team, inRotation: false, active: false, joinedOn: past.from || null, leftOn: past.to });
+    setPast(null);
   };
 
   const add = () => {
@@ -184,6 +198,41 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
           Add
         </button>
         {usersError && <p className="basis-full text-[12px] text-red-600">{usersError}</p>}
+        {team.tenureReady && !past && (
+          <button onClick={() => setPast({ phone: '', team: 'kam', from: '', to: istDay() })} className="basis-full text-left text-[12px] text-gray-500 hover:text-gray-800 underline">
+            Record someone who has left B2B, so their past orders count under the team they were on
+          </button>
+        )}
+        {past && (
+          <div className="basis-full flex flex-wrap items-end gap-3 border-t border-gray-100 pt-3">
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500 min-w-[220px] flex-1">
+              Person (any CRM user)
+              <select value={past.phone} onChange={(e) => setPast({ ...past, phone: e.target.value })}
+                className="border border-gray-200 rounded px-2 py-1.5 text-[13px] text-gray-800">
+                <option value="">Pick a person</option>
+                {pastCandidates.map((u) => <option key={u.id} value={normalisePhone(u.phone)}>{u.name} · {u.role}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              Was on
+              <select value={past.team} onChange={(e) => setPast({ ...past, team: e.target.value as B2BTeam, phone: '' })}
+                className="border border-gray-200 rounded px-2 py-1.5 text-[13px] text-gray-800">
+                {B2B_TEAMS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              First day (blank if always)
+              <input type="date" value={past.from} onChange={(e) => setPast({ ...past, from: e.target.value })} className="border border-gray-200 rounded px-2 py-1 text-[13px] text-gray-800" />
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              Last day
+              <input type="date" value={past.to} min={past.from || undefined} onChange={(e) => setPast({ ...past, to: e.target.value })} className="border border-gray-200 rounded px-2 py-1 text-[13px] text-gray-800" />
+            </label>
+            <button disabled={!past.phone || !past.to || (!!past.from && past.from > past.to) || !!busyKey} onClick={addPast}
+              className="px-4 py-1.5 text-[13px] font-semibold rounded bg-[#1A1A1A] text-white disabled:opacity-40">Record</button>
+            <button onClick={() => setPast(null)} className="text-[12px] text-gray-500">Cancel</button>
+          </div>
+        )}
       </section>
 
       {gaps && !team.tableMissing && (
@@ -232,6 +281,7 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                         hasPrimary={withPrimary.has(m.phone)}
                         coverReady={team.coverReady}
                         pauseReady={team.pauseReady}
+                        tenureReady={team.tenureReady}
                         busy={busyKey === memberKey(m)}
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}

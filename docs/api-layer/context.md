@@ -225,7 +225,8 @@ cover, so a round-robin toggle never wipes cover dates. Whether the backend has 
 is read off the GET (`coverReady`: the rows carry `is_primary`). A backend before 0031
 would silently drop them, so `saveMember` refuses cover fields with that reason
 instead of reporting a save that did not happen. `paused_from`/`paused_to` (0032)
-follow the same rule, read off the GET as `pauseReady`.
+follow the same rule, read off the GET as `pauseReady`, and so do `joined_on`/`left_on`
+(0034, `tenureReady`): each is sent only when the save names it.
 
 **A team save reads Kylas's user list only when it links a Kylas user** (a new row, or
 a picked `kylasUserId`). Until 2026-11-26 every save did, which is two pages at about

@@ -331,6 +331,15 @@ Inbound that week). Every person has metrics on all three teams.
   rotation list (Inbound, Outreach, KAM) read, so the person rejoins by themselves the
   day after. The checkbox stays the open-ended pause. A single-person assign can still
   pick a paused person, as before. Nothing they already hold moves.
+- **Team dates (2026-11-27, migration 0034).** The user: when someone moves between
+  B2B and the stores, revenue must count under the role they held when the order was
+  placed, never the one they hold now. Each row has `joined_on`/`left_on` ("set team
+  dates" under the name). Remove asks for the last day (default today) and saves it with
+  `active: false`; Restore clears it. "Record someone who has left B2B" adds an inactive
+  dated row for a person who was never on this list (the roster-only KAMs who predate
+  it), picked from every CRM user, whatever their role now. These dates only date the
+  membership for revenue (`overview.md` §Four revenue channels); covers and pauses still
+  decide who gets new work. Until 0034 deploys the controls stay hidden.
 - **Landing tab:** the team they are covering today, else the primary
   (`viewer.member`).
 - **Adding a person:** their first row becomes primary; "For: A cover, for set days"

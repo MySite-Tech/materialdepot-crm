@@ -29,9 +29,16 @@ export interface Holder {
 
 export type NumberBook = Map<string, Holder[]>;
 
+export interface RepSpan {
+  team: B2BTeam;
+  from: string | null;
+  to: string | null;
+}
+
 export interface B2BRepEntry {
   name: string;
   teams: B2BTeam[];
+  spans?: RepSpan[];
 }
 
 export type RepTeams = Map<string, B2BRepEntry>;

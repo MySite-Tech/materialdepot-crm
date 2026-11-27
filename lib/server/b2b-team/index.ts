@@ -81,12 +81,13 @@ function rotationSince(now = Date.now()): string {
 export async function saveMember(input: MemberInput, byName: string): Promise<SavedMember> {
   const phone = normalisePhone(input.phone);
   if (phone.length !== 10) throw new InputError('A team member needs a 10-digit phone number');
-  const { members, coverReady, pauseReady } = await readMembers();
+  const { members, coverReady, pauseReady, tenureReady } = await readMembers();
   const stored = members.find((m) => m.phone === phone && m.team === input.team);
   const name = String(input.name ?? '').trim() || stored?.name || '';
   if (!name) throw new InputError('A team member needs a name');
   const cover = coverFor(input, stored, members.filter((m) => m.phone === phone && m.team !== input.team), coverReady);
   const pause = pauseFor(input, pauseReady);
+  const tenure = tenureFor(input, stored, tenureReady);
 
   let kylasUserId = input.kylasUserId !== undefined ? input.kylasUserId : stored?.kylasUserId ?? null;
   let kylasName: string | null = input.kylasUserId === undefined ? stored?.kylasName ?? null : null;
@@ -117,9 +118,22 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     isAdmin: input.isAdmin,
     cover,
     pause,
+    tenure,
     updatedBy: byName,
   });
   return { member, warning };
+}
+
+function tenureFor(input: MemberInput, stored: TeamMember | undefined, ready: boolean): Partial<Pick<TeamMember, 'joinedOn' | 'leftOn'>> | undefined {
+  if (input.joinedOn === undefined && input.leftOn === undefined) return undefined;
+  if (!ready) throw new InputError('Dating a membership needs b2b-backend migration 0034 deployed first');
+  const out: Partial<Pick<TeamMember, 'joinedOn' | 'leftOn'>> = {};
+  if (input.joinedOn !== undefined) out.joinedOn = input.joinedOn ?? null;
+  if (input.leftOn !== undefined) out.leftOn = input.leftOn ?? null;
+  const joined = out.joinedOn !== undefined ? out.joinedOn : stored?.joinedOn ?? null;
+  const left = out.leftOn !== undefined ? out.leftOn : stored?.leftOn ?? null;
+  if (joined && left && left < joined) throw new InputError('The last day is before the first day');
+  return out;
 }
 
 function pauseFor(input: MemberInput, ready: boolean): Pick<TeamMember, 'pausedFrom' | 'pausedTo'> | undefined {

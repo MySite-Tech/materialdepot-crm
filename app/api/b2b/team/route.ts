@@ -56,7 +56,9 @@ export async function PUT(request: NextRequest) {
     return bad("'kylasUserId' must be an integer, null, or absent");
   }
   const day = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
-  if (![body.from, body.to, body.pausedFrom, body.pausedTo].every(day)) return bad("'from', 'to', 'pausedFrom' and 'pausedTo' must be YYYY-MM-DD, null, or absent");
+  if (![body.from, body.to, body.pausedFrom, body.pausedTo, body.joinedOn, body.leftOn].every(day)) {
+    return bad("'from', 'to', 'pausedFrom', 'pausedTo', 'joinedOn' and 'leftOn' must be YYYY-MM-DD, null, or absent");
+  }
 
   try {
     return Response.json(await saveMember({
@@ -71,6 +73,8 @@ export async function PUT(request: NextRequest) {
       to: body.to,
       pausedFrom: body.pausedFrom,
       pausedTo: body.pausedTo,
+      joinedOn: body.joinedOn,
+      leftOn: body.leftOn,
       kylasUserId: body.kylasUserId,
     }, c.name));
   } catch (err) {

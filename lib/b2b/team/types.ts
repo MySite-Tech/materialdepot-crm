@@ -14,6 +14,8 @@ export interface TeamMember {
   to: string | null;
   pausedFrom: string | null;
   pausedTo: string | null;
+  joinedOn: string | null;
+  leftOn: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -23,6 +25,7 @@ export interface TeamState {
   tableMissing: boolean;
   coverReady: boolean;
   pauseReady: boolean;
+  tenureReady: boolean;
 }
 
 export interface KylasUser {
@@ -45,6 +48,8 @@ export interface MemberInput {
   to?: string | null;
   pausedFrom?: string | null;
   pausedTo?: string | null;
+  joinedOn?: string | null;
+  leftOn?: string | null;
 }
 
 export interface SavedMember {

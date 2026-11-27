@@ -137,6 +137,16 @@ where it was booked decides the channel (`lib/b2b/revenue/utils/classify.ts`):
   date gate lives in `asOfOrder` (`classify.ts`) and was checked on hand-built cases
   through the compiled classifier. **After it deploys,** every month's total and
   order count must be unchanged and EC Direct must read above zero.
+- **A rep's team is the one they held on the order's day (2026-11-27).** Team rows carry
+  `joined_on`/`left_on` (b2b-backend 0034, set on the Team tab), and `repOf(name, reps,
+  day)` returns only the teams whose dates cover the order's IST day (`orderPlacedAt`,
+  else the cart date). A person with any dated row is judged by their dates alone: their
+  undated inactive rows, the static roster and `branch === 'B2B'` no longer make them a
+  B2B rep. A person with no dates keeps the old rule (active rows, roster, branch), so
+  nothing changes until they are dated. An order by someone on B2B that day reads
+  `store: B2B`, because the row's `branch` is the rep's home branch **today**: a KAM who
+  became a store manager had every past order filed under the new store
+  (`docs/landmines.md`). After their last day their orders are store orders like anyone's.
 - **The first match decides the type:** referred, then a B2B rep, then a number B2B
   holds, then a firm with no KAM, then the B2B branch.
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is

@@ -150,6 +150,12 @@ a member gets no rotation work (`b2b/sales-tab-redesign.md` §Pausing for set da
 works. Run up, down and up on a `TEMPLATE crm_real` copy and over HTTP there: a round
 robin toggle kept the dates, a half or reversed window was refused with 400.
 
+**Migration `0034_b2b_team_tenure`** (b2b-backend branch `b2b-team-tenure`, 2026-11-27)
+adds `joined_on`/`left_on` to `b2b_team_member` (CHECK `left_on >= joined_on`), read and
+written by `GET/PUT /team`. **Deploy it first.** Without it the Team tab hides the date
+controls and revenue reads every person as undated, the old rule. Run on a throwaway
+Postgres: idempotent, dates on a primary row accepted, a reversed pair refused.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-106 entries. They live in one file because they cross-reference each other —
+107 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -116,6 +116,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Client Database's Status filter offered bands that no longer existed, and picking one emptied the list
 - A firm's new SPoC read "—" on the Client Database list until the page was reloaded
 - The Report Card read "the stats call failed" for most of a big team while every call returned 200
+- A person's role change rewrote their past revenue, because the rep test read today's team and today's branch
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1652,4 +1653,22 @@ production confirmed equals the per-person sum. **A bulk endpoint's silent cap r
 as missing data, so find the cap on production before choosing a batch size, and
 never label a missing key in a successful answer as a failed call** (the 4 KB
 request-line entry above is the same family).
+
+### A person's role change rewrote their past revenue, because the rep test read today's team and today's branch (2026-11-27)
+
+The user: Manikanta was a Hyderabad KAM and became the Indiranagar store manager when
+that store opened on 27 Nov, and his B2B sales from April on now sat under Indiranagar,
+a store that did not exist then. The live report confirmed it: every order he placed
+since April carried `store: Indiranagar`. An order row's `branch` is the rep's **current**
+Django home branch, and `classifyOrder` copied it into `store`. The rep test had the same
+flaw: `buildRepTeams` dropped inactive team rows and added the static roster with no
+dates, so a person counted as B2B for every order or none, whatever they were on the
+order's date. The same check found two more: a rep who left on 14 Nov kept counting as
+B2B for any order after, and a rep who joined Inbound mid-year had their earlier store
+orders counted as B2B. Now each team row can carry `joined_on`/`left_on` (b2b-backend
+0034), the rep's teams are read **as of the order's IST day** (`repOf(name, reps, day)`),
+a dated person is never a B2B rep by `branch === 'B2B'` alone, and an order by someone on
+B2B that day reads `store: B2B`. People with no dates behave exactly as before, so nothing
+moves until a manager dates them. **Any attribute of a person that can change (team,
+branch, role) must be read as of the event's date, never as of today.**
 
