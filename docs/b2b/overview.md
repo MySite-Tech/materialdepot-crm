@@ -335,6 +335,16 @@ revenue filled in when the lookups landed. A Refresh mid-lookup drops the older 
 result (`run` ref). The lasting fix is fewer misses: those orders' Enquiry IDs should
 match a ticket on the firm's numbers.
 
+On production after that change, a warm load painted at about 8 s, all of it waiting on
+`/api/b2b/rows` then `b2b-bulk`, and the revenue headline, whose own read answers in
+under half a second from the server cache, only started then because it rendered
+behind the same gate. So the revenue section and the client funnel now render at once,
+outside the `base` gate, in a tree whose shape never changes (so they never remount and
+fetch twice). The target, the pace figures and the rest of the page fill in when the B2B
+reads land; until then the target reads "—". Checked on the sandbox with rows and
+`b2b-bulk` delayed 6 s each: the headline showed at 4 s, the target at 14 s, and the
+revenue read ran once.
+
 **Still open:** sharing one report across managers would make a second
 manager's load instant. It needs proof that Django's `/crm/leads/` answers the
 same rows for callers with the same role and branches. Until then the key
