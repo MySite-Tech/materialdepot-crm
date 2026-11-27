@@ -27,24 +27,11 @@ export function OverviewSummary({ team, onNavigate, onAnalyse, head }: {
     [o.base, team.members, teamLive],
   );
 
-  if (!o.base) {
-    return (
-      <>
-        {head(null)}
-        <div className="text-sm text-gray-400">
-          {o.refreshing ? 'Loading overview…' : (
-            <>The overview could not be loaded. <button onClick={o.reload} className="text-[#0F766E] font-semibold cursor-pointer">Retry</button></>
-          )}
-        </div>
-      </>
-    );
-  }
-
   const { base } = o;
 
   return (
     <>
-      {head(
+      {head(base && (
         <div className="flex items-center gap-3">
           {o.updatedAt && (
             <span className="text-[11px] text-gray-400 hidden sm:inline">
@@ -58,28 +45,38 @@ export function OverviewSummary({ team, onNavigate, onAnalyse, head }: {
           >
             {o.refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
-        </div>,
-      )}
+        </div>
+      ))}
 
-      {!!base.failed.length && (
+      {!!base?.failed.length && (
         <Notice title="Partly loaded.">{base.failed.join(', ')} could not be read, so the figures below leave {base.failed.length === 1 ? 'it' : 'them'} out. Refresh to retry.</Notice>
       )}
-      {!base.targetsOk && (
+      {base && !base.targetsOk && (
         <Notice title="Targets could not be read.">The target shown is the built-in default, not your team&rsquo;s.</Notice>
       )}
 
       <RevenueSection target={monthlyTarget} refreshKey={refreshKey} onAnalyse={onAnalyse} />
       <ClientFunnel refreshKey={refreshKey} />
 
-      <JourneySection k={base.kam} onNavigate={onNavigate} />
-      <AccountsSection
-        clients={base.dashboard.clients}
-        empty={base.dashboard.clientMasterEmpty}
-        k={base.kam}
-        health={base.health}
-        onNavigate={onNavigate}
-      />
-      <KamDesk k={base.kam} unresolved={base.unresolvedOrders} onNavigate={onNavigate} />
+      {base ? (
+        <>
+          <JourneySection k={base.kam} onNavigate={onNavigate} />
+          <AccountsSection
+            clients={base.dashboard.clients}
+            empty={base.dashboard.clientMasterEmpty}
+            k={base.kam}
+            health={base.health}
+            onNavigate={onNavigate}
+          />
+          <KamDesk k={base.kam} unresolved={base.unresolvedOrders} onNavigate={onNavigate} />
+        </>
+      ) : (
+        <div className="text-sm text-gray-400">
+          {o.refreshing ? 'Loading the pipeline, accounts and KAM desk…' : (
+            <>The pipeline, accounts and KAM desk could not be loaded. <button onClick={o.reload} className="text-[#0F766E] font-semibold cursor-pointer">Retry</button></>
+          )}
+        </div>
+      )}
     </>
   );
 }

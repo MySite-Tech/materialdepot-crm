@@ -1634,7 +1634,8 @@ correct, but `readBase` awaited it before rendering anything. Now the page paint
 the bulk match and runs the fallback after (`components/b2b/views/overview/hooks/use-overview-data.ts`).
 **A capped per-row fallback is allowed by the request budget, but never put it in front
 of first paint:** render what the bulk read answered, mark the rest as still checking,
-and fill it in.
+and fill it in. The same applies to a fast section rendered behind a slow one's gate: the
+revenue headline waited 8 s for reads it does not use until it was moved outside the gate.
 
 ### The Report Card read "the stats call failed" for most of a big team while every call returned 200 (2026-11-27)
 
