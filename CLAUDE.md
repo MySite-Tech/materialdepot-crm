@@ -684,6 +684,41 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
+**START HERE for B2B (2026-11-27, latest): CRM PR #104 with b2b-backend PR #45
+(migrations 0034–0036), both merged on Dhruv's ask.** Start new work from `origin/main`.
+Five changes; read the named doc section before touching any of them:
+- **Reminders** are horizontal tabs (Due now, Today, Missed, Coming up) with a Calls &
+  meetings / Carts & PIs switch from each record's stage (`docs/b2b/reminders.md`).
+- **Leads** has two sections, Inbound and Outreach / EC B2B referrals, a Created column,
+  and every filter in memory so the figures match the list (`docs/b2b/leads.md`).
+- **Revenue follows the team a rep held on the order's day.** Team rows carry
+  `joined_on`/`left_on`; an order by someone on B2B that day reads `store: B2B`, because
+  Django's row branch is the rep's branch today (a KAM who became a store manager had all
+  his B2B orders under the new store). Undated people keep the old rule, so **figures move
+  only once a manager dates people on the Team tab**: set team dates, Remove asks for the
+  last day, Record someone who has left (`docs/b2b/overview.md` §Four revenue channels).
+- **A business number is a person only between their dates** (0035: row `id`, one open
+  row per number per team). Adding a joiner on a held number asks for the holder's last
+  day; calls go to whoever held the number that day; leads and firms need the name to
+  agree. Leavers stay on the Leadership Board for their own days with "Show their whole
+  time here" (`docs/b2b/leadership.md`, `sales-tab-redesign.md`).
+- **CRM ↔ Studio Space sync, both ways** (`app/studio_crm_sync.py`, runs inside
+  `sync_firm_kams`): every live CRM team member gets a Studio staff login on their
+  mobile (no password; they sign in from the CRM tab), leavers' logins are switched off,
+  numbers and GSTINs flow both ways, and any Inbound lead, Outreach lead or firm can add
+  **Referred clients** from its drawer (0036 `b2b_referral`), counted as Referred on the
+  referrer's team. This **reverses** the October "CRM never writes Studio Space" and "the
+  team list creates no login" decisions (`docs/b2b/studio-space.md` §Two-way sync).
+- **Still to do on production:** a manager dates the people who moved or left (Team tab).
+  Check the console Team list for the logins the first start-up created. Never write why
+  someone left into this public repo.
+- **Local real-data copy:** a session on 2026-11-27 served this work on :3000 from a
+  scratchpad clone against `crm_real` on :8802, migrated to 0036 and pruned to match
+  production (the refresh only upserts, so it also deleted 26 firms and 2 Outreach rows
+  production no longer has). To rebuild it: `refresh-crm-real.py`, then run :8802 from a
+  b2b-backend checkout at `origin/master` (0036) and `npx next dev -p 3000` with the
+  `real()` env in `crm-local.sh`.
+
 **START HERE for B2B revenue (2026-11-27): Overview → Revenue analysis sub-tab (CRM PR
 from `b2b-revenue-analysis`, merged on Dhruv's ask; no backend PR).** The user wanted to
 see why one month earned more than another. Overview now has two sub-tabs. Revenue
