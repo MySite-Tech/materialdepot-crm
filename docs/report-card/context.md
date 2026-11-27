@@ -138,7 +138,8 @@ a confident zero.
   checked on production the same day against the per-person sum for all 150: total,
   won count and value, active and lost all equal. A row with no group in a
   successful answer reads "Django sent no figures for this number", never "the call
-  failed" (`docs/landmines.md`).
+  failed" (`docs/landmines.md`). Shipped in CRM PR #102 (`4ba777d`) and checked live
+  the same day: 0 rows without figures on page 1 of 150, tiles team-wide.
 - **The team hooks key their effects on joined phone strings** (`contactKey`,
   `filteredKey`, `pageKey`), not
   on the `people` array — that array is rebuilt on every render and depending on
