@@ -1,6 +1,7 @@
-import { fetchOutreachLeads } from '../data/reads';
-import { fetchInboundBoard } from '../data/reads';
+import { fetchInboundBoard, fetchRows } from '../data/reads';
+import { rowToOutreach } from '../mappers/outreach';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
+import { EC_B2B_REFERRAL } from '@/components/b2b/models/outreach';
 import { firmPhoneList } from './enq-lookup';
 
 export const inboundPhones = (l: Pick<InboundLead, 'phone' | 'primaryContactPhone' | 'additionalContacts'>): string[] =>
@@ -10,6 +11,10 @@ export const outreachPhones = (l: Pick<OutreachLead, 'phone' | 'altPhone' | 'con
   firmPhoneList([l.phone, l.altPhone, ...(l.contacts ?? []).map((c) => c.phone)]);
 
 export type LeadSource = 'Inbound' | 'Outreach';
+
+const EC_SOURCES: string[] = [EC_B2B_REFERRAL, 'EC referral'];
+
+export const isEcReferral = (l: Pick<UnifiedLead, 'outreach'>): boolean => EC_SOURCES.includes(String(l.outreach?.source));
 export type UnifiedStatus = 'Closed' | 'Yet to Close';
 
 export interface UnifiedLead {
@@ -17,6 +22,7 @@ export interface UnifiedLead {
   key: string;
   id: string;
   source: LeadSource;
+  createdAt?: string;
   companyName?: string;
   contactPerson?: string;
   phone?: string;
@@ -43,6 +49,7 @@ export function inboundToUnified(l: InboundLead): UnifiedLead {
     key: `inbound:${l.id}`,
     id: l.id,
     source: 'Inbound',
+    createdAt: l.leadCreatedAt || undefined,
 
     companyName: String(l.companyName || '').trim() || undefined,
     contactPerson: l.contactName || undefined,
@@ -62,11 +69,12 @@ export function inboundToUnified(l: InboundLead): UnifiedLead {
   };
 }
 
-export function outreachToUnified(l: OutreachLead): UnifiedLead {
+export function outreachToUnified(l: OutreachLead, rowCreatedAt?: string): UnifiedLead {
   return {
     key: `outreach:${l.id}`,
     id: l.id,
     source: 'Outreach',
+    createdAt: l.ecReferral?.at || l.createdAt || rowCreatedAt || undefined,
     companyName: String(l.company || '').trim() || undefined,
     contactPerson: l.contactPerson || undefined,
     phone: l.phone || undefined,
@@ -90,36 +98,32 @@ interface UnifiedLeadsResult {
   failed: LeadSource[];
 }
 
-export async function fetchUnifiedLeads(opts?: {
-  createdFrom?: string;
-  createdTo?: string;
-}): Promise<UnifiedLeadsResult> {
+export async function fetchUnifiedLeads(): Promise<UnifiedLeadsResult> {
   const failed: LeadSource[] = [];
 
-  const inboundP = fetchInboundBoard({ createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
+  const inboundP = fetchInboundBoard()
     .then((r) => {
       if (!r.ok) failed.push('Inbound');
-      return r;
+      return r.leads;
     })
     .catch((e) => {
       console.error('[b2b] leads tab: inbound fetch failed', e);
       failed.push('Inbound');
-      return { leads: [] as InboundLead[] };
+      return [] as InboundLead[];
     });
-  const outreachP = fetchOutreachLeads({ createdFrom: opts?.createdFrom, createdTo: opts?.createdTo })
+  const outreachP = fetchRows('outbound')
+    .then((rows) => rows.map((r) => outreachToUnified(rowToOutreach(r), r.created_at ? String(r.created_at) : undefined)))
     .catch((e) => {
       console.error('[b2b] leads tab: outreach fetch failed', e);
       failed.push('Outreach');
-      return [] as OutreachLead[];
+      return [] as UnifiedLead[];
     });
 
   const [inbound, outreach] = await Promise.all([inboundP, outreachP]);
 
   return {
-    leads: [
-      ...inbound.leads.map(inboundToUnified),
-      ...outreach.map(outreachToUnified),
-    ],
+    leads: [...inbound.map(inboundToUnified), ...outreach]
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
     failed,
   };
 }

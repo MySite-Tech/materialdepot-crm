@@ -6,7 +6,7 @@ import { InboundLead, OutreachLead, fmtINR } from '../../models/mock-data';
 import { companyTypeLabel } from '../../models/outreach';
 import { Empty, Field, LeadName, Pill, ReadValue, SectionCard, Spinner, StatusBadge, fmtDay, fmtLeadDateTime } from '../../ui/inbound-chips';
 import { MeetingLine, OutreachStatusBadge } from '../../ui/outreach-chips';
-import { SourceChip, UnifiedStatusCell } from './cells';
+import { SourceChip, UnifiedStatusCell } from './ui/cells';
 import { EnqLookup, UnifiedLead, inboundPhones, lookupEnqId, outreachPhones, saveInboundLead, upsertOutreachLead } from '@/lib/b2b';
 import { useEffect, useState } from 'react';
 import { fmtFollowUp } from '../../models/reminders';

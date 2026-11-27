@@ -57,7 +57,7 @@ export function useLeadAssign({ leads, members, reps, rotationReps, by, onSaved 
     const next = plan.map(({ item, rep }) => withJourney(item, assignLead(item, rep, by, at, how), by, at));
     const err = await upsertOutreachLeads(next);
     if (err) return `Nothing was assigned: ${err}`;
-    onSaved(next.map(outreachToUnified));
+    onSaved(next.map((l) => outreachToUnified(l)));
     return null;
   };
 
