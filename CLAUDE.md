@@ -545,9 +545,9 @@ shared CRM tree is checked out on it, so :3001 serves it. What it carries:
   (area manager and up, or a B2B manager). The route gates each view, and orders
   on referred numbers come from one `b2b-bulk` call (`docs/b2b/ec-referral.md`
   §Three views).
-- **Client Database and KAM status is month bands:** Active ≤30 days, Inactive
-  1–3, 3–6, 6–12 and 12+ months. It is still one `clientStatus` for every tab
-  (`docs/b2b/kam.md` §Account status).
+- **Client Database and KAM status is month bands** (day counts; replaced on
+  2026-11-27 by calendar months, see the 2026-11-27 START HERE). It is still one
+  `clientStatus` for every tab (`docs/b2b/kam.md` §Account status).
 - **Outreach has a top filter bar** with BM and period. It drives the scorecard
   and the pipeline (leads added in the period). Action needed is always as of
   today (`docs/b2b/outreach.md`).
@@ -724,11 +724,35 @@ primary for the three people the backfill left without one (Team tab, "No primar
 team"), and add Varun's Inbound cover with his dates. Production answered 0031 at
 2026-11-26 (16 rows, 9 primaries). Driven end to end on the sandbox only.
 
+**START HERE for B2B (2026-11-27): Client Database by calendar month, any firm to any
+team (CRM PRs #88 and #89, both merged 2026-11-27 on Dhruv's ask, main `074827d`; no
+backend PR).** Start new work from `origin/main`. The user asked for three things in one
+message; two already existed, so check before rebuilding:
+- **Status is by calendar month (#89).** Active is a last order in M-0 or M-1, then
+  Inactive 2–3 months (M-2, M-3), 4–6 (M-4 to M-6), 7–12 (M-7 to M-12) and over 12. A
+  firm moves band only on the 1st, which is the point: counts must not change day to
+  day. Still one `clientStatus` for Client Database, KAM, the Firm page, Overview and
+  KAM coverage; tile subtitles read the real months from `statusMonths`. Active now spans
+  27–61 days, so Active and KAM coverage's denominator read larger than under the 30-day
+  rule. "The previous six months" was read as M-7 to M-12; the user has not confirmed it
+  (`docs/b2b/kam.md` §Account status).
+- **Any firm goes to Inbound, Outreach or a KAM (#88),** no time window and no team
+  reservation (paragraph below). Don't add an eligibility rule back.
+- **The GST-order waitlist is Client Database → Review new firms (live since
+  2026-11-07, `client-db.md` §Review new firms).** It re-reads 12 months of GST-billed
+  orders on open and lists firms on no board, for a manager to send to a team or mark
+  Not a client. It never auto-adds: the user chose manual review because auto-import put
+  store walk-ins into EC Direct revenue. Don't re-propose auto-import.
+- **Seen on the sandbox only.** After deploy, signed in as a manager: Client Database
+  tiles read "last order Oct–Nov 2026"-style month ranges and their counts equal the
+  lists; send one Active firm to an Outreach BM; open Review new firms once (first read
+  up to a minute) — it has never been opened on production.
+
 **START HERE for B2B (2026-11-20): Client Database sends any firm to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no
 backend PR).** The user: the Client Database is not only for KAMs, and the four
 SPoCs exist for this. A manager selects firms and picks Inbound or Outreach on the
-assign bar. **Since 2026-11-27 (PR #88) any firm can go to any team, with no time
+assign bar. **Since 2026-11-27 (PR #88, merged) any firm can go to any team, with no time
 window:** the user said anyone can take any firm, so don't add an eligibility rule back.
 Each becomes a new lead in that team's tab (Outreach: source **Client Database firm**,
 a pending intake the BM accepts; Inbound: a `crm-` lead owned at once, no Kylas
