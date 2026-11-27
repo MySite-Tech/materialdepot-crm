@@ -114,8 +114,11 @@ definitions, 2026-11-28:
 - **Checked on production data on 2026-11-28** in a signed-in tab, through the bundled
   module: each month's clients add up to the month's All B2B and Studio Sales totals
   exactly, and the rows add up to Clients ordering. November's EC → Studio is almost
-  all firms given a KAM on 9 and 17 Nov, ordering at stores under that KAM. The screen
-  ran on the sandbox only.
+  all firms given a KAM on 9 and 17 Nov, ordering at stores under that KAM. After
+  deploy (PR #106) the live route returned the same figures month by month. Its first
+  cold call got a Django 500 on one month's page read and Retry worked in 4 s (the other
+  months were cached); add a retry on a 5xx page in `allOrders` if users hit it. The
+  screen itself ran on the sandbox only.
 
 ## Four revenue channels (redefined 2026-11-03, Direct narrowed 2026-11-28)
 

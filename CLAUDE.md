@@ -734,6 +734,31 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
+**START HERE for B2B revenue (2026-11-28, latest): Studio Sales, Direct by who booked, and
+the Clients sub-tab (CRM PR #106, `02d91ec`, merged and LIVE on Dhruv's ask; no backend
+PR).** Start new work from `origin/main` and read `docs/b2b/overview.md` §Four revenue
+channels and §Clients sub-tab first. Three changes, all the user's decisions that day:
+- **Studio Sales vs All B2B.** Studio Sales = Direct + Studio EC Redirected + Referred
+  and carries the target; All B2B adds EC Direct (no B2B effort). The hero, the trend
+  labels and Revenue analysis (Studio Sales / All B2B switch) follow it.
+- **Direct = an order booked on the B2B branch by someone on the B2B team that day.**
+  Store reps (dozens, never on B2B) book on branch 70 every month, and all of it used to
+  be Direct (types 3, 6, 7, now gone). A store rep's order there is a store order, so a
+  person who left B2B (team dates) counts as their store. Direct no longer equals branch
+  70 in Metabase, on purpose; don't "fix" that back.
+- **Clients sub-tab** (Overview → Clients): new, revived, Studio/EC moves and churn per
+  month. Churn = last order in M-3; revived = back after 3+ empty months within 12; new =
+  first-ever or none in 12 months. **Django's order read has nothing before April 2026**,
+  so older history is `client-order-history`'s first-order date and the undatable rest is
+  "Earlier client, gap unknown" (`docs/landmines.md`).
+- **Checked on production after deploy:** the live `/api/b2b/revenue/clients` matched the
+  pre-deploy run on real orders month by month, and each month's clients add up to its
+  All B2B and Studio Sales totals. Real figures are in memory, not here.
+- **Open:** the first cold call after deploy got a Django 500 on a month read ("Orders
+  could not be read (500)"); Retry answered in 4 s because the months that loaded were
+  cached. If users hit it, add one retry on a 5xx page read in `allOrders`
+  (`lib/server/b2b-revenue.ts`). Not yet seen in the browser signed in on production.
+
 **START HERE for B2B revenue (2026-11-27): Overview → Revenue analysis sub-tab (CRM PR
 from `b2b-revenue-analysis`, merged on Dhruv's ask; no backend PR).** The user wanted to
 see why one month earned more than another. Overview now has two sub-tabs. Revenue
