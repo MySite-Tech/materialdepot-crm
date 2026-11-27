@@ -404,10 +404,12 @@ taken from the seeded clients.
 
 Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
 `clientLensMatches` (`views/client-db/utils.ts`) gives both a tile's count and
-the list it opens. Tiles: All firms · Active · Inactive 1–3 months · Inactive 3–6 months ·
-Inactive 6–12 months · Over 12 months · Never ordered, then No KAM, plus Unread only when some
-firm's orders did not load. The bands are `ORDER_BANDS` (`kam.md` §Account status, 2026-11-06),
-and `LENS_STATUS` maps each status tile to its band, so the tile and the list cannot disagree.
+the list it opens. Tiles: All firms · Active · Inactive 2–3 months · Inactive 4–6 months ·
+Inactive 7–12 months · Over 12 months · Never ordered, then No KAM, plus Unread only when some
+firm's orders did not load. The bands are calendar months, M-0/M-1 Active through M-13+
+(`ORDER_BANDS`, `kam.md` §Account status, 2026-11-27), and `LENS_STATUS` maps each status
+tile to its band, so the tile and the list cannot disagree. Each tile's subtitle is that
+band's month range from `statusMonths`, so it reads the real months ("last order Aug–Sep 2026").
 
 - **Why it changed.** The five tiles were `StatTile`s with no click handler, and
   a status dropdown did the tiles' job. The tiles counted the dropdown-filtered

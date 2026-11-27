@@ -1,6 +1,6 @@
 'use client';
 
-import { ACTIVE_DAYS, ClientEntity, b2bSellerTest, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, INACTIVE_DAYS, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
+import { ClientEntity, b2bSellerTest, latestEcSpoc, EVIDENCE_IS_EXACT, FirmSpoc, MergeChoices, clientMatchesSearch, clientStatus, contactNumbers, currentTemperature, daysToLapse, statusMonths, findDuplicates, firmLinks, firmSpocs, firmStudioAccess, lastOrderInFuture, istToday, mergeClients } from '../../models/client';
 import { newB2BId } from '../../models/ids';
 import { fmtShortINR } from '../../models/mock-data';
 import { repNames } from '../../models/outreach/handover';
@@ -14,7 +14,7 @@ import { useFirmAssign } from './hooks/use-firm-assign';
 import { useSpocSources } from './hooks/use-spoc-sources';
 import { TemperatureChip } from '../../ui/client-chips';
 import { LensTileGroup, LensTiles } from '../../ui/lens-tiles';
-import { CLIENT_LENS, LENS_DEFAULT_SORT, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
+import { CLIENT_LENS, LENS_DEFAULT_SORT, LENS_STATUS, NO_FILTERS, PAGE_SIZE, STATUS_LENSES } from './constants';
 import { ClientFilters, ClientLens, ClientListRow, FilterContext, FilterKey, FilterOption, SortState } from './types';
 import { clientLensMatches, filterChips, rowMatchesFilters, sortRows } from './utils';
 import { ClientFilterBar, ListHead } from './ui/filters';
@@ -160,11 +160,11 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
     const n = byLens[k].length;
     switch (k) {
       case 'all':      return { value: String(n), sub: `${fmtShortINR(scopeRevenue)} lifetime${unread ? ` · ${unread} status unknown` : ''}`, warn: !!unread };
-      case 'active':   return { value: String(n), sub: `ordered in last ${ACTIVE_DAYS} days` };
-      case 'm1to3':    return { value: String(n), sub: `last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago` };
-      case 'm3to6':    return { value: String(n), sub: `last order ${INACTIVE_DAYS + 1}–180 days ago` };
-      case 'm6to12':   return { value: String(n), sub: 'last order 181–365 days ago' };
-      case 'm12plus':  return { value: String(n), sub: 'last order over a year ago' };
+      case 'active':
+      case 'm2to3':
+      case 'm4to6':
+      case 'm7to12':
+      case 'm12plus':  return { value: String(n), sub: `last order ${statusMonths(LENS_STATUS[k]!, today)}` };
       case 'never':    return { value: String(n), sub: 'no order on record' };
       case 'unknown':  return { value: String(n), sub: futureDated ? `${futureDated} with a future order date` : 'orders did not load', warn: true };
       case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
@@ -412,7 +412,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {`Active means an order placed in the last ${ACTIVE_DAYS} days. After that a firm is Inactive 1–3, 3–6 or 6–12 months, or over 12 months, counted back from today to its last order. The KAM tab uses the same rule: its Inactive 3+ months tile is the last three together.`}
+        {'Status is by calendar month, so a firm moves band only on the 1st. Active is a last order this month or last (M-0, M-1). Then Inactive 2–3 months (M-2, M-3), 4–6 months (M-4 to M-6), 7–12 months (M-7 to M-12) and over 12 months. The KAM tab uses the same rule: its Inactive 4+ months tile is the last three together.'}
       </p>
       </>)}
 
