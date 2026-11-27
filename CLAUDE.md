@@ -213,7 +213,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 102 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 105 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | BDA Retail | `docs/bda-retail/context.md` | Retail leads the stores missed, in four cohorts with priorities, stored in b2b-backend (0033). Five named admins see everything; the `bda_retail` role sees only its queue and performance. Django's cart rows carry no `visits`, and carts over ₹1 Cr are typos |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
@@ -293,7 +293,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 102 titles, so grep a title and read around the line you
+**Contents** list of all 105 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -774,9 +774,13 @@ message; two already existed, so check before rebuilding:
   status tiles sum to All firms with no Unknown, each tile's count equals its list, and
   each band's last orders fall exactly inside its months. A firm from every band opens
   Inbound, Outreach and KAM, and each picker lists people. Review new firms loaded on
-  production for the first time. No console errors. **Not yet done:** a real send. The
-  first one should be a manager sending one Active firm to an Outreach BM, then checking
-  the BM's pool and the Firm page SPoC.
+  production for the first time. No console errors. **A real send ran the same day:**
+  a dummy firm sent to an Outreach BM landed in that BM's Waiting for sign-off as a
+  Client Database firm lead, and the Firm page showed the BM as Outreach SPoC. Both test
+  rows were then deleted. That run found two list bugs, fixed in CRM PR
+  `client-db-list-fixes`: the Status column filter still offered the old 30/60-day
+  labels and matched nothing, and a new SPoC read "—" on the list until a reload
+  (`docs/landmines.md`).
 - **The Overview's client book now matches Client Database (CRM PR from
   `overview-studio-orders`, 27 Nov, merged on Dhruv's ask).** It read 190 / 134 / 326 /
   500 against 194 / 132 / 325 / 499 because it skipped Studio Space orders; it now adds
@@ -799,11 +803,8 @@ write) **and** a `spoc_log` entry naming that person as the firm's Inbound or
 Outreach SPoC from that day. The KAM is kept. A firm with an open lead on that team,
 or no phone number, is skipped. Detail and the known gap
 (a BM's reject leaves the logged SPoC) are in `docs/b2b/client-db.md` §Any firm can
-go to Inbound, Outreach or a KAM. **The assign bar was checked on production on
-2026-11-27** (every band opens all three teams; see the 2026-11-27 entry above), but
-no send has run there yet. The first real send should be a manager sending one Active
-firm to an Outreach BM, then checking the lead in that BM's pool and the SPoC on the
-Firm page.
+go to Inbound, Outreach or a KAM. **Checked on production on 2026-11-27,** a real
+send included (see the 2026-11-27 entry above).
 
 **START HERE for B2B (2026-11-23): Outreach BMs log calls (CRM PR #83 from
 `outreach-call-log`, merged on Dhruv's ask; no backend PR).** The user: the Outreach

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-102 entries. They live in one file because they cross-reference each other —
+105 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -113,6 +113,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A rep's past calls moved to the lead's current owner the moment their team row was switched off
 - A round robin checkbox took seconds to answer because every team save listed every Kylas user
 - The Overview's client book and Client Database disagreed by a few firms per status band
+- Client Database's Status filter offered bands that no longer existed, and picking one emptied the list
+- A firm's new SPoC read "—" on the Client Database list until the page was reloaded
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1596,3 +1598,27 @@ Studio Space read a band older on the Overview. It predates the calendar-month c
 the Overview applies `withStudioOrders` too. **A firm's order metrics come from b2b-bulk
 plus Studio orders, everywhere; a new screen that calls `clientMetricsFrom` alone will
 disagree with Client Database** (the badge entry above is the same shape).
+
+### Client Database's Status filter offered bands that no longer existed, and picking one emptied the list (2026-11-27)
+
+Found signed in on production the day calendar-month status shipped. The Status column's
+filter still listed Active, Inactive 1 month, Inactive, Never ordered, Unknown: the 30/60-day
+labels of 2026-10-29. The match is `r.status === v`, so Inactive 1 month and Inactive matched
+no firm and emptied the list, and none of the real Inactive bands could be picked. It was a
+hand-typed list in `views/client-db/constants.ts` that two band changes (2026-11-06 and
+2026-11-27) never touched, while the tiles were right because they read `LENS_STATUS`. Now the
+filter reads `CLIENT_STATUS_ORDER` (`constants/client.ts`), the same list the Overview's client
+book uses. **A list of status labels is never typed by hand in a view; read
+`CLIENT_STATUS_ORDER`, or a band change leaves it behind with no `tsc` error** (the badge entry
+above is the same shape).
+
+### A firm's new SPoC read "—" on the Client Database list until the page was reloaded (2026-11-27)
+
+Found on production with a test firm sent to an Outreach BM: the send saved the firm's
+`spoc_log` and the Firm page showed the BM, but the list's Outreach SPoC column still read
+"—" until a reload. `spocsOf` in `views/client-db/index.tsx` cached each firm's SPoCs in a
+`Map` keyed by `c.id`, memoised only on the lead sources, so a firm replaced by `onSaved`
+kept its old answer. Now the cache is a `WeakMap` keyed by the firm object, so a saved firm,
+being a new object, is read again. **A per-row cache in a view keys on the row object, not
+its id, whenever rows are replaced in place after a save.**
+

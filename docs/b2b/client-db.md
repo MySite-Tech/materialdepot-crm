@@ -548,8 +548,17 @@ question ("a new Outreach lead, or an Outreach BM owning the firm?"): **both.**
 - **2026-11-27, signed in on production as a manager (read-only):** one firm from each
   of Active, Inactive 2–3, 4–6, 7–12, over 12 months and Never ordered opened Inbound,
   Outreach and KAM. The pickers listed 3, 4 and 5 people, and there were no console
-  errors. **No send has run on production yet.** The first should be one Active firm to
-  an Outreach BM, then check the BM's pool and the Firm page SPoC.
+  errors.
+- **2026-11-27, a real send on production.** A dummy firm (never ordered, no KAM,
+  remarked as a test) was added, sent to one Outreach BM with One person, and checked:
+  the note named the BM; the backend held an `outbound` row with source **Client
+  Database firm**, stage Yet to Meet, owned by the BM, with a pending intake; the firm's
+  `spoc_log` had the BM as Outreach SPoC from that day; the Firm page showed it; and
+  Outreach → Waiting for sign-off listed the lead with Accept and Reject. Both rows were
+  then deleted, and the B2B row count returned to what it was. The run found two list
+  bugs, both fixed the same day (CRM PR `client-db-list-fixes`, `docs/landmines.md`):
+  the Status column filter still offered the 30/60-day labels and matched nothing, and
+  the list's SPoC columns kept a firm's old SPoC until a reload.
 - Seen on the sandbox only (two seeded firms, `CLI-SBX-0003` 250 days, `CLI-SBX-0004`
   420 days and no KAM): Outreach to one person, Inbound by round robin, a recent firm
   refused, a second Outreach send refused for the open lead, both SPoCs on the Firm
