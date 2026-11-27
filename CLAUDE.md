@@ -734,8 +734,10 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
-**Inbound: calls, then carts and PIs, and a tabbed lead window (2026-11-28, branch
-`inbound-calls-carts-drawer`, not merged, no backend PR).** The user's three asks:
+**START HERE for Inbound (2026-11-28, latest): calls, then carts and PIs, and a tabbed
+lead window. CRM PR #108 from `inbound-calls-carts-drawer`, open, not merged; no backend
+PR. The tech team merges.** To continue the work, check out that branch (in a `git
+worktree`), not `main`. The user's three asks:
 the Inbound tab counts only leads since 10 Nov (`INBOUND_WINDOW_START`; a search still
 reaches older ones); its groups are Calls / Carts & PIs / Outcomes, where a lead with an
 open cart or PI on any of its numbers leaves Calls (Django's open tickets, read once
@@ -744,7 +746,10 @@ tabs. The "i" explanations across B2B open on hover and pin on click (`ui/info-t
 Read `docs/b2b/inbound.md` §Only leads since 10 Nov, §Three groups and §The lead window
 has five tabs first. On 28 Nov real data gave 485 leads: Calls 301, Carts & PIs 40.
 **After deploy,** check signed in that the Carts & PIs tiles load. They read Unknown with
-an amber notice if Django refuses the read for that login.
+an amber notice if Django refuses the read for that login. **Open questions for the user:**
+whether Lost, Closed or Invalid leads with an open cart (14 on 28 Nov) should come back
+into Carts & PIs; today they stay in Outcomes. The Outreach and Firm drawers picked up
+the new card styling but were not restructured into tabs. Ask before doing that too.
 
 **START HERE for B2B revenue (2026-11-28, latest): Studio Sales, Direct by who booked, and
 the Clients sub-tab (CRM PR #106, `02d91ec`, merged and LIVE on Dhruv's ask; no backend
