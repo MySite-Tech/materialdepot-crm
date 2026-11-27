@@ -685,7 +685,8 @@ as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
 **START HERE for B2B revenue (2026-11-27): Overview → Revenue analysis sub-tab (CRM PR
-from `b2b-revenue-analysis`, merged on Dhruv's ask; no backend PR).** The user wanted to
+#91 from `b2b-revenue-analysis`, merged and deployed on Dhruv's ask as `55c8876`; no
+backend PR).** The user wanted to
 see why one month earned more than another. Overview now has two sub-tabs. Revenue
 analysis compares any two months (same days only by default), filters by ten dimensions
 (channel, branch, rep on the cart, category, how B2B holds it, team, credited to, client
@@ -694,9 +695,14 @@ biggest gain and drop per dimension, drills in, and shades six months per value.
 only the existing `/api/b2b/revenue` (six reads on open). Category has no per-category
 price, so an order counts under each of its categories; branch is the rep's home branch
 until Django sends the booked branch. Read `docs/b2b/overview.md` §Revenue analysis
-sub-tab before changing it. Tied out to the hero on real October and November orders;
-screens seen on the sandbox only. **After deploy,** its Revenue tile must equal the
-Overview hero for the same month with Same days only off.
+sub-tab before changing it. **Checked signed in on production the same day:** the
+Revenue tile equals the hero, the channels tie to the hero's cards, six reads, no console
+errors, and drill and compare work. **Open, waiting on the user: EC Direct reads ₹0 in
+every month** on the Overview and here. The channel follows a firm's KAM today, not at
+order time, and about 400 firms got a KAM on 17–18 Nov, so their past store orders moved
+to Studio EC Redirected. Totals are right, the pre-18-Nov split is not. The proposed fix
+(orders before the firm's first KAM assignment stay EC Direct) is in `docs/b2b/overview.md`
+§Four revenue channels. Don't build it until the user says so.
 
 **START HERE for BDA Retail (2026-11-26): a new top-level CRM tab, live.** CRM PR #87
 (branch `bda-retail`) with b2b-backend #42 (migration 0033, `bda_*` tables) and #43

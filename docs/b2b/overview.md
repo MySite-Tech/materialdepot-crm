@@ -66,8 +66,11 @@ over real reports: November (1–27) equalled the hero's figure exactly, and so 
 October against the trend. The figures stay out of this public repo. The volume/size split, the per-channel changes and the
 per-branch rows each added back to the totals exactly. The screens were driven on
 the sandbox only (`npm run dev:sandbox`, Django and the B2B backend stubbed), with
-no console errors. **After deploy,** open it signed in as a manager and check that
-the Revenue tile for the current month equals the Overview hero.
+no console errors. **Checked signed in on production on 2026-11-27, after PR #91
+deployed:** the Revenue tile equalled the hero, channel and order counts matched the
+hero's cards, the six reads all answered 200 from the server cache in under 0.3 s, and
+there were no console errors. Analyse revenue, the drill from Channel to Branch and the
+Same days toggle all worked.
 
 ## Four revenue channels (redefined 2026-11-03)
 
@@ -112,6 +115,18 @@ where it was booked decides the channel (`lib/b2b/revenue/utils/classify.ts`):
   matched by any of its numbers with no date gate, so its whole history counts.
   An order placed under a number the firm record does not hold (a site supervisor,
   the end client) is missed: there is no GST or name match.
+- **Open (found 2026-11-27, not fixed): EC Direct reads zero in every month.** A
+  firm's channel follows whether it has a KAM *now*, not when the order was placed
+  (`holderOf` in `book.ts` has no date gate for a `client` row with an owner). About
+  400 Client Database firms were given a KAM on 17–18 Nov, so every past store order
+  of theirs moved from type 8 (EC Direct) to type 4 (Studio EC Redirected). On real
+  October orders 155 moved, and no October order sat on a firm still without a KAM.
+  The total is unchanged; the split before 18 Nov is wrong, with Studio EC Redirected
+  overstated by the old EC Direct amount. The proposed fix, waiting on the user: an
+  order placed before the firm's first KAM assignment (`meta.assignments[].at`, not
+  Rejected) stays type 6/8, which matches the 2026-10-30 rule that revenue follows the
+  owner at close. Check it on real orders through the compiled classifier
+  (§Checking a figure against production) before and after.
 - **The first match decides the type:** referred, then a B2B rep, then a number B2B
   holds, then a firm with no KAM, then the B2B branch.
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is
