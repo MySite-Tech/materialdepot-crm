@@ -156,6 +156,8 @@ written by `GET/PUT /team`. **Deploy it first.** Without it the Team tab hides t
 controls and revenue reads every person as undated, the old rule. Run on a throwaway
 Postgres: idempotent, dates on a primary row accepted, a reversed pair refused.
 
+**0034–0036 are live (b2b-backend #45, `8193264`, 2026-11-27); production answered the new fields the same evening.**
+
 **Migration `0035_b2b_team_row_id`** (same branch, 2026-11-27) gives each row an `id`
 primary key and a unique index on `(phone, team) WHERE left_on IS NULL`, so a closed row
 keeps its number while the next joiner opens a row on it (`b2b/sales-tab-redesign.md`
