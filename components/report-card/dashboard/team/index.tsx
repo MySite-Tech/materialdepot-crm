@@ -1,9 +1,12 @@
 'use client';
 
 import { MultiDropdown } from '../ui/dropdowns';
-import { OrgPerson, STAKEHOLDERS, StakeholderRole, TEAM_PAGE_SIZE, positionsPresent } from '@/lib/org';
+import { OrgPerson, STAKEHOLDERS, StakeholderRole, TEAM_PAGE_SIZE, normaliseName, positionsPresent } from '@/lib/org';
 import { RoleBadge } from './reporting-line';
-import { TeamPerformance } from './types';
+import { useTeamFootfall } from './hooks/use-team-footfall';
+import { useTeamLeadStats } from './hooks/use-team-lead-stats';
+import { TeamFootfall, TeamLeadStats, TeamQuery } from './types';
+import { metricsFor } from './utils';
 import { Th } from '../ui';
 import { fmtMoney, fmtNum, fmtPct } from '../utils';
 import { useEffect, useMemo, useState } from 'react';
@@ -16,9 +19,16 @@ const num = (v: number | null) => (v === null ? <span className="text-gray-300">
 const pct = (v: number | null) => (v === null ? <span className="text-gray-300">—</span> : fmtPct(v));
 const money = (v: number | null) => (v === null ? <span className="text-gray-300">—</span> : fmtMoney(v));
 
-export function TeamPerformanceSection({ people, performance, selectedPhone, onSelect }: {
+const missingStats = (person: OrgPerson, leads: TeamLeadStats) => {
+  if (!person.phone) return 'No phone on this login, so no lead stats';
+  if (leads.failedPhones.has(person.phone)) return 'Unknown — the stats call failed';
+  if (leads.loading) return 'Loading…';
+  return 'Unknown — Django sent no figures for this number';
+};
+
+export function TeamPerformanceSection({ people, query, selectedPhone, onSelect }: {
   people: OrgPerson[];
-  performance: TeamPerformance;
+  query: TeamQuery;
   selectedPhone: string;
   onSelect: (person: OrgPerson) => void;
 }) {
@@ -31,35 +41,38 @@ export function TeamPerformanceSection({ people, performance, selectedPhone, onS
     [people],
   );
 
+  const footfall = useTeamFootfall(people, query);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const wanted = new Set(positions);
-    return performance.rows.filter(({ person }) => {
+    return people.filter((person) => {
       if (wanted.size > 0 && (!person.stakeholder || !wanted.has(person.stakeholder))) return false;
       if (!needle) return true;
       return person.name.toLowerCase().includes(needle)
         || person.phone.includes(needle)
         || person.branches.some((b) => b.toLowerCase().includes(needle));
     });
-  }, [performance.rows, positions, q]);
+  }, [people, positions, q]);
 
-  useEffect(() => { setPage(1); }, [q, positions, performance.rows]);
-
-  const totals = useMemo(() => filtered.reduce((acc, { metrics }) => {
-    if (!metrics) return acc;
-    return {
-      people: acc.people + 1,
-      footfall: acc.footfall + (metrics.footfall ?? 0),
-      orders: acc.orders + metrics.orders,
-      salesValue: acc.salesValue + metrics.salesValue,
-      pipelineValue: acc.pipelineValue + metrics.pipelineValue,
-    };
-  }, { people: 0, footfall: 0, orders: 0, salesValue: 0, pipelineValue: 0 }), [filtered]);
+  useEffect(() => { setPage(1); }, [q, positions, people]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / TEAM_PAGE_SIZE));
   const safePage = Math.min(page, pages);
   const start = (safePage - 1) * TEAM_PAGE_SIZE;
-  const rows = filtered.slice(start, start + TEAM_PAGE_SIZE);
+  const pagePeople = useMemo(() => filtered.slice(start, start + TEAM_PAGE_SIZE), [filtered, start]);
+
+  const leads = useTeamLeadStats(filtered, pagePeople, query);
+  const hitFor = (person: OrgPerson) => (footfall.failed ? undefined : footfall.index.byName.get(normaliseName(person.name)));
+  const footfallTotal = useMemo(
+    () => filtered.reduce((t, person) => t + (footfall.index.byName.get(normaliseName(person.name))?.footfall_users ?? 0), 0),
+    [filtered, footfall.index],
+  );
+  const rows = pagePeople.map((person) => {
+    const stats = leads.byPhone[person.phone];
+    return { person, metrics: stats ? metricsFor(stats, hitFor(person)) : null };
+  });
+  const total = leads.totalFailed ? null : leads.total;
 
   return (
     <div className="space-y-3">
@@ -72,15 +85,15 @@ export function TeamPerformanceSection({ people, performance, selectedPhone, onS
           placeholder="Search by name, phone or store…"
           className="flex-1 min-w-[220px] max-w-sm rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-700 outline-none focus:border-gray-300"
         />
-        {performance.loading && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
+        {(leads.loading || footfall.loading) && <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
       </div>
 
       <div className="flex flex-wrap gap-3">
         <Tile label="People" value={fmtNum(filtered.length)} />
-        <Tile label="Footfall attended" value={performance.footfallFailed ? 'Unknown' : fmtNum(totals.footfall)} />
-        <Tile label="Orders" value={performance.leadsFailed ? 'Unknown' : fmtNum(totals.orders)} />
-        <Tile label="Sales value closed" value={performance.leadsFailed ? 'Unknown' : fmtMoney(totals.salesValue)} />
-        <Tile label="Live pipeline" value={performance.leadsFailed ? 'Unknown' : fmtMoney(totals.pipelineValue)} />
+        <Tile label="Footfall attended" value={footfall.failed ? 'Unknown' : fmtNum(footfallTotal)} />
+        <Tile label="Orders" value={total ? fmtNum(total.won.count) : leads.totalFailed ? 'Unknown' : '…'} />
+        <Tile label="Sales value closed" value={total ? fmtMoney(total.won.value) : leads.totalFailed ? 'Unknown' : '…'} />
+        <Tile label="Live pipeline" value={total ? fmtMoney(total.active.value) : leads.totalFailed ? 'Unknown' : '…'} />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -105,7 +118,7 @@ export function TeamPerformanceSection({ people, performance, selectedPhone, onS
                   <td className={`px-3 py-2.5 text-[13px] font-semibold ${active ? 'text-amber-600' : 'text-gray-800'}`}>{person.name || '—'}</td>
                   <td className="px-3 py-2.5 text-[12px] text-gray-400">{person.branches.length ? person.branches.join(', ') : 'All stores'}</td>
                   {metrics === null ? (
-                    <td colSpan={9} className="px-3 py-2.5 text-right text-[12px] text-gray-400">Unknown — the stats call failed</td>
+                    <td colSpan={9} className="px-3 py-2.5 text-right text-[12px] text-gray-400">{missingStats(person, leads)}</td>
                   ) : (
                     <>
                       <Cell value={num(metrics.footfall)} />
@@ -145,7 +158,7 @@ export function TeamPerformanceSection({ people, performance, selectedPhone, onS
         </span>
       </div>
 
-      <Notes performance={performance} shown={filtered.length} />
+      <Notes people={filtered} footfall={footfall} leads={leads} />
     </div>
   );
 }
@@ -159,23 +172,25 @@ function Tile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Notes({ performance, shown }: { performance: TeamPerformance; shown: number }) {
-  const unmatched = performance.rows.filter((r) => !r.footfallMatched).length;
+function Notes({ people, footfall, leads }: { people: OrgPerson[]; footfall: TeamFootfall; leads: TeamLeadStats }) {
+  const unmatched = people.filter((p) => !footfall.index.byName.has(normaliseName(p.name))).length;
+  const ambiguous = people.filter((p) => footfall.index.ambiguous.has(normaliseName(p.name))).length;
+  const shown = people.length;
   return (
     <div className="space-y-1 text-[11px] text-gray-400">
-      {performance.leadsFailed && (
-        <div className="text-amber-700">Orders, sales value, pipeline and lost counts did not load — they read Unknown rather than zero.</div>
+      {(leads.totalFailed || leads.failedPhones.size > 0) && (
+        <div className="text-amber-700">Some orders, sales value, pipeline or lost figures did not load — they read Unknown rather than zero.</div>
       )}
-      {performance.footfallFailed && (
+      {footfall.failed && (
         <div className="text-amber-700">The footfall funnel did not load, so footfall, carts, cart % and conversion % are Unknown.</div>
       )}
-      {!performance.footfallFailed && unmatched > 0 && (
+      {!footfall.failed && !footfall.loading && unmatched > 0 && (
         <div>
-          {unmatched} of {performance.rows.length} had no footfall row in this range
-          {performance.footfallAmbiguous > 0 && <>, {performance.footfallAmbiguous} of them because the name is not unique — no row is guessed</>}.
+          {unmatched} of {shown} had no footfall row in this range
+          {ambiguous > 0 && <>, {ambiguous} of them because the name is not unique — no row is guessed</>}.
         </div>
       )}
-      <div>Cart %, conversion % and footfall come from the footfall funnel; orders, sales value, AOV, pipeline and lost come from lead stats keyed on phone. {shown} row{shown === 1 ? '' : 's'} shown.</div>
+      <div>Cart %, conversion % and footfall come from the footfall funnel; orders, sales value, AOV, pipeline and lost come from lead stats keyed on phone. The tiles read the whole filtered team in one request; the rows read only the page shown. {shown} row{shown === 1 ? '' : 's'} shown.</div>
     </div>
   );
 }

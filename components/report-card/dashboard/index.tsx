@@ -12,7 +12,6 @@ import { fmtDate, monthEndISO, monthStartISO } from './utils';
 import { CategoryOption, ReportCardBMOption, ReportCardData, fetchAvailableBMs, fetchCategoryOptions, fetchReportCard } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTeam } from './team/hooks/use-team';
-import { useTeamPerformance } from './team/hooks/use-team-performance';
 
 export default function ReportCardDashboard({ branches, allowedBranches, currentUser }: Props) {
   const isRestricted = allowedBranches.length > 0;
@@ -60,7 +59,7 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
     [visiblePeople, currentUserPhone],
   );
 
-  const performance = useTeamPerformance(teamPeople, { dateFrom, dateTo, branch: store });
+  const teamQuery = useMemo(() => ({ dateFrom, dateTo, branch: store }), [dateFrom, dateTo, store]);
 
   const autoPicked = useRef(false);
   useEffect(() => {
@@ -180,7 +179,7 @@ export default function ReportCardDashboard({ branches, allowedBranches, current
           hint={`${teamPeople.length} ${teamPeople.length === 1 ? 'person' : 'people'} under you · filter by position or store · open any card`}>
           <TeamPerformanceSection
             people={teamPeople}
-            performance={performance}
+            query={teamQuery}
             selectedPhone={personPhone}
             onSelect={p => setPersonPhone(p.phone)}
           />

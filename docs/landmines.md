@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-105 entries. They live in one file because they cross-reference each other —
+106 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -115,6 +115,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - The Overview's client book and Client Database disagreed by a few firms per status band
 - Client Database's Status filter offered bands that no longer existed, and picking one emptied the list
 - A firm's new SPoC read "—" on the Client Database list until the page was reloaded
+- The Report Card read "the stats call failed" for most of a big team while every call returned 200
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1635,3 +1636,20 @@ the bulk match and runs the fallback after (`components/b2b/views/overview/hooks
 of first paint:** render what the bulk read answered, mark the rest as still checking,
 and fill it in. The same applies to a fast section rendered behind a slow one's gate: the
 revenue headline waited 8 s for reads it does not use until it was moved outside the gate.
+
+### The Report Card read "the stats call failed" for most of a big team while every call returned 200 (2026-11-27)
+
+Found in a full sweep of the live site, signed in as an admin with 150 people under
+them. 114 of the 150 team rows read "Unknown — the stats call failed", and the tiles
+above (orders, sales value, pipeline) summed only the other 36. All three
+`/crm/leads/stats/?bm_groups=` calls answered 200. Django returns at most **12 groups**
+per call and drops the rest without an error, and the table sent 50 a call
+(`STATS_BATCH`), so people 13–50 of every batch came back missing. The row text
+blamed a failure that never happened, because the code read "no group for this
+phone" as "the call failed". Now the batch is 12, the rows ask only for the page
+shown, and the tiles ask once with a single group of the whole filtered team, which
+production confirmed equals the per-person sum. **A bulk endpoint's silent cap reads
+as missing data, so find the cap on production before choosing a batch size, and
+never label a missing key in a successful answer as a failed call** (the 4 KB
+request-line entry above is the same family).
+
