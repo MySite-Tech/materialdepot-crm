@@ -1,7 +1,11 @@
-import { REVENUE_CHANNELS } from '../constants';
+import { REVENUE_CHANNELS, STUDIO_CHANNELS } from '../constants';
 import type { ChannelSplit, RevenueChannel, RevenueFilter, RevenueOrder, RollupRow } from '../types';
 
 export const revenueTotal = (orders: RevenueOrder[]): number => orders.reduce((s, o) => s + o.value, 0);
+
+export const isStudioChannel = (c: RevenueChannel): boolean => STUDIO_CHANNELS.includes(c);
+
+export const studioTotal = (orders: RevenueOrder[]): number => revenueTotal(orders.filter((o) => isStudioChannel(o.channel)));
 
 export const matchesFilter = (o: RevenueOrder, f: RevenueFilter): boolean => {
   if (f.channel !== 'all' && o.channel !== f.channel) return false;

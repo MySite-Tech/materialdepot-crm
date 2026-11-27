@@ -95,6 +95,15 @@ caller and month: the hero and the trend ask for the current month at the same
 moment on open, and without that the month would be read from Django twice.
 Refresh skips the cache, but not for a report built in the last minute.
 
+Since 2026-11-28 one month build yields two things, cached under separate keys: the
+report (`b2b-revenue:`) and a small digest (`b2b-digest:`, every buyer's number and each
+B2B order's phone, channel and value) for the Clients sub-tab. They share **one
+in-flight build per caller and month**, keyed on the report key, so a digest request and
+a report request for the same month never both read Django. A build asked for only the
+digest does not cache the full report: the Clients tab reads every month since April
+2026, and keeping each lapsed month's full report (a few hundred KB) per manager is
+what the split avoids. The Clients answer itself is cached 5 minutes per caller.
+
 `lib/server/b2b-client-import/` reuses the report's `allOrders` pager, so the two
 read `/crm/leads/` the same way. It caches 12 months of orders under one global key
 for 30 minutes, not one per caller, because the read is company-wide and takes up to
@@ -346,6 +355,11 @@ is silent:
 |---|---|---|
 | `created_from`/`created_to` | `Ticket.created_at` | every deal, cart-stage included |
 | `order_from`/`order_to` | `estimate.order_placed_time` | only deals that reached an order |
+
+**Neither filter reaches before April 2026** (checked 2026-11-28): `order_from` returns
+0–2 placed orders a month from July 2025 to March 2026, `created_from` returns none. For
+older history only `client-order-history` / `b2b-bulk` help, and only as one
+`firstOrderDate`/`lastOrderDate` per number (`docs/landmines.md`).
 
 `branch_basis` decides what `branch` means: unset (or `owner`) keys on the cart
 **owner's** branch, `estimate` on the branch the order was **booked** at. These
