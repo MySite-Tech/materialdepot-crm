@@ -6,7 +6,7 @@ import { useOrderCredits } from '../../../../order-credit/hooks/use-order-credit
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMonthReport } from '../../hooks/use-month-report';
 import { useRevenueTrend } from '../../hooks/use-revenue-trend';
-import { Card, Hint, Notice, Pill, Segmented, Stat } from '../../ui';
+import { Card, Hint, LinkButton, Notice, Pill, Segmented, Stat } from '../../ui';
 import { monthPace } from '../../utils';
 import { MONTHS_OFFERED, TEAM_OPTIONS } from './constants';
 import { Breakdown } from './ui/breakdown';
@@ -18,7 +18,7 @@ const SELECT = 'px-2 py-1 text-[11px] font-semibold border border-gray-200 round
 
 const NO_FILTER: RevenueFilter = { channel: 'all', type: 'all', team: 'all', person: 'all', store: 'all', search: '' };
 
-export function RevenueSection({ target, refreshKey }: { target: number; refreshKey: number }) {
+export function RevenueSection({ target, refreshKey, onAnalyse }: { target: number; refreshKey: number; onAnalyse: () => void }) {
   const months = useMemo(() => monthWindows(new Date(), MONTHS_OFFERED), []);
   const [monthKey, setMonthKey] = useState(months[0].key);
   const [fellBack, setFellBack] = useState(false);
@@ -86,9 +86,12 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
             {report && hasTarget && !isCurrent && <Pill tone={total >= target ? 'good' : 'muted'}>{pace.achievedPct}% of the current target</Pill>}
           </div>
         </div>
-        <select aria-label="Month" value={monthKey} onChange={(e) => pickMonth(e.target.value)} className={SELECT}>
-          {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-        </select>
+        <div className="flex items-center gap-3">
+          <LinkButton onClick={onAnalyse}>Analyse revenue</LinkButton>
+          <select aria-label="Month" value={monthKey} onChange={(e) => pickMonth(e.target.value)} className={SELECT}>
+            {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {fellBack && (

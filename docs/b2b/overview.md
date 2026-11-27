@@ -13,10 +13,61 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 |---|---|---|
 | `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readBase`) |
 | `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/` | On open |
-| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; on Revenue analysis, one per month of the last six plus any month picked there. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
 | `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, three months at a time (two until 2026-11-06). No orders in the response |
 | `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
 | `fetchFunnelReport` | `GET /api/b2b/revenue/funnel?from&to` | Only once the Client Database funnel is opened (remembered per browser), then one per month picked; 5-minute server cache per caller. Reads `/crm/leads/?created_from&created_to` for the month, up to 30 pages of 1,000, 8 at a time |
+
+## Revenue analysis sub-tab (2026-11-27)
+
+The user: the Overview tells what revenue was, not why. They asked for a sub-tab to
+slice it by every parameter it can be attributed to (branch, BM, category and the
+rest), compare two months, and see what went right in a strong month and wrong in
+a weak one. Overview now has two sub-tabs, **Overview** (everything below) and
+**Revenue analysis** (`views/overview/analysis/`). The Overview card's "Analyse
+revenue" link opens it.
+
+- **It reads only `fetchRevenueReport`, one per month,** the same per-order report
+  and server cache as the hero. Six months (the trend's window) plus any older
+  month picked, three at a time (`LOAD_PARALLEL`), so opening it costs 6 requests.
+  The Overview's own reads (`useOverviewData`, the trend, the funnel) do not run
+  on this sub-tab. A real month was a few hundred KB in November 2026, so six
+  months hold a couple of MB. If that is too heavy, drop remarks from the report first.
+- **Everything else is in memory** (`analysis/utils.ts`, no React, runnable with
+  the compile recipe in `CLAUDE.md`). Ten dimensions, each one function of an
+  order (`valuesOf`): channel, branch, rep on the cart, category, how B2B holds it
+  (the order type, with 3/4 split by `heldBy`), B2B team, credited to, client type,
+  order size and firm. Each filters, breaks down, and shows in What moved it.
+- **Branch is the cart rep's home branch, not where it was booked,** the same as
+  the Overview's branch filter. Django does not fill `bookedBranch` yet
+  (`backends.md` §Owed by Django row 10). For a store order the two agree.
+- **Category is the cart's category names.** `/crm/leads/` sends one string per
+  order ("Laminates, Tiles"), with no price per category, so a two-category order
+  counts in full under each and categories add up to more than the total. The
+  hint says so. A per-category value
+  split needs Django to send line totals by category.
+- **Client type is mostly blank** on real tickets (about two in three in October
+  2026). It shows as "Not recorded", never dropped.
+- **Rep on the cart is the "BM" for a store order.** It is `placedBy`, Django's
+  ticket owner. "Credited to" is the B2B person, after `teammateRecordOwner` and
+  any manager credit (`applyCredits`).
+- **Same days only** (on by default when the current month is one of the two):
+  both months are cut to days 1–N by IST placed date, so 27 days are not compared
+  with 31. The month-by-month table is always whole months.
+- **The revenue change splits exactly into volume and order size:**
+  `(orders now − orders before) × avg before` plus `orders now × (avg now − avg before)`.
+- **Clicking a name drills in.** It filters to that value and moves Break down by
+  to the next unfiltered dimension, so Channel → Branch → Rep → Category is one
+  click each. The filter lists are faceted: each lists only values left under the
+  other filters.
+
+Checked 2026-11-27 by running the compiled `utils.ts` in a signed-in production tab
+over real reports: November (1–27) equalled the hero's figure exactly, and so did
+October against the trend. The figures stay out of this public repo. The volume/size split, the per-channel changes and the
+per-branch rows each added back to the totals exactly. The screens were driven on
+the sandbox only (`npm run dev:sandbox`, Django and the B2B backend stubbed), with
+no console errors. **After deploy,** open it signed in as a manager and check that
+the Revenue tile for the current month equals the Overview hero.
 
 ## Four revenue channels (redefined 2026-11-03)
 
