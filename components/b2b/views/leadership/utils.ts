@@ -26,9 +26,20 @@ export function periodFor(key: string, today: string, custom: Period): Period {
 export const fmtDay = (d: string, weekday = false): string =>
   new Date(`${d}T00:00:00Z`).toLocaleString('en-IN', { ...(weekday ? { weekday: 'short' } : {}), day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+export const overlaps = (t: { from: string | null; to: string | null }, p: Period): boolean =>
+  (!t.to || t.to >= p.from) && (!t.from || t.from <= p.to);
+
+export function tenureLine(t: { from: string | null; to: string | null }, today: string): string {
+  const end = t.to ?? today;
+  const days = t.from ? Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${t.from}T00:00:00Z`)) / 86_400_000) + 1 : null;
+  const span = t.from ? `${fmtDay(t.from)} ${t.from.slice(0, 4)} – ${t.to ? `${fmtDay(t.to)} ${t.to.slice(0, 4)}` : 'today'}` : `until ${fmtDay(end)} ${end.slice(0, 4)}`;
+  return `On the team ${span}${days ? ` · ${days} days` : ''}`;
+}
+
 export const fmtPeriod = (p: Period): string => (p.from === p.to ? fmtDay(p.from) : `${fmtDay(p.from)} – ${fmtDay(p.to)}`);
 
 export function personTag(p: Person, team: B2BTeam): string | null {
+  if (p.tenure?.to && !p.onTeam) return `Left ${fmtDay(p.tenure.to)}`;
   if (p.cover) return coverLabel(p.cover);
   if (p.primaryTeam && p.primaryTeam !== team) return `${B2B_TEAM_LABEL[p.primaryTeam]} is their team`;
   return null;
@@ -40,7 +51,7 @@ export function rosterOf(data: PerfData, members: TeamMember[], live: boolean): 
   const seen = new Map<string, RosterEntry & { home: B2BTeam }>();
   for (const t of TEAM_ORDER) {
     for (const p of ENGINES[t].people(data, members, live)) {
-      const tag = p.cover ? `${coverLabel(p.cover)} on ${B2B_TEAM_LABEL[t]}` : null;
+      const tag = p.tenure?.to && !p.onTeam ? `left ${fmtDay(p.tenure.to)}` : p.cover ? `${coverLabel(p.cover)} on ${B2B_TEAM_LABEL[t]}` : null;
       const covering = !!p.cover && coverState(p.cover) === 'covering';
       const hit = seen.get(p.key);
       if (!hit) seen.set(p.key, { person: p, home: p.primaryTeam ?? t, now: covering ? t : p.primaryTeam ?? t, tags: tag ? [tag] : [] });

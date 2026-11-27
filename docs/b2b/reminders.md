@@ -37,6 +37,26 @@ A reminder is "actioned" the same way the tiles are. Logging the call or moving
 the date moves it, and nothing is ticked off by hand. There is no dismiss button,
 on purpose: dismissing would make the tab disagree with the Overdue tile.
 
+## Calls and meetings, or carts and PIs (2026-11-27)
+
+The user: every client has two kinds of update, its calls and meetings, and its carts
+and PIs, and the tab should keep them apart for all three teams. Each reminder carries
+a `topic`, decided by `topicOf` from the record's own stage, so it costs no request:
+
+| Topic | When |
+|---|---|
+| Carts & PIs | a KAM PI follow-up; an Inbound lead at `PI Shared`; an Outreach follow-up at `Quote Share` or `PI Shared` (`CART_STAGES`) |
+| Calls & meetings | everything else, and every Outreach meeting and KAM firm follow-up |
+
+## Layout (rebuilt 2026-11-27)
+
+The four sections used to stack down the page, so reaching Missed meant scrolling past
+every Due now row. They are now horizontal tabs with counts (Due now, Today, Missed,
+Coming up). The tab opens on the first one with anything in it. Under the tabs sit the
+topic switch, the team filter and a search, each showing counts within the open tab,
+then one table paged at 25. A row opens the record in place, the same as Open. The
+badge and the alert are unchanged: they still read `buildReminders` and the states.
+
 ## The time rules (IST wall clock)
 
 `reminderState` in `models/reminders/utils.ts`, checked at every boundary by hand:

@@ -19,6 +19,7 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
 }
 
 type MemberRow = {
+  id?: number;
   phone: string;
   name: string;
   team: B2BTeam;
@@ -32,11 +33,14 @@ type MemberRow = {
   ends_on?: string | null;
   paused_from?: string | null;
   paused_to?: string | null;
+  joined_on?: string | null;
+  left_on?: string | null;
   updated_at: string | null;
   updated_by: string | null;
 };
 
 const toMember = (r: MemberRow): TeamMember => ({
+  id: r.id == null ? null : Number(r.id),
   phone: r.phone,
   name: r.name,
   team: r.team,
@@ -50,6 +54,8 @@ const toMember = (r: MemberRow): TeamMember => ({
   to: r.ends_on ?? null,
   pausedFrom: r.paused_from ?? null,
   pausedTo: r.paused_to ?? null,
+  joinedOn: r.joined_on ?? null,
+  leftOn: r.left_on ?? null,
   updatedAt: r.updated_at,
   updatedBy: r.updated_by,
 });
@@ -62,20 +68,22 @@ export async function readMembers(): Promise<TeamState> {
       tableMissing: false,
       coverReady: !members.length || 'is_primary' in members[0],
       pauseReady: !members.length || 'paused_from' in members[0],
+      tenureReady: !members.length || 'joined_on' in members[0],
     };
   } catch (e) {
-    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true, coverReady: false, pauseReady: false };
+    if (e instanceof TeamTableMissing) return { members: [], tableMissing: true, coverReady: false, pauseReady: false, tenureReady: false };
     throw e;
   }
 }
 
-type MemberWrite = Omit<TeamMember, 'updatedAt' | 'isAdmin' | 'primary' | 'from' | 'to' | 'pausedFrom' | 'pausedTo'>
-  & { isAdmin?: boolean; cover?: Pick<TeamMember, 'primary' | 'from' | 'to'>; pause?: Pick<TeamMember, 'pausedFrom' | 'pausedTo'> };
+type MemberWrite = Omit<TeamMember, 'updatedAt' | 'isAdmin' | 'primary' | 'from' | 'to' | 'pausedFrom' | 'pausedTo' | 'joinedOn' | 'leftOn'>
+  & { isAdmin?: boolean; cover?: Pick<TeamMember, 'primary' | 'from' | 'to'>; pause?: Pick<TeamMember, 'pausedFrom' | 'pausedTo'>; tenure?: Partial<Pick<TeamMember, 'joinedOn' | 'leftOn'>> };
 
 export async function upsertMember(m: MemberWrite): Promise<TeamMember> {
   const row = await call<MemberRow>('/team', {
     method: 'PUT',
     body: {
+      ...(m.id != null ? { id: m.id } : {}),
       phone: m.phone,
       name: m.name,
       team: m.team,
@@ -86,6 +94,8 @@ export async function upsertMember(m: MemberWrite): Promise<TeamMember> {
       is_admin: m.isAdmin,
       ...(m.cover ? { is_primary: m.cover.primary, starts_on: m.cover.from, ends_on: m.cover.to } : {}),
       ...(m.pause ? { paused_from: m.pause.pausedFrom, paused_to: m.pause.pausedTo } : {}),
+      ...(m.tenure && 'joinedOn' in m.tenure ? { joined_on: m.tenure.joinedOn } : {}),
+      ...(m.tenure && 'leftOn' in m.tenure ? { left_on: m.tenure.leftOn } : {}),
       updated_by: m.updatedBy,
     },
   });

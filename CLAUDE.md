@@ -198,7 +198,7 @@ reading the module.
 | Module | Doc | What it holds |
 |---|---|---|
 | Site audit / installation ops | `docs/site-audit/` | Split into `roles` · `staff` · `orders` · `analytics` · `coe` · `gotchas`; `context.md` is the pointer table |
-| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups; the meeting check-in, built 2026-10-30) · `ec-directed` (leads sent to an EC, and the assisted revenue they bring) · `ec-referral` (the store form that hands a walk-in B2B client to Outreach) · `reminders` (every person's follow-ups with an optional time, an hour-before window and opt-in desktop alerts, 2026-11-06) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
+| B2B sales CRM | `docs/b2b/` | Split into `overview` (the landing sub-tab, ex-Dashboard, rebuilt 2026-10-30) · `inbound` · `outreach` · `leads` · `client-db` · `kam` (admin assignment with KAM sign-off; per-PI follow-ups; the meeting check-in, built 2026-10-30) · `ec-directed` (leads sent to an EC, and the assisted revenue they bring) · `ec-referral` (the store form that hands a walk-in B2B client to Outreach) · `reminders` (every person's follow-ups with an optional time, an hour-before window and opt-in desktop alerts, 2026-11-06) · `data-layer` · `studio-space` (the tab that replaced Partner Content: a link out, plus per-number Studio Space onboarding; the two-way CRM ↔ Studio Space sync and CRM referrals, 2026-11-27) · `partner-bridge` (design only) · `sandbox` (`npm run dev:sandbox`, the whole journey on dummy data); `context.md` is the pointer table. **A manager/individual visibility redesign is active across sessions — read `sales-tab-redesign.md` and `kpi-definitions.md` first** before any B2B Sales tab change. A summary tile on a B2B tab is a clickable *lens*: one predicate gives both its count and the list it opens (`inbound.md` §One tab, three tile groups; KAM has the same, `kam.md` §The tiles are the navigation) |
 | App shell / auth / tabs | `docs/crm-shell/context.md` | Login, session restore, the 16-tab permission gate |
 | Remarks quality | `docs/remarks-quality/context.md` | The 4-pointer remark score, why scoring lives in Django, the 7 MB in-memory payload, server-enforced `crm.remarks_quality` |
 | Django/Kylas client layer | `docs/api-layer/context.md` | `mdFetch`'s envelope unwrap, 8s GET dedupe, single-flight token refresh; the server cache and rate limiter |
@@ -213,7 +213,7 @@ reading the module.
 | Store checklist | `docs/store-checklist/context.md` | The daily EC checklist: stable item ids as jsonb keys, the merging RPC, per-role backdating, store codes not branch names |
 | Store display | `docs/store-display/context.md` | Movement lifecycle, the hardcoded store↔branch-id map, the image transform proxy |
 | Sales dashboard | `docs/sales-dashboard/context.md` | Raise/escalation tabs; contact→deals in one request |
-| Shipped-and-fixed bugs | `docs/landmines.md` | 106 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
+| Shipped-and-fixed bugs | `docs/landmines.md` | 107 bugs already fixed here, kept because the shape recurs. **Not only site-audit** — it also holds the `42703` missing-column signature, the roster's probe-gated columns, the permissions drift, the lost-photo state-updater bug, duplicate log writes, and why an empty `allowedBranches` means all branches |
 | The three backends | `docs/backends.md` | Django vs CRM Supabase vs Site Audit Supabase, and the hardcoded creds; B2B on the FastAPI backend since 2026-10-29; **§Owed by Django**, the one list of every change still waiting on Django |
 | BDA Retail | `docs/bda-retail/context.md` | Retail leads the stores missed, in four cohorts with priorities, stored in b2b-backend (0033). Five named admins see everything; the `bda_retail` role sees only its queue and performance. Django's cart rows carry no `visits`, and carts over ₹1 Cr are typos |
 | Supabase DDL | `supabase/migrations/README.md` | Which project each `.sql` targets, and which were never applied |
@@ -293,7 +293,7 @@ The two largest modules are **split into topic parts** for exactly this reason �
 `docs/site-audit/` and `docs/b2b/` each have a 19-line `context.md` pointer table
 and six parts of 45–190 lines. Read the part, not the module. `docs/landmines.md`
 stays one file because its entries cross-reference each other; it opens with a
-**Contents** list of all 106 titles, so grep a title and read around the line you
+**Contents** list of all 107 titles, so grep a title and read around the line you
 hit.
 
 Answers are often not in the doc whose name matches the topic. `docs/landmines.md`
@@ -684,6 +684,41 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
+**START HERE for B2B (2026-11-27, latest): CRM PR #104 with b2b-backend PR #45
+(migrations 0034–0036), both merged on Dhruv's ask.** Start new work from `origin/main`.
+Five changes; read the named doc section before touching any of them:
+- **Reminders** are horizontal tabs (Due now, Today, Missed, Coming up) with a Calls &
+  meetings / Carts & PIs switch from each record's stage (`docs/b2b/reminders.md`).
+- **Leads** has two sections, Inbound and Outreach / EC B2B referrals, a Created column,
+  and every filter in memory so the figures match the list (`docs/b2b/leads.md`).
+- **Revenue follows the team a rep held on the order's day.** Team rows carry
+  `joined_on`/`left_on`; an order by someone on B2B that day reads `store: B2B`, because
+  Django's row branch is the rep's branch today (a KAM who became a store manager had all
+  his B2B orders under the new store). Undated people keep the old rule, so **figures move
+  only once a manager dates people on the Team tab**: set team dates, Remove asks for the
+  last day, Record someone who has left (`docs/b2b/overview.md` §Four revenue channels).
+- **A business number is a person only between their dates** (0035: row `id`, one open
+  row per number per team). Adding a joiner on a held number asks for the holder's last
+  day; calls go to whoever held the number that day; leads and firms need the name to
+  agree. Leavers stay on the Leadership Board for their own days with "Show their whole
+  time here" (`docs/b2b/leadership.md`, `sales-tab-redesign.md`).
+- **CRM ↔ Studio Space sync, both ways** (`app/studio_crm_sync.py`, runs inside
+  `sync_firm_kams`): every live CRM team member gets a Studio staff login on their
+  mobile (no password; they sign in from the CRM tab), leavers' logins are switched off,
+  numbers and GSTINs flow both ways, and any Inbound lead, Outreach lead or firm can add
+  **Referred clients** from its drawer (0036 `b2b_referral`), counted as Referred on the
+  referrer's team. This **reverses** the October "CRM never writes Studio Space" and "the
+  team list creates no login" decisions (`docs/b2b/studio-space.md` §Two-way sync).
+- **Still to do on production:** a manager dates the people who moved or left (Team tab).
+  Check the console Team list for the logins the first start-up created. Never write why
+  someone left into this public repo.
+- **Local real-data copy:** a session on 2026-11-27 served this work on :3000 from a
+  scratchpad clone against `crm_real` on :8802, migrated to 0036 and pruned to match
+  production (the refresh only upserts, so it also deleted 26 firms and 2 Outreach rows
+  production no longer has). To rebuild it: `refresh-crm-real.py`, then run :8802 from a
+  b2b-backend checkout at `origin/master` (0036) and `npx next dev -p 3000` with the
+  `real()` env in `crm-local.sh`.
+
 **START HERE for B2B revenue (2026-11-27): Overview → Revenue analysis sub-tab (CRM PR
 from `b2b-revenue-analysis`, merged on Dhruv's ask; no backend PR).** The user wanted to
 see why one month earned more than another. Overview now has two sub-tabs. Revenue
@@ -977,8 +1012,9 @@ Site Audit users with no phone ("not set"), and a contact saved under the name
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
 sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees which firm). Never match
-a staff login by name. The CRM's team list creates no Studio Space login, so an
-admin still has to add the new people. The CRM keeps screen-only rep scoping by the
+a staff login by name. Since 2026-11-27 the CRM team list creates and deactivates
+Studio Space logins itself, and numbers, GSTINs and referrals flow both ways
+(`docs/b2b/studio-space.md` §Two-way sync). The CRM keeps screen-only rep scoping by the
 user's decision.
 
 **Studio and CRM sync (live 2026-10-31, `34e85b9`, backend #18).** A firm's Studio
@@ -1188,7 +1224,11 @@ for it.
   matched none of his 117 firms. Fix it with the Team tab's Sign-in check and
   Change number, never by hand-editing rows (`docs/b2b/sales-tab-redesign.md`
   §Sign-in check and Change number). A KAM tab that is empty because nothing is
-  assigned (Varun, the same day) is correct.
+  assigned (Varun, the same day) is correct. **Since 2026-11-27 a number is a person
+  only between their team dates:** business numbers are reissued to joiners, so match a
+  dated record with `holderOn` and an undated one only when its name agrees
+  (`numberIsTheirs`). Never key a person on the phone alone again
+  (`docs/b2b/leadership.md` §People who left).
 
 - **The B2B Sales tab has no data export anywhere (2026-10-29).** The user
   removed it from Client Database, Leads and Inbound for every role, admins

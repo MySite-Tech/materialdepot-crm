@@ -22,7 +22,7 @@ import { btnGhost } from '../../constants/ui';
 import { RowsPanel, Scorecard } from './ui/scorecard';
 import { TargetsEditor } from './ui/targets-editor';
 import { TeamTable } from './ui/team-table';
-import { fmtPeriod, periodFor, personTag, rosterOf } from './utils';
+import { fmtPeriod, overlaps, periodFor, personTag, rosterOf, tenureLine } from './utils';
 import type { B2BTeam, B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 
@@ -66,8 +66,8 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
   const people = useMemo<Person[]>(() => {
     if (!engine || !data || team.loading) return [];
     if (!manager) return selves.filter((s) => s.team === engine.team).map((s) => s.person);
-    return engine.people(data, team.members, live);
-  }, [engine, data, manager, selves, team.members, team.loading, live]);
+    return engine.people(data, team.members, live).filter((p) => !p.tenure || overlaps(p.tenure, period));
+  }, [engine, data, manager, selves, team.members, team.loading, live, period]);
 
   const picked = useMemo(() => (manager
     ? pickedRef && (people.find((p) => p.key === pickedRef.key) ?? { ...pickedRef, onTeam: false, cover: undefined })
@@ -204,6 +204,19 @@ export default function Leadership({ team, viewer }: { team: B2BTeamLoad; viewer
               <button onClick={() => setPickedRef(null)} className="font-semibold text-gray-500 hover:text-gray-900 cursor-pointer">← Whole {engine.label} team</button>
               <span className="text-gray-300">/</span>
               <span className="font-bold text-gray-900">{picked.name}</span>
+            </div>
+          )}
+          {manager && picked?.tenure && (
+            <div className="flex items-center gap-3 flex-wrap text-[12.5px] text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2">
+              <span>{tenureLine(picked.tenure, today)}. Only their own work and their orders from those days count here.</span>
+              {picked.tenure.to && (
+                <button
+                  onClick={() => { setPreset('custom'); setCustom({ from: picked.tenure!.from ?? addDays(picked.tenure!.to!, -89), to: picked.tenure!.to! }); }}
+                  className="font-semibold text-gray-900 underline cursor-pointer"
+                >
+                  Show their whole time here
+                </button>
+              )}
             </div>
           )}
 

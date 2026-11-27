@@ -331,6 +331,24 @@ Inbound that week). Every person has metrics on all three teams.
   rotation list (Inbound, Outreach, KAM) read, so the person rejoins by themselves the
   day after. The checkbox stays the open-ended pause. A single-person assign can still
   pick a paused person, as before. Nothing they already hold moves.
+- **Team dates (2026-11-27, migration 0034).** The user: when someone moves between
+  B2B and the stores, revenue must count under the role they held when the order was
+  placed, never the one they hold now. Each row has `joined_on`/`left_on` ("set team
+  dates" under the name). Remove asks for the last day (default today) and saves it with
+  `active: false`; Restore clears it. "Record someone who has left B2B" adds an inactive
+  dated row for a person who was never on this list (the roster-only KAMs who predate
+  it), picked from every CRM user, whatever their role now. These dates only date the
+  membership for revenue (`overview.md` §Four revenue channels); covers and pauses still
+  decide who gets new work. Until 0034 deploys the controls stay hidden.
+- **A business number passes to the next joiner (2026-11-27, migration 0035).** Numbers
+  are the company's and get reissued, so a number is a person only between their dates.
+  Rows have their own `id`, and only one row per number per team may be open (no last
+  day). Adding a CRM user whose number still has someone else's open row shows "number
+  was X's" and asks for X's last day; the Add closes X's rows on that day and starts the
+  joiner the day after. The backend refuses (409) a different person on an open number.
+  Row saves go by `id`. "Record someone who has left B2B" takes a free name and number,
+  because a leaver's number may already show the joiner's name in the CRM user list, and
+  it never auto-links the Kylas user found by that number (that is the current holder's).
 - **Landing tab:** the team they are covering today, else the primary
   (`viewer.member`).
 - **Adding a person:** their first row becomes primary; "For: A cover, for set days"

@@ -250,6 +250,20 @@ anyone can do anyone's work, with a primary team and short covers
 - A cover stays on the compare table after it ends. Remove the row on the Team tab
   and the person still appears through their logged work, tagged with their team.
 
+**People who left are listed with their dates, and judged only on their own days
+(2026-11-27).** The user: someone who has left must still be reviewable for the
+days they were here. A row with a last day and no longer active is a
+former member (`formerPeople`): their key carries the last day (`memberKey`), so they
+never collide with whoever holds their business number now. They show only for periods
+that overlap their dates, the picker tags them "left 20 Nov", they carry no default
+target, and their page offers **Show their whole time here** (their joined date, or 90
+days back from their last day when none is set). Work is theirs by the record: an
+Inbound call is credited to whoever held `byPhone` **on the call's IST day**
+(`holderOn`, `isPersonByNumberOn`), and an Outreach lead or firm is owned by a number
+only when the name on the record does not name someone else (`numberIsTheirs`, in
+`repOwns` and `ownsFirm`). So a joiner who inherits the number does not inherit the
+leaver's calls, leads or firms; a manager reassigns those by hand.
+
 An individual is matched through `viewer.memberships` when they are on the list. Otherwise they are
 matched by phone, or by name, against each team's people (`selfOn`). Someone who
 matches nothing sees a notice, not an empty card.

@@ -3,7 +3,7 @@ import { MONTHLY_RATES, OUTREACH_KPIS, Period, outreachKpis } from '../../outrea
 import { journeyBy, newestFirst, notesBy, outreachCallsBy, outreachMeetingsBy, redirectsBy } from '../measures/activity';
 import { creditedOrders } from '../measures/revenue';
 import { ActivityItem, PerfCard, PerfData, PerfKpiDef, Person, TeamEngine } from '../types';
-import { memberPeople, withDataPeople } from '../utils';
+import { formerPeople, memberPeople, withDataPeople } from '../utils';
 import type { TeamMember } from '@/lib/b2b/team/types';
 
 const DEFS: PerfKpiDef[] = OUTREACH_KPIS.map((d) => ({
@@ -47,7 +47,7 @@ function activity(data: PerfData, people: Person[], period: Period): ActivityIte
 }
 
 function people(data: PerfData, members: TeamMember[], live: boolean): Person[] {
-  const base = live ? memberPeople(members, 'outreach') : [];
+  const base = live ? [...memberPeople(members, 'outreach'), ...formerPeople(members, 'outreach')] : [];
   const owners = base.map((p) => repOwns({ name: p.name, phone: p.phone }));
   const unowned = data.outreach.filter((l) => !owners.some((own) => own(l)));
   return withDataPeople(base, unowned.map((l) => l.bm), !live);

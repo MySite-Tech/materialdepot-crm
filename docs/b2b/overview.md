@@ -137,6 +137,16 @@ where it was booked decides the channel (`lib/b2b/revenue/utils/classify.ts`):
   date gate lives in `asOfOrder` (`classify.ts`) and was checked on hand-built cases
   through the compiled classifier. **After it deploys,** every month's total and
   order count must be unchanged and EC Direct must read above zero.
+- **A rep's team is the one they held on the order's day (2026-11-27).** Team rows carry
+  `joined_on`/`left_on` (b2b-backend 0034, set on the Team tab), and `repOf(name, reps,
+  day)` returns only the teams whose dates cover the order's IST day (`orderPlacedAt`,
+  else the cart date). A person with any dated row is judged by their dates alone: their
+  undated inactive rows, the static roster and `branch === 'B2B'` no longer make them a
+  B2B rep. A person with no dates keeps the old rule (active rows, roster, branch), so
+  nothing changes until they are dated. An order by someone on B2B that day reads
+  `store: B2B`, because the row's `branch` is the rep's home branch **today**: a KAM who
+  became a store manager had every past order filed under the new store
+  (`docs/landmines.md`). After their last day their orders are store orders like anyone's.
 - **The first match decides the type:** referred, then a B2B rep, then a number B2B
   holds, then a firm with no KAM, then the B2B branch.
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is
@@ -195,6 +205,13 @@ public repo. The route itself has run only on the sandbox.
   this reads Django's orders and not Studio's `referral_order`. On 2026-10-31 that
   was one small order. A firm's revenue on its page can differ from this report: that
   page is lifetime plus Studio orders on unlisted numbers.
+- **Referred also counts referrals made in the CRM (2026-11-27).** Any Inbound lead,
+  Outreach lead or firm can refer clients from its drawer (`studio-space.md` §Two-way
+  sync). Each becomes a `referred` holder on that number from the referral's date,
+  credited to the referring record's owner **on that record's team** (Inbound, Outreach
+  or KAM), so the Referred card is no longer KAM-only (`classifyOrder` uses the holder's
+  team). Studio referrals now count when `approved`, `active` or `dormant`; before,
+  only `approved` counted, so a referral Studio had moved to active silently stopped.
 - **`client_master.referred_clients` is empty and `user_refferred` was not used.** Only
   Studio Space referrals count, so a KAM's referral outside Studio Space is
   invisible. On 2026-10-31 18 referred numbers had one order each.

@@ -52,14 +52,18 @@ export async function PUT(request: NextRequest) {
   catch { return bad('Body must be JSON'); }
 
   if (!body.team || !TEAM_KEYS.has(body.team)) return bad("'team' must be inbound, outreach or kam");
+  if (body.id !== undefined && body.id !== null && !Number.isInteger(body.id)) return bad("'id' must be an integer, null, or absent");
   if (body.kylasUserId !== undefined && body.kylasUserId !== null && !Number.isInteger(body.kylasUserId)) {
     return bad("'kylasUserId' must be an integer, null, or absent");
   }
   const day = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
-  if (![body.from, body.to, body.pausedFrom, body.pausedTo].every(day)) return bad("'from', 'to', 'pausedFrom' and 'pausedTo' must be YYYY-MM-DD, null, or absent");
+  if (![body.from, body.to, body.pausedFrom, body.pausedTo, body.joinedOn, body.leftOn].every(day)) {
+    return bad("'from', 'to', 'pausedFrom', 'pausedTo', 'joinedOn' and 'leftOn' must be YYYY-MM-DD, null, or absent");
+  }
 
   try {
     return Response.json(await saveMember({
+      id: body.id ?? undefined,
       phone: String(body.phone ?? ''),
       name: String(body.name ?? ''),
       team: body.team,
@@ -71,6 +75,8 @@ export async function PUT(request: NextRequest) {
       to: body.to,
       pausedFrom: body.pausedFrom,
       pausedTo: body.pausedTo,
+      joinedOn: body.joinedOn,
+      leftOn: body.leftOn,
       kylasUserId: body.kylasUserId,
     }, c.name));
   } catch (err) {

@@ -70,3 +70,58 @@ export function TeamRole({ member, hasPrimary, ready, busy, onChange }: {
     </span>
   );
 }
+
+export type TenurePatch = Pick<MemberInput, 'joinedOn' | 'leftOn' | 'active'>;
+
+const day = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+export function tenureLabel(m: Pick<TeamMember, 'joinedOn' | 'leftOn'>): string | null {
+  if (m.joinedOn && m.leftOn) return `On the team ${day(m.joinedOn)} – ${day(m.leftOn)}`;
+  if (m.leftOn) return `Last day ${day(m.leftOn)}`;
+  if (m.joinedOn) return `On the team since ${day(m.joinedOn)}`;
+  return null;
+}
+
+export function Tenure({ member, ready, busy, onChange }: {
+  member: TeamMember;
+  ready: boolean;
+  busy: boolean;
+  onChange: (patch: TenurePatch) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [joined, setJoined] = useState(member.joinedOn ?? '');
+  const [left, setLeft] = useState(member.leftOn ?? '');
+  if (!ready) return null;
+  const input = 'border border-gray-200 rounded px-1 py-0.5 text-[12px] text-gray-800';
+
+  if (editing) {
+    return (
+      <span className="flex items-center gap-1 mt-1 flex-wrap text-[11px] text-gray-500">
+        <input type="date" aria-label="First day on the team" value={joined} onChange={(e) => setJoined(e.target.value)} className={input} />
+        to
+        <input type="date" aria-label="Last day on the team" value={left} min={joined || undefined} onChange={(e) => setLeft(e.target.value)} className={input} />
+        <button
+          disabled={busy || (!!joined && !!left && left < joined)}
+          onClick={() => { onChange({ joinedOn: joined || null, leftOn: left || null, ...(left && left < istDay() ? { active: false } : {}) }); setEditing(false); }}
+          className="font-semibold text-gray-700 disabled:opacity-40"
+        >
+          Save
+        </button>
+        <button onClick={() => setEditing(false)} className="text-gray-400">Cancel</button>
+      </span>
+    );
+  }
+
+  const label = tenureLabel(member);
+  return (
+    <span className="block">
+      {label && <span className={`${chip} bg-gray-50 text-gray-600 border-gray-200`}>{label}</span>}
+      <button
+        disabled={busy} onClick={() => setEditing(true)} className={label ? link : `-ml-1.5 ${link}`}
+        title="Revenue counts under this team only for orders placed between these days"
+      >
+        {label ? 'change dates' : 'set team dates'}
+      </button>
+    </span>
+  );
+}

@@ -179,8 +179,12 @@ for its message. Five things the relay deliberately does:
   so a credit always names who really set it (`docs/b2b/overview.md` §A manager
   credits one order). Other relayed writes still carry the actor the browser sends.
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`, `studio-number`, `client-review`, `order-credits`) so the catch-all is a defined surface, not an open proxy to
-  the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
+  `studio-access`, `studio-number`, `client-review`, `order-credits`, `referrals`) so the catch-all is a defined surface, not an open proxy to
+  the backend. `referrals` (2026-11-27) is open to every B2B user, because any rep adds a
+  client's referral from their own drawer; on a firm linked to Studio Space the backend
+  also writes the studio's referral, which is why the route is allow-listed and not a
+  direct call (`docs/b2b/studio-space.md` §Two-way sync). The revenue report reads it
+  server-side too, as one more holder read beside `/rows`. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.
@@ -225,7 +229,10 @@ cover, so a round-robin toggle never wipes cover dates. Whether the backend has 
 is read off the GET (`coverReady`: the rows carry `is_primary`). A backend before 0031
 would silently drop them, so `saveMember` refuses cover fields with that reason
 instead of reporting a save that did not happen. `paused_from`/`paused_to` (0032)
-follow the same rule, read off the GET as `pauseReady`.
+follow the same rule, read off the GET as `pauseReady`, and so do `joined_on`/`left_on`
+(0034, `tenureReady`): each is sent only when the save names it. A row's `id` (0035) is
+sent whenever the CRM knows it, so a save lands on that membership and not on whoever
+holds the number now.
 
 **A team save reads Kylas's user list only when it links a Kylas user** (a new row, or
 a picked `kylasUserId`). Until 2026-11-26 every save did, which is two pages at about

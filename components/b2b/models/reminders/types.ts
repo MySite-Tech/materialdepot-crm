@@ -7,6 +7,8 @@ export type ReminderKind = 'inbound' | 'outreach' | 'meeting' | 'firm' | 'pi';
 
 export type ReminderState = 'later' | 'soon' | 'due' | 'today' | 'overdue';
 
+export type ReminderTopic = 'touch' | 'cart';
+
 export interface ReminderPerson {
   name: string;
   phone?: string;
@@ -17,6 +19,8 @@ export interface Reminder {
   key: string;
   kind: ReminderKind;
   team: B2BTeam;
+  topic: ReminderTopic;
+  stage?: string;
   openId?: string;
   company: string;
   contact?: string;

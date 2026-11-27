@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { REMINDER_KIND_LABEL, REMINDER_LEAD_MINUTES, Reminder, fmtTime, reminderState } from '../models/reminders';
+import { REMINDER_KIND_LABEL, REMINDER_LEAD_MINUTES, REMINDER_TEAM_LABEL, Reminder, fmtTime, reminderState } from '../models/reminders';
 
 const SEEN_KEY = 'b2b.reminders.alerted';
 const SEEN_KEEP_MS = 3 * 86_400_000;
@@ -60,7 +60,7 @@ export function useReminderAlerts(mine: Reminder[], nowMs: number, ready: boolea
     show(
       fresh.length === 1 ? `${fmtTime(first.time)} · ${first.company}` : `${fresh.length} reminders due within the hour`,
       fresh.length === 1
-        ? [REMINDER_KIND_LABEL[first.kind], first.contact, first.phone].filter(Boolean).join(' · ')
+        ? [`${REMINDER_TEAM_LABEL[first.team]} ${REMINDER_KIND_LABEL[first.kind].toLowerCase()}`, first.contact, first.phone].filter(Boolean).join(' · ')
         : fresh.slice(0, 4).map((r) => `${fmtTime(r.time)} ${r.company}`).join('\n'),
       () => open.current(),
     );

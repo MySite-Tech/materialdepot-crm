@@ -2,7 +2,7 @@ import { normalisePhone } from '@/lib/org/utils';
 import { ClientContact, ClientEntity, KamAssignment, clientTypeFromLead, contactNumbers, normalizeContactNumber, normalizeGst } from '../../client';
 import { newB2BId } from '../../ids';
 import { OutreachLead } from '../../mock-data';
-import { HANDOVER_TAT_HOURS, hoursSince, sameRep } from '../../outreach/handover';
+import { HANDOVER_TAT_HOURS, hoursSince, numberIsTheirs, sameRep } from '../../outreach/handover';
 import { Rep, spreadByLoad } from '../../outreach/intake';
 
 export type FirmHandoverState = 'pending' | 'overdue' | 'accepted' | 'rejected' | 'none';
@@ -33,7 +33,7 @@ export const firmHandoverPending = (c: ClientEntity): boolean => firmHandover(c)
 export const ownsFirm = (c: ClientEntity, me: Rep): boolean => {
   if (!c.kam) return false;
   const a = latestAssignment(c);
-  if (a?.kamPhone && me.phone && sameRep(a.kam, c.kam)) return a.kamPhone === me.phone;
+  if (a?.kamPhone && me.phone && sameRep(a.kam, c.kam)) return a.kamPhone === me.phone && numberIsTheirs(a.kam, me);
   return sameRep(c.kam, me.name);
 };
 

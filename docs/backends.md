@@ -150,6 +150,21 @@ a member gets no rotation work (`b2b/sales-tab-redesign.md` §Pausing for set da
 works. Run up, down and up on a `TEMPLATE crm_real` copy and over HTTP there: a round
 robin toggle kept the dates, a half or reversed window was refused with 400.
 
+**Migration `0034_b2b_team_tenure`** (b2b-backend branch `b2b-team-tenure`, 2026-11-27)
+adds `joined_on`/`left_on` to `b2b_team_member` (CHECK `left_on >= joined_on`), read and
+written by `GET/PUT /team`. **Deploy it first.** Without it the Team tab hides the date
+controls and revenue reads every person as undated, the old rule. Run on a throwaway
+Postgres: idempotent, dates on a primary row accepted, a reversed pair refused.
+
+**Migration `0035_b2b_team_row_id`** (same branch, 2026-11-27) gives each row an `id`
+primary key and a unique index on `(phone, team) WHERE left_on IS NULL`, so a closed row
+keeps its number while the next joiner opens a row on it (`b2b/sales-tab-redesign.md`
+§A business number passes). `PUT /team` takes `id`, else updates the open row for the
+number, refuses another person on an open number with 409, and inserts a closed record
+for someone else as its own row. Renumber moves only open rows. Run up, down and up on a
+`TEMPLATE crm_dummy` copy and exercised over HTTP there; 0034 and 0035 also ran on the
+local `crm_real` copy of production's schema.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against

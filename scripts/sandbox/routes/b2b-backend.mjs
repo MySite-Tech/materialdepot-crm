@@ -42,24 +42,33 @@ function kamLoad(db) {
   return load;
 }
 
-const MEMBER_KEYS = ['phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'is_admin', 'is_primary', 'starts_on', 'ends_on', 'paused_from', 'paused_to', 'updated_at', 'updated_by'];
+const MEMBER_KEYS = ['id', 'phone', 'name', 'team', 'kylas_user_id', 'kylas_name', 'in_rotation', 'active', 'is_admin', 'is_primary', 'starts_on', 'ends_on', 'paused_from', 'paused_to', 'joined_on', 'left_on', 'updated_at', 'updated_by'];
 
 function putMember(db, body) {
   const phone = String(body?.phone ?? '').replace(/\D/g, '').slice(-10);
   if (phone.length !== 10) return reply(422, { error: 'phone must be 10 digits' });
-  const i = db.team.findIndex((m) => m.phone === phone && m.team === body.team);
+  const who = (n) => String(n ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  db.team.forEach((m, n) => { m.id ??= n + 1; });
+  let i = body.id != null ? db.team.findIndex((m) => m.id === body.id) : db.team.findIndex((m) => m.phone === phone && m.team === body.team && !m.left_on);
+  if (body.id != null && i < 0) return reply(404, { detail: 'No team row has that id' });
+  if (body.id == null && i >= 0 && who(db.team[i].name) !== who(body.name)) {
+    if (!body.left_on) return reply(409, { detail: `${phone} is still ${db.team[i].name}'s number on ${body.team}. Give ${db.team[i].name} a last day first, then add ${body.name}.` });
+    i = -1;
+  }
   const row = Object.fromEntries(MEMBER_KEYS.map((k) => [k, body[k] ?? null]));
+  row.id = i >= 0 ? db.team[i].id : Math.max(0, ...db.team.map((m) => m.id)) + 1;
   row.phone = phone;
   row.is_admin = typeof body.is_admin === 'boolean' ? body.is_admin : i >= 0 && db.team[i].is_admin === true;
-  for (const k of ['starts_on', 'ends_on', 'paused_from', 'paused_to']) row[k] = k in body ? body[k] || null : i >= 0 ? db.team[i][k] ?? null : null;
+  for (const k of ['starts_on', 'ends_on', 'paused_from', 'paused_to', 'joined_on', 'left_on']) row[k] = k in body ? body[k] || null : i >= 0 ? db.team[i][k] ?? null : null;
   if (row.starts_on && row.ends_on && row.ends_on < row.starts_on) return reply(400, { detail: 'ends_on is before starts_on' });
+  if (row.joined_on && row.left_on && row.left_on < row.joined_on) return reply(400, { detail: 'left_on is before joined_on' });
   if (!row.paused_from !== !row.paused_to) return reply(400, { detail: 'A pause needs both paused_from and paused_to, or neither' });
   row.is_primary = typeof body.is_primary === 'boolean' ? body.is_primary : i >= 0 && db.team[i].is_primary === true;
   if (row.starts_on || row.ends_on) row.is_primary = false;
   row.updated_at = new Date().toISOString();
   if (i >= 0) db.team[i] = row; else db.team.push(row);
-  if (typeof body.is_admin === 'boolean') for (const m of db.team) if (m.phone === phone) m.is_admin = body.is_admin;
-  if (row.is_primary) for (const m of db.team) if (m.phone === phone && m.team !== row.team) m.is_primary = false;
+  if (typeof body.is_admin === 'boolean') for (const m of db.team) if (m.phone === phone && !m.left_on) m.is_admin = body.is_admin;
+  if (row.is_primary) for (const m of db.team) if (m.phone === phone && m.team !== row.team && !m.left_on) m.is_primary = false;
   return row;
 }
 
@@ -167,8 +176,25 @@ export function backendRoutes(db) {
     if (path === '/target' && method === 'GET') return db.target;
     if (path === '/target' && method === 'POST') { db.target = { ...body, updated_at: new Date().toISOString() }; return db.target; }
 
+    if (path === '/referrals' && method === 'GET') return { referrals: (db.referrals ?? []).filter((r) => r.status === 'active') };
+    if (path === '/referrals' && method === 'POST') {
+      const phone = String(body?.client_phone ?? '').replace(/\D/g, '').slice(-10);
+      if (!/^[6-9]\d{9}$/.test(phone)) return reply(422, { detail: 'Not a 10-digit Indian mobile number.' });
+      db.referrals ??= [];
+      const hit = db.referrals.find((r) => r.referrer_kind === body.referrer_kind && r.referrer_id === body.referrer_id && r.client_phone === phone);
+      const row = { ...(hit ?? { id: db.referrals.length + 1, created_at: new Date().toISOString() }), referrer_kind: body.referrer_kind, referrer_id: body.referrer_id,
+        referrer_name: body.referrer_name ?? null, client_name: body.client_name, client_phone: phone, note: body.note ?? null, created_by: body.created_by ?? null, status: 'active', on_studio: false };
+      if (hit) Object.assign(hit, row); else db.referrals.push(row);
+      return { ...row, studio_note: null };
+    }
+    if (path.startsWith('/referrals/') && method === 'DELETE') {
+      const r = (db.referrals ?? []).find((x) => String(x.id) === path.split('/')[2]);
+      if (!r) return reply(404, { detail: 'No such referral' });
+      r.status = 'removed';
+      return { ok: true };
+    }
     if (path === '/team' && method === 'GET') {
-      return { members: [...db.team].sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone)) };
+      return { members: [...db.team].map((m, n) => ({ id: n + 1, joined_on: null, left_on: null, ...m })).sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone)) };
     }
     if (path === '/team' && method === 'PUT') return putMember(db, body);
     if (path === '/ec-visits' && method === 'GET') return listEcVisits(db, query);
