@@ -745,7 +745,7 @@ team"), and add Varun's Inbound cover with his dates. Production answered 0031 a
 
 **START HERE for B2B (2026-11-27): Client Database by calendar month, any firm to any
 team (CRM PRs #88 and #89, both merged 2026-11-27 on Dhruv's ask, main `074827d`; no
-backend PR).** Start new work from `origin/main`. The user asked for three things in one
+backend PR; live and checked signed in on production the same day).** Start new work from `origin/main`. The user asked for three things in one
 message; two already existed, so check before rebuilding:
 - **Status is by calendar month (#89).** Active is a last order in M-0 or M-1, then
   Inactive 2–3 months (M-2, M-3), 4–6 (M-4 to M-6), 7–12 (M-7 to M-12) and over 12. A
@@ -762,10 +762,22 @@ message; two already existed, so check before rebuilding:
   orders on open and lists firms on no board, for a manager to send to a team or mark
   Not a client. It never auto-adds: the user chose manual review because auto-import put
   store walk-ins into EC Direct revenue. Don't re-propose auto-import.
-- **Seen on the sandbox only.** After deploy, signed in as a manager: Client Database
-  tiles read "last order Oct–Nov 2026"-style month ranges and their counts equal the
-  lists; send one Active firm to an Outreach BM; open Review new firms once (first read
-  up to a minute) — it has never been opened on production.
+- **Checked on production, 27 Nov, signed in as Dhruv, read-only** (nothing assigned or
+  saved). Client Database: 1,288 firms = Active 194 + 2–3 months 132 + 4–6 months 325 +
+  7–12 months 499 + over 12 months 60 + never ordered 78, 0 Unknown; every tile's count
+  equals its list; all 1,288 rows' status matches their last-order month, 0 mismatches.
+  Against the old 30-day rule, Active went 124 → 194. KAM tab agrees (701 assigned = 194 +
+  132 + 361 + 14). The assign bar offers Inbound (3 people), Outreach (4) and KAM (5) for
+  an Active firm. Review new firms loads: 945 firms (530 proprietors, 205 partnerships,
+  201 companies; 416 ordered Oct–Nov), 0 marked Not a client, so nobody has worked it
+  yet. No console errors. **Not done:** an actual send to an Outreach BM (a production
+  write; do it signed in when the user wants a real firm sent).
+- **Open gap, found then, pre-existing:** the Overview's client book reads 190 / 134 /
+  326 / 500 against Client Database's 194 / 132 / 325 / 499. Client Database and KAM add
+  a firm's Studio Space orders (`useClientAggregates` → `withStudioOrders`); the
+  Overview (`use-overview-data.ts`) does not, so firms whose newest order is on Studio
+  sit in an older band there. One number, one function: make the Overview use the same
+  metrics. Not fixed yet; the user has not asked.
 
 **START HERE for B2B (2026-11-20): Client Database sends any firm to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no

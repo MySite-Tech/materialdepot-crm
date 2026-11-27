@@ -229,6 +229,12 @@ Inactive 2–3 months only. `nextStatus` names that band on the Firm page.
   3–6 → 4–6, 6–12 → 7–12, 12+ → over 12), and so did the Client Database lens keys
   (`m2to3`, `m4to6`, `m7to12`, `m12plus`) and KAM's long tile (Inactive 4+ months,
   `LONG_INACTIVE`). Nothing persisted the old names.
+- **Production, 2026-11-27, signed in, read-only:** all 1,288 Client Database firms'
+  status matched their last-order month (0 mismatches), every tile equalled its list, and
+  Active rose from 124 under the 30-day rule to 194. The KAM tab's tiles agree. **The
+  Overview's client book does not quite:** it read 190 Active against 194, because Client
+  Database and KAM add Studio Space orders (`withStudioOrders` in `useClientAggregates`)
+  and `use-overview-data.ts` does not. Same rule, different last-order date. Open.
 - Checked at each boundary through the compiled `rules/status.ts` (Node, the
   recipe in `CLAUDE.md`): on 27 Nov an order on 1 Oct is Active and 30 Sep is
   Inactive 2–3 months; 31 Jul is 4–6; 30 Apr is 7–12; 31 Oct 2025 is over 12; a
