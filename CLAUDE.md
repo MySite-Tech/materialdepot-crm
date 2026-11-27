@@ -695,8 +695,10 @@ only the existing `/api/b2b/revenue` (six reads on open). Category has no per-ca
 price, so an order counts under each of its categories; branch is the rep's home branch
 until Django sends the booked branch. Read `docs/b2b/overview.md` §Revenue analysis
 sub-tab before changing it. Tied out to the hero on real October and November orders;
-screens seen on the sandbox only. **After deploy,** its Revenue tile must equal the
-Overview hero for the same month with Same days only off.
+opened signed in on production on 2026-11-27: the headline, the comparison against
+October 1–27 and What moved it all load, with no console errors. **Not yet checked
+there:** its Revenue tile must equal the Overview hero for the same month with Same
+days only off.
 
 **START HERE for BDA Retail (2026-11-26): a new top-level CRM tab, live.** CRM PR #87
 (branch `bda-retail`) with b2b-backend #42 (migration 0033, `bda_*` tables) and #43
@@ -762,10 +764,13 @@ message; two already existed, so check before rebuilding:
   orders on open and lists firms on no board, for a manager to send to a team or mark
   Not a client. It never auto-adds: the user chose manual review because auto-import put
   store walk-ins into EC Direct revenue. Don't re-propose auto-import.
-- **Seen on the sandbox only.** After deploy, signed in as a manager: Client Database
-  tiles read "last order Oct–Nov 2026"-style month ranges and their counts equal the
-  lists; send one Active firm to an Outreach BM; open Review new firms once (first read
-  up to a minute) — it has never been opened on production.
+- **Checked signed in on production 2026-11-27 (read-only, as a manager).** The six
+  status tiles sum to All firms with no Unknown, each tile's count equals its list, and
+  each band's last orders fall exactly inside its months. A firm from every band opens
+  Inbound, Outreach and KAM, and each picker lists people. Review new firms loaded on
+  production for the first time. No console errors. **Not yet done:** a real send. The
+  first one should be a manager sending one Active firm to an Outreach BM, then checking
+  the BM's pool and the Firm page SPoC.
 
 **START HERE for B2B (2026-11-20): Client Database sends any firm to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no
@@ -779,9 +784,11 @@ write) **and** a `spoc_log` entry naming that person as the firm's Inbound or
 Outreach SPoC from that day. The KAM is kept. A firm with an open lead on that team,
 or no phone number, is skipped. Detail and the known gap
 (a BM's reject leaves the logged SPoC) are in `docs/b2b/client-db.md` §Any firm can
-go to Inbound, Outreach or a KAM. **Seen on the sandbox only.** After deploy,
-sign in as a manager, send one recently active firm to an Outreach BM, and check the lead
-in that BM's pool and the SPoC on the Firm page.
+go to Inbound, Outreach or a KAM. **The assign bar was checked on production on
+2026-11-27** (every band opens all three teams; see the 2026-11-27 entry above), but
+no send has run there yet. The first real send should be a manager sending one Active
+firm to an Outreach BM, then checking the lead in that BM's pool and the SPoC on the
+Firm page.
 
 **START HERE for B2B (2026-11-23): Outreach BMs log calls (CRM PR #83 from
 `outreach-call-log`, merged on Dhruv's ask; no backend PR).** The user: the Outreach

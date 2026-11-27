@@ -27,6 +27,11 @@ a weak one. Overview now has two sub-tabs, **Overview** (everything below) and
 **Revenue analysis** (`views/overview/analysis/`). The Overview card's "Analyse
 revenue" link opens it.
 
+**Opened signed in on production on 2026-11-27:** the headline (revenue, orders, firms
+ordering, average order) against October 1–27, the split into fewer vs smaller orders,
+What moved it per dimension and the six-month channel table all loaded, with no console
+errors. The Revenue-tile-equals-hero tie-out has not been done on production.
+
 - **It reads only `fetchRevenueReport`, one per month,** the same per-order report
   and server cache as the hero. Six months (the trend's window) plus any older
   month picked, three at a time (`LOAD_PARALLEL`), so opening it costs 6 requests.
