@@ -360,8 +360,9 @@ matches nothing sees a notice, not an empty card.
   interaction modal wrote the firm's KAM (or `KAMS[0]` when the firm had none),
   so a call was never credited to whoever actually made it. An `Enquiry`
   interaction counts toward neither calls nor meetings.
-- **KAM coverage** uses Active (`clientStatus`: an order in the last 30 days,
-  as of today) as its denominator, since 2026-10-29. It was a 3-month window
+- **KAM coverage** uses Active (`clientStatus`: an order this calendar month or
+  last, as of today, since 2026-11-27; the last 30 days before that) as its
+  denominator, since 2026-10-29. It was a 3-month window
   before. `kpi-definitions.md` requires one meaning of
   "active" across KAM. Against the Django stub every firm is Inactive, so it
   reads "—".

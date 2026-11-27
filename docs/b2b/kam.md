@@ -205,7 +205,36 @@ data, with Django stubbed.
   because free-text notes and the legacy target key still say it. The Django
   side is still owed (`backends.md` §Owed by Django row 15).
 
-### Account status: months since the last order, every firm (2026-11-06)
+### Account status: calendar months since the last order, every firm (2026-11-27)
+
+**Bands count calendar months, not days (2026-11-27, the user's ask).** With M-0 the
+current IST month and M-1 the one before, `clientStatus` takes the month of the
+firm's latest `lastOrderPlaced` and counts back: **Active** M-0 or M-1,
+**Inactive 2–3 months** M-2 or M-3, **Inactive 4–6 months** M-4 to M-6,
+**Inactive 7–12 months** M-7 to M-12, **Inactive over 12 months** older. Never
+ordered and Unknown (no read, or a future date) are unchanged. The point is
+stability: a firm changes band only on the 1st of a month, never mid-month, so a
+tile's count no longer shifts day to day. `ORDER_BANDS` holds the upper month of
+each band; `statusMonths` turns a band into its month range for tile subtitles
+("last order Aug–Sep 2026"), so the UI never restates the rule by hand.
+`daysToLapse` counts to the 1st of the month the firm drops a band, for Active and
+Inactive 2–3 months only. `nextStatus` names that band on the Firm page.
+
+- **What moved against the day rule.** Active now covers between 27 and 61 days
+  depending on the date, not a flat 30. On the 27th, a firm that ordered on the
+  1st of last month is still Active; on the 1st of a month every firm from two
+  months back drops at once. The KAM coverage denominator (`leadership.md`) and
+  the Overview's client book move with it.
+- **Renamed, not just re-cut.** The labels changed with the bands (1–3 → 2–3,
+  3–6 → 4–6, 6–12 → 7–12, 12+ → over 12), and so did the Client Database lens keys
+  (`m2to3`, `m4to6`, `m7to12`, `m12plus`) and KAM's long tile (Inactive 4+ months,
+  `LONG_INACTIVE`). Nothing persisted the old names.
+- Checked at each boundary through the compiled `rules/status.ts` (Node, the
+  recipe in `CLAUDE.md`): on 27 Nov an order on 1 Oct is Active and 30 Sep is
+  Inactive 2–3 months; 31 Jul is 4–6; 30 Apr is 7–12; 31 Oct 2025 is over 12; a
+  date after today is Unknown; December's turnover works across the year.
+
+#### The day-count bands it replaced (2026-11-06)
 
 **Replaced the 30 / 60-day rule on 2026-11-06**, at the user's ask, so firms can
 be targeted and handed to KAMs by how long they have been quiet. The bands are

@@ -13,7 +13,7 @@ import { useEcVisits } from './hooks/use-ec-visits';
 import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { fmtDate } from './utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, gstNumbers, lastOrderInFuture } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, gstNumbers, lastOrderInFuture, nextStatus } from '../../models/client';
 import { fmtShortINR } from '../../models/mock-data';
 import { Rep } from '../../models/outreach/intake';
 import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
@@ -88,7 +88,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
             <StatTile
               label="Last order"
               value={<span className="text-[15px]"><Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} /></span>}
-              sub={days !== undefined ? `${days} days until ${status === 'Active' ? 'Inactive 1–3 months' : 'Inactive 3–6 months'}` : undefined}
+              sub={days !== undefined ? `${days} days until ${nextStatus(status)}` : undefined}
             />
             <StatTile label="Open carts" value={<Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} />} />
           </div>
