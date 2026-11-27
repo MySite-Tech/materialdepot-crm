@@ -680,7 +680,7 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   why every firm has four SPoCs. Built on `client-db-win-back`: the assign bar
   opens Inbound and Outreach for those firms, each send creates a lead in that
   team's tab and logs the firm's SPoC, and the KAM is kept (`client-db.md`
-  §Firms inactive over 6 months go to Inbound or Outreach). Checked on the sandbox
+  §Any firm can go to Inbound, Outreach or a KAM; since 2026-11-27 any firm, with no time window). Checked on the sandbox
   only.
 
 ## Outreach: the brief (2026-10-28) and what was built

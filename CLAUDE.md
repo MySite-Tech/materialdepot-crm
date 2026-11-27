@@ -724,19 +724,20 @@ primary for the three people the backfill left without one (Team tab, "No primar
 team"), and add Varun's Inbound cover with his dates. Production answered 0031 at
 2026-11-26 (16 rows, 9 primaries). Driven end to end on the sandbox only.
 
-**START HERE for B2B (2026-11-20): Client Database sends long-inactive firms to
+**START HERE for B2B (2026-11-20): Client Database sends any firm to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no
 backend PR).** The user: the Client Database is not only for KAMs, and the four
-SPoCs exist for this. A manager selects firms inactive over 6 months (Inactive 6–12
-or 12+ months, `WIN_BACK_STATUSES`) and picks Inbound or Outreach on the assign bar.
-Each becomes a new lead in that team's tab (Outreach: source **Inactive firm**,
+SPoCs exist for this. A manager selects firms and picks Inbound or Outreach on the
+assign bar. **Since 2026-11-27 (PR #88) any firm can go to any team, with no time
+window:** the user said anyone can take any firm, so don't add an eligibility rule back.
+Each becomes a new lead in that team's tab (Outreach: source **Client Database firm**,
 a pending intake the BM accepts; Inbound: a `crm-` lead owned at once, no Kylas
 write) **and** a `spoc_log` entry naming that person as the firm's Inbound or
-Outreach SPoC from that day. The KAM is kept. A firm with an open lead on that team
-is skipped. Never ordered and recent firms stay KAM-only. Detail and the known gap
-(a BM's reject leaves the logged SPoC) are in `docs/b2b/client-db.md` §Firms inactive
-over 6 months go to Inbound or Outreach. **Seen on the sandbox only.** After deploy,
-sign in as a manager, send one 6+ month firm to an Outreach BM, and check the lead
+Outreach SPoC from that day. The KAM is kept. A firm with an open lead on that team,
+or no phone number, is skipped. Detail and the known gap
+(a BM's reject leaves the logged SPoC) are in `docs/b2b/client-db.md` §Any firm can
+go to Inbound, Outreach or a KAM. **Seen on the sandbox only.** After deploy,
+sign in as a manager, send one recently active firm to an Outreach BM, and check the lead
 in that BM's pool and the SPoC on the Firm page.
 
 **START HERE for B2B (2026-11-23): Outreach BMs log calls (CRM PR #83 from
