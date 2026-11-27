@@ -180,8 +180,9 @@ Tested over HTTP on a migrated copy of the local Studio Space test database: a K
 login created and later deactivated, a Studio-only login joining the CRM team, a CRM
 number and GSTIN reaching the studio approved, the studio's numbers reaching the CRM
 firm, a second save adding nothing, a firm referral mirrored and expired on removal.
-**Not yet run against production data.** On the first deploy the start-up pass creates
-a login for every live CRM person who lacks one; check the console Team list after.
+**Live since 2026-11-27 (b2b-backend #45, CRM #104).** The start-up pass on that deploy
+created a login for every live CRM person who lacked one. Not yet looked at: the console
+Team list after it, and a real referral end to end. Check both before changing the sync.
 
 ## Read from Studio Space (2026-10-29)
 

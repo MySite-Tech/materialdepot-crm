@@ -684,8 +684,15 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
-**START HERE for B2B (2026-11-27, latest): CRM PR #104 with b2b-backend PR #45
-(migrations 0034–0036), both merged on Dhruv's ask.** Start new work from `origin/main`.
+**START HERE for B2B (2026-11-27, latest): CRM PR #104 (`a52ea7d`) with b2b-backend
+PR #45 (`8193264`, migrations 0034–0036), both merged and LIVE on Dhruv's ask.** Start
+new work from `origin/main`. **Checked on production the same evening:** the backend
+answered `joined_on`, `id` and `/b2b/referrals` 200 (17 team rows, unchanged); the live
+bundle carries the new Reminders, Leads, Team and referral strings; signed in, Reminders
+(Due now / Today / Missed / Coming up), Leads (both sections), Team (date controls on
+every row, Record someone who has left), Leadership Board and Overview loaded with no
+console errors. Nothing was saved on production. **Not yet seen:** the Studio Space
+console Team list after the first start-up created logins, and a real referral.
 Five changes; read the named doc section before touching any of them:
 - **Reminders** are horizontal tabs (Due now, Today, Missed, Coming up) with a Calls &
   meetings / Carts & PIs switch from each record's stage (`docs/b2b/reminders.md`).
@@ -712,12 +719,16 @@ Five changes; read the named doc section before touching any of them:
 - **Still to do on production:** a manager dates the people who moved or left (Team tab).
   Check the console Team list for the logins the first start-up created. Never write why
   someone left into this public repo.
-- **Local real-data copy:** a session on 2026-11-27 served this work on :3000 from a
-  scratchpad clone against `crm_real` on :8802, migrated to 0036 and pruned to match
-  production (the refresh only upserts, so it also deleted 26 firms and 2 Outreach rows
-  production no longer has). To rebuild it: `refresh-crm-real.py`, then run :8802 from a
-  b2b-backend checkout at `origin/master` (0036) and `npx next dev -p 3000` with the
-  `real()` env in `crm-local.sh`.
+- **Local real-data copy on :3000 (the user's ask, 2026-11-27).** `next dev -p 3000`
+  runs from this checkout (on `main`) with the `real()` env of `crm-local.sh`: Django and
+  Kylas through the guard :8803, B2B from `crm_real` on :8802, which now runs from
+  `~/Projects/nov12-b2b-backend` fast-forwarded to `master` (0036). `crm_real` and
+  `crm_dummy` are both migrated to 0036. `crm_real` was refreshed and then pruned to match
+  production row for row (the refresh only upserts, so 26 firms and 2 Outreach rows
+  production no longer has were deleted locally). Log: `ss-local-stack/logs/crm-3000.log`.
+  Because it runs from this directory, `crm-local.sh up` cannot also start :3001 here
+  (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
+  production.
 
 **START HERE for B2B revenue (2026-11-27): Overview → Revenue analysis sub-tab (CRM PR
 from `b2b-revenue-analysis`, merged on Dhruv's ask; no backend PR).** The user wanted to
