@@ -752,8 +752,8 @@ team"), and add Varun's Inbound cover with his dates. Production answered 0031 a
 2026-11-26 (16 rows, 9 primaries). Driven end to end on the sandbox only.
 
 **START HERE for B2B (2026-11-27): Client Database by calendar month, any firm to any
-team (CRM PRs #88 and #89, both merged 2026-11-27 on Dhruv's ask, main `074827d`; no
-backend PR).** Start new work from `origin/main`. The user asked for three things in one
+team (CRM PRs #88 and #89, then fixes #97 and #98, all merged and live 2026-11-27 on
+Dhruv's ask; no backend PR).** Start new work from `origin/main`. The user asked for three things in one
 message; two already existed, so check before rebuilding:
 - **Status is by calendar month (#89).** Active is a last order in M-0 or M-1, then
   Inactive 2–3 months (M-2, M-3), 4–6 (M-4 to M-6), 7–12 (M-7 to M-12) and over 12. A
@@ -777,12 +777,13 @@ message; two already existed, so check before rebuilding:
   production for the first time. No console errors. **A real send ran the same day:**
   a dummy firm sent to an Outreach BM landed in that BM's Waiting for sign-off as a
   Client Database firm lead, and the Firm page showed the BM as Outreach SPoC. Both test
-  rows were then deleted. That run found two list bugs, fixed in CRM PR
-  `client-db-list-fixes`: the Status column filter still offered the old 30/60-day
+  rows were then deleted. That run found two list bugs, fixed in CRM PR #98
+  (`client-db-list-fixes`, live): the Status column filter still offered the old 30/60-day
   labels and matched nothing, and a new SPoC read "—" on the list until a reload
   (`docs/landmines.md`).
-- **The Overview's client book now matches Client Database (CRM PR from
-  `overview-studio-orders`, 27 Nov, merged on Dhruv's ask).** It read 190 / 134 / 326 /
+- **The Overview's client book now matches Client Database (CRM PR #97,
+  `overview-studio-orders`, merged `6072494` on Dhruv's ask; rechecked on production
+  after deploy: both read 194 / 132 / 325 / 499 / 60 / 78).** It read 190 / 134 / 326 /
   500 against 194 / 132 / 325 / 499 because it skipped Studio Space orders; it now adds
   them like Client Database and KAM (`docs/landmines.md`). One extra cached read,
   `/studio-access`, in parallel with the base reads.
