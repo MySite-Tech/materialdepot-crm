@@ -401,6 +401,11 @@ the Overview revenue channels and the Studio sync. Don't re-add the check-in pho
 the user scrapped it on 2026-10-31. Later work needs a new PR to `main`. A failed
 `Build and Deploy Job` on a PR is Azure's preview limit when the log says "maximum
 number of staging environments" after "Compiled successfully".
+On a push to `main`, "No matching Static Web App environment was found" after the
+upload means two merges landed seconds apart and the second deploy collided with the
+first (#88 and #89, 2026-11-27, 7 s apart). The site keeps the first. Re-run the failed
+job (`gh run rerun <id> --failed`), and wait for one `main` deploy to finish before
+merging the next.
 **The 1,000+ firms are in the Client Database (2026-10-31).** See
 `docs/b2b/client-db.md` §The client_master import.
 **The tech team merges, not a session**, unless Dhruv asks.
