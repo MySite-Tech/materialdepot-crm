@@ -30,7 +30,10 @@ revenue" link opens it.
 **Opened signed in on production on 2026-11-27:** the headline (revenue, orders, firms
 ordering, average order) against October 1–27, the split into fewer vs smaller orders,
 What moved it per dimension and the six-month channel table all loaded, with no console
-errors. The Revenue-tile-equals-hero tie-out has not been done on production.
+errors. A second signed-in check the same day tied it out: the Revenue tile equalled
+the hero, the channels and order counts matched the hero's cards, the six reads all
+answered 200 from the server cache, and Analyse revenue, the drill from Channel to Branch
+and the Same days toggle worked.
 
 - **It reads only `fetchRevenueReport`, one per month,** the same per-order report
   and server cache as the hero. Six months (the trend's window) plus any older
@@ -114,9 +117,26 @@ where it was booked decides the channel (`lib/b2b/revenue/utils/classify.ts`):
 - **Types 6 and 8 are the Client Database's firms with no KAM**, including the
   client_master import. Many of those designers bought at stores before anyone at
   B2B knew them, and the user wants that volume visible as EC Direct. A firm is
-  matched by any of its numbers with no date gate, so its whole history counts.
+  matched by any of its numbers with no date gate, so its whole history counts,
+  up to the day it gets a KAM (next bullet).
   An order placed under a number the firm record does not hold (a site supervisor,
   the end client) is missed: there is no GST or name match.
+- **A KAM holds a firm from its first KAM assignment, not for its whole history
+  (2026-11-27).** A Client Database firm with a KAM is types 3/4 only for orders
+  placed (`orderPlacedAt`, else the cart date) at or after its earliest assignment
+  that was not Rejected (`kamSince`, from `meta.assignments[].at`). Earlier orders
+  stay 6/8 with nobody credited, which is the 2026-10-30 rule that revenue follows
+  the owner at close. Before this, the check was "has a KAM today". About 400 firms
+  got their first KAM on 9 and 17–18 Nov, so every past store order of theirs moved
+  from EC Direct to Studio EC Redirected, and EC Direct read zero in every month on
+  the Overview and Revenue analysis while the totals stayed right. A firm with a KAM
+  but no dated assignment keeps its whole history as before. An Inbound or Outreach
+  SPoC, a redirect or a Studio Space number still makes the order 3/4 by its own
+  date. This also takes KAM credit off orders placed before the KAM held the firm;
+  a manager can still credit one order by hand (§A manager credits one order). The
+  date gate lives in `asOfOrder` (`classify.ts`) and was checked on hand-built cases
+  through the compiled classifier. **After it deploys,** every month's total and
+  order count must be unchanged and EC Direct must read above zero.
 - **The first match decides the type:** referred, then a B2B rep, then a number B2B
   holds, then a firm with no KAM, then the B2B branch.
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is

@@ -1566,3 +1566,19 @@ only 1,000, and re-POSTed every other order on each load: hundreds of 409s on
 the same way, so the Orders tile read exactly 1000. All of them now page with `sbGetPaged`.
 **Any read of a whole site-audit table must page; a plain `sbGet` is wrong once it passes
 1,000 rows, and it gives no error when it is.**
+
+
+### EC Direct read zero in every month because a firm's channel followed its KAM today (2026-11-27)
+
+Found while checking the new Revenue analysis sub-tab on production. EC Direct, which
+had read tens of lakhs a month on 3 Nov, read ₹0 for all six months on the Overview and
+on Revenue analysis, and Studio EC Redirected had grown by the same amount. The totals
+were right. The classifier treated a Client Database firm as KAM-held if it had an owner
+*now*, with no date gate. About 400 firms got their first KAM on 9 and 17–18 Nov, so every
+past store order of theirs moved from type 8 to type 4. In October alone, 155 orders sat
+on firms first assigned after the month ended, and none sat on a firm still without a KAM.
+Now `kamSince` (the earliest assignment that was not Rejected) gates the firm holder per
+order (`asOfOrder` in `lib/b2b/revenue/utils/classify.ts`). Earlier orders are 6/8 with
+nobody credited. **Any rule that reads who holds a record must ask who held it when the
+order was placed.** A bulk assignment rewrites history otherwise, and nothing errors:
+the figure just moves between channels (`docs/b2b/overview.md` §Four revenue channels).

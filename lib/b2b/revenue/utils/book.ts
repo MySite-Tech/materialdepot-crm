@@ -119,13 +119,18 @@ function kamFrom(owner: string, assignments: unknown): string {
   return from;
 }
 
+function kamSince(assignments: unknown): string {
+  const list = Array.isArray(assignments) ? assignments as { at?: unknown; status?: unknown }[] : [];
+  return list.filter((a) => text(a.at) && a.status !== 'Rejected').map((a) => String(a.at)).sort()[0] ?? '';
+}
+
 function holderOf(row: B2BSourceRow): Holder | null {
   const meta = row.meta_data ?? {};
   const owner = repName(row.owner);
   const firm = text(meta.company) || text(meta.firm_name);
   if (row.pipeline === 'client') {
     return owner
-      ? { kind: 'firm', team: 'kam', owner, firm, since: '', kamFrom: kamFrom(owner, meta.assignments) }
+      ? { kind: 'firm', team: 'kam', owner, firm, since: '', kamFrom: kamFrom(owner, meta.assignments), kamSince: kamSince(meta.assignments) }
       : { kind: 'unowned', team: null, owner: '', firm, since: '' };
   }
   if (row.pipeline === 'kam') return { kind: 'firm', team: 'kam', owner, firm, since: '' };

@@ -694,11 +694,17 @@ biggest gain and drop per dimension, drills in, and shades six months per value.
 only the existing `/api/b2b/revenue` (six reads on open). Category has no per-category
 price, so an order counts under each of its categories; branch is the rep's home branch
 until Django sends the booked branch. Read `docs/b2b/overview.md` §Revenue analysis
-sub-tab before changing it. Tied out to the hero on real October and November orders;
-opened signed in on production on 2026-11-27: the headline, the comparison against
-October 1–27 and What moved it all load, with no console errors. **Not yet checked
-there:** its Revenue tile must equal the Overview hero for the same month with Same
-days only off.
+sub-tab before changing it. **Checked signed in on production on 2026-11-27:** the
+Revenue tile equals the hero, the channels tie to the hero's cards, six reads, no console
+errors, and drill and compare work.
+**EC Direct read ₹0 in every month (fixed the same day, CRM PR from
+`revenue-ec-direct-kam-date`, merged on Dhruv's ask; no backend PR).** The channel asked
+whether a firm has a KAM *today*, and about 400 firms got their first KAM on 9 and
+17–18 Nov, so all their past store orders moved to Studio EC Redirected. Now a firm is
+KAM-held only for orders placed on or after its first non-rejected KAM assignment.
+Earlier orders are EC Direct with nobody credited, so KAM credit on those orders goes
+too (the owner-at-close rule). Totals do not change (`docs/b2b/overview.md` §Four
+revenue channels, `docs/landmines.md`).
 
 **START HERE for BDA Retail (2026-11-26): a new top-level CRM tab, live.** CRM PR #87
 (branch `bda-retail`) with b2b-backend #42 (migration 0033, `bda_*` tables) and #43
