@@ -112,6 +112,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - An installation order's delivery date was the installer's date, so every new order read as due today
 - A rep's past calls moved to the lead's current owner the moment their team row was switched off
 - A round robin checkbox took seconds to answer because every team save listed every Kylas user
+- The Overview's client book and Client Database disagreed by a few firms per status band
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1582,3 +1583,16 @@ order (`asOfOrder` in `lib/b2b/revenue/utils/classify.ts`). Earlier orders are 6
 nobody credited. **Any rule that reads who holds a record must ask who held it when the
 order was placed.** A bulk assignment rewrites history otherwise, and nothing errors:
 the figure just moves between channels (`docs/b2b/overview.md` §Four revenue channels).
+
+### The Overview's client book and Client Database disagreed by a few firms per status band (2026-11-27)
+
+Checked signed in on production the day calendar-month status shipped: Client Database
+read Active 194, Inactive 2–3 months 132, 4–6 months 325, 7–12 months 499; the Overview's
+client book read 190, 134, 326 and 500 for the same 1,288 firms. Same `clientStatus`,
+different last-order date: Client Database and KAM build metrics through
+`useClientAggregates`, which adds a firm's Studio Space orders (`withStudioOrders`), and
+`use-overview-data.ts` called `clientMetricsFrom` alone. A firm whose newest order was on
+Studio Space read a band older on the Overview. It predates the calendar-month change. Now
+the Overview applies `withStudioOrders` too. **A firm's order metrics come from b2b-bulk
+plus Studio orders, everywhere; a new screen that calls `clientMetricsFrom` alone will
+disagree with Client Database** (the badge entry above is the same shape).

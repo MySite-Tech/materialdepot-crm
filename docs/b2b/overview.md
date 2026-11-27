@@ -416,7 +416,13 @@ three teams that do not share stages.
    shows its win rate instead,** because `kamFunnel` steps are cumulative
    ("standing here or beyond"), so Closed over their sum would be wrong. Each
    card's Open link switches the B2B sub-tab (`onNavigate`).
-4. **Client book · Needs attention.** The 30/60-day status as one stacked bar,
+4. **Client book · Needs attention.** The calendar-month status (`kam.md` §Account
+   status) as one stacked bar. Each firm's metrics are Client Database's: b2b-bulk
+   plus its Studio Space orders (`withStudioOrders`, from `fetchStudioAccess`, read in
+   parallel with the base data and shared through its 60 s cache). Until 2026-11-27 the
+   Overview skipped the Studio orders and read 190 Active against Client Database's 194
+   (`docs/landmines.md`). A failed Studio read falls back to b2b-bulk alone, as Client
+   Database does. Then
    new clients by month (the last 6), and one attention list with two tabs:
    Going inactive (`k.atRisk`) and Escalations (`health.attention`). Each shows
    6 rows and links to Client Database.

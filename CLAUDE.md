@@ -777,6 +777,15 @@ message; two already existed, so check before rebuilding:
   production for the first time. No console errors. **Not yet done:** a real send. The
   first one should be a manager sending one Active firm to an Outreach BM, then checking
   the BM's pool and the Firm page SPoC.
+- **The Overview's client book now matches Client Database (CRM PR from
+  `overview-studio-orders`, 27 Nov, merged on Dhruv's ask).** It read 190 / 134 / 326 /
+  500 against 194 / 132 / 325 / 499 because it skipped Studio Space orders; it now adds
+  them like Client Database and KAM (`docs/landmines.md`). One extra cached read,
+  `/studio-access`, in parallel with the base reads.
+- **"111 past 48h" on the KAM tab is people, not code.** All 111 are Prafful's 18 and
+  20 Nov assignments to Krishna Jadhav, on his current number, waiting for him to accept
+  or reject; until then each counts under No KAM (`kam.md` §Account status). Don't
+  auto-accept them; Krishna or a manager decides.
 
 **START HERE for B2B (2026-11-20): Client Database sends any firm to
 Inbound or Outreach (CRM PR from `client-db-win-back`, merged on Dhruv's ask; no
