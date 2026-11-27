@@ -11,8 +11,8 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 
 | Call | Endpoint | When |
 |---|---|---|
-| `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readBase`) |
-| `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/` | On open |
+| `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readInputs`) |
+| `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/`; a KAM order the bulk read does not match falls back to one `/crm/leads/?enquiry_ids=` and per-number `q=` reads (`lookupEnqId`, at most 60 orders) | On open. The page paints from the bulk match and runs the fallback after (below) |
 | `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; on Revenue analysis, one per month of the last six plus any month picked there. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
 | `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, three months at a time (two until 2026-11-06). No orders in the response |
 | `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
@@ -318,6 +318,22 @@ Django, 1,000 a page, so six months is six full scans. Two changes:
   (`fresh=1`) rebuilds unless the copy is under a minute old. The current month
   keeps the 5-minute cache. The cache is per user and per server process, so a
   cold process still pays the full build once.
+
+**The Overview paints before the KAM order lookups (2026-11-27).** The user found the
+Overview took about a minute on a cold load. The time was not the revenue report: on
+production about 10 KAM orders' Enquiry IDs miss `b2b-bulk`'s deals, and
+`resolveKamOrders` then looks each one up (`/crm/leads/?enquiry_ids=`, then a `q=`
+search per firm number, 15 Django calls of 2–15 s), and `readBase` awaited all of it
+before anything rendered. Now `useOverviewData` resolves from the bulk match only
+(`resolveKamOrders(…, lookup = false)`), paints, and runs the per-order fallback in the
+background, then repaints. Until it finishes, an order it is still checking shows at
+its logged value and the KAM desk's "has not matched a deal ticket" note stays hidden
+(`unresolvedOrders: null`), so the note never shows a count that is about to drop. The
+request count is unchanged; only the wait moved. Checked on the sandbox with the bulk
+deals stripped and each lookup delayed 8 s: the page painted at 5 s and the KAM
+revenue filled in when the lookups landed. A Refresh mid-lookup drops the older run's
+result (`run` ref). The lasting fix is fewer misses: those orders' Enquiry IDs should
+match a ticket on the firm's numbers.
 
 **Still open:** sharing one report across managers would make a second
 manager's load instant. It needs proof that Django's `/crm/leads/` answers the

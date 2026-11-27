@@ -1622,3 +1622,15 @@ kept its old answer. Now the cache is a `WeakMap` keyed by the firm object, so a
 being a new object, is read again. **A per-row cache in a view keys on the row object, not
 its id, whenever rows are replaced in place after a save.**
 
+
+### The Overview took a minute to load because it waited for per-order fallback lookups (2026-11-27)
+
+The user saw "Loading overview…" for about a minute on a cold load. Every fast read was
+done in seconds; the page was waiting for `resolveKamOrders`, which looks up each KAM
+order whose Enquiry ID the bulk read did not match, one Django call each and then a
+search per firm number (15 calls of 2–15 s on production). The fallback is capped and
+correct, but `readBase` awaited it before rendering anything. Now the page paints from
+the bulk match and runs the fallback after (`components/b2b/views/overview/hooks/use-overview-data.ts`).
+**A capped per-row fallback is allowed by the request budget, but never put it in front
+of first paint:** render what the bulk read answered, mark the rest as still checking,
+and fill it in.
