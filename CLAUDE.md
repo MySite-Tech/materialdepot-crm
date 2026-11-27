@@ -679,6 +679,20 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
+**START HERE for B2B revenue (2026-11-27): Overview → Revenue analysis sub-tab (CRM PR
+from `b2b-revenue-analysis`, merged on Dhruv's ask; no backend PR).** The user wanted to
+see why one month earned more than another. Overview now has two sub-tabs. Revenue
+analysis compares any two months (same days only by default), filters by ten dimensions
+(channel, branch, rep on the cart, category, how B2B holds it, team, credited to, client
+type, order size, firm), splits the change into more orders vs bigger orders, lists the
+biggest gain and drop per dimension, drills in, and shades six months per value. It reads
+only the existing `/api/b2b/revenue` (six reads on open). Category has no per-category
+price, so an order counts under each of its categories; branch is the rep's home branch
+until Django sends the booked branch. Read `docs/b2b/overview.md` §Revenue analysis
+sub-tab before changing it. Tied out to the hero on real October and November orders;
+screens seen on the sandbox only. **After deploy,** its Revenue tile must equal the
+Overview hero for the same month with Same days only off.
+
 **START HERE for BDA Retail (2026-11-26): a new top-level CRM tab, live.** CRM PR #87
 (branch `bda-retail`) with b2b-backend #42 (migration 0033, `bda_*` tables) and #43
 (`/b2b/bda/assign`), all merged on Dhruv's ask. Start new work from `origin/main`; read
