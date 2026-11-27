@@ -1,8 +1,9 @@
 import { InboundLead, LeadNote, OutreachLead } from '../mock-data';
 import { InboundStatus, sentToOutreach } from '../inbound';
-import { AssignHow, COMPANY_TYPES, CompanyType, EC_B2B_REFERRAL } from '.';
+import { AssignHow, COMPANY_TYPES, CompanyType, EC_B2B_REFERRAL, OUTREACH_STATUS_LABEL } from '.';
 import { sameRep } from './handover';
 import { normalisePhone } from '@/lib/org/utils';
+import { outreachPhones } from '@/lib/b2b/leads/unified';
 
 export const INBOUND_POOL_STAGES: InboundStatus[] = ['Closed', 'PI Shared', 'Follow up', 'Connected - Need nurturing'];
 
@@ -14,6 +15,15 @@ export interface PoolLead {
 }
 
 export const intakeLeadId = (inboundLeadId: string): string => `OR-IN-${inboundLeadId}`;
+
+export function leadOnNumber(leads: OutreachLead[], phone: string | undefined): OutreachLead | undefined {
+  const n = normalisePhone(phone);
+  if (n.length !== 10) return undefined;
+  return leads.find((l) => l.status !== 'Lost' && outreachPhones(l).includes(n));
+}
+
+export const duplicateLeadMessage = (l: OutreachLead): string =>
+  `This number is already on the Outreach lead ${l.company} (${l.bm || 'no BM'}, ${OUTREACH_STATUS_LABEL[l.status]}). Open that lead instead of adding a second one.`;
 
 export const intakePending = (l: OutreachLead): boolean =>
   !!l.intake && !l.intake.acceptedAt && !l.intake.rejectedAt;

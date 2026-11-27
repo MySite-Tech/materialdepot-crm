@@ -10,7 +10,7 @@ import {
 } from '../../models/outreach';
 import { isMobile, sameRep } from '../../models/outreach/handover';
 import { normalisePhone } from '@/lib/org/utils';
-import { Rep } from '../../models/outreach/intake';
+import { Rep, duplicateLeadMessage, leadOnNumber } from '../../models/outreach/intake';
 import { LostReasonSelect } from '../../ui/lost-reason-select';
 import { Field, GateErrors, errorInputCls, inputCls } from '../../ui/inbound-chips';
 import { newB2BId } from '../../models/ids';
@@ -114,7 +114,8 @@ export function MoveModal({ lead, target, onCancel, onDone }: {
   );
 }
 
-export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCreate }: {
+export function CreateLeadModal({ reps, me, canPickBm, assigner, existing, onClose, onCreate }: {
+  existing: OutreachLead[];
   reps: Rep[];
   me: Rep;
   canPickBm: boolean;
@@ -161,6 +162,10 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
   const toggle = (s: Selection) =>
     setSelections((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
 
+  const taken = (p?: string) => leadOnNumber(existing, p);
+  const dupPhone = taken(phone);
+  const dupAlt = altPhone.trim() ? taken(altPhone) : undefined;
+  const dupContact = contacts.map((c) => taken(c.phone)).find(Boolean);
   const errors: Partial<Record<'company' | 'contactPerson' | 'designation' | 'phone' | 'altPhone' | 'altName' | 'altRole' | 'segment' | 'teamSize' | 'next' | 'contacts', string>> = {
     ...(!company.trim() && { company: 'A company name is required.' }),
     ...(!contactPerson.trim() && { contactPerson: 'Who is the owner or designer?' }),
@@ -173,8 +178,12 @@ export function CreateLeadModal({ reps, me, canPickBm, assigner, onClose, onCrea
     ...(!teamSize && { teamSize: 'Pick a team size.' }),
     ...(!toPool && !mDate && !followUpDate && { next: 'Book meeting 1 or set a next follow-up date — every lead needs a next step.' }),
     ...(contacts.some((c) => !c.name.trim() || !c.role.trim()) && { contacts: 'Every extra person needs a name and a role.' }),
+    ...(dupPhone && { phone: duplicateLeadMessage(dupPhone) }),
+    ...(dupAlt && { altPhone: duplicateLeadMessage(dupAlt) }),
+    ...(dupContact && { contacts: duplicateLeadMessage(dupContact) }),
   };
-  const err = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
+  const dupKeys = new Set([dupPhone && 'phone', dupAlt && 'altPhone', dupContact && 'contacts']);
+  const err = (k: keyof typeof errors) => (touched || dupKeys.has(k) ? errors[k] : undefined);
   const cls = (k: keyof typeof errors) => (err(k) ? errorInputCls : inputCls);
 
   const save = async () => {

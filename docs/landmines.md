@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-107 entries. They live in one file because they cross-reference each other —
+108 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -117,6 +117,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A firm's new SPoC read "—" on the Client Database list until the page was reloaded
 - The Report Card read "the stats call failed" for most of a big team while every call returned 200
 - A person's role change rewrote their past revenue, because the rep test read today's team and today's branch
+- One client held two Outreach leads, so the converted one sat beside a stale Follow up
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1687,3 +1688,17 @@ B2B that day reads `store: B2B`. People with no dates behave exactly as before, 
 moves until a manager dates them. **Any attribute of a person that can change (team,
 branch, role) must be read as of the event's date, never as of today.**
 
+### One client held two Outreach leads, so the converted one sat beside a stale Follow up (2026-11-19)
+
+Outreach search for a client listed it twice under the same BM and number: one lead
+Converted and handed over to the KAM, the other still Follow up with a reminder for
+23 Nov. The BM had created the client on 30 Oct, then created it again on 4 Nov, and
+the meetings, notes and contacts were split across the two. Outreach has no merge.
+"+ New lead" checked nothing but the number's format, while the EC B2B Referral
+route already refused a number Outreach held. On 19 Nov production had 17 such
+groups out of 387 Outreach rows, several of them the same firm under two BMs. The
+shape: a create path that skips the duplicate check its sibling path has. "+ New
+lead" now refuses a mobile (main, alternate or extra contact) already on an Outreach
+lead that is not Lost, and names that lead, its BM and stage (`leadOnNumber`,
+`docs/b2b/outreach.md` §One client, one lead). It does not merge the rows that
+already exist.
