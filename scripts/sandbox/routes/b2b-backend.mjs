@@ -176,6 +176,23 @@ export function backendRoutes(db) {
     if (path === '/target' && method === 'GET') return db.target;
     if (path === '/target' && method === 'POST') { db.target = { ...body, updated_at: new Date().toISOString() }; return db.target; }
 
+    if (path === '/referrals' && method === 'GET') return { referrals: (db.referrals ?? []).filter((r) => r.status === 'active') };
+    if (path === '/referrals' && method === 'POST') {
+      const phone = String(body?.client_phone ?? '').replace(/\D/g, '').slice(-10);
+      if (!/^[6-9]\d{9}$/.test(phone)) return reply(422, { detail: 'Not a 10-digit Indian mobile number.' });
+      db.referrals ??= [];
+      const hit = db.referrals.find((r) => r.referrer_kind === body.referrer_kind && r.referrer_id === body.referrer_id && r.client_phone === phone);
+      const row = { ...(hit ?? { id: db.referrals.length + 1, created_at: new Date().toISOString() }), referrer_kind: body.referrer_kind, referrer_id: body.referrer_id,
+        referrer_name: body.referrer_name ?? null, client_name: body.client_name, client_phone: phone, note: body.note ?? null, created_by: body.created_by ?? null, status: 'active', on_studio: false };
+      if (hit) Object.assign(hit, row); else db.referrals.push(row);
+      return { ...row, studio_note: null };
+    }
+    if (path.startsWith('/referrals/') && method === 'DELETE') {
+      const r = (db.referrals ?? []).find((x) => String(x.id) === path.split('/')[2]);
+      if (!r) return reply(404, { detail: 'No such referral' });
+      r.status = 'removed';
+      return { ok: true };
+    }
     if (path === '/team' && method === 'GET') {
       return { members: [...db.team].map((m, n) => ({ id: n + 1, joined_on: null, left_on: null, ...m })).sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone)) };
     }

@@ -1,7 +1,7 @@
 import { B2B_ROSTER } from '../../../../components/b2b/models/roster';
 import { HOLDER_RANK } from '../constants';
 import type { B2BTeam, TeamMember } from '../../team/types';
-import type { B2BRepEntry, B2BSourceRow, Holder, HolderKind, NumberBook, RedirectInput, RepSpan, RepTeams, StudioFirm } from '../types';
+import type { B2BRepEntry, B2BSourceRow, CrmReferralInput, Holder, HolderKind, NumberBook, RedirectInput, RepSpan, RepTeams, StudioFirm } from '../types';
 
 export const phoneOf = (raw: unknown): string => {
   const digits = String(raw ?? '').replace(/\D/g, '').slice(-10);
@@ -156,7 +156,11 @@ function holderOf(row: B2BSourceRow): Holder | null {
 const firmHolderOf = (book: NumberBook, phone: string): Holder | undefined =>
   (book.get(phone) ?? []).find((h) => h.kind === 'firm');
 
-export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[]): NumberBook {
+const REFERRER_PIPELINE = { inbound: 'inbound', outreach: 'outbound', client: 'client' } as const;
+const REFERRER_TEAM = { inbound: 'inbound', outreach: 'outreach', client: 'kam' } as const;
+const LIVE_STUDIO_REFERRAL = new Set(['approved', 'active', 'dormant']);
+
+export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[], referrals: CrmReferralInput[] = []): NumberBook {
   const book: NumberBook = new Map();
   const hold = (raw: unknown, holder: Holder) => {
     const phone = phoneOf(raw);
@@ -177,12 +181,22 @@ export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | nul
     const referredNumber: Holder = { kind: 'referred', ...owned, since: '' };
     for (const p of f.phones) hold(p, ownNumber);
     for (const r of f.referrals) {
-      if (r.status === 'approved') hold(r.phone, { ...referredNumber, since: day(r.referred_on) });
+      if (LIVE_STUDIO_REFERRAL.has(r.status ?? '')) hold(r.phone, { ...referredNumber, since: day(r.referred_on ?? '') });
     }
     const listed = new Set(f.referrals.map((r) => phoneOf(r.phone)));
     for (const o of f.orders) {
       if (!listed.has(phoneOf(o.phone))) hold(o.phone, o.source === 'client' ? referredNumber : ownNumber);
     }
+  }
+
+  for (const r of referrals) {
+    const row = rows.find((x) => x.pipeline === REFERRER_PIPELINE[r.referrer_kind]
+      && (String(x.id ?? '') === r.referrer_id || String(x.kylas_lead_id ?? '') === r.referrer_id));
+    const from = row ? holderOf(row) : null;
+    hold(r.client_phone, {
+      kind: 'referred', team: REFERRER_TEAM[r.referrer_kind], owner: from?.owner ?? '',
+      firm: from?.firm || r.referrer_name || '', since: day(r.created_at),
+    });
   }
 
   for (const r of redirects) {

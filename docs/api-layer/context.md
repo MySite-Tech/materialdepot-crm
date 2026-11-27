@@ -179,8 +179,12 @@ for its message. Five things the relay deliberately does:
   so a credit always names who really set it (`docs/b2b/overview.md` §A manager
   credits one order). Other relayed writes still carry the actor the browser sends.
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`, `studio-number`, `client-review`, `order-credits`) so the catch-all is a defined surface, not an open proxy to
-  the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
+  `studio-access`, `studio-number`, `client-review`, `order-credits`, `referrals`) so the catch-all is a defined surface, not an open proxy to
+  the backend. `referrals` (2026-11-27) is open to every B2B user, because any rep adds a
+  client's referral from their own drawer; on a firm linked to Studio Space the backend
+  also writes the studio's referral, which is why the route is allow-listed and not a
+  direct call (`docs/b2b/studio-space.md` §Two-way sync). The revenue report reads it
+  server-side too, as one more holder read beside `/rows`. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.

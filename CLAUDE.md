@@ -977,8 +977,9 @@ Site Audit users with no phone ("not set"), and a contact saved under the name
 **Live on Studio Space (2026-10-31): b2b-backend #17, #18 and #19, and b2b-dashboard
 #35.** Only admins see every firm there, and the CRM's assignment
 sets each firm's KAM (`docs/b2b/studio-space.md` §Who sees which firm). Never match
-a staff login by name. The CRM's team list creates no Studio Space login, so an
-admin still has to add the new people. The CRM keeps screen-only rep scoping by the
+a staff login by name. Since 2026-11-27 the CRM team list creates and deactivates
+Studio Space logins itself, and numbers, GSTINs and referrals flow both ways
+(`docs/b2b/studio-space.md` §Two-way sync). The CRM keeps screen-only rep scoping by the
 user's decision.
 
 **Studio and CRM sync (live 2026-10-31, `34e85b9`, backend #18).** A firm's Studio

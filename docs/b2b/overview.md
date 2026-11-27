@@ -205,6 +205,13 @@ public repo. The route itself has run only on the sandbox.
   this reads Django's orders and not Studio's `referral_order`. On 2026-10-31 that
   was one small order. A firm's revenue on its page can differ from this report: that
   page is lifetime plus Studio orders on unlisted numbers.
+- **Referred also counts referrals made in the CRM (2026-11-27).** Any Inbound lead,
+  Outreach lead or firm can refer clients from its drawer (`studio-space.md` §Two-way
+  sync). Each becomes a `referred` holder on that number from the referral's date,
+  credited to the referring record's owner **on that record's team** (Inbound, Outreach
+  or KAM), so the Referred card is no longer KAM-only (`classifyOrder` uses the holder's
+  team). Studio referrals now count when `approved`, `active` or `dormant`; before,
+  only `approved` counted, so a referral Studio had moved to active silently stopped.
 - **`client_master.referred_clients` is empty and `user_refferred` was not used.** Only
   Studio Space referrals count, so a KAM's referral outside Studio Space is
   invisible. On 2026-10-31 18 referred numbers had one order each.

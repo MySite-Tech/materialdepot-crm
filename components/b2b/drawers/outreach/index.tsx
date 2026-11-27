@@ -32,6 +32,7 @@ import { fetchFirmDeals } from '@/lib/api';
 import { CheckInCapture } from '../../ui/check-in-capture';
 import { OrderCreditLine } from '../../order-credit/ui/credit-line';
 import { RedirectToEc, openEnquiries, uniquePhones } from '../../ui/redirect-to-ec';
+import { ReferralsCard } from '../../ui/referrals';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function OutreachDrawer({
@@ -288,6 +289,8 @@ export default function OutreachDrawer({
             enquiries={openEnquiries(deals ?? [])}
             enquiriesState={!deals ? 'loading' : dealsFailed ? 'failed' : 'ready'}
           />
+
+          <ReferralsCard kind="outreach" referrerId={draft.id} referrerName={draft.company} by={scope.me.name || undefined} />
 
           <OutreachCallsCard draft={draft} onLog={logCall} />
 

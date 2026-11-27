@@ -29,6 +29,14 @@ export interface Holder {
 
 export type NumberBook = Map<string, Holder[]>;
 
+export interface CrmReferralInput {
+  referrer_kind: 'inbound' | 'outreach' | 'client';
+  referrer_id: string;
+  referrer_name: string | null;
+  client_phone: string;
+  created_at: string;
+}
+
 export interface RepSpan {
   team: B2BTeam;
   from: string | null;
@@ -106,6 +114,8 @@ export interface RevenueReport {
 }
 
 export interface B2BSourceRow {
+  id?: string | number;
+  kylas_lead_id?: string | number | null;
   pipeline: string;
   owner?: string | null;
   stage?: string | null;

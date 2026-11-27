@@ -72,7 +72,7 @@ export function classifyOrder(
     value: Number(o.cartValue) || 0,
   });
 
-  if (referred) return shape(5, 'kam', referred.owner, referred);
+  if (referred) return shape(5, referred.team ?? 'kam', referred.owner, referred);
   if (byB2BRep) {
     const recordOwner = teammateRecordOwner(held, repTeams, placedBy, String(o.orderPlacedAt || o.createdAt || ''));
     return recordOwner

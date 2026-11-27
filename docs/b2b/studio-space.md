@@ -104,10 +104,9 @@ an assignment across.
   active login, a mobile two logins share, or CRM rows that disagree. Setting a firm
   to Unassigned in the CRM keeps Studio Space's KAM, so a blank cannot wipe a real
   assignment. A firm with no CRM match keeps the KAM chosen on its console page.
-- **The CRM team list and Studio Space's staff are two lists.** Being on the first
-  creates no login on the second. An admin adds people under console Team → Add
-  somebody, with the same mobile as their CRM account, or nothing links. Merge PR #17
-  before adding KAMs, or they see a whole market in between.
+- **The CRM team list drives Studio Space's staff (2026-11-27, reversing 2026-10-31).**
+  See §Two-way sync. Every live CRM team member has a Studio Space staff login on their
+  mobile; nobody has to be added on the console by hand any more.
 - **Failures leave little trace.** A refused CRM sign-in writes no row and
   `audit_log` records only successful writes, so "nothing happened" for a person
   is not visible in either.
@@ -148,9 +147,43 @@ migration 0029, `partner.access_tier`).
   users**, count onboarded firms by tier.
 - **Client Database:** the Studio Space column and its filter (Power user /
   Normal user / Not onboarded) use the same reading, so the filter splits by tier.
-- The CRM still never writes Studio Space: the tier is changed on Studio Space.
+- The tier is still changed on Studio Space only; §Two-way sync does not touch it.
 
-## Read from Studio Space, never written (2026-10-29)
+## Two-way sync (2026-11-27, b2b-backend `app/studio_crm_sync.py`, migration 0036)
+
+The user: there must be no gap between the CRM and Studio Space, and the CRM may write
+to Studio Space. All three proposals were accepted: every KAM gets a login, numbers and
+GSTINs flow both ways, and any client can refer clients from the CRM. This **reverses**
+"the CRM never writes Studio Space" and "the team list creates no login" (2026-10-29/31).
+The pass runs inside `sync_firm_kams`, so after every CRM firm save, team change, staff
+change, Studio referral or GSTIN review, and at start-up. It never raises.
+
+| What | Rule |
+|---|---|
+| Staff logins | Every person with a live CRM team row (active, no past last day) has an active `staff_user` on that mobile, role = primary team. Created with no email or password: they sign in through the CRM tab's phone handoff, and an admin can issue a password later. A login on a number whose CRM person has left is deactivated, and one on a reissued number whose name is someone else's is replaced (`same_person`: one name's words inside the other's, because "Tharun" and "Tharun Teja" are one person). Admin logins are never changed |
+| Studio → CRM team | An active Studio login in a CRM role whose mobile is on no CRM row joins that CRM team, primary, **out of the round robin** |
+| Firm link | `partner.md_client_id` is set once, by number, then GSTIN, then exact name, and only when exactly one studio fits and no other CRM firm already holds the link |
+| Numbers | A CRM firm contact Studio does not hold is added as an approved `referral` (source `team`, note "Added from the CRM"), unless another studio holds it live. Studio's numbers (own phone, approved team/self numbers, its logins' phones) are appended to the CRM firm's `contacts` with label "Studio Space" |
+| GSTINs | A valid CRM GSTIN Studio lacks is added approved, and fills an empty `partner.gst`. Studio's approved GSTINs are appended to the CRM firm's `gsts` |
+| Never touched | A number or GSTIN Studio already holds **in any status**, so an admin's rejection stands. Lead (Inbound/Outreach) numbers, because a lead is not a studio |
+
+**Referrals from the CRM.** Every Inbound lead, Outreach lead and firm drawer has a
+**Referred clients** card (`ui/referrals.tsx`): add a name, mobile and note; remove
+marks it removed. Stored in `b2b_referral` (migration 0036, `GET/POST /b2b/referrals`,
+`DELETE /b2b/referrals/{id}`, relayed for any B2B user). On a firm linked to a studio
+the referral is also written to the studio's `referral` (source `client`, approved) and
+removing it expires that row; if another studio already refers the number it stays in
+the CRM only and the card says so. Revenue counts these as Referred (`overview.md`
+§Four revenue channels). One request when a drawer opens, cached 60 s.
+
+Tested over HTTP on a migrated copy of the local Studio Space test database: a KAM's
+login created and later deactivated, a Studio-only login joining the CRM team, a CRM
+number and GSTIN reaching the studio approved, the studio's numbers reaching the CRM
+firm, a second save adding nothing, a firm referral mirrored and expired on removal.
+**Not yet run against production data.** On the first deploy the start-up pass creates
+a login for every live CRM person who lacks one; check the console Team list after.
+
+## Read from Studio Space (2026-10-29)
 
 The list is Studio Space's own data. `useStudioLogins()` reads b2b-backend's
 `GET /b2b/studio-access` (every login with a mobile, and its `visible_tabs`) and
