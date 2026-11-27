@@ -24,6 +24,7 @@ export interface Holder {
   firm: string;
   since: string;
   kamFrom?: string;
+  kamSince?: string;
 }
 
 export type NumberBook = Map<string, Holder[]>;

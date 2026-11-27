@@ -17,6 +17,11 @@ const samePerson = (a: string, b: string) => repName(a).toLowerCase() === repNam
 const heldAtOrder = (h: Holder, orderMs: number) =>
   h.kind !== 'firm' || !h.kamFrom || Number.isNaN(orderMs) || Date.parse(h.kamFrom) <= orderMs;
 
+const asOfOrder = (h: Holder, orderMs: number): Holder =>
+  h.kind !== 'firm' || !h.kamSince || Number.isNaN(orderMs) || Date.parse(h.kamSince) <= orderMs
+    ? h
+    : { ...h, kind: 'unowned', team: null, owner: '' };
+
 export function teammateRecordOwner(held: Holder[], repTeams: B2BTeam[], placedBy: string, orderAt: string): Holder | null {
   const orderMs = Date.parse(orderAt);
   const records = held.filter((h) => RECORD_KINDS.has(h.kind) && h.owner && h.team && heldAtOrder(h, orderMs));
@@ -33,7 +38,8 @@ export function classifyOrder(
   const cartDay = String(o.createdAt || '').slice(0, 10);
   const bookedOnB2B = booked !== 'store';
   const phone = phoneOf(o.clientPhone);
-  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay));
+  const orderMs = Date.parse(String(o.orderPlacedAt || o.createdAt || ''));
+  const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay)).map((h) => asOfOrder(h, orderMs));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
   const rep = repOf(o.assignedTo, reps);
   const repTeams = rep?.teams ?? [];
