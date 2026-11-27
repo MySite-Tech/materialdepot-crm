@@ -5,8 +5,8 @@ import { useOrderCredits } from '../../../order-credit/hooks/use-order-credits';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { MONTHS_OFFERED } from '../sections/revenue/constants';
 import { OrderDrawer } from '../sections/revenue/ui/order-drawer';
-import { Card, Notice } from '../ui';
-import { DIM_META, DIM_ORDER, TREND_SPAN } from './constants';
+import { Card, Notice, Segmented } from '../ui';
+import { DIM_META, DIM_ORDER, SCOPES, STUDIO_SCOPE, TREND_SPAN } from './constants';
 import { useMonthReports } from './hooks/use-month-reports';
 import type { AnalysisFilter, DimKey, Option } from './types';
 import { ChangeTable } from './ui/changes';
@@ -25,7 +25,7 @@ export function RevenueAnalysis({ head }: { head: (right: ReactNode) => ReactNod
   const [focusKey, setFocusKey] = useState(months[0].key);
   const [compareKey, setCompareKey] = useState(months[1].key);
   const [sameDays, setSameDays] = useState(true);
-  const [filter, setFilter] = useState<AnalysisFilter>({});
+  const [filter, setFilter] = useState<AnalysisFilter>({ channel: STUDIO_SCOPE });
   const [dim, setDim] = useState<DimKey>('channel');
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -56,6 +56,10 @@ export function RevenueAnalysis({ head }: { head: (right: ReactNode) => ReactNod
       setCompareKey(months[2].key);
     }
   }, [reports, months, focusKey]);
+
+  const picks = filter.channel ?? [];
+  const scope = !picks.length ? 'all' : picks.length === STUDIO_SCOPE.length && STUDIO_SCOPE.every((c) => picks.includes(c)) ? 'studio' : null;
+  const pickScope = (s: keyof typeof SCOPES) => setFilter((f) => ({ ...f, channel: s === 'studio' ? STUDIO_SCOPE : [] }));
 
   const partial = focusKey === months[0].key || compareKey === months[0].key;
   const cutoff = partial && sameDays ? Number(months[0].to.slice(8)) : null;
@@ -125,7 +129,8 @@ export function RevenueAnalysis({ head }: { head: (right: ReactNode) => ReactNod
 
       <Card className="flex flex-col gap-3">
         <div className="flex items-center gap-2 flex-wrap text-[12px] text-gray-500">
-          <span className="font-semibold text-gray-700">Compare</span>
+          <Segmented options={SCOPES} value={scope as keyof typeof SCOPES} onChange={pickScope} />
+          <span className="font-semibold text-gray-700 ml-1">Compare</span>
           <select aria-label="Month to analyse" value={focusKey} onChange={(e) => pickFocus(e.target.value)} className={SELECT}>
             {months.map((m) => <option key={m.key} value={m.key}>{m.label}{m.key === months[0].key ? ' (so far)' : ''}</option>)}
           </select>

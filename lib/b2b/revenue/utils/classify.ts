@@ -51,7 +51,7 @@ export function classifyOrder(
   const referred = held.find((h) => h.kind === 'referred');
 
   const channelOf = (type: OrderType): RevenueChannel =>
-    type === 5 ? 'referred' : bookedOnB2B ? 'direct' : type === 8 ? 'ecDirect' : 'redirected';
+    type === 5 ? 'referred' : type === 1 ? 'direct' : type === 8 ? 'ecDirect' : 'redirected';
 
   const shape = (type: OrderType, team: B2BTeam | null, person: string, from?: Holder): RevenueOrder => ({
     id: o.id,
@@ -79,8 +79,7 @@ export function classifyOrder(
       ? shape(bookedOnB2B ? 1 : 2, recordOwner.team, recordOwner.owner, recordOwner)
       : shape(bookedOnB2B ? 1 : 2, directTeam(repTeams, held), placedBy, owned);
   }
-  if (owned) return shape(bookedOnB2B ? 3 : 4, owned.team, owned.owner, owned);
+  if (owned) return shape(4, owned.team, owned.owner, owned);
   const unowned = held.find((h) => h.kind === 'unowned');
-  if (unowned) return shape(bookedOnB2B ? 6 : 8, null, '', unowned);
-  return booked === 'branch' ? shape(7, null, '') : null;
+  return unowned ? shape(8, null, '', unowned) : null;
 }

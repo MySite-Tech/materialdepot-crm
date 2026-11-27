@@ -1,4 +1,9 @@
+import { CHANNEL_LABELS, STUDIO_CHANNELS } from '../../../../../lib/b2b/revenue/constants';
 import type { DimKey } from './types';
+
+export const STUDIO_SCOPE: string[] = STUDIO_CHANNELS.map((c) => CHANNEL_LABELS[c]);
+
+export const SCOPES = { studio: 'Studio Sales', all: 'All B2B' } as const;
 
 export const DIM_ORDER: DimKey[] = ['channel', 'branch', 'rep', 'category', 'source', 'team', 'person', 'clientType', 'size', 'firm'];
 

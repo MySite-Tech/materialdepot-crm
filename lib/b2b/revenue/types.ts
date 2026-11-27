@@ -4,7 +4,7 @@ import type { B2BTeam } from '../team/types';
 
 export type RevenueChannel = 'direct' | 'redirected' | 'ecDirect' | 'referred';
 
-export type OrderType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type OrderType = 1 | 2 | 4 | 5 | 8;
 
 export type BookedOn = 'branch' | 'shared' | 'store';
 

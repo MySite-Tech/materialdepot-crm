@@ -1,6 +1,7 @@
 import { B2B_ROSTER } from '../../../../components/b2b/models/roster';
 import { HOLDER_RANK } from '../constants';
 import type { B2BTeam, TeamMember } from '../../team/types';
+import type { ClientGroup } from '../clients/types';
 import type { B2BRepEntry, B2BSourceRow, CrmReferralInput, Holder, HolderKind, NumberBook, RedirectInput, RepSpan, RepTeams, StudioFirm } from '../types';
 
 export const phoneOf = (raw: unknown): string => {
@@ -115,6 +116,19 @@ export function clientDbFirms(rows: B2BSourceRow[]): Map<string, string> {
       const phone = phoneOf(n);
       if (phone && !out.has(phone)) out.set(phone, firm);
     }
+  }
+  return out;
+}
+
+export function clientDbGroups(rows: B2BSourceRow[]): Map<string, ClientGroup> {
+  const out = new Map<string, ClientGroup>();
+  for (const row of rows) {
+    if (row.pipeline !== 'client') continue;
+    const meta = row.meta_data ?? {};
+    const phones = contactNumbers(meta).map(phoneOf).filter(Boolean);
+    if (!phones.length) continue;
+    const group = { key: `f:${row.id ?? phones[0]}`, name: text(meta.company) || text(meta.firm_name) };
+    for (const phone of phones) if (!out.has(phone)) out.set(phone, group);
   }
   return out;
 }

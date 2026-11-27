@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-108 entries. They live in one file because they cross-reference each other —
+110 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -117,6 +117,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A firm's new SPoC read "—" on the Client Database list until the page was reloaded
 - The Report Card read "the stats call failed" for most of a big team while every call returned 200
 - A person's role change rewrote their past revenue, because the rep test read today's team and today's branch
+- A person who left B2B still earned Direct, because Direct was the booking branch and Django kept booking them on it
+- Django's order read starts in April 2026, so any lookback before then reads as "no order"
 - One client held two Outreach leads, so the converted one sat beside a stale Follow up
 
 - **The Category Revenue tab was compared against Metabase for months while
@@ -1687,6 +1689,31 @@ a dated person is never a B2B rep by `branch === 'B2B'` alone, and an order by s
 B2B that day reads `store: B2B`. People with no dates behave exactly as before, so nothing
 moves until a manager dates them. **Any attribute of a person that can change (team,
 branch, role) must be read as of the event's date, never as of today.**
+
+### A person who left B2B still earned Direct, because Direct was the booking branch and Django kept booking them on it (2026-11-28)
+
+The user: Mandeep left B2B on 24 Sep and now assists clients at the Electronic City
+store, so a client B2B sends to him should read Studio EC Redirected. It read Direct.
+His team dates were right and `repOf` already said he was not on B2B; the channel did
+not ask. Direct was "booked on branch 70", and Django still books his estimates there.
+The same check found the bigger version: dozens of store reps who were never on B2B
+book on branch 70 every month, and all of it was Direct (old types 3, 6, 7). Direct is
+now a B2B person's order on the B2B branch, and a store rep's order there is a store
+order (`overview.md` §Four revenue channels). **Where an order was booked is a fact
+about Django's estimate, not about who did the work; never let it pick the channel on
+its own.**
+
+### Django's order read starts in April 2026, so any lookback before then reads as "no order" (2026-11-28)
+
+`/crm/leads/?order_from&order_to` returns 0–2 placed orders a month from July 2025 to
+March 2026 and about 1,400 from April; `created_from` returns nothing before April
+either. Nothing errors: a 12-month lookback simply finds no order and calls every
+client new. Only `client-order-history` / `b2b-bulk` reach further, and only as one
+`firstOrderDate` and one `lastOrderDate` per number. The Clients sub-tab reads months
+from `ORDER_HISTORY_FROM` only and shows a client it cannot date as "Earlier client,
+gap unknown" rather than New (`overview.md` §Clients sub-tab). **Before trusting a
+"first order" or "no order since" over a long window, check the window starts after
+April 2026.**
 
 ### One client held two Outreach leads, so the converted one sat beside a stale Follow up (2026-11-19)
 

@@ -5,17 +5,17 @@ export const CHANNEL_META: Record<RevenueChannel, { label: string; color: string
   direct: {
     label: CHANNEL_LABELS.direct,
     color: '#4F46E5',
-    hint: 'Every order placed on the B2B branch, whoever held the cart: HQ until June 2026, the B2B branch from July. Referred clients are counted in Referred instead. At HQ, a walk-in on no B2B record is not counted, because HQ is also a store.',
+    hint: 'Booked on the B2B branch (HQ until June 2026) by someone on the B2B team that day. A store rep\'s order on the B2B branch counts as a store order, so a person who left B2B counts as their store from their last day. Referred clients are counted in Referred instead.',
   },
   redirected: {
     label: CHANNEL_LABELS.redirected,
     color: '#DB2777',
-    hint: 'Booked at a store by a firm the B2B team already works with: a B2B rep on the cart, or a number held by a KAM, an Inbound or Outreach SPoC or lead, or a logged redirect. These orders are also in that store\'s own revenue.',
+    hint: 'A client the B2B team already works with, ordering through a store: a B2B rep on a store cart, or a store rep (wherever it was booked) on a number held by a KAM, an Inbound or Outreach SPoC or lead, or a logged redirect. These orders are also in that store\'s own revenue.',
   },
   ecDirect: {
     label: CHANNEL_LABELS.ecDirect,
     color: '#0891B2',
-    hint: 'Booked at a store by a Client Database firm that has no KAM and no Inbound or Outreach SPoC: firms buying from the store on their own, before any B2B tie-up. These orders are also in that store\'s own revenue.',
+    hint: 'A store rep\'s order (wherever it was booked) for a Client Database firm that has no KAM and no Inbound or Outreach SPoC: firms buying from the store on their own, before any B2B tie-up. Not part of Studio Sales. These orders are also in that store\'s own revenue.',
   },
   referred: {
     label: CHANNEL_LABELS.referred,
@@ -27,12 +27,9 @@ export const CHANNEL_META: Record<RevenueChannel, { label: string; color: string
 export const TYPE_META: Record<OrderType, { label: string; rule: string }> = {
   1: { label: 'B2B rep on cart', rule: 'A B2B rep held the cart and booked it on the B2B branch.' },
   2: { label: 'B2B rep on cart', rule: 'A B2B rep held the cart and booked it at a store.' },
-  3: { label: 'B2B client', rule: 'Booked on the B2B branch by a store rep, on a number B2B holds.' },
-  4: { label: 'B2B client', rule: 'Booked at a store by a store rep, on a number B2B holds.' },
+  4: { label: 'B2B client', rule: 'Booked by a store rep (at a store or on the B2B branch), on a number B2B holds.' },
   5: { label: 'Referred client', rule: 'The number is a client a Studio Space partner referred, so it counts in Referred wherever it was booked.' },
-  6: { label: 'No-KAM firm', rule: 'Booked on the B2B branch by a store rep, for a Client Database firm with no KAM yet.' },
-  7: { label: 'No B2B record', rule: 'Booked on the B2B branch by a store rep. No firm or lead holds the number.' },
-  8: { label: 'No-KAM firm', rule: 'Booked at a store by a store rep, for a Client Database firm with no KAM yet.' },
+  8: { label: 'No-KAM firm', rule: 'Booked by a store rep (at a store or on the B2B branch), for a Client Database firm with no KAM yet.' },
 };
 
 export const HELD_BY: Record<HolderKind, string> = {

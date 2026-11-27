@@ -16,8 +16,7 @@ const HELD_SOURCE: Partial<Record<HolderKind, string>> = {
 function sourceOf(o: RevenueOrder): string {
   if (o.type === 1 || o.type === 2) return 'B2B rep on the cart';
   if (o.type === 5) return 'Studio Space referral';
-  if (o.type === 6 || o.type === 8) return 'Client Database firm, no KAM';
-  if (o.type === 7) return 'No B2B record';
+  if (o.type === 8) return 'Client Database firm, no KAM';
   return (o.heldBy && HELD_SOURCE[o.heldBy]) || 'Number B2B holds';
 }
 

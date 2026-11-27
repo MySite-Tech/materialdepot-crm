@@ -9,6 +9,16 @@ export const B2B_BOOKING: B2BBooking[] = [
 
 export const REVENUE_CHANNELS: RevenueChannel[] = ['direct', 'redirected', 'ecDirect', 'referred'];
 
+export const STUDIO_CHANNELS: RevenueChannel[] = ['direct', 'redirected', 'referred'];
+
+export const FLOW_MONTHS = 5;
+
+export const FLOW_LOOKBACK = 12;
+
+export const CHURN_GAP = 3;
+
+export const ORDER_HISTORY_FROM = '2026-04';
+
 export const CHANNEL_LABELS: Record<RevenueChannel, string> = {
   direct: 'Direct',
   redirected: 'Studio EC Redirected',
@@ -17,7 +27,7 @@ export const CHANNEL_LABELS: Record<RevenueChannel, string> = {
 };
 
 export const CHANNEL_TYPES: Record<RevenueChannel, OrderType[]> = {
-  direct: [1, 3, 6, 7],
+  direct: [1],
   redirected: [2, 4],
   ecDirect: [8],
   referred: [5],
@@ -46,9 +56,7 @@ export const FUNNEL_STAGES: FunnelStage[] = ['enquiry', 'quoted', 'ordered', 'de
 export const FUNNEL_OF: Partial<Record<OrderType, FunnelBucket>> = {
   1: 'studio',
   2: 'studio',
-  3: 'ecReferred',
   4: 'ecReferred',
-  6: 'ecDirect',
   8: 'ecDirect',
 };
 

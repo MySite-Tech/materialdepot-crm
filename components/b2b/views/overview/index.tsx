@@ -1,6 +1,7 @@
 'use client';
 
 import { RevenueAnalysis } from './analysis';
+import { ClientMovement } from './clients';
 import { OverviewSub, SUB_TABS } from './constants';
 import { OverviewSummary } from './sections';
 import { OverviewTarget } from './types';
@@ -11,6 +12,7 @@ import { ReactNode, useState } from 'react';
 const SUBTITLES: Record<OverviewSub, string> = {
   summary: 'B2B revenue, pipeline and accounts at a glance',
   analysis: 'Slice revenue by channel, branch, rep, category and more, and compare any two months',
+  clients: 'New, revived, moving and churned clients, month by month',
 };
 
 export default function B2BOverview({ team, onNavigate }: {
@@ -24,9 +26,9 @@ export default function B2BOverview({ team, onNavigate }: {
 
   return (
     <div className="p-4 sm:p-6 max-w-[1400px] mx-auto flex flex-col gap-3">
-      {sub === 'summary'
-        ? <OverviewSummary team={team} onNavigate={onNavigate} onAnalyse={() => setSub('analysis')} head={head} />
-        : <RevenueAnalysis head={head} />}
+      {sub === 'summary' && <OverviewSummary team={team} onNavigate={onNavigate} onAnalyse={() => setSub('analysis')} head={head} />}
+      {sub === 'analysis' && <RevenueAnalysis head={head} />}
+      {sub === 'clients' && <ClientMovement head={head} />}
     </div>
   );
 }
