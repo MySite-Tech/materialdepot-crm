@@ -50,6 +50,7 @@ export function ClientDrawer({ row, clients, orders, today, historyFor, assignAs
       assignAs={assignAs}
       kams={kams}
       people={people}
+      activityBadge={log.length ? String(log.length) : undefined}
     >
       {mismatch && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">

@@ -42,9 +42,9 @@ export const LENS: Record<Lens, LensMeta> = {
     accent: '#DC2626',
   },
   ready: {
-    title: 'Ready to close',
-    rule: '5 RNRs in the last 7 days, or 7+ days old with 5+ calls and still not at Follow up. Decide: close as Lost, or send them on.',
-    empty: 'Nothing is ready to close.',
+    title: 'Needs a decision',
+    rule: 'Leads the calls are not moving: 5 RNRs in the last 7 days, or 7+ days old with 5+ calls and still not at Follow up. Decide: close as Lost, or keep going and send them on.',
+    empty: 'No lead needs a decision.',
     accent: '#B45309',
   },
   deals: {

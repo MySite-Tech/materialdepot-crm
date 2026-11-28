@@ -161,6 +161,22 @@ export async function fetchOrdersByGst(gstins: string[]): Promise<ClientOrderRow
   return (Array.isArray(results) ? results : []).map((r) => ticketToOrderRow(r, String(r.clientPhone || '')));
 }
 
+const detailCache = new Map<string, Promise<ClientOrderRow | null>>();
+
+export function fetchEnquiryDetail(enqId: string): Promise<ClientOrderRow | null> {
+  const want = enqId.trim().toUpperCase();
+  const hit = detailCache.get(want);
+  if (hit) return hit;
+  const promise = fetchCRMLeads({ enquiryIds: [want], page: 1, pageSize: 5, include: 'boq' })
+    .then(({ results }) => {
+      const row = (results ?? []).find((r) => String(r.id).toUpperCase() === want);
+      return row ? ticketToOrderRow(row, String(row.clientPhone || '')) : null;
+    });
+  detailCache.set(want, promise);
+  promise.catch(() => detailCache.delete(want));
+  return promise;
+}
+
 const itemsCache = new Map<string, Promise<BoqLine[]>>();
 
 export function fetchEnquiryItems(enqId: string): Promise<BoqLine[]> {

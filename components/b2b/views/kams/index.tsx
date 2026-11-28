@@ -16,6 +16,7 @@ import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { ClientDrawer } from './drawer';
 import { InteractionModal } from './panels/interactions';
 import { OrderModal } from './orders/modal';
+import { FilterBar } from '../../ui/filter-bar';
 import { LensPills, LensTileGroup, LensTiles } from '../../ui/lens-tiles';
 import { btnGhost, btnPrimary } from '../../constants/ui';
 import { fetchClients, fetchKamOrders, kamEnquiryIdsToResolve, resolveKamOrders, upsertClient, upsertKamOrder } from '@/lib/b2b';
@@ -289,32 +290,31 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
 
       <LensTiles groups={tileGroups} active={lens} onPick={pickLens} />
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search firm, contact, number or Enq ID…"
-          className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white outline-none focus:border-[#0F766E] w-full sm:w-[280px]" />
-        {manager && (
-          <select value={kamFilter} onChange={(e) => setKamFilter(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-            <option value="all">All KAMs ({assignedFirms.length} firms)</option>
-            <option value="unassigned">No KAM yet ({unassignedCount})</option>
-            {kamOptions.map((k) => <option key={k} value={k}>{k} ({assignedFirms.filter((c) => sameRep(c.kam, k)).length})</option>)}
-          </select>
-        )}
-        <select value={segment} onChange={(e) => setSegment(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All segments</option>
-          {SEGMENTS.map((x) => <option key={x} value={x}>Segment {x}</option>)}
-        </select>
-        <select value={source} onChange={(e) => setSource(e.target.value)} className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white cursor-pointer">
-          <option value="all">All sources</option>
-          {CLIENT_SOURCES.map((x) => <option key={x} value={x}>{x}</option>)}
-        </select>
-        <div className="ml-auto">
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Search firm, contact, number or Enq ID"
+        fields={[
+          ...(manager ? [{
+            key: 'kam', label: 'KAM', value: kamFilter, any: `All (${assignedFirms.length} firms)`,
+            options: [
+              { v: 'unassigned', t: `No KAM yet (${unassignedCount})` },
+              ...kamOptions.map((k) => ({ v: k, t: `${k} (${assignedFirms.filter((c) => sameRep(c.kam, k)).length})` })),
+            ],
+          }] : []),
+          { key: 'segment', label: 'Segment', value: segment, options: SEGMENTS.map((x) => ({ v: x, t: `Segment ${x}` })) },
+          { key: 'source', label: 'Source', value: source, options: CLIENT_SOURCES.map((x) => ({ v: x, t: x })) },
+        ]}
+        onSet={(key, v) => (key === 'kam' ? setKamFilter(v) : key === 'segment' ? setSegment(v) : setSource(v))}
+        onClearAll={() => { setKamFilter('all'); setSegment('all'); setSource('all'); }}
+        right={(
           <LensPills
             pills={KAM_SIDE_LENSES.map((k) => ({ key: k, title: KAM_LENS[k].title, rule: KAM_LENS[k].rule, count: loading ? undefined : countOf(k) }))}
             active={lens}
             onPick={pickLens}
           />
-        </div>
-      </div>
+        )}
+      />
 
       {loading ? <p className="text-sm text-gray-400 py-8 text-center bg-white rounded-lg border border-gray-200">Loading firms and orders…</p>
         : (isOrderLens(lens) ? ordersFailed : clientsFailed) ? (

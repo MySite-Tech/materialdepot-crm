@@ -45,7 +45,7 @@ function FollowUp({ lead, today }: { lead: InboundLead; today: string }) {
   );
 }
 
-function DealCell({ lead, ctx }: { lead: InboundLead; ctx?: LeadCtx }) {
+function DealCell({ lead, ctx, onView }: { lead: InboundLead; ctx?: LeadCtx; onView: (enqId: string) => void }) {
   const d = ctx?.stage === 'pi' ? ctx.pis[0] : ctx?.stage === 'cart' ? ctx.carts[0] : undefined;
   const more = ctx ? ctx.carts.length + ctx.pis.length - 1 : 0;
   if (!d) {
@@ -57,7 +57,11 @@ function DealCell({ lead, ctx }: { lead: InboundLead; ctx?: LeadCtx }) {
     );
   }
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
+    <button
+      onClick={(e) => { e.stopPropagation(); onView(d.enqId); }}
+      title="Open the products and full detail"
+      className="flex flex-col gap-0.5 min-w-0 text-left rounded-md -mx-1.5 px-1.5 py-1 hover:bg-indigo-50/60"
+    >
       <span className="flex items-baseline gap-1.5">
         <span className={`text-[10px] font-semibold rounded px-1 ${d.kind === 'pi' ? 'bg-purple-50 text-purple-700' : 'bg-indigo-50 text-indigo-700'}`}>{d.kind === 'pi' ? 'PI' : 'Cart'}</span>
         <span className="font-mono text-gray-800">{d.value ? fmtINR(d.value) : '₹0'}</span>
@@ -66,7 +70,8 @@ function DealCell({ lead, ctx }: { lead: InboundLead; ctx?: LeadCtx }) {
         <span className="font-mono">{d.enqId}</span> · opened {fmtDay(d.createdOn)}{more > 0 ? ` · +${more} more` : ''}
       </span>
       {(d.branch || d.bm) && <span className="text-[11px] text-gray-400 truncate">{[d.branch, d.bm].filter(Boolean).join(' · ')}</span>}
-    </div>
+      <span className="text-[11px] font-medium text-indigo-700">View products</span>
+    </button>
   );
 }
 
@@ -138,13 +143,15 @@ function Deal({ lead }: { lead: InboundLead }) {
   return <div className="flex flex-col gap-0.5 whitespace-nowrap">{value}{enq}</div>;
 }
 
-export function LeadTable({ lens, rows, ctx, today, showOwner, searchQuery, valueText, page, setPage, onOpen, onClearSearch, emptyAction, picked, onTogglePick, onTogglePage }: {
+export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searchQuery, searchWide, valueText, page, setPage, onOpen, onClearSearch, emptyAction, picked, onTogglePick, onTogglePage }: {
   lens: Lens;
   rows: InboundLead[];
   ctx: Map<string, LeadCtx>;
+  onViewDeal: (enqId: string) => void;
   today: string;
   showOwner: boolean;
   searchQuery: string;
+  searchWide?: boolean;
   valueText?: string;
   page: number;
   setPage: (p: number) => void;
@@ -183,7 +190,11 @@ export function LeadTable({ lens, rows, ctx, today, showOwner, searchQuery, valu
             {valueText && <span className="text-[12px] font-semibold text-gray-600">· {valueText}</span>}
           </div>
           <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-            {searchQuery ? 'The search covers every stage and owner in the Kylas B2B pipeline, wider than the board itself.' : meta.rule}
+            {searchQuery
+              ? searchWide
+                ? 'Every lead in the CRM, 10 Nov or older, plus every stage and owner in the Kylas B2B pipeline.'
+                : 'Every lead in the CRM, older than 10 Nov included. Press Enter to also search Kylas.'
+              : meta.rule}
           </p>
         </div>
         {searchQuery && (
@@ -247,7 +258,7 @@ export function LeadTable({ lens, rows, ctx, today, showOwner, searchQuery, valu
                       </div>
                     </td>
                     {showStatus && <td className={td}><StatusBadge s={l.stage} /></td>}
-                    {isDeals && <td className={`${td} max-w-[240px]`}><DealCell lead={l} ctx={ctx.get(l.id)} /></td>}
+                    {isDeals && <td className={`${td} max-w-[240px]`}><DealCell lead={l} ctx={ctx.get(l.id)} onView={onViewDeal} /></td>}
                     <td className={`${td} whitespace-nowrap`}><LeadDate lead={l} today={today} /></td>
                     {isResult && (
                       <td className={`${td} whitespace-nowrap`}>

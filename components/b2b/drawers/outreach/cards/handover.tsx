@@ -6,7 +6,6 @@ import {
   hoursSince, isWhatsappGroupLink, whatsappDeclineReason,
 } from '../../../models/outreach/handover';
 import { Rep } from '../../../models/outreach/intake';
-import EcPicker from '../../../ui/ec-picker';
 import { Field, Pill, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
 import { inputCls } from '../../../constants/ui';
 import { Dispatch, SetStateAction, useState } from 'react';
@@ -58,15 +57,14 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
   return (
     <SectionCard
       title="KAM handover"
-      owner="crm"
-      subtitle={`Round-robin to a KAM once converted · KAM signs off within ${HANDOVER_TAT_HOURS}h`}
+      info={`Opens once the lead is converted. Pick a KAM or use round robin; the KAM signs off within ${HANDOVER_TAT_HOURS}h.`}
       right={<Pill color={HANDOVER_STATE_COLOR[state]}>{HANDOVER_STATE_LABEL[state]}</Pill>}
     >
       {declining ? (
         <Field
           label="Why the client will not join a WhatsApp group"
           required={draft.status === 'Closed'}
-          hint="The handover goes ahead without a group. The KAM sees this reason and calls the client directly."
+          info="The handover goes ahead without a group. The KAM sees this reason and calls the client directly."
           error={declineMissing && draft.status === 'Closed' ? 'Pick a reason, or untick below and paste the group link.' : undefined}
         >
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -93,7 +91,7 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
         <Field
           label="WhatsApp group link"
           required={draft.status === 'Closed'}
-          hint="The group with the client, you and the KAM. Required for the handover unless the client is not willing."
+          info="The group with the client, you and the KAM. Required for the handover unless the client is not willing."
           error={linkBad ? 'That is not a WhatsApp group invite link (https://chat.whatsapp.com/…).' : undefined}
         >
           <div className="flex items-center gap-1.5">
@@ -105,7 +103,7 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
           </div>
         </Field>
       )}
-      <label className="mt-2 flex items-center gap-1.5 text-[11.5px] text-gray-600 cursor-pointer select-none">
+      <label className="mt-2 flex items-center gap-1.5 text-[12px] text-gray-600 cursor-pointer select-none">
         <input
           type="checkbox"
           checked={declining}
@@ -140,7 +138,7 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
           {(state === 'ready' || state === 'rejected') && (
             <>
               <div className="mt-3">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Handover must carry</span>
+                <span className="block text-[12px] font-medium text-gray-700 mb-1.5">Handover must carry</span>
                 {missing.length ? (
                   <ul className="flex flex-col gap-0.5">
                     {missing.map((m) => <li key={m} className="text-[11.5px] text-red-600">✗ {m}</li>)}
@@ -159,7 +157,7 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
                   onClick={async () => { const pick = await onAutoKam(); if (pick) setKamName(pick); }}
                   className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-gray-200 bg-white text-gray-600 hover:border-[#0F766E] hover:text-[#0F766E]"
                 >
-                  Round-robin
+                  Round robin
                 </button>
                 <button
                   disabled={!canSend || busy}
@@ -170,7 +168,7 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
                 </button>
               </div>
               {kamLoad && (
-                <p className="text-[10px] text-gray-400 mt-1.5 leading-snug">
+                <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
                   {`Round-robin picks the KAM holding the fewest converted leads across Inbound and Outreach — ${Object.entries(kamLoad).map(([k, n]) => `${k} ${n}`).join(', ') || 'nobody has any yet'}.`}
                 </p>
               )}
@@ -203,16 +201,6 @@ export function OutreachHandoverCard({ draft, saved, kams, canRespond, nowMs, bu
           )}
         </>
       )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-3 border-t border-gray-100">
-        <Field label="Spok" hint="Whoever is speaking to this lead — shown on the Leads tab">
-          <input value={draft.spok || ''} onChange={(e) => set('spok', e.target.value)} placeholder={draft.bm} className={inputCls} />
-        </Field>
-        <div>
-          <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Assisted at EC</span>
-          <EcPicker ecName={draft.ecName} ecBmName={draft.ecBmName} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
-        </div>
-      </div>
     </SectionCard>
   );
 }

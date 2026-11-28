@@ -168,7 +168,7 @@ export function tileFigures(
     new: { value: n('new'), sub: v.tomorrow ? `+${v.tomorrow} after 7 pm, for tomorrow` : counts.new ? 'not called yet' : 'all called' },
     due: { value: n('due'), sub: 'booked for today' },
     overdue: { value: n('overdue'), sub: 'date passed', warn: counts.overdue > 0 },
-    ready: { value: n('ready'), sub: counts.ready ? 'close or send on' : 'none yet', warn: counts.ready > 0 },
+    ready: { value: n('ready'), sub: counts.ready ? 'close or keep going' : 'none yet', warn: counts.ready > 0 },
     cartOpen: waiting('cartOpen'),
     piOpen: waiting('piOpen'),
     cartFollow: following('cartFollow', v.cartDue),

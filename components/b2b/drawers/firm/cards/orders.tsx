@@ -1,6 +1,7 @@
 'use client';
 
-import { ORDER_PAGE_SIZE, ORDER_TABS } from '../constants';
+import { LABEL_CLS, LINK_CLS, ORDER_PAGE_SIZE, ORDER_TABS } from '../constants';
+import { Hint } from '../../../ui/info-tip';
 import { OrderTab, fmtDate, fmtDateTime, fmtPhone, orderTab, unlistedOrders } from '../utils';
 import { fmtINR, fmtShortINR } from '../../../models/mock-data';
 import { SectionCard, Spinner } from '../../../ui/inbound-chips';
@@ -16,9 +17,6 @@ import { btnPrimary, inputCls } from '../../../constants/ui';
 import { ClientOrderDetails, ClientOrderHistory, ClientOrderRow } from '@/lib/b2b';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-
-const ACTION_LABEL = 'text-[10px] font-semibold uppercase tracking-wider text-gray-500';
-const ACTION_LINK = 'text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap';
 
 function EnquirySpocLine({ client, row, people, assignAs, onSave }: {
   client: ClientEntity;
@@ -49,12 +47,12 @@ function EnquirySpocLine({ client, row, people, assignAs, onSave }: {
     <div className="bg-white border border-gray-100 rounded-md px-3 py-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="min-w-0">
-          <div className={ACTION_LABEL}>B2B SPoC on this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'}</div>
+          <div className={LABEL_CLS}>B2B SPoC on this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'}</div>
           <div className="text-[12px] text-gray-800">
             {held ? <><span className="font-semibold">{held.name}</span><span className="text-gray-400"> · since {fmtDate(held.at)}{held.by ? ` · set by ${held.by}` : ''}</span></> : <span className="text-gray-400">Not set</span>}
           </div>
         </div>
-        {canEdit && !editing && <button onClick={() => { setName(held?.name || ''); setEditing(true); }} className={ACTION_LINK}>{held ? 'Change' : 'Assign'}</button>}
+        {canEdit && !editing && <button onClick={() => { setName(held?.name || ''); setEditing(true); }} className={LINK_CLS}>{held ? 'Change' : 'Assign'}</button>}
       </div>
       {editing && (
         <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -85,8 +83,8 @@ function EnquiryRedirect({ client, row, ec }: {
   return (
     <div className="bg-white border border-gray-100 rounded-md px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <div className={ACTION_LABEL}>Send this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'} to an EC</div>
-        {row.open && !open && !ec.error && <button onClick={() => setOpen(true)} className={ACTION_LINK}>+ Send to EC</button>}
+        <div className={LABEL_CLS}>Send this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'} to an EC</div>
+        {row.open && !open && !ec.error && <button onClick={() => setOpen(true)} className={LINK_CLS}>+ Send to EC</button>}
       </div>
       {ec.error && <p className="text-[11px] text-blue-700 mt-1">Earlier sends could not be read: {ec.error}</p>}
       {sent.map((v) => <p key={v.id} className="text-[11.5px] text-[#0F766E] mt-1">{sentLine(v)} {fmtDate(v.createdAt)}</p>)}
@@ -195,8 +193,9 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
   return (
     <SectionCard
       title="Enquiries & orders"
-      subtitle={details ? `${scoped.length} enquir${scoped.length === 1 ? 'y' : 'ies'} ${via ? `on ${fmtPhone(via)}` : numbers > 1 ? `across all ${numbers} numbers` : 'on this number'} · click one for its cart and history` : undefined}
-      right={<button onClick={onRecheck} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">Re-check</button>}
+      info={`Every deal ticket on this firm's numbers, matched by an exact contact-number match, plus enquiries billed to its GSTINs. Click one for its cart, items and history.${rejected ? ` ${rejected} ticket${rejected === 1 ? '' : 's'} raised under a different number ${rejected === 1 ? 'was' : 'were'} discarded.` : ''}`}
+      subtitle={details ? `${scoped.length} enquir${scoped.length === 1 ? 'y' : 'ies'} ${via ? `on ${fmtPhone(via)}` : numbers > 1 ? `across all ${numbers} numbers` : 'on this number'}` : undefined}
+      right={<button onClick={onRecheck} className={LINK_CLS}>Re-check</button>}
     >
       <div className="flex items-center gap-1 border-b border-gray-100 mb-2 flex-wrap">
         {ORDER_TABS.map((t) => (
@@ -221,9 +220,9 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
       )}
 
       {tab === 'placed' && !loading && !failed && unlisted.orders > 0 && (
-        <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mb-2">
-          <span className="font-semibold">{unlisted.orders} order{unlisted.orders === 1 ? '' : 's'}{unlisted.value > 0 ? ` worth ${fmtShortINR(unlisted.value)}` : ''} on {via ? 'this number' : 'these numbers'} {unlisted.orders === 1 ? 'is' : 'are'} not listed here.</span>{' '}
-          {unlisted.orders === 1 ? 'It is' : 'They are'} in the figures above, but the CRM can only list an order that has a deal ticket, and {unlisted.orders === 1 ? 'this one has' : 'these have'} none. PIs without a deal ticket are missing the same way. The tech team has the Django change that lists them.
+        <p className="flex items-center gap-1.5 text-[12px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mb-2">
+          <span>{unlisted.orders} order{unlisted.orders === 1 ? '' : 's'}{unlisted.value > 0 ? ` worth ${fmtShortINR(unlisted.value)}` : ''} on {via ? 'this number' : 'these numbers'} {unlisted.orders === 1 ? 'is' : 'are'} not listed here.</span>
+          <Hint text={`${unlisted.orders === 1 ? 'It is' : 'They are'} in the Overview figures, but the CRM can only list an order that has a deal ticket, and ${unlisted.orders === 1 ? 'this one has' : 'these have'} none. PIs without a deal ticket are missing the same way. The tech team has the Django change that lists them.`} />
         </p>
       )}
 
@@ -234,15 +233,15 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-[12px] min-w-[620px]">
               <thead>
-                <tr className="text-gray-400 text-[9px] uppercase tracking-wider">
-                  <th className="text-left font-semibold px-1 py-1.5">Enquiry ID</th>
-                  <th className="text-left font-semibold px-1 py-1.5">{tab === 'placed' ? 'Order placed' : 'Created'}</th>
-                  <th className="text-right font-semibold px-1 py-1.5">Value</th>
-                  <th className="text-left font-semibold px-1 py-1.5 pl-3">Status</th>
-                  {showVia && <th className="text-left font-semibold px-1 py-1.5">Via</th>}
-                  {showCompany && <th className="text-left font-semibold px-1 py-1.5">Company on order</th>}
-                  {showGst && <th className="text-left font-semibold px-1 py-1.5">GST on order</th>}
-                  <th className="text-left font-semibold px-1 py-1.5">Branch · ticket owner</th>
+                <tr className="text-gray-500 text-[11.5px]">
+                  <th className="text-left font-medium px-1 py-1.5">Enquiry ID</th>
+                  <th className="text-left font-medium px-1 py-1.5">{tab === 'placed' ? 'Order placed' : 'Created'}</th>
+                  <th className="text-right font-medium px-1 py-1.5">Value</th>
+                  <th className="text-left font-medium px-1 py-1.5 pl-3">Status</th>
+                  {showVia && <th className="text-left font-medium px-1 py-1.5">Via</th>}
+                  {showCompany && <th className="text-left font-medium px-1 py-1.5">Company on order</th>}
+                  {showGst && <th className="text-left font-medium px-1 py-1.5">GST on order</th>}
+                  <th className="text-left font-medium px-1 py-1.5">Branch · ticket owner</th>
                 </tr>
               </thead>
               <tbody>
@@ -300,11 +299,6 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
           </div>
         </div>
       )}
-
-      <p className="text-[10px] text-gray-400 mt-2">
-        Matched to this firm by an exact contact-number match.
-        {!!rejected && ` ${rejected} ticket${rejected === 1 ? '' : 's'} raised under a different number ${rejected === 1 ? 'was' : 'were'} discarded.`}
-      </p>
     </SectionCard>
   );
 }

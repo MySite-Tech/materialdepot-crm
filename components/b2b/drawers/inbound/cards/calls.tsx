@@ -98,7 +98,7 @@ export function InboundActivity({ draft, calls, readiness, onClose }: {
         {readiness.ready ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
             <p className="text-[12px] text-amber-800">
-              <span className="font-semibold">Ready to close.</span>{' '}
+              <span className="font-semibold">Needs a decision.</span>{' '}
               {readiness.reason === 'unreachable'
                 ? `${readiness.rnrInWindow} RNRs in the last ${READY_WINDOW_DAYS} days.`
                 : `${readiness.ageDays} days in, ${tally.total} calls, still ${draft.stage}.`}

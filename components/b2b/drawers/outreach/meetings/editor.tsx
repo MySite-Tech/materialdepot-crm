@@ -5,6 +5,7 @@ import { MeetingStatus, OutreachLead, OutreachMeeting } from '../../../models/mo
 import { CHECK_IN_REQUIRED_FROM, MEETING_STATUSES, needsCheckIn } from '../../../models/outreach';
 import { meetingGaps } from '../../../models/outreach/reminders';
 import { Field, ReadValue, errorInputCls } from '../../../ui/inbound-chips';
+import { Hint } from '../../../ui/info-tip';
 import { CheckInLine } from '../../../ui/check-in-capture';
 import { MeetingStatusChip } from '../../../ui/outreach-chips';
 import { inputCls } from '../../../constants/ui';
@@ -33,7 +34,7 @@ export function MeetingEditor({ m, saved, locked, draft, set, patchMeeting, show
     <div>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-[12px] font-bold text-gray-800">Meeting {m.n}</span>
+          <span className="text-[12.5px] font-semibold text-gray-900">Meeting {m.n}</span>
           <MeetingStatusChip s={m.status} />
         </div>
         <div className="flex items-center gap-2">
@@ -92,12 +93,12 @@ export function MeetingEditor({ m, saved, locked, draft, set, patchMeeting, show
       )}
 
       <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[11px]">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Check-in</span>
+        <span className="text-[11.5px] font-medium text-gray-500">Check-in</span>
         {m.checkIn ? <CheckInLine c={m.checkIn} /> : m.status === 'Scheduled' ? (
           onCheckIn ? (
             <>
               <button onClick={onCheckIn} className="px-2.5 py-1 rounded-md bg-[#0F766E] text-white font-semibold">Check in at the meeting</button>
-              <span className="text-gray-500">On arrival: your exact location. Needed before it can be marked held.</span>
+              <Hint text="On arrival: your exact location. Needed before it can be marked held." />
             </>
           ) : <span className="text-amber-700">Save this meeting first, then check in when you arrive.</span>
         ) : needsCheckIn(m.date)
@@ -131,14 +132,14 @@ export function MeetingEditor({ m, saved, locked, draft, set, patchMeeting, show
                 error={followUpError ? 'Set when you will next follow up after this visit.' : undefined}>
                 <input type="date" value={draft.followUpDate || ''} onChange={(e) => set('followUpDate', e.target.value)} className={followUpError ? errorInputCls : inputCls} />
               </Field>
-              <Field label="Time" hint="Optional">
+              <Field label="Time" info="Optional. Reminders bring it forward an hour before.">
                 <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value || undefined)} className={inputCls} />
               </Field>
             </div>
           )}
         </>
       ) : m.notes ? (
-        <Field label="Meeting notes" hint="Recorded when this meeting was marked Completed" className="mt-2.5">
+        <Field label="Meeting notes" info="Recorded when this meeting was marked Completed." className="mt-2.5">
           <ReadValue v={m.notes} />
         </Field>
       ) : null}

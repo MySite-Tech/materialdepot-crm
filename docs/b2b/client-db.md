@@ -153,6 +153,35 @@ not visible in the code's shape:
 - The list and the order tabs page at 25 rows. The tiles and the strip
   count the full filtered set.
 
+### The firm page has tabs (2026-11-28)
+
+The same header-and-tabs layout the Inbound lead window got that day
+(`inbound.md` §The lead window has five tabs). Nothing stored or shown was removed:
+
+| Where | What |
+|---|---|
+| Header | firm name, primary number, status band, temperature, type · segment · source, Edit details, and the four SPoCs on one line with an "i" for how each holds it; Change opens People |
+| Activity | KAM tab only, and its default: the children `views/kams/drawer.tsx` passes (calls and meetings with the check-in, KAM pipeline, escalations, the temperature mismatch). Badge = interactions logged |
+| Overview | the five stat tiles, the Unknown-status notices, Account (KAM with Assign/Reassign, assignment history, remarks, merged from) |
+| Orders | Enquiries & orders (its Orders / PI shared / Open carts / Lost sub-tabs, per-enquiry SPoC and Send to EC), Sales by SPoC. Badge = open carts and PIs |
+| People | SPoCs (Change/Add per team), contact numbers, GST numbers, Delete this firm at the bottom |
+| EC & handover | EC visits and redirects, Handover from Outreach (absent when there is none, as before) |
+| Referrals | Referred clients |
+
+- **The KAM slot's Change on People jumps to Overview and opens the Account
+  picker.** The picker's open state lives in the drawer, not the card, because the
+  card unmounts on a tab switch; a nonce like the old one would either never open
+  or reopen on every return to Overview.
+- **A number's order count on People filters Orders and switches to it.** The two
+  used to sit on one page, so the filter showed in place.
+- **Orders, links and EC visits are still read once when the page opens**, not per
+  tab, so the SPoC line in the header and the tab badges are right on open and the
+  request count is unchanged. Referrals now reads only when its tab opens.
+- Explanations (GST matching, Studio Space tiers, "matched by exact number",
+  discarded tickets, why an order is unlisted) moved behind the "i". Labels are
+  sentence case. The stat tiles' labels still render upper case because
+  `StatTile` is shared (`ui/client-chips.tsx`).
+
 ### Four SPoCs on every firm, and sales by SPoC (2026-10-31)
 
 The user: every firm has an EC, Inbound, Outreach and KAM SPoC, none compulsory,

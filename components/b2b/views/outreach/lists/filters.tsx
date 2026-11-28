@@ -1,33 +1,10 @@
 'use client';
 
 import { COMPANY_TYPES, LEAD_TYPES, OUTREACH_SOURCES, SEGMENTS } from '../../../models/outreach';
-import { inputCls } from '../../../constants/ui';
 import { NO_FILTERS } from '../constants';
 import { BmOption, OutreachFilters } from '../types';
-import { activeFilterCount } from '../utils';
-import { ReactNode, useState } from 'react';
-
-const label = 'block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1';
-const control = 'px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md outline-none bg-white min-w-[130px] focus:border-[#0F766E]';
-const chip = 'px-2.5 py-1 rounded-full text-[11.5px] font-semibold border whitespace-nowrap';
-
-export function BmPicker({ options, value, onChange }: {
-  options: BmOption[];
-  value: string;
-  onChange: (name: string) => void;
-}) {
-  const total = options.reduce((n, o) => n + o.leads, 0);
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={`${control} font-semibold text-gray-700`}>
-      <option value="all">{`All BMs (${total})`}</option>
-      {options.map((o) => (
-        <option key={o.rep.name} value={o.rep.name}>
-          {`${o.rep.name} (${o.leads})${o.onTeam ? '' : ' · not on the Outreach team'}`}
-        </option>
-      ))}
-    </select>
-  );
-}
+import { ReactNode } from 'react';
+import { FilterBar, FilterField } from '../../../ui/filter-bar';
 
 const SELECTS: [string, keyof OutreachFilters, readonly string[], (v: string) => string][] = [
   ['Client type', 'companyType', COMPANY_TYPES, (v) => v],
@@ -36,71 +13,36 @@ const SELECTS: [string, keyof OutreachFilters, readonly string[], (v: string) =>
   ['Source', 'source', [...OUTREACH_SOURCES, 'none'], (v) => (v === 'none' ? 'Source not set' : v)],
 ];
 
-export function Toolbar({ f, set, onSearch, right }: {
+export function Toolbar({ f, set, onSearch, bm, period, periodNote, periodWarn, right }: {
   f: OutreachFilters;
   set: (patch: Partial<OutreachFilters>) => void;
   onSearch: (q: string) => void;
+  bm?: { options: BmOption[]; value: string; onChange: (name: string) => void } | null;
+  period?: ReactNode;
+  periodNote?: string;
+  periodWarn?: boolean;
   right?: ReactNode;
 }) {
-  const active = activeFilterCount(f);
-  const [open, setOpen] = useState(false);
-  const chips: { key: string; text: string; clear: Partial<OutreachFilters> }[] = [
-    ...SELECTS.filter(([, k]) => f[k] !== 'all').map(([, k, , show]) => ({ key: k, text: show(f[k] as string), clear: { [k]: 'all' } })),
-    ...(f.onlyGaps ? [{ key: 'gaps', text: 'Missing details', clear: { onlyGaps: false } }] : []),
+  const bmField: FilterField[] = bm
+    ? [{ key: 'bm', label: 'BM', value: bm.value, any: `All (${bm.options.reduce((n, o) => n + o.leads, 0)})`,
+      options: bm.options.map((o) => ({ v: o.rep.name, t: `${o.rep.name} (${o.leads})${o.onTeam ? '' : ' · not on the team'}` })) }]
+    : [];
+  const fields: FilterField[] = [
+    ...bmField,
+    ...SELECTS.map(([label, key, opts, show]) => ({ key, label, value: f[key] as string, options: opts.map((o) => ({ v: o, t: show(o) })) })),
   ];
-
   return (
-    <div className="mb-3">
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative w-full sm:w-[300px]">
-          <input
-            value={f.search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search firm, contact, phone, Enq ID or BM"
-            className={`${inputCls} pr-7`}
-          />
-          {f.search && (
-            <button onClick={() => onSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm leading-none">×</button>
-          )}
-        </div>
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className={`px-3 py-1.5 text-[12px] font-semibold rounded-md border whitespace-nowrap ${active ? 'border-[#0F766E] text-[#0F766E] bg-teal-50' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-400'}`}
-        >
-          Filters{active ? ` · ${active}` : ''} {open ? '▴' : '▾'}
-        </button>
-        {chips.map((c) => (
-          <button key={c.key} onClick={() => set(c.clear)} title="Remove this filter"
-            className={`${chip} bg-teal-50 text-[#0F766E] border-teal-200 hover:border-[#0F766E]`}>
-            {c.text} <span className="opacity-60">×</span>
-          </button>
-        ))}
-        {active > 1 && (
-          <button onClick={() => set({ ...NO_FILTERS, search: f.search })} className="text-[11.5px] font-semibold text-gray-500 hover:text-gray-800 whitespace-nowrap">Clear all</button>
-        )}
-        <div className="ml-auto">{right}</div>
-      </div>
-
-      {open && (
-        <div className="mt-2 bg-white rounded-lg border border-gray-200 p-3">
-          <div className="flex items-end gap-2.5 flex-wrap">
-            {SELECTS.map(([name, key, opts, show]) => (
-              <div key={key}>
-                <label className={label}>{name}</label>
-                <select value={f[key] as string} onChange={(e) => set({ [key]: e.target.value })} className={control}>
-                  <option value="all">Any</option>
-                  {opts.map((o) => <option key={o} value={o}>{show(o)}</option>)}
-                </select>
-              </div>
-            ))}
-            <label className="flex items-center gap-1.5 text-[12px] text-gray-600 py-1.5 cursor-pointer select-none">
-              <input type="checkbox" checked={f.onlyGaps} onChange={(e) => set({ onlyGaps: e.target.checked })} className="accent-[#0F766E]" />
-              Only leads missing details
-            </label>
-          </div>
-          <p className="mt-2 text-[10.5px] text-gray-400">These narrow the tiles and lists below, together with the BM and period at the top. The scorecard follows only the BM and period.</p>
-        </div>
-      )}
-    </div>
+    <FilterBar
+      search={f.search}
+      onSearch={onSearch}
+      placeholder="Search firm, contact, phone, Enq ID or BM"
+      lead={period}
+      fields={fields}
+      onSet={(key, v) => (key === 'bm' ? bm?.onChange(v) : set({ [key]: v } as Partial<OutreachFilters>))}
+      toggles={[{ key: 'gaps', label: 'Missing details', on: f.onlyGaps, onChange: (on) => set({ onlyGaps: on }) }]}
+      onClearAll={() => { set({ ...NO_FILTERS, search: f.search }); bm?.onChange('all'); }}
+      right={right}
+      note={periodNote && <span className={periodWarn ? 'text-amber-700' : undefined}>{periodNote}</span>}
+    />
   );
 }

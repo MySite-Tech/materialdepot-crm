@@ -62,10 +62,6 @@ export function bmOptions(leads: OutreachLead[], reps: Rep[], teamLive: boolean)
     .sort((a, b) => b.leads - a.leads || a.rep.name.localeCompare(b.rep.name));
 }
 
-export const activeFilterCount = (f: OutreachFilters): number =>
-  (['companyType', 'leadType', 'segment', 'source'] as const).filter((k) => f[k] !== 'all').length
-  + (f.onlyGaps ? 1 : 0);
-
 export function matchesFilters(l: OutreachLead, f: OutreachFilters): boolean {
   if (f.companyType !== 'all' && l.companyType !== f.companyType) return false;
   if (f.leadType !== 'all' && l.leadType !== f.leadType) return false;

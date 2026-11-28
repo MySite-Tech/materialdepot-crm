@@ -251,7 +251,7 @@ still gives every tile its count and its rows.
 
 | Group (head) | Sub-tabs | Rule |
 |---|---|---|
-| Calls | First call · Due today · Overdue · Ready to close | leads in the call phase: open, not sent to Outreach, **no open cart or PI** |
+| Calls | First call · Due today · Overdue · Needs a decision | leads in the call phase: open, not sent to Outreach, **no open cart or PI** |
 | Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | open leads (`withInbound`) with an open cart or PI on any of their numbers |
 | Outcomes | Sent to Outreach · Closed · Lost · Invalid | where leads ended up |
 
@@ -286,7 +286,7 @@ amber notice says so. A lead with status PI Shared is placed correctly either wa
 
 Checked on 28 Nov with the compiled lens code, on today's `crm_real` rows and
 production's open tickets: 485 leads in the window. Calls 301 (First call 124, Due
-today 11, Overdue 166, Ready to close 0). Carts & PIs 40 (Carts open 17, PI open 0,
+today 11, Overdue 166, Needs a decision 0). Carts & PIs 40 (Carts open 17, PI open 0,
 Carts follow up 18, PI follow up 5). No lead appeared in both groups. Of the 54
 window leads with an open ticket, the other 14 were Lost 9, Closed 2, Invalid 1 and
 sent to Outreach 2. Without the carts, First call would have read 140, not 124.
@@ -301,7 +301,7 @@ since <date>" in amber when open) and Follow-up. Outcomes adds Outcome on.
   Connected and Sent to Outreach, and in Due today, Overdue and Reminders on its
   old follow-up date. The user said that padded Inbound's lists and hurt their
   numbers. Now `withInbound(l)` (open status and not `sentToOutreach`) gates
-  Calls, Carts & PIs, Ready to close, every follow-up lens
+  Calls, Carts & PIs, Needs a decision, every follow-up lens
   (through `awaitsFollowUp`, so Reminders too) and the board's open columns. A
   sent lead shows under Sent to Outreach, All leads and an explicit Status filter.
   The adherence KPI no longer asks a sent lead for a next follow-up date. An
@@ -322,7 +322,7 @@ header and five tabs. Nothing was removed from what is stored or shown:
 | Where | What |
 |---|---|
 | Header | name, number, status, priority, lead type, follow-up, Enq ID, "n details missing" (opens Client), and the four SPoCs on one line with Reassign behind a link |
-| Activity | next follow-up with RNR / Connected, the Connected form, Ready to close, one note box, and **one timeline of calls and team notes** |
+| Activity | next follow-up with RNR / Connected, the Connected form, Needs a decision, one note box, and **one timeline of calls and team notes** |
 | Client | company, people (column labels once, not per row), client type, lead type, priority, segment, city, GST, office address, then the requirement: selection, summary with its history, expected value |
 | Deal | status and its gated fields, **Carts and PIs** (every deal ticket on the client's numbers, open first), Assisted by / Placed under, order credit |
 | Hand-offs | Send to Outreach, Send to an EC, Referred clients |
@@ -338,8 +338,36 @@ header and five tabs. Nothing was removed from what is stored or shown:
   Titles and labels are sentence case, and the "CRM" source chip is no longer drawn
   because nearly every field is the CRM's. Kylas and deal-ticket chips remain. Both
   changes apply to every B2B drawer that uses `SectionCard` and `Field`.
+- **Every deal ticket opens in full (2026-11-28).** The user wanted complete clarity on a
+  cart or PI. A click on a ticket in the Deal tab, or on the Cart / PI cell in the Carts &
+  PIs list, opens `DealDetail` (`ui/deal-detail.tsx`): status, value with and without
+  GST, the client and number on the ticket, store, store BM, opened, the store's follow-up,
+  closure or placement, property and phase, every product line (qty, rate, amount, with a
+  total), and the store's remarks and visits. It is one `/crm/leads/?enquiry_ids=<id>&include=boq`
+  read per ticket opened (`fetchEnquiryDetail`, cached for the page), never one per row.
+  At PI Shared and Closed, "Use as Enq ID" beside a ticket picks it; the click itself only
+  opens the detail.
 - **A save the gates refuse switches to Deal**, where every gated field is.
 - Unsaved edits survive switching tabs: every tab edits the same draft.
+
+### Filters (2026-11-28)
+
+The user found the filters broken. Three things were:
+
+- **The lead date filter compared the Kylas creation date, not the Lead date shown.** A
+  re-enquired lead showing 27 Nov dropped out of a 27 Nov filter, and a lead with no
+  Kylas date passed every date filter. `inboundBoardMatches` now uses
+  `inboundArrivalDay`, and a date filter drops a lead that has no date. The picker no
+  longer offers dates before 10 Nov.
+- **Search did nothing until Enter.** It now filters every loaded lead as you type,
+  older than 10 Nov included, and Enter still adds the Kylas search for leads not yet in
+  the CRM. The list says which of the two it shows.
+- **What was applied was hidden in a collapsed panel.** Every filter is now a chip
+  showing its value (`ui/filter-bar.tsx`, `FilterBar`), teal with a × when set, plus a
+  Lead date range and Clear all. Outreach and KAM use the same bar.
+
+Filters and the tiles still combine: every tile counts within the filters, so a Status
+filter of Lost leaves the Calls tiles at 0. That is deliberate and unchanged.
 
 ### The working day ends at 7 pm (5 pm until 2026-10-30)
 
@@ -394,7 +422,7 @@ written to Kylas**.
   not the `lead` prop the drawer opened with. The prop has none of the calls
   logged since it opened, and the whole row is replaced on write, so reassigning
   a CRM-added lead used to delete those calls (`docs/landmines.md`).
-### Ready to close (2026-10-29)
+### Needs a decision (2026-10-29, named Ready to close until 2026-11-28)
 
 `closureReadiness` decides when a lead may be closed for lack of response:
 
@@ -404,7 +432,8 @@ written to Kylas**.
   `MIN_ATTEMPTS_BEFORE_CLOSE` (5) calls, still `New` or `Connected`, and not sent
   to Outreach.
 
-It feeds the Ready to close tile, a banner in the call log with a one-click
+The user renamed the tile on 2026-11-28: these are leads the calls are not moving,
+and the rep decides whether to close them or keep going. It feeds the Needs a decision tile, a banner in the call log with a one-click
 "Mark Lost", and the Lost gate. **The two no-response reasons are refused unless
 readiness says so, and every other lost reason needs a Connected call.** A
 reason like "Price issue" can only come from someone who spoke to the client.
@@ -775,7 +804,7 @@ them, and whoever the CRM gives a lead to must own it in Kylas too, so Django's
 
 `statusGateErrors` blocks the four the PRD states — follow-up date on
 `Follow up`, Enq ID **and** follow-up date on `PI Shared`, lost reason on `Lost`
-— plus the Lost reason rule (Ready to close, above) and Invalid's call, reason
+— plus the Lost reason rule (Needs a decision, above) and Invalid's call, reason
 and note. **Since 2026-11-14 `Closed` needs an Enq ID too**, because a Closed lead
 has been through PI Shared, which already asked for one. On production that day 6
 leads had been set Closed in the CRM in Sep–Oct with none. The data-presence part

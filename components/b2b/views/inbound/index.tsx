@@ -22,6 +22,7 @@ import { leadDeals } from '@/lib/b2b/inbound-deals/utils';
 import { useInboundDeals } from '../../hooks/use-inbound-deals';
 import { fmtDay } from '../../ui/inbound-chips';
 import { LeadCtx } from './types';
+import { DealDetail } from '../../ui/deal-detail';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInboundSync } from '../../hooks/use-inbound-sync';
@@ -49,6 +50,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [viewingDeal, setViewingDeal] = useState<string | null>(null);
 
   const today = istToday();
 
@@ -121,12 +123,13 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     return n && n !== l.owner ? { ...l, owner: n } : l;
   }), [leads, ownerName]);
 
+  const typed = search.trim();
   const inWindow = useMemo(() => named.filter(inInboundWindow), [named]);
-  const windowed = appliedSearch ? named : inWindow;
+  const windowed = typed || appliedSearch ? named : inWindow;
 
   const filtered = useMemo(
-    () => windowed.filter((l) => inboundBoardMatches(l, { ...serverOpts, search: undefined }) && matchesFilters(l, f)).sort(byNewestLeadFirst),
-    [windowed, f, serverOpts],
+    () => windowed.filter((l) => inboundBoardMatches(l, { ...serverOpts, search: typed }) && matchesFilters(l, f)).sort(byNewestLeadFirst),
+    [windowed, f, serverOpts, typed],
   );
 
   const phoneKey = useMemo(
@@ -187,6 +190,12 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const runSearch = (q: string) => {
     setAppliedSearch(q);
     if (q) pickLens('all');
+  };
+
+  const typeSearch = (v: string) => {
+    if (v.trim() && !typed) pickLens('all');
+    if (!v.trim()) setAppliedSearch('');
+    setSearch(v);
   };
 
   const applyPatch = async (lead: InboundLead, patch: Partial<InboundLead>) => {
@@ -253,7 +262,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             {scope === 'mine'
               ? `Your leads, ${me?.name ?? ''}`
               : <span title={inboundOwners.map((o) => o.name).join(', ')}>Every inbound owner</span>}
-            {loading ? ' · loading…' : ` · ${filtered.length} lead${filtered.length === 1 ? '' : 's'}${appliedSearch ? '' : ` since ${fmtDay(INBOUND_WINDOW_START)}`}`}
+            {loading ? ' · loading…' : ` · ${filtered.length} lead${filtered.length === 1 ? '' : 's'}${typed || appliedSearch ? '' : ` since ${fmtDay(INBOUND_WINDOW_START)}`}`}
             {sync.syncing && <span className="text-gray-400"> · checking Kylas for new leads…</span>}
           </p>
         </div>
@@ -343,7 +352,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         onClear={clearFilters}
         ownerOptions={scope === 'mine' ? null : inboundOwners.map((o) => o.name)}
         search={search}
-        setSearch={setSearch}
+        setSearch={typeSearch}
         onSearch={runSearch}
         aside={<LensPills pills={sidePills(counts, loading || loadFailed)} active={view === 'list' ? lens : null} onPick={pickLens} />}
       />
@@ -395,9 +404,11 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             lens={lens}
             rows={rows}
             ctx={ctx}
+            onViewDeal={setViewingDeal}
             today={today}
             showOwner={scope === 'all'}
-            searchQuery={appliedSearch}
+            searchQuery={typed}
+            searchWide={!!appliedSearch && appliedSearch === typed}
             valueText={valueText}
             page={listPage}
             setPage={setListPage}
@@ -436,6 +447,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           onDone={(patch) => { applyPatch(move.lead, patch); setMove(null); }}
         />
       )}
+
+      {viewingDeal && <DealDetail enqId={viewingDeal} onClose={() => setViewingDeal(null)} />}
 
       {selected && (
         <InboundDrawer

@@ -8,7 +8,7 @@ export type { ClientOrderHistory } from './orders/history';
 export { firmPhoneList, lookupEnqId } from './leads/enq-lookup';
 export type { EnqLookup } from './leads/enq-lookup';
 export { fetchKamLoad } from './leads/kam-load';
-export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClientOrderRows, fetchEnquiryItems, fetchOrdersByGst, firstOrderValueFromAggregates, invalidateClientTickets, orderDatesFromAggregates, resolveKamOrders } from './orders/details';
+export { ENQ_RESOLVE_CAP, kamEnquiryIdsToResolve, clientMetricsFrom, fetchClientOrderRows, fetchEnquiryDetail, fetchEnquiryItems, fetchOrdersByGst, firstOrderValueFromAggregates, invalidateClientTickets, orderDatesFromAggregates, resolveKamOrders } from './orders/details';
 export type { ClientOrderDetails } from './orders/details';
 export { byNewestOrder } from './orders/ticket';
 export type { BoqLine, CartLine, ClientOrderRow } from './orders/ticket';

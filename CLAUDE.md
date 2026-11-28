@@ -745,11 +745,19 @@ server-side and cached 5 minutes per caller); and the lead window is a header pl
 tabs. The "i" explanations across B2B open on hover and pin on click (`ui/info-tip.tsx`).
 Read `docs/b2b/inbound.md` §Only leads since 10 Nov, §Three groups and §The lead window
 has five tabs first. On 28 Nov real data gave 485 leads: Calls 301, Carts & PIs 40.
-**After deploy,** check signed in that the Carts & PIs tiles load. They read Unknown with
-an amber notice if Django refuses the read for that login. **Open questions for the user:**
-whether Lost, Closed or Invalid leads with an open cart (14 on 28 Nov) should come back
-into Carts & PIs; today they stay in Outcomes. The Outreach and Firm drawers picked up
-the new card styling but were not restructured into tabs. Ask before doing that too.
+**Second round, same PR (the user's review of :3000, 2026-11-28):** "Ready to close" is
+now **Needs a decision**; any cart or PI opens in full (`ui/deal-detail.tsx`: products,
+values, store, BM, dates, remarks) from Inbound's list and Deal tab and Outreach's Deal
+tab; the filters were fixed (lead date compared the Kylas date, not the shown one; search
+needed Enter) and Inbound, Outreach and KAM share one chip filter bar (`ui/filter-bar.tsx`);
+the **Outreach and Firm (KAM / Client Database) drawers are tabbed** like Inbound's; the
+**Outreach scorecard is removed** and lives only on the Leadership Board. Read
+`inbound.md` §Filters, `outreach.md` §The lead window has tabs, `client-db.md` §The firm
+page has tabs. **:3000 serves this branch** from `~/Projects/crm-inbound-108` (the main
+checkout stays on `main`). **After deploy,** check signed in that the Carts & PIs tiles
+load. They read Unknown with an amber notice if Django refuses the read for that login.
+**Open question for the user:** whether Lost, Closed or Invalid leads with an open cart
+(14 on 28 Nov) should come back into Carts & PIs; today they stay in Outcomes.
 
 **START HERE for B2B revenue (2026-11-28, latest): Studio Sales, Direct by who booked, and
 the Clients sub-tab (CRM PR #106, `02d91ec`, merged and LIVE on Dhruv's ask; no backend

@@ -11,7 +11,7 @@ const NOTES_SHOWN = 3;
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+      <div className="text-[11.5px] font-medium text-gray-500">{label}</div>
       <div className="text-[12.5px] text-gray-800 break-words">{children || <span className="text-gray-400">Not given</span>}</div>
     </div>
   );
@@ -46,7 +46,7 @@ export function HandoverCard({ lead, failed }: { lead?: OutreachLead; failed: bo
   return (
     <SectionCard title="Handover from Outreach" subtitle={`${sent} · ${answered}`}>
       <div className="rounded-md border border-gray-200 px-3 py-2 mb-3 flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">WhatsApp group</span>
+        <span className="text-[11.5px] font-medium text-gray-500">WhatsApp group</span>
         {link ? (
           <a href={link} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-[#0F766E] hover:underline break-all">{link}</a>
         ) : declined ? (
@@ -73,7 +73,7 @@ export function HandoverCard({ lead, failed }: { lead?: OutreachLead; failed: bo
       </div>
 
       <div className="mt-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">People the BM met</div>
+        <div className="text-[11.5px] font-medium text-gray-500">People the BM met</div>
         {people.length ? (
           <ul className="mt-0.5 flex flex-col gap-0.5">
             {people.map((p, i) => (
@@ -86,7 +86,7 @@ export function HandoverCard({ lead, failed }: { lead?: OutreachLead; failed: bo
       </div>
 
       <div className="mt-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{`Meetings held (${meetings.length})`}</div>
+        <div className="text-[11.5px] font-medium text-gray-500">{`Meetings held (${meetings.length})`}</div>
         {meetings.length ? (
           <ul className="mt-1 flex flex-col gap-1.5">
             {meetings.map((m) => (
@@ -103,7 +103,7 @@ export function HandoverCard({ lead, failed }: { lead?: OutreachLead; failed: bo
 
       {!!notes.length && (
         <div className="mt-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{`Latest Outreach notes (${notes.length} of ${lead.notes?.length})`}</div>
+          <div className="text-[11.5px] font-medium text-gray-500">{`Latest Outreach notes (${notes.length} of ${lead.notes?.length})`}</div>
           <ul className="mt-1 flex flex-col gap-1">
             {notes.map((n) => (
               <li key={`${n.ts}-${n.author}-${n.text.length}`} className="text-[12px] text-gray-800">

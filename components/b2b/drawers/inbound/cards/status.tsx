@@ -7,7 +7,8 @@ import { ClosureReadiness, InboundStatus } from '../../../types/inbound';
 import { Empty, Field, SectionCard, Spinner, errorInputCls, fmtDay, inputCls } from '../../../ui/inbound-chips';
 import { fmtFollowUp } from '../../../models/reminders';
 import { Loaded } from '../hooks/use-inbound-detail';
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useState } from 'react';
+import { DealDetail } from '../../../ui/deal-detail';
 import { dealIsOpen } from '../../../models/client';
 
 export type GateField = 'followUpDate' | 'enqId' | 'lostReason' | 'invalidCalls' | 'invalidReason' | 'invalidNote';
@@ -29,6 +30,7 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
   const pick = (id: string) => { set('enqId', id); checkEnq(id); };
   const tickets = [...deals.data].sort((a, b) => Number(dealIsOpen(b.status)) - Number(dealIsOpen(a.status)));
   const openCount = tickets.filter((d) => dealIsOpen(d.status)).length;
+  const [viewing, setViewing] = useState<string | null>(null);
   const reasonOk = (r: string) => {
     const needs = LOST_REASON_NEEDS[r];
     return needs ? readiness.reason === needs : connected;
@@ -55,7 +57,7 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
         {needsEnq && (
           <div className="sm:col-span-2 flex flex-col gap-2">
             <p className="text-[11.5px] text-gray-500">
-              {draft.stage === 'PI Shared' ? 'Which PI?' : 'Which order?'}{draft.stage === 'PI Shared' && <span className="text-red-500">*</span>} Pick a deal ticket under Carts and PIs below, or type the Enq ID.
+              {draft.stage === 'PI Shared' ? 'Which PI?' : 'Which order?'}{draft.stage === 'PI Shared' && <span className="text-red-500">*</span>} Use a deal ticket under Carts and PIs below, or type the Enq ID.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Enq ID" error={gateFor('enqId')} info="Picked below, or typed if the ticket is on another number.">
@@ -136,7 +138,7 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
       title="Carts and PIs"
       owner="deals"
       subtitle={deals.loading ? 'loading…' : deals.failed ? '' : `${openCount} open of ${tickets.length}`}
-      info="Every deal ticket on this client's numbers: the Kylas number, the primary person and everyone added. Open ones first."
+      info="Every deal ticket on this client's numbers: the Kylas number, the primary person and everyone added. Open ones first. Click one for its products and full detail."
     >
       {deals.loading ? <Spinner label="Loading deal tickets…" />
         : deals.failed ? <p className="text-[12px] text-amber-700">The deal tickets did not load, so carts and PIs are unknown here. This is not an empty list.</p>
@@ -146,29 +148,27 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
                 {tickets.map((d) => {
                   const on = (draft.enqId || '').trim() === d.id;
                   const open = dealIsOpen(d.status);
-                  const body = (
-                    <>
-                      <span className="min-w-0">
-                        <span className="text-[12px] font-mono font-medium text-gray-800">{d.id}</span>
-                        <span className={`ml-2 text-[10.5px] font-medium rounded px-1 ${open ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>{d.status}</span>
-                        {on && <span className="ml-1.5 text-[10.5px] font-medium text-[#0F766E]">picked</span>}
-                        <span className="block text-[11px] text-gray-400 truncate">{[d.branch, d.assignedTo, d.createdAt && `opened ${fmtDay(d.createdAt)}`].filter(Boolean).join(' · ')}</span>
-                      </span>
-                      <span className="text-[12px] font-mono text-gray-700 whitespace-nowrap">{d.cartValue ? fmtINR(d.cartValue) : '—'}</span>
-                    </>
-                  );
-                  return needsEnq ? (
-                    <button key={d.ticketId ?? d.id} onClick={() => pick(d.id)}
-                      className={`text-left px-3 py-2 flex items-center justify-between gap-2 ${on ? 'bg-[#0F766E]/[0.06]' : 'hover:bg-gray-50'}`}>
-                      {body}
-                    </button>
-                  ) : (
-                    <div key={d.ticketId ?? d.id} className="px-3 py-2 flex items-center justify-between gap-2">{body}</div>
+                  return (
+                    <div key={d.ticketId ?? d.id} className={`flex items-center gap-2 pr-3 ${on ? 'bg-[#0F766E]/[0.06]' : ''}`}>
+                      <button onClick={() => setViewing(d.id)} className="flex-1 min-w-0 text-left pl-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-50 rounded-md">
+                        <span className="min-w-0">
+                          <span className="text-[12px] font-mono font-medium text-gray-800">{d.id}</span>
+                          <span className={`ml-2 text-[10.5px] font-medium rounded px-1 ${open ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>{d.status}</span>
+                          {on && <span className="ml-1.5 text-[10.5px] font-medium text-[#0F766E]">picked</span>}
+                          <span className="block text-[11px] text-gray-400 truncate">{[d.branch, d.assignedTo, d.createdAt && `opened ${fmtDay(d.createdAt)}`].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        <span className="text-[12px] font-mono text-gray-700 whitespace-nowrap">{d.cartValue ? fmtINR(d.cartValue) : '—'}</span>
+                      </button>
+                      {needsEnq && !on && (
+                        <button onClick={() => pick(d.id)} className="shrink-0 text-[11.5px] font-medium text-[#0F766E] hover:underline whitespace-nowrap">Use as Enq ID</button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             )}
     </SectionCard>
+    {viewing && <DealDetail enqId={viewing} onClose={() => setViewing(null)} />}
     </>
   );
 }

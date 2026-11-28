@@ -20,7 +20,7 @@ export function MeetingEntry({ m, gap, followUp, followUpTime, onEdit }: {
     <div className="min-w-0">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className="text-[12px] font-bold text-gray-800">Meeting {m.n}</span>
+          <span className="text-[12.5px] font-semibold text-gray-900">Meeting {m.n}</span>
           <MeetingStatusChip s={m.status} />
           <span className="text-[11.5px] text-gray-600 whitespace-nowrap">
             {m.date ? fmtMeetingDay(m.date) : <span className="text-amber-600">no date</span>}

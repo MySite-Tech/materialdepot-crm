@@ -12,7 +12,7 @@
 | `upsertOutreachLeads(list, { onlyNew })` | `b2b_lead` bulk upsert | Inbound intake only (`ignoreDuplicates`, so two managers assigning the same lead cannot overwrite each other) |
 | `fetchLeadDeals(phone)` | Django `/crm/leads/?q=` | Drawer only, as before; now also feeds the 6-month new-onboarding check |
 | `fetchKamLoad()` | `b2b_lead` closed rows | Drawer only, on "Round-robin" |
-| Calls card (`logCall`) | the same `upsertOutreachLead()` | One write per call, at once; see §BMs log their calls |
+| Activity tab calls (`logCall`) | the same `upsertOutreachLead()` | One write per call, at once; see §BMs log their calls |
 
 Mount cost: the `b2b_lead` read + the waitlist call, plus the shell's `/api/b2b/team`.
 
@@ -267,7 +267,7 @@ CRM adherence KPI cannot disagree:
 - **Next follow-up** shows for every open stage now, not just Follow up and PI
   Shared, and again inside the latest held meeting. A held meeting is where
   the BM knows the next step. Since 2026-11-06 an optional time sits beside it
-  everywhere (status card, meeting editor, Move modal, new lead), and the
+  everywhere (Deal tab status, meeting editor, Move modal, new lead), and the
   follow-up and every scheduled meeting appear on the BM's Reminders tab
   (`reminders.md`).
 
@@ -280,6 +280,45 @@ the same as an extra person's name and role. An Inbound intake fills
 leaves the role for the BM. An extra person needs
 both a name and a role.
 
+### The lead window has tabs (2026-11-28)
+
+The same change the Inbound drawer got that day (`inbound.md` §The lead window has
+five tabs): one header and six tabs, because the drawer was a single scroll of ten
+cards with client details, notes and people in several places. Nothing stored or
+shown was removed, and every save gate, the check-in rules and the handover gate
+(WhatsApp link or refusal reason) are unchanged.
+
+| Where | What |
+|---|---|
+| Header | firm, mobile, status, lead type, follow-up, handover state, waitlist, Enq ID, "n details missing" (opens Client), and the Inbound / Outreach / KAM / EC SPoCs on one line, with Reassign (the BM) for anyone who could pick the BM before |
+| Activity | next follow-up (opens Deal), RNR / Connected, one note box, and **one timeline of calls and notes** |
+| Meetings | schedule, check in, mark held, the meeting timeline |
+| Client | company, people (owner, alternate number, everyone else; column labels once), client type, segment, team size, lead type, city, GST, email, office address, then the requirement with its history, expected value and closure date |
+| Deal | status with follow-up and lost reason, Enq ID and order value, Carts and PIs, Spok and Assisted at EC, order credit |
+| Hand-offs | KAM handover, Send to an EC, Referred clients |
+| Journey | source (locked once an intake set it), intake and EC referral facts, the journey log with the waitlist |
+
+- **Tabs are hidden, not unmounted.** Every tab stays rendered, as all cards were
+  before, so a half-typed Connected note, the meeting being scheduled or the KAM
+  picked for a handover survive a tab switch, and the request count on open is
+  unchanged (the EC picker, Send to an EC and Referred clients still load on open).
+- **A refused save opens the tab holding the first problem** (`gateTab`): a stage
+  gate (follow-up for Follow up / PI Shared, lost reason) opens Deal, a held meeting
+  missing its check-in, who you met or notes opens Meetings, a missing client field
+  opens Client, and a visited lead with no next step opens Meetings, where the latest
+  held meeting is forced open with its follow-up field.
+- **Notes still save with Save changes**, unlike Inbound's, which save at once. An
+  added note shows "not saved yet" in the timeline until then. Calls still save at
+  once. A note with the same text as a call within 15 minutes is drawn once.
+- **A note's `ts` is an en-IN string, not ISO** ("6/11/2026, 2:27:22 pm").
+  `Date.parse` reads it as 11 June, so the timeline parses it as day/month in IST
+  (`noteMs`) to sort it among calls and prints it in the calls' format. A `ts` it
+  cannot parse prints as stored, at the bottom.
+- **Reassign changes only the draft BM**, as the BM picker did: Save changes keeps
+  it, and a manager's pick still goes through `assignLead`.
+- **Explanations sit behind the "i"** (`Field` / `SectionCard` `info`); visible hints
+  are kept only for live state, such as where the order value came from.
+
 ### The journey log (`withJourney` in `models/outreach/reminders.ts`)
 
 Every write diffs before/after and appends `{at, by, kind, text}` to
@@ -288,7 +327,7 @@ status changes, meetings scheduled/held (with who was met)/postponed, next
 follow-up set or moved, each note added, each person added, first order
 verified, handover sent/accepted/rejected, BM changed. **It is derived from the diff, not
 written by each button**, so a new write path cannot forget to log. The drawer's
-Journey card merges in the waitlist sign-up from Studio Space. Rows written
+Journey tab merges in the waitlist sign-up from Studio Space. Rows written
 before 2026-10-28 have no journey; the card says so instead of showing nothing.
 Writes from the Leads tab drawer (`views/leads/drawer.tsx`) do not go through
 `withJourney` yet. `withJourney` also keeps the requirement's earlier versions
@@ -411,7 +450,7 @@ the five Outreach BMs appeared in it). BMs had been writing "Call done…" or "r
 into notes instead: 24 such notes in 1–23 Nov (Shahrukh 13, Sai Suresh 8, Vilok 3,
 pratham 0).
 
-- **The drawer has a Calls card**, above the meetings: **RNR** saves at once,
+- **The drawer logs calls on its Activity tab**: **RNR** saves at once,
   **Connected…** asks what was discussed and saves. Both save straight away, as the
   check-in does (`onSave(lead, …)` on the saved lead, then patch the draft), so a
   call is never lost to a forgotten Save changes. Each call stores `by` and
@@ -424,7 +463,7 @@ pratham 0).
   not use it yet (the same holds for its notes).
 - **No journey event for a call.** The immediate save's journey entry would not reach
   the open draft, and the next Save changes would write the draft's journey back over
-  it. The Calls card is the record.
+  it. The Activity timeline is the record.
 - **The Calls KPI** (`calls`, first Effort tile) counts every call in the period on
   the BM's leads, the same lead set as their meetings, so a lead's calls move with it
   on a reassignment (Inbound credits the caller instead). One row per lead, so the list
@@ -509,12 +548,12 @@ a manager, or anyone while the team table is not live.
 - **The KAM sees the handover on the Firm page (2026-11-19).** The user: after a
   handover, the KAM could not see the office address, WhatsApp link and the rest the
   BM had to fill to send it. The Firm page (KAM and Client Database) now has a
-  "Handover from Outreach" card under People on this firm: WhatsApp link or refusal
+  "Handover from Outreach" card (on its EC & handover tab since 2026-11-28): WhatsApp link or refusal
   reason, office address, city, BM, client type, segment, team size, email, GST, first
   order, project details, every contact, every held meeting with notes, and the latest
   three notes. A note's `ts` is an en-IN locale string ("6/11/2026, 2:27:22 pm"),
   not ISO, so the card takes the last three by position and prints `ts` as stored,
-  as the Outreach drawer does; sorting `ts` as text put 6 Nov after 13 Nov. It reads the lead that `useFirmLinks` already fetches, so it costs no
+  as the Outreach drawer did until 2026-11-28 (it now parses it, §The lead window has tabs); sorting `ts` as text put 6 Nov after 13 Nov. It reads the lead that `useFirmLinks` already fetches, so it costs no
   request. `firmLinks().handover` is the newest lead on the firm's numbers (phone,
   alt phone or any extra contact, the same numbers `firmForOutreachHandover` copies)
   with a handover not Rejected. A firm a KAM got by reassign, not by handover, has no
@@ -596,9 +635,10 @@ shown as each tile's tooltip; the non-obvious ones:
 - **Revenue** is every order credited to the BM in the period (§Conversions and
   revenue come from orders).
 
-The scorecard follows only the BM and the period in the filter bar. The filter panel and
-search narrow the work tiles and every list, a scorecard tile's list included,
-which then says "Filters or search hide n of N".
+**The scorecard is no longer on this tab (2026-11-28).** The user removed it from the top
+of Outreach. Every KPI above is on the Leadership Board, per BM with the rows behind each
+figure (`leadership.md`), through the same `outreachKpis`. The tab no longer reads the
+per-order revenue report, and its KPI drill-down lenses (`kpi:*`) are gone with it.
 
 **Head count while the team table is missing** is the number of BMs holding
 leads, from `bmOptions()`, not the 2-name roster. See the BM picker entry in
@@ -612,11 +652,11 @@ full-width banners, and My day as a wall of reminder sentences. The layout now
 matches Inbound's (`inbound.md` §One tab, three tile groups): **every number
 is a lens, and clicking it lists exactly what it counts**.
 
-- **Order: filter bar (BM + period) → Scorecard → search/filters → work tiles
-  → one table (2026-11-06).** The user asked for the filters first and the data
-  after. The BM chips became a `BmPicker` select in that bar, and the period
-  picker moved up from the scorecard header. **One period drives the scorecard
-  (counted in it) and the Pipeline group (leads added in it)**; the panel's
+- **Order: one filter bar (search, period, BM and the filters) → work tiles → one
+  table (2026-11-28; the scorecard and the separate BM + period bar were removed).**
+  The bar is the shared `FilterBar` (`ui/filter-bar.tsx`) Inbound and KAM use: every
+  filter is a chip showing its value, with a × when set and Clear all. **The period
+  drives the Pipeline group (leads added in it)**; the panel's
   separate "Lead added" filter was removed because two created-date controls
   disagreed. **Action needed ignores the period on purpose**: a follow-up due
   today on an August lead must not vanish because the period is "This month",
@@ -625,7 +665,7 @@ is a lens, and clicking it lists exactly what it counts**.
   search ignores the period, because it jumps to All leads and would otherwise
   hide an older match. Board follows the pipeline set. A rep sees "Your leads"
   in place of the picker; a manager starts on All BMs.
-- **Scorecard**: Effort and Output, four tiles each, with a period picker
+- **Scorecard (removed 2026-11-28, now only on Leadership)**: Effort and Output, four tiles each, with a period picker
   (this/last month, four earlier months, this week, last 7/30 days, custom;
   grouped Months / Ranges). Picking **Custom range** seeds both dates from
   the period on screen. The end date is clamped to today, and an incomplete
