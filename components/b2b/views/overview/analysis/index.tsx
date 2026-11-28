@@ -7,14 +7,15 @@ import { MONTHS_OFFERED } from '../sections/revenue/constants';
 import { OrderDrawer } from '../sections/revenue/ui/order-drawer';
 import { Card, Notice, Segmented } from '../ui';
 import { DIM_META, DIM_ORDER, SCOPES, STUDIO_SCOPE, TREND_SPAN } from './constants';
-import { useMonthReports } from './hooks/use-month-reports';
+import { useMonthReports } from '../hooks/use-month-reports';
 import type { AnalysisFilter, DimKey, Option } from './types';
 import { ChangeTable } from './ui/changes';
 import { FilterBar } from './ui/filter-bar';
 import { HeatTable } from './ui/heat-table';
 import { KpiStrip } from './ui/kpis';
 import { Movers } from './ui/movers';
-import { matches, moversByDim, optionsOf, ordersFor, throughDay, totals } from './utils';
+import { throughDay } from '@/lib/b2b/revenue/journey';
+import { matches, moversByDim, optionsOf, ordersFor, totals } from './utils';
 
 const SELECT = 'px-2 py-1 text-[12px] font-semibold border border-gray-200 rounded-lg bg-white text-gray-700 cursor-pointer';
 

@@ -1,9 +1,9 @@
-import type { ChurnedClient, FlowClient, FlowMonth } from '../../../../../lib/b2b/revenue/clients/types';
-import { monthsBefore } from '../../../../../lib/b2b/revenue/clients';
-import { CHURN_GAP } from '../../../../../lib/b2b/revenue/constants';
+import type { ChurnedClient, FlowClient, FlowMonth } from '../../../../../../lib/b2b/revenue/clients/types';
+import { monthsBefore } from '../../../../../../lib/b2b/revenue/clients';
+import { CHURN_GAP } from '../../../../../../lib/b2b/revenue/constants';
 import { FLOW_ROWS, FROM_LABEL, SIDE_LABEL } from './constants';
-import { FIRM_KIND_LABEL } from '../../../../../lib/b2b/client-import/constants';
-import type { FirmKind, ReviewFirm } from '../../../../../lib/b2b/client-import/types';
+import { FIRM_KIND_LABEL } from '../../../../../../lib/b2b/client-import/constants';
+import type { FirmKind, ReviewFirm } from '../../../../../../lib/b2b/client-import/types';
 import type { FlowCell, ListRow, UnregisteredCell } from './types';
 
 export const CHURN_ROW = 'churned';

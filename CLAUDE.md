@@ -900,7 +900,9 @@ channels and §Clients sub-tab first. Three changes, all the user's decisions th
   counts as Revived, flagged "gap unknown" (`docs/landmines.md`). Since 2026-11-28 the
   tab also has **Not registered yet**: GST-billed firms ordering at stores that no B2B
   record holds (Review new firms by month), larger than All B2B on production from
-  August (`overview.md` §Clients sub-tab).
+  August (`overview.md` §Clients sub-tab). The sub-tab opens on a **firm journey** between
+  any two months (bridge, flows, retention, categories, firm table; `overview.md` §Firm
+  journey).
 - **Checked on production after deploy:** the live `/api/b2b/revenue/clients` matched the
   pre-deploy run on real orders month by month, and each month's clients add up to its
   All B2B and Studio Sales totals. Real figures are in memory, not here.

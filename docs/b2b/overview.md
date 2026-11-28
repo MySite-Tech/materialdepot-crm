@@ -132,9 +132,10 @@ definitions, 2026-11-28:
 - **Cost.** Each month's build now also returns a digest (every buyer's number, and
   each B2B order's phone, channel and value), cached beside the report under
   `b2b-digest:`, so a lookback month does not keep its full report in memory. The
-  report and the digest share one in-flight build. Opening the tab is two requests;
+  report and the digest share one in-flight build. Opening the tab is seven requests
+  (the flow, Review new firms, and five monthly revenue reports for the journey below);
   the server reads the months it has not cached (about four Django pages each) and
-  `client-order-history` in batches of 280. Not registered yet adds the second request.
+  `client-order-history` in batches of 280.
 - **Checked on production data on 2026-11-28** in a signed-in tab, through the bundled
   module: each month's clients add up to the month's All B2B and Studio Sales totals
   exactly, and the rows add up to Clients ordering. November's EC → Studio is almost
@@ -143,6 +144,47 @@ definitions, 2026-11-28:
   cold call got a Django 500 on one month's page read and Retry worked in 4 s (the other
   months were cached); a 5xx page is now retried once (2026-11-28). The screen itself
   ran on the sandbox only.
+
+### Firm journey: why revenue moved between two months (2026-11-28)
+
+The user wanted to see where July's revenue went by November: which firms stopped, which
+ordered less, which moved from EC Direct to Studio, who joined and from where, with
+average order, categories, churn and retention. The Clients sub-tab now opens on this
+analysis (`views/overview/clients/journey/`, logic in `lib/b2b/revenue/journey/`), with
+the month-to-month table (`clients/movement/`) below it.
+
+- **Two lenses.** Studio Sales counts only a firm's Direct, Studio EC Redirected and
+  Referred orders, so an EC Direct firm is the pool Studio grows from, worth ₹0 until it
+  moves. All B2B counts every channel. Same rules as the hero.
+- **It reads the per-order revenue reports** (`fetchRevenueReport`, one per month, the
+  same server cache as Revenue analysis) for the five flow months, through
+  `overview/hooks/use-month-reports.ts`, now shared by both sub-tabs. Everything else is
+  in memory. Any month failing shows a notice and no journey, never a partial bridge.
+- **A firm is `RevenueOrder.clientKey`** (added 2026-11-28): the same firm-group key as the
+  Clients flow (`firmKey`), so the journey and the month-to-month table agree on who a
+  client is. `ecReferral` (also new) marks orders on a number an Outreach lead holds with
+  source EC B2B Referral or EC referral.
+- **Every firm gets one path between month A and month B.** Studio in A: stayed Studio,
+  Studio → EC, or stopped. EC in A: EC → Studio, stayed EC, or stopped. Not in A: its first
+  ordering month after A decides, through the Clients flow's lifecycle for that month:
+  new, revived, store buyer → B2B, or skipped A (ordered in the months just before A).
+- **The bridge adds up exactly:** A's revenue + each path's change = B's revenue
+  (stayed paths split into ordering more and ordering less). Checked on production
+  reports on 2026-11-28 through a bundled copy of the module: the tie-out was ₹0.00 under
+  both lenses. Every bridge step, flow band, category and journey chip filters the firm
+  table.
+- **Where new revenue came from** is each joining firm's largest source of B orders
+  (`orderSource`): EC B2B referral, Referred client, the holder (KAM firm, Inbound lead,
+  Outreach lead, Studio Space firm, logged redirect), else the B2B team on the cart.
+- **Retention** is the share of a month's firms (for the lens) ordering in each later
+  month, by firms or by revenue. Churn on the tiles is 1 − retention from A to B. This
+  is month-to-month, not the 3-empty-month churn of the table below.
+- **Same days only** (on by default when B is the current month) trims every month to
+  days 1–today, so a part month is never compared with full ones.
+- **Categories** count an order in full under each of its categories, as in Revenue
+  analysis (`orderCategories`, now shared).
+- Seen on the sandbox and on production reports through the bundled module; the screen
+  has not been seen signed in on production.
 
 ## Four revenue channels (redefined 2026-11-03, Direct narrowed 2026-11-28)
 

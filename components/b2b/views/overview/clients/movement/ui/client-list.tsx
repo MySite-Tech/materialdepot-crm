@@ -1,6 +1,6 @@
 'use client';
 
-import { fmtL } from '../../../../models/mock-data';
+import { fmtL } from '../../../../../models/mock-data';
 import { useEffect, useState } from 'react';
 import { PAGE_SIZE } from '../constants';
 import type { ListRow } from '../types';

@@ -69,7 +69,6 @@ export const NOT_SET = {
 
 export const TREND_SPAN = 6;
 
-export const LOAD_PARALLEL = 3;
 
 export const HEAT_ROWS = 12;
 
