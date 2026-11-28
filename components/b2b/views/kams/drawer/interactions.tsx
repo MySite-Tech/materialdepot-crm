@@ -1,15 +1,19 @@
 'use client';
 
-import { ClientEntity, ClientInteraction, INTERACTION_SUMMARY, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, currentTemperature, temperatureColor } from '../../../models/client';
+import { ClientEntity, ClientInteraction, FOLLOW_UP_FOR, FollowUpFor, INTERACTION_SUMMARY, INTERACTION_TYPES, InteractionType, TEMPERATURE_BANDS, TEMPERATURE_MAX, clampTemperature, currentTemperature, temperatureColor } from '../../../models/client';
 import { interactionGateErrors, interactionPrompts } from '../../../models/kam';
+import { fmtINR } from '../../../models/mock-data';
 import { newB2BId } from '../../../models/ids';
-import { Field } from '../ui';
+import { Field } from '../lists/ui';
 import { btnGhost, btnPrimary, inputCls } from '../../../constants/ui';
 import { CheckInLine } from '../../../ui/check-in-capture';
 import { useState } from 'react';
 
-export function InteractionModal({ client, loggedBy, today, open, initialType, onClose, onSave }: {
+export interface TicketRef { enqId: string; kind: 'cart' | 'pi'; value?: number; status?: string }
+
+export function InteractionModal({ client, loggedBy, today, open, initialType, ticket, onClose, onSave }: {
   client: ClientEntity;
+  ticket?: TicketRef;
   loggedBy: string;
   today: string;
   open: ClientInteraction | undefined;
@@ -26,6 +30,9 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
   const [upcomingProject, setUpcomingProject] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
   const [nextFollowUpTime, setNextFollowUpTime] = useState('');
+  const [followUpFor, setFollowUpFor] = useState<FollowUpFor>('Call');
+  const ticketLabel = ticket ? (ticket.kind === 'pi' ? 'PI' : 'cart') : '';
+  const types = ticket ? INTERACTION_TYPES.filter((t) => t !== 'Enquiry') : INTERACTION_TYPES;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,6 +54,9 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
       upcomingProject: upcomingProject.trim() || undefined,
       nextFollowUpDate: nextFollowUpDate || undefined,
       nextFollowUpTime: (nextFollowUpDate && nextFollowUpTime) || undefined,
+      nextFollowUpFor: nextFollowUpDate && !ticket ? followUpFor : undefined,
+      enqId: ticket?.enqId,
+      ticketKind: ticket?.kind,
       loggedBy,
       checkIn: completing?.checkIn,
       createdAt: completing?.createdAt || new Date().toISOString(),
@@ -61,8 +71,8 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
       <div className="relative w-full max-w-[540px] bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-base font-bold text-gray-800">Log an interaction</h2>
-            <p className="text-[11px] text-gray-400">{client.company} · KAM PRD §3.1</p>
+            <h2 className="text-base font-bold text-gray-800">{ticket ? `Follow-up on ${ticketLabel} ${ticket.enqId}` : 'Log an interaction'}</h2>
+            <p className="text-[11px] text-gray-400">{client.company}{ticket ? `${ticket.value ? ` · ${fmtINR(ticket.value)}` : ''}${ticket.status ? ` · ${ticket.status}` : ''}` : ' · KAM PRD §3.1'}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none cursor-pointer">×</button>
         </div>
@@ -71,7 +81,7 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
           <div className="grid grid-cols-2 gap-3">
             <Field label="Interaction type">
               <div className="flex rounded-md border border-gray-200 overflow-hidden">
-                {INTERACTION_TYPES.map((t) => (
+                {types.map((t) => (
                   <button key={t} onClick={() => setType(t)}
                     className={`flex-1 px-2 py-1.5 text-[12px] font-semibold cursor-pointer ${type === t ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-500'}`}>
                     {t}
@@ -125,9 +135,9 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
 
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-3">
             <Field
-              label={`Next follow-up date${type !== 'Meeting' ? ' *' : ''}`}
+              label={`Next follow-up${ticket ? ` on this ${ticketLabel}` : ''} date${type !== 'Meeting' ? ' *' : ''}`}
               hint={type !== 'Meeting'
-                ? `Required on a logged ${type.toLowerCase()} — it is what fills Today’s Calls and the Follow-up Queue.`
+                ? (ticket ? `Required. This ${ticketLabel} comes up under Carts & PIs on that date.` : `Required on a logged ${type.toLowerCase()}. It is what puts the firm under Calls & meetings.`)
                 : 'Optional on a meeting.'}
             >
               <input type="date" min={date} value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} className={inputCls} />
@@ -136,6 +146,19 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
               <input type="time" value={nextFollowUpTime} onChange={(e) => setNextFollowUpTime(e.target.value)} className={inputCls} />
             </Field>
           </div>
+
+          {!!nextFollowUpDate && !ticket && (
+            <Field label="The next follow-up is" hint={`A meeting fills Meetings today, a call Calls today. A follow-up on a cart or PI is logged on that ticket, from Carts & PIs or the firm's Orders tab.`}>
+              <div className="flex rounded-md border border-gray-200 overflow-hidden">
+                {FOLLOW_UP_FOR.map((t) => (
+                  <button key={t} onClick={() => setFollowUpFor(t)}
+                    className={`flex-1 px-2 py-1.5 text-[12px] font-semibold cursor-pointer ${followUpFor === t ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-500'}`}>
+                    {`A ${t.toLowerCase()}`}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
 
           {!!errors.length && (
             <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
@@ -149,10 +172,6 @@ export function InteractionModal({ client, loggedBy, today, open, initialType, o
           )}
           {error && <p className="text-[12px] text-red-600">Could not save: {error}</p>}
 
-          <p className="text-[10px] text-gray-400">
-            There is no reminder service in this CRM. A follow-up date puts the client in Today&apos;s Calls or the
-            Follow-up Queue — nothing is sent to anyone.
-          </p>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">

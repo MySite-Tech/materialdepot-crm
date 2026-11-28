@@ -734,7 +734,29 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
-**START HERE for B2B (2026-11-28, third round, latest): CRM PRs #112 and #113, merged and
+**START HERE for KAM and the firm page (2026-11-28, fourth round, latest): CRM PR from
+`kam-groups-firm-details`, merged and deployed on Dhruv's ask; no backend PR, no
+migration.** Start new work from `origin/main`. The user asked
+for KAM to work like Inbound and Outreach. Read `kam.md` §Five groups, §Carts and PIs
+are the KAM pipeline and §Referred clients, and `client-db.md` §Edit details, §A cart or
+PI on the Orders tab opens in full and §Studio Space: their view before touching any of it.
+- **KAM is five groups, Carts & PIs leftmost and the landing lens:** Carts & PIs (one
+  row per open ticket), Calls & meetings, Referred clients, Accounts, Handovers.
+- **Open carts and PIs are the KAM's pipeline.** A follow-up is logged on the ticket
+  (`enqId` on the interaction). The KAM order board, its modal, auto-advance and
+  `upsertKamOrder` are gone; the stored KAM rows stay for Overview and Leadership.
+  Don't bring a separate KAM pipeline back.
+- **Every firm page has Edit details and a red "n details missing"** (`firmDetailGaps`),
+  and a Studio Space tab with the firm's own view when it is on Studio Space.
+- Accepted limits (the user, 28 Nov): KAM's Carts & PIs lists only tickets opened since
+  `openDealsSince` (11 Oct), older ones stay on the firm's Orders tab; old KAM-order
+  follow-up dates are not carried over, so every open ticket starts as "open".
+- Seen on the sandbox and on fixtures, not yet signed in on production. **First thing to
+  check live:** KAM → Carts & PIs loads per-ticket rows, Log follow-up on one moves it to
+  follow up, a firm's Studio Space tab opens their view. `views/kams` is now `drawer/`,
+  `lists/`, `hooks/`.
+
+**START HERE for B2B (2026-11-28, third round): CRM PRs #112 and #113, merged and
 deployed on Dhruv's ask; no backend PR.** Start new work from `origin/main`.
 - **Outreach is three groups like Inbound:** Calls & meetings (Meetings today, Overdue,
   Due today, No meeting booked), Carts & PIs (open carts and PIs from the same Django read

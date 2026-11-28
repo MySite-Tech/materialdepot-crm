@@ -2,6 +2,10 @@
 
 ## The KAM module: clients and orders are two things now
 
+**Since 2026-11-28 the KAM order board below is no longer in the UI** (§Carts and PIs
+are the KAM pipeline). These sections describe the stored `pipeline='kam'` rows the
+Overview and Leadership still read.
+
 `components/b2b/models/kam/` implements `KAM_Module_PRD.docx` v1.0 (KK).
 `components/b2b/views/kams/index.tsx` is the tab, rebuilt around it.
 
@@ -12,8 +16,8 @@ This module owns exactly one stored thing: the **Active Order**, still the same
 actually using them.
 
 Opening a client opens the shared Firm page (`components/b2b/drawers/firm/`,
-see `client-db.md`). `views/kams/drawer.tsx` only adds the KAM-only sections:
-calls and meetings, the KAM pipeline and escalations, which since 2026-11-28 fill
+see `client-db.md`). `views/kams/drawer/index.tsx` only adds the KAM-only sections:
+calls and meetings and escalations (the KAM pipeline card was removed on 2026-11-28), which fill
 the page's Activity tab, open by default from KAM (`client-db.md` §The firm page
 has tabs). So a number or GSTIN
 added on either tab shows on the other, because both edit the same client row.
@@ -58,32 +62,7 @@ My performance resolves for display too (2026-10-31). One writer, two readers �
 deliberately, because two surfaces writing the
 same rows on load is how the duplicate auto-advance note below got written.
 
-### Auto-advance now keys on the order's own ticket
-
-`components/b2b/models/kam/auto-stage.ts` still moves an order forward off its deal status, forward-only,
-never out of Closed/Lost. What changed is rule 3: it matches the order's **own**
-Enquiry ID exactly, where it used to key on `furthestStatus` for the client's
-PHONE — a lifetime figure across every deal that client ever raised. On the old
-one-row-per-client board that was coarse; now that a client holds several orders
-it is wrong, and one closed order would advance every other open order on the
-account. An order with no Enq ID is left alone and the UI says so. Verified
-live: `RK Interiors` did not advance despite its phone carrying a Delivered
-ticket, because the order stores no Enq ID.
-
-The audit note is also no longer written twice. The old code reasoned that
-storing the new stage made a repeat impossible; live row
-`KAM-1787743441579-4` carries `"Auto-advanced PI Shared → Order Placed (cart
-status: Delivered)"` **twice**, because the write that would have prevented the
-second was fire-and-forget and its failure invisible. Now the caller awaits every
-write and reports failures, and an identical consecutive note is not re-appended.
-
-### Gates: two hard on an order, two hard on an interaction
-
-`kamOrderGateErrors` blocks exactly what §5.2 writes the word "Requires"
-against — an Enq ID on `PI Shared`, a lost reason on `Lost`. Note this differs
-from the Outreach board, which soft-gates the Enq ID: that PRD only says the
-value is auto-fetched, this one says *requires*. Hard-gate what a document
-names as required, and no more.
+### Gates on an interaction
 
 `interactionGateErrors` hard-blocks a next follow-up date on a logged **Call**,
 because §4.1 says one "is required … before it can be saved". Scoped to a call,
@@ -93,7 +72,7 @@ visit ending in "we'll call when the drawings land" has no honest date to give.
 **Revenue credit is per enquiry (2026-11-12).** A KAM's revenue is every placed
 order the Overview credits to them, not the KAM board's Closed orders
 (`leadership.md` §Revenue is the Overview's per-order rule). A manager moves one
-order to anyone on the team from the enquiry card, the order modal or the Overview
+order to anyone on the team from the enquiry card or the Overview
 drawer (`order-credit/ui/credit-line.tsx`, `overview.md` §A manager credits one
 order). The per-record `revenueCredit` of 2026-10-30 is gone; production held none.
 
@@ -126,6 +105,90 @@ Open question #3 (a floor on the queue) is answered no — an old unactioned
 follow-up sits there indefinitely, because dropping it is how an account goes
 quiet with nobody deciding to let it. `queueAgeBand` marks the age instead.
 
+### Five groups: Carts & PIs, Calls & meetings, Referred clients, Accounts, Handovers (2026-11-28)
+
+The user asked for KAM to be built like Inbound and Outreach (`inbound.md` §Three
+groups), with Carts & PIs leftmost, and for the referred clients a firm sends to be
+watched. The tiles sit in two rows: Carts & PIs and Calls & meetings, then Referred
+clients, Accounts and a small Handovers. Every tile is one predicate giving its count
+and its list (`firmLensMatches`, `ticketLensMatches`, `referralLensMatches` in
+`models/kam/cadence.ts`), computed once in `views/kams/hooks/use-kam-lenses.ts`.
+**Carts & PIs is the landing lens.** Upcoming and Details missing are pills.
+
+| Group (head) | Tiles | Rule |
+|---|---|---|
+| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | **one row per open ticket** on the firms' numbers (§Carts and PIs are the KAM pipeline). Open = no follow-up logged on that ticket on or after the day it was raised; follow up = one was |
+| Calls & meetings | Overdue · Calls today · Meetings today · No follow-up · Called today | the firm's next follow-up from its latest interaction **not on a ticket**. Today splits by Call or Meeting. Head = overdue or due today. Called today counts every Call, ticket ones too |
+| Referred clients | Not at an EC yet · Cart no order · Ordered | one row per referred client (§Referred clients) |
+| Accounts | unchanged | §Account status |
+| Handovers | Waiting for sign-off | unchanged |
+
+- **Carts come from the same Django read as Inbound and Outreach**
+  (`POST /api/b2b/inbound/deals`, `useOpenDeals`, shared per-caller cache), posting
+  every firm's numbers (a manager's: all firms, so the KAM filter costs no request)
+  plus referred clients' numbers. It reads tickets opened since `openDealsSince`
+  (11 Oct on 28 Nov), so an older open PI does not show here; the firm's Orders tab
+  still lists it. One request on open, again every 5 minutes while visible.
+- **A row's ticket opens under it** with the products (`DealInline`) and that
+  ticket's follow-up history. Log follow-up is on the row; Open firm opens the firm
+  page on Orders.
+- Checked on 28 Nov in the sandbox as the manager, with two open tickets seeded on a
+  KAM firm: one row each, Log follow-up on the cart moved it from Carts open to Carts
+  follow up and Called today to 1, and the firm's Calls & meetings did not change.
+  **Not yet seen on real data.**
+
+### Carts and PIs are the KAM pipeline (2026-11-28)
+
+The user: KAMs follow up and talk to clients to convert the open carts and PIs on
+their firms, not a separate pipeline, and Carts & PIs is where keeping them moving is
+tracked. So:
+
+- **A follow-up is logged on a ticket.** Log follow-up (Carts & PIs row, or the firm's
+  Orders tab on an open cart or PI) opens Log interaction for that ticket: Call or
+  Meeting, notes, and the next follow-up date on it (required on a call). The
+  interaction stores `enqId` and `ticketKind` in the client's `interactions` JSON, so
+  no migration. `ticketFollowUps` (`models/client/derived/interactions.ts`) gives each
+  ticket its log, last follow-up and next date; `nextFollowUp` (the firm's) now
+  **skips** ticket interactions, so a cart follow-up never moves the firm's own call.
+- **The KAM order board is gone from the UI:** the firm's KAM pipeline card and
+  + Add order, and the Open orders, Pipeline and Order board pills, with their modal
+  and auto-advance (`views/kams/orders/`, `models/kam/auto-stage.ts`,
+  `upsertKamOrder`). The KAM tab no longer reads or writes `pipeline='kam'` rows.
+  **The stored rows stay** and are still read by the Overview and Leadership, which
+  resolve them for display (§The KAM module, below, now describes those legacy rows).
+  Their per-PI follow-up dates no longer feed Reminders.
+- **Reminders** show a KAM ticket follow-up as "Cart / PI follow-up" under Carts &
+  PIs, only while the ticket is still open (the Reminders hook reads open tickets for
+  KAM firms that have one logged, one request, shared cache).
+- **The firm's Orders tab opens on PI shared, else Open carts, from KAM**, with a KAM
+  follow-up column and the ticket's follow-up log inside each open row.
+
+### A firm-level follow-up is a call or a meeting (2026-11-28)
+
+Log interaction asks "The next follow-up is" A call · A meeting once a date is set
+(`nextFollowUpFor`). A meeting fills Meetings today; a call fills Calls today.
+Interactions logged before this read as a call. The KAM list's Next follow-up column
+and the interaction log show which. A follow-up about a cart or PI is a ticket
+follow-up instead (above).
+
+### Referred clients (2026-11-28)
+
+The user: an end client a firm refers (a design firm referring its own client) must not
+go quiet before they shop. Rows come from the CRM's `b2b_referral` with
+`referrerKind 'client'` on a firm in scope, plus Studio Space's client referrals on
+the firm's studio (`studio-access`), deduped by number, CRM first. The referred
+numbers join the KAM tab's one `b2b-bulk` read and the open-carts read, so this costs
+one extra request (`/referrals`, cached 60 s), not one per client.
+
+- **Ordered**: an order on the number in Django, or in Studio's referral ledger.
+- **Cart, no order**: an open cart or PI, or any deal ticket (`enquiries > 0`).
+- **Not at an EC yet**: the number was read and has no ticket at all. A walk-in who
+  bought nothing leaves no ticket, so the rule says "ask the firm"; the CRM cannot
+  see store visits without a cart. Oldest referral first; red after 7 days.
+- **Unknown** (history not read) counts only in the head.
+- Search reaches the referred client's name and number. Segment and Source filter by
+  the referring firm. The row opens the firm on its Referrals tab.
+
 ### Filters (2026-11-28)
 
 Search, KAM (managers only), Segment and Source sit in the shared filter bar
@@ -148,11 +211,9 @@ five tiles that need order dates (Assigned, Active, Lapsing, Inactive, Never ord
 read "…" with "reading orders", and a line above the list says status reads Unknown
 until the history lands. Order lookups and auto-advance still run after it.
 
-- **Follow-ups:** Overdue · Due today · No follow-up · Called today.
-  **Accounts:** Assigned · Active · Inactive 1 month · Inactive (see §Account
-  status). **Orders:** Open orders · Pipeline. Upcoming and Order board are
-  pills. The four follow-up buckets
-  partition the book: 9 + 2 + 44 + 11 = 66 firms on that day.
+- **The groups were re-cut on 2026-11-28** (§Five groups, below). The 2026-10-28
+  set was Follow-ups (Overdue, Due today, No follow-up, Called today), Accounts and
+  Orders (Open orders, Pipeline). The follow-up buckets still partition the book.
 - **They replaced the `KAM_VIEWS` chips**, which listed the same four things as
   the tiles under different names and counts. The Assigned Clients chip counted
   `filteredRows` (after search) while its tile counted `rows`, so the two
@@ -308,8 +369,8 @@ bug, reads Unknown since 2026-10-30 (it read Active before; `client-db.md`).
 ### No header actions (2026-10-29)
 
 Export, Upload Orders and + Add Order were removed from the tab header at the
-user's request. An order is now added only from a firm's page (`drawer.tsx`
-`onAddOrder`), so every new order carries a `clientId`. The header button had
+user's request. (+ Add Order on the firm page went too on 2026-11-28, with the
+whole KAM order board.) The header button had
 created orders with no client, which is what the board's "unlinked" count
 reports. The CSV order importer (`views/kams/upload.tsx` and its validator in
 `io/kam-import.ts`) went with it. That file keeps only the cell, phone and
@@ -319,7 +380,7 @@ delimiter parsing that the Client Database import still uses.
 
 An admin selects firms in the Client Database (one or many) and assigns them to
 a KAM, either by name or round robin. The KAM accepts or rejects from the
-**Waiting for sign-off** tile here (`panels/signoff.tsx`).
+**Waiting for sign-off** tile here (`lists/signoff.tsx`).
 
 - **The handover lives on the latest `assignments` entry**, as `status`,
   `how`, `kamPhone` and `respondedAt/By`. There is no new meta
@@ -372,7 +433,10 @@ a KAM, either by name or round robin. The KAM accepts or rejects from the
   On failure nothing is assigned and the error says so. A partial set never
   shows as done.
 
-### Per-PI follow-up and closure dates (2026-10-29)
+### Per-PI follow-up and closure dates (2026-10-29, retired 2026-11-28)
+
+**Replaced by follow-ups logged on the ticket** (§Carts and PIs are the KAM pipeline).
+What follows describes the KAM order rows that are still stored.
 
 The user confirmed that every PI carries its own follow-up date and closure date.
 `KamOrder.followUpDate` (`meta.follow_up_date`, so it lives in the backend's

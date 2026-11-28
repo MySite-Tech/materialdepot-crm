@@ -2,37 +2,14 @@
 
 import { ReactNode } from 'react';
 
-import { daysUntil } from '../../../models/inbound';
-import { KAM_LENS, KAM_LIST_PAGE_SIZE, queueAgeBand } from '../../../models/kam';
+import { KAM_LENS, KAM_LIST_PAGE_SIZE } from '../../../models/kam';
 import { daysToLapse } from '../../../models/client';
 import { fmtL } from '../../../models/mock-data';
 import { AssignedClientRow, KamFirmLens } from '../../../types/kam';
 import { Metric, StatusPill, TemperatureChip } from '../../../ui/client-chips';
-import { Pager } from '../ui';
+import { FirmCell, FollowUpCell, ListHead, Pager, td, th } from './ui';
 
-const FOLLOW_UP_LENSES: KamFirmLens[] = ['overdue', 'due', 'nofollow', 'called', 'upcoming'];
-const th = 'text-left font-semibold px-3 py-2 whitespace-nowrap';
-const td = 'px-3 py-2.5 align-top';
-
-function FollowUp({ r, today }: { r: AssignedClientRow; today: string }) {
-  if (!r.nextFollowUpDate) {
-    return <span className="text-gray-300">none set</span>;
-  }
-  const late = r.followUp === 'overdue' ? Math.abs(daysUntil(r.nextFollowUpDate, today) ?? 0) : 0;
-  const aged = late ? queueAgeBand(late) : null;
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="font-mono" style={{ color: r.followUp === 'overdue' ? '#DC2626' : r.followUp === 'today' ? '#EA580C' : '#4B5563' }}>
-        {r.followUp === 'today' ? 'Today' : r.nextFollowUpDate}
-      </span>
-      {aged ? (
-        <span className="w-fit px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: aged.color + '18', color: aged.color }}>
-          {late}d overdue
-        </span>
-      ) : r.daysSinceContact !== undefined && <span className="text-[10px] text-gray-400">{r.daysSinceContact}d since contact</span>}
-    </div>
-  );
-}
+const FOLLOW_UP_LENSES: KamFirmLens[] = ['work', 'overdue', 'due', 'meetings', 'nofollow', 'called', 'upcoming', 'details'];
 
 export function KamFirmTable({ lens, rows, today, search, valueText, page, setPage, onOpen, emptyAction }: {
   lens: KamFirmLens;
@@ -54,15 +31,7 @@ export function KamFirmTable({ lens, rows, today, search, valueText, page, setPa
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="w-2 h-2 rounded-full shrink-0 self-center" style={{ background: meta.accent }} />
-          <h2 className="text-[14px] font-bold text-gray-900">{search ? `${meta.title} matching “${search}”` : meta.title}</h2>
-          <span className="text-[12px] font-semibold text-gray-400 tabular-nums">{rows.length}</span>
-          {valueText && <span className="text-[12px] font-semibold text-gray-600">· {valueText}</span>}
-        </div>
-        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{meta.rule}</p>
-      </div>
+      <ListHead accent={meta.accent} title={search ? `${meta.title} matching “${search}”` : meta.title} count={rows.length} extra={valueText} rule={meta.rule} />
 
       {!rows.length ? (
         <div className="py-10 flex flex-col items-center gap-3">
@@ -91,15 +60,7 @@ export function KamFirmTable({ lens, rows, today, search, valueText, page, setPa
                 const last = r.lastInteraction;
                 return (
                   <tr key={r.client.id} onClick={() => onOpen(r.client.id)} className="border-t border-gray-100 cursor-pointer hover:bg-gray-50">
-                    <td className={`${td} max-w-[240px]`}>
-                      <div className="font-semibold text-gray-800 truncate">{r.company}</div>
-                      <div className="text-[10px] text-gray-400 truncate">
-                        {r.client.kam || 'unassigned'}
-                        {r.segment && ` · Segment ${r.segment}`}
-                        {` · ${r.source}`}
-                        {r.upcomingProject && <span className="text-[#0F766E]"> · project noted</span>}
-                      </div>
-                    </td>
+                    <td className={td}><FirmCell r={r} /></td>
                     <td className={`${td} whitespace-nowrap text-gray-600`}>
                       {r.contactNumber
                         ? <a href={`tel:${r.contactNumber}`} onClick={(e) => e.stopPropagation()} className="font-mono hover:text-[#0F766E] hover:underline">{r.contactNumber}</a>
@@ -121,7 +82,7 @@ export function KamFirmTable({ lens, rows, today, search, valueText, page, setPa
                         </div>
                       )}
                     </td>
-                    <td className={`${td} whitespace-nowrap`}><FollowUp r={r} today={today} /></td>
+                    <td className={`${td} whitespace-nowrap`}><FollowUpCell r={r} today={today} /></td>
                     {showLogged && (
                       <td className={`${td} max-w-[260px] text-gray-500`}>
                         {last ? (

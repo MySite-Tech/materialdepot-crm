@@ -45,8 +45,8 @@ a `topic`, decided by `topicOf` from the record's own stage, so it costs no requ
 
 | Topic | When |
 |---|---|
-| Carts & PIs | a KAM PI follow-up; an Inbound lead at `PI Shared`; an Outreach follow-up at `Quote Share` or `PI Shared` (`CART_STAGES`) |
-| Calls & meetings | everything else, and every Outreach meeting and KAM firm follow-up |
+| Carts & PIs | a KAM follow-up logged on an open cart or PI (since 2026-11-28, `kam.md` §Carts and PIs are the KAM pipeline; KAM-order PI dates no longer show); an Inbound lead at `PI Shared`; an Outreach follow-up at `Quote Share` or `PI Shared` (`CART_STAGES`) |
+| Calls & meetings | everything else, and every Outreach meeting and KAM firm follow-up (a call or a meeting; a meeting's context starts with "Meeting") |
 
 ## Layout (rebuilt 2026-11-27)
 

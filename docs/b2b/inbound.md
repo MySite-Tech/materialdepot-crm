@@ -339,7 +339,7 @@ header and five tabs. Nothing was removed from what is stored or shown:
 
 | Where | What |
 |---|---|
-| Header | name, number, status, priority, lead type, follow-up, Enq ID, "n details missing" (opens Client), and the four SPoCs on one line with Reassign behind a link |
+| Header | name, number, status, priority, lead type, follow-up, Enq ID, "Edit details · n missing" in red (opens Client; red since 2026-11-28, matching the firm page), and the four SPoCs on one line with Reassign behind a link |
 | Activity | next follow-up with RNR / Connected, the Connected form, Needs a decision, one note box, and **one timeline of calls and team notes** |
 | Client | company, people (column labels once, not per row), client type, lead type, priority, segment, city, GST, office address, then the requirement: selection, summary with its history, expected value |
 | Deal | status and its gated fields, **Carts and PIs** (every deal ticket on the client's numbers, open first), Assisted by / Placed under, order credit |

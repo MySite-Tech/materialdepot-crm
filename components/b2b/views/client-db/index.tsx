@@ -34,7 +34,6 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<ClientEntity | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [merging, setMerging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -434,13 +433,9 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
           people={byTeam}
           onClose={() => setOpenId(null)}
           onSave={saveClient}
-          onEdit={() => setEditing(openRow.client)}
           onDelete={viewer.canManageTeam ? deleteFirm : undefined}
           canAddStudioNumber={viewer.canManageTeam}
         />
-      )}
-      {editing && (
-        <ClientModal client={editing} kams={allKams} onClose={() => setEditing(null)} onSave={saveClient} />
       )}
       {merging && (
         <MergeModal clients={clients} suggestions={suggestions} onClose={() => setMerging(false)} onMerge={runMerge} />

@@ -290,7 +290,7 @@ shown was removed, and every save gate, the check-in rules and the handover gate
 
 | Where | What |
 |---|---|
-| Header | firm, mobile, status, lead type, follow-up, handover state, waitlist, Enq ID, "n details missing" (opens Client), and the Inbound / Outreach / KAM / EC SPoCs on one line, with Reassign (the BM) for anyone who could pick the BM before |
+| Header | firm, mobile, status, lead type, follow-up, handover state, waitlist, Enq ID, "Edit details · n missing" in red (opens Client; red since 2026-11-28, matching the firm page), and the Inbound / Outreach / KAM / EC SPoCs on one line, with Reassign (the BM) for anyone who could pick the BM before |
 | Activity | next follow-up (opens Deal), RNR / Connected, one note box, and **one timeline of calls and notes** |
 | Meetings | schedule, check in, mark held, the meeting timeline |
 | Client | company, people (owner, alternate number, everyone else; column labels once), client type, segment, team size, lead type, city, GST, email, office address, then the requirement with its history, expected value and closure date |

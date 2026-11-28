@@ -39,8 +39,8 @@ export function InboundDrawerHeader({ draft, gaps, today, people, tabs, tab, onT
               {isOpenStatus(draft.stage) && !!draft.followUpDate && <FollowUpChip date={draft.followUpDate} today={today} />}
               {draft.enqId && <span className="text-[11px] font-mono text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">{draft.enqId}</span>}
               {gaps.length > 0 && (
-                <button onClick={() => onTab('client')} className="text-[11px] font-medium text-amber-700 hover:underline">
-                  {unnamed ? 'Add the company name' : `${gaps.length} detail${gaps.length === 1 ? '' : 's'} missing`}
+                <button onClick={() => onTab('client')} className="text-[11.5px] font-semibold text-red-600 hover:underline">
+                  {unnamed ? 'Add the company name' : `Edit details · ${gaps.length} missing`}
                 </button>
               )}
             </div>

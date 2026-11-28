@@ -3,7 +3,7 @@
 import { ESCALATION_CATEGORIES, ESCALATION_TIERS, Escalation, EscalationCategory, EscalationTier, HEALTH_META, scoreAccount } from '../../../models/account-health';
 import { ClientEntity } from '../../../models/client';
 import { newB2BId } from '../../../models/ids';
-import { Field } from '../ui';
+import { Field } from '../lists/ui';
 import { btnPrimary, inputCls } from '../../../constants/ui';
 import { useState } from 'react';
 

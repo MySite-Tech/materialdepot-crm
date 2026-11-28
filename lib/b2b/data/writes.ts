@@ -1,11 +1,9 @@
 import { clientToRow } from '../mappers/client';
 import { inboundChange, inboundToRow, rowToInbound } from '../mappers/inbound';
-import { kamOrderToRow } from '../mappers/kam';
 import { outreachToRow } from '../mappers/outreach';
 import { B2BLeadRow, Pipeline } from './rows';
 import { b2bBackendDelete, b2bBackendPost } from './backend';
 import { ClientEntity } from '@/components/b2b/models/client';
-import { KamOrder } from '@/components/b2b/models/kam';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { invalidateB2BCache } from './cache';
 
@@ -94,10 +92,6 @@ export async function upsertClients(list: ClientEntity[]): Promise<string | null
     console.error('[b2b] bulk client upsert failed', e);
     return writeErrorMessage(e);
   }
-}
-
-export function upsertKamOrder(o: KamOrder): Promise<string | null> {
-  return upsert(kamOrderToRow(o));
 }
 
 export async function deleteB2BRow(id: string, pipeline: Pipeline = 'client'): Promise<string | null> {

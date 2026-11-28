@@ -64,8 +64,8 @@ function LeadCard({ lead, today, onClick, onDragStart }: {
           {attempts ? `${attempts} ${attempts === 1 ? 'call' : 'calls'} · ${last?.outcome}` : 'No calls yet'}
         </span>
         {gaps.length > 0 && (
-          <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="text-[10px] font-semibold text-amber-600 whitespace-nowrap">
-            ⚠ {gaps.length}
+          <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="text-[10px] font-semibold text-red-600 bg-red-50 rounded px-1 whitespace-nowrap">
+            {gaps.length} missing
           </span>
         )}
       </div>

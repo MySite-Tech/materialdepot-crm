@@ -6,6 +6,9 @@ import { EcVisitsCard } from './cards/ec-visits';
 import { GstsCard } from './cards/gsts';
 import { HandoverCard } from './cards/handover';
 import { DeleteFirm } from './cards/delete-firm';
+import { FirmDetailsModal } from './cards/details';
+import { StudioViewCard } from './cards/studio-view';
+import { useStudioLogins } from '../../hooks/use-studio-logins';
 import { EnquiryActions, OrdersCard } from './cards/orders';
 import { ReferredClientsCard } from './cards/referred-clients';
 import { SpocReadState, SpocSalesCard, SpocsCard } from './cards/spocs';
@@ -15,7 +18,7 @@ import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
 import { useFirmSpocs } from './hooks/use-firm-spocs';
 import { fmtDate, orderTab } from './utils';
-import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, gstNumbers, lastOrderInFuture, nextStatus } from '../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, firmDetailGaps, gstNumbers, lastOrderInFuture, nextStatus, studioFirmOf, ticketFollowUps } from '../../models/client';
 import { istToday } from '../../models/inbound';
 import { fmtShortINR } from '../../models/mock-data';
 import { Rep } from '../../models/outreach/intake';
@@ -27,7 +30,8 @@ import { useEffect, useMemo, useState } from 'react';
 const NO_PEOPLE: Record<B2BTeam, Rep[]> = { inbound: [], outreach: [], kam: [] };
 const NO_ROWS: ClientOrderRow[] = [];
 
-export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], people = NO_PEOPLE, onClose, onSave, onEdit, onDelete, canAddStudioNumber, activityBadge, children }: {
+export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], people = NO_PEOPLE, onClose, onSave, onDelete, canAddStudioNumber, activityBadge, defaultTab, onLogTicket, children }: {
+  onLogTicket?: (t: { enqId: string; kind: 'cart' | 'pi'; value?: number; status?: string }) => void;
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
@@ -41,7 +45,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   people?: Record<B2BTeam, Rep[]>;
   onClose: () => void;
   onSave: (c: ClientEntity) => Promise<string | null>;
-  onEdit?: () => void;
+  defaultTab?: FirmTab;
   onDelete?: (c: ClientEntity) => Promise<string | null>;
   canAddStudioNumber?: boolean;
   activityBadge?: string;
@@ -54,15 +58,20 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   const ec = useEcVisits(client.id, phones);
   const rows = orders.details?.rows ?? NO_ROWS;
   const { isB2B, spocs, sales } = useFirmSpocs(client, links.links, rows, people);
-  const [tab, setTab] = useState<FirmTab>(children ? 'activity' : 'overview');
+  const [tab, setTab] = useState<FirmTab>(defaultTab ?? (children ? 'activity' : 'overview'));
+  const [editing, setEditing] = useState(false);
+  const gaps = useMemo(() => firmDetailGaps(client), [client]);
+  const followUps = useMemo(() => ticketFollowUps(client.interactions), [client.interactions]);
+  const studioAccess = useStudioLogins();
+  const studio = useMemo(() => studioFirmOf(client, studioAccess.firms), [client, studioAccess.firms]);
   const [via, setVia] = useState<string | null>(null);
   const [kamPicker, setKamPicker] = useState(false);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !editing) onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, editing]);
 
   const read: SpocReadState = { linksLoading: links.loading, linksFailed: links.failed, ordersLoading: orders.loading, ordersFailed: orders.failed };
   const openDeals = useMemo(() => rows.filter((r) => { const t = orderTab(r); return t === 'pi' || t === 'open'; }).length, [rows]);
@@ -77,6 +86,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
     { key: 'people', label: 'People', badge: phones.length ? undefined : 'no number', warn: true },
     { key: 'ec', label: 'EC & handover', badge: ec.loading || ec.error ? undefined : upcoming ? `${upcoming} upcoming` : undefined },
     { key: 'referrals', label: 'Referrals' },
+    ...(studio ? [{ key: 'studio' as const, label: 'Studio Space ↗' }] : []),
   ];
 
   const pickKam = () => { setTab('overview'); setKamPicker(true); };
@@ -94,7 +104,8 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
           spocs={spocs}
           read={read}
           onPeople={canAssign ? () => setTab('people') : undefined}
-          onEdit={onEdit}
+          gaps={gaps}
+          onEdit={() => setEditing(true)}
           onClose={onClose}
           tabs={tabs}
           tab={tab}
@@ -143,6 +154,9 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
                 onClearVia={() => setVia(null)}
                 onRecheck={orders.recheck}
                 renderActions={(r) => <EnquiryActions client={client} row={r} ec={ec} people={people} assignAs={assignAs} onSave={onSave} />}
+                followUps={followUps}
+                preferOpen={!!children}
+                onLogTicket={onLogTicket ? (r) => onLogTicket({ enqId: r.enqId, kind: orderTab(r) === 'pi' ? 'pi' : 'cart', value: r.orderValue, status: r.status }) : undefined}
               />
               <SpocSalesCard sales={sales} loading={orders.loading} failed={orders.failed} />
             </>
@@ -167,7 +181,10 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
           )}
 
           {tab === 'referrals' && <ReferredClientsCard client={client} metrics={metrics} />}
+
+          {tab === 'studio' && studio && <StudioViewCard studio={studio} />}
         </div>
+        {editing && <FirmDetailsModal client={client} clients={clients} onClose={() => setEditing(false)} onSave={onSave} />}
       </div>
     </div>
   );

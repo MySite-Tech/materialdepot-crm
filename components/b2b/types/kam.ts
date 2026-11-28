@@ -1,4 +1,5 @@
-import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, ClientStatus, InteractionType, TemperatureBand } from '../models/client';
+import { ClientEntity, ClientInteraction, ClientOrderMetrics, ClientSource, ClientStatus, FollowUpFor, InteractionType, TemperatureBand, TicketFollowUp } from '../models/client';
+import type { OpenDeal } from '@/lib/b2b/inbound-deals/types';
 import { FollowUpBucket, Segment } from '../models/inbound';
 import type { RequirementVersion } from '../models/requirement';
 export type KamOrderStatus =
@@ -48,15 +49,6 @@ export interface KamOrder {
   value: number;
 }
 
-export interface KamOrderGateInput {
-  status: KamOrderStatus;
-  enqId?: string;
-  lostReason?: string;
-  company?: string;
-  expectedClosure?: string;
-  followUpDate?: string;
-}
-
 export interface InteractionGateInput {
   type: InteractionType;
   date?: string;
@@ -89,7 +81,11 @@ export interface AssignedClientRow {
   previousTemperature?: number;
   upcomingProject?: string;
   nextFollowUpDate?: string;
+  nextFollowUpTime?: string;
+  followUpFor: FollowUpFor;
   followUp: FollowUpBucket;
+  gaps: { key: string; label: string }[];
+  tickets: OpenDeal[];
   lastInteraction?: ClientInteraction;
   daysSinceContact?: number;
 }
@@ -145,11 +141,49 @@ export interface NewVsRepeat {
 }
 
 
-export type KamFirmLens = 'signoff' | 'assigned' | 'overdue' | 'due' | 'nofollow' | 'called' | 'upcoming' | 'active' | 'lapsing' | 'inactive' | 'never';
+export type KamDealLens = 'deals' | 'cartOpen' | 'piOpen' | 'cartFollow' | 'piFollow';
 
-export type KamOrderLens = 'open' | 'pipeline' | 'orders';
+export type KamFirmLens =
+  | 'signoff' | 'assigned' | 'work' | 'overdue' | 'due' | 'meetings' | 'nofollow' | 'called' | 'upcoming'
+  | 'active' | 'lapsing' | 'inactive' | 'never' | 'details';
 
-export type KamLens = KamFirmLens | KamOrderLens;
+export type KamReferralLens = 'referred' | 'refNone' | 'refCart' | 'refOrdered';
+
+export type KamLens = KamFirmLens | KamDealLens | KamReferralLens;
+
+export interface KamTicketRow {
+  key: string;
+  firm: AssignedClientRow;
+  deal: OpenDeal;
+  followUp?: TicketFollowUp;
+  touched: boolean;
+  due: FollowUpBucket;
+}
+
+export type ReferralStage = 'none' | 'cart' | 'ordered' | 'unknown';
+
+export interface KamReferralRow {
+  key: string;
+  name: string;
+  phone: string;
+  note?: string;
+  referredOn?: string;
+  via: 'crm' | 'studio';
+  addedBy?: string;
+  firm: AssignedClientRow;
+  stage: ReferralStage;
+  orders: number;
+  enquiries: number;
+  lastOrder?: string;
+  open: OpenDeal[];
+}
+
+export interface KamLensGroup {
+  title: string;
+  head?: KamLens;
+  lenses: KamLens[];
+  row: 1 | 2;
+}
 
 export interface KamLensMeta {
   title: string;

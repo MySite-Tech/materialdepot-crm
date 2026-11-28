@@ -93,7 +93,7 @@ function Firm({ l }: { l: OutreachLead }) {
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="font-semibold text-gray-900 truncate">{l.company || 'Unnamed firm'}</span>
         {gaps.length > 0 && (
-          <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="shrink-0 text-[10px] font-semibold text-amber-600">⚠ {gaps.length}</span>
+          <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="shrink-0 text-[10px] font-semibold text-red-600 bg-red-50 rounded px-1">{gaps.length} missing</span>
         )}
       </div>
       <div className="text-[11px] text-gray-400 truncate">{[l.contactPerson, l.phone].filter(Boolean).join(' · ') || 'No contact'}</div>

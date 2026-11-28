@@ -123,14 +123,22 @@ function Body({ row }: { row: ClientOrderRow }) {
   );
 }
 
-export function DealInline({ enqId }: { enqId: string }) {
+export function DealInline({ enqId, fallback, actions }: { enqId: string; fallback?: ClientOrderRow; actions?: React.ReactNode }) {
   const state = useEnquiryDetail(enqId);
   return (
-    <div className="bg-gray-50 border border-gray-100 rounded-md px-3 py-3 cursor-default" onClick={(e) => e.stopPropagation()}>
+    <div className="bg-gray-50 border border-gray-100 rounded-md px-3 py-3 cursor-default flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+      {actions}
       {state.status === 'loading' ? <Spinner label="Reading the deal ticket…" />
-        : state.status === 'failed' ? <p className="text-[12.5px] text-amber-700">The deal ticket could not be read ({state.error}). Nothing here means it is empty.</p>
-          : state.status === 'missing' ? <p className="text-[12.5px] text-gray-500">Django has no ticket with this id any more.</p>
-            : <Body row={state.row} />}
+        : state.status === 'ready' ? <Body row={state.row} />
+          : fallback ? (
+            <>
+              <p className="text-[11.5px] text-amber-700">
+                {state.status === 'failed' ? `The full ticket could not be read (${state.error}), so this is what the order list holds.` : 'Django has no deal ticket with this id, so this is what the order list holds.'}
+              </p>
+              <Body row={fallback} />
+            </>
+          ) : state.status === 'failed' ? <p className="text-[12.5px] text-amber-700">The deal ticket could not be read ({state.error}). Nothing here means it is empty.</p>
+            : <p className="text-[12.5px] text-gray-500">Django has no ticket with this id any more.</p>}
     </div>
   );
 }

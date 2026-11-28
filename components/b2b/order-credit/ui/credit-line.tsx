@@ -5,6 +5,7 @@ import { B2B_TEAM_LABEL } from '@/lib/b2b/team/constants';
 import { creditKey } from '@/lib/b2b/revenue';
 import { TEAM_ORDER_OF } from '../constants';
 import { useOrderCredits } from '../hooks/use-order-credits';
+import { Hint } from '../../ui/info-tip';
 
 const control = 'px-2 py-1 text-[12px] border border-gray-200 rounded-md bg-white outline-none focus:border-[#0F766E]';
 
@@ -59,7 +60,8 @@ export function OrderCreditLine({ enquiryId, rule }: { enquiryId: string; rule?:
         ) : (
           <span className="text-gray-700">
             {rule ? <strong>{rule}</strong> : <span className="text-gray-500">No one yet</span>}
-            <span className="text-gray-400"> · by the rule: when a teammate opened the ticket, the owner of this client's lead, or its firm's KAM if they held it when the order was placed; else the B2B rep on the cart; else whoever holds this number</span>
+            <span className="text-gray-400"> · by the rule </span>
+            <Hint text="When a teammate opened the ticket, the owner of this client's lead, or its firm's KAM if they held it when the order was placed; else the B2B rep on the cart; else whoever holds this number." />
           </span>
         )}
         {canEdit && state === 'ready' && !editing && (

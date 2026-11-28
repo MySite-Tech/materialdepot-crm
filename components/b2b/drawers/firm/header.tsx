@@ -9,11 +9,12 @@ import { StatusPill } from '../../ui/client-chips';
 import { Hint } from '../../ui/info-tip';
 import { btnGhost } from '../../constants/ui';
 
-export type FirmTab = 'activity' | 'overview' | 'orders' | 'people' | 'ec' | 'referrals';
+export type FirmTab = 'activity' | 'overview' | 'orders' | 'people' | 'ec' | 'referrals' | 'studio';
 
 export interface FirmTabDef { key: FirmTab; label: string; badge?: string; warn?: boolean }
 
-export function FirmDrawerHeader({ client, status, days, badges, spocs, read, onPeople, onEdit, onClose, tabs, tab, onTab }: {
+export function FirmDrawerHeader({ client, status, days, badges, spocs, read, gaps, onPeople, onEdit, onClose, tabs, tab, onTab }: {
+  gaps: { label: string }[];
   client: ClientEntity;
   status: ClientStatus;
   days?: number;
@@ -47,10 +48,18 @@ export function FirmDrawerHeader({ client, status, days, badges, spocs, read, on
               <StatusPill status={status} days={days} />
               {badges}
               <span className="text-[12px] text-gray-500">{facts.join(' · ')}</span>
+              {gaps.length > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <button onClick={onEdit} className="text-[11.5px] font-semibold text-red-600 hover:underline">
+                    {`${gaps.length} detail${gaps.length === 1 ? '' : 's'} missing`}
+                  </button>
+                  <Hint text={`Still empty: ${gaps.map((g) => g.label).join(', ')}. Ask the firm and fill them with Edit details.`} />
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {onEdit && <button onClick={onEdit} className={btnGhost}>Edit details</button>}
+            {onEdit && <button onClick={onEdit} className={gaps.length ? 'px-3 py-1.5 text-[12px] font-semibold rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100' : btnGhost}>Edit details</button>}
             <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
           </div>
         </div>

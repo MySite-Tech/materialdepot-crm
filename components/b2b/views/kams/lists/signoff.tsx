@@ -6,7 +6,7 @@ import { fmtL } from '../../../models/mock-data';
 import { HANDOVER_TAT_HOURS, hoursSince } from '../../../models/outreach/handover';
 import { AssignedClientRow } from '../../../types/kam';
 import { Metric } from '../../../ui/client-chips';
-import { Pager } from '../ui';
+import { Pager } from './ui';
 import { useState } from 'react';
 
 const th = 'text-left font-semibold px-3 py-2 whitespace-nowrap';
