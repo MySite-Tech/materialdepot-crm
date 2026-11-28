@@ -252,7 +252,7 @@ still gives every tile its count and its rows.
 | Group (head) | Sub-tabs | Rule |
 |---|---|---|
 | Calls | First call · Due today · Overdue · Needs a decision | leads in the call phase: open, not sent to Outreach, **no open cart or PI** |
-| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | open leads (`withInbound`) with an open cart or PI on any of their numbers |
+| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | leads that are not Lost or Invalid (open, Closed or sent to Outreach) with an open cart or PI on any of their numbers |
 | Outcomes | Sent to Outreach · Closed · Lost · Invalid | where leads ended up |
 
 Arrived today, Upcoming, No follow-up date, Needs enrichment and All leads stay as
@@ -261,12 +261,26 @@ The Pipeline group (Connected, Follow up, PI shared) is gone. Its status split i
 still the Status filter and the board view.
 
 **What puts a lead in Carts & PIs (`leadCtx`).** A lead is in the PI part when it
-has an open PI ticket (`Quote Approval Pending`, `Availability Check`, `Hold Stock`) or
-its status is PI Shared. Otherwise it is in the cart part when it has an `In Cart`
-ticket. The lead must be open and not sent to Outreach. A Lost, Closed or Invalid lead
-with an open cart stays in Outcomes, because the rep has already decided. These are
-Django's real labels, checked on production on 28 Nov. `Payment Pending` is not a deal
-ticket status there.
+has an open PI ticket (`Quote Approval Pending`, `Availability Check`, `Hold Stock`), or
+it is open with status PI Shared. Otherwise it is in the cart part when it has an `In Cart`
+ticket. These are Django's real labels, checked on production on 28 Nov. `Payment Pending`
+is not a deal ticket status there.
+
+**Outcome leads with an open cart (the user's rule, 2026-11-28).** On 28 Nov, 14 leads
+in the window had an outcome and an open ticket: Lost 9, Closed 3, Invalid 1, and 1 still
+Connected but sent to Outreach. Of those, only 2 had a ticket raised after the outcome.
+- **Closed and sent-to-Outreach** leads with an open ticket show in **both** Carts & PIs
+  and their own tab (Closed, Sent to Outreach). A Closed client opening a new cart is a
+  repeat order starting.
+- **Lost and Invalid** stay **only** in Lost and Invalid. Their row carries a "Cart still
+  open · ₹…" marker (`OpenTicketChip`), which opens the ticket. Most are carts opened
+  before the lead was closed that nobody marked lost in Django. A ticket raised after an
+  Invalid is worth a look: on 28 Nov a lead marked spam on 19 Nov had a ₹50K PI raised on
+  24 Nov.
+- A CRM-only status of PI Shared counts only for an open lead. A Closed or sent lead
+  needs a real ticket.
+
+The marker shows on every row outside the Carts & PIs list that has an open ticket.
 
 **Open vs follow up, so the four never overlap.** *Open* means no call is logged on
 or after the day the newest cart or PI was raised (for a PI, also `piSharedAt`), so
@@ -289,7 +303,7 @@ production's open tickets: 485 leads in the window. Calls 301 (First call 124, D
 today 11, Overdue 166, Needs a decision 0). Carts & PIs 40 (Carts open 17, PI open 0,
 Carts follow up 18, PI follow up 5). No lead appeared in both groups. Of the 54
 window leads with an open ticket, the other 14 were Lost 9, Closed 2, Invalid 1 and
-sent to Outreach 2. Without the carts, First call would have read 140, not 124.
+sent to Outreach 2. Under the 28 Nov rule above, the 4 Closed or sent ones join Carts & PIs (44). Without the carts, First call would have read 140, not 124.
 
 **Columns.** Every list has a **Lead date** column (the lead date above, with the time
 when it is the Kylas creation). Calls lists add Follow-up and Calls. Carts & PIs adds

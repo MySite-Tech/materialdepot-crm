@@ -28,9 +28,12 @@ export const matchesFilters = (l: InboundLead, f: InboundFilters): boolean =>
 
 const NO_DEALS: LeadDeals = { carts: [], pis: [] };
 
+const NO_CART_TAB = ['Lost', 'Invalid'];
+
 export function leadCtx(l: InboundLead, deals: LeadDeals = NO_DEALS): LeadCtx {
-  const open = withInbound(l);
-  const stage = !open ? null : deals.pis.length || l.stage === 'PI Shared' ? 'pi' : deals.carts.length ? 'cart' : null;
+  const stage = NO_CART_TAB.includes(l.stage) ? null
+    : deals.pis.length || (withInbound(l) && l.stage === 'PI Shared') ? 'pi'
+      : deals.carts.length ? 'cart' : null;
   const since = stage === 'pi'
     ? [deals.pis[0]?.createdOn || '', istDay(l.piSharedAt)].sort().pop() || ''
     : stage === 'cart' ? deals.carts[0].createdOn : '';

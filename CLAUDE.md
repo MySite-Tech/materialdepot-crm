@@ -762,8 +762,10 @@ signed in on production:**
 - A cart's detail lists its products.
 - A rep's Inbound shows only their leads since 10 Nov.
 
-**Open question for the user:** whether Lost, Closed or Invalid leads with an open cart
-(14 on 28 Nov) should come back into Carts & PIs; today they stay in Outcomes.
+**Outcome leads with an open cart (the user's decision, 28 Nov, CRM PR from
+`inbound-outcome-carts`):** Closed and sent-to-Outreach leads show in both Carts & PIs and
+their own tab. Lost and Invalid stay only in theirs, with a "Cart still open" marker on
+the row (`inbound.md` §Outcome leads with an open cart).
 
 **START HERE for B2B revenue (2026-11-28, latest): Studio Sales, Direct by who booked, and
 the Clients sub-tab (CRM PR #106, `02d91ec`, merged and LIVE on Dhruv's ask; no backend

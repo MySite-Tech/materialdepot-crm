@@ -14,7 +14,7 @@ export const NO_FILTERS: InboundFilters = {
 
 const CALL_RULE = 'Leads still in the call phase: open, not sent to Outreach, no open cart or PI, already called at least once';
 
-const DEAL_RULE = 'Open leads with a cart or PI open on any of their numbers. Carts and PIs are read from the deal tickets every 5 minutes';
+const DEAL_RULE = 'Leads with a cart or PI open on any of their numbers: open leads, and Closed or sent-to-Outreach leads too, which also stay in their own tab. Lost and Invalid leads stay only in theirs, marked as having an open cart. Carts and PIs are read from the deal tickets every 5 minutes';
 
 export const LENS: Record<Lens, LensMeta> = {
   today: {
@@ -49,7 +49,7 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   deals: {
     title: 'Carts & PIs',
-    rule: `${DEAL_RULE}. A PI also counts when the lead's status is PI Shared. These come before ordinary calls.`,
+    rule: `${DEAL_RULE}. A PI also counts when an open lead's status is PI Shared. These come before ordinary calls.`,
     empty: 'No open lead has a cart or PI open.',
     accent: '#4F46E5',
   },

@@ -75,6 +75,21 @@ function DealCell({ lead, ctx, onView }: { lead: InboundLead; ctx?: LeadCtx; onV
   );
 }
 
+function OpenTicketChip({ ctx, onView }: { ctx?: LeadCtx; onView: (enqId: string) => void }) {
+  const d = ctx?.pis[0] ?? ctx?.carts[0];
+  if (!d) return null;
+  const more = ctx!.carts.length + ctx!.pis.length - 1;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onView(d.enqId); }}
+      title={`${d.enqId} · ${d.status} · opened ${fmtDay(d.createdOn)}${d.branch ? ` · ${d.branch}` : ''}. Click for the products and full detail.`}
+      className={`mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-px text-[10.5px] font-medium ${d.kind === 'pi' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+    >
+      {d.kind === 'pi' ? 'PI' : 'Cart'} still open · {fmtINR(d.value)}{more > 0 ? ` · +${more}` : ''}
+    </button>
+  );
+}
+
 function LastCall({ lead, ctx }: { lead: InboundLead; ctx?: LeadCtx }) {
   const last = lastAttempt(lead.callAttempts);
   if (ctx && !ctx.updated) {
@@ -256,6 +271,7 @@ export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searc
                           : <span className="text-gray-300">No phone</span>}
                         {l.clientType && <span className="text-gray-400"> · {l.clientType}</span>}
                       </div>
+                      {!isDeals && <OpenTicketChip ctx={ctx.get(l.id)} onView={onViewDeal} />}
                     </td>
                     {showStatus && <td className={td}><StatusBadge s={l.stage} /></td>}
                     {isDeals && <td className={`${td} max-w-[240px]`}><DealCell lead={l} ctx={ctx.get(l.id)} onView={onViewDeal} /></td>}
