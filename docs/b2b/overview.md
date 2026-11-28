@@ -183,8 +183,8 @@ the month-to-month table (`clients/movement/`) below it.
   days 1–today, so a part month is never compared with full ones.
 - **Categories** count an order in full under each of its categories, as in Revenue
   analysis (`orderCategories`, now shared).
-- Seen on the sandbox and on production reports through the bundled module; the screen
-  has not been seen signed in on production.
+- Seen on the sandbox, on production reports through the bundled module, and **signed in
+  on production after deploy (PR #125, `5f56129`)**: every section loads with no page errors.
 
 ## Four revenue channels (redefined 2026-11-03, Direct narrowed 2026-11-28)
 

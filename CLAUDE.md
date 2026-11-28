@@ -764,6 +764,31 @@ from `origin/main`. Read the named doc section before touching any of it:
   **after deploy, open a referred client's Studio Space details signed in and compare it with
   Studio's own Needs attention row.**
 
+**START HERE for B2B analysis (2026-11-28, seventh round, latest): Overview → Clients is a
+firm journey. CRM PR #125 (`5f56129`), merged and deployed on Dhruv's ask; no backend PR, no
+migration.** Start new work from `origin/main`. Read `docs/b2b/overview.md` §Clients sub-tab
+and §Firm journey before touching it.
+- **Firm journey** (`views/overview/clients/journey/`, logic `lib/b2b/revenue/journey/`): any
+  two of the five flow months, Studio Sales or All B2B. A revenue bridge whose steps add up
+  exactly (stopped, ordered less or more, EC → Studio, new, revived, skipped the first month,
+  store buyer), a firm flow chart, where new revenue came from, retention, month-by-month,
+  the category shift and a firm table every chart filters. `RevenueOrder` gained `clientKey`
+  (the flow's firm key) and `ecReferral`.
+- **The month-to-month table** (`clients/movement/`): "Earlier client, gap unknown" is now
+  Revived flagged gap unknown (exact needs Owed by Django row 23); Churned's amount is what
+  they spent in their last month; a new **Not registered yet** row lists GST-billed firms
+  ordering at stores that no B2B board holds (Client Database → Review new firms by month).
+  On production it is larger than All B2B from August, so working the review list is the
+  user's next lever.
+- **Next (the user's plan):** dive into the analysis on the live tab: which July firms fell
+  away and why, average order, categories, churn and retention, Studio Sales vs All B2B.
+  Real figures from the first run are in memory (`clients-tab-cleanup-2026-11-28`), never here.
+- **Checked signed in on production after deploy (read-only, as Dhruv):** the tiles, the
+  bridge (tying out July 1–28 to November 1–28 under Same days), the flow chart, sources,
+  retention, categories, the firm table and the month-to-month table with Not registered
+  yet all load, with no page errors. Firm counts there group every number of a firm, so they
+  run a little below the per-phone counts of the pre-deploy check. Nothing was saved.
+
 **START HERE for B2B revenue channels (2026-11-28, sixth round): a firm's B2B tie-up has a
 start date. LIVE: b2b-backend PR #46 (`/studio-access` sends `onboarded_on`, no migration)
 then CRM PR #119 (`b69c45e`), both merged and deployed on Dhruv's ask.** Start new work
