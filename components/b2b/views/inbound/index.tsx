@@ -20,6 +20,8 @@ import { fetchInboundBoard, inboundBoardMatches, inboundPhones, saveInboundLead 
 import { INBOUND_WINDOW_START } from '../../constants/inbound';
 import { leadDeals } from '@/lib/b2b/inbound-deals/utils';
 import { useOpenDeals } from '../../hooks/use-open-deals';
+import { useReferredClients } from '../../hooks/use-referred-clients';
+import { ReferredClientsTable } from '../../ui/referred-clients-table';
 import { fmtDay } from '../../ui/inbound-chips';
 import { LeadCtx } from './types';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
@@ -142,6 +144,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     return out;
   }, [filtered, deals.status, deals.byPhone]);
 
+  const referredLabels = useMemo(() => new Map(named.map((l) => [l.id, l.companyName || l.contactName || l.phone])), [named]);
+  const referred = useReferredClients('inbound', referredLabels, deals.status === 'ready' ? deals.byPhone : null, !loading && !loadFailed && !unlinked);
+
   const byLens = useMemo(() => {
     const out = Object.fromEntries(LENS_KEYS.map((k) => [k, [] as InboundLead[]])) as Record<Lens, InboundLead[]>;
     for (const l of filtered) {
@@ -152,13 +157,19 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   }, [filtered, ctx, today]);
 
   const counts = useMemo(
-    () => Object.fromEntries(LENS_KEYS.map((k) => [k, byLens[k].length])) as Record<Lens, number>,
-    [byLens],
+    () => ({ ...Object.fromEntries(LENS_KEYS.map((k) => [k, byLens[k].length])), referred: referred.rows.length }) as Record<Lens, number>,
+    [byLens, referred.rows.length],
   );
 
   const tomorrow = useMemo(() => filtered.filter((l) => countsTomorrow(l, today)).length, [filtered, today]);
   const values = useMemo(() => lensValues(byLens, ctx, tomorrow, today), [byLens, ctx, tomorrow, today]);
-  const figures = tileFigures(counts, values, fmtINR);
+  const waitingOnReferred = referred.rows.filter((r) => r.stage === 'none').length;
+  const figures = {
+    ...tileFigures(counts, values, fmtINR),
+    referred: referred.status === 'failed' ? { value: 'Unknown', sub: 'referrals did not load', warn: true }
+      : referred.status === 'pending' ? { value: '…', sub: 'loading' }
+        : { value: String(referred.rows.length), sub: waitingOnReferred ? `${waitingOnReferred} not at an EC yet` : referred.rows.length ? 'from your leads' : 'none yet', warn: waitingOnReferred > 0 },
+  };
 
   const valueText = lens === 'deals' && values.deals ? `${fmtINR(values.deals)} open on carts and PIs`
     : (lens === 'cartOpen' || lens === 'piOpen') && values[lens] ? `${fmtINR(values[lens])} open`
@@ -398,6 +409,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
               onClear={reassign.clear}
             />
           )}
+          {lens === 'referred' ? (
+            <ReferredClientsTable state={referred} today={today} referrerLabel="Referred by lead" onOpenReferrer={openLead} />
+          ) : (
           <LeadTable
             lens={lens}
             rows={rows}
@@ -416,6 +430,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             onTogglePick={reassign.toggle}
             onTogglePage={reassign.togglePage}
           />
+          )}
           </>
         )}
 

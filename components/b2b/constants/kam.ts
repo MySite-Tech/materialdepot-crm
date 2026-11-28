@@ -55,8 +55,8 @@ export const KAM_LENS: Record<KamLens, KamLensMeta> = {
   assigned: { title: 'Assigned', rule: 'Every firm in scope, with lifetime order metrics from the deal tickets (§2).', empty: 'No firm is assigned.', accent: '#6B7280' },
   active:   { title: 'Active', rule: 'Last order placed this calendar month or last (M-0 or M-1). A firm changes band only on the 1st of a month.', empty: 'No firm has ordered this month or last month.', accent: '#22C55E' },
   lapsing:  { title: 'Inactive 2–3 months', rule: 'Last order two or three calendar months back (M-2 or M-3). Closest to going fully inactive first.', empty: 'No firm last ordered two or three months back.', accent: '#F59E0B' },
-  inactive: { title: 'Inactive 4+ months', rule: 'Last order four or more calendar months back (M-4 or older). Firms with no order on record are under Never ordered.', empty: 'No inactive firm.', accent: '#9CA3AF' },
-  never:    { title: 'Never ordered', rule: 'No order on record for any of the firm’s numbers.', empty: 'Every firm has ordered at least once.', accent: '#D1D5DB' },
+  inactive: { title: 'Inactive 4+ months', rule: 'Last order four to twelve calendar months back (M-4 to M-12). Older than that, or no order on record, is Never ordered.', empty: 'No inactive firm.', accent: '#9CA3AF' },
+  never:    { title: 'Never ordered', rule: 'No order in the last twelve calendar months, or none on record for any of the firm’s numbers.', empty: 'Every firm has ordered in the last twelve months.', accent: '#D1D5DB' },
   details:  { title: 'Details missing', rule: 'Firms missing any of: contact person, their designation, client type, segment, city, office address, GST (an End Consumer is not asked for segment, office address or GST). Open one and use Edit details. Most missing first.', empty: 'Every firm has its details filled.', accent: '#DC2626' },
 };
 

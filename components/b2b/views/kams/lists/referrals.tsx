@@ -2,18 +2,13 @@
 
 import { KAM_LENS, KAM_LIST_PAGE_SIZE } from '../../../models/kam';
 import { fmtINR } from '../../../models/mock-data';
-import { KamReferralLens, KamReferralRow, ReferralStage } from '../../../types/kam';
+import { REFERRAL_STAGE } from '../../../constants/referral';
+import { KamReferralLens, KamReferralRow } from '../../../types/kam';
 import { DealInline } from '../../../ui/deal-detail';
+import { StudioReferralDetailPanel } from '../../../ui/studio-referral-detail';
 import { fmtDay } from '../../../ui/inbound-chips';
 import { ListHead, Pager, td, th } from './ui';
 import { Fragment, useEffect, useState } from 'react';
-
-const STAGE: Record<ReferralStage, { label: string; cls: string }> = {
-  none:    { label: 'Not at an EC yet', cls: 'bg-red-50 text-red-700' },
-  cart:    { label: 'Cart, no order', cls: 'bg-amber-50 text-amber-800' },
-  ordered: { label: 'Ordered', cls: 'bg-emerald-50 text-emerald-700' },
-  unknown: { label: 'Unknown', cls: 'bg-blue-50 text-blue-700' },
-};
 
 const daysSince = (day: string | undefined, today: string) =>
   day ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86_400_000) : undefined;
@@ -29,7 +24,8 @@ export function KamReferralTable({ lens, rows, today, search, page, setPage, onO
 }) {
   const meta = KAM_LENS[lens];
   const [shown, setShown] = useState<{ key: string; enqId: string } | null>(null);
-  useEffect(() => { setShown(null); }, [lens, page]);
+  const [detail, setDetail] = useState<string | null>(null);
+  useEffect(() => { setShown(null); setDetail(null); }, [lens, page]);
   const pages = Math.max(1, Math.ceil(rows.length / KAM_LIST_PAGE_SIZE));
   const cur = Math.min(page, pages - 1);
   const visible = rows.slice(cur * KAM_LIST_PAGE_SIZE, (cur + 1) * KAM_LIST_PAGE_SIZE);
@@ -63,6 +59,12 @@ export function KamReferralTable({ lens, rows, today, search, page, setPage, onO
                         <div className="font-semibold text-gray-800">{r.name}</div>
                         <a href={`tel:${r.phone}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[11px] text-gray-500 hover:text-[#0F766E]">{r.phone}</a>
                         {r.note && <div className="text-[10.5px] text-gray-400 max-w-[220px] truncate" title={r.note}>{r.note}</div>}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDetail(detail === r.key ? null : r.key); }}
+                          className="text-[11px] font-medium text-indigo-700 hover:underline"
+                        >
+                          {detail === r.key ? 'Hide Studio Space details' : 'Studio Space details'}
+                        </button>
                       </td>
                       <td className={td}>
                         <div className="text-gray-800">{r.firm.company}</div>
@@ -72,7 +74,7 @@ export function KamReferralTable({ lens, rows, today, search, page, setPage, onO
                         {r.referredOn ? fmtDay(r.referredOn) : <span className="text-gray-300">—</span>}
                         {age !== undefined && <div className={`text-[10.5px] ${r.stage === 'none' && age > 7 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>{age}d ago</div>}
                       </td>
-                      <td className={td}><span className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold whitespace-nowrap ${STAGE[r.stage].cls}`}>{STAGE[r.stage].label}</span></td>
+                      <td className={td}><span className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold whitespace-nowrap ${REFERRAL_STAGE[r.stage].cls}`}>{REFERRAL_STAGE[r.stage].label}</span></td>
                       <td className={`${td} whitespace-nowrap`}>
                         {d ? (
                           <button
@@ -89,6 +91,11 @@ export function KamReferralTable({ lens, rows, today, search, page, setPage, onO
                         ) : <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
+                    {detail === r.key && (
+                      <tr className="border-t border-gray-50">
+                        <td colSpan={5} className="px-3 pb-3 pt-0"><StudioReferralDetailPanel phone={r.phone} /></td>
+                      </tr>
+                    )}
                     {open && (
                       <tr className="border-t border-gray-50">
                         <td colSpan={5} className="px-3 pb-3 pt-0"><DealInline enqId={open} /></td>

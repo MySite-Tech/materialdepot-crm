@@ -1,5 +1,6 @@
 'use client';
 
+import { REFERRED_LENS } from '../../constants/referral';
 import { INBOUND_STATUS_COLORS } from '../../models/inbound';
 import { InboundFilters, Lens, LensGroup, LensMeta } from './types';
 
@@ -77,6 +78,7 @@ export const LENS: Record<Lens, LensMeta> = {
     empty: 'No PI is being followed up.',
     accent: '#A855F7',
   },
+  referred: { ...REFERRED_LENS },
   results: {
     title: 'Outcomes',
     rule: 'Every lead that reached an outcome: sent to Outreach, Closed, Lost or Invalid.',
@@ -141,7 +143,7 @@ export const LENS: Record<Lens, LensMeta> = {
 
 export const LENS_GROUPS: { key: LensGroup; title: string; head: Lens; lenses: Lens[] }[] = [
   { key: 'calls', title: 'Calls', head: 'today', lenses: ['new', 'due', 'overdue', 'ready'] },
-  { key: 'deals', title: 'Carts & PIs', head: 'deals', lenses: ['cartOpen', 'piOpen', 'cartFollow', 'piFollow'] },
+  { key: 'deals', title: 'Carts & PIs', head: 'deals', lenses: ['cartOpen', 'piOpen', 'cartFollow', 'piFollow', 'referred'] },
   { key: 'results', title: 'Outcomes', head: 'results', lenses: ['sent', 'closed', 'lost', 'invalid'] },
 ];
 

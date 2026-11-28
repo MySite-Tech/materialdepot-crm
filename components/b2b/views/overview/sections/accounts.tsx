@@ -25,7 +25,7 @@ function ClientBook({ clients, k, empty, onOpen }: {
     <Card>
       <SectionHead
         title="Client book"
-        hint="Active = ordered this calendar month or last (M-0, M-1). Then Inactive 2–3, 4–6, 7–12 and over 12 months, by calendar month. Never ordered is counted apart. Computed from deal tickets."
+        hint="Active = ordered this calendar month or last (M-0, M-1). Then Inactive 2–3, 4–6 and 7–12 months, by calendar month. Never ordered is no order in the last twelve months, or none on record. Computed from deal tickets."
         right={<LinkButton onClick={onOpen}>Client Database</LinkButton>}
       />
       {empty ? (

@@ -220,10 +220,27 @@ uses the same card, so it changed too.
 `In Cart` ticket `/crm/leads/?enquiry_ids=…&include=boq` answers `boqItems: []` and
 `cartItems` is only the category ("Tiles"), so a cart shows its category and no qty or
 rate. PIs answer full lines. That is Django's data, not the screen. Studio Space shows
-every SKU because it reads Material Depot's snapshot service with its own key. **The tech
-team will add that to the CRM and make it live (the user, 2026-11-28); a session should
-not build it unless asked.** The plan and the env vars are in `backends.md` §Owed by
-Django row 22.
+every SKU because it reads Material Depot's snapshot service with its own key.
+**Built the same day, on the user's ask, and run once against the real service.**
+The card is compact (2026-11-28, the user found it mostly blank): status, store, BM, opened date and total on one line, the Products table next, then only the facts that have a value. Empty fields are left out, not shown as dashes. `DealInline` on a Cart or PI calls `/api/b2b/ticket-skus` (`requireCaller`, B2B access) with
+the ticket id and number. The route asks the snapshot service for that one number
+(`lib/server/md-snapshot.ts`, cached 60 s) and matches `cart.cart_number` to the ticket id
+for a cart, or `orders.items[].lead_id` to it for a PI, then shows SKU, brand, qty and
+amount. A ticket it cannot match, or a service that fails, falls back to Django's lines;
+a failure says so in amber and is never shown as an empty cart. **The route accepts any
+alphanumeric ticket id (6–40): store cart ids mix letters and digits, a `CT` prefix with letters and digits after it, and
+an `[A-Z]+\d+` check refused them, so every cart read "not a ticket id" and showed only its
+category until it was loosened. Checked with the real key
+on 2026-11-28 (a KAM-tab cart):** `cart_number` equals the store cart's `CT…` id, a
+10-digit number is accepted, and the two lines' rates add up to the ticket's value to the
+rupee. Brand and category are nested (`product.brand.brand_name`,
+`product.category.category_name`), and the price is `selling_price_with_tax`. A placed
+order's `bill_breakdown.line_items` gave SKU, brand, category and quantity, but its lines
+sum to the bill before the coupon, so they run a little above the order total, and it has
+no unit. **Still unseen:** an open PI that is not yet an order (the number tested had four
+placed orders and a cart). Orders reach back only about three weeks, and a customer has one
+live cart, so an older replaced cart has no lines. Needs `MD_SNAPSHOT_API_KEY` and
+`MD_CF_ACCESS_TOKEN` in the CRM's app settings (`backends.md` §Owed by Django row 22).
 
 ### Studio Space: their view (2026-11-28)
 
@@ -490,8 +507,8 @@ taken from the seeded clients.
 Same shape as Inbound and KAM, on `components/b2b/ui/lens-tiles.tsx`.
 `clientLensMatches` (`views/client-db/utils.ts`) gives both a tile's count and
 the list it opens. Tiles: All firms · Active · Inactive 2–3 months · Inactive 4–6 months ·
-Inactive 7–12 months · Over 12 months · Never ordered, then No KAM, plus Unread only when some
-firm's orders did not load. The bands are calendar months, M-0/M-1 Active through M-13+
+Inactive 7–12 months · Never ordered (which holds over 12 months since 2026-11-28), then No KAM, plus Unread only when some
+firm's orders did not load. The bands are calendar months, M-0/M-1 Active through M-12, and M-13 or older counts as Never ordered
 (`ORDER_BANDS`, `kam.md` §Account status, 2026-11-27), and `LENS_STATUS` maps each status
 tile to its band, so the tile and the list cannot disagree. Each tile's subtitle is that
 band's month range from `statusMonths`, so it reads the real months ("last order Aug–Sep 2026").

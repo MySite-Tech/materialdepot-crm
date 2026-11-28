@@ -162,9 +162,8 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       case 'active':
       case 'm2to3':
       case 'm4to6':
-      case 'm7to12':
-      case 'm12plus':  return { value: String(n), sub: `last order ${statusMonths(LENS_STATUS[k]!, today)}` };
-      case 'never':    return { value: String(n), sub: 'no order on record' };
+      case 'm7to12':   return { value: String(n), sub: `last order ${statusMonths(LENS_STATUS[k]!, today)}` };
+      case 'never':    return { value: String(n), sub: 'none in 12 months' };
       case 'unknown':  return { value: String(n), sub: futureDated ? `${futureDated} with a future order date` : 'orders did not load', warn: true };
       case 'nokam':    return { value: String(n), sub: n ? 'need an owner' : 'all owned', warn: n > 0 };
       case 'pending':  return { value: String(n), sub: 'not accepted yet' };
@@ -411,7 +410,7 @@ export default function ClientDatabase({ team, viewer }: { team: B2BTeamLoad; vi
       )}
 
       <p className="text-[10px] text-gray-400 mt-3">
-        {'Status is by calendar month, so a firm moves band only on the 1st. Active is a last order this month or last (M-0, M-1). Then Inactive 2–3 months (M-2, M-3), 4–6 months (M-4 to M-6), 7–12 months (M-7 to M-12) and over 12 months. The KAM tab uses the same rule: its Inactive 4+ months tile is the last three together.'}
+        {'Status is by calendar month, so a firm moves band only on the 1st. Active is a last order this month or last (M-0, M-1). Then Inactive 2–3 months (M-2, M-3), 4–6 months (M-4 to M-6), and 7–12 months (M-7 to M-12). A firm whose last order is older than that, or that never ordered, is Never ordered. The KAM tab uses the same rule: its Inactive 4+ months tile is 4–6 and 7–12 together.'}
       </p>
       </>)}
 

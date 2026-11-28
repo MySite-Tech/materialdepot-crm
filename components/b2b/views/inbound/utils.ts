@@ -57,6 +57,7 @@ export function lensMatches(lens: Lens, l: InboundLead, c: LeadCtx, today: strin
     case 'overdue':    return callBucket(l, c, today, 'overdue');
     case 'ready':      return inCalls(c) && withInbound(l) && closureReadiness(l, today).ready;
     case 'deals':      return c.stage !== null;
+    case 'referred':   return false;
     case 'cartOpen':   return c.stage === 'cart' && !c.updated;
     case 'piOpen':     return c.stage === 'pi' && !c.updated;
     case 'cartFollow': return c.stage === 'cart' && c.updated;

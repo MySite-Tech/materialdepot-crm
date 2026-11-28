@@ -13,6 +13,10 @@ export interface StudioReferralRow {
   value?: number;
 }
 
+const EMPTY = { name: '', phone: '', note: '', city: '', projectType: '', categories: '', book: false, ec: '', on: '', time: '', requirements: '' };
+
+const split = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
+
 const input = 'h-8 border border-gray-200 rounded-md px-2 text-[13px] bg-white text-gray-800 outline-none focus:border-gray-400';
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
@@ -27,7 +31,7 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
   const [list, setList] = useState<CrmReferral[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', note: '' });
+  const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
@@ -40,7 +44,8 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
   }, [kind, referrerId]);
 
   const phone = normalisePhone(form.phone);
-  const valid = form.name.trim() !== '' && /^[6-9]\d{9}$/.test(phone);
+  const toStudio = kind === 'client';
+  const valid = form.name.trim() !== '' && /^[6-9]\d{9}$/.test(phone) && (!form.book || /^\d{4}-\d{2}-\d{2}$/.test(form.on));
   const crmPhones = new Set((list ?? []).map((r) => r.clientPhone));
   const studioOnly = studio.filter((s) => !crmPhones.has(normalisePhone(s.phone)));
 
@@ -51,11 +56,19 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
     try {
       const { referral, studioNote } = await addReferral({
         referrerKind: kind, referrerId, referrerName, clientName: form.name.trim(), clientPhone: phone, note: form.note.trim() || undefined, createdBy: by,
+        ...(toStudio ? {
+          city: form.city.trim() || undefined, projectType: form.projectType.trim() || undefined, categories: split(form.categories),
+          visit: form.book ? { ec: form.ec.trim() || undefined, on: form.on, time: form.time.trim() || undefined, categories: split(form.categories), requirements: form.requirements.trim() || undefined } : undefined,
+        } : {}),
       });
       setList((prev) => [referral, ...(prev ?? []).filter((r) => r.id !== referral.id)]);
-      setForm({ name: '', phone: '', note: '' });
+      const booked = form.book;
+      setForm(EMPTY);
       setAdding(false);
-      setMessage(studioNote ? { tone: 'error', text: studioNote } : { tone: 'ok', text: referral.onStudio ? 'Saved, and added to this firm on Studio Space.' : 'Saved.' });
+      setMessage(studioNote ? { tone: 'error', text: studioNote }
+        : referral.onStudio ? { tone: 'ok', text: booked ? 'Saved, approved on Studio Space, and the store visit is booked there.' : 'Saved, and approved on Studio Space.' }
+          : booked ? { tone: 'error', text: 'Saved in the CRM only: this firm is not on Studio Space, so no store visit was booked.' }
+            : { tone: 'ok', text: 'Saved.' });
     } catch (e) {
       setMessage({ tone: 'error', text: e instanceof Error ? e.message : 'Could not save the referral' });
     } finally {
@@ -81,7 +94,7 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
     <SectionCard
       title="Referred clients"
       subtitle={failed ? 'Could not load' : list === null ? 'Loading…' : `${count} referred`}
-      info="When this client sends their own client to Material Depot, add them here. Their orders count as Referred."
+      info={kind === 'client' ? 'When this firm sends its own client to Material Depot, add them here. They reach Studio Space already approved, with any store visit you book, so nobody enters them twice. Their orders count as Referred.' : 'When this lead sends their own client to Material Depot, add them here. Their orders count as Referred, and they show under Carts & PIs → Referred clients.'}
       right={!adding && (
         <button onClick={() => setAdding(true)} className="text-[12px] font-medium text-[#0F766E] hover:underline">+ Add referral</button>
       )}
@@ -92,6 +105,24 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
           <input aria-label="Client name" placeholder="Client name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={`${input} w-[160px]`} />
           <input aria-label="Client mobile" placeholder="10-digit mobile" inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={`${input} w-[130px]`} />
           <input aria-label="Note" placeholder="Note (optional)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className={`${input} flex-1 min-w-[140px]`} />
+          {toStudio && (
+            <div className="basis-full flex flex-wrap items-center gap-2">
+              <input aria-label="City" placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={`${input} w-[120px]`} />
+              <input aria-label="Project type" placeholder="Project type" value={form.projectType} onChange={(e) => setForm({ ...form, projectType: e.target.value })} className={`${input} w-[140px]`} />
+              <input aria-label="Categories" placeholder="Categories, comma separated" value={form.categories} onChange={(e) => setForm({ ...form, categories: e.target.value })} className={`${input} flex-1 min-w-[180px]`} />
+              <label className="flex items-center gap-1.5 text-[12.5px] text-gray-700">
+                <input type="checkbox" checked={form.book} onChange={(e) => setForm({ ...form, book: e.target.checked })} /> Book a store visit
+              </label>
+            </div>
+          )}
+          {toStudio && form.book && (
+            <div className="basis-full flex flex-wrap items-center gap-2">
+              <input aria-label="Experience centre" placeholder="Experience centre" value={form.ec} onChange={(e) => setForm({ ...form, ec: e.target.value })} className={`${input} w-[150px]`} />
+              <input aria-label="Visit date" type="date" value={form.on} onChange={(e) => setForm({ ...form, on: e.target.value })} className={`${input} w-[140px]`} />
+              <input aria-label="Visit time" placeholder="Time (any time)" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className={`${input} w-[130px]`} />
+              <input aria-label="Requirements" placeholder="What they need" value={form.requirements} onChange={(e) => setForm({ ...form, requirements: e.target.value })} className={`${input} flex-1 min-w-[160px]`} />
+            </div>
+          )}
           <button disabled={!valid || busy} onClick={save} className="h-8 px-3 rounded-md text-[13px] font-semibold bg-gray-900 text-white disabled:opacity-40">Save</button>
           <button onClick={() => setAdding(false)} className="h-8 px-2 text-[13px] text-gray-500">Cancel</button>
         </div>

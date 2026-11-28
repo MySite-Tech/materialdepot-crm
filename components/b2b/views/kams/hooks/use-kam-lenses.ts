@@ -113,8 +113,8 @@ export function useKamLenses({ scoped, metricsFor, historyFor, dealsByPhone, ref
       case 'assigned': return { value: v, sub: unread ? `${unread} status unknown` : 'firms in scope', warn: !!unread };
       case 'active':   return { value: v, sub: unread ? `${unread} status unknown` : `ordered ${statusMonths('Active', today)}`, warn: !!unread };
       case 'lapsing':  return { value: v, sub: `last order ${statusMonths('Inactive 2–3 months', today)}` };
-      case 'inactive': return { value: v, sub: `last order ${statusMonths('Inactive 4–6 months', today)?.split('–').pop()} or earlier` };
-      case 'never':    return { value: v, sub: 'no order on record' };
+      case 'inactive': return { value: v, sub: `last order ${statusMonths('Inactive 7–12 months', today)?.split('–')[0]}–${statusMonths('Inactive 4–6 months', today)?.split('–').pop()}` };
+      case 'never':    return { value: v, sub: 'none in 12 months' };
       default:         return { value: v };
     }
   };

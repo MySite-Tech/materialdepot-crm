@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-112 entries. They live in one file because they cross-reference each other —
+114 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -16,6 +16,8 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A Supabase write error is not an `Error`, so `String(e)` said "[object Object]"
 - A booking's date must come from the sub-job, not from its assignment
 - A tab's badge must count the rows that tab lists — derive both from one function
+- A guessed id pattern refused real cart ids, and a read-only POST hit the local write guard
+- Over 12 months is Never ordered, not a status of its own
 - A lead's displayed id is not unique — only `ticketId` identifies a row
 - Availability is per CITY, and the Store Team kiosk was the one surface that did not know it
 - `AddStaffOverlay` never wrote a city
@@ -1772,4 +1774,24 @@ unstamped stage, and found no change either. The shape: a stamp decided by
 comparing against unsaved state. Both paths now stamp with `withStatusStamps`
 against the saved row (`saved.current`, `base()`). Rows already written stay
 unstamped (`docs/b2b/inbound.md` §The call log).
+
+### A guessed id pattern refused real cart ids, and a read-only POST hit the local write guard (2026-11-28)
+
+Every cart on the KAM tab still showed only its category after the Studio Space product
+lookup shipped: the amber line read "'enqId' is not a ticket id". The new route checked ids
+with `[A-Za-z]{2,4}\d+`, written from the one cart tested (an id of two letters then digits), and real ids
+mix letters and digits (a `CT` prefix with letters and digits after it). Then the local real-data guard on :8803
+answered "Blocked: local real-data mode is read-only" because the lookup is a POST, and
+the guard blocks every non-GET to Django. The shape: a validator written from one example,
+and a read that travels as a POST. The route now takes any alphanumeric id (6–40), and the
+guard (`ss-local-stack/crm-guard.mjs`, outside this repo) allows exactly
+`POST /user-cart-order-snapshot/`. Production has no guard, so only the local copy needed it.
+**Test a new route with two or three real ids, not one** (`docs/api-layer/context.md`).
+
+### Over 12 months is Never ordered, not a status of its own (2026-11-28)
+
+KAM's Inactive 4+ months list held firms with status "Inactive over 12 months" and the
+user said they belong under Never ordered. A firm whose last order is M-13 or older now
+reads Never ordered through `clientStatus`, the one rule behind Client Database, KAM, the
+Firm page and the Overview, so no tile can disagree (`docs/b2b/kam.md` §Account status).
 
