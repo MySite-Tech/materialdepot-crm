@@ -144,9 +144,11 @@ Four things worth knowing before reusing it:
   UI would offer actions the route then refuses. `permission_name` is an HR
   label (see `docs/crm-shell/context.md`) — it is used here only because it is
   what `ROLE_TABS` and `BACKDATE_DAYS` are already keyed on.
-- **The resolved caller is cached 30 s, keyed by user id + the token's tail.** So
-  a revoked or logged-out session keeps working for at most 30 s on a route that
-  is already open. Failures are never cached, and the key includes the token, so
+- **The resolved caller is cached 5 minutes, keyed by user id + the token's tail
+  (30 s until 2026-11-28; Dhruv chose load time over the shorter window).** So a
+  revoked, switched-off or logged-out session keeps working for at most 5 minutes
+  on a route that is already open. Each re-check reads the 300 KB roster (p50
+  273 ms, p99 4.3 s). Failures are never cached, and the key includes the token, so
   one user's entry can't serve another's request.
 - **Concurrent checks for one session share one roster read (2026-11-28).** A cold
   B2B tab fires several route calls at once, and each read the 300 KB roster: 10

@@ -4,7 +4,7 @@ import { roleFromPermission } from '../api/crm/roles';
 
 const API_BASE = MD_API_BASE_URL;
 
-const SESSION_TTL_MS = 30_000;
+const SESSION_TTL_MS = 300_000;
 const LAST_VERIFIED_TTL_MS = 3_600_000;
 const ROSTER_RETRY_MS = [400, 1200];
 const ROSTER_DOWN = 502;
