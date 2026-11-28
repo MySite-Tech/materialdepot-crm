@@ -11,12 +11,13 @@ const HELD_SOURCE: Partial<Record<HolderKind, string>> = {
   outreach: 'Outreach lead',
   redirect: 'Logged redirect',
   studio: 'Studio Space firm',
+  b2bOrder: 'Earlier B2B order',
 };
 
 function sourceOf(o: RevenueOrder): string {
   if (o.type === 1 || o.type === 2) return 'B2B rep on the cart';
   if (o.type === 5) return 'Studio Space referral';
-  if (o.type === 8) return 'Client Database firm, no KAM';
+  if (o.type === 8) return 'Known firm, before B2B';
   return (o.heldBy && HELD_SOURCE[o.heldBy]) || 'Number B2B holds';
 }
 

@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   if (cached && q.get('fresh') !== '1') return Response.json(cached);
 
   try {
-    const report = await buildFunnelReport(from, to, request.headers.get('authorization') ?? '');
+    const report = await buildFunnelReport(userId, from, to, request.headers.get('authorization') ?? '');
     setCache(key, report);
     return Response.json(report);
   } catch (err) {

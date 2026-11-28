@@ -133,6 +133,12 @@ split into the Overview's four channels.
   revenue reads Unknown with the reason, never ₹0. The whole period does not need it:
   the report is already windowed on the order date. The sandbox stub sends
   `orderPlacedAt` since this change; before, every day read ₹0 beside a ₹3.4L total.
+- **A store order counts for whoever held the firm on its day (2026-11-28).** A Studio
+  Space firm's KAM no longer gets its store orders from before that KAM's first
+  assignment, and a firm whose orders a B2B person had already taken credits that person
+  while they are on B2B (`overview.md` §A firm's B2B tie-up has a start date). Past
+  months moved: KAMs lost orders from before they held a firm, and the people who had
+  booked those firms' orders gained them.
 - **A cart a rep raised counts for them even when their Django name differs from the
   team list (2026-11-14).** The report matches the rep by their sign-in number
   (`overview.md` §Four revenue channels). Krishna Jadhav's ₹0 was this.

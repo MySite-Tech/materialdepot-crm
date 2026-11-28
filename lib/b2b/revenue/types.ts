@@ -15,7 +15,7 @@ export interface B2BBooking {
   shared: boolean;
 }
 
-export type HolderKind = 'redirect' | 'firm' | 'studio' | 'outreach' | 'inbound' | 'referred' | 'unowned';
+export type HolderKind = 'redirect' | 'firm' | 'studio' | 'outreach' | 'inbound' | 'b2bOrder' | 'referred' | 'unowned';
 
 export interface Holder {
   kind: HolderKind;
@@ -28,6 +28,24 @@ export interface Holder {
 }
 
 export type NumberBook = Map<string, Holder[]>;
+
+export interface FirmGroups {
+  of: Map<string, string>;
+  members: Map<string, string[]>;
+  names: Map<string, string>;
+  known: Set<string>;
+}
+
+export interface Touch {
+  day: string;
+  person: string;
+  team: B2BTeam | null;
+}
+
+export interface FirmIndex {
+  groups: FirmGroups;
+  touches: Map<string, Touch[]>;
+}
 
 export interface CrmReferralInput {
   referrer_kind: 'inbound' | 'outreach' | 'client';
@@ -125,6 +143,7 @@ export interface B2BSourceRow {
 
 export interface StudioFirm {
   firm_name: string;
+  onboarded_on?: string | null;
   phones: string[];
   orders: { phone: string | null; source: string | null }[];
   referrals: { phone: string | null; status: string | null; referred_on: string | null }[];

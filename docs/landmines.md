@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-111 entries. They live in one file because they cross-reference each other —
+112 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -122,6 +122,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - One client held two Outreach leads, so the converted one sat beside a stale Follow up
 - An explanation in a native `title` shows only after the pointer rests, and never on a click
 - Logging a call saved the drawer's unsaved stage with no stage date
+- A Studio Space firm, or a firm on an old KAM-tab row, counted every past store order as Studio EC Redirected
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1607,6 +1608,19 @@ order (`asOfOrder` in `lib/b2b/revenue/utils/classify.ts`). Earlier orders are 6
 nobody credited. **Any rule that reads who holds a record must ask who held it when the
 order was placed.** A bulk assignment rewrites history otherwise, and nothing errors:
 the figure just moves between channels (`docs/b2b/overview.md` §Four revenue channels).
+
+### A Studio Space firm, or a firm on an old KAM-tab row, counted every past store order as Studio EC Redirected (2026-11-28)
+
+The 2026-11-27 fix above dated only Client Database rows. A Studio Space number
+(`kind: 'studio'`) and an old KAM-tab row (`pipeline: 'kam'`) still had no date, so a
+firm that bought only at one store until it joined Studio Space in October read Studio EC
+Redirected from June, and its store orders were credited to today's KAM. One firm on an
+old KAM-tab row created in mid-October carried most of a KAM's August and September. The
+user noticed it as EC Direct falling month on month while Redirected held up. Now every
+firm has one start date from evidence (`docs/b2b/overview.md` §A firm's B2B tie-up has a
+start date): Studio numbers count from `onboarded_on`, old KAM rows from `created_at`, and
+a Studio firm's KAM is credited only from that KAM's first assignment. **The same shape
+again: every holder needs a date, and a holder added later without one rewrites history.**
 
 ### The Overview's client book and Client Database disagreed by a few firms per status band (2026-11-27)
 
