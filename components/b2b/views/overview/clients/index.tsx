@@ -104,8 +104,10 @@ export function ClientMovement({ head }: { head: (right: ReactNode) => ReactNode
           <h2 className="text-[13px] font-bold text-gray-800">Clients month to month</h2>
         </div>
         <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
-          A client is a Client Database firm across all its numbers, otherwise one phone number. Studio means at least one order that month
-          in Direct, Studio EC Redirected or Referred; EC means EC Direct orders only. Moves and churn look at every order with Material
+          A client is a firm across all its numbers (every Client Database, KAM, Studio Space or lead record that shares a number),
+          otherwise one phone number. Studio means at least one order that month in Direct, Studio EC Redirected or Referred; EC means
+          EC Direct orders only. Once a firm&rsquo;s B2B tie-up starts its store orders stay Studio, so Studio &rarr; EC stays empty;
+          a firm with no order for three months is churned. Moves and churn look at every order with Material
           Depot on any branch from {flow ? shortMonth(flow.historyFrom.slice(0, 7)) : 'April 2026'}, which is as far back as Django&rsquo;s order
           read goes; New and Revived also use each number&rsquo;s first-ever order date.
         </p>

@@ -368,9 +368,13 @@ Studio EC Redirected from June because the firm is on Studio Space now.
   B2B orders moved a share of EC Direct to Redirected in every month from June to
   October; dating Studio moves the other way by an amount that depends on the real
   onboarding dates, bounded on both sides with Studio counted from June and not at all.
-  Figures are in memory, not here. **After the backend deploys,** re-run the same
-  comparison and check one store-only firm that joined Studio Space late reads EC Direct
-  before its onboarding day.
+  Figures are in memory, not here.
+- **Live since 2026-11-28 (backend #46, CRM #119), checked signed in on production.** Every
+  Studio Space firm's `onboarded_on` falls in September to November, so June to August
+  count no Studio evidence at all. The live month reports equalled the pre-deploy run;
+  Direct was unchanged in every month; a store-only firm onboarded in mid-October read EC
+  Direct before that day and Redirected after; trend, Clients (Studio → EC zero every
+  month), funnel and EC SPoCs answered 200, and no B2B Sales tab logged a console error.
 
 ## A teammate's ticket does not take the lead owner's order (2026-11-17)
 
