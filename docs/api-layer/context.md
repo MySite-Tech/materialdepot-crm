@@ -287,6 +287,21 @@ unknown status such as `Payment Pending` is ignored, so the filter falls away an
 read returns every row. Measured on 28 Nov with a signed-in token: 7,785 open tickets
 since 11 Oct, 8 pages, about 0.7 s and 710 KB a page.
 
+`lib/server/md-snapshot.ts` (`POST /api/b2b/ticket-skus`, 2026-11-28) is the one server
+read of Material Depot's **snapshot service** (`POST /user-cart-order-snapshot/`), the only
+place a cart's product lines exist, since `/crm/leads/?include=boq` gives a cart none. It
+authenticates with a server-only key, not the caller's token: `X-Api-Key:
+MD_SNAPSHOT_API_KEY`, plus `x-cf-access: MD_CF_ACCESS_TOKEN` so Cloudflare lets a datacentre
+through (Studio Space's `lib/data/snapshot.ts` does the same). In production both come from
+Key Vault references in the app settings (secret `b2b-crm-md-snapshot-api-key`); never a
+`NEXT_PUBLIC_` name, which would ship the key to the browser. One request per number, only
+when a Cart or PI is opened (never on mount, never in a loop), cached 60 s per number. It
+throws on any failure, so the route answers 502 and the card says so; "no lines" is only a
+call that ran and matched nothing. Called once with the real key on 2026-11-28:
+`cart_number` is the store's `CT…` id. Whether an open PI (not yet an order) carries
+`bill_breakdown.line_items` is still unseen (`b2b/client-db.md` §A cart or PI on the
+Orders tab).
+
 ### There is no scheduled route in this app, and no platform cron to run one
 
 Worth knowing before someone adds one: this app deploys to **Azure Static Web

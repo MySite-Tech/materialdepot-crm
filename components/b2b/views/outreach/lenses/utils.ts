@@ -70,6 +70,7 @@ export function lensMatches(lens: WorkLens, r: LensRow, ctx: LensCtx): boolean {
     case 'piOpen': return c.stage === 'pi' && !c.updated;
     case 'cartFollow': return c.stage === 'cart' && c.updated;
     case 'piFollow': return c.stage === 'pi' && c.updated;
+    case 'referred': return false;
     case 'action': return r.reminders.some((x) => x.level !== 'todo');
     case 'inbox': return intakePending(l);
     case 'handoff': return HANDOFF_STATES.includes(handoverState(l, ctx.nowMs));

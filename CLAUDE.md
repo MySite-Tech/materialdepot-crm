@@ -734,7 +734,36 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
-**START HERE for KAM and the firm page (2026-11-28, fourth round, latest): CRM PR #114
+**START HERE (2026-11-28, fifth round, latest): cart and PI product lines, referred clients,
+and over 12 months = Never ordered. CRM PR `cart-skus-referred-clients` with b2b-backend PR
+`studio-referral-detail` (no migration), merged and deployed on Dhruv's ask.** Start new work
+from `origin/main`. Read the named doc section before touching any of it:
+- **Cart and PI SKUs are live in code** (`POST /api/b2b/ticket-skus`,
+  `lib/server/md-snapshot.ts`, `docs/b2b/client-db.md` §A cart or PI on the Orders tab opens in
+  full). It asks Material Depot's snapshot service per number when a Cart or PI opens. Checked
+  with the real key locally on two real carts: `cart_number` is the store's `CT…` id and the lines
+  add up to the ticket value. **Needs `MD_SNAPSHOT_API_KEY` and `MD_CF_ACCESS_TOKEN` in the
+  Azure app settings** as Key Vault references (secret `b2b-crm-md-snapshot-api-key`); only the
+  tech team can add them. Until then a cart reads an amber "could not be read" with Django's
+  lines. **Open PIs not yet an order are unseen** (`docs/backends.md` row 22). The card is
+  compact and shows only fields with a value.
+- **Locally the lookup needs the write guard to allow it.** `ss-local-stack/crm-guard.mjs`
+  (outside this repo) blocks every Django POST, so it now allows exactly
+  `POST /user-cart-order-snapshot/` (`docs/landmines.md`). Restart it after editing.
+- **Over 12 months is Never ordered (the user's decision).** No "Inactive over 12 months"
+  status, tile or lens key; KAM's Inactive 4+ months is 4–6 and 7–12 only (`docs/b2b/kam.md`
+  §Account status).
+- **Referred clients is a tile after PI follow up on Inbound and Outreach** (their own leads'
+  referrals, KAM's stage rule), and **KAM's referred rows open "Studio Space details"**: the
+  referral, each booked store visit with the store's check, and orders, from new
+  `GET /b2b/studio-referrals` (`docs/b2b/kam.md` §Referred clients). **The firm's referral card
+  now takes city, project type, categories and a store visit**, written to Studio Space approved
+  and as a `visit_request` (`docs/b2b/studio-space.md` §Referral details and a booked visit).
+  Seen on a local test database only; the real Studio data exists only on production, so
+  **after deploy, open a referred client's Studio Space details signed in and compare it with
+  Studio's own Needs attention row.**
+
+**START HERE for KAM and the firm page (2026-11-28, fourth round): CRM PR #114
 (`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
 work from `origin/main`. **Checked signed in on production the same day (read-only, as
 Dhruv):** all 18 KAM tiles equal their lists (Carts & PIs 97 tickets, 74 carts + 23 PIs);

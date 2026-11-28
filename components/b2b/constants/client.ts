@@ -76,9 +76,9 @@ export const ORDER_BANDS: { status: ClientStatus; upTo: number }[] = [
   { status: 'Inactive 7–12 months', upTo: 12 },
 ];
 
-export const CLIENT_STATUS_ORDER: ClientStatus[] = ['Active', 'Inactive 2–3 months', 'Inactive 4–6 months', 'Inactive 7–12 months', 'Inactive over 12 months', 'Never ordered', 'Unknown'];
+export const CLIENT_STATUS_ORDER: ClientStatus[] = ['Active', 'Inactive 2–3 months', 'Inactive 4–6 months', 'Inactive 7–12 months', 'Never ordered', 'Unknown'];
 
-export const LONG_INACTIVE: ClientStatus[] = ['Inactive 4–6 months', 'Inactive 7–12 months', 'Inactive over 12 months'];
+export const LONG_INACTIVE: ClientStatus[] = ['Inactive 4–6 months', 'Inactive 7–12 months'];
 
 export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {
   colors: {
@@ -86,7 +86,6 @@ export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, s
     'Inactive 2–3 months': '#F59E0B',
     'Inactive 4–6 months': '#9CA3AF',
     'Inactive 7–12 months': '#6B7280',
-    'Inactive over 12 months': '#374151',
     'Never ordered': '#D1D5DB',
     Unknown: '#3B82F6',
   },
@@ -95,8 +94,7 @@ export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, s
     'Inactive 2–3 months': 'Last order two or three calendar months back (M-2 or M-3)',
     'Inactive 4–6 months': 'Last order four to six calendar months back (M-4 to M-6)',
     'Inactive 7–12 months': 'Last order seven to twelve calendar months back (M-7 to M-12)',
-    'Inactive over 12 months': 'Last order more than twelve calendar months back',
-    'Never ordered': 'No order on record for any of the firm’s numbers',
+    'Never ordered': 'No order in the last twelve calendar months, or none on record for any of the firm’s numbers',
     Unknown: 'Order dates could not be read, or the last order date is after today',
   },
 };

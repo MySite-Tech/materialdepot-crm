@@ -252,7 +252,7 @@ still gives every tile its count and its rows.
 | Group (head) | Sub-tabs | Rule |
 |---|---|---|
 | Calls | First call · Due today · Overdue · Needs a decision | leads in the call phase: open, not sent to Outreach, **no open cart or PI** |
-| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | leads that are not Lost or Invalid (open, Closed or sent to Outreach) with an open cart or PI on any of their numbers |
+| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up · **Referred clients** (2026-11-28) | leads that are not Lost or Invalid (open, Closed or sent to Outreach) with an open cart or PI on any of their numbers |
 | Outcomes | Sent to Outreach · Closed · Lost · Invalid | where leads ended up |
 
 Arrived today, Upcoming, No follow-up date, Needs enrichment and All leads stay as

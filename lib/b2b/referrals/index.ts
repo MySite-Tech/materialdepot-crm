@@ -36,10 +36,14 @@ export function fetchReferrals(): Promise<CrmReferral[]> {
 
 export async function addReferral(input: {
   referrerKind: ReferrerKind; referrerId: string; referrerName?: string; clientName: string; clientPhone: string; note?: string; createdBy?: string;
+  city?: string; email?: string; projectType?: string; categories?: string[];
+  visit?: { ec?: string; on: string; time?: string; categories?: string[]; requirements?: string };
 }): Promise<{ referral: CrmReferral; studioNote: string | null }> {
   const row = await b2bBackendPost<ReferralRow>('/referrals', {
     referrer_kind: input.referrerKind, referrer_id: input.referrerId, referrer_name: input.referrerName,
     client_name: input.clientName, client_phone: input.clientPhone, note: input.note, created_by: input.createdBy,
+    city: input.city, email: input.email, project_type: input.projectType, categories: input.categories ?? [],
+    visit: input.visit && { ec_name: input.visit.ec, scheduled_on: input.visit.on, scheduled_time: input.visit.time || 'any time', categories: input.visit.categories ?? [], requirements: input.visit.requirements },
   });
   cached = null;
   return { referral: toReferral(row), studioNote: row.studio_note ?? null };

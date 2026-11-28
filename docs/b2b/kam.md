@@ -189,6 +189,23 @@ one extra request (`/referrals`, cached 60 s), not one per client.
 - Search reaches the referred client's name and number. Segment and Source filter by
   the referring firm. The row opens the firm on its Referrals tab.
 
+**Studio Space details on every referred client (2026-11-28, the user: a Studio Space
+visit showed far more than the CRM row).** A "Studio Space details" link on each row opens
+everything Studio holds on that number: the referral (email, city, project, budget,
+categories, notes, status), each booked store visit (centre, date, time, categories,
+requirements, waiting / BM assigned / visited / cancelled, the store's check and note) and
+the orders it filed. It reads one route, `GET /b2b/studio-referrals?phones=` (b2b-backend,
+read-only, 50 numbers, cached 60 s in the browser), only when a row is opened.
+A number no studio refers reads "Studio Space has no referral on this number", not an error.
+
+**Referred clients is also a tile on Inbound and Outreach (2026-11-28).** It sits after PI
+follow up in Carts & PIs and lists the clients referred from that user's own leads
+(`referrerKind` `inbound` / `outreach`, `hooks/use-referred-clients.ts`,
+`ui/referred-clients-table.tsx`). The stage rule is KAM's (`referralStage`). The tile costs
+the cached `/referrals` read plus one `b2b-bulk` for the referred numbers, so a page with
+no referrals adds no history read. Lead-side referrals never reach Studio Space (a lead is
+not a studio), so their rows have no Studio link.
+
 ### Filters (2026-11-28)
 
 Search, KAM (managers only), Segment and Source sit in the shared filter bar
@@ -283,6 +300,17 @@ until the history lands. Order lookups and auto-advance still run after it.
   side is still owed (`backends.md` §Owed by Django row 15).
 
 ### Account status: calendar months since the last order, every firm (2026-11-27)
+
+**Over 12 months is Never ordered (2026-11-28, the user's decision).** A firm whose last
+order is M-13 or older reads **Never ordered**, the same as one with no order at all.
+There is no "Inactive over 12 months" status, Client Database tile or lens key
+(`m12plus`) any more; KAM's Inactive 4+ months tile is Inactive 4–6 and 7–12 together,
+subtitle "last order Nov 2025–Jul 2026". It sits in `clientStatus` because the rule is
+one for Client Database, KAM, the Firm page and the Overview. The Never ordered tiles
+now read "none in 12 months", and their count grew by the firms that were over 12
+(60 on 27 Nov, production). The sections below that say "over 12" describe the
+rule before this change. Checked through the compiled `rules/status.ts` on 28 Nov: 31 Oct
+2025 and 4 Jun 2025 are Never ordered, 30 Nov 2025 is 7–12.
 
 **Bands count calendar months, not days (2026-11-27, the user's ask).** With M-0 the
 current IST month and M-1 the one before, `clientStatus` takes the month of the

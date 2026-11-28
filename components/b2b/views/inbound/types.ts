@@ -6,7 +6,7 @@ export type View = 'list' | 'board';
 
 export type Lens =
   | 'today' | 'new' | 'due' | 'overdue' | 'ready'
-  | 'deals' | 'cartOpen' | 'piOpen' | 'cartFollow' | 'piFollow'
+  | 'deals' | 'cartOpen' | 'piOpen' | 'cartFollow' | 'piFollow' | 'referred'
   | 'results' | 'sent' | 'closed' | 'lost' | 'invalid'
   | 'arrived' | 'upcoming' | 'undated' | 'all' | 'gaps';
 

@@ -19,7 +19,7 @@ export type SaveLead = (before: OutreachLead | null, after: OutreachLead) => Pro
 
 export type WorkLens =
   | 'work' | 'meetings' | 'overdue' | 'due' | 'book'
-  | 'deals' | 'cartOpen' | 'piOpen' | 'cartFollow' | 'piFollow'
+  | 'deals' | 'cartOpen' | 'piOpen' | 'cartFollow' | 'piFollow' | 'referred'
   | 'other' | 'inbox' | 'handoff' | 'won' | 'lost'
   | 'action' | 'all' | 'yet' | 'fu' | 'quote' | 'pi'
   | 'signoff' | 'signed';

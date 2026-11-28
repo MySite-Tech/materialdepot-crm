@@ -15,6 +15,8 @@ import { Assignments } from './intake';
 import { outreachPills, outreachTiles } from './lenses';
 import { LensPills, LensTiles } from '../../ui/lens-tiles';
 import { useOpenDeals } from '../../hooks/use-open-deals';
+import { useReferredClients } from '../../hooks/use-referred-clients';
+import { ReferredClientsTable } from '../../ui/referred-clients-table';
 import { outreachPhones } from '@/lib/b2b';
 import { OutreachBoard } from './lists/board';
 import { columnsFor } from './lists/columns';
@@ -88,6 +90,8 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const phoneKey = useMemo(() => [...new Set(scoped.flatMap(outreachPhones))].sort().join(','), [scoped]);
   const deals = useOpenDeals(phoneKey, !isKamView && !data.loading && !data.loadFailed);
   const dealsByPhone = deals.status === 'ready' ? deals.byPhone : null;
+  const referredLabels = useMemo(() => new Map(scoped.map((l) => [l.id, l.company || l.contactPerson || l.phone || l.id])), [scoped]);
+  const referred = useReferredClients('outreach', referredLabels, dealsByPhone, !isKamView && !data.loading && !data.loadFailed);
   const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, isKam: isKamView, today, nowMs, waitlist: waitIdx, dealsByPhone });
 
   const validLens = lens in lenses.lists;
@@ -143,11 +147,21 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const state = loading ? 'loading' : data.loadFailed ? 'failed' : 'ready';
   const customIncomplete = periodKey === 'custom' && !rangeFor('custom', today, custom);
   const periodName = allTime || f.search.trim() ? 'any time' : fmtRange(period);
+  const waitingOnReferred = referred.rows.filter((r) => r.stage === 'none').length;
   const tiles = useMemo(() => outreachTiles({
     groups: lenses.groups, lists: lenses.lists, today, pool, unassigned: unassigned.length,
     leadsState: loading ? 'pending' : data.loadFailed ? 'failed' : null,
     dealsState: deals.status === 'ready' ? null : deals.status,
-  }), [lenses.groups, lenses.lists, today, pool, unassigned.length, loading, data.loadFailed, deals.status]);
+  }).map((g) => ({
+    ...g,
+    tiles: g.tiles.map((t) => t.key !== 'referred' ? t : {
+      ...t,
+      ...(referred.status === 'failed' ? { value: 'Unknown', sub: 'referrals did not load', warn: true }
+        : referred.status === 'pending' ? { value: '…', sub: 'loading' }
+          : { value: String(referred.rows.length), sub: waitingOnReferred ? `${waitingOnReferred} not at an EC yet` : referred.rows.length ? 'from your leads' : 'none yet', warn: waitingOnReferred > 0 }),
+      muted: referred.status === 'ready' && referred.rows.length === 0,
+    }),
+  })), [lenses.groups, lenses.lists, today, pool, unassigned.length, loading, data.loadFailed, deals.status, referred.status, referred.rows, waitingOnReferred]);
   const pills = useMemo(() => outreachPills(lenses.lists, state !== 'ready'), [lenses.lists, state]);
   const pickPeriod = (key: string) => {
     if (key === 'custom' && !rangeFor('custom', today, custom)) setCustom({ from: period.from, to: period.to > today ? today : period.to });
@@ -226,6 +240,8 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
           </div>
         ) : view === 'board' ? (
           <OutreachBoard leads={pipelineLeads} today={today} onOpen={setSelectedId} onMove={requestMove} />
+        ) : lens === 'referred' ? (
+          <ReferredClientsTable state={referred} today={today} referrerLabel="Referred by lead" onOpenReferrer={setSelectedId} />
         ) : lens === 'inbox' ? (
           <Assignments leads={filtered} allLeads={data.leads} pool={pool} unassigned={unassigned} scope={scope} today={today}
             save={data.save} saveMany={data.saveMany} createMany={data.createMany} onOpen={setSelectedId} />

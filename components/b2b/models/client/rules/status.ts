@@ -30,7 +30,7 @@ export function clientStatus(m: ClientOrderMetrics, today: string = istToday()):
   const months = monthsSinceLastOrder(m, today);
   if (months === undefined) return 'Never ordered';
   if (months < 0) return 'Unknown';
-  return ORDER_BANDS.find((b) => months <= b.upTo)?.status ?? 'Inactive over 12 months';
+  return ORDER_BANDS.find((b) => months <= b.upTo)?.status ?? 'Never ordered';
 }
 
 export function lastOrderInFuture(m: ClientOrderMetrics, today: string = istToday()): boolean {
@@ -48,14 +48,13 @@ export function daysToLapse(m: ClientOrderMetrics, today: string = istToday()): 
 
 export function nextStatus(status: ClientStatus): ClientStatus | undefined {
   const i = ORDER_BANDS.findIndex((b) => b.status === status);
-  return i < 0 ? undefined : ORDER_BANDS[i + 1]?.status ?? 'Inactive over 12 months';
+  return i < 0 ? undefined : ORDER_BANDS[i + 1]?.status ?? 'Never ordered';
 }
 
 export function statusMonths(status: ClientStatus, today: string = istToday()): string | undefined {
   const now = monthIndex(today);
   const i = ORDER_BANDS.findIndex((b) => b.status === status);
   if (now === undefined) return undefined;
-  if (status === 'Inactive over 12 months') return `before ${monthLabel(now - ORDER_BANDS[ORDER_BANDS.length - 1].upTo, true)}`;
   if (i < 0) return undefined;
   const newest = now - (i === 0 ? 0 : ORDER_BANDS[i - 1].upTo + 1);
   const oldest = now - ORDER_BANDS[i].upTo;

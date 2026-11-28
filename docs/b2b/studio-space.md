@@ -175,6 +175,15 @@ the referral is also written to the studio's `referral` (source `client`, approv
 removing it expires that row; if another studio already refers the number it stays in
 the CRM only and the card says so. Revenue counts these as Referred (`overview.md`
 §Four revenue channels). One request when a drawer opens, cached 60 s.
+**Referral details and a booked visit (2026-11-28).** The firm's Referred clients card
+also takes city, project type, categories and an optional **store visit** (centre, date,
+time, requirements). A firm linked to a studio writes all of it to Studio's `referral`
+(approved at once) and creates a `visit_request` (status requested), so nobody enters it
+twice and Material Depot's Needs attention list shows it. The user's reason: the approval
+step on a Studio referral was only there to stop outside risk, and a B2B-team referral
+carries none. A firm not on Studio Space saves in the CRM only, and the card says no visit
+was booked. A repeat save with a visit books another visit. Reading goes the other way:
+`GET /b2b/studio-referrals` (`docs/b2b/kam.md` §Referred clients). No migration.
 
 Tested over HTTP on a migrated copy of the local Studio Space test database: a KAM's
 login created and later deactivated, a Studio-only login joining the CRM team, a CRM

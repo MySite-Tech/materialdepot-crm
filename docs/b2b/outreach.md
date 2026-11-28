@@ -655,7 +655,7 @@ tile its count and its rows, and `outreachTiles` builds the shared `LensTiles`.
 | Group (head) | Tiles | Rule |
 |---|---|---|
 | Calls & meetings | Meetings today · Overdue · Due today · No meeting booked | open status, accepted (not waiting for sign-off) and **no open cart or PI** |
-| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | not Lost and not waiting for sign-off, with an open cart or PI on any of its numbers, or status PI shared |
+| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up · **Referred clients** (2026-11-28) | not Lost and not waiting for sign-off, with an open cart or PI on any of its numbers, or status PI shared |
 | Sign-offs & outcomes | Waiting for sign-off · Handover pending · Converted · Lost | the union of the four |
 
 - **Calls & meetings tiles never overlap.** A lead goes to the first that fits:

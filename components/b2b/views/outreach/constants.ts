@@ -1,6 +1,7 @@
 'use client';
 
 import { OUTREACH_STATUS_COLORS, OUTREACH_STATUS_HINT, OutreachStatus } from '../../models/outreach';
+import { REFERRED_LENS } from '../../constants/referral';
 import { HANDOVER_TAT_HOURS } from '../../models/outreach/handover';
 import { LensGroup, OutreachFilters, RangeKey, WorkLens } from './types';
 
@@ -23,6 +24,7 @@ export const LENS: Record<WorkLens, { title: string; rule: string; accent: strin
   piOpen:     { title: 'PI open', rule: 'An open PI (or status PI shared) and no call or held meeting logged since.', accent: '#9333EA' },
   cartFollow: { title: 'Carts follow up', rule: 'An open cart the BM has called or met about since it was raised. Sorted by next follow-up, overdue first.', accent: '#6366F1' },
   piFollow:   { title: 'PI follow up', rule: 'An open PI the BM has called or met about since. Sorted by next follow-up, overdue first.', accent: '#A855F7' },
+  referred:   { ...REFERRED_LENS },
   other:      { title: 'Sign-offs & outcomes', rule: 'Everything outside calls, meetings and carts: assignments waiting for a BM, KAM handovers, and leads converted or lost in the period.', accent: '#16A34A' },
   inbox:      { title: 'Waiting for sign-off', rule: 'Leads an admin assigned to a BM, from Inbound or any other source, waiting for that BM to accept or reject. The note counts the leads nobody has been assigned yet: the Inbound pool plus the unassigned pool.', accent: '#0EA5E9' },
   handoff:    { title: 'Handover pending', rule: `Converted leads whose KAM handover is not sent, rejected, or unsigned after ${HANDOVER_TAT_HOURS}h.`, accent: '#16A34A' },
@@ -44,7 +46,7 @@ export const TILE_LABEL: Partial<Record<WorkLens, string>> = {
 
 export const REP_GROUPS: LensGroup[] = [
   { title: 'Calls & meetings', head: 'work', lenses: ['meetings', 'overdue', 'due', 'book'] },
-  { title: 'Carts & PIs', head: 'deals', lenses: ['cartOpen', 'piOpen', 'cartFollow', 'piFollow'] },
+  { title: 'Carts & PIs', head: 'deals', lenses: ['cartOpen', 'piOpen', 'cartFollow', 'piFollow', 'referred'] },
   { title: 'Sign-offs & outcomes', head: 'other', lenses: ['inbox', 'handoff', 'won', 'lost'] },
 ];
 
