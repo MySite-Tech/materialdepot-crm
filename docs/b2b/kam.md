@@ -386,7 +386,7 @@ KAM and Client Database, and its own segment on the Overview strip. Checked at e
 drives the "Lapses in" column and the pill's "Nd left".
 
 Everything KAM reads it: the tab's tiles, the Firm page opened from KAM (through
-`statusScale`), and the B2B Overview's KAM desk and Needs attention list (`overview.md`). Those
+`statusScale`), and the B2B Overview's Needs attention list (`overview.md`). Those
 now treat at-risk as **Inactive 1 month with no
 follow-up or an overdue one**, counted in days to 60. It also feeds the
 Leadership Board's KAM coverage denominator (`leadership.md`). The old At risk

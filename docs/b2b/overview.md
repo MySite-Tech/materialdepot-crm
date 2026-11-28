@@ -176,6 +176,16 @@ the month-to-month table (`clients/movement/`) below it.
 - **Where new revenue came from** is each joining firm's largest source of B orders
   (`orderSource`): EC B2B referral, Referred client, the holder (KAM firm, Inbound lead,
   Outreach lead, Studio Space firm, logged redirect), else the B2B team on the cart.
+- **Every tile goes somewhere (2026-11-28, the user's ask).** Revenue scrolls to the
+  bridge and Average order to Month by month. Firms ordering, Retention, Churned and
+  Joined since filter the firm table to exactly the firms they count and scroll to it;
+  a second click clears it. Each count and its list read the same predicate
+  (`FIRM_SETS` in `journey/utils.ts`), so a tile and its list cannot drift. Churned and
+  Retention count a firm by orders, the same as the retention grid, not by value.
+- **Layout (2026-11-28).** Month by month sits beside Retention (both run across the five
+  months), and new-revenue sources beside categories, so paired cards are of similar
+  height. The bridge has dashed connectors and room above its tallest bar for the label
+  (`docs/landmines.md`).
 - **Retention** is the share of a month's firms (for the lens) ordering in each later
   month, by firms or by revenue. Churn on the tiles is 1 − retention from A to B. This
   is month-to-month, not the 3-empty-month churn of the table below.
@@ -537,8 +547,8 @@ search per firm number, 15 Django calls of 2–15 s), and `readBase` awaited all
 before anything rendered. Now `useOverviewData` resolves from the bulk match only
 (`resolveKamOrders(…, lookup = false)`), paints, and runs the per-order fallback in the
 background, then repaints. Until it finishes, an order it is still checking shows at
-its logged value and the KAM desk's "has not matched a deal ticket" note stays hidden
-(`unresolvedOrders: null`), so the note never shows a count that is about to drop. The
+its logged value. (The KAM desk's "has not matched a deal ticket" note that waited on
+it went with the KAM desk on 2026-11-28.) The
 request count is unchanged; only the wait moved. Checked on the sandbox with the bulk
 deals stripped and each lookup delayed 8 s: the page painted at 5 s and the KAM
 revenue filled in when the lookups landed. A Refresh mid-lookup drops the older run's
@@ -667,14 +677,11 @@ three teams that do not share stages.
    new clients by month (the last 6), and one attention list with two tabs:
    Going inactive (`k.atRisk`) and Escalations (`health.attention`). Each shows
    6 rows and links to Client Database.
-5. **KAM desk.** `kamAccountSplit` and `callCompliance` merged into one row per
-   KAM (`kamDeskRows`): firms, active, open orders, pipeline, revenue, calls
-   today and overdue follow-ups.
 
 Explanations moved off the page into the ⓘ tooltips (`Hint`). Notices stay as
 amber lines, because a failed read must never pass for a zero.
 
-**Dropped on purpose; don't re-add them as panels:** Orders on the B2B branch (its period and basis toggles, status tiles and Open carts drawer) and the "How this ties to Orders on the B2B branch" table, both removed by the user on 2026-11-03, Where It Came From (the Django vertical donut, replaced by the channels), Target
+**Dropped on purpose; don't re-add them as panels:** the KAM desk (one row per KAM: firms, active, open orders, pipeline, revenue, calls today, overdue; removed by the user on 2026-11-28), Orders on the B2B branch (its period and basis toggles, status tiles and Open carts drawer) and the "How this ties to Orders on the B2B branch" table, both removed by the user on 2026-11-03, Where It Came From (the Django vertical donut, replaced by the channels), Target
 Achieved and Run Rate (now in the hero), Pipeline by Stage, Pipeline by Vertical, the KAM §6
 pipeline tiles, Target vs Revenue and Total Revenue Split. The last two used the
 typed Supabase values, a third revenue number that agrees with neither Django

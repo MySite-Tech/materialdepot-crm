@@ -37,7 +37,7 @@ export function Bridge({ journey, focus, onFocus }: { journey: Journey; focus: F
   return (
     <div className="overflow-x-auto">
       <div className="flex items-stretch gap-1.5 min-w-[720px]">
-        {cols.map((c) => {
+        {cols.map((c, i) => {
           const active = focus?.kind === 'bridge' && c.focus?.kind === 'bridge' && focus.key === c.focus.key;
           const dim = focus?.kind === 'bridge' && !active;
           const hi = Math.max(c.from, c.to);
@@ -51,8 +51,11 @@ export function Bridge({ journey, focus, onFocus }: { journey: Journey; focus: F
               onClick={() => c.focus && onFocus(active ? null : c.focus)}
               className={`flex-1 min-w-0 flex flex-col items-stretch rounded-lg px-1 pt-1 pb-2 text-left transition ${clickable ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'} ${active ? 'bg-gray-100 ring-1 ring-gray-300' : ''} ${dim ? 'opacity-40' : ''}`}
             >
-              <div className="relative h-[180px]">
+              <div className="relative h-[180px] mt-5">
                 <div className="absolute inset-x-0 border-b border-gray-200" style={{ top: '100%' }} />
+                {i < cols.length - 1 && (
+                  <div className="absolute border-t border-dashed border-gray-300" style={{ top: `${y(c.to)}%`, left: '82%', right: 'calc(-18% - 14px)' }} />
+                )}
                 <div
                   className="absolute left-[18%] right-[18%] rounded-[4px]"
                   style={{ top: `${y(hi)}%`, height: `max(2px, ${y(lo) - y(hi)}%)`, background: c.color }}

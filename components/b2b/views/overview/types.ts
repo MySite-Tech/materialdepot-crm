@@ -15,7 +15,6 @@ export interface BaseData {
   health: HealthOverview<ClientEntity>;
   failed: B2BData['failed'];
   clientCount: number;
-  unresolvedOrders: number | null;
   targetStore: TargetStore;
   targetsOk: boolean;
 }
@@ -29,19 +28,6 @@ export interface MonthPace {
   perDayNeeded: number;
   daysLeft: number;
   monthLabel: string;
-}
-
-export interface KamDeskRow {
-  kam: string;
-  clients: number;
-  active: number;
-  unknown: number;
-  openOrders: number;
-  pipeline: number;
-  revenue: number;
-  logged: number;
-  callTarget: number;
-  overdue: number;
 }
 
 export interface MonthState {

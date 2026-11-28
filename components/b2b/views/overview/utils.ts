@@ -1,7 +1,6 @@
 'use client';
 
-import type { KamDashboard } from '../../models/analytics';
-import { KamDeskRow, MonthPace } from './types';
+import { MonthPace } from './types';
 
 export function monthPace(revenue: number, target: number, now: Date): MonthPace {
   const day = now.getDate();
@@ -18,29 +17,6 @@ export function monthPace(revenue: number, target: number, now: Date): MonthPace
     daysLeft,
     monthLabel: now.toLocaleString('en-IN', { month: 'long' }),
   };
-}
-
-export function kamDeskRows(k: KamDashboard): KamDeskRow[] {
-  const calls = new Map(k.compliance.map((c) => [c.kam, c]));
-  const names = [...new Set([...k.spocSplit.map((s) => s.kam), ...k.compliance.map((c) => c.kam)])];
-  return names
-    .map((kam) => {
-      const s = k.spocSplit.find((r) => r.kam === kam);
-      const c = calls.get(kam);
-      return {
-        kam,
-        clients: s?.clients ?? 0,
-        active: s?.active ?? 0,
-        unknown: s?.unknown ?? 0,
-        openOrders: s?.openOrders ?? 0,
-        pipeline: s?.pipeline ?? 0,
-        revenue: s?.revenue ?? 0,
-        logged: c?.logged ?? 0,
-        callTarget: c?.target ?? 0,
-        overdue: c?.overdueFollowUps ?? 0,
-      };
-    })
-    .sort((a, b) => b.pipeline + b.revenue - (a.pipeline + a.revenue));
 }
 
 export const pctOf = (n: number, d: number): number => (d > 0 ? Math.round((n / d) * 100) : 0);

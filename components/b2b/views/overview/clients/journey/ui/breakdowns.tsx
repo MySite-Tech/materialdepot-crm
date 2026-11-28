@@ -38,7 +38,7 @@ export function CategoryShift({ journey, focus, onFocus }: { journey: Journey; f
             <th className="py-1.5 pr-2 font-semibold text-right">{a}</th>
             <th className="py-1.5 pr-2 font-semibold text-right">{b}</th>
             <th className="py-1.5 pr-2 font-semibold text-right">Change</th>
-            <th className="py-1.5 w-[30%]" />
+            <th className="py-1.5 w-[22%] min-w-[80px]" />
           </tr>
         </thead>
         <tbody>
@@ -53,9 +53,9 @@ export function CategoryShift({ journey, focus, onFocus }: { journey: Journey; f
                 className={`border-b border-gray-50 cursor-pointer ${active ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
               >
                 <td className="py-1.5 pr-2 font-medium text-gray-800">{c.name}</td>
-                <td className="py-1.5 pr-2 text-right tabular-nums text-gray-600">{fmtL(c.a)}<span className="text-gray-400 text-[10px]"> · {c.firmsA}</span></td>
-                <td className="py-1.5 pr-2 text-right tabular-nums text-gray-600">{fmtL(c.b)}<span className="text-gray-400 text-[10px]"> · {c.firmsB}</span></td>
-                <td className={`py-1.5 pr-2 text-right tabular-nums font-semibold ${d < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{signedL(d)}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums text-gray-600 whitespace-nowrap">{fmtL(c.a)}<span className="text-gray-400 text-[10px]"> · {c.firmsA}</span></td>
+                <td className="py-1.5 pr-2 text-right tabular-nums text-gray-600 whitespace-nowrap">{fmtL(c.b)}<span className="text-gray-400 text-[10px]"> · {c.firmsB}</span></td>
+                <td className={`py-1.5 pr-2 text-right tabular-nums font-semibold whitespace-nowrap ${d < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{signedL(d)}</td>
                 <td className="py-1.5">
                   <div className="relative h-4">
                     <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-200" />
