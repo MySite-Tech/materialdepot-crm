@@ -3,16 +3,16 @@ import type { ClientOrderHistoryRow } from '../api/crm/leads';
 import { dealIsOrder } from '../../components/b2b/models/client';
 import { rowToEcVisit } from '../b2b/ec-visits/utils';
 import type { EcVisitRow } from '../b2b/ec-visits/types';
-import { buildNumberBook, buildRepTeams, clientDbFirms, clientDbGroups, phoneOf } from '../b2b/revenue/utils/book';
+import { buildNumberBook, buildRepTeams, clientDbFirms, clientGroups, firmGroups, phoneOf } from '../b2b/revenue/utils/book';
 import { clientFlow, flowPhones } from '../b2b/revenue/clients';
 import type { ClientFlowReport, MonthDigest } from '../b2b/revenue/clients';
 import { funnelBucketOf } from '../b2b/revenue/utils/funnel';
-import { classifyOrder } from '../b2b/revenue/utils/classify';
+import { buildTouches, classifyOrder } from '../b2b/revenue/utils/classify';
 import { monthWindows } from '../b2b/revenue/utils/months';
 import { istToday } from '../b2b/stats/pipeline';
 import { channelSplits } from '../b2b/revenue/utils/rollup';
 import { B2B_BOOKING, B2B_BRANCH, CHURN_GAP, FLOW_LOOKBACK, FLOW_MONTHS, FUNNEL_PAGES, ORDER_HISTORY_FROM, PAST_MONTH_KEEP, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
-import type { B2BSourceRow, BookedOn, CrmReferralInput, EcSpocReport, EcSpocSeen, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
+import type { B2BSourceRow, BookedOn, CrmReferralInput, EcSpocReport, EcSpocSeen, FirmIndex, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm, Touch } from '../b2b/revenue/types';
 import { getCached, setCache } from './cache';
 import { b2bBackendFetch } from './b2b-backend';
 import { readMembers } from './b2b-team';
@@ -24,19 +24,21 @@ const MAX_PAGES = 8;
 const PARALLEL_PAGES = 8;
 const TREND_PARALLEL = 3;
 const FRESH_ENOUGH = 60_000;
+const TOUCH_TTL = 5 * 60_000;
 
 interface OrdersPage {
   results: OrderInput[];
   totalPages: number;
 }
 
-async function ordersPage(query: string, page: number, auth: string): Promise<OrdersPage> {
+async function ordersPage(query: string, page: number, auth: string, retry = true): Promise<OrdersPage> {
   const res = await fetch(`${MD_API_BASE_URL}/crm/leads/?${query}&page_size=${PAGE_SIZE}&page=${page}`, {
     headers: { Authorization: auth },
     cache: 'no-store',
   });
   const body = await res.json().catch(() => null) as { data?: OrdersPage } | OrdersPage | null;
   const data = (body && 'data' in body ? body.data : body) as OrdersPage | null | undefined;
+  if (res.status >= 500 && retry) return ordersPage(query, page, auth, false);
   if (!res.ok || !Array.isArray(data?.results)) throw new Error(`Orders could not be read (${res.status})`);
   return data;
 }
@@ -64,10 +66,11 @@ async function readHolders(auth: string) {
     staffDirectory(auth).catch(() => []),
     b2bBackendFetch<{ referrals: CrmReferralInput[] }>('/referrals').then((r) => r.referrals).catch(() => null),
   ]);
+  const groups = firmGroups(rows, studio);
   return {
-    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit), referrals ?? []),
+    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit), referrals ?? [], groups),
     clientDb: clientDbFirms(rows),
-    groups: clientDbGroups(rows),
+    groups,
     reps: buildRepTeams(team?.members ?? [], staff),
     studioOk: !!studio,
     redirectsOk: !!redirects,
@@ -97,28 +100,91 @@ interface BuiltMonth {
   digest: MonthDigest;
 }
 
-async function buildMonth(from: string, to: string, auth: string, holders?: Promise<Holders>): Promise<BuiltMonth> {
+interface RawWindow {
+  placed: OrderInput[];
+  on: [string, BookedOn][];
+  truncated: boolean;
+  readAt: number;
+}
+
+const rawInflight = new Map<string, Promise<RawWindow>>();
+
+async function readWindow(from: string, to: string, auth: string): Promise<RawWindow> {
   const window = (f: string, t: string) => `order_from=${f}&order_to=${t}&branch_basis=estimate`;
-  const idOf = (o: OrderInput) => o.id;
-  const [all, booked, { book, reps, studioOk, redirectsOk, teamOk }] = await Promise.all([
-    allOrders(window(from, to), auth),
-    readBooked(from, to, window, idOf, auth),
+  const [all, booked] = await Promise.all([allOrders(window(from, to), auth), readBooked(from, to, window, (o) => o.id, auth)]);
+  const unique = new Map([...all.orders, ...booked.orders].map((o) => [o.id, o]));
+  return {
+    placed: [...unique.values()].filter((o) => dealIsOrder(o.status)),
+    on: [...booked.on],
+    truncated: all.truncated || booked.truncated,
+    readAt: Date.now(),
+  };
+}
+
+function rawWindow(userId: string, from: string, to: string, auth: string, maxAge: number): Promise<RawWindow> {
+  const key = `b2b-raw:${userId}:${from}:${to}`;
+  const cached = getCached(key) as RawWindow | null;
+  if (cached && Date.now() - cached.readAt <= maxAge) return Promise.resolve(cached);
+  let read = rawInflight.get(key);
+  if (!read) {
+    read = readWindow(from, to, auth)
+      .then((r) => { setCache(key, r, PAST_MONTH_KEEP); return r; })
+      .finally(() => rawInflight.delete(key));
+    rawInflight.set(key, read);
+  }
+  return read;
+}
+
+const isPast = (to: string) => to.slice(0, 7) < istToday().slice(0, 7);
+
+const historyWindows = () => monthWindows(new Date(), FLOW_MONTHS + FLOW_LOOKBACK).reverse().filter((w) => w.key >= ORDER_HISTORY_FROM);
+
+const touchInflight = new Map<string, Promise<Map<string, Touch[]>>>();
+
+function touchIndex(userId: string, auth: string, holders: Holders): Promise<Map<string, Touch[]>> {
+  const key = `b2b-touches:${userId}`;
+  const cached = getCached(key) as Map<string, Touch[]> | null;
+  if (cached) return Promise.resolve(cached);
+  let build = touchInflight.get(key);
+  if (!build) {
+    build = (async () => {
+      const windows = historyWindows();
+      const raws: RawWindow[] = [];
+      for (let start = 0; start < windows.length; start += TREND_PARALLEL) {
+        raws.push(...await Promise.all(windows.slice(start, start + TREND_PARALLEL)
+          .map((w) => rawWindow(userId, w.from, w.to, auth, isPast(w.to) ? PAST_MONTH_KEEP : TOUCH_TTL))));
+      }
+      const touches = buildTouches(raws.flatMap((r) => r.placed), holders.reps, holders.groups);
+      setCache(key, touches, TOUCH_TTL);
+      return touches;
+    })().finally(() => touchInflight.delete(key));
+    touchInflight.set(key, build);
+  }
+  return build;
+}
+
+async function firmIndex(userId: string, auth: string, holders: Holders): Promise<FirmIndex> {
+  return { groups: holders.groups, touches: await touchIndex(userId, auth, holders) };
+}
+
+async function buildMonth(userId: string, from: string, to: string, auth: string, holders?: Promise<Holders>): Promise<BuiltMonth> {
+  const [raw, h] = await Promise.all([
+    rawWindow(userId, from, to, auth, isPast(to) ? PAST_MONTH_TTL : 0),
     holders ?? readHolders(auth),
   ]);
-
-  const unique = new Map([...all.orders, ...booked.orders].map((o) => [o.id, o]));
-  const placed = [...unique.values()].filter((o) => dealIsOrder(o.status));
-  const orders = placed
-    .map((o) => classifyOrder(o, booked.on.get(o.id) ?? 'store', book, reps))
+  const firms = await firmIndex(userId, auth, h);
+  const on = new Map(raw.on);
+  const orders = raw.placed
+    .map((o) => classifyOrder(o, on.get(o.id) ?? 'store', h.book, h.reps, firms))
     .filter((o): o is RevenueOrder => !!o);
-  const truncated = all.truncated || booked.truncated;
+  const { truncated } = raw;
   const generatedAt = new Date().toISOString();
 
   return {
-    report: { from, to, orders, truncated, studioOk, redirectsOk, teamOk, generatedAt },
+    report: { from, to, orders, truncated, studioOk: h.studioOk, redirectsOk: h.redirectsOk, teamOk: h.teamOk, generatedAt },
     digest: {
       key: from.slice(0, 7),
-      buyers: [...new Set(placed.map((o) => phoneOf(o.clientPhone)).filter(Boolean))],
+      buyers: [...new Set(raw.placed.map((o) => phoneOf(o.clientPhone)).filter(Boolean))],
       orders: orders.map((o) => ({ phone: o.phone, channel: o.channel, value: o.value, name: o.firm || o.client })),
       truncated,
       generatedAt,
@@ -141,7 +207,7 @@ function cachedMonth<T extends { generatedAt: string }>(
   const rebuild = () => {
     let build = inflight.get(keys.report);
     if (!build) {
-      build = buildMonth(from, to, auth, holders?.())
+      build = buildMonth(userId, from, to, auth, holders?.())
         .then((m) => { setCache(keys.digest, m.digest, ttl); return m; })
         .finally(() => inflight.delete(keys.report));
       inflight.set(keys.report, build);
@@ -187,8 +253,7 @@ async function firstOrderDates(phones: string[], auth: string): Promise<{ firsts
 }
 
 async function buildClientFlow(userId: string, auth: string, fresh: boolean): Promise<ClientFlowReport> {
-  const all = monthWindows(new Date(), FLOW_MONTHS + FLOW_LOOKBACK).reverse();
-  const windows = all.filter((w) => w.key >= ORDER_HISTORY_FROM);
+  const windows = historyWindows();
   const current = windows[windows.length - 1].key;
   const holders = readHolders(auth);
   const digests: MonthDigest[] = [];
@@ -199,10 +264,11 @@ async function buildClientFlow(userId: string, auth: string, fresh: boolean): Pr
   }
   const { groups, studioOk, redirectsOk, teamOk } = await holders;
   const analysedCount = Math.min(FLOW_MONTHS, Math.max(0, windows.length - CHURN_GAP));
-  const { firsts, ok } = await firstOrderDates(flowPhones(digests, groups, analysedCount), auth);
+  const flowGroups = clientGroups(groups);
+  const { firsts, ok } = await firstOrderDates(flowPhones(digests, flowGroups, analysedCount), auth);
   const analysed = windows.slice(-analysedCount);
   return {
-    months: clientFlow(digests, groups, analysedCount, firsts).map((m, i) => ({ ...m, label: analysed[i].label, partial: analysed[i].key === current })),
+    months: clientFlow(digests, flowGroups, analysedCount, firsts).map((m, i) => ({ ...m, label: analysed[i].label, partial: analysed[i].key === current })),
     historyFrom: windows[0].from,
     historyOk: ok,
     studioOk,
@@ -267,14 +333,16 @@ export async function buildEcSpocs(userId: string, auth: string): Promise<EcSpoc
   return { from: windows[windows.length - 1].from, to: windows[0].to, spocs, generatedAt: new Date().toISOString() };
 }
 
-export async function buildFunnelReport(from: string, to: string, auth: string): Promise<FunnelReport> {
+export async function buildFunnelReport(userId: string, from: string, to: string, auth: string): Promise<FunnelReport> {
   const window = (f: string, t: string) => `created_from=${f}&created_to=${t}`;
   const rowKey = (o: OrderInput) => String(o.ticketId ?? o.id);
-  const [all, booked, { book, reps, clientDb, studioOk, redirectsOk, teamOk }] = await Promise.all([
+  const [all, booked, holders] = await Promise.all([
     allOrders(window(from, to), auth, FUNNEL_PAGES),
     readBooked(from, to, window, rowKey, auth, FUNNEL_PAGES),
     readHolders(auth),
   ]);
+  const { book, reps, clientDb, studioOk, redirectsOk, teamOk } = holders;
+  const firms = await firmIndex(userId, auth, holders);
 
   const unique = new Map([...all.orders, ...booked.orders].map((o) => [rowKey(o), o]));
   const enquiries: FunnelEnquiry[] = [];
@@ -282,7 +350,7 @@ export async function buildFunnelReport(from: string, to: string, auth: string):
   for (const o of unique.values()) {
     const firm = clientDb.get(phoneOf(o.clientPhone));
     if (firm === undefined) continue;
-    const classified = classifyOrder(o, booked.on.get(rowKey(o)) ?? 'store', book, reps);
+    const classified = classifyOrder(o, booked.on.get(rowKey(o)) ?? 'store', book, reps, firms);
     const funnel = classified && funnelBucketOf(classified);
     if (!classified || !funnel) referredSkipped += 1;
     else enquiries.push({ ...classified, firm: firm || classified.firm, funnel });

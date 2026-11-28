@@ -13,7 +13,7 @@ date and branch basis, `basisApplied`) are in `data-layer.md`.
 |---|---|---|
 | `fetchB2BData`, `fetchTargets` | B2B backend, through the 8 s B2B cache | On open (`readInputs`) |
 | `fetchB2BBulk`, `resolveKamOrders` | Django `/crm/leads/b2b-bulk/`; a KAM order the bulk read does not match falls back to one `/crm/leads/?enquiry_ids=` and per-number `q=` reads (`lookupEnqId`, at most 60 orders) | On open. The page paints from the bulk match and runs the fallback after (below) |
-| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; on Revenue analysis, one per month of the last six plus any month picked there. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request |
+| `fetchRevenueReport` | `GET /api/b2b/revenue?from&to` | One per month picked; on Revenue analysis, one per month of the last six plus any month picked there. Server cache per caller, 5 minutes for the current month and 30 for past ones. Refresh bypasses it, for that read only: a month picked after Refresh uses the cache (before 2026-11-05 every later pick bypassed it, about 4 s each). Carries each order's whole ticket, so the drill-down below costs no request. Classifying needs every B2B person's order since April 2026, read once per caller and cached (§A firm's B2B tie-up has a start date) |
 | `fetchRevenueTrend` | `GET /api/b2b/revenue/trend` | On open. The last six months' channel totals, built from the same per-month reports and cache, three months at a time (two until 2026-11-06). No orders in the response |
 | `fetchEnquiryItems` | Django `/crm/leads/?enquiry_ids&include=boq` | Only when one enquiry is expanded, once per enquiry (`client-db.md` §One enquiry) |
 | `fetchClientFlow` | `GET /api/b2b/revenue/clients` | Only on the Clients sub-tab. One month digest per month since April 2026 (built with, and cached beside, each month's revenue report) plus `client-order-history` for first-order dates, 280 numbers a call. The whole answer is cached 5 minutes per caller; Refresh rebuilds only the current month |
@@ -86,8 +86,9 @@ Client Database firms move to Outreach and then to a KAM. The Clients sub-tab
 five months, how many clients ordered and where each came from. The user's
 definitions, 2026-11-28:
 
-- **A client** is a Client Database firm across all its numbers (`clientDbGroups`),
-  otherwise one phone number. **Studio** that month means at least one Direct, Studio
+- **A client** is a firm across all its numbers: every record sharing a number
+  (`firmGroups`, since 2026-11-28; before, Client Database rows only), otherwise one
+  phone number. **Studio** that month means at least one Direct, Studio
   EC Redirected or Referred order; **EC** means EC Direct only.
 - **New:** no order with Material Depot, on any branch, in the 12 months before,
   which includes a first-ever order. **Revived:** an order after 3 or more empty
@@ -117,8 +118,8 @@ definitions, 2026-11-28:
   all firms given a KAM on 9 and 17 Nov, ordering at stores under that KAM. After
   deploy (PR #106) the live route returned the same figures month by month. Its first
   cold call got a Django 500 on one month's page read and Retry worked in 4 s (the other
-  months were cached); add a retry on a 5xx page in `allOrders` if users hit it. The
-  screen itself ran on the sandbox only.
+  months were cached); a 5xx page is now retried once (2026-11-28). The screen itself
+  ran on the sandbox only.
 
 ## Four revenue channels (redefined 2026-11-03, Direct narrowed 2026-11-28)
 
@@ -129,9 +130,9 @@ sheet), and the type decides the channel (`lib/b2b/revenue/utils/classify.ts`):
 |---|---|---|
 | 1 | Someone on the B2B team that day, booked on the B2B branch | **Direct** |
 | 2 | Someone on the B2B team that day, booked at a store | **Studio EC Redirected** |
-| 4 | A store rep, wherever booked, on a number B2B holds | **Studio EC Redirected** |
+| 4 | A store rep, wherever booked, for a firm whose B2B tie-up had started that day | **Studio EC Redirected** |
 | 5 | A referred client's number | **Referred** |
-| 8 | A store rep, wherever booked, for a Client Database firm with no KAM | **EC Direct** |
+| 8 | A store rep, wherever booked, for a firm B2B knows (Client Database, KAM row or Studio Space), before its tie-up started | **EC Direct** |
 | — | A store rep, on a number no B2B record holds | not B2B revenue |
 
 - **Direct is a B2B person's order on the B2B branch, not everything on branch 70
@@ -175,8 +176,8 @@ sheet), and the type decides the channel (`lib/b2b/revenue/utils/classify.ts`):
 - **Type 8 is the Client Database's firms with no KAM**, including the
   client_master import. Many of those designers bought at stores before anyone at
   B2B knew them, and the user wants that volume visible as EC Direct. A firm is
-  matched by any of its numbers with no date gate, so its whole history counts,
-  up to the day it gets a KAM (next bullet).
+  matched by any of its numbers, and its orders count as EC Direct up to the day its
+  B2B tie-up starts (§A firm's B2B tie-up has a start date).
   An order placed under a number the firm record does not hold (a site supervisor,
   the end client) is missed: there is no GST or name match.
 - **A KAM holds a firm from its first KAM assignment, not for its whole history
@@ -205,8 +206,8 @@ sheet), and the type decides the channel (`lib/b2b/revenue/utils/classify.ts`):
   `store: B2B`, because the row's `branch` is the rep's home branch **today**: a KAM who
   became a store manager had every past order filed under the new store
   (`docs/landmines.md`). After their last day their orders are store orders like anyone's.
-- **The first match decides the type:** referred, then a B2B rep, then a number B2B
-  holds, then a firm with no KAM, then the B2B branch.
+- **The first match decides the type:** referred, then a B2B rep, then a holder on the
+  order's day, then an earlier B2B order for the firm, then a known firm (EC Direct).
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is
   1–2, EC referred 4, EC direct 8.
 - **`branch=HQ` on `/crm/leads/` has not been seen answering from real Django.**
@@ -238,7 +239,8 @@ Direct (above). The figures stay out of this public repo.
   never aliased. `placedBy` and `person` both carry the team name. The list is the same
   call `requireCaller` makes, and a failed read falls back to names only.
 - **A lead or redirect counts only for carts raised on or after its date,** so a
-  store customer who later became a lead is not claimed. Firms have no such gate.
+  store customer who later became a lead is not claimed. Firms are dated too since
+  2026-11-28.
 - **The hero is at least the Orders section's Won, and the EC's own revenue overlaps it.**
   Studio EC Redirected, EC Direct and Referred are also in the stores' numbers. The hero is B2B's
   influence, measured against a target that `kpi-definitions.md` says counts EC,
@@ -255,7 +257,7 @@ Direct (above). The figures stay out of this public repo.
 - **Referred reads `GET /b2b/studio-access` `firms[]`, not `/sync/pull-numbers`.**
   A firm's `referrals` are its client numbers, `phones` its own, and `orders` adds any
   number Studio attributed an order to, which covers the linked numbers it does not
-  list. An order-only number has no date, so it skips the date gate. `/sync/*` was the
+  list. An order-only number takes its firm's Studio Space date. `/sync/*` was the
   first choice and Cloudflare answers it 403 from outside a browser, while `/b2b/*`
   passes. b2b-backend #19 added the fields `/sync/pull-numbers` lacked and is now
   unused here. A failed read shows Unknown, never ₹0.
@@ -318,6 +320,57 @@ because they hold the firm. **Not checked:** whether Django
 scopes this read for a non-admin token, and `/api/b2b/revenue` itself against real
 data. Only the classifier ran on real rows; the route ran on the sandbox and answered
 401 without a session. Check the route first once it is deployed or running on :3001.
+
+## A firm's B2B tie-up has a start date (2026-11-28)
+
+The user, 28 Nov: what a firm is today must not decide its July orders. Their two cases:
+a Studio Space firm whose orders B2B people were booking in June, so its later store
+orders are B2B work, and a firm that bought only at one store until Outreach brought it
+in at the end of October, so its earlier orders are EC Direct. Before this, both read
+Studio EC Redirected from June because the firm is on Studio Space now.
+
+- **A firm is every record that shares a number** (`firmGroups` in `book.ts`): Client
+  Database rows, old KAM-tab rows, Studio Space firms, Inbound and Outreach leads. Each
+  record's holder is put on every number of its firm (`holdFirm`), so an order on any
+  of a firm's numbers sees the whole firm. On production on 28 Nov the largest firm had
+  17 numbers and no team member's number sat on any record, so nothing over-merged.
+- **The tie-up starts on the earliest of:** a B2B person's order on any of its numbers
+  (`buildTouches`, every placed order since April 2026 whose rep was on B2B that day),
+  its first KAM assignment (`kamSince`), an old KAM-tab row's `created_at`, an Inbound or
+  Outreach lead or SPoC, a logged redirect, or its Studio Space `onboarded_on` (from
+  `/studio-access`, b2b-backend PR `studio-access-onboarded-on`).
+- **Before it, a store rep's order is EC Direct** if the firm holds a firm record
+  (Client Database, KAM row or Studio Space, `groups.known`), and not B2B otherwise.
+  **From it, Studio EC Redirected.** A B2B person's own order is Direct or type 2, as before.
+- **The tie-up never lapses (the user's call).** A firm that stops ordering for three
+  months is churned on the Clients sub-tab; its channel does not go back to EC Direct.
+  So Clients' Studio → EC row is empty by design.
+- **Credit follows the order's day.** A Studio firm's KAM is credited only from that KAM's
+  first assignment; before that the Studio number counts as Redirected with nobody, and
+  until 28 Nov it carried today's KAM on every past order. When the only evidence is an
+  earlier B2B order, the person who took the latest one is credited if they were still on
+  B2B on this order's day, otherwise nobody. Individual figures moved accordingly: KAMs
+  lost store orders placed before they held a firm, and the people who had booked those
+  firms' orders gained them.
+- **Limits the user accepted:** Django's orders start in April 2026, so a tie-up seen only
+  in older orders is missed. `onboarded_on` defaults to the day a partner row was
+  inserted, so a backfilled firm may carry that day. **Until the backend PR deploys,
+  `onboarded_on` is absent and a Studio number counts from the start, as before;** deploy
+  the backend first.
+- **Cost.** Classifying any month needs every B2B person's order since April. Each
+  month's placed orders are read once per caller and cached (`b2b-raw:`, past months
+  24 hours), and the B2B-order index is cached 5 minutes (`b2b-touches:`). A cold first
+  load reads about eight months before its headline; after that, past months come from
+  cache. A Django 5xx on a page is retried once (`ordersPage`).
+- **Checked on production orders on 28 Nov** in a signed-in tab through the compiled
+  bundle, against the live route: Direct identical in every month; totals up by under 2%
+  (single numbers a B2B person had sold to, whose later store orders now count); earlier
+  B2B orders moved a share of EC Direct to Redirected in every month from June to
+  October; dating Studio moves the other way by an amount that depends on the real
+  onboarding dates, bounded on both sides with Studio counted from June and not at all.
+  Figures are in memory, not here. **After the backend deploys,** re-run the same
+  comparison and check one store-only firm that joined Studio Space late reads EC Direct
+  before its onboarding day.
 
 ## A teammate's ticket does not take the lead owner's order (2026-11-17)
 

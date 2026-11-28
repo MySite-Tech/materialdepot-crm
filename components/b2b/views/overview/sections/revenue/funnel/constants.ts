@@ -4,12 +4,12 @@ export const FUNNEL_META: Record<FunnelBucket, { label: string; color: string; r
   ecDirect: {
     label: 'EC direct',
     color: '#6B7280',
-    rule: 'A store rep on the cart. No KAM on the firm, and no Inbound or Outreach lead or logged SPoC on its numbers.',
+    rule: 'A store rep on the cart, before the firm\'s B2B tie-up started: no B2B person had taken one of its orders, and it had no KAM, Inbound or Outreach lead or SPoC, logged redirect or Studio Space onboarding yet.',
   },
   ecReferred: {
     label: 'EC referred',
     color: '#DB2777',
-    rule: 'A store rep on the cart, and B2B is on the firm: a KAM, an Inbound or Outreach lead or logged SPoC from before the cart, a Studio Space number, or a logged redirect to an EC.',
+    rule: 'A store rep on the cart, after the firm\'s B2B tie-up started: a B2B person had taken one of its orders, or it had a KAM, an Inbound or Outreach lead or SPoC, a logged redirect or Studio Space onboarding by then.',
   },
   studio: {
     label: 'Studio direct',

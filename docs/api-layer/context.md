@@ -104,6 +104,18 @@ digest does not cache the full report: the Clients tab reads every month since A
 2026, and keeping each lapsed month's full report (a few hundred KB) per manager is
 what the split avoids. The Clients answer itself is cached 5 minutes per caller.
 
+Since 2026-11-28 a month build classifies from a cached **raw read** (`rawWindow`,
+`b2b-raw:<caller>:<from>:<to>`: the placed orders and which were booked on the B2B
+branch), and every build also needs the **B2B-order index** (`touchIndex`,
+`b2b-touches:<caller>`, 5 minutes): every placed order since April 2026 whose rep was on
+B2B that day, which dates each firm's B2B tie-up (`docs/b2b/overview.md` §A firm's B2B
+tie-up has a start date). Both are single-flight. Past months' raw reads are kept 24 hours
+and re-read after 30 minutes when a past report rebuilds; the current month is re-read on
+every rebuild. So the first build per caller reads every month since April, three at a
+time, before it can answer. Keys stay per caller because Django scopes rows to the token.
+`ordersPage` retries a 5xx once: the first cold read after a deploy got one on
+2026-11-28.
+
 `lib/server/b2b-client-import/` reuses the report's `allOrders` pager, so the two
 read `/crm/leads/` the same way. It caches 12 months of orders under one global key
 for 30 minutes, not one per caller, because the read is company-wide and takes up to

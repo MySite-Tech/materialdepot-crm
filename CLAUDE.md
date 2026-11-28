@@ -734,6 +734,22 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
+**START HERE for B2B revenue channels (2026-11-28, latest): a firm's B2B tie-up has a
+start date. CRM branch `b2b-since-evidence` with b2b-backend branch
+`studio-access-onboarded-on` (no migration). Open, not merged; the tech team merges, and
+the backend deploys first.** The user: a firm's label today must not decide its July
+orders. Every firm (all records sharing a number) starts its tie-up on the earliest of a
+B2B person's order on any of its numbers (from April 2026), its first KAM assignment, an
+old KAM-tab row's date, a lead, SPoC or redirect, or its Studio Space `onboarded_on`.
+Store orders before it are EC Direct, after it Studio EC Redirected, and it never lapses
+(churn is three months with no order, on Clients). It changes Overview (all three
+sub-tabs and the funnel), Leadership and Outreach's KPIs, which all read one classifier.
+Leads, Inbound and KAM show per-record order totals and needed no change. Read
+`docs/b2b/overview.md` §A firm's B2B tie-up has a start date before touching it.
+Checked on production orders in a signed-in tab (Direct unchanged every month); the Studio
+part waits for the backend. **After deploy,** re-run that comparison and check a store-only
+firm that joined Studio Space late reads EC Direct before its onboarding day.
+
 **START HERE for KAM and the firm page (2026-11-28, fourth round, latest): CRM PR #114
 (`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
 work from `origin/main`. **Checked signed in on production the same day (read-only, as

@@ -14,7 +14,7 @@ export const DIM_META: Record<DimKey, { label: string; hint: string }> = {
   },
   source: {
     label: 'How B2B holds it',
-    hint: 'Why the order counts as B2B: a B2B rep on the cart, a KAM firm, an Inbound or Outreach lead, a logged redirect, a Studio Space firm or referral, or a Client Database firm with no KAM.',
+    hint: 'Why the order counts as B2B: a B2B rep on the cart, a KAM firm, an Inbound or Outreach lead, a logged redirect, a Studio Space firm or referral, an earlier B2B order for the firm, or a known firm before its B2B tie-up started.',
   },
   branch: {
     label: 'Branch',

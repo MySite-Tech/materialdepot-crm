@@ -2,7 +2,7 @@ import { B2B_ROSTER } from '../../../../components/b2b/models/roster';
 import { HOLDER_RANK } from '../constants';
 import type { B2BTeam, TeamMember } from '../../team/types';
 import type { ClientGroup } from '../clients/types';
-import type { B2BRepEntry, B2BSourceRow, CrmReferralInput, Holder, HolderKind, NumberBook, RedirectInput, RepSpan, RepTeams, StudioFirm } from '../types';
+import type { B2BRepEntry, B2BSourceRow, CrmReferralInput, FirmGroups, Holder, HolderKind, NumberBook, RedirectInput, RepSpan, RepTeams, StudioFirm } from '../types';
 
 export const phoneOf = (raw: unknown): string => {
   const digits = String(raw ?? '').replace(/\D/g, '').slice(-10);
@@ -120,19 +120,6 @@ export function clientDbFirms(rows: B2BSourceRow[]): Map<string, string> {
   return out;
 }
 
-export function clientDbGroups(rows: B2BSourceRow[]): Map<string, ClientGroup> {
-  const out = new Map<string, ClientGroup>();
-  for (const row of rows) {
-    if (row.pipeline !== 'client') continue;
-    const meta = row.meta_data ?? {};
-    const phones = contactNumbers(meta).map(phoneOf).filter(Boolean);
-    if (!phones.length) continue;
-    const group = { key: `f:${row.id ?? phones[0]}`, name: text(meta.company) || text(meta.firm_name) };
-    for (const phone of phones) if (!out.has(phone)) out.set(phone, group);
-  }
-  return out;
-}
-
 function kamFrom(owner: string, assignments: unknown): string {
   const list = (Array.isArray(assignments) ? assignments as { kam?: unknown; at?: unknown; status?: unknown }[] : [])
     .filter((a) => text(a.at))
@@ -161,45 +148,107 @@ function holderOf(row: B2BSourceRow): Holder | null {
       ? { kind: 'firm', team: 'kam', owner, firm, since: '', kamFrom: kamFrom(owner, meta.assignments), kamSince: kamSince(meta.assignments) }
       : { kind: 'unowned', team: null, owner: '', firm, since: '' };
   }
-  if (row.pipeline === 'kam') return { kind: 'firm', team: 'kam', owner, firm, since: '' };
+  if (row.pipeline === 'kam') return { kind: 'firm', team: 'kam', owner, firm, since: day(row.created_at) };
   if (row.pipeline === 'outbound') return { kind: 'outreach', team: 'outreach', owner, firm, since: day(row.created_at) };
   if (row.pipeline === 'inbound' && row.stage !== 'Invalid') return { kind: 'inbound', team: 'inbound', owner, firm, since: day(row.created_at) };
   return null;
 }
 
-const firmHolderOf = (book: NumberBook, phone: string): Holder | undefined =>
-  (book.get(phone) ?? []).find((h) => h.kind === 'firm');
+const NAME_RANK: Record<string, number> = { client: 0, studio: 1, kam: 2, outbound: 3, inbound: 4 };
+
+const FIRM_KINDS = new Set(['client', 'kam', 'studio']);
+
+export function firmGroups(rows: B2BSourceRow[], studio: StudioFirm[] | null): FirmGroups {
+  const parent = new Map<string, string>();
+  const find = (p: string): string => {
+    let root = p;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    parent.set(p, root);
+    return root;
+  };
+  const records: { kind: string; name: string; phones: string[] }[] = [
+    ...rows.filter((r) => holderOf(r)).map((r) => ({
+      kind: r.pipeline,
+      name: text(r.meta_data?.company) || text(r.meta_data?.firm_name),
+      phones: contactNumbers(r.meta_data ?? {}).map(phoneOf).filter(Boolean),
+    })),
+    ...(studio ?? []).map((f) => ({ kind: 'studio', name: text(f.firm_name), phones: f.phones.map(phoneOf).filter(Boolean) })),
+  ];
+  for (const r of records) {
+    for (const p of r.phones) if (!parent.has(p)) parent.set(p, p);
+    for (const p of r.phones.slice(1)) {
+      const [a, b] = [find(r.phones[0]), find(p)];
+      if (a !== b) parent.set(b, a);
+    }
+  }
+  const of = new Map<string, string>();
+  const members = new Map<string, string[]>();
+  for (const p of parent.keys()) {
+    const key = `g:${find(p)}`;
+    of.set(p, key);
+    members.set(key, [...(members.get(key) ?? []), p]);
+  }
+  const names = new Map<string, string>();
+  const rank = new Map<string, number>();
+  const known = new Set<string>();
+  for (const r of records) {
+    const key = r.phones.length ? of.get(r.phones[0])! : '';
+    if (!key) continue;
+    if (FIRM_KINDS.has(r.kind)) known.add(key);
+    const at = NAME_RANK[r.kind] ?? 9;
+    if (r.name && at < (rank.get(key) ?? Infinity)) {
+      names.set(key, r.name);
+      rank.set(key, at);
+    }
+  }
+  return { of, members, names, known };
+}
+
+export const firmKey = (groups: FirmGroups, phone: string): string => groups.of.get(phone) ?? `n:${phone}`;
+
+export function clientGroups(groups: FirmGroups): Map<string, ClientGroup> {
+  return new Map([...groups.of].map(([phone, key]) => [phone, { key, name: groups.names.get(key) ?? '' }]));
+}
 
 const REFERRER_PIPELINE = { inbound: 'inbound', outreach: 'outbound', client: 'client' } as const;
 const REFERRER_TEAM = { inbound: 'inbound', outreach: 'outreach', client: 'kam' } as const;
 const LIVE_STUDIO_REFERRAL = new Set(['approved', 'active', 'dormant']);
 
-export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[], referrals: CrmReferralInput[] = []): NumberBook {
+export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | null, redirects: RedirectInput[], referrals: CrmReferralInput[], groups: FirmGroups): NumberBook {
   const book: NumberBook = new Map();
   const hold = (raw: unknown, holder: Holder) => {
     const phone = phoneOf(raw);
-    if (phone) book.set(phone, [...(book.get(phone) ?? []), holder]);
+    if (!phone) return;
+    const held = book.get(phone) ?? [];
+    if (!held.includes(holder)) book.set(phone, [...held, holder]);
+  };
+  const holdFirm = (numbers: unknown[], holder: Holder) => {
+    const phones = new Set(numbers.map(phoneOf).filter(Boolean).flatMap((p) => groups.members.get(firmKey(groups, p)) ?? [p]));
+    for (const p of phones) hold(p, holder);
   };
 
   for (const row of rows) {
     const holder = holderOf(row);
     if (!holder) continue;
     const held = row.pipeline === 'client' ? [holder, ...spocHolders(row, holder.firm)] : [holder];
-    for (const n of contactNumbers(row.meta_data ?? {})) for (const h of held) hold(n, h);
+    for (const h of held) holdFirm(contactNumbers(row.meta_data ?? {}), h);
   }
 
   for (const f of studio ?? []) {
-    const firm = f.phones.map((p) => firmHolderOf(book, phoneOf(p))).find(Boolean);
+    const firms = f.phones.flatMap((p) => book.get(phoneOf(p)) ?? []).filter((h) => h.kind === 'firm');
+    const firm = firms.find((h) => h.kamSince !== undefined) ?? firms[0];
     const owned = { team: 'kam' as const, owner: firm?.owner ?? '', firm: f.firm_name };
-    const ownNumber: Holder = { kind: 'studio', ...owned, since: '' };
+    const ownNumber: Holder = { kind: 'studio', ...owned, since: day(f.onboarded_on), kamSince: firm?.kamSince ?? firm?.since };
     const referredNumber: Holder = { kind: 'referred', ...owned, since: '' };
-    for (const p of f.phones) hold(p, ownNumber);
+    holdFirm(f.phones, ownNumber);
     for (const r of f.referrals) {
       if (LIVE_STUDIO_REFERRAL.has(r.status ?? '')) hold(r.phone, { ...referredNumber, since: day(r.referred_on ?? '') });
     }
     const listed = new Set(f.referrals.map((r) => phoneOf(r.phone)));
     for (const o of f.orders) {
-      if (!listed.has(phoneOf(o.phone))) hold(o.phone, o.source === 'client' ? referredNumber : ownNumber);
+      if (listed.has(phoneOf(o.phone))) continue;
+      if (o.source === 'client') hold(o.phone, referredNumber);
+      else holdFirm([o.phone], ownNumber);
     }
   }
 
@@ -214,8 +263,7 @@ export function buildNumberBook(rows: B2BSourceRow[], studio: StudioFirm[] | nul
   }
 
   for (const r of redirects) {
-    const holder: Holder = { kind: 'redirect', team: r.sourceTeam ?? null, owner: repName(r.scheduledBy), firm: r.firm, since: day(r.createdAt) };
-    for (const p of r.phones) hold(p, holder);
+    holdFirm(r.phones, { kind: 'redirect', team: r.sourceTeam ?? null, owner: repName(r.scheduledBy), firm: r.firm, since: day(r.createdAt) });
   }
 
   for (const held of book.values()) held.sort((a, b) => HOLDER_RANK[a.kind] - HOLDER_RANK[b.kind]);

@@ -46,7 +46,8 @@ export const HOLDER_RANK: Record<HolderKind, number> = {
   studio: 3,
   outreach: 4,
   inbound: 5,
-  unowned: 6,
+  b2bOrder: 6,
+  unowned: 7,
 };
 
 export const FUNNEL_BUCKETS: FunnelBucket[] = ['ecDirect', 'ecReferred', 'studio'];
