@@ -186,6 +186,10 @@ the month-to-month table (`clients/movement/`) below it.
   months), and new-revenue sources beside categories, so paired cards are of similar
   height. The bridge has dashed connectors and room above its tallest bar for the label
   (`docs/landmines.md`).
+- **Checked signed in on production after deploy (PR #127, `1ff4075`, read-only):** the KAM
+  desk is gone from Overview; on Jul → Nov every bridge label sits inside its box, no two
+  flow-chart labels overlap, and each of the four list tiles' counts equals the firm
+  table's "of N" when clicked. No page errors.
 - **Retention** is the share of a month's firms (for the lens) ordering in each later
   month, by firms or by revenue. Churn on the tiles is 1 − retention from A to B. This
   is month-to-month, not the 3-empty-month churn of the table below.

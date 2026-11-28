@@ -764,7 +764,20 @@ from `origin/main`. Read the named doc section before touching any of it:
   **after deploy, open a referred client's Studio Space details signed in and compare it with
   Studio's own Needs attention row.**
 
-**START HERE for B2B analysis (2026-11-28, seventh round, latest): Overview → Clients is a
+**START HERE for B2B (2026-11-28, eighth round, latest): the KAM desk is gone and the Clients
+journey's tiles click through. CRM PR #127 (`1ff4075`), merged and deployed on Dhruv's ask; no
+backend PR.** Start new work from `origin/main`. The user said the Overview's KAM desk "is not
+required": it is removed with its unmatched-Enquiry-ID note (the background KAM order lookup
+stays). Don't re-add it (`docs/b2b/overview.md` §Dropped on purpose). On Overview → Clients,
+Revenue scrolls to the bridge, Average order to Month by month, and Firms ordering, Retention,
+Churned and Joined since filter the firm table through one predicate (`FIRM_SETS` in
+`views/overview/clients/journey/utils.ts`), so a tile and its list cannot drift. Also fixed:
+bridge labels clipped by `overflow-x-auto` (`docs/landmines.md`), overlapping flow labels, and
+half-empty cards (Month by month now beside Retention, sources beside categories). **Checked
+signed in on production after deploy (read-only):** all bridge labels visible, no flow-label
+overlap, every tile count equals its list, no page errors. Nothing is open from this round.
+
+**START HERE for B2B analysis (2026-11-28, seventh round): Overview → Clients is a
 firm journey. CRM PR #125 (`5f56129`), merged and deployed on Dhruv's ask; no backend PR, no
 migration.** Start new work from `origin/main`. Read `docs/b2b/overview.md` §Clients sub-tab
 and §Firm journey before touching it.
