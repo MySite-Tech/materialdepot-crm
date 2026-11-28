@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CITIES, EXIT_COLS, exitColumnsAvailable, fetchBmEmailsByPhone, inCity, mapCaps, mapExit, phoneKey, rosterQuery, sbGet, sbPatch, syntheticSiteAuditEmail, type CityFilter, type StaffExit } from '../../shared';
+import { CITIES, EXIT_COLS, exitColumnsAvailable, fetchBmEmailsByPhone, inCity, mapCaps, mapExit, phoneKey, rosterQuery, sbGet, sbGetPaged, sbPatch, syntheticSiteAuditEmail, type CityFilter, type StaffExit } from '../../shared';
 import { fetchUsers } from '@/lib/api';
 import { poFieldFor } from '../../data/oms-service';
 import { autoImportAuditOrders } from '../../data/auto-import-audit-orders';
@@ -168,7 +168,7 @@ export default function SiteAuditOpsView({ city = 'all', attribution = DEFAULT_A
 
   const loadOrders = useCallback(async () => {
     try {
-      const rows = await sbGet('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted&order=created_at.desc');
+      const rows = await sbGetPaged('audit_orders?select=' + AUDIT_COLS + '&status=neq.deleted', 1000, 50, 'created_at.desc,id');
       if (!Array.isArray(rows)) {
         setConnErr(true);
         if (!retryTid.current) retryTid.current = setTimeout(() => { retryTid.current = null; loadOrders(); }, 8000);

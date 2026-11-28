@@ -7,15 +7,19 @@ import { Reminder, ReminderLevel } from '../../../models/outreach/reminders';
 import { Pill, fmtDay } from '../../../ui/inbound-chips';
 import { MeetingDots, OutreachStatusBadge, WaitlistChip } from '../../../ui/outreach-chips';
 import { WaitlistIndex, waitlistFor } from '../../../models/outreach/kpis';
-import { LENS_STATUS } from '../constants';
-import { Lens, LensRow } from '../types';
+import { DEAL_LENSES, LENS_STATUS } from '../constants';
+import { LensRow, WorkLens } from '../types';
 import { gapsFor } from '../utils';
 import { fmtTime } from '../../../models/reminders';
 import { ReactNode } from 'react';
 
+export interface ColUi {
+  viewDeal: (enqId: string) => void;
+}
+
 export interface Col {
   head: string;
-  cell: (r: LensRow) => ReactNode;
+  cell: (r: LensRow, ui: ColUi) => ReactNode;
 }
 
 const day = (d: string | undefined) => String(d || '').slice(0, 10);
@@ -40,6 +44,48 @@ function When({ date, time, today }: { date: string; time?: string; today: strin
   return <span className={`whitespace-nowrap ${cls}`} title={date}>{text}{time ? <span className="font-normal text-gray-400"> · {fmtTime(time)}</span> : ''}</span>;
 }
 
+function DealCell({ r, ui }: { r: LensRow; ui: ColUi }) {
+  const c = r.deal;
+  const d = c.stage === 'pi' ? c.pis[0] : c.carts[0];
+  if (!d) return <span className="text-[11px] text-gray-500">PI shared · no PI ticket on its numbers</span>;
+  const more = c.carts.length + c.pis.length - 1;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); ui.viewDeal(d.enqId); }}
+      title="Show the products and full detail under this lead"
+      className="flex flex-col gap-0.5 min-w-0 text-left rounded-md -mx-1.5 px-1.5 py-1 hover:bg-indigo-50/60"
+    >
+      <span className="flex items-baseline gap-1.5">
+        <span className={`text-[10px] font-semibold rounded px-1 ${d.kind === 'pi' ? 'bg-purple-50 text-purple-700' : 'bg-indigo-50 text-indigo-700'}`}>{d.kind === 'pi' ? 'PI' : 'Cart'}</span>
+        <span className="font-mono text-gray-800">{d.value ? fmtINR(d.value) : '₹0'}</span>
+      </span>
+      <span className="text-[11px] text-gray-500 truncate"><span className="font-mono">{d.enqId}</span> · opened {fmtDay(d.createdOn)}{more > 0 ? ` · +${more} more` : ''}</span>
+      {(d.branch || d.bm) && <span className="text-[11px] text-gray-400 truncate">{[d.branch, d.bm].filter(Boolean).join(' · ')}</span>}
+      <span className="text-[11px] font-medium text-indigo-700">View products</span>
+    </button>
+  );
+}
+
+function OpenTicketChip({ r, ui }: { r: LensRow; ui: ColUi }) {
+  const d = r.deal.pis[0] ?? r.deal.carts[0];
+  if (!d) return null;
+  const more = r.deal.carts.length + r.deal.pis.length - 1;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); ui.viewDeal(d.enqId); }}
+      title={`${d.enqId} · ${d.status} · opened ${fmtDay(d.createdOn)}${d.branch ? ` · ${d.branch}` : ''}. Click to show the products and full detail under this lead.`}
+      className={`mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-px text-[10.5px] font-medium ${d.kind === 'pi' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+    >
+      {d.kind === 'pi' ? 'PI' : 'Cart'} still open · {fmtINR(d.value)}{more > 0 ? ` · +${more}` : ''}
+    </button>
+  );
+}
+
+function LastTouch({ r }: { r: LensRow }) {
+  if (!r.deal.updated) return <span className="text-amber-700 font-semibold whitespace-nowrap">None since {fmtDay(r.deal.since)}</span>;
+  return <span className="text-gray-600 whitespace-nowrap">Since {fmtDay(r.deal.since)}</span>;
+}
+
 function Firm({ l }: { l: OutreachLead }) {
   const gaps = gapsFor(l);
   return (
@@ -47,7 +93,7 @@ function Firm({ l }: { l: OutreachLead }) {
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="font-semibold text-gray-900 truncate">{l.company || 'Unnamed firm'}</span>
         {gaps.length > 0 && (
-          <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="shrink-0 text-[10px] font-semibold text-amber-600">⚠ {gaps.length}</span>
+          <span title={`Missing: ${gaps.map((g) => g.label).join(', ')}`} className="shrink-0 text-[10px] font-semibold text-red-600 bg-red-50 rounded px-1">{gaps.length} missing</span>
         )}
       </div>
       <div className="text-[11px] text-gray-400 truncate">{[l.contactPerson, l.phone].filter(Boolean).join(' · ') || 'No contact'}</div>
@@ -97,8 +143,10 @@ const value = (l: OutreachLead) => (l.orderValue
   ? <span className="font-mono text-gray-700 whitespace-nowrap">{fmtINR(l.orderValue)}</span>
   : l.expectedOrderValue ? <span className="font-mono text-gray-400 whitespace-nowrap" title="The BM's estimate">~{fmtINR(l.expectedOrderValue)}</span> : dash);
 
-export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { today: string; nowMs: number; showBm: boolean; waitlist: WaitlistIndex }): Col[] {
-  const firm: Col = { head: 'Firm', cell: (r) => <Firm l={r.lead} /> };
+export function columnsFor(lens: WorkLens, { today, nowMs, showBm, waitlist }: { today: string; nowMs: number; showBm: boolean; waitlist: WaitlistIndex }): Col[] {
+  const firm: Col = DEAL_LENSES.includes(lens)
+    ? { head: 'Firm', cell: (r) => <Firm l={r.lead} /> }
+    : { head: 'Firm', cell: (r, ui) => <div><Firm l={r.lead} /><OpenTicketChip r={r} ui={ui} /></div> };
   const stage: Col = { head: 'Stage', cell: (r) => <OutreachStatusBadge s={r.lead.status} /> };
   const meetings: Col = { head: 'Meetings', cell: (r) => <MeetingDots meetings={r.lead.meetings} /> };
   const next: Col = { head: 'Next step', cell: (r) => <NextStep l={r.lead} today={today} /> };
@@ -110,22 +158,6 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { tod
   const onWaitlist: Col = { head: 'Waitlist', cell: (r) => <WaitlistChip w={waitlistFor(r.lead, waitlist)} short /> };
   const converted: Col = { head: 'Converted', cell: (r) => muted(fmtDay(r.lead.convertedAt || r.lead.statusChangedAt)) };
 
-  if (lens.startsWith('kpi:')) {
-    return [
-      firm,
-      {
-        head: 'Counts?',
-        cell: (r) => (
-          <div className="flex items-start gap-1.5 max-w-[340px]">
-            <span className={`shrink-0 font-bold ${r.kpi?.counts ? 'text-[#0F766E]' : 'text-amber-600'}`}>{r.kpi?.counts ? '✓' : '✕'}</span>
-            <span className={`leading-snug ${r.kpi?.counts ? 'text-gray-600' : 'text-amber-700'}`}>{r.kpi?.note}</span>
-          </div>
-        ),
-      },
-      { head: 'Date', cell: (r) => muted(r.kpi?.at ? fmtDay(r.kpi.at) : '') },
-      stage, meetings, ...bm,
-    ];
-  }
   switch (lens) {
     case 'action':
       return [firm, { head: "What's due", cell: (r) => <Due rs={r.reminders} /> }, stage, next, ...bm];
@@ -145,8 +177,14 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { tod
         },
         stage, ...bm,
       ];
-    case 'followups':
-      return [firm, { head: 'Follow-up', cell: (r) => <When date={day(r.lead.followUpDate)} time={r.lead.followUpTime} today={today} /> }, stage, meetings, ...bm];
+    case 'overdue': case 'due': case 'work':
+      return [firm, next, stage, meetings, ...bm];
+    case 'book':
+      return [firm, { head: 'Source', cell: (r) => muted(r.lead.source) }, { head: 'Added', cell: (r) => muted(fmtDay(r.lead.createdAt)) }, stage, ...bm];
+    case 'deals': case 'cartOpen': case 'piOpen': case 'cartFollow': case 'piFollow':
+      return [firm, { head: 'Cart / PI', cell: (r, ui) => <DealCell r={r} ui={ui} /> }, { head: 'Last call or meeting', cell: (r) => <LastTouch r={r} /> }, next, stage, ...bm];
+    case 'other':
+      return [firm, { head: "What's due", cell: (r) => <Due rs={r.reminders} /> }, stage, handover, ...bm];
     case 'handoff': case 'won':
       return [firm, converted, { head: 'First order', cell: (r) => <FirstOrder l={r.lead} /> }, handover, onWaitlist, { head: 'KAM', cell: (r) => muted(r.lead.handover?.kam || r.lead.kam) }, ...bm];
     case 'lost':

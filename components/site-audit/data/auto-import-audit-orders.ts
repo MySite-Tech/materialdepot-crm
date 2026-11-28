@@ -1,4 +1,4 @@
-import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGet, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from '../shared';
+import { CITIES, fetchBmEmailsByPhone, phoneKey, sbGetPaged, sbPatchWhere, sbPost, syntheticSiteAuditEmail } from '../shared';
 import { autoLinkBmsFromRows } from './resolve-bm-from-backend';
 import { AUDIT_SKU } from '../audit-ops/constants';
 import { INSTALL_SKU } from '../install-ops/constants';
@@ -221,9 +221,10 @@ function staleDeliveryDates(backend: BackendRow[], known: any[]): Map<string, st
 }
 
 async function refreshDeliveryDates(backend: BackendRow[]): Promise<number> {
-  const pending = await sbGet(
+  const pending = await sbGetPaged(
     'install_orders?select=id,pi,status,delivery_date,original_delivery_date,created_by_email'
     + '&status=eq.pending&created_by_email=eq.' + encodeURIComponent(AUTO_ATTRIBUTION),
+    1000,
   );
   if (!Array.isArray(pending)) return 0;
   let moved = 0;
@@ -241,7 +242,7 @@ async function refreshDeliveryDates(backend: BackendRow[]): Promise<number> {
 async function reconcile(kind: Kind): Promise<number> {
   const [backend, known, bms] = await Promise.all([
     fetchBackendRows(kind),
-    sbGet(kind.table + '?select=pi,status'),
+    sbGetPaged(kind.table + '?select=pi,status', 1000),
     kind.table === 'audit_orders' ? fetchBmEmailsByPhone() : Promise.resolve(new Map() as BmIndex),
   ]);
 

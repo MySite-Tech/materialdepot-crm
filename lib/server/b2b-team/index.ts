@@ -78,31 +78,44 @@ function rotationSince(now = Date.now()): string {
   return new Date(Math.max(start, now - INBOUND_ROTATION_WINDOW_DAYS * DAY_MS)).toISOString();
 }
 
+const personName = (s: string | undefined) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
 export async function saveMember(input: MemberInput, byName: string): Promise<SavedMember> {
   const phone = normalisePhone(input.phone);
   if (phone.length !== 10) throw new InputError('A team member needs a 10-digit phone number');
-  const { members } = await readMembers();
-  const stored = members.find((m) => m.phone === phone && m.team === input.team);
+  const { members, coverReady, pauseReady, tenureReady } = await readMembers();
+  const sameName = (m: TeamMember) => personName(m.name) === personName(input.name || m.name);
+  const stored = input.id != null
+    ? members.find((m) => m.id === input.id)
+    : members.find((m) => m.phone === phone && m.team === input.team && !m.leftOn && sameName(m));
+  if (input.id != null && !stored) throw new InputError('That team row no longer exists. Reload the Team tab.');
   const name = String(input.name ?? '').trim() || stored?.name || '';
   if (!name) throw new InputError('A team member needs a name');
+  const cover = coverFor(input, stored, members.filter((m) => m.phone === phone && m.team !== input.team && !m.leftOn), coverReady);
+  const pause = pauseFor(input, pauseReady);
+  const tenure = tenureFor(input, stored, tenureReady);
 
   let kylasUserId = input.kylasUserId !== undefined ? input.kylasUserId : stored?.kylasUserId ?? null;
   let kylasName: string | null = input.kylasUserId === undefined ? stored?.kylasName ?? null : null;
   let warning: string | undefined;
-  const users = await listKylasUsers();
+  const pastRecord = !stored && input.active === false && !!input.leftOn;
+  const linking = input.kylasUserId != null || (input.kylasUserId === undefined && !stored && !pastRecord);
+  const users = linking ? await listKylasUsers() : [];
   if (input.kylasUserId === undefined && !stored) {
-    const hit = kylasUserForPhone(users, phone);
+    const linked = members.find((m) => m.phone === phone && m.kylasUserId != null)?.kylasUserId;
+    const hit = kylasUserForPhone(users, phone) ?? users.find((u) => u.id === linked) ?? null;
     kylasUserId = hit?.id ?? null;
     kylasName = hit?.name ?? null;
     if (!hit && input.team === 'inbound') warning = `No Kylas user has the phone ${phone}. Pick their Kylas user by hand, or they cannot own leads.`;
     else if (hit && !hit.active) warning = `${hit.name} is deactivated in Kylas.`;
-  } else if (kylasUserId != null) {
-    const hit = users.find((u) => u.id === kylasUserId);
+  } else if (input.kylasUserId != null) {
+    const hit = users.find((u) => u.id === input.kylasUserId);
     if (!hit) throw new InputError(`Kylas has no user ${kylasUserId}`);
     kylasName = hit.name;
   }
 
   const member = await upsertMember({
+    id: stored?.id ?? null,
     phone,
     name,
     team: input.team,
@@ -111,9 +124,49 @@ export async function saveMember(input: MemberInput, byName: string): Promise<Sa
     inRotation: input.inRotation ?? stored?.inRotation ?? true,
     active: input.active ?? stored?.active ?? true,
     isAdmin: input.isAdmin,
+    cover,
+    pause,
+    tenure,
     updatedBy: byName,
   });
   return { member, warning };
+}
+
+function tenureFor(input: MemberInput, stored: TeamMember | undefined, ready: boolean): Partial<Pick<TeamMember, 'joinedOn' | 'leftOn'>> | undefined {
+  if (input.joinedOn === undefined && input.leftOn === undefined) return undefined;
+  if (!ready) throw new InputError('Dating a membership needs b2b-backend migration 0034 deployed first');
+  const out: Partial<Pick<TeamMember, 'joinedOn' | 'leftOn'>> = {};
+  if (input.joinedOn !== undefined) out.joinedOn = input.joinedOn ?? null;
+  if (input.leftOn !== undefined) out.leftOn = input.leftOn ?? null;
+  const joined = out.joinedOn !== undefined ? out.joinedOn : stored?.joinedOn ?? null;
+  const left = out.leftOn !== undefined ? out.leftOn : stored?.leftOn ?? null;
+  if (joined && left && left < joined) throw new InputError('The last day is before the first day');
+  return out;
+}
+
+function pauseFor(input: MemberInput, ready: boolean): Pick<TeamMember, 'pausedFrom' | 'pausedTo'> | undefined {
+  if (input.pausedFrom === undefined && input.pausedTo === undefined) return undefined;
+  if (!ready) throw new InputError('Pausing for set days needs b2b-backend migration 0032 deployed first');
+  const pausedFrom = input.pausedFrom ?? null;
+  const pausedTo = input.pausedTo ?? null;
+  if (!pausedFrom !== !pausedTo) throw new InputError('A pause needs a first and a last day');
+  if (pausedFrom && pausedTo && pausedTo < pausedFrom) throw new InputError('The pause ends before it starts');
+  return { pausedFrom, pausedTo };
+}
+
+function coverFor(input: MemberInput, stored: TeamMember | undefined, others: TeamMember[], ready: boolean): Pick<TeamMember, 'primary' | 'from' | 'to'> | undefined {
+  const asked = input.primary !== undefined || input.from !== undefined || input.to !== undefined;
+  if (!ready) {
+    if (asked) throw new InputError('Primary teams and cover dates need b2b-backend migration 0031 deployed first');
+    return undefined;
+  }
+  const from = input.from !== undefined ? input.from : stored?.from ?? null;
+  const to = input.to !== undefined ? input.to : stored?.to ?? null;
+  if (from && to && to < from) throw new InputError('The cover ends before it starts');
+  if (from || to) return { primary: false, from, to };
+  const primary = input.primary ?? (stored ? stored.primary : !others.some((m) => m.active));
+  if (!asked && stored) return undefined;
+  return { primary, from: null, to: null };
 }
 
 export async function changeMemberNumber(fromPhone: string, toPhone: string, byName: string): Promise<RenumberOutcome> {

@@ -25,12 +25,23 @@ where it was raised and `assignedTo` is who owns it; "assisted at" is a claim
 about who helped close it, and inferring one from the other puts a name in a
 field nobody attested to.
 
-**The date filters still re-read, and only the newest read is applied
-(2026-11-05).** A late answer for an earlier date range used to replace the newer
-one. They re-read rather than filter in memory because Outreach's date is the
-row's top-level `created_at` (`fetchRows`), which the mapped lead does not hold:
-it carries `meta_data.created_at`. Moving the filter in memory needs the mapper to
-keep the row date first.
+### Two sections, and every filter in memory (rebuilt 2026-11-27)
+
+The user found the tab cluttered and the filters not the ones they want. It now has
+two tabs: **Inbound and Outreach**, and **EC B2B referrals** (`isEcReferral`: an
+Outreach row whose source is EC B2B Referral, or the older hand-picked "EC
+referral"). Each has its own columns. Status is one switch (All, Open, Closed, Lost)
+with counts, which replaced Status, Lost only and Hide lost. The figures (leads,
+closed and its rate, Enquiry IDs, order value) and the section counts are computed
+from the filtered set, so they always match the list.
+
+**Every lead has a Created date** (`UnifiedLead.createdAt`): the Kylas lead's
+creation date for Inbound (`leadCreatedAt`), and for Outreach the referral's `at`,
+then `meta_data.created_at`, then the row's own `created_at`. `fetchUnifiedLeads`
+reads the Outreach rows itself so it has that last one; `rowToOutreach` does not
+carry it. With the date on every lead, the period filter (All time, This month, Last
+month, 30 and 90 days, Custom) runs in memory, so the tab reads once on open and
+never again on a filter change. The list is newest first.
 
 Three PRD open questions are resolved in `fetchUnifiedLeads`, in code rather
 than in JSX:
@@ -57,7 +68,7 @@ shows. Since 2026-11-03 every Kylas inbound lead is imported, so there is no
 
 ### Referred from EC and Referred by (2026-11-16)
 
-Two columns after Source, on the user's ask: with the EC B2B Referral filter on, the
+Now columns of the EC B2B referrals section (2026-11-27). Originally two columns after Source, on the user's ask: with the EC B2B Referral filter on, the
 list did not say which EC a lead came from or who at the store referred it. Both read
 the Outreach row's `ecReferral {ec, by, byPhone}` (`ReferralEcCell`, `ReferrerCell`),
 so they cost no request. EC falls back to `ecName` on an EC B2B Referral row only.
@@ -70,7 +81,7 @@ not rendered.
 The user wants one shape on Leads and Client Database: assign straight to a
 person, or select rows and round-robin them over a chosen set of people.
 Managers get the checkbox column and the shared `AssignBar`, plus an Unassigned
-filter and an EC B2B Referral source filter. `useLeadAssign` holds the rules.
+filter. `useLeadAssign` holds the rules.
 
 - **The bar picks the team first, the same on both tabs.** A lead stays on its own
   side: Outreach to an Outreach BM, Inbound to an Inbound member. A team is enabled

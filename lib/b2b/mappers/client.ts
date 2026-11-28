@@ -12,6 +12,8 @@ const CLIENT_META: MetaSpec<ClientEntity> = {
   segment:       { col: 'segment',         read: (v) => str(v) as Segment | undefined },
   clientType:    { col: 'client_type',     read: (v) => str(v) as ClientEntityType | undefined },
   clientTypeRaw: { col: 'client_type_raw', read: str },
+  city:          { col: 'city',            read: str },
+  officeAddress: { col: 'office_address',  read: str },
   source:        { col: 'source',          read: (v) => (str(v) as ClientSource | undefined) || 'Existing' },
   assignments:   { col: 'assignments',     read: (v) => arr<KamAssignment>(v) },
   spocLog:       { col: 'spoc_log',        read: (v) => arr<SpocLogEntry>(v) },

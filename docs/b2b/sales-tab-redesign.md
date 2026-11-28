@@ -290,6 +290,76 @@ Varun's empty tab the same day was not this: nothing was assigned to him.
   a migrated copy of the production snapshot: 92 firms and the Outreach rows moved,
   nothing else in any row changed, and the merge path deleted the duplicate row.
 
+### Primary team and covers (2026-11-26)
+
+The user: anyone can do anyone's work. Each person has one primary team, and when a
+team is short a manager puts someone else on it for set days (Varun, a KAM, covering
+Inbound that week). Every person has metrics on all three teams.
+
+- **A roster row is now one of three things** (b2b-backend migration 0031): the
+  person's **primary** team (`is_primary`, one per phone; setting it clears the
+  others), a **cover** (`starts_on`/`ends_on`, inclusive IST days, never primary), or
+  a standing second team (neither). The migration marked a primary only where a phone
+  had one row. People already on two teams read "No primary team" on the Team tab
+  until a manager picks; on production after the deploy (2026-11-26) that was three
+  people, one of whom also has a switched-off row (switched-off rows still count as "on
+  two teams" for the backfill).
+- **The dates decide who receives new work, nothing else.** `onDuty` (active and
+  inside the window) gates the round robin (`rotationOrder`) and every assign picker
+  (`useB2BReps`, `useAssignTeams`, Inbound reassign, Leads assign, Inbound "add lead"
+  owners). Viewer memberships still include every active row, so after a cover ends
+  the person keeps seeing what they were dealt, and the Team tab lists the ended cover
+  for a manager to reassign its work and Remove the row. Shrinking visibility at the
+  end date was rejected: Inbound scopes "Mine" by the Inbound row's Kylas id, so the
+  leads would have stranded with nobody seeing them.
+- **Nothing already assigned is ever re-dealt (the user's rule, 2026-11-26).** New
+  leads in a period rotate among the on-duty, round-robin-ticked people; moving
+  anything already owned is a manual reassign on that team's tab. This holds because
+  the Inbound round robin only takes leads still on the intake owner, uncalled and not
+  in the assignment log, and the Studio KAM sync a team save triggers resolves an
+  owner to a phone, which a cover row does not change. Nothing runs when a cover ends;
+  the dates are only read when choosing who gets new work. Checked on the sandbox the
+  same day by snapshotting every Inbound owner: cover on, 3 waiting leads went one
+  each to the two regulars and the cover, 0 of 13 owned leads changed; cover ended
+  and the round robin and Inbound sync re-run, 0 changed and the cover kept its lead;
+  2 new leads then went to the two regulars only. Don't add an automatic "return the
+  cover's leads" step: the user wants that done by hand.
+- **Pausing for set days (2026-11-26, migration 0032).** The user: a member who is off
+  should get no leads on those days only. "pause for days" under the round robin
+  checkbox stores `paused_from`/`paused_to` (both or neither). `getsWork` (on duty, round
+  robin ticked, not inside the pause) is the one rule the Inbound round robin and every
+  rotation list (Inbound, Outreach, KAM) read, so the person rejoins by themselves the
+  day after. The checkbox stays the open-ended pause. A single-person assign can still
+  pick a paused person, as before. Nothing they already hold moves.
+- **Team dates (2026-11-27, migration 0034).** The user: when someone moves between
+  B2B and the stores, revenue must count under the role they held when the order was
+  placed, never the one they hold now. Each row has `joined_on`/`left_on` ("set team
+  dates" under the name). Remove asks for the last day (default today) and saves it with
+  `active: false`; Restore clears it. "Record someone who has left B2B" adds an inactive
+  dated row for a person who was never on this list (the roster-only KAMs who predate
+  it), picked from every CRM user, whatever their role now. These dates only date the
+  membership for revenue (`overview.md` §Four revenue channels); covers and pauses still
+  decide who gets new work. Until 0034 deploys the controls stay hidden.
+- **A business number passes to the next joiner (2026-11-27, migration 0035).** Numbers
+  are the company's and get reissued, so a number is a person only between their dates.
+  Rows have their own `id`, and only one row per number per team may be open (no last
+  day). Adding a CRM user whose number still has someone else's open row shows "number
+  was X's" and asks for X's last day; the Add closes X's rows on that day and starts the
+  joiner the day after. The backend refuses (409) a different person on an open number.
+  Row saves go by `id`. "Record someone who has left B2B" takes a free name and number,
+  because a leaver's number may already show the joiner's name in the CRM user list, and
+  it never auto-links the Kylas user found by that number (that is the current holder's).
+- **Landing tab:** the team they are covering today, else the primary
+  (`viewer.member`).
+- **Adding a person:** their first row becomes primary; "For: A cover, for set days"
+  needs an end date. A cover's Kylas user falls back to the one on their other row.
+- **Until 0031 deploys** the CRM reads `coverReady: false` (no `is_primary` key on the
+  rows), hides every cover control, shows an amber notice, refuses cover fields with
+  that reason, and treats every row as on duty every day, which is the old behaviour.
+
+How covers count on the Leadership Board, and why a cover has no default target, is
+in `leadership.md` §Who the people are.
+
 ### The working surface: the Today view becomes the rep's day
 
 **Layout done 2026-10-28.** The tiles are now clickable lenses, and the First
@@ -628,7 +698,7 @@ cross-day view of it is "My performance" (step 4). Step 4 is built (see
   why every firm has four SPoCs. Built on `client-db-win-back`: the assign bar
   opens Inbound and Outreach for those firms, each send creates a lead in that
   team's tab and logs the firm's SPoC, and the KAM is kept (`client-db.md`
-  §Firms inactive over 6 months go to Inbound or Outreach). Checked on the sandbox
+  §Any firm can go to Inbound, Outreach or a KAM; since 2026-11-27 any firm, with no time window). Checked on the sandbox
   only.
 
 ## Outreach: the brief (2026-10-28) and what was built

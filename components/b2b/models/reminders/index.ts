@@ -1,15 +1,14 @@
-import { awaitsFollowUp } from '../inbound';
+import { awaitsFollowUp, inInboundWindow } from '../inbound';
 import { OUTREACH_OPEN_STATUSES } from '../outreach';
 import { repOwns, sameRep } from '../outreach/handover';
-import { nextFollowUp, primaryContact } from '../client';
+import { nextFollowUp, primaryContact, ticketFollowUps } from '../client';
 import { ownsFirm } from '../kam/handover';
-import { KAM_OPEN_STATUSES } from '../../constants/kam';
-import { REMINDER_ACTIVE_STATES, REMINDER_UPCOMING_DAYS } from './constants';
+import { CART_STAGES, REMINDER_ACTIVE_STATES, REMINDER_UPCOMING_DAYS } from './constants';
 import { cleanDay, cleanTime, followUpAt, istDayOf, reminderState } from './utils';
 import type { Reminder, ReminderPerson, ReminderSources, ReminderState } from './types';
 
-export type { Reminder, ReminderKind, ReminderPerson, ReminderSources, ReminderState } from './types';
-export { REMINDER_KIND_LABEL, REMINDER_LEAD_MINUTES, REMINDER_REFRESH_MS, REMINDER_TICK_MS, REMINDER_UPCOMING_DAYS } from './constants';
+export type { Reminder, ReminderKind, ReminderPerson, ReminderSources, ReminderState, ReminderTopic } from './types';
+export { REMINDER_KIND_LABEL, REMINDER_TEAM_LABEL, REMINDER_TOPIC_LABEL, REMINDER_LEAD_MINUTES, REMINDER_REFRESH_MS, REMINDER_TICK_MS, REMINDER_UPCOMING_DAYS } from './constants';
 export { cleanTime, daysLate, fmtFollowUp, fmtTime, minutesUntil, reminderState } from './utils';
 
 const at = (date: string | undefined, time: string | undefined): Pick<Reminder, 'date' | 'time' | 'dueAt'> | null => {
@@ -19,6 +18,8 @@ const at = (date: string | undefined, time: string | undefined): Pick<Reminder, 
   return { date: d, time: t, dueAt: followUpAt(d, t) };
 };
 
+const topicOf = (stage: string | undefined): Reminder['topic'] => (CART_STAGES.includes(String(stage)) ? 'cart' : 'touch');
+
 const lastNote = (notes: { text?: string }[] | undefined): string | undefined =>
   String(notes?.[notes.length - 1]?.text || '').trim() || undefined;
 
@@ -26,12 +27,13 @@ export function buildReminders(src: ReminderSources): Reminder[] {
   const out: Reminder[] = [];
 
   for (const l of src.inbound) {
-    const when = awaitsFollowUp(l) ? at(l.followUpDate, l.followUpTime) : null;
+    const when = awaitsFollowUp(l) && inInboundWindow(l) ? at(l.followUpDate, l.followUpTime) : null;
     if (!when) continue;
     const call = [...(l.callAttempts || [])].reverse().find((c) => c.note);
     out.push({
       ...when,
       key: `inbound:${l.id}`, kind: 'inbound', team: 'inbound', openId: l.id,
+      topic: topicOf(l.stage), stage: l.stage,
       company: l.company, contact: l.contactName, phone: l.phone,
       context: call?.note || l.requirement || l.leadSummary,
       owner: src.inboundOwnerName(l.ownerId) || l.owner,
@@ -42,12 +44,12 @@ export function buildReminders(src: ReminderSources): Reminder[] {
   for (const l of src.outreach) {
     if (!OUTREACH_OPEN_STATUSES.includes(l.status)) continue;
     const owns = (p: ReminderPerson) => repOwns(p)(l);
-    const base = { team: 'outreach' as const, openId: l.id, company: l.company, contact: l.contactPerson, phone: l.phone, owner: l.bm, owns };
+    const base = { team: 'outreach' as const, stage: l.status, openId: l.id, company: l.company, contact: l.contactPerson, phone: l.phone, owner: l.bm, owns };
     const when = at(l.followUpDate, l.followUpTime);
-    if (when) out.push({ ...base, ...when, key: `outreach:${l.id}`, kind: 'outreach', context: lastNote(l.notes) || l.requirement });
+    if (when) out.push({ ...base, ...when, key: `outreach:${l.id}`, kind: 'outreach', topic: topicOf(l.status), context: lastNote(l.notes) || l.requirement });
     for (const m of l.meetings || []) {
       const mw = m.status === 'Scheduled' ? at(m.date, m.time) : null;
-      if (mw) out.push({ ...base, ...mw, key: `meeting:${l.id}:${m.n}`, kind: 'meeting', context: [`Meeting ${m.n}`, m.area || m.officeLocation].filter(Boolean).join(' · ') });
+      if (mw) out.push({ ...base, ...mw, key: `meeting:${l.id}:${m.n}`, kind: 'meeting', topic: 'touch', context: [`Meeting ${m.n}`, m.area || m.officeLocation].filter(Boolean).join(' · ') });
     }
   }
 
@@ -59,26 +61,31 @@ export function buildReminders(src: ReminderSources): Reminder[] {
     const person = primaryContact(c.contacts);
     out.push({
       ...when,
-      key: `firm:${c.id}`, kind: 'firm', team: 'kam', openId: c.id,
+      key: `firm:${c.id}`, kind: 'firm', team: 'kam', topic: 'touch', openId: c.id,
       company: c.company, contact: person?.name, phone: person?.number,
-      context: String(next.from.summary || '').trim() || undefined,
+      context: [next.from.nextFollowUpFor === 'Meeting' ? 'Meeting' : '', String(next.from.summary || '').trim()].filter(Boolean).join(' · ') || undefined,
       owner: c.kam,
       owns: (p) => ownsFirm(c, p),
     });
   }
 
-  for (const o of src.orders) {
-    if (!KAM_OPEN_STATUSES.includes(o.status)) continue;
-    const when = at(o.followUpDate, o.followUpTime);
-    if (!when) continue;
-    out.push({
-      ...when,
-      key: `pi:${o.id}`, kind: 'pi', team: 'kam', openId: o.clientId,
-      company: o.company, contact: o.contactName, phone: o.phone,
-      context: [o.status, o.enqId, o.requirement].filter(Boolean).join(' · '),
-      owner: o.kam,
-      owns: (p) => sameRep(o.kam, p.name),
-    });
+  for (const c of src.clients) {
+    if (!c.kam) continue;
+    const person = primaryContact(c.contacts);
+    for (const f of ticketFollowUps(c.interactions).values()) {
+      if (src.openTickets && !src.openTickets.has(f.enqId)) continue;
+      const when = f.next ? at(f.next.date, f.next.time) : null;
+      if (!when) continue;
+      const label = f.kind === 'pi' ? 'PI' : 'Cart';
+      out.push({
+        ...when,
+        key: `pi:${c.id}:${f.enqId}`, kind: 'pi', team: 'kam', topic: 'cart', stage: label, openId: c.id,
+        company: c.company, contact: person?.name, phone: person?.number,
+        context: [`${label} ${f.enqId}`, String(f.last.summary || '').trim()].filter(Boolean).join(' · '),
+        owner: c.kam,
+        owns: (p) => ownsFirm(c, p),
+      });
+    }
   }
 
   return out.sort((a, b) => a.dueAt - b.dueAt || a.company.localeCompare(b.company));

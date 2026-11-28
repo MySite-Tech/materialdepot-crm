@@ -31,7 +31,7 @@ Log in with the phone and any four-digit OTP. Any other phone logs in as a local
 | 9000000001 | Asha (Inbound) | `b2b_sales` | inbound, in rotation | 990001 |
 | 9000000002 | Bharat (Inbound) | `b2b_sales` | inbound, in rotation | 990002 |
 | 9000000011 | Omkar (Outreach) | `b2b_sales` | outreach | — |
-| 9000000021 | Kavya (KAM) | `b2b_KAM` | kam | — |
+| 9000000021 | Kavya (KAM) | `b2b_KAM` | kam | 990021 (so she can cover Inbound) |
 | 9000000099 | Meera (B2B Manager) | `b2b_manager` | — (manager) | — |
 
 Kylas also has Hardi (`81181`, the intake owner), and Django has three EC BMs
@@ -73,6 +73,7 @@ upserts on `kylas_lead_id`, the other pipelines on `pipeline + id`. A second
 | Presales notes and calls | Kylas `/notes/relation`, `/call-logs/search`, `/call-logs/{id}` | Kylas stub, seeded on two leads |
 | B2B calls (RNR / Connected), client details, status, team notes, Send to Outreach | backend `POST /b2b/rows` (pipeline `inbound`). Nothing but a lead's owner is written to Kylas (since 2026-11-14; nothing at all from 2026-10-29) | backend stub |
 | Enq ID and deal tickets | Django `/crm/leads/?enquiry_ids=` and `?q=<phone>` | Django stub, seven `ENQ-9001xx` tickets |
+| Inbound Carts & PIs | Django `/crm/leads/?status=<comma list>&created_from=` through `POST /api/b2b/inbound/deals` | Django stub. Like Django, it takes a comma list of statuses and `created_from`. Inbound leads 9 and 16 hold `In Cart` tickets and lead 11 a `Quote Approval Pending` one, Django's real labels (the seed said `Cart Created` and `Estimate Shared` until 2026-11-28) |
 | Review new firms | Django `/crm/leads/?order_from` → `/api/b2b/client-import`; backend `/client-review` | Django stub and the backend stub. Eight tickets carry dummy GSTINs: Mockup Interiors and Template Builders are already clients, and four firms are left to review (one on two numbers, one a proprietor, one in Telangana). Not-a-client decisions land in `backend.clientReview` |
 | Order credits | backend `GET/POST /b2b/order-credits`, `DELETE /b2b/order-credits/{id}` | Backend stub, kept in `backend.orderCredits` with `history`, like production. The Django stub sends `orderPlacedAt` on every order (the order's closure or created day, 06:30 UTC), so My performance can place an order on a day |
 | BM / EC pickers | Django `/crm/available-bms/`, `/orgainsation-branch/` | Django stub |
@@ -96,8 +97,10 @@ waiting for Omkar's sign-off (`OR-IN-7000117`). Outreach also has a converted
 lead with a handover pending on Kavya and one she accepted, which became the
 client `CLI-SBX-0001`; `CLI-SBX-0002` last ordered 45 days ago. `CLI-SBX-0003`
 (Dormant Builders, KAM Kavya) last ordered 250 days ago and `CLI-SBX-0004` (Lapsed
-Interiors, no KAM) 420 days ago, so Client Database can send them to Inbound or
-Outreach (`client-db.md` §Firms inactive over 6 months).
+Interiors, no KAM) 420 days ago. `CLI-SBX-0005` (Quiet Studio, KAM Kavya, 130 days)
+and `CLI-SBX-0006` (Fresh Inbound Interiors, source Inbound, no KAM, ordered 10 days
+ago) fill the gaps between them. Client Database can send any of them to Inbound,
+Outreach or a KAM (`client-db.md` §Any firm can go to Inbound, Outreach or a KAM).
 `CLI-SBX-0001` has one EC visit booked at Whitefield for tomorrow
 (`ECV-SBX-0001`), so the Firm page card and the Appointment Tracker's B2B list
 both have something to show. Every name, firm

@@ -1,15 +1,18 @@
 import { MD_API_BASE_URL } from '../api/core/config';
+import type { ClientOrderHistoryRow } from '../api/crm/leads';
 import { dealIsOrder } from '../../components/b2b/models/client';
 import { rowToEcVisit } from '../b2b/ec-visits/utils';
 import type { EcVisitRow } from '../b2b/ec-visits/types';
-import { buildNumberBook, buildRepTeams, clientDbFirms, phoneOf } from '../b2b/revenue/utils/book';
+import { buildNumberBook, buildRepTeams, clientDbFirms, clientDbGroups, phoneOf } from '../b2b/revenue/utils/book';
+import { clientFlow, flowPhones } from '../b2b/revenue/clients';
+import type { ClientFlowReport, MonthDigest } from '../b2b/revenue/clients';
 import { funnelBucketOf } from '../b2b/revenue/utils/funnel';
 import { classifyOrder } from '../b2b/revenue/utils/classify';
 import { monthWindows } from '../b2b/revenue/utils/months';
 import { istToday } from '../b2b/stats/pipeline';
 import { channelSplits } from '../b2b/revenue/utils/rollup';
-import { B2B_BOOKING, B2B_BRANCH, FUNNEL_PAGES, PAST_MONTH_KEEP, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
-import type { B2BSourceRow, BookedOn, EcSpocReport, EcSpocSeen, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
+import { B2B_BOOKING, B2B_BRANCH, CHURN_GAP, FLOW_LOOKBACK, FLOW_MONTHS, FUNNEL_PAGES, ORDER_HISTORY_FROM, PAST_MONTH_KEEP, PAST_MONTH_TTL, TREND_MONTHS } from '../b2b/revenue/constants';
+import type { B2BSourceRow, BookedOn, CrmReferralInput, EcSpocReport, EcSpocSeen, FunnelEnquiry, FunnelReport, OrderInput, RevenueOrder, RevenueReport, RevenueTrend, StudioFirm } from '../b2b/revenue/types';
 import { getCached, setCache } from './cache';
 import { b2bBackendFetch } from './b2b-backend';
 import { readMembers } from './b2b-team';
@@ -53,16 +56,18 @@ export async function allOrders(query: string, auth: string, maxPages = MAX_PAGE
 }
 
 async function readHolders(auth: string) {
-  const [rows, studio, redirects, team, staff] = await Promise.all([
+  const [rows, studio, redirects, team, staff, referrals] = await Promise.all([
     b2bBackendFetch<B2BSourceRow[]>('/rows'),
     b2bBackendFetch<{ firms?: StudioFirm[] }>('/studio-access').then((r) => r.firms ?? null).catch(() => null),
     b2bBackendFetch<{ visits: EcVisitRow[] }>('/ec-visits?kind=redirect').catch(() => null),
     readMembers().catch(() => null),
     staffDirectory(auth).catch(() => []),
+    b2bBackendFetch<{ referrals: CrmReferralInput[] }>('/referrals').then((r) => r.referrals).catch(() => null),
   ]);
   return {
-    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit)),
+    book: buildNumberBook(rows, studio, (redirects?.visits ?? []).map(rowToEcVisit), referrals ?? []),
     clientDb: clientDbFirms(rows),
+    groups: clientDbGroups(rows),
     reps: buildRepTeams(team?.members ?? [], staff),
     studioOk: !!studio,
     redirectsOk: !!redirects,
@@ -71,8 +76,6 @@ async function readHolders(auth: string) {
 }
 
 type Holders = Awaited<ReturnType<typeof readHolders>>;
-
-const inflight = new Map<string, Promise<RevenueReport>>();
 
 interface Booked {
   orders: OrderInput[];
@@ -89,7 +92,12 @@ async function readBooked(from: string, to: string, query: (from: string, to: st
   return { orders: reads.flatMap((r) => r.orders), on, truncated: reads.some((r) => r.truncated) };
 }
 
-export async function buildRevenueReport(from: string, to: string, auth: string, holders?: Promise<Holders>): Promise<RevenueReport> {
+interface BuiltMonth {
+  report: RevenueReport;
+  digest: MonthDigest;
+}
+
+async function buildMonth(from: string, to: string, auth: string, holders?: Promise<Holders>): Promise<BuiltMonth> {
   const window = (f: string, t: string) => `order_from=${f}&order_to=${t}&branch_basis=estimate`;
   const idOf = (o: OrderInput) => o.id;
   const [all, booked, { book, reps, studioOk, redirectsOk, teamOk }] = await Promise.all([
@@ -99,35 +107,49 @@ export async function buildRevenueReport(from: string, to: string, auth: string,
   ]);
 
   const unique = new Map([...all.orders, ...booked.orders].map((o) => [o.id, o]));
+  const placed = [...unique.values()].filter((o) => dealIsOrder(o.status));
+  const orders = placed
+    .map((o) => classifyOrder(o, booked.on.get(o.id) ?? 'store', book, reps))
+    .filter((o): o is RevenueOrder => !!o);
+  const truncated = all.truncated || booked.truncated;
+  const generatedAt = new Date().toISOString();
 
   return {
-    from,
-    to,
-    orders: [...unique.values()]
-      .filter((o) => dealIsOrder(o.status))
-      .map((o) => classifyOrder(o, booked.on.get(o.id) ?? 'store', book, reps))
-      .filter((o): o is RevenueOrder => !!o),
-    truncated: all.truncated || booked.truncated,
-    studioOk,
-    redirectsOk,
-    teamOk,
-    generatedAt: new Date().toISOString(),
+    report: { from, to, orders, truncated, studioOk, redirectsOk, teamOk, generatedAt },
+    digest: {
+      key: from.slice(0, 7),
+      buyers: [...new Set(placed.map((o) => phoneOf(o.clientPhone)).filter(Boolean))],
+      orders: orders.map((o) => ({ phone: o.phone, channel: o.channel, value: o.value, name: o.firm || o.client })),
+      truncated,
+      generatedAt,
+    },
   };
 }
 
-export function revenueReport(userId: string, from: string, to: string, auth: string, fresh: boolean, holders?: () => Promise<Holders>): Promise<RevenueReport> {
-  const key = `b2b-revenue:${userId}:${from}:${to}`;
+const inflight = new Map<string, Promise<BuiltMonth>>();
+
+function cachedMonth<T extends { generatedAt: string }>(
+  kind: 'report' | 'digest',
+  userId: string, from: string, to: string, auth: string, fresh: boolean,
+  holders?: () => Promise<Holders>,
+): Promise<T> {
+  const keys = { report: `b2b-revenue:${userId}:${from}:${to}`, digest: `b2b-digest:${userId}:${from}:${to}` };
   const past = to.slice(0, 7) < istToday().slice(0, 7);
-  const cached = getCached(key) as RevenueReport | null;
+  const ttl = past ? PAST_MONTH_KEEP : undefined;
+  const cached = getCached(keys[kind]) as T | null;
   const age = cached ? Date.now() - Date.parse(cached.generatedAt) : Infinity;
   const rebuild = () => {
-    const running = inflight.get(key);
-    if (running) return running;
-    const build = buildRevenueReport(from, to, auth, holders?.())
-      .then((r) => { setCache(key, r, past ? PAST_MONTH_KEEP : undefined); return r; })
-      .finally(() => inflight.delete(key));
-    inflight.set(key, build);
-    return build;
+    let build = inflight.get(keys.report);
+    if (!build) {
+      build = buildMonth(from, to, auth, holders?.())
+        .then((m) => { setCache(keys.digest, m.digest, ttl); return m; })
+        .finally(() => inflight.delete(keys.report));
+      inflight.set(keys.report, build);
+    }
+    return build.then((m) => {
+      if (kind === 'report') setCache(keys.report, m.report, ttl);
+      return m[kind] as unknown as T;
+    });
   };
   if (cached && fresh && age < FRESH_ENOUGH) return Promise.resolve(cached);
   if (cached && !fresh) {
@@ -135,6 +157,68 @@ export function revenueReport(userId: string, from: string, to: string, auth: st
     return Promise.resolve(cached);
   }
   return rebuild();
+}
+
+export const revenueReport = (userId: string, from: string, to: string, auth: string, fresh: boolean, holders?: () => Promise<Holders>): Promise<RevenueReport> =>
+  cachedMonth<RevenueReport>('report', userId, from, to, auth, fresh, holders);
+
+const monthDigest = (userId: string, from: string, to: string, auth: string, fresh: boolean, holders?: () => Promise<Holders>): Promise<MonthDigest> =>
+  cachedMonth<MonthDigest>('digest', userId, from, to, auth, fresh, holders);
+
+const FIRST_ORDER_BATCH = 280;
+const FLOW_TTL = 5 * 60_000;
+
+async function firstOrderDates(phones: string[], auth: string): Promise<{ firsts: Map<string, string>; ok: boolean }> {
+  const firsts = new Map<string, string>();
+  let ok = true;
+  const batches = Array.from({ length: Math.ceil(phones.length / FIRST_ORDER_BATCH) }, (_, i) => phones.slice(i * FIRST_ORDER_BATCH, (i + 1) * FIRST_ORDER_BATCH));
+  await Promise.all(batches.map(async (batch) => {
+    try {
+      const res = await fetch(`${MD_API_BASE_URL}/crm/leads/client-order-history/?phones=${batch.join(',')}`, { headers: { Authorization: auth }, cache: 'no-store' });
+      const body = await res.json().catch(() => null) as { data?: Record<string, ClientOrderHistoryRow> } | Record<string, ClientOrderHistoryRow> | null;
+      if (!res.ok || !body) throw new Error(String(res.status));
+      const rows = ('data' in body && body.data ? body.data : body) as Record<string, ClientOrderHistoryRow>;
+      for (const [phone, row] of Object.entries(rows)) if (row?.firstOrderDate) firsts.set(phoneOf(phone), row.firstOrderDate.slice(0, 10));
+    } catch {
+      ok = false;
+    }
+  }));
+  return { firsts, ok };
+}
+
+async function buildClientFlow(userId: string, auth: string, fresh: boolean): Promise<ClientFlowReport> {
+  const all = monthWindows(new Date(), FLOW_MONTHS + FLOW_LOOKBACK).reverse();
+  const windows = all.filter((w) => w.key >= ORDER_HISTORY_FROM);
+  const current = windows[windows.length - 1].key;
+  const holders = readHolders(auth);
+  const digests: MonthDigest[] = [];
+  for (let start = 0; start < windows.length; start += TREND_PARALLEL) {
+    const batch = windows.slice(start, start + TREND_PARALLEL)
+      .map((w) => monthDigest(userId, w.from, w.to, auth, fresh && w.key === current, () => holders));
+    digests.push(...await Promise.all(batch));
+  }
+  const { groups, studioOk, redirectsOk, teamOk } = await holders;
+  const analysedCount = Math.min(FLOW_MONTHS, Math.max(0, windows.length - CHURN_GAP));
+  const { firsts, ok } = await firstOrderDates(flowPhones(digests, groups, analysedCount), auth);
+  const analysed = windows.slice(-analysedCount);
+  return {
+    months: clientFlow(digests, groups, analysedCount, firsts).map((m, i) => ({ ...m, label: analysed[i].label, partial: analysed[i].key === current })),
+    historyFrom: windows[0].from,
+    historyOk: ok,
+    studioOk,
+    redirectsOk,
+    teamOk,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+export async function clientFlowReport(userId: string, auth: string, fresh: boolean): Promise<ClientFlowReport> {
+  const key = `b2b-client-flow:${userId}`;
+  const cached = getCached(key) as ClientFlowReport | null;
+  if (cached && !fresh) return cached;
+  const report = await buildClientFlow(userId, auth, fresh);
+  setCache(key, report, FLOW_TTL);
+  return report;
 }
 
 async function trendReports(userId: string, auth: string, fresh: boolean) {

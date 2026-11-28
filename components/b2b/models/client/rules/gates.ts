@@ -1,5 +1,6 @@
 import { validateGst } from './gst';
 import { ClientEntity } from '../../../types/client';
+import { FIRM_DETAIL_CHECKS } from '../../../constants/client';
 import { contactNumbers, isValidContactNumber } from '../../utils/client';
 
 export function clientGateErrors(c: Partial<ClientEntity>): string[] {
@@ -26,4 +27,9 @@ export function clientEnrichmentGaps(c: ClientEntity): string[] {
   const withChecksumWarning = (c.gsts || []).filter((g) => validateGst(g.number).check === 'bad-checksum');
   if (withChecksumWarning.length) gaps.push(`${withChecksumWarning.length} GST check digit${withChecksumWarning.length === 1 ? '' : 's'} disagree`);
   return gaps;
+}
+
+export function firmDetailGaps(c: ClientEntity): { key: string; label: string }[] {
+  const consumer = c.clientType === 'End Consumer';
+  return FIRM_DETAIL_CHECKS.filter((k) => !(consumer && k.firmOnly) && !k.filled(c)).map(({ key, label }) => ({ key, label }));
 }

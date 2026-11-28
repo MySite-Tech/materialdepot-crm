@@ -1,6 +1,6 @@
 'use client';
 
-import { OrgPerson, StakeholderRole } from '@/lib/org';
+import { CRMLeadsStats, FootfallBMRow } from '@/lib/api';
 
 export interface TeamMetrics {
   footfall: number | null;
@@ -15,21 +15,27 @@ export interface TeamMetrics {
   lostCount: number;
 }
 
-export interface TeamRow {
-  person: OrgPerson;
-  metrics: TeamMetrics | null;
-  footfallMatched: boolean;
+export interface TeamQuery {
+  dateFrom: string;
+  dateTo: string;
+  branch: string;
 }
 
-export interface TeamPerformance {
-  rows: TeamRow[];
-  leadsFailed: boolean;
-  footfallFailed: boolean;
-  footfallAmbiguous: number;
+export interface FootfallIndex {
+  byName: Map<string, FootfallBMRow>;
+  ambiguous: Set<string>;
+}
+
+export interface TeamFootfall {
+  index: FootfallIndex;
+  failed: boolean;
   loading: boolean;
 }
 
-export interface TeamFilters {
-  positions: StakeholderRole[];
-  query: string;
+export interface TeamLeadStats {
+  total: CRMLeadsStats | null;
+  totalFailed: boolean;
+  byPhone: Record<string, CRMLeadsStats>;
+  failedPhones: Set<string>;
+  loading: boolean;
 }

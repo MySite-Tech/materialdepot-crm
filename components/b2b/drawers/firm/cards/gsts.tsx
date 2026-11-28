@@ -1,5 +1,6 @@
 'use client';
 
+import { LINK_CLS } from '../constants';
 import { firmHolding, fmtGst } from '../utils';
 import { ClientEntity, gstNumbers, normalizeGst, validateGst } from '../../../models/client';
 import { SectionCard } from '../../../ui/inbound-chips';
@@ -43,16 +44,14 @@ export function GstsCard({ client, clients, onSave }: {
   return (
     <SectionCard
       title="GST numbers"
+      info="Enquiries billed to these GSTINs count towards this firm's orders, even when raised on a number not listed here. Matched exactly on the estimate's client GST."
       subtitle={`${gsts.length} on file`}
       right={!adding && (
-        <button onClick={() => setAdding(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">+ Add GST</button>
+        <button onClick={() => setAdding(true)} className={LINK_CLS}>+ Add GST</button>
       )}
     >
       {!gsts.length && !adding ? (
-        <div className="border border-dashed border-gray-200 rounded-md px-3 py-4 text-center">
-          <p className="text-[11px] text-gray-400">No GSTIN on file.</p>
-          <button onClick={() => setAdding(true)} className="mt-1 text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer">Add the firm&apos;s GST number</button>
-        </div>
+        <p className="text-[12px] text-gray-400 py-2">No GSTIN on file.</p>
       ) : (
         <ul className="divide-y divide-gray-100 border border-gray-100 rounded-md">
           {gsts.map((g) => {
@@ -62,8 +61,8 @@ export function GstsCard({ client, clients, onSave }: {
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-[13px] font-semibold text-gray-800 tracking-tight">{fmtGst(r.normalized)}</span>
                   {r.check === 'valid'
-                    ? <span className="px-1.5 py-px rounded text-[9px] font-bold bg-green-50 text-green-700 border border-green-200">VALID</span>
-                    : <span className="px-1.5 py-px rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title={r.message}>CHECK DIGIT</span>}
+                    ? <span className="px-1.5 py-px rounded text-[10.5px] font-medium bg-green-50 text-green-700 border border-green-200">Valid</span>
+                    : <span className="px-1.5 py-px rounded text-[10.5px] font-medium bg-amber-50 text-amber-700 border border-amber-200" title={r.message}>Check digit</span>}
                 </div>
                 <div className="text-[11px] text-gray-500 mt-0.5">
                   {[r.stateName, r.pan && `PAN ${r.pan}`].filter(Boolean).join(' · ')}
@@ -107,14 +106,6 @@ export function GstsCard({ client, clients, onSave }: {
             <button onClick={add} disabled={busy || v.check === 'empty' || !!draftError} className={btnPrimary}>{busy ? 'Saving…' : 'Add GST'}</button>
           </div>
         </div>
-      )}
-      {!!gsts.length && (
-        <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1.5 mt-2">
-          Enquiries billed to these GSTINs are included in this firm&apos;s orders, even when
-          raised on a number not listed here — matched exactly on{' '}
-          <span className="font-mono">estimate.client_gst</span> via the{' '}
-          <span className="font-mono">gst=</span> filter.
-        </p>
       )}
       {error && <p className="text-[11px] text-red-600 mt-2">Could not save: {error}</p>}
     </SectionCard>

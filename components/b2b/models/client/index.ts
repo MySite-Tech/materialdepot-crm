@@ -1,5 +1,5 @@
-export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, SpocRole, SpocLogEntry, InteractionType, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, StatusScale, DuplicateSuggestion, MergeChoices, StudioAccess, StudioLogin, StudioLogins, StudioFirm, StudioOrder, StudioReferral, FirmStudioState, EnquirySpoc } from '../../types/client';
-export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, INTERACTION_SUMMARY, TEMPERATURE_MAX, TEMPERATURE_BANDS, ACTIVE_DAYS, INACTIVE_DAYS, ORDER_BANDS, LONG_INACTIVE, WIN_BACK_STATUSES, CLIENT_STATUS_SCALE, STUDIO_SPACE_URL, STUDIO_ACCESS, CONTACT_CLASSES, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL } from '../../constants/client';
+export type { ClientEntityType, ClientSource, ClientContact, ClientGst, ClientMergeRecord, KamAssignment, ClientEntity, SpocRole, SpocLogEntry, InteractionType, FollowUpFor, ClientInteraction, TemperatureBand, ClientOrderMetrics, ClientStatus, StatusScale, DuplicateSuggestion, MergeChoices, StudioAccess, StudioLogin, StudioLogins, StudioFirm, StudioOrder, StudioReferral, FirmStudioState, EnquirySpoc } from '../../types/client';
+export { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, INTERACTION_SUMMARY, FOLLOW_UP_FOR, TEMPERATURE_MAX, TEMPERATURE_BANDS, ORDER_BANDS, LONG_INACTIVE, CLIENT_STATUS_ORDER, CLIENT_STATUS_SCALE, STUDIO_SPACE_URL, STUDIO_ACCESS, CONTACT_CLASSES, EVIDENCE_LABEL, EVIDENCE_IS_EXACT, MERGE_FIELD_LABEL } from '../../constants/client';
 export { clientTypeFromLead, contactLabel, normalizeContactNumber, isValidContactNumber, primaryContact, contactNumbers, normalizeGst, clampTemperature, normalizeCompanyName } from '../utils/client';
 export { validateGst, gstNumbers } from './rules/gst';
 export { clientMatchesSearch } from './derived/search';
@@ -7,12 +7,13 @@ export { b2bSellerTest, enquirySpoc, firmLinks, firmSpocs, latestEcSpoc, spocSal
 export type { B2BSellerTest, FirmLinks, FirmSpoc, InboundLink, SpocLinkLead, SpocSales, SpocStage } from './derived/spocs';
 export { dealIsOrder, dealIsOpen, averageOrderValue } from './derived/deals';
 export { studioLoginOf, studioAccessOf, firmStudioAccess, firmStudioState, studioFirmOf, studioFirmsNotInCrm, withStudioOrders } from './derived/studio';
-export { sortedInteractions, openCheckIn, withInteraction, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp } from './derived/interactions';
-export { clientStatus, daysToLapse, lastOrderInFuture } from './rules/status';
+export { sortedInteractions, openCheckIn, withInteraction, latestInteraction, currentTemperature, temperatureBand, temperatureColor, currentUpcomingProject, nextFollowUp, ticketFollowUps } from './derived/interactions';
+export type { TicketFollowUp } from './derived/interactions';
+export { clientStatus, daysToLapse, lastOrderInFuture, nextStatus, statusMonths } from './rules/status';
 export { findDuplicates } from './rules/duplicates';
 export { groupIntoParents, parentSubjectFromClient } from './parents';
 export type { ParentSubject, ParentCompany, ParentGrouping, NameOnlyCandidate } from './parents';
 export { mergeConflicts, mergeClients } from './rules/merge';
-export { clientGateErrors, clientEnrichmentGaps } from './rules/gates';
+export { clientGateErrors, clientEnrichmentGaps, firmDetailGaps } from './rules/gates';
 export type { Segment } from '../inbound';
 export { SEGMENTS, istToday } from '../inbound';

@@ -1,14 +1,26 @@
 'use client';
 
 import { fmtL } from '../../../../../models/mock-data';
-import { REVENUE_CHANNELS, RevenueTrend, TrendMonth } from '@/lib/b2b/revenue';
+import { REVENUE_CHANNELS, RevenueTrend, STUDIO_CHANNELS, TrendMonth, isStudioChannel } from '@/lib/b2b/revenue';
 import { useState } from 'react';
-import { Notice } from '../../../ui';
+import { Notice, Segmented } from '../../../ui';
 import { CHANNEL_META } from '../constants';
 
 const PLOT_HEIGHT = 120;
 
 const totalOf = (m: TrendMonth) => REVENUE_CHANNELS.reduce((s, c) => s + m[c], 0);
+
+const studioOf = (m: TrendMonth) => STUDIO_CHANNELS.reduce((s, c) => s + m[c], 0);
+
+const STACK = [...STUDIO_CHANNELS, ...REVENUE_CHANNELS.filter((c) => !isStudioChannel(c))];
+
+const SCOPES = { studio: 'Studio Sales', all: 'All B2B' } as const;
+type Scope = keyof typeof SCOPES;
+
+const SCOPE_OF: Record<Scope, { sum: (m: TrendMonth) => number; channels: typeof STACK; note: string }> = {
+  studio: { sum: studioOf, channels: STACK.filter(isStudioChannel), note: 'Direct, Studio EC Redirected and Referred; carries the target' },
+  all: { sum: totalOf, channels: STACK, note: 'Studio Sales plus EC Direct' },
+};
 
 const shortMonth = (key: string) =>
   new Date(`${key}-01T00:00:00Z`).toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' });
@@ -25,7 +37,10 @@ function Tooltip({ m, current }: { m: TrendMonth; current: boolean }) {
         </div>
       ))}
       <div className="flex justify-between border-t border-white/20 mt-1 pt-1 tabular-nums font-semibold">
-        <span>Total</span><span>{fmtL(totalOf(m))}</span>
+        <span>Studio Sales</span><span>{fmtL(studioOf(m))}</span>
+      </div>
+      <div className="flex justify-between tabular-nums text-gray-300">
+        <span>All B2B</span><span>{fmtL(totalOf(m))}</span>
       </div>
       {m.truncated && <div className="text-amber-300 mt-1">More orders than one read covers: incomplete</div>}
     </div>
@@ -40,6 +55,8 @@ export function RevenueTrendChart({ trend, error, selected, onPick, onRetry }: {
   onRetry: () => void;
 }) {
   const [hover, setHover] = useState<string | null>(null);
+  const [scope, setScope] = useState<Scope>('studio');
+  const { sum, channels, note } = SCOPE_OF[scope];
 
   if (error) {
     return (
@@ -50,15 +67,19 @@ export function RevenueTrendChart({ trend, error, selected, onPick, onRetry }: {
   }
 
   const months = trend?.months ?? [];
-  const max = Math.max(1, ...months.map(totalOf));
+  const max = Math.max(1, ...months.map(sum));
   const current = months[months.length - 1]?.key;
 
   return (
     <div className="mt-5 pt-4 border-t border-gray-100">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <h3 className="text-[12px] font-bold text-gray-700">Month by month</h3>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-[12px] font-bold text-gray-700">Month by month</h3>
+          <Segmented options={SCOPES} value={scope} onChange={setScope} />
+          <span className="text-[11px] text-gray-400">{note}</span>
+        </div>
         <div className="flex items-center gap-3 text-[11px] text-gray-500">
-          {REVENUE_CHANNELS.map((c) => (
+          {channels.map((c) => (
             <span key={c} className="inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-sm" style={{ background: CHANNEL_META[c].color }} />
               {CHANNEL_META[c].label}
@@ -72,6 +93,8 @@ export function RevenueTrendChart({ trend, error, selected, onPick, onRetry }: {
         <div className="grid gap-2 sm:gap-4" style={{ gridTemplateColumns: `repeat(${months.length}, minmax(0, 1fr))` }}>
           {months.map((m) => {
             const total = totalOf(m);
+            const studio = studioOf(m);
+            const shown = sum(m);
             const isSelected = m.key === selected;
             return (
               <button
@@ -83,17 +106,17 @@ export function RevenueTrendChart({ trend, error, selected, onPick, onRetry }: {
                 onFocus={() => setHover(m.key)}
                 onBlur={() => setHover(null)}
                 aria-pressed={isSelected}
-                aria-label={`${m.label}: ${fmtL(total)}`}
+                aria-label={`${m.label}: Studio Sales ${fmtL(studio)}, all B2B ${fmtL(total)}`}
                 className={`relative flex flex-col items-center rounded-lg pt-1 pb-1.5 cursor-pointer transition-colors ${isSelected ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
               >
                 {hover === m.key && <Tooltip m={m} current={m.key === current} />}
                 <span className="flex flex-col justify-end items-center w-full" style={{ height: PLOT_HEIGHT + 20 }}>
-                  <span className={`tabular-nums text-[11px] font-semibold mb-1 ${total ? 'text-gray-700' : 'text-gray-300'}`}>{total ? fmtL(total) : '—'}</span>
-                  <span className="flex flex-col-reverse gap-[2px] w-full max-w-[44px]" style={{ height: (total / max) * PLOT_HEIGHT }}>
-                    {REVENUE_CHANNELS.filter((c) => m[c] > 0).map((c, i, shown) => (
+                  <span className={`tabular-nums text-[11px] font-semibold mb-1 ${shown ? 'text-gray-700' : 'text-gray-300'}`}>{shown ? fmtL(shown) : '—'}</span>
+                  <span className="flex flex-col-reverse gap-[2px] w-full max-w-[44px]" style={{ height: (shown / max) * PLOT_HEIGHT }}>
+                    {channels.filter((c) => m[c] > 0).map((c, i, stacked) => (
                       <span
                         key={c}
-                        className={`block w-full ${i === shown.length - 1 ? 'rounded-t' : ''}`}
+                        className={`block w-full ${i === stacked.length - 1 ? 'rounded-t' : ''}`}
                         style={{ flexGrow: m[c], flexBasis: 0, minHeight: 2, background: CHANNEL_META[c].color }}
                       />
                     ))}

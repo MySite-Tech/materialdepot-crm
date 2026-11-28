@@ -19,13 +19,13 @@ const IMRAN = { name: 'Imran (EC BM)', phone: '9000000033' };
 
 function seedDeals() {
   return [
-    deal('ENQ-900101', leadPhone(11), 'Prototype Projects', 'Estimate Shared', 245000, RAVI, 'JP Nagar', -3, { followUpDate: istDay(2) }),
+    deal('ENQ-900101', leadPhone(11), 'Prototype Projects', 'Quote Approval Pending', 245000, RAVI, 'JP Nagar', -3, { followUpDate: istDay(2) }),
     deal('ENQ-900102', leadPhone(12), 'Sandbox Studio', 'Order Placed', 380000, SNEHA, 'Whitefield', -8, { closureDate: istDay(-5) }),
     deal('ENQ-900103', '9000020001', 'Mockup Interiors', 'Order Placed', 520000, IMRAN, 'HSR', -6, { closureDate: istDay(-4), clientGst: '29AAACS1111A1Z1' }),
     deal('ENQ-900104', '9000020002', 'Template Builders', 'Delivered', 610000, SNEHA, 'Whitefield', -30, { closureDate: istDay(-25), clientGst: '29AAACT2222B1Z5' }),
     deal('ENQ-900105', '9000020003', 'Exemplar Interiors', 'Delivered', 180000, RAVI, 'JP Nagar', -50, { closureDate: istDay(-45) }),
-    deal('ENQ-900106', leadPhone(9), 'Fictional Spaces', 'Cart Created', 90000, RAVI, 'JP Nagar', -1),
-    deal('ENQ-900107', leadPhone(16), 'Specimen Studio', 'Estimate Shared', 150000, IMRAN, 'HSR', -2, { followUpDate: istDay(3) }),
+    deal('ENQ-900106', leadPhone(9), 'Fictional Spaces', 'In Cart', 90000, RAVI, 'JP Nagar', -1),
+    deal('ENQ-900107', leadPhone(16), 'Specimen Studio', 'In Cart', 150000, IMRAN, 'HSR', -2, { followUpDate: istDay(3) }),
     deal('ENQ-900108', '9000020001', 'Mockup Interiors', 'Order Confirmed', 340000, { name: 'Kavya (KAM)', phone: '9000000021' }, 'B2B', -7, { closureDate: istDay(-3), clientGst: '29AAACS1111A2Z0' }),
     deal('ENQ-900109', leadPhone(12), 'Sandbox Studio', 'Delivered', 125000, { name: 'Asha (Inbound)', phone: '9000000001' }, 'B2B', -9, { closureDate: istDay(-6) }),
     deal('ENQ-900110', '9000020009', 'A client of Mockup Interiors', 'Order Placed', 215000, SNEHA, 'Whitefield', -4, { closureDate: istDay(-2), clientGst: '29AAACS1111A2Z0' }),
@@ -37,6 +37,8 @@ function seedDeals() {
     deal('ENQ-900116', '9000020015', 'Stand-in Constructions', 'Delivered', 230000, SNEHA, 'Whitefield', -95, { closureDate: istDay(-90), clientGst: '36AAACS7777G1Z4' }),
     deal('ENQ-900117', '9000020016', 'Dormant Builders', 'Delivered', 275000, RAVI, 'JP Nagar', -255, { closureDate: istDay(-250) }),
     deal('ENQ-900118', '9000020017', 'Lapsed Interiors', 'Delivered', 88000, IMRAN, 'HSR', -425, { closureDate: istDay(-420) }),
+    deal('ENQ-900119', '9000020018', 'Quiet Studio', 'Delivered', 120000, RAVI, 'JP Nagar', -135, { closureDate: istDay(-130) }),
+    deal('ENQ-900120', '9000020019', 'Fresh Inbound Interiors', 'Order Placed', 160000, { name: 'Asha (Inbound)', phone: '9000000001' }, 'B2B', -12, { closureDate: istDay(-10) }),
   ];
 }
 
@@ -176,6 +178,12 @@ function seedKam() {
     clientRow('CLI-SBX-0004', 'Lapsed Interiors', '9000020017', 'Existing', istAt(-450, 12), {
       contactName: 'Demo Owner E', clientType: 'Interior Designer', noKam: true,
     }),
+    clientRow('CLI-SBX-0005', 'Quiet Studio', '9000020018', 'Existing', istAt(-200, 12), {
+      contactName: 'Demo Owner F', clientType: 'Interior Designer', reason: 'Existing account',
+    }),
+    clientRow('CLI-SBX-0006', 'Fresh Inbound Interiors', '9000020019', 'Inbound', istAt(-10, 12), {
+      contactName: 'Demo Owner G', clientType: 'Interior Designer', noKam: true,
+    }),
   ];
   const orders = [
     kamRow('KAM-SBX-0001', 'CLI-SBX-0001', 'Template Builders', '9000020002', 'Closed', -30, {
@@ -194,7 +202,8 @@ function seedKam() {
 function seedTeam(at) {
   const row = (p, team, inRotation) => ({
     phone: p.phone, name: p.name, team, kylas_user_id: p.kylasId ?? null, kylas_name: p.kylasId ? p.name : null,
-    in_rotation: inRotation, active: true, is_admin: false, updated_at: at, updated_by: MEERA.name,
+    in_rotation: inRotation, active: true, is_admin: false, is_primary: team === p.team, starts_on: null, ends_on: null, paused_from: null, paused_to: null,
+    updated_at: at, updated_by: MEERA.name,
   });
   const bharat = PERSONAS.find((p) => p.phone === '9000000002');
   return [...PERSONAS.filter((p) => p.team).map((p) => row(p, p.team, true)), row(bharat, 'outreach', false)];

@@ -14,7 +14,7 @@ export const PERSONAS = [
   { phone: '9000000001', userId: 910001, name: 'Asha (Inbound)', role: 'b2b_sales', team: 'inbound', kylasId: 990001 },
   { phone: '9000000002', userId: 910002, name: 'Bharat (Inbound)', role: 'b2b_sales', team: 'inbound', kylasId: 990002 },
   { phone: '9000000011', userId: 910011, name: 'Omkar (Outreach)', role: 'b2b_sales', team: 'outreach' },
-  { phone: '9000000021', userId: 910021, name: 'Kavya (KAM)', role: 'b2b_KAM', team: 'kam' },
+  { phone: '9000000021', userId: 910021, name: 'Kavya (KAM)', role: 'b2b_KAM', team: 'kam', kylasId: 990021 },
   { phone: '9000000099', userId: 910099, name: 'Meera (B2B Manager)', role: 'b2b_manager' },
 ];
 

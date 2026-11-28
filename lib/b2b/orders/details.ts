@@ -82,6 +82,7 @@ export async function resolveKamOrders(
   orders: KamOrder[],
   deals: B2BDealRef[],
   clients: ClientEntity[] = [],
+  lookup = true,
 ): Promise<KamOrderResolveResult> {
   const firmNumbers = new Map(clients.map((c) => [c.id, contactNumbers(c.contacts)]));
   const phonesOf = (o: KamOrder) => firmPhoneList([o.phone, ...(o.clientId ? firmNumbers.get(o.clientId) ?? [] : [])]);
@@ -108,6 +109,7 @@ export async function resolveKamOrders(
     }
     // `otherPhone` set means the ticket carries this enquiry id but sits on a
     // number that is not on the firm. The bulk path above checks the same set.
+    if (!lookup) return { order: o, outcome: 'skipped' };
     const r = await lookupEnqId(phonesOf(o), o.enqId);
     if (r.status === 'matched' && !r.otherPhone) {
       return {
@@ -157,6 +159,22 @@ export async function fetchOrdersByGst(gstins: string[]): Promise<ClientOrderRow
     include: 'boq', estimates: true, sortBy: 'createdAt', sortDir: 'desc',
   });
   return (Array.isArray(results) ? results : []).map((r) => ticketToOrderRow(r, String(r.clientPhone || '')));
+}
+
+const detailCache = new Map<string, Promise<ClientOrderRow | null>>();
+
+export function fetchEnquiryDetail(enqId: string): Promise<ClientOrderRow | null> {
+  const want = enqId.trim().toUpperCase();
+  const hit = detailCache.get(want);
+  if (hit) return hit;
+  const promise = fetchCRMLeads({ enquiryIds: [want], page: 1, pageSize: 5, include: 'boq' })
+    .then(({ results }) => {
+      const row = (results ?? []).find((r) => String(r.id).toUpperCase() === want);
+      return row ? ticketToOrderRow(row, String(row.clientPhone || '')) : null;
+    });
+  detailCache.set(want, promise);
+  promise.catch(() => detailCache.delete(want));
+  return promise;
 }
 
 const itemsCache = new Map<string, Promise<BoqLine[]>>();

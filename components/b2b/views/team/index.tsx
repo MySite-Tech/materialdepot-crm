@@ -5,14 +5,17 @@ import { fetchUsers } from '@/lib/api';
 import { changeTeamMemberNumber, fetchKylasUsers, saveTeamMember } from '@/lib/b2b/team';
 import { B2B_TEAM_LABEL, B2B_TEAMS } from '@/lib/b2b/team/constants';
 import type { B2BTeam, B2BTeamLoad, KylasUser, MemberInput, TeamMember, Viewer } from '@/lib/b2b/team/types';
-import { canUseB2B, rotationOrder, signInGaps } from '@/lib/b2b/team/utils';
+import { canUseB2B, coverLabel, coverState, istDay, rotationOrder, signInGaps } from '@/lib/b2b/team/utils';
 import { normalisePhone } from '@/lib/org/utils';
 import type { AppUser } from '@/types/crm';
 import { MemberRow } from './ui/member-row';
 import { RotationPanel } from './ui/rotation-panel';
 import { SignInCheck } from './ui/sign-in-check';
+import { CoverDates, coverValid } from './ui/team-role';
 
-const memberKey = (m: Pick<TeamMember, 'phone' | 'team'>) => `${m.phone}|${m.team}`;
+const memberKey = (m: Pick<TeamMember, 'phone' | 'team'> & { id?: number | null }) => (m.id != null ? `id:${m.id}` : `${m.phone}|${m.team}`);
+
+const samePerson = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [users, setUsers] = useState<AppUser[] | null>(null);
@@ -20,6 +23,10 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
   const [kylasUsers, setKylasUsers] = useState<KylasUser[] | null>(null);
   const [pickPhone, setPickPhone] = useState('');
   const [pickTeam, setPickTeam] = useState<B2BTeam>('inbound');
+  const [asCover, setAsCover] = useState(false);
+  const [coverFrom, setCoverFrom] = useState(istDay());
+  const [coverTo, setCoverTo] = useState('');
+  const [past, setPast] = useState<{ name: string; phone: string; team: B2BTeam; from: string; to: string } | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'warn' | 'error'; text: string } | null>(null);
 
@@ -36,33 +43,44 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Could not load Kylas users' }));
   };
 
-  const onPickedTeam = useMemo(
-    () => new Set(team.members.filter((m) => m.team === pickTeam).map((m) => m.phone)),
-    [team.members, pickTeam],
-  );
   const candidates = useMemo(
     () => (users ?? [])
-      .filter((u) => u.active !== false && canUseB2B(u) && !onPickedTeam.has(normalisePhone(u.phone)))
+      .filter((u) => u.active !== false && canUseB2B(u)
+        && !team.members.some((m) => m.team === pickTeam && !m.leftOn && m.phone === normalisePhone(u.phone) && samePerson(m.name, u.name)))
       .sort((a, b) => a.name.localeCompare(b.name)),
-    [users, onPickedTeam],
+    [users, team.members, pickTeam],
   );
+  const picked = candidates.find((c) => normalisePhone(c.phone) === pickPhone);
+  const holders = useMemo(
+    () => (picked ? team.members.filter((m) => m.phone === pickPhone && !m.leftOn && !samePerson(m.name, picked.name)) : []),
+    [picked, pickPhone, team.members],
+  );
+  const [handover, setHandover] = useState(istDay(Date.now() - 86_400_000));
   const teamsOf = useMemo(() => {
     const out = new Map<string, B2BTeam[]>();
     for (const m of team.members) if (m.active) out.set(m.phone, [...(out.get(m.phone) || []), m.team]);
     return out;
   }, [team.members]);
   const rotation = useMemo(() => rotationOrder(team.members), [team.members]);
+  const withPrimary = useMemo(() => new Set(team.members.filter((m) => m.active && m.primary).map((m) => m.phone)), [team.members]);
+  const ended = useMemo(() => team.members.filter((m) => m.active && coverState(m) === 'ended'), [team.members]);
   const gaps = useMemo(() => (users ? signInGaps(users, team.members) : null), [users, team.members]);
 
   const save = (m: MemberInput) => {
+    const before = m.id != null ? team.members.find((x) => x.id === m.id) : team.members.find((x) => x.phone === normalisePhone(m.phone) && x.team === m.team && !x.leftOn);
+    if (before) team.patch({ ...before, ...Object.fromEntries(Object.entries(m).filter(([k, v]) => v !== undefined && k in before)) });
     setBusyKey(memberKey(m));
     setNotice(null);
     saveTeamMember(m)
       .then((r) => {
         if (r.warning) setNotice({ tone: 'warn', text: r.warning });
-        team.reload();
+        team.patch(r.member);
+        if (m.primary !== undefined || m.isAdmin !== undefined) team.reload();
       })
-      .catch((e) => setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Save failed' }))
+      .catch((e) => {
+        if (before) team.patch(before);
+        setNotice({ tone: 'error', text: `${e instanceof Error ? e.message : 'Save failed'}. Nothing was changed.` });
+      })
       .finally(() => setBusyKey(null));
   };
 
@@ -78,11 +96,38 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       .finally(() => setBusyKey(null));
   };
 
-  const add = () => {
-    const u = candidates.find((c) => normalisePhone(c.phone) === pickPhone);
-    if (!u) return;
-    save({ phone: pickPhone, name: u.name, team: pickTeam, inRotation: true, active: true });
-    setPickPhone('');
+  const pastCandidates = useMemo(
+    () => (users ?? []).filter((u) => normalisePhone(u.phone).length === 10).sort((a, b) => a.name.localeCompare(b.name)),
+    [users],
+  );
+  const pastValid = !!past && past.name.trim() !== '' && normalisePhone(past.phone).length === 10 && !!past.to && (!past.from || past.from <= past.to);
+
+  const addPast = () => {
+    if (!past || !pastValid) return;
+    save({ phone: normalisePhone(past.phone), name: past.name.trim(), team: past.team, inRotation: false, active: false, joinedOn: past.from || null, leftOn: past.to });
+    setPast(null);
+  };
+
+  const add = async () => {
+    if (!picked) return;
+    setBusyKey(`${pickPhone}|${pickTeam}`);
+    setNotice(null);
+    try {
+      for (const h of holders) await saveTeamMember({ id: h.id, phone: h.phone, name: h.name, team: h.team, active: false, leftOn: handover });
+      const r = await saveTeamMember({
+        phone: pickPhone, name: picked.name, team: pickTeam, inRotation: true, active: true,
+        ...(holders.length ? { joinedOn: istDay(Date.parse(`${handover}T00:00:00Z`) + 86_400_000 - 19_800_000) } : {}),
+        ...(asCover ? { from: coverFrom || null, to: coverTo } : {}),
+      });
+      if (r.warning) setNotice({ tone: 'warn', text: r.warning });
+      setPickPhone('');
+      setAsCover(false);
+    } catch (e) {
+      setNotice({ tone: 'error', text: e instanceof Error ? e.message : 'Save failed' });
+    } finally {
+      setBusyKey(null);
+      team.reload();
+    }
   };
 
   return (
@@ -90,7 +135,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
       <div>
         <h2 className="text-[18px] font-bold text-gray-900">B2B team</h2>
         <p className="text-[12.5px] text-gray-500 mt-0.5">
-          Who is on Inbound, Outreach and KAM. One person can be on several teams; add them once per team, and switch each team&apos;s round robin on or off separately.
+          Who is on Inbound, Outreach and KAM. Everyone has one primary team, and can be put on another team as a cover for set days when that team is short.
+          A cover gets that team&apos;s new work (round robin and the assign pickers) only on those days, keeps what it was given after them, and has no target there unless one is set.
           Each person sees their own leads and accounts. Admins, B2B managers and anyone marked B2B admin here see everyone.
           People are added from the existing CRM users. Their Kylas user is found by phone number.
         </p>
@@ -103,6 +149,17 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
         </p>
       )}
       {team.error && <p className="text-[12.5px] text-red-600">{team.error}</p>}
+      {!team.loading && !team.tableMissing && !team.coverReady && (
+        <p className="text-[12.5px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+          Primary teams and covers need b2b-backend migration 0031, which is not deployed yet. Until it is, everyone on a team is on it every day.
+        </p>
+      )}
+      {!!ended.length && (
+        <p className="text-[12.5px] bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+          {ended.map((m) => `${m.name}: ${B2B_TEAM_LABEL[m.team]} ${coverLabel(m).replace(/^Cover/, 'cover')}`).join('; ')}.{' '}
+          A finished cover gets no new work, but whatever it was given is still theirs. Reassign it on that team&apos;s tab, then Remove the row here.
+        </p>
+      )}
       {notice && (
         <p className={`text-[12.5px] rounded px-3 py-2 border ${notice.tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-red-50 border-red-200 text-red-700'}`}>
           {notice.text}
@@ -121,7 +178,8 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
             <option value="">{users ? `${candidates.length} CRM users not on ${B2B_TEAM_LABEL[pickTeam]}` : usersError ? 'Could not load CRM users' : 'Loading CRM users…'}</option>
             {candidates.map((u) => {
               const on = teamsOf.get(normalisePhone(u.phone));
-              return <option key={u.id} value={normalisePhone(u.phone)}>{u.name} · {u.role}{on ? ` · on ${on.map((t) => B2B_TEAM_LABEL[t]).join(', ')}` : ''}</option>;
+              const was = team.members.find((m) => m.phone === normalisePhone(u.phone) && !m.leftOn && !samePerson(m.name, u.name));
+              return <option key={u.id} value={normalisePhone(u.phone)}>{u.name} · {u.role}{was ? ` · number was ${was.name}'s` : on ? ` · on ${on.map((t) => B2B_TEAM_LABEL[t]).join(', ')}` : ''}</option>;
             })}
           </select>
         </label>
@@ -135,14 +193,79 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
             {B2B_TEAMS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
         </label>
+        {team.coverReady && (
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            For
+            <select value={asCover ? 'cover' : 'team'} onChange={(e) => setAsCover(e.target.value === 'cover')}
+              className="border border-gray-200 rounded px-2 py-1.5 text-[13px] font-normal normal-case tracking-normal text-gray-800">
+              <option value="team">Their team</option>
+              <option value="cover">A cover, for set days</option>
+            </select>
+          </label>
+        )}
+        {asCover && (
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            Days
+            <CoverDates from={coverFrom} to={coverTo} setFrom={setCoverFrom} setTo={setCoverTo} />
+          </label>
+        )}
+        {holders.length > 0 && (
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+            {holders[0].name}&apos;s last day on this number
+            <input type="date" value={handover} max={istDay()} onChange={(e) => setHandover(e.target.value)}
+              className="border border-amber-300 rounded px-2 py-1 text-[13px] font-normal normal-case tracking-normal text-gray-800" />
+          </label>
+        )}
         <button
-          disabled={!pickPhone || !!busyKey}
+          disabled={!pickPhone || !!busyKey || (asCover && !coverValid(coverFrom, coverTo)) || (holders.length > 0 && !handover)}
           onClick={add}
           className="px-4 py-1.5 text-[13px] font-semibold rounded bg-[#EAB308] text-[#1A1A1A] disabled:opacity-40"
         >
           Add
         </button>
         {usersError && <p className="basis-full text-[12px] text-red-600">{usersError}</p>}
+        {team.tenureReady && !past && (
+          <button onClick={() => setPast({ name: '', phone: '', team: 'kam', from: '', to: istDay() })} className="basis-full text-left text-[12px] text-gray-500 hover:text-gray-800 underline">
+            Record someone who has left B2B, so their past orders count under the team they were on
+          </button>
+        )}
+        {past && (
+          <div className="basis-full flex flex-wrap items-end gap-3 border-t border-gray-100 pt-3">
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500 min-w-[180px] flex-1">
+              Name
+              <input list="past-people" value={past.name} placeholder="As they were known"
+                onChange={(e) => {
+                  const u = pastCandidates.find((c) => c.name === e.target.value);
+                  setPast({ ...past, name: e.target.value, ...(u && !past.phone ? { phone: normalisePhone(u.phone) } : {}) });
+                }}
+                className="border border-gray-200 rounded px-2 py-1 text-[13px] text-gray-800" />
+              <datalist id="past-people">{pastCandidates.map((u) => <option key={u.id} value={u.name} />)}</datalist>
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              Number they used
+              <input value={past.phone} inputMode="numeric" placeholder="10 digits" onChange={(e) => setPast({ ...past, phone: e.target.value })}
+                className="border border-gray-200 rounded px-2 py-1 text-[13px] text-gray-800 w-[130px]" />
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              Was on
+              <select value={past.team} onChange={(e) => setPast({ ...past, team: e.target.value as B2BTeam, phone: '' })}
+                className="border border-gray-200 rounded px-2 py-1.5 text-[13px] text-gray-800">
+                {B2B_TEAMS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              First day (blank if always)
+              <input type="date" value={past.from} onChange={(e) => setPast({ ...past, from: e.target.value })} className="border border-gray-200 rounded px-2 py-1 text-[13px] text-gray-800" />
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-gray-500">
+              Last day
+              <input type="date" value={past.to} min={past.from || undefined} onChange={(e) => setPast({ ...past, to: e.target.value })} className="border border-gray-200 rounded px-2 py-1 text-[13px] text-gray-800" />
+            </label>
+            <button disabled={!pastValid || !!busyKey} onClick={addPast}
+              className="px-4 py-1.5 text-[13px] font-semibold rounded bg-[#1A1A1A] text-white disabled:opacity-40">Record</button>
+            <button onClick={() => setPast(null)} className="text-[12px] text-gray-500">Cancel</button>
+          </div>
+        )}
       </section>
 
       {gaps && !team.tableMissing && (
@@ -185,13 +308,17 @@ export default function TeamView({ team }: { team: B2BTeamLoad; viewer: Viewer }
                   <tbody>
                     {rows.map((m) => (
                       <MemberRow
-                        key={m.phone}
+                        key={memberKey(m)}
                         member={m}
-                        otherTeams={(teamsOf.get(m.phone) || []).filter((x) => x !== m.team)}
+                        otherTeams={m.leftOn && !m.active ? [] : (teamsOf.get(m.phone) || []).filter((x) => x !== m.team)}
+                        hasPrimary={withPrimary.has(m.phone)}
+                        coverReady={team.coverReady}
+                        pauseReady={team.pauseReady}
+                        tenureReady={team.tenureReady}
                         busy={busyKey === memberKey(m)}
                         kylasUsers={kylasUsers}
                         onLoadKylasUsers={loadKylasUsers}
-                        onChange={(patch) => save({ phone: m.phone, name: m.name, team: m.team, ...patch })}
+                        onChange={(patch) => save({ id: m.id, phone: m.phone, name: m.name, team: m.team, ...patch })}
                         onRenumber={(to) => renumber(m, to)}
                       />
                     ))}

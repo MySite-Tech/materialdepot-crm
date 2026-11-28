@@ -1,7 +1,7 @@
 'use client';
 
 import { ActivityItem, ActivityKind } from '../../../models/performance/types';
-import { Pager } from '../../kams/ui';
+import { Pager } from '../../kams/lists/ui';
 import { PAGE_SIZE } from '../constants';
 import { fmtDay } from '../utils';
 import { useEffect, useMemo, useState } from 'react';

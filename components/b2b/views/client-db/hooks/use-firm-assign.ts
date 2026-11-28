@@ -1,6 +1,6 @@
 'use client';
 
-import { ClientEntity, ClientOrderMetrics, ClientStatus, SpocLogEntry, WIN_BACK_STATUSES, contactNumbers } from '../../../models/client';
+import { ClientEntity, ClientOrderMetrics, ClientStatus, SpocLogEntry, contactNumbers } from '../../../models/client';
 import { isOpenStatus, openLeadLoad } from '../../../models/inbound';
 import { assignFirm, planFirmRoundRobin } from '../../../models/kam';
 import { OUTREACH_OPEN_STATUSES } from '../../../models/outreach';
@@ -9,21 +9,19 @@ import { Rep, assignLead, planRoundRobin, spreadByLoad } from '../../../models/o
 import { withJourney } from '../../../models/outreach/reminders';
 import { useAssignTeams } from '../../../hooks/use-assign-teams';
 import { usePicked } from '../../../hooks/use-picked';
-import { AssignTarget, AssignTeams, isRoundRobin } from '../../../ui/assign-bar';
+import { AssignTarget, isRoundRobin } from '../../../ui/assign-bar';
 import { fetchInboundBoard, fetchOutreachLeads, inboundPhones, insertInboundLeads, istToday, outreachPhones, upsertClients, upsertOutreachLeads } from '@/lib/b2b';
-import { firmToInbound, firmToOutreach, winBackSummary } from '@/lib/b2b/client-import';
+import { firmSendSummary, firmToInbound, firmToOutreach } from '@/lib/b2b/client-import';
 import type { B2BTeam, B2BTeamLoad } from '@/lib/b2b/team/types';
 import { useMemo, useState } from 'react';
 
-type WinBackTeam = Exclude<B2BTeam, 'kam'>;
+type LeadTeam = Exclude<B2BTeam, 'kam'>;
 
-const LABEL: Record<WinBackTeam, string> = { inbound: 'Inbound', outreach: 'Outreach' };
+const LABEL: Record<LeadTeam, string> = { inbound: 'Inbound', outreach: 'Outreach' };
 
 const firms = (n: number) => `${n} firm${n === 1 ? '' : 's'}`;
 
 const names = (reps: Rep[]) => [...new Set(reps.map((r) => r.name))].join(', ');
-
-export const WIN_BACK_RULE = 'Inbound and Outreach take only firms with no order in over 6 months.';
 
 export function useFirmAssign({ clients, team, by, rowOf, onSaved }: {
   clients: ClientEntity[];
@@ -39,8 +37,7 @@ export function useFirmAssign({ clients, team, by, rowOf, onSaved }: {
   const { teams: all, inboundTeam } = useAssignTeams(team);
 
   const selected = useMemo(() => clients.filter((c) => picked.has(c.id)), [clients, picked]);
-  const winBack = useMemo(() => selected.filter((c) => WIN_BACK_STATUSES.includes(rowOf(c).status) && contactNumbers(c.contacts).length > 0), [selected, rowOf]);
-  const teams = useMemo<AssignTeams>(() => (winBack.length ? all : { kam: all.kam }), [winBack.length, all]);
+  const withNumber = useMemo(() => selected.filter((c) => contactNumbers(c.contacts).length > 0), [selected]);
 
   const toKam = async (to: AssignTarget) => {
     if (!isRoundRobin(to) && selected.length === 1 && sameRep(selected[0].kam, to.name)) {
@@ -67,10 +64,10 @@ export function useFirmAssign({ clients, team, by, rowOf, onSaved }: {
     if (skipped) setNote(`${firms(chosen.length)} assigned. ${skipped} already had a KAM and stayed where ${skipped === 1 ? 'it was' : 'they were'}. Move an owned firm by selecting it on its own.`);
   };
 
-  const sendLeads = async (to: AssignTarget, t: WinBackTeam, at: string) => {
+  const sendLeads = async (to: AssignTarget, t: LeadTeam, at: string) => {
     const how = isRoundRobin(to) ? 'round-robin' : 'manual';
-    const summary = (c: ClientEntity) => { const r = rowOf(c); return winBackSummary(c, r.metrics, r.status, by); };
-    const freeOf = (held: Set<string>) => winBack.filter((c) => !contactNumbers(c.contacts).some((p) => held.has(p)));
+    const summary = (c: ClientEntity) => { const r = rowOf(c); return firmSendSummary(c, r.metrics, r.status, by); };
+    const freeOf = (held: Set<string>) => withNumber.filter((c) => !contactNumbers(c.contacts).some((p) => held.has(p)));
     if (t === 'outreach') {
       const leads = await fetchOutreachLeads();
       const held = new Set(leads.filter((l) => OUTREACH_OPEN_STATUSES.includes(l.status) && !l.intake?.rejectedAt).flatMap(outreachPhones));
@@ -96,17 +93,17 @@ export function useFirmAssign({ clients, team, by, rowOf, onSaved }: {
     return plan;
   };
 
-  const toTeam = async (to: AssignTarget, t: WinBackTeam) => {
-    if (!winBack.length) {
-      setError(`${WIN_BACK_RULE} None of the selected firms is.`);
+  const toTeam = async (to: AssignTarget, t: LeadTeam) => {
+    if (!withNumber.length) {
+      setError(`None of the selected firms has a phone number, so none can become a ${LABEL[t]} lead. Add one on the Firm page.`);
       return;
     }
     const at = new Date().toISOString();
     const plan = await sendLeads(to, t, at);
-    const recent = selected.length - winBack.length;
-    const busyElsewhere = winBack.length - plan.length;
+    const noNumber = selected.length - withNumber.length;
+    const busyElsewhere = withNumber.length - plan.length;
     const skips = [
-      recent ? `${firms(recent)} ordered in the last 6 months and stayed put` : '',
+      noNumber ? `${firms(noNumber)} had no phone number and stayed put` : '',
       busyElsewhere ? `${firms(busyElsewhere)} already had an open ${LABEL[t]} lead on ${busyElsewhere === 1 ? 'its' : 'their'} numbers, so ${busyElsewhere === 1 ? 'it was' : 'they were'} left there` : '',
     ].filter(Boolean).join('. ');
     if (!plan.length) {
@@ -145,5 +142,5 @@ export function useFirmAssign({ clients, team, by, rowOf, onSaved }: {
     }
   };
 
-  return { picked, toggle, togglePage, pickAll, clear, teams, winBack: winBack.length, assign, busy, error, setError, note, setNote };
+  return { picked, toggle, togglePage, pickAll, clear, teams: all, assign, busy, error, setError, note, setNote };
 }

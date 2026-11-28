@@ -1,12 +1,13 @@
 'use client';
 
 import { fmtL } from '../../../../models/mock-data';
-import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, applyCredits, channelSplits, fetchRevenueReport, matchesFilter, monthWindows, revenueTotal } from '@/lib/b2b/revenue';
+import { OrderType, REVENUE_CHANNELS, RevenueChannel, RevenueFilter, applyCredits, channelSplits, fetchRevenueReport, matchesFilter, monthWindows, revenueTotal, studioTotal } from '@/lib/b2b/revenue';
 import { useOrderCredits } from '../../../../order-credit/hooks/use-order-credits';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMonthReport } from '../../hooks/use-month-report';
 import { useRevenueTrend } from '../../hooks/use-revenue-trend';
-import { Card, Hint, Notice, Pill, Segmented, Stat } from '../../ui';
+import { Card, LinkButton, Notice, Pill, Segmented, Stat } from '../../ui';
+import { Hint } from '../../../../ui/info-tip';
 import { monthPace } from '../../utils';
 import { MONTHS_OFFERED, TEAM_OPTIONS } from './constants';
 import { Breakdown } from './ui/breakdown';
@@ -18,7 +19,7 @@ const SELECT = 'px-2 py-1 text-[11px] font-semibold border border-gray-200 round
 
 const NO_FILTER: RevenueFilter = { channel: 'all', type: 'all', team: 'all', person: 'all', store: 'all', search: '' };
 
-export function RevenueSection({ target, refreshKey }: { target: number; refreshKey: number }) {
+export function RevenueSection({ target, refreshKey, onAnalyse }: { target: number; refreshKey: number; onAnalyse: () => void }) {
   const months = useMemo(() => monthWindows(new Date(), MONTHS_OFFERED), []);
   const [monthKey, setMonthKey] = useState(months[0].key);
   const [fellBack, setFellBack] = useState(false);
@@ -42,7 +43,8 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
   const orders = useMemo(() => applyCredits(report?.orders ?? [], credits), [report, credits]);
   const isCurrent = monthKey === months[0].key;
   const total = useMemo(() => revenueTotal(orders), [orders]);
-  const pace = useMemo(() => monthPace(total, target, new Date()), [total, target]);
+  const studio = useMemo(() => studioTotal(orders), [orders]);
+  const pace = useMemo(() => monthPace(studio, target, new Date()), [studio, target]);
 
   const narrowed = useMemo(() => orders.filter((o) => matchesFilter(o, { ...filter, channel: 'all', type: 'all' })), [orders, filter]);
   const splits = useMemo(() => channelSplits(narrowed), [narrowed]);
@@ -61,10 +63,13 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
     set(filter.channel === channel && filter.type === 'all' ? { channel: 'all', type: 'all' } : { channel, type: 'all' });
   const pickType = (channel: RevenueChannel, type: OrderType) =>
     set(filter.channel === channel && filter.type === type ? { channel: 'all', type: 'all' } : { channel, type });
-  const notes: Partial<Record<RevenueChannel, string>> = referredOnBranch > 0 ? {
-    direct: `${fmtL(referredOnBranch)} more on the B2B branch is referred clients, in Referred`,
-    referred: `${fmtL(referredOnBranch)} booked on the B2B branch · ${fmtL(splits.referred.value - referredOnBranch)} at a store`,
-  } : {};
+  const notes: Partial<Record<RevenueChannel, string>> = {
+    ecDirect: 'In all B2B revenue only, not in Studio Sales or its target',
+    ...(referredOnBranch > 0 ? {
+      direct: `${fmtL(referredOnBranch)} more on the B2B branch is referred clients, in Referred`,
+      referred: `${fmtL(referredOnBranch)} booked on the B2B branch · ${fmtL(splits.referred.value - referredOnBranch)} at a store`,
+    } : {}),
+  };
   const pickMonth = (key: string) => {
     monthPicked.current = true;
     setFellBack(false);
@@ -76,19 +81,28 @@ export function RevenueSection({ target, refreshKey }: { target: number; refresh
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-500">
-            B2B revenue · {isCurrent ? `${pace.monthLabel} so far` : month.label}
-            <Hint text="Direct is every order placed on the B2B branch (HQ until June 2026). Studio EC Redirected is store orders from firms the B2B team works with. EC Direct is store orders from Client Database firms with no B2B SPoC. Referred is every order from clients a Studio Space partner referred. By order date. The target is the sum of each person's revenue target." />
+            Studio Sales · {isCurrent ? `${pace.monthLabel} so far` : month.label}
+            <Hint text="Studio Sales is what the B2B team's work brought in: Direct (booked on the B2B branch, HQ until June 2026, by someone on the B2B team that day), Studio EC Redirected (store-rep orders from clients the B2B team works with) and Referred (every order from referred clients). It is measured against the target, the sum of each person's revenue target. All B2B revenue adds EC Direct: store-rep orders from Client Database firms with no B2B SPoC, which take no B2B effort. By order date." />
           </div>
           <div className="flex items-baseline gap-3 flex-wrap mt-1">
-            <span className="tabular-nums text-[34px] sm:text-[40px] leading-none font-bold text-gray-900">{report ? fmtL(total) : error ? 'Unknown' : '…'}</span>
+            <span className="tabular-nums text-[34px] sm:text-[40px] leading-none font-bold text-gray-900">{report ? fmtL(studio) : error ? 'Unknown' : '…'}</span>
             {hasTarget && <span className="text-[13px] text-gray-400">of {fmtL(target)}</span>}
             {report && hasTarget && isCurrent && <Pill tone={ahead ? 'good' : 'warn'}>{pace.achievedPct}% · {ahead ? 'ahead of pace' : 'behind pace'}</Pill>}
-            {report && hasTarget && !isCurrent && <Pill tone={total >= target ? 'good' : 'muted'}>{pace.achievedPct}% of the current target</Pill>}
+            {report && hasTarget && !isCurrent && <Pill tone={studio >= target ? 'good' : 'muted'}>{pace.achievedPct}% of the current target</Pill>}
           </div>
+          {report && (
+            <div className="text-[12px] text-gray-500 mt-2 tabular-nums">
+              All B2B revenue <span className="font-semibold text-gray-800">{fmtL(total)}</span>
+              <span className="text-gray-400">{` · adds EC Direct ${fmtL(total - studio)}, firms ordering at a store on their own`}</span>
+            </div>
+          )}
         </div>
-        <select aria-label="Month" value={monthKey} onChange={(e) => pickMonth(e.target.value)} className={SELECT}>
-          {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-        </select>
+        <div className="flex items-center gap-3">
+          <LinkButton onClick={onAnalyse}>Analyse revenue</LinkButton>
+          <select aria-label="Month" value={monthKey} onChange={(e) => pickMonth(e.target.value)} className={SELECT}>
+            {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {fellBack && (

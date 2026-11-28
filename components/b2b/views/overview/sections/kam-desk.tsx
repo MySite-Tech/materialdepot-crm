@@ -11,7 +11,7 @@ const callColor = (pct: number) => (pct >= 100 ? '#22C55E' : pct >= 60 ? '#F59E0
 
 export function KamDesk({ k, unresolved, onNavigate }: {
   k: KamDashboard;
-  unresolved: number;
+  unresolved: number | null;
   onNavigate?: (t: OverviewTarget) => void;
 }) {
   const rows = kamDeskRows(k);

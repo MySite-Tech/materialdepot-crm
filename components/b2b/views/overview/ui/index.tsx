@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Hint } from '../../../ui/info-tip';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`bg-white rounded-xl border border-gray-200 p-5 ${className}`}>{children}</div>;
@@ -15,18 +16,6 @@ export function SectionHead({ title, hint, right }: { title: string; hint?: stri
       </div>
       {right}
     </div>
-  );
-}
-
-export function Hint({ text }: { text: string }) {
-  return (
-    <span
-      title={text}
-      aria-label={text}
-      className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[9px] font-bold text-gray-400 cursor-help select-none"
-    >
-      i
-    </span>
   );
 }
 
@@ -101,6 +90,40 @@ export function StackBar({ parts, height = 'h-2' }: { parts: { key: string; valu
           style={{ width: `${(p.value / total) * 100}%`, background: p.color }}
         />
       ))}
+    </div>
+  );
+}
+
+export function PageHead<K extends string>({ title, subtitle, tabs, tab, onTab, right }: {
+  title: string;
+  subtitle: string;
+  tabs: Record<K, string>;
+  tab: K;
+  onTab: (k: K) => void;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+          <p className="text-[12px] text-gray-400 mt-0.5">{subtitle}</p>
+        </div>
+        {right}
+      </div>
+      <div className="flex gap-5 border-b border-gray-200 overflow-x-auto no-scrollbar">
+        {(Object.keys(tabs) as K[]).map((k) => (
+          <button
+            key={k}
+            onClick={() => onTab(k)}
+            className={`-mb-px pb-2 text-[13px] font-semibold border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
+              tab === k ? 'border-[#EAB308] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            {tabs[k]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

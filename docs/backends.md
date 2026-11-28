@@ -10,6 +10,7 @@ This is the single most common source of confusion here.
 |---|---|---|
 | **Employees, permissions, auth, leads** | Django, `https://api-dev2.materialdepot.in/apiV1` | `lib/api/core/client.ts` (`mdFetch`), re-exported from the `lib/api/index.ts` barrel |
 | **B2B sales CRM data** | FastAPI `b2b-backend` → `newdb` Postgres on `psql-md-prod-cin-01` | Browser → `lib/b2b/data/backend.ts` → `app/api/b2b/[...path]` route handler (`lib/server/b2b-backend.ts`: `requireCaller` + `canUseB2B`, the same B2B Sales rule as the tab gate) → FastAPI, trusted by `x-sync-key: B2B_BACKEND_SECRET`. Env: `B2B_BACKEND_URL` + `B2B_BACKEND_SECRET`, **server-only** (route handler), so like the other server-only keys they are NOT in the deploy workflow — set them in Azure application settings. See `docs/b2b/data-layer.md` |
+| **BDA Retail bank** | The same `b2b-backend`, tables `bda_*` (migration 0033) | Browser → `app/api/bda-retail` (`requireCaller`, then admin or `bda_retail` scope) → `lib/server/bda-retail.ts` → FastAPI `/b2b/bda/*`, same `x-sync-key`. See `docs/bda-retail/context.md` |
 | **CRM's own Supabase** | project `olkkioacgccgsjjlmbhc` | Route handlers only, `SUPABASE_SERVICE_ROLE_KEY` via `lib/appointments/rota-plan.ts` and `lib/store-checklist/checklist-store.ts`, which bypass RLS. **No longer reached from the browser** — `lib/supabase.ts` (the anon client, used only by `lib/b2b/**`) was deleted when B2B moved to the FastAPI backend above. `b2b_lead`/`b2b_target` are retired there |
 | **Site Audit / field-app Supabase** | project `jqrdfnjfxqxrazfkaofm` | `components/site-audit/shared/sb-client.ts` — `sbGet`/`sbPost`/`sbPatch` |
 
@@ -133,6 +134,39 @@ their figures follow the rule only; revenue itself still loads. The whole chain
 (set, replace into `history`, bad team refused, case-insensitive key, clear), and
 0026 then ran on local `crm_real` and `crm_dummy`.
 
+**Migration `0031_b2b_team_cover`** (b2b-backend branch `b2b-team-cover`, 2026-11-26)
+adds `is_primary`, `starts_on` and `ends_on` to `b2b_team_member`
+(`b2b/sales-tab-redesign.md` §Primary team and covers). `PUT /b2b/team` accepts them,
+clears the person's other primary, and demotes a row that is given dates. **Deploy it
+first.** Without it the Team tab says so and works as before, with no covers. It was
+run on a `TEMPLATE crm_real` copy (0026 → 0031, down one, up again) and `PUT /team`
+was exercised over HTTP there: a cover kept its dates through an old-style save,
+reversed and malformed dates and a dated primary were refused with 400.
+
+**Migration `0032_b2b_team_pause`** (b2b-backend branch `b2b-team-pause`, 2026-11-26)
+adds `paused_from`/`paused_to` to `b2b_team_member` (both or neither, CHECK), the days
+a member gets no rotation work (`b2b/sales-tab-redesign.md` §Pausing for set days).
+**Deploy it first.** Without it the Team tab hides "pause for days" and everything else
+works. Run up, down and up on a `TEMPLATE crm_real` copy and over HTTP there: a round
+robin toggle kept the dates, a half or reversed window was refused with 400.
+
+**Migration `0034_b2b_team_tenure`** (b2b-backend branch `b2b-team-tenure`, 2026-11-27)
+adds `joined_on`/`left_on` to `b2b_team_member` (CHECK `left_on >= joined_on`), read and
+written by `GET/PUT /team`. **Deploy it first.** Without it the Team tab hides the date
+controls and revenue reads every person as undated, the old rule. Run on a throwaway
+Postgres: idempotent, dates on a primary row accepted, a reversed pair refused.
+
+**0034–0036 are live (b2b-backend #45, `8193264`, 2026-11-27); production answered the new fields the same evening.**
+
+**Migration `0035_b2b_team_row_id`** (same branch, 2026-11-27) gives each row an `id`
+primary key and a unique index on `(phone, team) WHERE left_on IS NULL`, so a closed row
+keeps its number while the next joiner opens a row on it (`b2b/sales-tab-redesign.md`
+§A business number passes). `PUT /team` takes `id`, else updates the open row for the
+number, refuses another person on an open number with 409, and inserts a closed record
+for someone else as its own row. Renumber moves only open rows. Run up, down and up on a
+`TEMPLATE crm_dummy` copy and exercised over HTTP there; 0034 and 0035 also ran on the
+local `crm_real` copy of production's schema.
+
 ## Owed by Django (2026-10-30)
 
 Collected from every module doc on 2026-10-30. None of it is checked against
@@ -160,6 +194,8 @@ and who changes it is still open. Each row names the doc with the detail.
 | 17 | One active login per person: before creating a staff login, look for an existing one with that name or Kylas `crm_id`, and change its `contact` instead of adding a second | A second login leaves the first one holding the person's name, Kylas id and history, and the CRM matches by number, so their work stays on the number they stopped using | `landmines.md`, the KAM login-number entry |
 | 18 | `/crm/leads/` lists estimates with no deal ticket when `estimates=1` is sent with `q=<phone>` or `gst=`: one row per ENQ id (its latest non-deleted, unrevised estimate), `ticketId` null, `id` the ENQ id, `status` in the ticket labels (`quote_approval_pending` → Quote Approval Pending, `delivered` → Delivered…), `cartValue` = `total_estimate_amount`, plus `clientGst`, `orderPlacedAt`, `bookedBranch`, `createdAt` and `boqItems` under `include=boq`. Skip any estimate whose ENQ id a deal ticket already reaches. The CRM sends the param already | A firm's orders and PIs placed without a CRM ticket are missing from the Firm page, though counted in its totals: about a quarter of placed orders and nearly every Quote Approval Pending PI since Jan 2026. The Orders tab names the count | `b2b/client-db.md` §The Firm page lists deal tickets |
 | 19 | ~~Set `user_organisation.crm_id` = 87068 on Vikas's login 818~~ (done, seen 14 Nov). Still open: decide whether a B2B lead's deal ticket should be owned by the CRM's Inbound owner rather than whoever opened the client's first ticket | The revenue rule credits the ticket owner, so a Vikas lead whose ticket Hardi opened is credited to Hardi until a manager sets a per-order credit. Procurement's "Assigned to" is the estimate's assignee, a separate field anyone in Procurement can set | `b2b/inbound.md` §The CRM's owner is written to Kylas |
+| 21 | Two for BDA Retail: accept `bda_retail` as a permission name on `/user-organisation/`, and give b2b-backend a static read key for `/crm/leads/` and the footfall drill-downs | Without the first, the role may not save on a real account. Without the second, new leads arrive only when one of the five admins clicks Fetch new leads, because nothing server-side can read Django | `bda-retail/context.md` §Who can open it, §Data |
+| 20 | `/crm/footfall-no-cart/` rows gain the visit date and branch (`last_visit_date`, `branch`), and `/crm/leads/` rows the `visits` its type already declares | BDA Retail's "EC visit, no cart" leads enter on the fetch date and cannot be sorted by latest visit, and "no EC visit" is read from a year of footfall instead of the cart itself | `bda-retail/context.md` §Cohorts |
 
 Data fixes, no code: Branch Access for B2B reps who carry retail stores (Admin >
 Users), and backfilling `crm.remarks_quality` on existing permission lists.

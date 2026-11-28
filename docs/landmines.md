@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-100 entries. They live in one file because they cross-reference each other —
+112 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -110,6 +110,19 @@ grep for a term, then read around the line you hit rather than opening all of it
 - An Outreach scorecard read 0 conversions and ₹0 while the headline above it credited the BM's orders
 - A firm's last order read a month old while its own page listed yesterday's order
 - An installation order's delivery date was the installer's date, so every new order read as due today
+- A rep's past calls moved to the lead's current owner the moment their team row was switched off
+- A round robin checkbox took seconds to answer because every team save listed every Kylas user
+- The Overview's client book and Client Database disagreed by a few firms per status band
+- Client Database's Status filter offered bands that no longer existed, and picking one emptied the list
+- A firm's new SPoC read "—" on the Client Database list until the page was reloaded
+- The Report Card read "the stats call failed" for most of a big team while every call returned 200
+- A person's role change rewrote their past revenue, because the rep test read today's team and today's branch
+- A person who left B2B still earned Direct, because Direct was the booking branch and Django kept booking them on it
+- Django's order read starts in April 2026, so any lookback before then reads as "no order"
+- One client held two Outreach leads, so the converted one sat beside a stale Follow up
+- An explanation in a native `title` shows only after the pointer rests, and never on a click
+- Logging a call saved the drawer's unsaved stage with no stage date
+- A cart's detail listed its category, not its products
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1520,3 +1533,239 @@ on a row that is not a delivery. Django now sends `goods_delivery_date` on the s
 flooring, wallpaper or panel line, by its promised date. The import uses
 it, and each reconcile moves a still-pending, auto-imported, never re-dated order to it
 (`docs/site-audit/orders.md` §The delivery date is when the goods arrive).
+
+### A rep's past calls moved to the lead's current owner the moment their team row was switched off (2026-11-26)
+
+Found while building covers, not reported. Inbound calls (and KAM interactions) were
+credited to the caller only while the caller was on that team's *active* list, else to
+the lead's owner. So switching a departed rep's row off, which is what Remove does,
+re-credited every call they ever logged to whoever owned each lead by then (Mandeep's
+leads went to Hardi and Vikas on 14 Nov, so their calls likely grew that day for work
+they never did), and a KAM's calls on an Inbound lead counted for nobody. The rule meant
+to stop a manager's call from counting for the manager had become "the list as it is
+today decides who did past work". Now any B2B team row, any team, active or not, keeps
+the caller's credit (`onB2BTeam`, `b2bMemberByPhone`, `docs/b2b/leadership.md` §KPI
+rules); only someone on no team falls back to the owner. **Who did a piece of work must
+never depend on the roster's current state.** Check this when anything filters people
+by `active` or by team before crediting history.
+
+### A round robin checkbox took seconds to answer because every team save listed every Kylas user (2026-11-26)
+
+The user, on the Team tab: the checkbox "takes way too long to select or deselect".
+`saveMember` called `listKylasUsers` on every save to refresh the Kylas name, though only
+a new row or a picked Kylas user needs it. Kylas's `/users` is two pages of about 1.2 s
+each on the shared, rate-limited key, which answered 429 on one try in three that day,
+and each 429 waits 1, 2, 4 then 8 s. The backend PUT itself, Studio KAM sync included,
+took about 20 ms. The box then flipped only after a full team re-read. Now the list is
+read only when linking, and the row flips at once and reverts with a message if the save
+fails. **Before adding a Kylas or Django read to a save path, check whether this save
+needs it; that key's budget is shared with everything else (`docs/backends.md` §Owed by
+Django row 12).**
+
+
+### The Install Dashboard read "Cannot connect to server" and every load re-imported hundreds of orders (2026-11-26)
+
+Two faults on one screen. One wallpanel sub-job (ENQ20261119105079) was saved with
+`jobcard.rooms: null`. `install_orders_slim` expands `rooms` as an array, and JSON `null` is a
+scalar to Postgres, so the whole view answered `400 cannot extract elements from a scalar` and
+the dashboard showed 0 orders and retried every 8 s. The row was repaired to `rooms: []`; the
+view still trusts every row, so **one non-array `rooms` takes the whole Install Dashboard down
+again**. Separately, `install_orders` (1,275) and `audit_orders` (1,373) had passed Supabase's
+1,000-row cap. The auto-import read "which PIs do we already have" with a plain `sbGet`, saw
+only 1,000, and re-POSTed every other order on each load: hundreds of 409s on
+`*_orders_pi_key`, harmless but noisy. The ops, install-ops and COE order loads were capped
+the same way, so the Orders tile read exactly 1000. All of them now page with `sbGetPaged`.
+**Any read of a whole site-audit table must page; a plain `sbGet` is wrong once it passes
+1,000 rows, and it gives no error when it is.**
+
+It came back on 2026-11-27 (ENQ20261121105431), and the cause was the ops screens, not the
+installer. `install_orders_slim` rebuilds each `jobcard` without `photos` and `installerSign`,
+and an aggregate over zero rooms returns NULL, so a signed card with `rooms: []` reads back as
+`rooms: null`. The order drawer and the assign section patched the whole `subjobs` array they had
+loaded from that view, so any SM action (a status change, a slot booking) wrote the slim job card
+over the real one: `null` rooms took the view down, and photos/installer sign-off were dropped.
+Both writers now go through `install-ops/patch-order.ts`, which re-reads the stored `subjobs` and
+keeps each sub-job's `jobcard`/`jobcard_history` as stored. 60 of 917 signed job cards had no
+`photos` key by then; there is no history to tell lost photos from cards that never had any.
+**Never write back `subjobs` read from a `_slim` view; re-read the table, as the installer app
+and `coe-ops/core/writes.ts` already do.**
+The same row broke a third time at 13:47 that day, from an SM tab opened before the fix
+deployed. Every slim read now repairs `rooms: null` rows itself on that exact 400 and retries
+once (`shared/sb-client.ts`), so a stale tab costs one extra round trip, not an outage.
+
+
+### EC Direct read zero in every month because a firm's channel followed its KAM today (2026-11-27)
+
+Found while checking the new Revenue analysis sub-tab on production. EC Direct, which
+had read tens of lakhs a month on 3 Nov, read ₹0 for all six months on the Overview and
+on Revenue analysis, and Studio EC Redirected had grown by the same amount. The totals
+were right. The classifier treated a Client Database firm as KAM-held if it had an owner
+*now*, with no date gate. About 400 firms got their first KAM on 9 and 17–18 Nov, so every
+past store order of theirs moved from type 8 to type 4. In October alone, 155 orders sat
+on firms first assigned after the month ended, and none sat on a firm still without a KAM.
+Now `kamSince` (the earliest assignment that was not Rejected) gates the firm holder per
+order (`asOfOrder` in `lib/b2b/revenue/utils/classify.ts`). Earlier orders are 6/8 with
+nobody credited. **Any rule that reads who holds a record must ask who held it when the
+order was placed.** A bulk assignment rewrites history otherwise, and nothing errors:
+the figure just moves between channels (`docs/b2b/overview.md` §Four revenue channels).
+
+### The Overview's client book and Client Database disagreed by a few firms per status band (2026-11-27)
+
+Checked signed in on production the day calendar-month status shipped: Client Database
+read Active 194, Inactive 2–3 months 132, 4–6 months 325, 7–12 months 499; the Overview's
+client book read 190, 134, 326 and 500 for the same 1,288 firms. Same `clientStatus`,
+different last-order date: Client Database and KAM build metrics through
+`useClientAggregates`, which adds a firm's Studio Space orders (`withStudioOrders`), and
+`use-overview-data.ts` called `clientMetricsFrom` alone. A firm whose newest order was on
+Studio Space read a band older on the Overview. It predates the calendar-month change. Now
+the Overview applies `withStudioOrders` too. **A firm's order metrics come from b2b-bulk
+plus Studio orders, everywhere; a new screen that calls `clientMetricsFrom` alone will
+disagree with Client Database** (the badge entry above is the same shape).
+
+### Client Database's Status filter offered bands that no longer existed, and picking one emptied the list (2026-11-27)
+
+Found signed in on production the day calendar-month status shipped. The Status column's
+filter still listed Active, Inactive 1 month, Inactive, Never ordered, Unknown: the 30/60-day
+labels of 2026-10-29. The match is `r.status === v`, so Inactive 1 month and Inactive matched
+no firm and emptied the list, and none of the real Inactive bands could be picked. It was a
+hand-typed list in `views/client-db/constants.ts` that two band changes (2026-11-06 and
+2026-11-27) never touched, while the tiles were right because they read `LENS_STATUS`. Now the
+filter reads `CLIENT_STATUS_ORDER` (`constants/client.ts`), the same list the Overview's client
+book uses. **A list of status labels is never typed by hand in a view; read
+`CLIENT_STATUS_ORDER`, or a band change leaves it behind with no `tsc` error** (the badge entry
+above is the same shape).
+
+### A firm's new SPoC read "—" on the Client Database list until the page was reloaded (2026-11-27)
+
+Found on production with a test firm sent to an Outreach BM: the send saved the firm's
+`spoc_log` and the Firm page showed the BM, but the list's Outreach SPoC column still read
+"—" until a reload. `spocsOf` in `views/client-db/index.tsx` cached each firm's SPoCs in a
+`Map` keyed by `c.id`, memoised only on the lead sources, so a firm replaced by `onSaved`
+kept its old answer. Now the cache is a `WeakMap` keyed by the firm object, so a saved firm,
+being a new object, is read again. **A per-row cache in a view keys on the row object, not
+its id, whenever rows are replaced in place after a save.**
+
+
+### The Overview took a minute to load because it waited for per-order fallback lookups (2026-11-27)
+
+The user saw "Loading overview…" for about a minute on a cold load. Every fast read was
+done in seconds; the page was waiting for `resolveKamOrders`, which looks up each KAM
+order whose Enquiry ID the bulk read did not match, one Django call each and then a
+search per firm number (15 calls of 2–15 s on production). The fallback is capped and
+correct, but `readBase` awaited it before rendering anything. Now the page paints from
+the bulk match and runs the fallback after (`components/b2b/views/overview/hooks/use-overview-data.ts`).
+**A capped per-row fallback is allowed by the request budget, but never put it in front
+of first paint:** render what the bulk read answered, mark the rest as still checking,
+and fill it in. The same applies to a fast section rendered behind a slow one's gate: the
+revenue headline waited 8 s for reads it does not use until it was moved outside the gate.
+
+### The Report Card read "the stats call failed" for most of a big team while every call returned 200 (2026-11-27)
+
+Found in a full sweep of the live site, signed in as an admin with 150 people under
+them. 114 of the 150 team rows read "Unknown — the stats call failed", and the tiles
+above (orders, sales value, pipeline) summed only the other 36. All three
+`/crm/leads/stats/?bm_groups=` calls answered 200. Django returns at most **12 groups**
+per call and drops the rest without an error, and the table sent 50 a call
+(`STATS_BATCH`), so people 13–50 of every batch came back missing. The row text
+blamed a failure that never happened, because the code read "no group for this
+phone" as "the call failed". Now the batch is 12, the rows ask only for the page
+shown, and the tiles ask once with a single group of the whole filtered team, which
+production confirmed equals the per-person sum. **A bulk endpoint's silent cap reads
+as missing data, so find the cap on production before choosing a batch size, and
+never label a missing key in a successful answer as a failed call** (the 4 KB
+request-line entry above is the same family).
+
+### A person's role change rewrote their past revenue, because the rep test read today's team and today's branch (2026-11-27)
+
+The user: Manikanta was a Hyderabad KAM and became the Indiranagar store manager when
+that store opened on 27 Nov, and his B2B sales from April on now sat under Indiranagar,
+a store that did not exist then. The live report confirmed it: every order he placed
+since April carried `store: Indiranagar`. An order row's `branch` is the rep's **current**
+Django home branch, and `classifyOrder` copied it into `store`. The rep test had the same
+flaw: `buildRepTeams` dropped inactive team rows and added the static roster with no
+dates, so a person counted as B2B for every order or none, whatever they were on the
+order's date. The same check found two more: a rep who left on 14 Nov kept counting as
+B2B for any order after, and a rep who joined Inbound mid-year had their earlier store
+orders counted as B2B. Now each team row can carry `joined_on`/`left_on` (b2b-backend
+0034), the rep's teams are read **as of the order's IST day** (`repOf(name, reps, day)`),
+a dated person is never a B2B rep by `branch === 'B2B'` alone, and an order by someone on
+B2B that day reads `store: B2B`. People with no dates behave exactly as before, so nothing
+moves until a manager dates them. **Any attribute of a person that can change (team,
+branch, role) must be read as of the event's date, never as of today.**
+
+### A person who left B2B still earned Direct, because Direct was the booking branch and Django kept booking them on it (2026-11-28)
+
+The user: Mandeep left B2B on 24 Sep and now assists clients at the Electronic City
+store, so a client B2B sends to him should read Studio EC Redirected. It read Direct.
+His team dates were right and `repOf` already said he was not on B2B; the channel did
+not ask. Direct was "booked on branch 70", and Django still books his estimates there.
+The same check found the bigger version: dozens of store reps who were never on B2B
+book on branch 70 every month, and all of it was Direct (old types 3, 6, 7). Direct is
+now a B2B person's order on the B2B branch, and a store rep's order there is a store
+order (`overview.md` §Four revenue channels). **Where an order was booked is a fact
+about Django's estimate, not about who did the work; never let it pick the channel on
+its own.**
+
+### Django's order read starts in April 2026, so any lookback before then reads as "no order" (2026-11-28)
+
+`/crm/leads/?order_from&order_to` returns 0–2 placed orders a month from July 2025 to
+March 2026 and about 1,400 from April; `created_from` returns nothing before April
+either. Nothing errors: a 12-month lookback simply finds no order and calls every
+client new. Only `client-order-history` / `b2b-bulk` reach further, and only as one
+`firstOrderDate` and one `lastOrderDate` per number. The Clients sub-tab reads months
+from `ORDER_HISTORY_FROM` only and shows a client it cannot date as "Earlier client,
+gap unknown" rather than New (`overview.md` §Clients sub-tab). **Before trusting a
+"first order" or "no order since" over a long window, check the window starts after
+April 2026.**
+
+### One client held two Outreach leads, so the converted one sat beside a stale Follow up (2026-11-19)
+
+Outreach search for a client listed it twice under the same BM and number: one lead
+Converted and handed over to the KAM, the other still Follow up with a reminder for
+23 Nov. The BM had created the client on 30 Oct, then created it again on 4 Nov, and
+the meetings, notes and contacts were split across the two. Outreach has no merge.
+"+ New lead" checked nothing but the number's format, while the EC B2B Referral
+route already refused a number Outreach held. On 19 Nov production had 17 such
+groups out of 387 Outreach rows, several of them the same firm under two BMs. The
+shape: a create path that skips the duplicate check its sibling path has. "+ New
+lead" now refuses a mobile (main, alternate or extra contact) already on an Outreach
+lead that is not Lost, and names that lead, its BM and stage (`leadOnNumber`,
+`docs/b2b/outreach.md` §One client, one lead). It does not merge the rows that
+already exist.
+
+### An explanation in a native `title` shows only after the pointer rests, and never on a click (2026-11-28)
+
+The user, on the Overview's Clients sub-tab: the "i" beside each row showed its
+meaning only after hovering still for some seconds, and clicking it did nothing. The
+"i" was a `<span title=…>`. The browser decides the delay and gives a click and a
+touch screen nothing. The Clients table also sits in an `overflow-x-auto` box, so a
+plain absolutely positioned popover there would have been clipped. `Hint`
+(`components/b2b/ui/info-tip.tsx`) now opens on hover or focus at once, a click pins
+it until a click elsewhere or Esc, and it renders in a portal at a fixed position so
+no scroll box clips it. `Field` and `SectionCard` take `info` to use it. **Put an
+explanation people are meant to read in `Hint`, not in `title`.** A `title` is still
+fine for a truncated value's full text.
+
+### Logging a call saved the drawer's unsaved stage with no stage date (2026-11-28)
+
+A Lost Inbound lead (Vikas, 21 Nov) had no Lost date, so the Outcomes list read "—"
+and adherence treated the stage as carried over from before the gates. Of the 493
+Inbound leads created since 1 Nov that had left New, 126 had no `statusChangedAt`,
+124 of them with logged calls. Logging a call saves the whole draft, including a
+stage the rep picked but had not saved, and the call log stamped the date only when
+the new stage differed from the **draft's** stage, which already held it. The Save
+that followed compared against the lead as opened, by then refreshed to the
+unstamped stage, and found no change either. The shape: a stamp decided by
+comparing against unsaved state. Both paths now stamp with `withStatusStamps`
+against the saved row (`saved.current`, `base()`). Rows already written stay
+unstamped (`docs/b2b/inbound.md` §The call log).
+
+### A cart's detail listed its category, not its products (2026-11-28)
+
+The user, on a firm's open cart on the KAM Firm page: "Items: Tiles" and a grid of
+dashes, while Inbound's view of a cart lists every product with qty and rate. The
+firm page's card fetched product lines (`include=boq`) only when the id started with
+`ENQ`, so every `CT…` cart fell back to the ticket's category list. Two views of one
+ticket had drifted. The firm page and the Overview's order drawer now render the same
+`DealInline` as Inbound and Outreach (`client-db.md` §A cart or PI on the Orders tab
+opens in full). **When two screens show the same ticket, render one component.**

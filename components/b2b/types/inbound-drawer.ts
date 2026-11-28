@@ -6,3 +6,5 @@ export interface SaveState {
   warning?: string;
   error?: string;
 }
+
+export type DrawerTab = 'activity' | 'client' | 'deal' | 'handoff' | 'source';

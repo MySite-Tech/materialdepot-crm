@@ -2,7 +2,7 @@
 
 import { fmtL } from '../../../../../models/mock-data';
 import { CHANNEL_TYPES, ChannelSplit, OrderType, RevenueChannel } from '@/lib/b2b/revenue';
-import { Hint } from '../../../ui';
+import { Hint } from '../../../../../ui/info-tip';
 import { CHANNEL_META, TYPE_META } from '../constants';
 import { share } from '../utils';
 

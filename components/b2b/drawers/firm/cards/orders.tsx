@@ -1,6 +1,7 @@
 'use client';
 
-import { ORDER_PAGE_SIZE, ORDER_TABS } from '../constants';
+import { LABEL_CLS, LINK_CLS, ORDER_PAGE_SIZE, ORDER_TABS } from '../constants';
+import { Hint } from '../../../ui/info-tip';
 import { OrderTab, fmtDate, fmtDateTime, fmtPhone, orderTab, unlistedOrders } from '../utils';
 import { fmtINR, fmtShortINR } from '../../../models/mock-data';
 import { SectionCard, Spinner } from '../../../ui/inbound-chips';
@@ -8,7 +9,8 @@ import { EnquiryDetail } from './enquiry';
 import { useOrderCredits } from '../../../order-credit/hooks/use-order-credits';
 import { creditKey } from '@/lib/b2b/revenue';
 import { useEcVisits } from '../hooks/use-ec-visits';
-import { ClientEntity, enquirySpoc, primaryContact } from '../../../models/client';
+import { ClientEntity, TicketFollowUp, enquirySpoc, istToday, primaryContact } from '../../../models/client';
+import { TicketFollowUpLog, TicketNext } from '../../../ui/ticket-follow-ups';
 import { repNames } from '../../../models/outreach/handover';
 import { Rep } from '../../../models/outreach/intake';
 import { EcRedirectForm, sentLine } from '../../../ui/redirect-to-ec';
@@ -16,9 +18,6 @@ import { btnPrimary, inputCls } from '../../../constants/ui';
 import { ClientOrderDetails, ClientOrderHistory, ClientOrderRow } from '@/lib/b2b';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-
-const ACTION_LABEL = 'text-[10px] font-semibold uppercase tracking-wider text-gray-500';
-const ACTION_LINK = 'text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap';
 
 function EnquirySpocLine({ client, row, people, assignAs, onSave }: {
   client: ClientEntity;
@@ -49,12 +48,12 @@ function EnquirySpocLine({ client, row, people, assignAs, onSave }: {
     <div className="bg-white border border-gray-100 rounded-md px-3 py-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="min-w-0">
-          <div className={ACTION_LABEL}>B2B SPoC on this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'}</div>
+          <div className={LABEL_CLS}>B2B SPoC on this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'}</div>
           <div className="text-[12px] text-gray-800">
             {held ? <><span className="font-semibold">{held.name}</span><span className="text-gray-400"> · since {fmtDate(held.at)}{held.by ? ` · set by ${held.by}` : ''}</span></> : <span className="text-gray-400">Not set</span>}
           </div>
         </div>
-        {canEdit && !editing && <button onClick={() => { setName(held?.name || ''); setEditing(true); }} className={ACTION_LINK}>{held ? 'Change' : 'Assign'}</button>}
+        {canEdit && !editing && <button onClick={() => { setName(held?.name || ''); setEditing(true); }} className={LINK_CLS}>{held ? 'Change' : 'Assign'}</button>}
       </div>
       {editing && (
         <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -85,8 +84,8 @@ function EnquiryRedirect({ client, row, ec }: {
   return (
     <div className="bg-white border border-gray-100 rounded-md px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <div className={ACTION_LABEL}>Send this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'} to an EC</div>
-        {row.open && !open && !ec.error && <button onClick={() => setOpen(true)} className={ACTION_LINK}>+ Send to EC</button>}
+        <div className={LABEL_CLS}>Send this {row.enqId.startsWith('ENQ') ? 'PI' : 'cart'} to an EC</div>
+        {row.open && !open && !ec.error && <button onClick={() => setOpen(true)} className={LINK_CLS}>+ Send to EC</button>}
       </div>
       {ec.error && <p className="text-[11px] text-blue-700 mt-1">Earlier sends could not be read: {ec.error}</p>}
       {sent.map((v) => <p key={v.id} className="text-[11.5px] text-[#0F766E] mt-1">{sentLine(v)} {fmtDate(v.createdAt)}</p>)}
@@ -125,6 +124,11 @@ export function EnquiryActions(props: {
   );
 }
 
+function openDays(created: string | undefined): number | undefined {
+  const ms = Date.parse(String(created || '').slice(0, 10) + 'T00:00:00Z');
+  return Number.isNaN(ms) ? undefined : Math.max(0, Math.floor((Date.now() - ms) / 86_400_000));
+}
+
 function EnqChip({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -148,7 +152,10 @@ function StatusChip({ r }: { r: ClientOrderRow }) {
   );
 }
 
-export function OrdersCard({ details, loading, failed, phones, historyFor, via, onClearVia, onRecheck, renderActions }: {
+export function OrdersCard({ details, loading, failed, phones, historyFor, via, onClearVia, onRecheck, renderActions, followUps, onLogTicket, preferOpen }: {
+  followUps?: Map<string, TicketFollowUp>;
+  onLogTicket?: (r: ClientOrderRow) => void;
+  preferOpen?: boolean;
   details: ClientOrderDetails | null;
   loading: boolean;
   failed: boolean;
@@ -161,6 +168,8 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
 }) {
   const numbers = phones.length;
   const [tab, setTab] = useState<OrderTab>('placed');
+  const [picked, setPicked] = useState(false);
+  const today = istToday();
   const [page, setPage] = useState(1);
   const [openEnq, setOpenEnq] = useState<string | null>(null);
 
@@ -180,9 +189,18 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
   );
 
   const { credits } = useOrderCredits();
+  useEffect(() => {
+    if (picked || !preferOpen) return;
+    if (byTab.pi.length) setTab('pi'); else if (byTab.open.length) setTab('open');
+  }, [picked, preferOpen, byTab]);
   useEffect(() => { setPage(1); setOpenEnq(null); }, [tab, via]);
 
   const list = byTab[tab];
+  const tracking = !!followUps && (tab === 'open' || tab === 'pi');
+  const touched = (r: ClientOrderRow) => {
+    const f = followUps?.get(r.enqId);
+    return !!f && f.log.some((i) => String(i.date || '').slice(0, 10) >= String(r.createdAt || '').slice(0, 10));
+  };
   const totalPages = Math.max(1, Math.ceil(list.length / ORDER_PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
   const pageRows = list.slice((curPage - 1) * ORDER_PAGE_SIZE, curPage * ORDER_PAGE_SIZE);
@@ -195,15 +213,17 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
   return (
     <SectionCard
       title="Enquiries & orders"
-      subtitle={details ? `${scoped.length} enquir${scoped.length === 1 ? 'y' : 'ies'} ${via ? `on ${fmtPhone(via)}` : numbers > 1 ? `across all ${numbers} numbers` : 'on this number'} · click one for its cart and history` : undefined}
-      right={<button onClick={onRecheck} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">Re-check</button>}
+      info={`Every deal ticket on this firm's numbers, matched by an exact contact-number match, plus enquiries billed to its GSTINs. Click one for its cart, items and history.${rejected ? ` ${rejected} ticket${rejected === 1 ? '' : 's'} raised under a different number ${rejected === 1 ? 'was' : 'were'} discarded.` : ''}`}
+      subtitle={details ? `${scoped.length} enquir${scoped.length === 1 ? 'y' : 'ies'} ${via ? `on ${fmtPhone(via)}` : numbers > 1 ? `across all ${numbers} numbers` : 'on this number'}` : undefined}
+      right={<button onClick={onRecheck} className={LINK_CLS}>Re-check</button>}
     >
       <div className="flex items-center gap-1 border-b border-gray-100 mb-2 flex-wrap">
         {ORDER_TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => { setPicked(true); setTab(t.key); }}
             className={`px-3 py-1.5 text-[12px] font-semibold -mb-px border-b-2 cursor-pointer ${tab === t.key ? 'border-[#0F766E] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
             {t.label}
             <span className={`ml-1.5 font-mono text-[11px] ${tab === t.key ? 'text-[#0F766E]' : 'text-gray-300'}`}>{byTab[t.key].length}</span>
+            {byTab[t.key].length > 0 && <span className="ml-1 text-[11px] font-normal text-gray-400">{fmtShortINR(byTab[t.key].reduce((n, r) => n + r.orderValue, 0))}</span>}
           </button>
         ))}
         {via && (
@@ -221,9 +241,9 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
       )}
 
       {tab === 'placed' && !loading && !failed && unlisted.orders > 0 && (
-        <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mb-2">
-          <span className="font-semibold">{unlisted.orders} order{unlisted.orders === 1 ? '' : 's'}{unlisted.value > 0 ? ` worth ${fmtShortINR(unlisted.value)}` : ''} on {via ? 'this number' : 'these numbers'} {unlisted.orders === 1 ? 'is' : 'are'} not listed here.</span>{' '}
-          {unlisted.orders === 1 ? 'It is' : 'They are'} in the figures above, but the CRM can only list an order that has a deal ticket, and {unlisted.orders === 1 ? 'this one has' : 'these have'} none. PIs without a deal ticket are missing the same way. The tech team has the Django change that lists them.
+        <p className="flex items-center gap-1.5 text-[12px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mb-2">
+          <span>{unlisted.orders} order{unlisted.orders === 1 ? '' : 's'}{unlisted.value > 0 ? ` worth ${fmtShortINR(unlisted.value)}` : ''} on {via ? 'this number' : 'these numbers'} {unlisted.orders === 1 ? 'is' : 'are'} not listed here.</span>
+          <Hint text={`${unlisted.orders === 1 ? 'It is' : 'They are'} in the Overview figures, but the CRM can only list an order that has a deal ticket, and ${unlisted.orders === 1 ? 'this one has' : 'these have'} none. PIs without a deal ticket are missing the same way. The tech team has the Django change that lists them.`} />
         </p>
       )}
 
@@ -234,15 +254,16 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-[12px] min-w-[620px]">
               <thead>
-                <tr className="text-gray-400 text-[9px] uppercase tracking-wider">
-                  <th className="text-left font-semibold px-1 py-1.5">Enquiry ID</th>
-                  <th className="text-left font-semibold px-1 py-1.5">{tab === 'placed' ? 'Order placed' : 'Created'}</th>
-                  <th className="text-right font-semibold px-1 py-1.5">Value</th>
-                  <th className="text-left font-semibold px-1 py-1.5 pl-3">Status</th>
-                  {showVia && <th className="text-left font-semibold px-1 py-1.5">Via</th>}
-                  {showCompany && <th className="text-left font-semibold px-1 py-1.5">Company on order</th>}
-                  {showGst && <th className="text-left font-semibold px-1 py-1.5">GST on order</th>}
-                  <th className="text-left font-semibold px-1 py-1.5">Branch · ticket owner</th>
+                <tr className="text-gray-500 text-[11.5px]">
+                  <th className="text-left font-medium px-1 py-1.5">Enquiry ID</th>
+                  <th className="text-left font-medium px-1 py-1.5">{tab === 'placed' ? 'Order placed' : 'Created'}</th>
+                  <th className="text-right font-medium px-1 py-1.5">Value</th>
+                  <th className="text-left font-medium px-1 py-1.5 pl-3">Status</th>
+                  {tracking && <th className="text-left font-medium px-1 py-1.5">KAM follow-up</th>}
+                  {showVia && <th className="text-left font-medium px-1 py-1.5">Via</th>}
+                  {showCompany && <th className="text-left font-medium px-1 py-1.5">Company on order</th>}
+                  {showGst && <th className="text-left font-medium px-1 py-1.5">GST on order</th>}
+                  <th className="text-left font-medium px-1 py-1.5">Branch · ticket owner</th>
                 </tr>
               </thead>
               <tbody>
@@ -259,18 +280,22 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                     <td className="px-1 py-1.5 text-gray-600 whitespace-nowrap">
                       {(tab === 'placed' ? fmtDateTime(r.placedAt) : fmtDate(r.createdAt))
                         || <span className="text-gray-300" title={tab === 'placed' ? 'Django sent no placement time for this order' : undefined}>—</span>}
+                      {(tab === 'open' || tab === 'pi') && openDays(r.createdAt) !== undefined && (
+                        <div className={`text-[10.5px] ${openDays(r.createdAt)! > 14 ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>open {openDays(r.createdAt)}d</div>
+                      )}
                     </td>
                     <td className="px-1 py-1.5 text-right font-mono font-semibold text-gray-800 whitespace-nowrap">{fmtINR(r.orderValue)}</td>
                     <td className="px-1 py-1.5 pl-3">
                       <StatusChip r={r} />
                       {r.lostReason && <div className="text-[10px] text-gray-400 mt-0.5">{r.lostReason}</div>}
                     </td>
+                    {tracking && <td className="px-1 py-1.5 text-[11.5px]"><TicketNext f={followUps!.get(r.enqId)} touched={touched(r)} today={today} /></td>}
                     {showVia && <td className="px-1 py-1.5 font-mono text-[11px] text-gray-500 whitespace-nowrap">{fmtPhone(r.contactNumber)}</td>}
                     {showCompany && <td className="px-1 py-1.5 text-gray-600">{r.companyOnOrder || <span className="text-gray-300">—</span>}</td>}
                     {showGst && <td className="px-1 py-1.5 font-mono text-[11px] text-gray-600">{r.gstOnOrder || <span className="text-gray-300">—</span>}</td>}
                     <td className="px-1 py-1.5 text-gray-600">
                       {[r.branch, r.spoc].filter(Boolean).join(' · ') || <span className="text-gray-300">—</span>}
-                      <span className="ml-1 text-gray-300">{expanded ? '▴' : '▾'}</span>
+                      <span className="ml-1 text-[11px] font-medium text-indigo-700 whitespace-nowrap">{expanded ? 'Hide' : 'Details'} {expanded ? '▴' : '▾'}</span>
                       {credits?.get(creditKey(r.enqId)) && (
                         <div className="text-[10px] font-semibold text-teal-800 mt-0.5">Credited to {credits.get(creditKey(r.enqId))!.name}</div>
                       )}
@@ -278,8 +303,19 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                   </tr>
                   {expanded && (
                     <tr>
-                      <td colSpan={5 + (showVia ? 1 : 0) + (showCompany ? 1 : 0) + (showGst ? 1 : 0)} className="px-1 pb-2">
-                        <EnquiryDetail r={r} actions={renderActions(r)} />
+                      <td colSpan={5 + (tracking ? 1 : 0) + (showVia ? 1 : 0) + (showCompany ? 1 : 0) + (showGst ? 1 : 0)} className="px-1 pb-2">
+                        <EnquiryDetail r={r} actions={(
+                          <>
+                            {tracking && (
+                              <TicketFollowUpLog
+                                f={followUps!.get(r.enqId)}
+                                label={tab === 'pi' ? 'PI' : 'cart'}
+                                onLog={onLogTicket ? () => onLogTicket(r) : undefined}
+                              />
+                            )}
+                            {renderActions(r)}
+                          </>
+                        )} />
                       </td>
                     </tr>
                   )}
@@ -300,11 +336,6 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
           </div>
         </div>
       )}
-
-      <p className="text-[10px] text-gray-400 mt-2">
-        Matched to this firm by an exact contact-number match.
-        {!!rejected && ` ${rejected} ticket${rejected === 1 ? '' : 's'} raised under a different number ${rejected === 1 ? 'was' : 'were'} discarded.`}
-      </p>
     </SectionCard>
   );
 }

@@ -91,8 +91,11 @@ Receptionist 0. The inactive row appears in nobody's team.
   and an ex-employee would otherwise sit in every manager's team list forever.
 - **Sorting is senior-first** (`STAKEHOLDER_ORDER`, derived from `depth` rather
   than hand-listed), then by name.
-- **`STATS_BATCH = 50`** is a self-imposed URL-length cap for
-  `bm_groups=`, not a known server limit. A 100-person team makes two calls.
+- **`STATS_BATCH = 12` is Django's cap on `bm_groups=`,** measured on production
+  2026-11-27: 12 groups come back whatever the count sent, and the rest are dropped
+  with a 200. It was 50, which looked like a URL-length choice, not a server limit.
+  So a team view asks per person only for the rows on screen and gets any team
+  total from one group holding every phone (`docs/report-card/context.md`).
 - **`normaliseName` is for display grouping and for the one exact-match join
   described in `docs/report-card/context.md`. It is not a fuzzy matcher** and
   must never become one.

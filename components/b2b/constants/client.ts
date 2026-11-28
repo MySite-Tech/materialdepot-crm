@@ -1,5 +1,5 @@
 
-import { ClientStatus, DuplicateEvidence, MergeField, StatusScale, StudioAccess } from '../types/client';
+import { ClientEntity, ClientStatus, DuplicateEvidence, MergeField, StatusScale, StudioAccess } from '../types/client';
 
 export const CLIENT_ENTITY_TYPES = [
   'Architect', 'Interior Designer', 'Contractor', 'Builder', 'End Consumer', 'Other',
@@ -39,6 +39,20 @@ export const LOST_SET = new Set<string>(DEAL_LOST_STATUSES);
 
 export const INTERACTION_TYPES = ['Call', 'Meeting', 'Enquiry'] as const;
 
+export const FOLLOW_UP_FOR = ['Call', 'Meeting'] as const;
+
+const primaryOf = (c: ClientEntity) => (c.contacts || []).find((x) => x.primary) ?? (c.contacts || [])[0];
+
+export const FIRM_DETAIL_CHECKS: { key: string; label: string; firmOnly?: true; filled: (c: ClientEntity) => boolean }[] = [
+  { key: 'contact',       label: 'Contact person',  filled: (c) => !!String(primaryOf(c)?.name || '').trim() },
+  { key: 'role',          label: 'Their designation', filled: (c) => !!String(primaryOf(c)?.role || '').trim() },
+  { key: 'clientType',    label: 'Client type',     filled: (c) => !!c.clientType },
+  { key: 'segment',       label: 'Segment',         firmOnly: true, filled: (c) => !!c.segment },
+  { key: 'city',          label: 'City',            filled: (c) => !!String(c.city || '').trim() },
+  { key: 'officeAddress', label: 'Office address',  firmOnly: true, filled: (c) => !!String(c.officeAddress || '').trim() },
+  { key: 'gst',           label: 'GST',             firmOnly: true, filled: (c) => !!(c.gsts || []).length },
+];
+
 export const INTERACTION_SUMMARY: Record<typeof INTERACTION_TYPES[number], { label: string; placeholder: string }> = {
   Call:    { label: 'Summary',               placeholder: 'What was discussed' },
   Meeting: { label: 'Minutes of meeting *',  placeholder: 'Who was there, what was discussed, what was agreed' },
@@ -55,37 +69,33 @@ export const TEMPERATURE_BANDS = [
   { key: 'hot',   label: '7–10 · healthy', min: 7, max: 10, color: '#22C55E' },
 ] as const;
 
-export const ACTIVE_DAYS = 30;
-
-export const INACTIVE_DAYS = 90;
-
 export const ORDER_BANDS: { status: ClientStatus; upTo: number }[] = [
-  { status: 'Active', upTo: ACTIVE_DAYS },
-  { status: 'Inactive 1–3 months', upTo: INACTIVE_DAYS },
-  { status: 'Inactive 3–6 months', upTo: 180 },
-  { status: 'Inactive 6–12 months', upTo: 365 },
+  { status: 'Active', upTo: 1 },
+  { status: 'Inactive 2–3 months', upTo: 3 },
+  { status: 'Inactive 4–6 months', upTo: 6 },
+  { status: 'Inactive 7–12 months', upTo: 12 },
 ];
 
-export const LONG_INACTIVE: ClientStatus[] = ['Inactive 3–6 months', 'Inactive 6–12 months', 'Inactive 12+ months'];
+export const CLIENT_STATUS_ORDER: ClientStatus[] = ['Active', 'Inactive 2–3 months', 'Inactive 4–6 months', 'Inactive 7–12 months', 'Inactive over 12 months', 'Never ordered', 'Unknown'];
 
-export const WIN_BACK_STATUSES: ClientStatus[] = ['Inactive 6–12 months', 'Inactive 12+ months'];
+export const LONG_INACTIVE: ClientStatus[] = ['Inactive 4–6 months', 'Inactive 7–12 months', 'Inactive over 12 months'];
 
 export const CLIENT_STATUS_SCALE: StatusScale & { colors: Record<ClientStatus, string> } = {
   colors: {
     Active: '#22C55E',
-    'Inactive 1–3 months': '#F59E0B',
-    'Inactive 3–6 months': '#9CA3AF',
-    'Inactive 6–12 months': '#6B7280',
-    'Inactive 12+ months': '#374151',
+    'Inactive 2–3 months': '#F59E0B',
+    'Inactive 4–6 months': '#9CA3AF',
+    'Inactive 7–12 months': '#6B7280',
+    'Inactive over 12 months': '#374151',
     'Never ordered': '#D1D5DB',
     Unknown: '#3B82F6',
   },
   hint: {
-    Active: `Ordered within the last ${ACTIVE_DAYS} days`,
-    'Inactive 1–3 months': `Last order ${ACTIVE_DAYS + 1}–${INACTIVE_DAYS} days ago`,
-    'Inactive 3–6 months': `Last order ${INACTIVE_DAYS + 1}–180 days ago`,
-    'Inactive 6–12 months': 'Last order 181–365 days ago',
-    'Inactive 12+ months': 'Last order more than a year ago',
+    Active: 'Ordered this calendar month or last (M-0 or M-1)',
+    'Inactive 2–3 months': 'Last order two or three calendar months back (M-2 or M-3)',
+    'Inactive 4–6 months': 'Last order four to six calendar months back (M-4 to M-6)',
+    'Inactive 7–12 months': 'Last order seven to twelve calendar months back (M-7 to M-12)',
+    'Inactive over 12 months': 'Last order more than twelve calendar months back',
     'Never ordered': 'No order on record for any of the firm’s numbers',
     Unknown: 'Order dates could not be read, or the last order date is after today',
   },

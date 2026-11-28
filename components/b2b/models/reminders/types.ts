@@ -1,11 +1,12 @@
 import type { ClientEntity } from '../../types/client';
-import type { KamOrder } from '../../types/kam';
 import type { InboundLead, OutreachLead } from '../mock-data';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 
 export type ReminderKind = 'inbound' | 'outreach' | 'meeting' | 'firm' | 'pi';
 
 export type ReminderState = 'later' | 'soon' | 'due' | 'today' | 'overdue';
+
+export type ReminderTopic = 'touch' | 'cart';
 
 export interface ReminderPerson {
   name: string;
@@ -17,6 +18,8 @@ export interface Reminder {
   key: string;
   kind: ReminderKind;
   team: B2BTeam;
+  topic: ReminderTopic;
+  stage?: string;
   openId?: string;
   company: string;
   contact?: string;
@@ -33,6 +36,6 @@ export interface ReminderSources {
   inbound: InboundLead[];
   outreach: OutreachLead[];
   clients: ClientEntity[];
-  orders: KamOrder[];
+  openTickets: Set<string> | null;
   inboundOwnerName: (kylasId: number | undefined) => string | undefined;
 }

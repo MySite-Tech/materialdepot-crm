@@ -9,7 +9,7 @@ import { AssignTarget, AssignTeams, isRoundRobin } from '../ui/assign-bar';
 import { moveInboundLeads } from '@/lib/b2b/team';
 import { INBOUND_ROTATION_BATCH } from '@/lib/b2b/team/constants';
 import type { TeamMember } from '@/lib/b2b/team/types';
-import { kylasOwnerNote, teamMembers } from '@/lib/b2b/team/utils';
+import { getsWork, kylasOwnerNote, onDutyIn, teamMembers } from '@/lib/b2b/team/utils';
 
 const REASON = 'Reassigned from the Inbound tab';
 
@@ -25,10 +25,10 @@ export function useInboundReassign({ leads, members, onMoved }: {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const team = useMemo(() => teamMembers(members, 'inbound').filter((m) => m.active), [members]);
+  const team = useMemo(() => teamMembers(onDutyIn(members, 'inbound'), 'inbound'), [members]);
   const teams = useMemo<AssignTeams>(() => {
     const rep = (m: TeamMember): Rep => ({ name: m.name, phone: m.phone });
-    return { inbound: { reps: team.map(rep), rotation: team.filter((m) => m.inRotation).map(rep) } };
+    return { inbound: { reps: team.map(rep), rotation: team.filter((m) => getsWork(m)).map(rep) } };
   }, [team]);
   const selected = useMemo(() => leads.filter((l) => picked.has(l.id)), [leads, picked]);
 

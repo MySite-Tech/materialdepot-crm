@@ -2,32 +2,44 @@
 
 import { buildHealthOverview } from '../../../models/account-health';
 import { ClientMetricsMap, computeDashboard, computeKamDashboard } from '../../../models/analytics';
-import { ClientEntity, contactNumbers } from '../../../models/client';
+import { ClientEntity, contactNumbers, withStudioOrders } from '../../../models/client';
 import { BaseData } from '../types';
-import { clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchTargets, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
-import { useCallback, useEffect, useState } from 'react';
+import { B2BData, clientMetricsFrom, fetchB2BBulk, fetchB2BData, fetchTargets, firstOrderValueFromAggregates, istToday, kamEnquiryIdsToResolve, orderDatesFromAggregates, resolveKamOrders } from '@/lib/b2b';
+import { fetchStudioAccess } from '@/lib/b2b/studio-logins';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-async function readBase(): Promise<BaseData> {
-  const now = new Date();
-  const [fetched, targets] = await Promise.all([fetchB2BData(), fetchTargets()]);
-  let data = fetched;
-  const today = istToday(now);
+type Resolutions = Awaited<ReturnType<typeof resolveKamOrders>>['resolutions'];
 
+interface Inputs {
+  data: B2BData;
+  targets: Awaited<ReturnType<typeof fetchTargets>>;
+  studio: Awaited<ReturnType<typeof fetchStudioAccess>> | null;
+  bulk: Awaited<ReturnType<typeof fetchB2BBulk>>;
+  clientPhones: string[];
+  today: string;
+}
+
+async function readInputs(): Promise<Inputs> {
+  const [data, targets, studio] = await Promise.all([fetchB2BData(), fetchTargets(), fetchStudioAccess().catch(() => null)]);
   const clientPhones = data.clients.flatMap((c) => contactNumbers(c.contacts));
-  const { histories: aggregates, deals, unread } = await fetchB2BBulk(
-    clientPhones, kamEnquiryIdsToResolve(data.kam),
-  );
+  const bulk = await fetchB2BBulk(clientPhones, kamEnquiryIdsToResolve(data.kam));
+  return { data, targets, studio, bulk, clientPhones, today: istToday(new Date()) };
+}
 
-  const { resolutions } = await resolveKamOrders(data.kam, deals, data.clients);
+const resolveOrders = (inputs: Inputs, lookup: boolean) =>
+  resolveKamOrders(inputs.data.kam, inputs.bulk.deals, inputs.data.clients, lookup).then((r) => r.resolutions);
+
+function buildBase({ data: fetched, targets, studio, bulk, clientPhones, today }: Inputs, resolutions: Resolutions, final: boolean): BaseData {
+  const { histories: aggregates, unread } = bulk;
   const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
-  const unresolvedOrders = data.kam.filter((o) =>
+  const unresolvedOrders = fetched.kam.filter((o) =>
     !!String(o.enqId || '').trim() && !resolvedById.has(o.id) && o.orderValue === undefined).length;
-  data = { ...data, kam: data.kam.map((o) => resolvedById.get(o.id) ?? o) };
+  const data = { ...fetched, kam: fetched.kam.map((o) => resolvedById.get(o.id) ?? o) };
 
   const dates = orderDatesFromAggregates(aggregates, clientPhones, unread);
   const clientMetrics: ClientMetricsMap = {};
   for (const c of data.clients) {
-    clientMetrics[c.id] = clientMetricsFrom(c.contacts, aggregates, dates);
+    clientMetrics[c.id] = withStudioOrders(clientMetricsFrom(c.contacts, aggregates, dates), c, studio?.firms ?? []);
   }
 
   return {
@@ -45,7 +57,7 @@ async function readBase(): Promise<BaseData> {
     ),
     failed: data.failed,
     clientCount: data.clients.length,
-    unresolvedOrders,
+    unresolvedOrders: final ? unresolvedOrders : null,
     targetStore: targets.store,
     targetsOk: targets.ok,
   };
@@ -55,15 +67,26 @@ export function useOverviewData() {
   const [base, setBase] = useState<BaseData | null>(null);
   const [busy, setBusy] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const run = useRef(0);
 
   const reload = useCallback(async () => {
+    const id = ++run.current;
     setBusy(true);
+    let inputs: Inputs;
+    let quick: Resolutions;
     try {
-      setBase(await readBase());
+      inputs = await readInputs();
+      quick = await resolveOrders(inputs, false);
+      if (id !== run.current) return;
+      const pending = quick.some((r) => r.outcome === 'skipped');
+      setBase(buildBase(inputs, quick, !pending));
       setUpdatedAt(new Date());
+      if (!pending) return;
     } finally {
-      setBusy(false);
+      if (id === run.current) setBusy(false);
     }
+    const full = await resolveOrders(inputs, true).catch(() => quick);
+    if (id === run.current) setBase(buildBase(inputs, full, true));
   }, []);
 
   useEffect(() => { reload(); }, [reload]);

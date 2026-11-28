@@ -144,6 +144,7 @@ export function rowToInbound(r: B2BLeadRow): InboundLead {
     phone: (lead.phone as string) || '',
     contactName: (lead.contactName as string) || '',
     source: (lead.source as InboundLead['source']) || 'Other',
+    crmAddedOn: String(r.created_at || '').slice(0, 10) || undefined,
     calls: [],
   } as unknown as InboundLead;
   out.company = inboundDisplayName(out);

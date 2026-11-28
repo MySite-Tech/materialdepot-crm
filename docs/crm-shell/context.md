@@ -99,6 +99,11 @@ into `PERMISSION_TAB_ORDER` rather than written twice, because a rename in one
 place would leave the route denying everyone. A tab whose backend must enforce
 the same rule should follow that shape; see `docs/api-layer/context.md`.
 
+`bdaRetail` (2026-11-26) has no slug. `resolveAllowedTabs` appends it for the five
+names in `BDA_RETAIL_ACCESS` (its admins), and the `bda_retail` role returns early
+with only that tab, the way the site-audit-only roles do. Its route checks both
+again (`docs/bda-retail/context.md`).
+
 `ecB2bReferral` (2026-10-31) is not gated: since 2026-11-03 `resolveAllowedTabs`
 appends it for every account but the site-audit-only roles, and
 `app/api/b2b/ec-referral/route.ts` only needs a session. The slug

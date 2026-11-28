@@ -1,4 +1,4 @@
-const TTL_MS = 8000;
+const TTL_MS = 60_000;
 const cache = new Map<string, { ts: number; promise: Promise<any> }>();
 
 if (typeof window !== 'undefined') {

@@ -10,6 +10,7 @@ import { UnifiedLead, inboundToUnified, istToday, outreachToUnified, upsertOutre
 import { INBOUND_INTAKE_KYLAS_ID, INBOUND_ROTATION_BATCH } from '@/lib/b2b/team/constants';
 import { moveInboundLeads } from '@/lib/b2b/team';
 import type { B2BTeam, TeamMember } from '@/lib/b2b/team/types';
+import { getsWork, onDutyIn, teamMembers } from '@/lib/b2b/team/utils';
 import { useMemo, useState } from 'react';
 
 const REASON = 'Assigned from the Leads tab';
@@ -35,11 +36,9 @@ export function useLeadAssign({ leads, members, reps, rotationReps, by, onSaved 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const inboundTeam = useMemo(() => members
-    .filter((m) => m.team === 'inbound' && m.active && m.kylasUserId != null)
-    .sort((a, b) => a.name.localeCompare(b.name)), [members]);
+  const inboundTeam = useMemo(() => teamMembers(onDutyIn(members, 'inbound'), 'inbound'), [members]);
   const inboundReps = useMemo<Rep[]>(() => inboundTeam.map((m) => ({ name: m.name, phone: m.phone })), [inboundTeam]);
-  const inboundRotation = useMemo<Rep[]>(() => inboundTeam.filter((m) => m.inRotation).map((m) => ({ name: m.name, phone: m.phone })), [inboundTeam]);
+  const inboundRotation = useMemo<Rep[]>(() => inboundTeam.filter((m) => getsWork(m)).map((m) => ({ name: m.name, phone: m.phone })), [inboundTeam]);
 
   const selected = useMemo(() => leads.filter((l) => picked.has(l.key)), [leads, picked]);
   const teams = useMemo<AssignTeams>(() => ({
@@ -58,7 +57,7 @@ export function useLeadAssign({ leads, members, reps, rotationReps, by, onSaved 
     const next = plan.map(({ item, rep }) => withJourney(item, assignLead(item, rep, by, at, how), by, at));
     const err = await upsertOutreachLeads(next);
     if (err) return `Nothing was assigned: ${err}`;
-    onSaved(next.map(outreachToUnified));
+    onSaved(next.map((l) => outreachToUnified(l)));
     return null;
   };
 

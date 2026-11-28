@@ -4,7 +4,7 @@ import { CallLogEntry, InboundLead, LeadNote } from '../../../models/mock-data';
 import { CollapsibleCard, Empty, Field, ReadValue, Spinner, fmtLeadDateTime } from '../../../ui/inbound-chips';
 import { Loaded } from '../hooks/use-inbound-detail';
 
-const sub = 'text-[10px] font-bold uppercase tracking-wider text-gray-400';
+const sub = 'text-[12px] font-medium text-gray-700';
 
 export function InboundPresalesCard({ detailFailed, detailLoading, draft, presalesTypeUnmapped, calls, notes, openCallSummary }: {
   detailFailed: boolean;
@@ -19,7 +19,7 @@ export function InboundPresalesCard({ detailFailed, detailLoading, draft, presal
     : detailFailed ? 'Kylas unreachable'
       : [draft.qualificationTag, draft.presalesOwner && `by ${draft.presalesOwner}`, fmtLeadDateTime(draft.leadCreatedAt)].filter(Boolean).join(' · ');
   return (
-    <CollapsibleCard title="From Presales" owner="kylas" subtitle="Read-only first reference · never overwritten by us" summary={summary}>
+    <CollapsibleCard title="From Presales" owner="kylas" subtitle="Read-only, never overwritten by us" summary={summary} defaultOpen>
       {detailFailed && (
         <p className="text-[11px] text-red-600 mb-3 leading-snug">
           Kylas did not answer, so this block shows the last stored snapshot rather than live
@@ -97,7 +97,7 @@ export function InboundPresalesCard({ detailFailed, detailLoading, draft, presal
 
 export function InboundAddedCard({ draft }: { draft: InboundLead }) {
   return (
-    <CollapsibleCard title="Added in the CRM" owner="crm" subtitle="Came from outside Kylas, so there is no Presales record" summary={[draft.source, draft.addedBy && `by ${draft.addedBy}`, fmtLeadDateTime(draft.leadCreatedAt)].filter(Boolean).join(' · ')}>
+    <CollapsibleCard title="Added in the CRM" owner="crm" subtitle="Came from outside Kylas, so there is no Presales record" summary={[draft.source, draft.addedBy && `by ${draft.addedBy}`, fmtLeadDateTime(draft.leadCreatedAt)].filter(Boolean).join(' · ')} defaultOpen>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Field label="Where it came from"><ReadValue v={draft.source} /></Field>
         <Field label="Added by"><ReadValue v={draft.addedBy} /></Field>

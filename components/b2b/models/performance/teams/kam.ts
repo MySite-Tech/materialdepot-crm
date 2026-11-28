@@ -1,17 +1,17 @@
-import { ACTIVE_DAYS, ClientEntity, ClientInteraction, clientStatus } from '../../client';
+import { ClientEntity, ClientInteraction, clientStatus } from '../../client';
 import { KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET } from '../../kam';
 import { Period, inPeriod } from '../../outreach/kpis';
 import { istDay } from '../../outreach/reminders';
 import { fromKpi, newestFirst, redirectsBy } from '../measures/activity';
 import { creditedOrders, revenueValue } from '../measures/revenue';
 import { ActivityItem, PerfCard, PerfData, PerfKpiDef, PerfRow, Person, TeamEngine } from '../types';
-import { countValue, counted, isPerson, memberPeople, onTeamList, pct, withDataPeople } from '../utils';
+import { countValue, counted, isPerson, formerPeople, memberPeople, onB2BTeam, pct, withDataPeople, withHelpers } from '../utils';
 import type { TeamMember } from '@/lib/b2b/team/types';
 
 const DEFS: PerfKpiDef[] = [
-  { key: 'meetings',  kind: 'Effort', label: 'Account meetings',        short: 'Meetings',       unit: 'count', target: KAM_MONTHLY_MEETING_TARGET, per: 'month', daily: true,  rule: 'Meetings they logged in the period, one per firm per day. One logged by someone not on the KAM team list goes to the firm\'s KAM.', weight: 10 },
-  { key: 'coverage',  kind: 'Effort', label: 'Meeting coverage',        short: 'Coverage',       unit: '%',     target: 50,  per: 'month', daily: false, rule: `Active firms assigned to them (an order in the last ${ACTIVE_DAYS} days, as of today) that they met in the period ÷ their active firms. Repeat meetings with one firm add nothing.`, weight: 10 },
-  { key: 'calls',     kind: 'Effort', label: 'Calls',                   short: 'Calls',          unit: 'count', target: KAM_MONTHLY_CALL_TARGET, per: 'month', daily: true, rule: `Calls they logged in the period, one per firm per day; one logged by someone not on the KAM team list goes to the firm's KAM. Target ${KAM_MONTHLY_CALL_TARGET} a month per head.`, weight: 10 },
+  { key: 'meetings',  kind: 'Effort', label: 'Account meetings',        short: 'Meetings',       unit: 'count', target: KAM_MONTHLY_MEETING_TARGET, per: 'month', daily: true,  rule: 'Meetings they logged in the period, one per firm per day. One logged by anyone on a B2B team counts for them; one logged by someone on no team goes to the firm\'s KAM.', weight: 10 },
+  { key: 'coverage',  kind: 'Effort', label: 'Meeting coverage',        short: 'Coverage',       unit: '%',     target: 50,  per: 'month', daily: false, rule: `Active firms assigned to them (an order this calendar month or last, as of today) that they met in the period ÷ their active firms. Repeat meetings with one firm add nothing.`, weight: 10 },
+  { key: 'calls',     kind: 'Effort', label: 'Calls',                   short: 'Calls',          unit: 'count', target: KAM_MONTHLY_CALL_TARGET, per: 'month', daily: true, rule: `Calls they logged in the period, one per firm per day; one logged by someone on no B2B team goes to the firm's KAM. Target ${KAM_MONTHLY_CALL_TARGET} a month per head.`, weight: 10 },
   { key: 'adherence', kind: 'Effort', label: 'CRM adherence',           short: 'CRM adherence',  unit: '%',     target: 100,               daily: true,  rule: 'Calls and meetings they logged in the period with notes and a next follow-up date ÷ all they logged. Profile completeness is not in it yet.', weight: 5 },
   { key: 'revenue',   kind: 'Output', label: 'Revenue',                 short: 'Revenue',        unit: 'L',     target: 50,  per: 'month', daily: true,  rule: 'Every order placed in the period and credited to them, in four channels: EC, self and referrals. An order is theirs when the number is on a firm they held when it was placed (even if another KAM opened the deal ticket), they were the B2B rep on the cart, it is a client their firm referred, or a manager credited the enquiry to them. The same per-order rule as the Overview.', weight: 30 },
   { key: 'ordering',  kind: 'Output', label: 'Accounts ordering',       short: 'Ordering',       unit: '%',     target: 60,  per: 'month', daily: false, rule: 'Firms assigned to them that placed an order in the period (a Closed KAM order, or a last order date in the period) ÷ firms assigned whose order history loaded.', weight: 10 },
@@ -19,7 +19,7 @@ const DEFS: PerfKpiDef[] = [
 
 const inProgress = (i: ClientInteraction) => i.type === 'Meeting' && !!i.checkIn && !String(i.summary || '').trim();
 
-const actor = (data: PerfData, c: ClientEntity, i: ClientInteraction) => (i.loggedBy && onTeamList(data, 'kam', i.loggedBy) ? i.loggedBy : c.kam);
+const actor = (data: PerfData, c: ClientEntity, i: ClientInteraction) => (i.loggedBy && onB2BTeam(data, i.loggedBy) ? i.loggedBy : c.kam);
 
 function loggedRows(data: PerfData, people: Person[], period: Period, type: ClientInteraction['type']): PerfRow[] {
   const seen = new Set<string>();
@@ -87,7 +87,8 @@ function card(data: PerfData, people: Person[], period: Period): PerfCard {
 
 function people(data: PerfData, members: TeamMember[], live: boolean): Person[] {
   const names = [...data.clients.map((c) => c.kam), ...data.kamOrders.map((o) => o.kam)];
-  return withDataPeople(live ? memberPeople(members, 'kam') : [], names, !live);
+  const base = live ? withHelpers([...memberPeople(members, 'kam'), ...formerPeople(members, 'kam')], members, 'kam', data.clients.flatMap((c) => (c.interactions || []).map((i) => ({ name: i.loggedBy })))) : [];
+  return withDataPeople(base, names, !live);
 }
 
 function activity(data: PerfData, people: Person[], period: Period, c: PerfCard): ActivityItem[] {

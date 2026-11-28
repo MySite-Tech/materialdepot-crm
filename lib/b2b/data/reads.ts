@@ -7,6 +7,7 @@ import { ClientEntity, InboundLink } from '@/components/b2b/models/client';
 import { InboundLead, OutreachLead } from '@/components/b2b/models/mock-data';
 import { KamOrder } from '@/components/b2b/models/kam';
 import { rowToInbound } from '../mappers/inbound';
+import { inboundArrivalDay } from '@/components/b2b/models/inbound';
 import { rowToClient } from '../mappers/client';
 import { rowToKamOrder } from '../mappers/kam';
 
@@ -41,11 +42,6 @@ interface InboundBoard {
   ok: boolean;
 }
 
-const istDay = (iso?: string): string => {
-  const ms = Date.parse(iso || '');
-  return Number.isNaN(ms) ? '' : new Date(ms + 19_800_000).toISOString().slice(0, 10);
-};
-
 export interface InboundBoardOpts {
   ownerId?: number;
   search?: string;
@@ -55,9 +51,9 @@ export interface InboundBoardOpts {
 }
 
 export function inboundBoardMatches(l: InboundLead, opts: InboundBoardOpts): boolean {
-  const day = istDay(l.leadCreatedAt);
-  if (day && opts.createdFrom && day < opts.createdFrom) return false;
-  if (day && opts.createdTo && day > opts.createdTo) return false;
+  const day = inboundArrivalDay(l);
+  if (opts.createdFrom && (!day || day < opts.createdFrom)) return false;
+  if (opts.createdTo && (!day || day > opts.createdTo)) return false;
   if (opts.ownerId != null && l.ownerId !== opts.ownerId) return false;
   if (opts.kylasStage && l.kylasStage !== opts.kylasStage) return false;
   const q = (opts.search || '').trim().toLowerCase();

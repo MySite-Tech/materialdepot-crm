@@ -1,5 +1,6 @@
 'use client';
 
+import { LINK_CLS } from '../constants';
 import { firmHolding, fmtPhone } from '../utils';
 import { CONTACT_CLASSES, ClientContact, ClientEntity, STUDIO_ACCESS, isValidContactNumber, normalizeContactNumber, StudioFirm, StudioLogin, studioFirmOf, studioLoginOf } from '../../../models/client';
 import { useStudioLogins } from '../../../hooks/use-studio-logins';
@@ -18,7 +19,6 @@ function StudioBadge({ login, firm, loading, failed }: { login?: StudioLogin; fi
   if (failed) return <div className={`${base} border-amber-200 text-amber-700`} title="Studio Space could not be reached, so access is unknown">Studio Space: unknown</div>;
   if (!login && firm) return <div className={`${base} border-gray-200 text-gray-600`} title={`${firm.firmName} is on Studio Space with ${firm.logins} login${firm.logins === 1 ? '' : 's'}. This number is not one of its numbers there.`}>Studio Space: firm on, number not</div>;
   if (!login) return <div className={`${base} border-gray-100 text-gray-400`} title="No Studio Space login uses this number">Studio Space: not onboarded</div>;
-  // The firm's tier when Studio Space sends it (2026-11-14), else the login's own tabs.
   const tier = (login.tier ? login.tier === 'power' : login.power) ? 'power' : 'non-power';
   const access = STUDIO_ACCESS[tier];
   const tabs = login.visibleTabs?.length ? `Tabs on: ${login.visibleTabs.join(', ')}` : login.visibleTabs ? 'No optional tabs on' : '';
@@ -105,9 +105,10 @@ export function ContactsCard({ client, clients, canAddStudioNumber, historyFor, 
   return (
     <SectionCard
       title="Contact numbers"
+      info={'Every order placed on a number here, past and future, counts towards this firm. Click a number\'s orders to see only those on the Orders tab.\nStudio Space access is read from Studio Space itself, by this number. Power user: the whole dashboard. Normal user: a login restricted to some tabs, such as order tracking.'}
       subtitle={`${contacts.length} on file`}
       right={!adding && (
-        <button onClick={() => setAdding(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">+ Add number</button>
+        <button onClick={() => setAdding(true)} className={LINK_CLS}>+ Add number</button>
       )}
     >
       <ul className="divide-y divide-gray-100 border border-gray-100 rounded-md">
@@ -121,7 +122,7 @@ export function ContactsCard({ client, clients, canAddStudioNumber, historyFor, 
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono text-[13px] font-semibold text-gray-800 tracking-tight">{fmtPhone(n)}</span>
-                    {c.primary && <span className="px-1.5 py-px rounded text-[9px] font-bold bg-[#0F766E] text-white">PRIMARY</span>}
+                    {c.primary && <span className="px-1.5 py-px rounded text-[10.5px] font-medium bg-[#0F766E] text-white">Primary</span>}
                   </div>
                   <div className="text-[11px] text-gray-500 truncate">{String(c.name || '').trim() || <span className="text-gray-300">No name on file</span>}</div>
                 </div>
@@ -194,18 +195,14 @@ export function ContactsCard({ client, clients, canAddStudioNumber, historyFor, 
               {CONTACT_CLASSES.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
-          {draftError && <p className="text-[11px] text-red-600">{draftError}</p>}
-          <p className="text-[10px] text-gray-400">Every order placed on this number from now on, and every past one, counts towards this firm.</p>
+          {draftError && <p className="text-[12px] text-red-600">{draftError}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={() => { setAdding(false); setDraft({ number: '' }); }} className={btnGhost}>Cancel</button>
             <button onClick={add} disabled={busy || !typed || !!draftError} className={btnPrimary}>{busy ? 'Saving…' : 'Add number'}</button>
           </div>
         </div>
       )}
-      <p className="text-[10px] text-gray-400 mt-2">
-        Studio Space access is read from Studio Space itself, by this number. Power user: the whole dashboard. Normal user: a login restricted to some tabs, such as order tracking.
-      </p>
-      {error && <p className="text-[11px] text-red-600 mt-2">Could not save: {error}</p>}
+      {error && <p className="text-[12px] text-red-600 mt-2">Could not save: {error}</p>}
     </SectionCard>
   );
 }

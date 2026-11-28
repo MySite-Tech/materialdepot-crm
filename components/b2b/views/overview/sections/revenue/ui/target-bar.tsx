@@ -1,7 +1,7 @@
 'use client';
 
 import { fmtL } from '../../../../../models/mock-data';
-import { ChannelSplit, REVENUE_CHANNELS, RevenueChannel } from '@/lib/b2b/revenue';
+import { ChannelSplit, RevenueChannel, STUDIO_CHANNELS } from '@/lib/b2b/revenue';
 import { CHANNEL_META } from '../constants';
 
 export function TargetBar({ splits, target, expectedPct }: {
@@ -9,7 +9,7 @@ export function TargetBar({ splits, target, expectedPct }: {
   target: number;
   expectedPct: number | null;
 }) {
-  const total = REVENUE_CHANNELS.reduce((s, c) => s + splits[c].value, 0);
+  const total = STUDIO_CHANNELS.reduce((s, c) => s + splits[c].value, 0);
   const scale = Math.max(target, total, 1);
   const pctOf = (n: number) => (n / scale) * 100;
 
@@ -18,7 +18,7 @@ export function TargetBar({ splits, target, expectedPct }: {
       <div className="relative h-3">
         <div className="absolute inset-0 rounded-full bg-gray-100" />
         <div className="absolute inset-y-0 left-0 flex gap-[2px] rounded-full overflow-hidden" style={{ width: `${pctOf(total)}%` }}>
-          {REVENUE_CHANNELS.filter((c) => splits[c].value > 0).map((c) => (
+          {STUDIO_CHANNELS.filter((c) => splits[c].value > 0).map((c) => (
             <div
               key={c}
               title={`${CHANNEL_META[c].label}: ${fmtL(splits[c].value)}`}

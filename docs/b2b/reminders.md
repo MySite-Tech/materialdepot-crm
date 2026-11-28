@@ -23,7 +23,7 @@ alert. Each source uses the rule its own tab already uses, so the counts agree:
 
 | Kind | Included when | Owner test (the tab's own) |
 |---|---|---|
-| Inbound call-back | `awaitsFollowUp(l)` (moved from `views/inbound/utils.ts`, which the Due today and Overdue tiles read; false once the lead is sent to Outreach, 2026-11-14) and a follow-up date | `ownerId` = the person's Inbound Kylas id |
+| Inbound call-back | `awaitsFollowUp(l)` (moved from `views/inbound/utils.ts`, which the Due today and Overdue tiles read; false once the lead is sent to Outreach, 2026-11-14), `inInboundWindow(l)` (only leads since 10 Nov, the Inbound tab's own window, 2026-11-28, `inbound.md` §Only leads since 10 Nov) and a follow-up date | `ownerId` = the person's Inbound Kylas id |
 | Outreach follow-up | `OUTREACH_OPEN_STATUSES` and a follow-up date | `repOwns` (BM phone, then `sameRep`) |
 | Outreach meeting | a `Scheduled` meeting with a date, on an open lead | same |
 | KAM follow-up | the firm has a KAM and `nextFollowUp(interactions)` gives a date | `ownsFirm` |
@@ -36,6 +36,26 @@ share matched the Inbound tiles exactly: 3 due today, 392 overdue.
 A reminder is "actioned" the same way the tiles are. Logging the call or moving
 the date moves it, and nothing is ticked off by hand. There is no dismiss button,
 on purpose: dismissing would make the tab disagree with the Overdue tile.
+
+## Calls and meetings, or carts and PIs (2026-11-27)
+
+The user: every client has two kinds of update, its calls and meetings, and its carts
+and PIs, and the tab should keep them apart for all three teams. Each reminder carries
+a `topic`, decided by `topicOf` from the record's own stage, so it costs no request:
+
+| Topic | When |
+|---|---|
+| Carts & PIs | a KAM follow-up logged on an open cart or PI (since 2026-11-28, `kam.md` §Carts and PIs are the KAM pipeline; KAM-order PI dates no longer show); an Inbound lead at `PI Shared`; an Outreach follow-up at `Quote Share` or `PI Shared` (`CART_STAGES`) |
+| Calls & meetings | everything else, and every Outreach meeting and KAM firm follow-up (a call or a meeting; a meeting's context starts with "Meeting") |
+
+## Layout (rebuilt 2026-11-27)
+
+The four sections used to stack down the page, so reaching Missed meant scrolling past
+every Due now row. They are now horizontal tabs with counts (Due now, Today, Missed,
+Coming up). The tab opens on the first one with anything in it. Under the tabs sit the
+topic switch, the team filter and a search, each showing counts within the open tab,
+then one table paged at 25. A row opens the record in place, the same as Open. The
+badge and the alert are unchanged: they still read `buildReminders` and the states.
 
 ## The time rules (IST wall clock)
 

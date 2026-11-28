@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchB2BData, onB2BWrite } from '@/lib/b2b';
 import type { B2BData } from '@/lib/b2b';
 import { membershipIn } from '@/lib/b2b/team/utils';
+import { contactNumbers } from '../models/client';
+import { useOpenDeals } from './use-open-deals';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { REMINDER_REFRESH_MS, REMINDER_TICK_MS, Reminder, ReminderPerson, activeReminderCount, buildReminders, scopeReminders } from '../models/reminders';
 
@@ -80,9 +82,20 @@ export function useReminders(team: B2BTeamLoad, viewer: Viewer): RemindersLoad {
     return (id: number | undefined) => (id != null ? byId.get(id) : undefined);
   }, [team.members]);
 
+  const kamView = viewer.isManager || !!membershipIn(viewer, 'kam');
+  const ticketPhones = useMemo(
+    () => (data && kamView ? [...new Set(data.clients.filter((c) => c.kam && (c.interactions || []).some((i) => i.enqId)).flatMap((c) => contactNumbers(c.contacts)))].sort().join(',') : ''),
+    [data, kamView],
+  );
+  const deals = useOpenDeals(ticketPhones, !!ticketPhones);
+  const openTickets = useMemo(
+    () => (deals.status === 'ready' && ticketPhones ? new Set([...deals.byPhone.values()].flat().map((d) => d.enqId)) : null),
+    [deals.status, deals.byPhone, ticketPhones],
+  );
+
   const all = useMemo(
-    () => (data ? buildReminders({ inbound: data.inbound, outreach: data.outreach, clients: data.clients, orders: data.kam, inboundOwnerName: inboundName }) : []),
-    [data, inboundName],
+    () => (data ? buildReminders({ inbound: data.inbound, outreach: data.outreach, clients: data.clients, openTickets, inboundOwnerName: inboundName }) : []),
+    [data, openTickets, inboundName],
   );
 
   const me = useMemo<ReminderPerson>(() => ({

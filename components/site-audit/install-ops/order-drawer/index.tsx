@@ -4,6 +4,7 @@ import { useNoteModal } from '../../hooks/use-note-modal';
 
 import { typeLabel, typeTag } from '../../data/audit-registry';
 import { sbPatch } from '../../shared';
+import { patchInstallOrder } from '../patch-order';
 import AssignSection from '../ui/assign-section';
 import { AUTO_STATUSES, STATUS, today } from '../constants';
 import { dstr, emptySkuRow, fmtDate, fmtLogLocal, isSplit, mintSubjobId, opsCallDue, sjCustomWp, sjDeliveryDate, sjShortLabel, slotsForWp, subjobDisplayStatus, syncParentStatus, totalRolls } from '../utils';
@@ -50,7 +51,7 @@ export default function OrderDrawer({ order: o, allOrders, installers, shadowerP
 
   async function persist(patch: Record<string, any>, toastMsg?: string, reopen = true, failMsg?: string): Promise<boolean> {
     try {
-      if (o.id) await sbPatch('install_orders', String(o.id), patch);
+      if (o.id) await patchInstallOrder(String(o.id), patch);
     } catch (e: any) {
       toast(failMsg || 'Could not save — ' + (e?.message || 'try again'));
       return false;

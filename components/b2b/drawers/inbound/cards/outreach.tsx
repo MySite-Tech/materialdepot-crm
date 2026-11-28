@@ -49,7 +49,7 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
 
   if (sentToOutreach(draft) && r) {
     return (
-      <SectionCard title="Outreach" owner="crm" subtitle="Handed to the field team">
+      <SectionCard title="Outreach" subtitle="Handed to the field team">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
           <p className="sm:col-span-2 font-semibold text-[#0F766E]">Sent {fmtDay(istDay(r.at))} by {r.by}</p>
           <p><span className="text-gray-400">Decision maker</span> {r.decisionMaker}</p>
@@ -80,7 +80,7 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
   const start = () => { setD({ ...EMPTY, summary: callDigest(draft) }); setOpen(true); };
 
   return (
-    <SectionCard title="Outreach" owner="crm" subtitle="Hand a qualified lead to the field team to meet in person">
+    <SectionCard title="Outreach" info="Hand a qualified lead to the field team to meet in person. Needs a Connected call and a status other than New, Lost or Invalid.">
       {!eligible ? (
         <p className="text-[11.5px] text-gray-500">Only a lead you have worked, and that is not Lost or Invalid, can go to Outreach.</p>
       ) : !connected ? (
@@ -95,7 +95,7 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
             <input value={d.decisionMaker} onChange={(e) => setD({ ...d, decisionMaker: e.target.value })}
               placeholder="Name, role" className={touched && !d.decisionMaker.trim() ? errorInputCls : inputCls} />
           </Field>
-          <Field label="Meeting location" required hint="Where to meet — their office address lives under Client details">
+          <Field label="Meeting location" required info="Where to meet. Their office address lives on the Client tab.">
             <input value={d.meetingLocation} onChange={(e) => setD({ ...d, meetingLocation: e.target.value })}
               placeholder="e.g. Their site in Whitefield" className={touched && !d.meetingLocation.trim() ? errorInputCls : inputCls} />
           </Field>
@@ -103,11 +103,11 @@ export function InboundOutreachCard({ draft, actorName, today, saving, onSend }:
             <input type="date" min={today} value={d.meetingDate} onChange={(e) => setD({ ...d, meetingDate: e.target.value })}
               className={touched && (!d.meetingDate || d.meetingDate < today) ? errorInputCls : inputCls} />
           </Field>
-          <Field label="Time" hint="Optional">
+          <Field label="Time" info="Optional">
             <input type="time" value={d.meetingTime} onChange={(e) => setD({ ...d, meetingTime: e.target.value })} className={inputCls} />
           </Field>
           <Field label="Summary for Outreach" required className="sm:col-span-2"
-            hint="Started from your Connected calls. The full call log and team notes go across too.">
+            info="Started from your Connected calls. The full call log and team notes go across too.">
             <textarea rows={4} value={d.summary} onChange={(e) => setD({ ...d, summary: e.target.value })}
               placeholder="What they need, what was discussed, anything to watch for"
               className={touched && !d.summary.trim() ? errorInputCls : inputCls} />

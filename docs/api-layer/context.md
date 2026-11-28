@@ -95,6 +95,15 @@ caller and month: the hero and the trend ask for the current month at the same
 moment on open, and without that the month would be read from Django twice.
 Refresh skips the cache, but not for a report built in the last minute.
 
+Since 2026-11-28 one month build yields two things, cached under separate keys: the
+report (`b2b-revenue:`) and a small digest (`b2b-digest:`, every buyer's number and each
+B2B order's phone, channel and value) for the Clients sub-tab. They share **one
+in-flight build per caller and month**, keyed on the report key, so a digest request and
+a report request for the same month never both read Django. A build asked for only the
+digest does not cache the full report: the Clients tab reads every month since April
+2026, and keeping each lapsed month's full report (a few hundred KB) per manager is
+what the split avoids. The Clients answer itself is cached 5 minutes per caller.
+
 `lib/server/b2b-client-import/` reuses the report's `allOrders` pager, so the two
 read `/crm/leads/` the same way. It caches 12 months of orders under one global key
 for 30 minutes, not one per caller, because the read is company-wide and takes up to
@@ -135,10 +144,17 @@ Four things worth knowing before reusing it:
   UI would offer actions the route then refuses. `permission_name` is an HR
   label (see `docs/crm-shell/context.md`) — it is used here only because it is
   what `ROLE_TABS` and `BACKDATE_DAYS` are already keyed on.
-- **The resolved caller is cached 30 s, keyed by user id + the token's tail.** So
-  a revoked or logged-out session keeps working for at most 30 s on a route that
-  is already open. Failures are never cached, and the key includes the token, so
+- **The resolved caller is cached 5 minutes, keyed by user id + the token's tail
+  (30 s until 2026-11-28; Dhruv chose load time over the shorter window).** So a
+  revoked, switched-off or logged-out session keeps working for at most 5 minutes
+  on a route that is already open. Each re-check reads the 300 KB roster (p50
+  273 ms, p99 4.3 s). Failures are never cached, and the key includes the token, so
   one user's entry can't serve another's request.
+- **Concurrent checks for one session share one roster read (2026-11-28).** A cold
+  B2B tab fires several route calls at once, and each read the 300 KB roster: 10
+  identical reads in one second were measured locally, at p50 273 ms and p99 4.3 s
+  each. `verifying` holds the in-flight check per cache key. A failure still clears
+  it, so nothing failed is reused.
 - **`user_id` is a UUID string, not a number.** Django's `User.id` is a
   `UUIDField`, so the claim and `user.id` on the roster row are both compared as
   strings. Coercing either with `Number()` yields `NaN` and 401s every caller.
@@ -179,8 +195,12 @@ for its message. Five things the relay deliberately does:
   so a credit always names who really set it (`docs/b2b/overview.md` §A manager
   credits one order). Other relayed writes still carry the actor the browser sends.
 - **Allow-lists the first path segment** (`rows`, `kam-load`, `target`,
-  `studio-access`, `studio-number`, `client-review`, `order-credits`) so the catch-all is a defined surface, not an open proxy to
-  the backend. `studio-access` (2026-10-29) is GET-only and read-only: every
+  `studio-access`, `studio-number`, `client-review`, `order-credits`, `referrals`) so the catch-all is a defined surface, not an open proxy to
+  the backend. `referrals` (2026-11-27) is open to every B2B user, because any rep adds a
+  client's referral from their own drawer; on a firm linked to Studio Space the backend
+  also writes the studio's referral, which is why the route is allow-listed and not a
+  direct call (`docs/b2b/studio-space.md` §Two-way sync). The revenue report reads it
+  server-side too, as one more holder read beside `/rows`. `studio-access` (2026-10-29) is GET-only and read-only: every
   Studio Space login's mobile and tab restriction, for the Firm page badge
   (`docs/b2b/client-db.md`). Other `/b2b` routes such as `team` and `ec-visits`
   have their own handlers rather than being allow-listed here.
@@ -219,6 +239,23 @@ client, or one that only flips round robin, cannot clear someone's B2B admin
 flag. A backend on 0020 ignores the key, and its GET has no `is_admin`, which
 reads as false.
 
+`is_primary`, `starts_on` and `ends_on` (migration 0031, 2026-11-26) work the same
+way: the store sends them only when a save is about the person's primary team or a
+cover, so a round-robin toggle never wipes cover dates. Whether the backend has them
+is read off the GET (`coverReady`: the rows carry `is_primary`). A backend before 0031
+would silently drop them, so `saveMember` refuses cover fields with that reason
+instead of reporting a save that did not happen. `paused_from`/`paused_to` (0032)
+follow the same rule, read off the GET as `pauseReady`, and so do `joined_on`/`left_on`
+(0034, `tenureReady`): each is sent only when the save names it. A row's `id` (0035) is
+sent whenever the CRM knows it, so a save lands on that membership and not on whoever
+holds the number now.
+
+**A team save reads Kylas's user list only when it links a Kylas user** (a new row, or
+a picked `kylasUserId`). Until 2026-11-26 every save did, which is two pages at about
+1.2 s each plus the 429 retries, so a round robin checkbox took seconds and sometimes
+over ten (`docs/landmines.md`). The Team tab also flips a row at once and puts it back
+if the save fails, instead of waiting for a full re-read.
+
 **A server route reads the backend through `/b2b/*`, never `/sync/*`.** Cloudflare
 answered `/sync/*` 403 from a script with the right key on 2026-10-31 and let `/b2b/*`
 through. `lib/server/b2b-revenue.ts` pages Django's `/crm/leads/`
@@ -238,6 +275,17 @@ Client Database funnel (`docs/b2b/overview.md` §Client Database funnel). That r
 pages up to `FUNNEL_PAGES` (30) of `/crm/leads/`, 8 in flight at a time
 (`PARALLEL_PAGES`). Before this, every page was requested at once, and 30 at once
 would hit Django together.
+
+`lib/server/b2b-inbound/deals.ts` (`POST /api/b2b/inbound/deals`, 2026-11-28) is the
+same shape for Inbound's Carts & PIs group. Django has no per-phone filter on
+`/crm/leads/` (`phones=` and `client_phones=` are ignored and return every row), so
+the route pages the open tickets once, `status=In Cart,Quote Approval Pending,Availability Check,Hold Stock`
+from 30 days before the Inbound window (at most 120 days back), 1,000 a page, 8 in
+flight. It caches 5 minutes per caller and returns only the numbers the page posts.
+`status=` takes a comma list. A repeated `status=` keeps only the last value, and an
+unknown status such as `Payment Pending` is ignored, so the filter falls away and the
+read returns every row. Measured on 28 Nov with a signed-in token: 7,785 open tickets
+since 11 Oct, 8 pages, about 0.7 s and 710 KB a page.
 
 ### There is no scheduled route in this app, and no platform cron to run one
 
@@ -326,6 +374,11 @@ is silent:
 | `created_from`/`created_to` | `Ticket.created_at` | every deal, cart-stage included |
 | `order_from`/`order_to` | `estimate.order_placed_time` | only deals that reached an order |
 
+**Neither filter reaches before April 2026** (checked 2026-11-28): `order_from` returns
+0–2 placed orders a month from July 2025 to March 2026, `created_from` returns none. For
+older history only `client-order-history` / `b2b-bulk` help, and only as one
+`firstOrderDate`/`lastOrderDate` per number (`docs/landmines.md`).
+
 `branch_basis` decides what `branch` means: unset (or `owner`) keys on the cart
 **owner's** branch, `estimate` on the branch the order was **booked** at. These
 are genuinely different populations — see `docs/b2b/data-layer.md` for the month
@@ -405,3 +458,9 @@ against an older API it is silently dropped, not an error.
 - Never call `fetch` against Django directly — you lose the envelope unwrap, the
   dedupe and the token refresh, all silently.
 - The request budget and the four permitted egress paths are in `CLAUDE.md`.
+- `lib/server/bda-retail.ts` is BDA Retail's b2b-backend client (`/b2b/bda/*`
+  through `b2bBackendFetch`). The route above it, not the backend, decides who
+  may see what (`docs/bda-retail/context.md`).
+- `staffDirectory` (`lib/server/session.ts`) returns each roster login's `role`
+  and `active` as well as name and phone (2026-11-26), so a route can list the
+  people on a role without a second roster read. BDA Retail lists its BDAs this way.

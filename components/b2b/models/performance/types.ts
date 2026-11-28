@@ -48,6 +48,9 @@ export interface Person {
   phone?: string;
   kylasUserId?: number | null;
   onTeam: boolean;
+  cover?: { from: string | null; to: string | null };
+  tenure?: { from: string | null; to: string | null };
+  primaryTeam?: B2BTeam | null;
 }
 
 export type Source = 'inbound' | 'outreach' | 'clients' | 'kamOrders';

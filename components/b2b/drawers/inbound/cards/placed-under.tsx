@@ -57,8 +57,7 @@ export function InboundPlacedUnderCard({ draft, people, setPlaced }: {
   return (
     <SectionCard
       title={PLACED_UNDER_TITLE[draft.stage] || 'Placed under'}
-      owner="crm"
-      subtitle={PLACED_UNDER_SUBTITLE[draft.stage]}
+      info={PLACED_UNDER_SUBTITLE[draft.stage]}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label={META.bmName.label} owner={META.bmName.owner} hint={bmHint}>
@@ -86,7 +85,7 @@ export function InboundPlacedUnderCard({ draft, people, setPlaced }: {
       </div>
 
       <div className="mt-3">
-        <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">Assisted at EC</span>
+        <span className="block text-[11.5px] font-medium text-gray-500 mb-1">Assisted at EC</span>
         <EcPicker
           ecName={placed.ecName}
           ecBmName={placed.ecBmName}

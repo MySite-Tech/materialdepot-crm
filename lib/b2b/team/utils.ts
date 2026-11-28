@@ -1,5 +1,5 @@
 import { normalisePhone } from '@/lib/org/utils';
-import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_REP_ROLE_TEAM, B2B_SALES_ROLES, PLACEHOLDER_NAMES } from './constants';
+import { B2B_ACCESS_SLUG, B2B_MANAGER_ROLES, B2B_MANAGER_SLUG, B2B_REP_ROLE_TEAM, B2B_SALES_ROLES, IST_OFFSET_MS, PLACEHOLDER_NAMES } from './constants';
 import { B2BTeam, B2BUser, KylasOwnerWrites, SignInGaps, TeamMember, Viewer } from './types';
 
 const perms = (u: B2BUser): string[] =>
@@ -24,15 +24,68 @@ export const membershipsForPhone = (members: TeamMember[], phone: string): TeamM
   return want.length === 10 ? members.filter((m) => m.phone === want && m.active) : [];
 };
 
+export const coversDay = (m: Pick<TeamMember, 'joinedOn' | 'leftOn'>, day: string): boolean =>
+  (!m.joinedOn || day >= m.joinedOn) && (!m.leftOn || day <= m.leftOn);
+
+export function holderOn(members: TeamMember[], phone: string | undefined, day: string): TeamMember | undefined {
+  const want = normalisePhone(phone);
+  if (want.length !== 10) return undefined;
+  const rows = members.filter((m) => m.phone === want && (!day || coversDay(m, day)));
+  return rows.find((m) => m.joinedOn || m.leftOn) ?? rows.find((m) => m.active) ?? rows[0];
+}
+
+export const istDay = (ms = Date.now()): string => new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+
+export const isCover = (m: Pick<TeamMember, 'from' | 'to'>): boolean => !!(m.from || m.to);
+
+export const onDuty = (m: TeamMember, day: string = istDay()): boolean =>
+  m.active && (!m.from || m.from <= day) && (!m.to || day <= m.to);
+
+export const pausedOn = (m: Pick<TeamMember, 'pausedFrom' | 'pausedTo'>, day: string = istDay()): boolean =>
+  !!m.pausedFrom && !!m.pausedTo && m.pausedFrom <= day && day <= m.pausedTo;
+
+export const getsWork = (m: TeamMember, day: string = istDay()): boolean =>
+  onDuty(m, day) && m.inRotation && !pausedOn(m, day);
+
+export const onDutyIn = (members: TeamMember[], team: B2BTeam, day: string = istDay()): TeamMember[] =>
+  members.filter((m) => m.team === team && onDuty(m, day));
+
+export type CoverState = 'upcoming' | 'covering' | 'ended';
+
+type Window = Pick<TeamMember, 'from' | 'to'>;
+
+export const coverState = (m: Window, day: string = istDay()): CoverState | null =>
+  !isCover(m) ? null : m.from && day < m.from ? 'upcoming' : m.to && day > m.to ? 'ended' : 'covering';
+
+const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+export function pauseLabel(m: Pick<TeamMember, 'pausedFrom' | 'pausedTo'>, day: string = istDay()): string | null {
+  if (!m.pausedFrom || !m.pausedTo || day > m.pausedTo) return null;
+  const span = m.pausedFrom === m.pausedTo ? fmtDay(m.pausedFrom) : `${fmtDay(m.pausedFrom)} – ${fmtDay(m.pausedTo)}`;
+  return day >= m.pausedFrom ? `Off ${span}, back ${fmtDay(nextDay(m.pausedTo))}` : `Off ${span}`;
+}
+
+const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+export function coverLabel(m: Window, day: string = istDay()): string {
+  const span = m.from && m.to ? `${fmtDay(m.from)} – ${fmtDay(m.to)}` : m.from ? `from ${fmtDay(m.from)}` : `until ${fmtDay(m.to as string)}`;
+  const state = coverState(m, day);
+  return state === 'ended' ? `Cover ended ${fmtDay(m.to as string)}` : state === 'upcoming' ? `Covers ${span}` : `Covering ${span}`;
+}
+
+export const primaryOf = (rows: TeamMember[]): TeamMember | null =>
+  rows.find((m) => m.primary) ?? null;
+
 export const viewerFor = (user: B2BUser | null, members: TeamMember[]): Viewer => {
   const memberships = user ? membershipsForPhone(members, user.phone) : [];
   const canManageTeam = user ? isB2BManager(user) : false;
+  const today = istDay();
   return {
     name: user?.name ?? '',
     phone: normalisePhone(user?.phone),
     isManager: canManageTeam || memberships.some((m) => m.isAdmin),
     canManageTeam,
-    member: memberships[0] ?? null,
+    member: memberships.find((m) => coverState(m, today) === 'covering') ?? primaryOf(memberships) ?? memberships[0] ?? null,
     memberships,
   };
 };
@@ -45,8 +98,8 @@ export const teamMembers = (members: TeamMember[], team: B2BTeam): TeamMember[] 
     .filter((m) => m.team === team && m.kylasUserId != null)
     .sort((a, b) => a.name.localeCompare(b.name) || a.phone.localeCompare(b.phone));
 
-export const rotationOrder = (members: TeamMember[]): TeamMember[] =>
-  teamMembers(members, 'inbound').filter((m) => m.active && m.inRotation);
+export const rotationOrder = (members: TeamMember[], day: string = istDay()): TeamMember[] =>
+  teamMembers(members, 'inbound').filter((m) => getsWork(m, day));
 
 export function planRotation<T>(
   leads: T[],
