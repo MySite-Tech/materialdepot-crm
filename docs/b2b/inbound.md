@@ -409,6 +409,10 @@ written to Kylas**.
   card on Deal shows it read-only (set from the call log). There used to be a second
   input there, and the two could disagree. The board's drag modal still asks for
   one when a move needs it; it writes the same field.
+- **A call saves the drawer's unsaved edits with it,** stage included, and the
+  stage date (`statusChangedAt`) is stamped against the saved row, not the draft.
+  Until 2026-11-28 it compared against the draft, so a stage picked and then saved
+  by logging a call got no date (`docs/landmines.md`).
 - **No cap on attempts.** The 4-box strip and "Attempt n of 4" are gone. Four
   was always the minimum before closing a lead, never a maximum.
 - **Duration is minutes, stored as `durationMin`.** The old path posted the
