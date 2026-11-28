@@ -741,7 +741,11 @@ Dhruv):** all 18 KAM tiles equal their lists (Carts & PIs 97 tickets, 74 carts +
 a PI opens with its product lines; a firm opens on PI shared with the KAM follow-up
 column and the red missing count; Edit details opens with the right gaps; a Studio-linked
 firm's Studio Space tab shows its own dashboard; no console errors. **A cart shows only
-its category: Django sends no line items for carts** (`backends.md` Owed by Django row 22). The user asked
+its category: Django sends no line items for carts.** Studio Space gets every SKU from
+Material Depot's snapshot service (`/user-cart-order-snapshot/`, key `MD_SNAPSHOT_API_KEY`).
+**The tech team owns fetching SKUs for carts and PIs in the CRM and will make it live**
+(the user, 2026-11-28); don't build it in a session unless asked. Plan and env vars:
+`backends.md` §Owed by Django row 22. The user asked
 for KAM to work like Inbound and Outreach. Read `kam.md` §Five groups, §Carts and PIs
 are the KAM pipeline and §Referred clients, and `client-db.md` §Edit details, §A cart or
 PI on the Orders tab opens in full and §Studio Space: their view before touching any of it.
