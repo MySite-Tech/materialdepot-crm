@@ -217,7 +217,8 @@ sheet), and the type decides the channel (`lib/b2b/revenue/utils/classify.ts`):
   on the Team tab. Someone whose Django branch is still B2B keeps a genuine store booking
   as type 2. Only the Direct/Redirected split moves: Studio Sales, All B2B, credit,
   Clients and the funnel are unchanged (checked on production orders that day: two
-  months changed, everything else identical).
+  months changed, everything else identical). Live as CRM #122 the same day and
+  rechecked signed in after deploy: the live reports matched that prediction exactly.
 - **The first match decides the type:** referred, then a B2B rep, then a holder on the
   order's day, then an earlier B2B order for the firm, then a known firm (EC Direct).
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is
