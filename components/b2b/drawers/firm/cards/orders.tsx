@@ -9,7 +9,8 @@ import { EnquiryDetail } from './enquiry';
 import { useOrderCredits } from '../../../order-credit/hooks/use-order-credits';
 import { creditKey } from '@/lib/b2b/revenue';
 import { useEcVisits } from '../hooks/use-ec-visits';
-import { ClientEntity, enquirySpoc, primaryContact } from '../../../models/client';
+import { ClientEntity, TicketFollowUp, enquirySpoc, istToday, primaryContact } from '../../../models/client';
+import { TicketFollowUpLog, TicketNext } from '../../../ui/ticket-follow-ups';
 import { repNames } from '../../../models/outreach/handover';
 import { Rep } from '../../../models/outreach/intake';
 import { EcRedirectForm, sentLine } from '../../../ui/redirect-to-ec';
@@ -123,6 +124,11 @@ export function EnquiryActions(props: {
   );
 }
 
+function openDays(created: string | undefined): number | undefined {
+  const ms = Date.parse(String(created || '').slice(0, 10) + 'T00:00:00Z');
+  return Number.isNaN(ms) ? undefined : Math.max(0, Math.floor((Date.now() - ms) / 86_400_000));
+}
+
 function EnqChip({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -146,7 +152,10 @@ function StatusChip({ r }: { r: ClientOrderRow }) {
   );
 }
 
-export function OrdersCard({ details, loading, failed, phones, historyFor, via, onClearVia, onRecheck, renderActions }: {
+export function OrdersCard({ details, loading, failed, phones, historyFor, via, onClearVia, onRecheck, renderActions, followUps, onLogTicket, preferOpen }: {
+  followUps?: Map<string, TicketFollowUp>;
+  onLogTicket?: (r: ClientOrderRow) => void;
+  preferOpen?: boolean;
   details: ClientOrderDetails | null;
   loading: boolean;
   failed: boolean;
@@ -159,6 +168,8 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
 }) {
   const numbers = phones.length;
   const [tab, setTab] = useState<OrderTab>('placed');
+  const [picked, setPicked] = useState(false);
+  const today = istToday();
   const [page, setPage] = useState(1);
   const [openEnq, setOpenEnq] = useState<string | null>(null);
 
@@ -178,9 +189,18 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
   );
 
   const { credits } = useOrderCredits();
+  useEffect(() => {
+    if (picked || !preferOpen) return;
+    if (byTab.pi.length) setTab('pi'); else if (byTab.open.length) setTab('open');
+  }, [picked, preferOpen, byTab]);
   useEffect(() => { setPage(1); setOpenEnq(null); }, [tab, via]);
 
   const list = byTab[tab];
+  const tracking = !!followUps && (tab === 'open' || tab === 'pi');
+  const touched = (r: ClientOrderRow) => {
+    const f = followUps?.get(r.enqId);
+    return !!f && f.log.some((i) => String(i.date || '').slice(0, 10) >= String(r.createdAt || '').slice(0, 10));
+  };
   const totalPages = Math.max(1, Math.ceil(list.length / ORDER_PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
   const pageRows = list.slice((curPage - 1) * ORDER_PAGE_SIZE, curPage * ORDER_PAGE_SIZE);
@@ -199,10 +219,11 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
     >
       <div className="flex items-center gap-1 border-b border-gray-100 mb-2 flex-wrap">
         {ORDER_TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => { setPicked(true); setTab(t.key); }}
             className={`px-3 py-1.5 text-[12px] font-semibold -mb-px border-b-2 cursor-pointer ${tab === t.key ? 'border-[#0F766E] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
             {t.label}
             <span className={`ml-1.5 font-mono text-[11px] ${tab === t.key ? 'text-[#0F766E]' : 'text-gray-300'}`}>{byTab[t.key].length}</span>
+            {byTab[t.key].length > 0 && <span className="ml-1 text-[11px] font-normal text-gray-400">{fmtShortINR(byTab[t.key].reduce((n, r) => n + r.orderValue, 0))}</span>}
           </button>
         ))}
         {via && (
@@ -238,6 +259,7 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                   <th className="text-left font-medium px-1 py-1.5">{tab === 'placed' ? 'Order placed' : 'Created'}</th>
                   <th className="text-right font-medium px-1 py-1.5">Value</th>
                   <th className="text-left font-medium px-1 py-1.5 pl-3">Status</th>
+                  {tracking && <th className="text-left font-medium px-1 py-1.5">KAM follow-up</th>}
                   {showVia && <th className="text-left font-medium px-1 py-1.5">Via</th>}
                   {showCompany && <th className="text-left font-medium px-1 py-1.5">Company on order</th>}
                   {showGst && <th className="text-left font-medium px-1 py-1.5">GST on order</th>}
@@ -258,18 +280,22 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                     <td className="px-1 py-1.5 text-gray-600 whitespace-nowrap">
                       {(tab === 'placed' ? fmtDateTime(r.placedAt) : fmtDate(r.createdAt))
                         || <span className="text-gray-300" title={tab === 'placed' ? 'Django sent no placement time for this order' : undefined}>—</span>}
+                      {(tab === 'open' || tab === 'pi') && openDays(r.createdAt) !== undefined && (
+                        <div className={`text-[10.5px] ${openDays(r.createdAt)! > 14 ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>open {openDays(r.createdAt)}d</div>
+                      )}
                     </td>
                     <td className="px-1 py-1.5 text-right font-mono font-semibold text-gray-800 whitespace-nowrap">{fmtINR(r.orderValue)}</td>
                     <td className="px-1 py-1.5 pl-3">
                       <StatusChip r={r} />
                       {r.lostReason && <div className="text-[10px] text-gray-400 mt-0.5">{r.lostReason}</div>}
                     </td>
+                    {tracking && <td className="px-1 py-1.5 text-[11.5px]"><TicketNext f={followUps!.get(r.enqId)} touched={touched(r)} today={today} /></td>}
                     {showVia && <td className="px-1 py-1.5 font-mono text-[11px] text-gray-500 whitespace-nowrap">{fmtPhone(r.contactNumber)}</td>}
                     {showCompany && <td className="px-1 py-1.5 text-gray-600">{r.companyOnOrder || <span className="text-gray-300">—</span>}</td>}
                     {showGst && <td className="px-1 py-1.5 font-mono text-[11px] text-gray-600">{r.gstOnOrder || <span className="text-gray-300">—</span>}</td>}
                     <td className="px-1 py-1.5 text-gray-600">
                       {[r.branch, r.spoc].filter(Boolean).join(' · ') || <span className="text-gray-300">—</span>}
-                      <span className="ml-1 text-gray-300">{expanded ? '▴' : '▾'}</span>
+                      <span className="ml-1 text-[11px] font-medium text-indigo-700 whitespace-nowrap">{expanded ? 'Hide' : 'Details'} {expanded ? '▴' : '▾'}</span>
                       {credits?.get(creditKey(r.enqId)) && (
                         <div className="text-[10px] font-semibold text-teal-800 mt-0.5">Credited to {credits.get(creditKey(r.enqId))!.name}</div>
                       )}
@@ -277,8 +303,19 @@ export function OrdersCard({ details, loading, failed, phones, historyFor, via, 
                   </tr>
                   {expanded && (
                     <tr>
-                      <td colSpan={5 + (showVia ? 1 : 0) + (showCompany ? 1 : 0) + (showGst ? 1 : 0)} className="px-1 pb-2">
-                        <EnquiryDetail r={r} actions={renderActions(r)} />
+                      <td colSpan={5 + (tracking ? 1 : 0) + (showVia ? 1 : 0) + (showCompany ? 1 : 0) + (showGst ? 1 : 0)} className="px-1 pb-2">
+                        <EnquiryDetail r={r} actions={(
+                          <>
+                            {tracking && (
+                              <TicketFollowUpLog
+                                f={followUps!.get(r.enqId)}
+                                label={tab === 'pi' ? 'PI' : 'cart'}
+                                onLog={onLogTicket ? () => onLogTicket(r) : undefined}
+                              />
+                            )}
+                            {renderActions(r)}
+                          </>
+                        )} />
                       </td>
                     </tr>
                   )}

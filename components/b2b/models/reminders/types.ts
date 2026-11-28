@@ -1,5 +1,4 @@
 import type { ClientEntity } from '../../types/client';
-import type { KamOrder } from '../../types/kam';
 import type { InboundLead, OutreachLead } from '../mock-data';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 
@@ -37,6 +36,6 @@ export interface ReminderSources {
   inbound: InboundLead[];
   outreach: OutreachLead[];
   clients: ClientEntity[];
-  orders: KamOrder[];
+  openTickets: Set<string> | null;
   inboundOwnerName: (kylasId: number | undefined) => string | undefined;
 }

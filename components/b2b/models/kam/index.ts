@@ -1,8 +1,8 @@
-export type { KamOrderStatus, KamOrder, CallCompliance, AssignedClientRow, KamPipelineSplit, KamFunnel, CohortMonth, KamAccountSplit, NewVsRepeat, KamLens, KamFirmLens, KamOrderLens } from '../../types/kam';
-export { KAM_ORDER_STATUSES, KAM_ORDER_STATUS_COLORS, KAM_ORDER_STATUS_HINT, KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, KAM_ORDER_LOST_REASONS, DAILY_CALL_TARGET, KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET, KAM_LENS, KAM_LENS_GROUPS, KAM_SIDE_LENSES, KAM_FIRM_LENSES, KAM_LIST_PAGE_SIZE } from '../../constants/kam';
+export type { KamOrderStatus, KamOrder, CallCompliance, AssignedClientRow, KamPipelineSplit, KamFunnel, CohortMonth, KamAccountSplit, NewVsRepeat, KamLens, KamFirmLens, KamDealLens, KamTicketRow, KamReferralLens, KamReferralRow, KamLensGroup, ReferralStage } from '../../types/kam';
+export { KAM_ORDER_STATUSES, KAM_OPEN_STATUSES, KAM_PIPELINE_STATUSES, DAILY_CALL_TARGET, KAM_MONTHLY_CALL_TARGET, KAM_MONTHLY_MEETING_TARGET, KAM_LENS, KAM_LENS_GROUPS, KAM_SIDE_LENSES, KAM_FIRM_LENSES, KAM_DEAL_LENSES, KAM_REFERRAL_LENSES, KAM_LIST_PAGE_SIZE } from '../../constants/kam';
 export { normalizeKamOrderStatus, isLegacyKamStage, queueAgeBand } from '../utils/kam';
-export { kamOrderGateErrors, kamOrderStatusPrompts, interactionGateErrors, interactionPrompts } from './gates';
-export { callsLoggedOn, calledOn, firmFollowUp, callCompliance, assignedClientRows, temperatureMismatch, isAtRisk, firmLensMatches, orderLensMatches, sortFirmsForLens } from './cadence';
+export { interactionGateErrors, interactionPrompts } from './gates';
+export { callsLoggedOn, calledOn, firmFollowUp, callCompliance, assignedClientRows, temperatureMismatch, isAtRisk, firmLensMatches, sortFirmsForLens, kamTicketRows, ticketLensMatches, sortTickets, kamReferralRows, referralLensMatches, referralStage, sortReferrals } from './cadence';
 export { assignFirm, canRespondToFirm, currentAssignments, firmHandover, firmHandoverPending, firmHandoverState, ownsFirm, planFirmRoundRobin, acceptFirmHandover, rejectFirmHandover } from './handover';
 export type { FirmHandoverState } from './handover';
 export { kamPipeline, kamPipelineToday, kamFunnel, clientCohort, kamAccountSplit, lostReasonBreakdown, newVsRepeat, segmentRevenue } from './analytics';

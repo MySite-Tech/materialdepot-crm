@@ -47,8 +47,27 @@ export function currentUpcomingProject(list: ClientInteraction[] | undefined): {
 
 export function nextFollowUp(list: ClientInteraction[] | undefined): { date: string; time?: string; from: ClientInteraction } | undefined {
   const open = openCheckIn(list);
-  const latest = latestInteraction((list || []).filter((i) => i !== open));
+  const latest = latestInteraction((list || []).filter((i) => i !== open && !i.enqId));
   const date = String(latest?.nextFollowUpDate || '').slice(0, 10);
   return latest && date ? { date, time: latest.nextFollowUpTime || undefined, from: latest } : undefined;
 }
 
+
+export interface TicketFollowUp {
+  enqId: string;
+  kind?: 'cart' | 'pi';
+  log: ClientInteraction[];
+  last: ClientInteraction;
+  next?: { date: string; time?: string };
+}
+
+export function ticketFollowUps(list: ClientInteraction[] | undefined): Map<string, TicketFollowUp> {
+  const out = new Map<string, TicketFollowUp>();
+  for (const i of sortedInteractions((list || []).filter((x) => x.enqId))) {
+    const prev = out.get(i.enqId!);
+    if (prev) { prev.log.push(i); continue; }
+    const date = String(i.nextFollowUpDate || '').slice(0, 10);
+    out.set(i.enqId!, { enqId: i.enqId!, kind: i.ticketKind, log: [i], last: i, next: date ? { date, time: i.nextFollowUpTime || undefined } : undefined });
+  }
+  return out;
+}

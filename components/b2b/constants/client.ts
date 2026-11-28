@@ -1,5 +1,5 @@
 
-import { ClientStatus, DuplicateEvidence, MergeField, StatusScale, StudioAccess } from '../types/client';
+import { ClientEntity, ClientStatus, DuplicateEvidence, MergeField, StatusScale, StudioAccess } from '../types/client';
 
 export const CLIENT_ENTITY_TYPES = [
   'Architect', 'Interior Designer', 'Contractor', 'Builder', 'End Consumer', 'Other',
@@ -38,6 +38,20 @@ export const ORDER_SET = new Set<string>(DEAL_ORDER_STATUSES);
 export const LOST_SET = new Set<string>(DEAL_LOST_STATUSES);
 
 export const INTERACTION_TYPES = ['Call', 'Meeting', 'Enquiry'] as const;
+
+export const FOLLOW_UP_FOR = ['Call', 'Meeting'] as const;
+
+const primaryOf = (c: ClientEntity) => (c.contacts || []).find((x) => x.primary) ?? (c.contacts || [])[0];
+
+export const FIRM_DETAIL_CHECKS: { key: string; label: string; firmOnly?: true; filled: (c: ClientEntity) => boolean }[] = [
+  { key: 'contact',       label: 'Contact person',  filled: (c) => !!String(primaryOf(c)?.name || '').trim() },
+  { key: 'role',          label: 'Their designation', filled: (c) => !!String(primaryOf(c)?.role || '').trim() },
+  { key: 'clientType',    label: 'Client type',     filled: (c) => !!c.clientType },
+  { key: 'segment',       label: 'Segment',         firmOnly: true, filled: (c) => !!c.segment },
+  { key: 'city',          label: 'City',            filled: (c) => !!String(c.city || '').trim() },
+  { key: 'officeAddress', label: 'Office address',  firmOnly: true, filled: (c) => !!String(c.officeAddress || '').trim() },
+  { key: 'gst',           label: 'GST',             firmOnly: true, filled: (c) => !!(c.gsts || []).length },
+];
 
 export const INTERACTION_SUMMARY: Record<typeof INTERACTION_TYPES[number], { label: string; placeholder: string }> = {
   Call:    { label: 'Summary',               placeholder: 'What was discussed' },

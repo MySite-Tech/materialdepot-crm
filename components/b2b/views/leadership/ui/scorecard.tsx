@@ -3,7 +3,7 @@
 import { Period } from '../../../models/outreach/kpis';
 import { Goals, PerfCard, PerfKpiDef, PerfValue, Person } from '../../../models/performance/types';
 import { counted, elapsedDays, fmtNumber, fmtValue, paceFor, targetFor, tone } from '../../../models/performance/utils';
-import { Pager } from '../../kams/ui';
+import { Pager } from '../../kams/lists/ui';
 import { PAGE_SIZE } from '../constants';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { fmtDay } from '../utils';

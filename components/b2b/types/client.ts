@@ -1,7 +1,7 @@
 import { Escalation } from '../models/account-health';
 import { Segment } from '../models/inbound';
 import type { MeetingCheckIn } from '../models/outreach';
-import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, INTERACTION_TYPES, TEMPERATURE_BANDS } from '../constants/client';
+import { CLIENT_ENTITY_TYPES, CLIENT_SOURCES, FOLLOW_UP_FOR, INTERACTION_TYPES, TEMPERATURE_BANDS } from '../constants/client';
 export type ClientEntityType = typeof CLIENT_ENTITY_TYPES[number];
 
 export type ClientSource = typeof CLIENT_SOURCES[number];
@@ -12,6 +12,7 @@ export interface ClientContact {
   name?: string;
 
   label?: string;
+  role?: string;
   primary?: boolean;
 }
 
@@ -142,6 +143,8 @@ export interface ClientEntity {
   gsts: ClientGst[];
   segment?: Segment;
   clientType?: ClientEntityType;
+  city?: string;
+  officeAddress?: string;
 
   clientTypeRaw?: string;
   source: ClientSource;
@@ -163,6 +166,8 @@ export interface ClientEntity {
 
 export type InteractionType = typeof INTERACTION_TYPES[number];
 
+export type FollowUpFor = typeof FOLLOW_UP_FOR[number];
+
 export interface ClientInteraction {
   id: string;
   type: InteractionType;
@@ -175,6 +180,9 @@ export interface ClientInteraction {
 
   nextFollowUpDate?: string;
   nextFollowUpTime?: string;
+  nextFollowUpFor?: FollowUpFor;
+  enqId?: string;
+  ticketKind?: 'cart' | 'pi';
   loggedBy?: string;
   checkIn?: MeetingCheckIn;
 

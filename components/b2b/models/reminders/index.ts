@@ -1,9 +1,8 @@
 import { awaitsFollowUp, inInboundWindow } from '../inbound';
 import { OUTREACH_OPEN_STATUSES } from '../outreach';
 import { repOwns, sameRep } from '../outreach/handover';
-import { nextFollowUp, primaryContact } from '../client';
+import { nextFollowUp, primaryContact, ticketFollowUps } from '../client';
 import { ownsFirm } from '../kam/handover';
-import { KAM_OPEN_STATUSES } from '../../constants/kam';
 import { CART_STAGES, REMINDER_ACTIVE_STATES, REMINDER_UPCOMING_DAYS } from './constants';
 import { cleanDay, cleanTime, followUpAt, istDayOf, reminderState } from './utils';
 import type { Reminder, ReminderPerson, ReminderSources, ReminderState } from './types';
@@ -64,24 +63,29 @@ export function buildReminders(src: ReminderSources): Reminder[] {
       ...when,
       key: `firm:${c.id}`, kind: 'firm', team: 'kam', topic: 'touch', openId: c.id,
       company: c.company, contact: person?.name, phone: person?.number,
-      context: String(next.from.summary || '').trim() || undefined,
+      context: [next.from.nextFollowUpFor === 'Meeting' ? 'Meeting' : '', String(next.from.summary || '').trim()].filter(Boolean).join(' · ') || undefined,
       owner: c.kam,
       owns: (p) => ownsFirm(c, p),
     });
   }
 
-  for (const o of src.orders) {
-    if (!KAM_OPEN_STATUSES.includes(o.status)) continue;
-    const when = at(o.followUpDate, o.followUpTime);
-    if (!when) continue;
-    out.push({
-      ...when,
-      key: `pi:${o.id}`, kind: 'pi', team: 'kam', topic: 'cart', stage: o.status, openId: o.clientId,
-      company: o.company, contact: o.contactName, phone: o.phone,
-      context: [o.enqId, o.requirement].filter(Boolean).join(' · ') || undefined,
-      owner: o.kam,
-      owns: (p) => sameRep(o.kam, p.name),
-    });
+  for (const c of src.clients) {
+    if (!c.kam) continue;
+    const person = primaryContact(c.contacts);
+    for (const f of ticketFollowUps(c.interactions).values()) {
+      if (src.openTickets && !src.openTickets.has(f.enqId)) continue;
+      const when = f.next ? at(f.next.date, f.next.time) : null;
+      if (!when) continue;
+      const label = f.kind === 'pi' ? 'PI' : 'Cart';
+      out.push({
+        ...when,
+        key: `pi:${c.id}:${f.enqId}`, kind: 'pi', team: 'kam', topic: 'cart', stage: label, openId: c.id,
+        company: c.company, contact: person?.name, phone: person?.number,
+        context: [`${label} ${f.enqId}`, String(f.last.summary || '').trim()].filter(Boolean).join(' · '),
+        owner: c.kam,
+        owns: (p) => ownsFirm(c, p),
+      });
+    }
   }
 
   return out.sort((a, b) => a.dueAt - b.dueAt || a.company.localeCompare(b.company));

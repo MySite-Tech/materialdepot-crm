@@ -14,7 +14,7 @@ export const REMINDER_KIND_LABEL: Record<ReminderKind, string> = {
   outreach: 'Follow-up',
   meeting: 'Meeting',
   firm: 'Follow-up',
-  pi: 'PI follow-up',
+  pi: 'Cart / PI follow-up',
 };
 
 export const REMINDER_TEAM_LABEL: Record<B2BTeam, string> = {

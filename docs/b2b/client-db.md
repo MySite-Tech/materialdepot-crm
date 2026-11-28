@@ -160,13 +160,14 @@ The same header-and-tabs layout the Inbound lead window got that day
 
 | Where | What |
 |---|---|
-| Header | firm name, primary number, status band, temperature, type · segment · source, Edit details, and the four SPoCs on one line with an "i" for how each holds it; Change opens People |
-| Activity | KAM tab only, and its default: the children `views/kams/drawer.tsx` passes (calls and meetings with the check-in, KAM pipeline, escalations, the temperature mismatch). Badge = interactions logged |
+| Header | firm name, primary number, status band, temperature, type · segment · source, a red "n details missing", Edit details (§Edit details), and the four SPoCs on one line with an "i" for how each holds it; Change opens People |
+| Activity | KAM tab only, and its default: the children `views/kams/drawer/index.tsx` passes (calls and meetings with the check-in, escalations, the temperature mismatch; the KAM pipeline card was removed on 2026-11-28, `kam.md` §Carts and PIs are the KAM pipeline). Badge = interactions logged |
 | Overview | the five stat tiles, the Unknown-status notices, Account (KAM with Assign/Reassign, assignment history, remarks, merged from) |
 | Orders | Enquiries & orders (its Orders / PI shared / Open carts / Lost sub-tabs, per-enquiry SPoC and Send to EC), Sales by SPoC. Badge = open carts and PIs |
 | People | SPoCs (Change/Add per team), contact numbers, GST numbers, Delete this firm at the bottom |
 | EC & handover | EC visits and redirects, Handover from Outreach (absent when there is none, as before) |
 | Referrals | Referred clients |
+| Studio Space ↗ | only when the firm is on Studio Space: the firm's own dashboard ("their view", §Studio Space: their view) |
 
 - **The KAM slot's Change on People jumps to Overview and opens the Account
   picker.** The picker's open state lives in the drawer, not the card, because the
@@ -181,6 +182,53 @@ The same header-and-tabs layout the Inbound lead window got that day
   discarded tickets, why an order is unlisted) moved behind the "i". Labels are
   sentence case. The stat tiles' labels still render upper case because
   `StatTile` is shared (`ui/client-chips.tsx`).
+
+### Edit details, and what a firm is missing (2026-11-28)
+
+The user: whoever holds a firm (KAM, Client Database) fills its details on the firm
+page itself, and the page says in red how many are still missing, so the count falls
+as they are filled. `firmDetailGaps` (`models/client/rules/gates.ts`, the checks in
+`FIRM_DETAIL_CHECKS`) is the one rule, read by the header, the KAM list's "n missing"
+chip and the KAM Details missing pill. It asks for: contact person (on the primary
+number), their designation, client type, segment, city, office address and GST. An
+End Consumer is not asked for segment, office address or GST.
+
+- **Edit details is on every firm page** (`cards/details.tsx`), red while anything
+  is missing, for anyone who can open the page. It edits name, contact person and
+  designation, client type, segment, source, city, office address, remarks, and adds
+  a GSTIN when there is none (more GSTINs stay on People). It saves through the same
+  `upsertClient`, under `clientGateErrors`.
+- **`city` and `office_address` are new keys, and `role` on a contact.** They land
+  in the backend's `extra` jsonb (`data-layer.md`), so no migration.
+- **Client Database's old Edit pop-up is gone from the firm page.** `ClientModal` is
+  now only Add Client. It also let anyone change the KAM there without the KAM
+  sign-off; the KAM changes only through Account (`kam.md` §Admin assigns firms).
+
+### A cart or PI on the Orders tab opens in full (2026-11-28)
+
+The user could not read a cart's detail: a firm's open cart showed "Items: Tiles", a
+category, and a grid of dashes. The old card fetched product lines only for `ENQ`
+ids. The expanded row now renders `DealInline` (`ui/deal-detail.tsx`), the view
+Inbound and Outreach use: one `/crm/leads/?enquiry_ids=<id>&include=boq` read per
+ticket opened, product lines with qty, rate and amount for carts as well as PIs,
+falling back to the list's own row (with a notice) when Django has no ticket. The
+SPoC and Send to EC lines sit above it. Revenue credit shows only on placed orders,
+with its rule behind the "i". Each sub-tab shows its total value, and an open cart or
+PI shows how many days it has been open (amber past 14). The Overview's order drawer
+uses the same card, so it changed too.
+
+### Studio Space: their view (2026-11-28)
+
+The user wanted to see a firm's Studio Space from its firm page. Studio Space already
+has "Their view" (b2b-dashboard `lib/data/view-as.ts`): `/console/view-as?firm=<partner
+id>` shows the firm's own dashboard to staff, read-only for the firm's KAM, acting for
+an admin; Studio decides who may open it, the CRM does not. The tab (`cards/studio-view.tsx`)
+appears when `studioFirmOf` finds the firm's studio. It signs the frame in through the
+same handoff as the Studio Space tab (`useStudioSignIn`), and since the handoff always
+lands on `/console`, the frame's first load sends it on to view-as. When no Studio login
+has the caller's mobile it falls back to Studio's sign-in; sign in there and press
+Reload. No backend change. On a local :3000 the handoff goes to the local backend, so
+expect the sign-in page there.
 
 ### Four SPoCs on every firm, and sales by SPoC (2026-10-31)
 
