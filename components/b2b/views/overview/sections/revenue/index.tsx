@@ -82,7 +82,7 @@ export function RevenueSection({ target, refreshKey, onAnalyse }: { target: numb
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-500">
             Studio Sales · {isCurrent ? `${pace.monthLabel} so far` : month.label}
-            <Hint text="Studio Sales is what the B2B team's work brought in: Direct (booked on the B2B branch, HQ until June 2026, by someone on the B2B team that day), Studio EC Redirected (store-rep orders from clients the B2B team works with) and Referred (every order from referred clients). It is measured against the target, the sum of each person's revenue target. All B2B revenue adds EC Direct: store-rep orders from Client Database firms with no B2B SPoC, which take no B2B effort. By order date." />
+            <Hint text="Studio Sales is what the B2B team's work brought in: Direct (booked on the B2B branch, HQ until June 2026, by someone on the B2B team that day), Studio EC Redirected (store-rep orders from clients the B2B team works with) and Referred (every order from referred clients). It is measured against the target, the sum of each person's revenue target. All B2B revenue adds EC Direct: store-rep orders from firms B2B knows, placed before their B2B tie-up started, which took no B2B effort. By order date." />
           </div>
           <div className="flex items-baseline gap-3 flex-wrap mt-1">
             <span className="tabular-nums text-[34px] sm:text-[40px] leading-none font-bold text-gray-900">{report ? fmtL(studio) : error ? 'Unknown' : '…'}</span>

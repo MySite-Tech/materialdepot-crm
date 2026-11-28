@@ -763,6 +763,25 @@ from `origin/main`. Read the named doc section before touching any of it:
   **after deploy, open a referred client's Studio Space details signed in and compare it with
   Studio's own Needs attention row.**
 
+**START HERE for B2B revenue channels (2026-11-28, sixth round): a firm's B2B tie-up has a
+start date. LIVE: b2b-backend PR #46 (`/studio-access` sends `onboarded_on`, no migration)
+then CRM PR #119 (`b69c45e`), both merged and deployed on Dhruv's ask.** Start new work
+from `origin/main`. The user: a firm's label today must not decide its July orders. Every
+firm (all records sharing a number) starts its tie-up on the earliest of a B2B person's
+order on any of its numbers (from April 2026), its first KAM assignment, an old KAM-tab
+row's date, a lead, SPoC or redirect, or its Studio Space `onboarded_on`. Store orders
+before it are EC Direct, after it Studio EC Redirected, and it never lapses (churn is three
+months with no order, on Clients, so Studio → EC is empty by design). One classifier feeds
+Overview (all three sub-tabs and the funnel), Leadership and Outreach's KPIs; Leads,
+Inbound and KAM show per-record order totals and needed no change. Read
+`docs/b2b/overview.md` §A firm's B2B tie-up has a start date before touching it.
+**Checked signed in on production after deploy (read-only, as Dhruv):** every Studio firm
+now carries an onboarding date (all September to November); Direct is unchanged in every
+month; the live reports match the pre-deploy run on production orders; the two firms the
+user named read as intended; trend, Clients, funnel and EC SPoC routes answer 200; every
+B2B Sales tab loads with no console error. Per-person credit moved on purpose (KAMs lose
+store orders from before they held a firm). Real figures are in memory, not here.
+
 **START HERE for KAM and the firm page (2026-11-28, fourth round): CRM PR #114
 (`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
 work from `origin/main`. **Checked signed in on production the same day (read-only, as

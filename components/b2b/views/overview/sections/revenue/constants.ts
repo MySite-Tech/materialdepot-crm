@@ -10,12 +10,12 @@ export const CHANNEL_META: Record<RevenueChannel, { label: string; color: string
   redirected: {
     label: CHANNEL_LABELS.redirected,
     color: '#DB2777',
-    hint: 'A client the B2B team already works with, ordering through a store: a B2B rep on a store cart, or a store rep (wherever it was booked) on a number held by a KAM, an Inbound or Outreach SPoC or lead, or a logged redirect. These orders are also in that store\'s own revenue.',
+    hint: 'A client the B2B team already worked with on the order\'s day, ordering through a store: a B2B rep on a store cart, or a store rep (wherever it was booked) for a firm whose B2B tie-up had started by then. It starts on the earliest of: a B2B person taking one of its orders, its first KAM assignment, an Inbound or Outreach lead or SPoC, a logged redirect, or its Studio Space onboarding. These orders are also in that store\'s own revenue.',
   },
   ecDirect: {
     label: CHANNEL_LABELS.ecDirect,
     color: '#0891B2',
-    hint: 'A store rep\'s order (wherever it was booked) for a Client Database firm that has no KAM and no Inbound or Outreach SPoC: firms buying from the store on their own, before any B2B tie-up. Not part of Studio Sales. These orders are also in that store\'s own revenue.',
+    hint: 'A store rep\'s order (wherever it was booked) for a firm B2B knows (Client Database, KAM or Studio Space) from before its B2B tie-up started: firms buying from the store on their own. Not part of Studio Sales. These orders are also in that store\'s own revenue.',
   },
   referred: {
     label: CHANNEL_LABELS.referred,
@@ -27,17 +27,18 @@ export const CHANNEL_META: Record<RevenueChannel, { label: string; color: string
 export const TYPE_META: Record<OrderType, { label: string; rule: string }> = {
   1: { label: 'B2B rep on cart', rule: 'A B2B rep held the cart and booked it on the B2B branch.' },
   2: { label: 'B2B rep on cart', rule: 'A B2B rep held the cart and booked it at a store.' },
-  4: { label: 'B2B client', rule: 'Booked by a store rep (at a store or on the B2B branch), on a number B2B holds.' },
+  4: { label: 'B2B client', rule: 'Booked by a store rep (at a store or on the B2B branch), for a firm B2B was already working with on the order\'s day.' },
   5: { label: 'Referred client', rule: 'The number is a client a Studio Space partner referred, so it counts in Referred wherever it was booked.' },
-  8: { label: 'No-KAM firm', rule: 'Booked by a store rep (at a store or on the B2B branch), for a Client Database firm with no KAM yet.' },
+  8: { label: 'Before B2B', rule: 'Booked by a store rep (at a store or on the B2B branch), for a firm B2B knows, before its B2B tie-up started.' },
 };
 
 export const HELD_BY: Record<HolderKind, string> = {
-  firm: 'The number is on a firm with a KAM.',
-  studio: 'It is a Studio Space firm\'s own number.',
+  firm: 'The firm had a KAM by then.',
+  studio: 'The firm was on Studio Space by then.',
   outreach: 'The number is on an Outreach lead or SPoC from before this cart.',
   inbound: 'The number is on an Inbound lead or SPoC from before this cart.',
-  redirect: 'A redirect to an EC is logged for this number.',
+  redirect: 'A redirect to an EC was logged for this firm before this cart.',
+  b2bOrder: 'A B2B person had already taken an order for this firm.',
   referred: '',
   unowned: '',
 };
