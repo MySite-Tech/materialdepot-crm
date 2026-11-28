@@ -17,6 +17,7 @@ function _mapUserOrg(u: Record<string, unknown>): import('../../../types/crm').A
     individualPermissions: Array.isArray(u.individual_permissions)
       ? (u.individual_permissions as string[])
       : [],
+    reportsTo: typeof u.reports_to === 'number' ? u.reports_to : null,
     active: u.status !== false,
   };
 }
@@ -41,7 +42,7 @@ export async function addUser({ name, phone, role, individualPermissions }: { na
 }
 
 export async function updateUser(id: string | number, updates: Partial<import('../../../types/crm').AppUser>): Promise<void> {
-  const { individualPermissions, active, ...rest } = updates;
+  const { individualPermissions, active, reportsTo, ...rest } = updates;
   await mdFetch(`/user-organisation/${id}/`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -50,6 +51,7 @@ export async function updateUser(id: string | number, updates: Partial<import('.
       ...(individualPermissions !== undefined ? { individual_permissions: individualPermissions } : {}),
 
       ...(active !== undefined ? { status: active } : {}),
+      ...(reportsTo !== undefined ? { reports_to: reportsTo } : {}),
     }),
   });
 }

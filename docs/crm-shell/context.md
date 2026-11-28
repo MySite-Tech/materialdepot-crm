@@ -104,6 +104,18 @@ names in `BDA_RETAIL_ACCESS` (its admins), and the `bda_retail` role returns ear
 with only that tab, the way the site-audit-only roles do. Its route checks both
 again (`docs/bda-retail/context.md`).
 
+`amChecklist` (2026-11-26) has the slug `crm.am_checklist` and is in
+`ROLE_TABS` for the new `assistant_manager` role (Django permission id 20) and
+for superadmin / admin / tech / manager. The slug only shows the tab; the
+Django endpoints decide which BMs the caller may see (`docs/am-checklist/context.md`).
+`storeChecklist` is deliberately not in the AM's tabs: its route denies roles
+outside `MARKER_ROLES`, so the tab would open onto an error.
+
+Admin > Users shows a **Reports to** dropdown (users whose role is
+`assistant_manager`) only while the role being edited is `sales`; any other
+role saves `reports_to: null`, so a BM moved off Sales drops out of their AM's
+list instead of lingering there.
+
 `ecB2bReferral` (2026-10-31) is not gated: since 2026-11-03 `resolveAllowedTabs`
 appends it for every account but the site-audit-only roles, and
 `app/api/b2b/ec-referral/route.ts` only needs a session. The slug

@@ -2,6 +2,7 @@
 
 import type { ReadonlyURLSearchParams } from 'next/navigation';
 
+import AmChecklistTab from '../../am-checklist';
 import AppointmentTrackerClient from '../../appointment-tracker/tracker';
 import BdaRetailTab from '../../bda-retail';
 import B2BSalesCRM from '../../b2b/views/b2-b-sales-crm';
@@ -67,6 +68,10 @@ export function CrmTabPanels({ branches, branchesLoaded, currentUser, effectiveT
       />
     )}
     
+    {effectiveTab === 'amChecklist' && currentUser && (
+      <AmChecklistTab currentUser={currentUser} />
+    )}
+
     {effectiveTab === 'ecB2bReferral' && (
       <EcB2bReferral currentUser={currentUser} branches={branchesLoaded ? branches : undefined} />
     )}
