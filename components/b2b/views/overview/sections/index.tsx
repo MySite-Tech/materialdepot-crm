@@ -6,7 +6,6 @@ import { OverviewTarget } from '../types';
 import { Notice } from '../ui';
 import { AccountsSection } from './accounts';
 import { JourneySection } from './journey';
-import { KamDesk } from './kam-desk';
 import { RevenueSection } from './revenue';
 import { ClientFunnel } from './revenue/funnel';
 import type { B2BTeamLoad } from '@/lib/b2b/team/types';
@@ -68,12 +67,11 @@ export function OverviewSummary({ team, onNavigate, onAnalyse, head }: {
             health={base.health}
             onNavigate={onNavigate}
           />
-          <KamDesk k={base.kam} unresolved={base.unresolvedOrders} onNavigate={onNavigate} />
         </>
       ) : (
         <div className="text-sm text-gray-400">
-          {o.refreshing ? 'Loading the pipeline, accounts and KAM desk…' : (
-            <>The pipeline, accounts and KAM desk could not be loaded. <button onClick={o.reload} className="text-[#0F766E] font-semibold cursor-pointer">Retry</button></>
+          {o.refreshing ? 'Loading the pipeline and accounts…' : (
+            <>The pipeline and accounts could not be loaded. <button onClick={o.reload} className="text-[#0F766E] font-semibold cursor-pointer">Retry</button></>
           )}
         </div>
       )}

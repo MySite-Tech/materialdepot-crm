@@ -12,6 +12,8 @@ const NODE_W = 12;
 const GAP = 12;
 const LEFT_X = 210;
 const RIGHT_X = W - 210 - NODE_W;
+const LABEL_GAP = 32;
+const PAD = 18;
 
 interface Node {
   id: string;
@@ -21,21 +23,35 @@ interface Node {
   value: number;
   y: number;
   h: number;
+  labelY: number;
 }
 
 const leftId = (l: FlowLink) => (l.from === 'none' ? `e:${l.path}` : `a:${l.from}`);
 const rightId = (l: FlowLink) => `b:${l.to}`;
 const linkId = (l: FlowLink) => `${leftId(l)}>${rightId(l)}`;
 
-function place(nodes: Omit<Node, 'y' | 'h'>[], scale: number): Node[] {
+function spreadLabels(centres: number[]): number[] {
+  const out = [...centres];
+  for (let i = 1; i < out.length; i++) out[i] = Math.max(out[i], out[i - 1] + LABEL_GAP);
+  const over = out.length ? out[out.length - 1] - (H + PAD - 16) : 0;
+  if (over > 0) {
+    out[out.length - 1] -= over;
+    for (let i = out.length - 2; i >= 0; i--) out[i] = Math.min(out[i], out[i + 1] - LABEL_GAP);
+  }
+  return out;
+}
+
+function place(nodes: Omit<Node, 'y' | 'h' | 'labelY'>[], scale: number): Node[] {
   const used = nodes.reduce((n, x) => n + Math.max(2, x.firms * scale), 0) + GAP * (nodes.length - 1);
   let y = (H - used) / 2;
-  return nodes.map((n) => {
+  const placed = nodes.map((n) => {
     const h = Math.max(2, n.firms * scale);
-    const placed = { ...n, y, h };
+    const at = { ...n, y, h, labelY: y + h / 2 };
     y += h + GAP;
-    return placed;
+    return at;
   });
+  const labels = spreadLabels(placed.map((n) => n.labelY));
+  return placed.map((n, i) => ({ ...n, labelY: labels[i] }));
 }
 
 export function FirmFlow({ journey, focus, onFocus }: { journey: Journey; focus: FirmFocus | null; onFocus: (f: FirmFocus | null) => void }) {
@@ -46,12 +62,12 @@ export function FirmFlow({ journey, focus, onFocus }: { journey: Journey; focus:
   const layout = useMemo(() => {
     const links = journey.links.filter((l) => l.firms > 0);
     const sum = (pick: (l: FlowLink) => boolean, v: (l: FlowLink) => number) => links.filter(pick).reduce((n, l) => n + v(l), 0);
-    const leftDefs: Omit<Node, 'y' | 'h'>[] = [
+    const leftDefs: Omit<Node, 'y' | 'h' | 'labelY'>[] = [
       ...(['studio', 'ec'] as const).map((s) => ({ id: `a:${s}`, label: `${s === 'studio' ? 'Studio' : 'EC Direct'} in ${a}`, color: COLOR[s] })),
       ...ENTRY_NODES.map((p) => ({ id: `e:${p}`, label: PATH_LABEL[p], color: COLOR[p as 'revived' | 'new' | 'returning' | 'storeBuyer'] })),
     ].map((n) => ({ ...n, firms: sum((l) => leftId(l) === n.id, (l) => l.firms), value: sum((l) => leftId(l) === n.id, (l) => l.valueA) }))
       .filter((n) => n.firms > 0);
-    const rightDefs: Omit<Node, 'y' | 'h'>[] = ([
+    const rightDefs: Omit<Node, 'y' | 'h' | 'labelY'>[] = ([
       { id: 'b:studio', label: `Studio in ${b}`, color: COLOR.studio },
       { id: 'b:ec', label: `EC Direct in ${b}`, color: COLOR.ec },
       { id: 'b:none', label: `No order in ${b}`, color: COLOR.none },
@@ -92,7 +108,7 @@ export function FirmFlow({ journey, focus, onFocus }: { journey: Journey; focus:
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`Where ${a}'s firms went by ${b}`}>
+      <svg viewBox={`0 ${-PAD} ${W} ${H + 2 * PAD}`} className="w-full h-auto" role="img" aria-label={`Where ${a}'s firms went by ${b}`}>
         {layout.ribbons.map((r) => {
           const id = linkId(r.l);
           const on = hover === id || focusId === id;
@@ -115,15 +131,15 @@ export function FirmFlow({ journey, focus, onFocus }: { journey: Journey; focus:
         {layout.left.map((n) => (
           <g key={n.id}>
             <rect x={LEFT_X} y={n.y} width={NODE_W} height={n.h} rx={3} fill={n.color} />
-            <text x={LEFT_X - 10} y={n.y + n.h / 2 - 2} textAnchor="end" className="fill-gray-800 text-[12.5px] font-semibold">{n.label}</text>
-            <text x={LEFT_X - 10} y={n.y + n.h / 2 + 13} textAnchor="end" className="fill-gray-500 text-[11px]">{nodeLabel(n)}</text>
+            <text x={LEFT_X - 10} y={n.labelY - 2} textAnchor="end" className="fill-gray-800 text-[12.5px] font-semibold">{n.label}</text>
+            <text x={LEFT_X - 10} y={n.labelY + 13} textAnchor="end" className="fill-gray-500 text-[11px]">{nodeLabel(n)}</text>
           </g>
         ))}
         {layout.right.map((n) => (
           <g key={n.id}>
             <rect x={RIGHT_X} y={n.y} width={NODE_W} height={n.h} rx={3} fill={n.color} />
-            <text x={RIGHT_X + NODE_W + 10} y={n.y + n.h / 2 - 2} className="fill-gray-800 text-[12.5px] font-semibold">{n.label}</text>
-            <text x={RIGHT_X + NODE_W + 10} y={n.y + n.h / 2 + 13} className="fill-gray-500 text-[11px]">{nodeLabel(n)}</text>
+            <text x={RIGHT_X + NODE_W + 10} y={n.labelY - 2} className="fill-gray-800 text-[12.5px] font-semibold">{n.label}</text>
+            <text x={RIGHT_X + NODE_W + 10} y={n.labelY + 13} className="fill-gray-500 text-[11px]">{nodeLabel(n)}</text>
           </g>
         ))}
       </svg>

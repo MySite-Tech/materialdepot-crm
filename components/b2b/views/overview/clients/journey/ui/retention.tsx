@@ -81,11 +81,11 @@ export function RetentionGrid({ journey, partialKey }: { journey: Journey; parti
 function Spark({ values, labels, fmt, color, marks }: { values: number[]; labels: string[]; fmt: (v: number) => string; color: string; marks: Set<number> }) {
   const top = Math.max(...values, 1);
   return (
-    <div className="flex items-end gap-1.5 h-[72px]">
+    <div className="flex items-end gap-1.5 h-[104px]">
       {values.map((v, i) => (
         <div key={labels[i]} className="flex-1 flex flex-col items-center justify-end h-full min-w-0" title={`${labels[i]}: ${fmt(v)}`}>
           <div className="text-[9.5px] tabular-nums text-gray-500 mb-0.5 whitespace-nowrap">{fmt(v)}</div>
-          <div className="w-full max-w-[28px] rounded-t-[4px]" style={{ height: `${Math.max(2, (44 * v) / top)}px`, background: color, opacity: marks.has(i) ? 1 : 0.35 }} />
+          <div className="w-full max-w-[28px] rounded-t-[4px]" style={{ height: `${Math.max(2, (72 * v) / top)}px`, background: color, opacity: marks.has(i) ? 1 : 0.35 }} />
           <div className={`text-[10px] mt-1 ${marks.has(i) ? 'font-bold text-gray-800' : 'text-gray-400'}`}>{labels[i]}</div>
         </div>
       ))}
@@ -103,7 +103,7 @@ export function MonthTrend({ journey }: { journey: Journey }) {
     { title: 'Orders', values: journey.months.map((m) => m.orders), fmt: (v: number) => String(v), color: COLOR.revived },
   ];
   return (
-    <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+    <div className="grid grid-cols-2 gap-x-6 gap-y-5">
       {rows.map((r) => (
         <div key={r.title}>
           <div className="text-[11px] font-semibold text-gray-600 mb-1">{r.title}</div>

@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-114 entries. They live in one file because they cross-reference each other —
+115 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -18,6 +18,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - A tab's badge must count the rows that tab lists — derive both from one function
 - A guessed id pattern refused real cart ids, and a read-only POST hit the local write guard
 - Over 12 months is Never ordered, not a status of its own
+- A label above a bar is clipped by its own `overflow-x-auto` box
 - A lead's displayed id is not unique — only `ticketId` identifies a row
 - Availability is per CITY, and the Store Team kiosk was the one surface that did not know it
 - `AddStaffOverlay` never wrote a city
@@ -1794,4 +1795,19 @@ KAM's Inactive 4+ months list held firms with status "Inactive over 12 months" a
 user said they belong under Never ordered. A firm whose last order is M-13 or older now
 reads Never ordered through `clientStatus`, the one rule behind Client Database, KAM, the
 Firm page and the Overview, so no tile can disagree (`docs/b2b/kam.md` §Account status).
+
+### A label above a bar is clipped by its own `overflow-x-auto` box (2026-11-28)
+
+The user, on Overview → Clients: the firm journey's revenue bridge showed no figure on
+its tallest columns (the first month, "Studio firms that stopped", "Skipped the first
+month", "Store buyers now B2B", the last month), and one read as a cut-off "₹2…". Each
+label sat 16 px above its bar, so the tallest bar's label sat above the chart's top
+edge, and the chart is inside `overflow-x-auto`. Setting one overflow axis to `auto`
+makes the other one clip too, so whatever pokes out of the top is cut off with no
+scrollbar. The chart
+area now has a top margin the label fits in. **Inside a horizontal scroll box, leave
+room for anything drawn above or below the plot, or scale the plot below its box.**
+The same day the flow chart's node labels overlapped when two small nodes sat
+together ("Skipped the first month" over "Store buyer → B2B"). Labels are now spread
+at least 32 units apart and kept inside the SVG's padded view box.
 

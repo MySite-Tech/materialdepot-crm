@@ -1,18 +1,29 @@
 import type { BridgeKey, FirmRow, JourneyPath, JourneySide } from '../../../../../../lib/b2b/revenue/journey';
-import { rowBridgeKey } from '../../../../../../lib/b2b/revenue/journey';
+import { ENTRY_PATHS, rowBridgeKey } from '../../../../../../lib/b2b/revenue/journey';
 import { fmtL } from '../../../../models/mock-data';
+
+export type FirmSet = 'ordering' | 'kept' | 'lost' | 'joined';
+
+export const FIRM_SETS: Record<FirmSet, (r: FirmRow) => boolean> = {
+  ordering: (r) => r.b.orders > 0,
+  kept: (r) => r.a.orders > 0 && r.b.orders > 0,
+  lost: (r) => r.a.orders > 0 && !r.b.orders,
+  joined: (r) => (ENTRY_PATHS.has(r.path) || r.path === 'ecToStudio') && r.b.value > 0 && !r.a.value,
+};
 
 export type FirmFocus =
   | { kind: 'bridge'; key: BridgeKey; label: string }
   | { kind: 'link'; from: JourneySide; to: JourneySide; path: JourneyPath | null; label: string }
   | { kind: 'category'; name: string; label: string }
-  | { kind: 'path'; path: JourneyPath; label: string };
+  | { kind: 'path'; path: JourneyPath; label: string }
+  | { kind: 'set'; set: FirmSet; label: string };
 
 export function inFocus(r: FirmRow, f: FirmFocus | null): boolean {
   if (!f) return true;
   switch (f.kind) {
     case 'bridge': return rowBridgeKey(r) === f.key;
     case 'path': return r.path === f.path;
+    case 'set': return FIRM_SETS[f.set](r);
     case 'category': return r.a.categories.includes(f.name) || r.b.categories.includes(f.name);
     case 'link': return r.sideA === f.from && r.sideB === f.to && (!f.path || r.path === f.path);
   }

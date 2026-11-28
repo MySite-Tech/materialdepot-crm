@@ -29,11 +29,9 @@ async function readInputs(): Promise<Inputs> {
 const resolveOrders = (inputs: Inputs, lookup: boolean) =>
   resolveKamOrders(inputs.data.kam, inputs.bulk.deals, inputs.data.clients, lookup).then((r) => r.resolutions);
 
-function buildBase({ data: fetched, targets, studio, bulk, clientPhones, today }: Inputs, resolutions: Resolutions, final: boolean): BaseData {
+function buildBase({ data: fetched, targets, studio, bulk, clientPhones, today }: Inputs, resolutions: Resolutions): BaseData {
   const { histories: aggregates, unread } = bulk;
   const resolvedById = new Map(resolutions.filter((r) => r.resolved).map((r) => [r.order.id, r.resolved!]));
-  const unresolvedOrders = fetched.kam.filter((o) =>
-    !!String(o.enqId || '').trim() && !resolvedById.has(o.id) && o.orderValue === undefined).length;
   const data = { ...fetched, kam: fetched.kam.map((o) => resolvedById.get(o.id) ?? o) };
 
   const dates = orderDatesFromAggregates(aggregates, clientPhones, unread);
@@ -57,7 +55,6 @@ function buildBase({ data: fetched, targets, studio, bulk, clientPhones, today }
     ),
     failed: data.failed,
     clientCount: data.clients.length,
-    unresolvedOrders: final ? unresolvedOrders : null,
     targetStore: targets.store,
     targetsOk: targets.ok,
   };
@@ -79,14 +76,14 @@ export function useOverviewData() {
       quick = await resolveOrders(inputs, false);
       if (id !== run.current) return;
       const pending = quick.some((r) => r.outcome === 'skipped');
-      setBase(buildBase(inputs, quick, !pending));
+      setBase(buildBase(inputs, quick));
       setUpdatedAt(new Date());
       if (!pending) return;
     } finally {
       if (id === run.current) setBusy(false);
     }
     const full = await resolveOrders(inputs, true).catch(() => quick);
-    if (id === run.current) setBase(buildBase(inputs, full, true));
+    if (id === run.current) setBase(buildBase(inputs, full));
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
