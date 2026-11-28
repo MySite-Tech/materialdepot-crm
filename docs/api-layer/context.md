@@ -303,9 +303,10 @@ since 11 Oct, 8 pages, about 0.7 s and 710 KB a page.
 read of Material Depot's **snapshot service** (`POST /user-cart-order-snapshot/`), the only
 place a cart's product lines exist, since `/crm/leads/?include=boq` gives a cart none. It
 authenticates with a server-only key, not the caller's token: `X-Api-Key:
-MD_SNAPSHOT_API_KEY`, plus `x-cf-access: MD_CF_ACCESS_TOKEN` so Cloudflare lets a datacentre
-through (Studio Space's `lib/data/snapshot.ts` does the same). In production both come from
-Key Vault references in the app settings (secret `b2b-crm-md-snapshot-api-key`); never a
+MD_SNAPSHOT_API_KEY`. `x-cf-access: MD_CF_ACCESS_TOKEN` is sent only when that variable is set
+(Studio Space needs it from Vercel; the CRM's other server calls to this Django host work from
+Azure without it, so leave it unset unless a Cloudflare 403 appears). In production the key
+comes from a Key Vault reference in the app settings (secret `b2b-crm-md-snapshot-api-key`); never a
 `NEXT_PUBLIC_` name, which would ship the key to the browser. One request per number, only
 when a Cart or PI is opened (never on mount, never in a loop), cached 60 s per number. It
 throws on any failure, so the route answers 502 and the card says so; "no lines" is only a

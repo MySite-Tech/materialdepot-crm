@@ -239,8 +239,8 @@ order's `bill_breakdown.line_items` gave SKU, brand, category and quantity, but 
 sum to the bill before the coupon, so they run a little above the order total, and it has
 no unit. **Still unseen:** an open PI that is not yet an order (the number tested had four
 placed orders and a cart). Orders reach back only about three weeks, and a customer has one
-live cart, so an older replaced cart has no lines. Needs `MD_SNAPSHOT_API_KEY` and
-`MD_CF_ACCESS_TOKEN` in the CRM's app settings (`backends.md` §Owed by Django row 22).
+live cart, so an older replaced cart has no lines. Needs `MD_SNAPSHOT_API_KEY` in the
+CRM's app settings (`backends.md` §Owed by Django row 22); `MD_CF_ACCESS_TOKEN` is optional.
 
 ### Studio Space: their view (2026-11-28)
 

@@ -742,9 +742,10 @@ from `origin/main`. Read the named doc section before touching any of it:
   `lib/server/md-snapshot.ts`, `docs/b2b/client-db.md` §A cart or PI on the Orders tab opens in
   full). It asks Material Depot's snapshot service per number when a Cart or PI opens. Checked
   with the real key locally on two real carts: `cart_number` is the store's `CT…` id and the lines
-  add up to the ticket value. **Needs `MD_SNAPSHOT_API_KEY` and `MD_CF_ACCESS_TOKEN` in the
-  Azure app settings** as Key Vault references (secret `b2b-crm-md-snapshot-api-key`); only the
-  tech team can add them. Until then a cart reads an amber "could not be read" with Django's
+  add up to the ticket value. **Needs only `MD_SNAPSHOT_API_KEY` in the Azure app settings**
+  as a Key Vault reference (secret `b2b-crm-md-snapshot-api-key`); only the tech team can add it.
+  `MD_CF_ACCESS_TOKEN` is optional (Dhruv, 2026-11-28): add it only if the live lookup hits a
+  Cloudflare 403. Until then a cart reads an amber "could not be read" with Django's
   lines. **Open PIs not yet an order are unseen** (`docs/backends.md` row 22). The card is
   compact and shows only fields with a value.
 - **Locally the lookup needs the write guard to allow it.** `ss-local-stack/crm-guard.mjs`
