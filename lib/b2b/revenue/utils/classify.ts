@@ -32,7 +32,8 @@ function orderFacts(o: OrderInput, reps: RepTeams) {
   const rep = repOf(o.assignedTo, reps, orderDay);
   const repTeams = rep?.teams ?? [];
   const byB2BRep = repTeams.length > 0 || (!rep?.dated && o.branch === B2B_BRANCH);
-  return { orderMs, cartDay, orderDay, rep, repTeams, byB2BRep, placedBy: rep?.name ?? repName(o.assignedTo) };
+  const movedToStore = !!rep?.dated && repTeams.length > 0 && !!o.branch && o.branch !== B2B_BRANCH;
+  return { orderMs, cartDay, orderDay, rep, repTeams, byB2BRep, movedToStore, placedBy: rep?.name ?? repName(o.assignedTo) };
 }
 
 export function buildTouches(orders: OrderInput[], reps: RepTeams, groups: FirmGroups): Map<string, Touch[]> {
@@ -70,9 +71,9 @@ export function classifyOrder(
   reps: RepTeams,
   firms: FirmIndex,
 ): RevenueOrder | null {
-  const bookedOnB2B = booked !== 'store';
   const phone = phoneOf(o.clientPhone);
-  const { orderMs, cartDay, orderDay, repTeams, byB2BRep, placedBy } = orderFacts(o, reps);
+  const { orderMs, cartDay, orderDay, repTeams, byB2BRep, movedToStore, placedBy } = orderFacts(o, reps);
+  const bookedOnB2B = booked !== 'store' || movedToStore;
   const held = (book.get(phone) ?? []).filter((h) => placedBefore(h, cartDay)).map((h) => asOfOrder(h, orderMs));
   const owned = held.find((h) => h.kind !== 'unowned' && h.kind !== 'referred');
   const referred = held.find((h) => h.kind === 'referred');
