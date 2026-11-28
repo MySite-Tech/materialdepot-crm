@@ -206,6 +206,18 @@ sheet), and the type decides the channel (`lib/b2b/revenue/utils/classify.ts`):
   `store: B2B`, because the row's `branch` is the rep's home branch **today**: a KAM who
   became a store manager had every past order filed under the new store
   (`docs/landmines.md`). After their last day their orders are store orders like anyone's.
+- **A person who moved to a store counts as booked on B2B for every day they were on
+  B2B (2026-11-28, the user's call).** Django also re-files the *booking* of a mover's
+  old orders: a KAM whose last B2B day was 24 Nov (now at Indiranagar) had a June month's
+  orders read as booked at a store, and an Inbound rep who left on 24 Sep (now at
+  Electronic City) had three July orders the same way, so they read Studio EC Redirected
+  (type 2). The user: they booked those on B2B. So for a **dated** person on B2B that day
+  whose Django branch today is not B2B (`movedToStore` in `classify.ts`), the order is
+  type 1, Direct. It reads their Team-tab dates, so a future mover needs only a last day
+  on the Team tab. Someone whose Django branch is still B2B keeps a genuine store booking
+  as type 2. Only the Direct/Redirected split moves: Studio Sales, All B2B, credit,
+  Clients and the funnel are unchanged (checked on production orders that day: two
+  months changed, everything else identical).
 - **The first match decides the type:** referred, then a B2B rep, then a holder on the
   order's day, then an earlier B2B order for the firm, then a known firm (EC Direct).
 - **The funnel keeps its cut** through `FUNNEL_OF` on the type: Studio direct is

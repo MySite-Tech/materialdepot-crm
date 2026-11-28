@@ -781,6 +781,11 @@ month; the live reports match the pre-deploy run on production orders; the two f
 user named read as intended; trend, Clients, funnel and EC SPoC routes answer 200; every
 B2B Sales tab loads with no console error. Per-person credit moved on purpose (KAMs lose
 store orders from before they held a firm). Real figures are in memory, not here.
+**Same day, CRM PR from `b2b-moved-rep-direct` (open; merge on Dhruv's ask, no backend PR):** a person who moved from B2B to a store
+(dated on the Team tab, Django branch no longer B2B) counts as booked on B2B for every day
+they were on B2B, so their own orders read Direct, not Redirected (the user, for two
+people who moved to stores on 25 Nov and 25 Sep). Only the Direct/Redirected split
+moves (`overview.md` §Four revenue channels).
 
 **START HERE for KAM and the firm page (2026-11-28, fourth round): CRM PR #114
 (`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
