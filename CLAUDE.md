@@ -785,7 +785,10 @@ store orders from before they held a firm). Real figures are in memory, not here
 (dated on the Team tab, Django branch no longer B2B) counts as booked on B2B for every day
 they were on B2B, so their own orders read Direct, not Redirected (the user, for two
 people who moved to stores on 25 Nov and 25 Sep). Only the Direct/Redirected split
-moves (`overview.md` §Four revenue channels).
+moves (`overview.md` §Four revenue channels). **Checked signed in on production after
+deploy (`37f60ae`):** June and July moved exactly as predicted, every other month and every
+month's Studio Sales and All B2B unchanged, no mover order left as type 2, all revenue
+routes 200, no console error on the B2B tabs. Nothing is open from this round.
 
 **START HERE for KAM and the firm page (2026-11-28, fourth round): CRM PR #114
 (`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
