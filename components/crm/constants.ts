@@ -102,14 +102,15 @@ export const LEGACY_PROPERTY_TYPES = ['Commercial', 'Independent House/Villa', '
 export const PROJECT_PHASES = ['Civil & Plumbing', 'Woodwork', 'Painting & Finishings'];
 
 export const ROLE_TABS: Record<string, Array<MainTab>> = {
-  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
-  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
-  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
-  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'sales','reportCard', 'remarksQuality', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
+  superadmin:   ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'amChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  admin:        ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'amChecklist', 'sales', 'b2bSales', 'admin', 'nps', 'siteAudit', 'storeDisplay'],
+  tech:         ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'amChecklist', 'sales', 'b2bSales', 'admin','nps', 'siteAudit', 'storeDisplay'],
+  manager:      ['leads', 'dashboard', 'footfall', 'storeVisit', 'storeChecklist', 'amChecklist', 'sales','reportCard', 'remarksQuality', 'b2bSales', 'weeklyFunnel', 'nps', 'siteAudit'],
   store_manager:['leads', 'dashboard', 'footfall', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
   cluster_head: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
   area_manager: ['leads', 'dashboard', 'footfall', 'weeklyFunnel', 'reportCard', 'remarksQuality', 'storeVisit', 'storeChecklist', 'sales', 'nps', 'siteAudit'],
   asst_store_manager: ['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'storeChecklist', 'sales', 'siteAudit'],
+  assistant_manager: ['amChecklist', 'leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'sales', 'siteAudit'],
   team_leader:  ['leads', 'dashboard', 'footfall', 'reportCard', 'storeVisit', 'sales', 'siteAudit'],
   sales:        ['leads', 'sales', 'footfall', 'reportCard', 'siteAudit'],
   retail:       ['dashboard', 'storeVisit', 'storeChecklist', 'footfall', 'nps'],
@@ -130,6 +131,7 @@ export const PERMISSION_TAB_ORDER: Array<[string, MainTab]> = [
   ['crm.remarks_quality', 'remarksQuality'],
   ['crm.store_visit', 'storeVisit'],
   [CHECKLIST_PERMISSION_SLUG, 'storeChecklist'],
+  ['crm.am_checklist', 'amChecklist'],
   [EC_REFERRAL_SLUG, 'ecB2bReferral'],
   ['crm.sales', 'sales'],
   ['crm.b2b_sales', 'b2bSales'],
@@ -154,13 +156,13 @@ export const SITE_AUDIT_SUBROLES: Array<[string, string]> = [
 
 export const TAB_LABELS: Record<MainTab, string> = {
   leads: 'Leads', dashboard: 'Dashboard', footfall: 'Footfall', weeklyFunnel: 'Weekly Funnel',
-  reportCard: 'Report Card', remarksQuality: 'Remarks Quality', storeVisit: 'Store Visit Form', storeChecklist: 'Store Checklist', ecB2bReferral: 'EC B2B Referral',
+  reportCard: 'Report Card', remarksQuality: 'Remarks Quality', storeVisit: 'Store Visit Form', storeChecklist: 'Store Checklist', ecB2bReferral: 'EC B2B Referral', amChecklist: 'AM Checklist',
   sales: 'Escalation visibility', b2bSales: 'B2B Sales', admin: 'Admin', nps: 'NPS', siteAudit: 'Site Audit',
   appointmentTracker: 'Appointment Tracker', storeDisplay: 'Store Display',
 };
 
 export const ROLE_OPTIONS: Array<string> = [
-  'sales', 'team_leader', 'asst_store_manager', 'store_manager', 'cluster_head',
+  'sales', 'team_leader', 'assistant_manager', 'asst_store_manager', 'store_manager', 'cluster_head',
   'area_manager', 'manager', 'retail', 'admin', 'tech',
   'b2b_sales', 'b2b_KAM', 'b2b_manager',
   'field_worker', 'delivery', 'delivery_manager', 'post_sales', 'procurement',
@@ -169,6 +171,7 @@ export const ROLE_OPTIONS: Array<string> = [
 
 export const ROLE_LABEL_OVERRIDES: Record<string, string> = {
   asst_store_manager: 'Assistant Store Manager',
+  assistant_manager: 'Assistant Manager',
   b2b_sales: 'B2B Sales',
   b2b_KAM: 'B2B KAM',
   b2b_manager: 'B2B Manager',
@@ -179,7 +182,7 @@ export const SITE_AUDIT_SUBROLE_SLUGS = new Set(SITE_AUDIT_SUBROLES.map(([slug])
 
 export const APPOINTMENT_TRACKER_ROLES = new Set([
   'superadmin', 'admin', 'tech',   // → Admin view
-  'manager', 'area_manager', 'cluster_head', 'store_manager', 'asst_store_manager', // → Store Manager view
+  'manager', 'area_manager', 'cluster_head', 'store_manager', 'asst_store_manager', 'assistant_manager', // → Store Manager view
   'retail',                        // → Receptionist view
 ]);
 

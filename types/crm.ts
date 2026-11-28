@@ -49,6 +49,8 @@ export interface AppUser {
   role: string;
   allowedBranches?: string[];
   individualPermissions?: string[];
+  /** user_organisation id of this user's Assistant Manager (set on BMs). */
+  reportsTo?: number | null;
 
   active?: boolean;
 }

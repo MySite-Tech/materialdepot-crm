@@ -27,6 +27,7 @@ export function AdminDashboard() {
   const [editRole, setEditRole] = useState('');
   const [editBranches, setEditBranches] = useState<string[]>([]);
   const [editPermissions, setEditPermissions] = useState<string[]>([]);
+  const [editReportsTo, setEditReportsTo] = useState<number | null>(null);
   const [usersPage, setUsersPage] = useState(1);
   const [userSearch, setUserSearch] = useState('');
   const USERS_PER_PAGE = 20;
@@ -61,7 +62,7 @@ export function AdminDashboard() {
   };
 
   const startEdit = (u: AppUser) => {
-    setEditId(u.id); setEditName(u.name); setEditPhone(u.phone); setEditEmail(''); setEditRole(u.role); setEditBranches(u.allowedBranches || []);
+    setEditId(u.id); setEditName(u.name); setEditPhone(u.phone); setEditEmail(''); setEditRole(u.role); setEditBranches(u.allowedBranches || []); setEditReportsTo(u.reportsTo ?? null);
     setEditPermissions(u.individualPermissions?.length ? u.individualPermissions : defaultPermissionsForRole(u.role));
   };
 
@@ -71,9 +72,11 @@ export function AdminDashboard() {
     if (users.some((u) => u.phone === editPhone.trim() && u.id !== editId)) { setError('Phone already exists'); return; }
     setError('');
     try {
-      await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole, individualPermissions: editPermissions });
+      // Only BMs (sales) report to an AM; any other role clears the link.
+      const reportsTo = editRole === 'sales' ? editReportsTo : null;
+      await updateUser(editId!, { name: editName.trim(), phone: editPhone.trim(), role: editRole, individualPermissions: editPermissions, reportsTo });
       await updateUserBranches(editId!, editBranches);
-      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches, individualPermissions: editPermissions } : u));
+      setUsers((prev) => prev.map((u) => u.id === editId ? { ...u, name: editName.trim(), phone: editPhone.trim(), role: editRole, allowedBranches: editBranches, individualPermissions: editPermissions, reportsTo } : u));
 
       const siteAuditRole = siteAuditRoleFromPermissions(editPermissions);
       if (siteAuditRole && editEmail.trim()) {
@@ -85,6 +88,9 @@ export function AdminDashboard() {
       setError(e.message || 'Failed to update user');
     }
   };
+
+  const assistantManagers = users.filter((u) => u.role === 'assistant_manager' && u.active !== false);
+  const amNameById = new Map(assistantManagers.map((am) => [Number(am.id), am.name]));
 
   const filteredUsers = userSearch.trim()
     ? users.filter((u) => {
@@ -188,6 +194,17 @@ export function AdminDashboard() {
                                 value={editRole}
                                 onChange={(role) => { setEditRole(role); setEditPermissions(defaultPermissionsForRole(role)); }}
                               />
+                              {editRole === 'sales' && (
+                                <select
+                                  className="mt-1.5 px-2 py-1 text-[11.5px] border border-gray-200 rounded outline-none w-full"
+                                  value={editReportsTo ?? ''}
+                                  onChange={(e) => setEditReportsTo(e.target.value ? Number(e.target.value) : null)}
+                                  title="Assistant Manager this BM reports to"
+                                >
+                                  <option value="">Reports to: no AM</option>
+                                  {assistantManagers.map((am) => <option key={am.id} value={Number(am.id)}>Reports to: {am.name}</option>)}
+                                </select>
+                              )}
                             </td>
                             <td className="px-4 py-2 min-w-[180px]">
                               <BranchAccessDropdown branchList={branchList} value={editBranches} onChange={setEditBranches} hideLabel />
@@ -217,6 +234,9 @@ export function AdminDashboard() {
                               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : u.role === 'tech' ? 'bg-cyan-100 text-cyan-700' : u.role === 'manager' ? 'bg-blue-100 text-blue-700' : u.role === 'retail' ? 'bg-teal-100 text-teal-700' : u.role === 'sales' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                                 {roleLabel(u.role)}
                               </span>
+                              {u.role === 'sales' && u.reportsTo ? (
+                                <div className="mt-0.5 text-[10.5px] text-gray-500">→ AM {amNameById.get(u.reportsTo) ?? `#${u.reportsTo}`}</div>
+                              ) : null}
                             </td>
                             <td className="px-4 py-2.5">
                               {(u.allowedBranches || []).length === 0
