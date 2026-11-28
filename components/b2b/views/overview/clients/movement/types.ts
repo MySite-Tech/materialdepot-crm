@@ -13,6 +13,7 @@ export interface FlowCell {
   count: number;
   value: number;
   bySide: Record<FlowSide, number>;
+  gapUnknown: number;
 }
 
 export interface Picked {
@@ -27,4 +28,11 @@ export interface ListRow {
   before: string;
   value: number;
   orders: number | null;
+}
+
+export interface UnregisteredCell {
+  count: number;
+  value: number;
+  business: number;
+  proprietor: number;
 }

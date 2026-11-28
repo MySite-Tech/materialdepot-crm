@@ -6,8 +6,9 @@ import { rowToClient } from '../../mappers/client';
 import { rowToInbound } from '../../mappers/inbound';
 import { rowToOutreach } from '../../mappers/outreach';
 import { inboundPhones, outreachPhones } from '../../leads/unified';
+import { istDay } from '../../team/utils';
 import { RECENT_ORDERS, REVIEW_ID_PREFIX } from '../constants';
-import type { FirmKind, RejectedFirm, ReviewDecision, ReviewFirm, ReviewOrder } from '../types';
+import type { FirmKind, RejectedFirm, ReviewDecision, ReviewFirm, ReviewMonth, ReviewOrder } from '../types';
 
 interface OrderFirm {
   gsts: Set<string>;
@@ -92,6 +93,21 @@ export function boardKeys(rows: B2BLeadRow[]): Set<string> {
 const keysOf = (gsts: Iterable<string>, phones: Iterable<string>): string[] =>
   [...[...gsts].map((g) => `g:${g}`), ...[...phones].map((p) => `p:${p}`)];
 
+const orderMonth = (at: string): string => {
+  const ms = Date.parse(at);
+  return Number.isNaN(ms) ? at.slice(0, 7) : istDay(ms).slice(0, 7);
+};
+
+function byMonth(orders: ReviewOrder[]): Record<string, ReviewMonth> {
+  const out: Record<string, ReviewMonth> = {};
+  for (const o of orders) {
+    const m = (out[orderMonth(o.at)] ??= { orders: 0, value: 0 });
+    m.orders += 1;
+    m.value += o.value;
+  }
+  return out;
+}
+
 function toReview(firm: OrderFirm): ReviewFirm {
   const gstins = [...firm.gsts].sort();
   const phones = [...firm.phones.entries()].sort((a, b) => b[1].at.localeCompare(a[1].at));
@@ -111,6 +127,7 @@ function toReview(firm: OrderFirm): ReviewFirm {
     lastOrder: orders[0]?.at || '',
     stores: [...stores.entries()].map(([name, n]) => ({ name, orders: n })).sort((a, b) => b.orders - a.orders || a.name.localeCompare(b.name)),
     recent: orders.slice(0, RECENT_ORDERS),
+    months: byMonth(orders),
   };
 }
 

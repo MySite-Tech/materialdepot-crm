@@ -149,10 +149,12 @@ function holderOf(row: B2BSourceRow): Holder | null {
       : { kind: 'unowned', team: null, owner: '', firm, since: '' };
   }
   if (row.pipeline === 'kam') return { kind: 'firm', team: 'kam', owner, firm, since: day(row.created_at) };
-  if (row.pipeline === 'outbound') return { kind: 'outreach', team: 'outreach', owner, firm, since: day(row.created_at) };
+  if (row.pipeline === 'outbound') return { kind: 'outreach', team: 'outreach', owner, firm, since: day(row.created_at), ecReferral: !!meta.ec_referral || EC_REFERRAL_SOURCES.has(text(meta.source)) };
   if (row.pipeline === 'inbound' && row.stage !== 'Invalid') return { kind: 'inbound', team: 'inbound', owner, firm, since: day(row.created_at) };
   return null;
 }
+
+const EC_REFERRAL_SOURCES = new Set(['EC B2B Referral', 'EC referral']);
 
 const NAME_RANK: Record<string, number> = { client: 0, studio: 1, kam: 2, outbound: 3, inbound: 4 };
 

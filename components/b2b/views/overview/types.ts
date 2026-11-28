@@ -5,6 +5,7 @@ import type { DashboardMetrics, KamDashboard } from '../../models/analytics';
 import type { ClientEntity } from '../../models/client';
 import type { TargetStore } from '../../models/performance/types';
 import type { B2BData } from '@/lib/b2b';
+import type { RevenueReport } from '@/lib/b2b/revenue';
 
 export type OverviewTarget = 'inbound' | 'outreach' | 'kams' | 'clients';
 
@@ -41,4 +42,10 @@ export interface KamDeskRow {
   logged: number;
   callTarget: number;
   overdue: number;
+}
+
+export interface MonthState {
+  report: RevenueReport | null;
+  error: string | null;
+  loading: boolean;
 }

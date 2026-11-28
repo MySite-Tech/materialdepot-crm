@@ -1728,8 +1728,8 @@ March 2026 and about 1,400 from April; `created_from` returns nothing before Apr
 either. Nothing errors: a 12-month lookback simply finds no order and calls every
 client new. Only `client-order-history` / `b2b-bulk` reach further, and only as one
 `firstOrderDate` and one `lastOrderDate` per number. The Clients sub-tab reads months
-from `ORDER_HISTORY_FROM` only and shows a client it cannot date as "Earlier client,
-gap unknown" rather than New (`overview.md` §Clients sub-tab). **Before trusting a
+from `ORDER_HISTORY_FROM` only and counts a client it cannot date as Revived, flagged
+"gap unknown", rather than New (`overview.md` §Clients sub-tab). **Before trusting a
 "first order" or "no order since" over a long window, check the window starts after
 April 2026.**
 

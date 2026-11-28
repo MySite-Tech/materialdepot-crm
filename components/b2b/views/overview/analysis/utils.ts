@@ -1,4 +1,5 @@
 import { CHANNEL_LABELS } from '../../../../../lib/b2b/revenue/constants';
+import { orderCategories } from '../../../../../lib/b2b/revenue/journey';
 import { revenueTotal } from '../../../../../lib/b2b/revenue/utils/rollup';
 import { B2B_TEAM_LABEL } from '../../../../../lib/b2b/team/constants';
 import type { HolderKind, RevenueOrder } from '../../../../../lib/b2b/revenue/types';
@@ -24,8 +25,8 @@ function sourceOf(o: RevenueOrder): string {
 const sizeOf = (value: number): string => (SIZE_BANDS.find((b) => value < b.below) ?? SIZE_BANDS[SIZE_BANDS.length - 1]).label;
 
 function categoriesOf(o: RevenueOrder): string[] {
-  const names = o.ticket.cart.flatMap((c) => c.name.split(/,\s*/)).map((n) => n.trim()).filter(Boolean);
-  return names.length ? [...new Set(names)] : [NOT_SET.category];
+  const names = orderCategories(o);
+  return names.length ? names : [NOT_SET.category];
 }
 
 export function valuesOf(o: RevenueOrder, dim: DimKey): string[] {
@@ -54,13 +55,6 @@ export function matches(o: RevenueOrder, f: AnalysisFilter, skip?: DimKey): bool
   return true;
 }
 
-export function istDay(o: RevenueOrder): number {
-  const ms = Date.parse(o.ticket.placedAt || o.ticket.createdAt || '');
-  return Number.isNaN(ms) ? 0 : new Date(ms + 330 * 60_000).getUTCDate();
-}
-
-export const throughDay = (orders: RevenueOrder[], day: number | null): RevenueOrder[] =>
-  day === null ? orders : orders.filter((o) => istDay(o) <= day);
 
 export function totals(orders: RevenueOrder[]): Totals {
   const value = revenueTotal(orders);

@@ -1,4 +1,3 @@
-import type { RevenueReport } from '../../../../../lib/b2b/revenue/types';
 
 export type DimKey = 'channel' | 'source' | 'branch' | 'rep' | 'category' | 'team' | 'person' | 'clientType' | 'size' | 'firm';
 
@@ -31,11 +30,6 @@ export interface Option {
 
 export type ChangeSort = 'change' | 'value';
 
-export interface MonthState {
-  report: RevenueReport | null;
-  error: string | null;
-  loading: boolean;
-}
 
 export interface Bridge {
   volume: number;

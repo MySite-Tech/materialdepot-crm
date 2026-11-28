@@ -25,6 +25,7 @@ export interface Holder {
   since: string;
   kamFrom?: string;
   kamSince?: string;
+  ecReferral?: boolean;
 }
 
 export type NumberBook = Map<string, Holder[]>;
@@ -78,9 +79,11 @@ export interface RevenueOrder {
   team: B2BTeam | null;
   person: string;
   firm: string;
+  clientKey: string;
   client: string;
   phone: string;
   heldBy: HolderKind | null;
+  ecReferral?: boolean;
   ticket: ClientOrderRow;
   placedBy: string;
   store: string;
