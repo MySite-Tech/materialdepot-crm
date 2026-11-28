@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import type { ClientOrderRow } from '@/lib/b2b';
 import { fmtINR } from '../models/mock-data';
 import { useEnquiryDetail } from '../hooks/use-enquiry-detail';
@@ -124,29 +123,14 @@ function Body({ row }: { row: ClientOrderRow }) {
   );
 }
 
-export function DealDetail({ enqId, onClose }: { enqId: string; onClose: () => void }) {
+export function DealInline({ enqId }: { enqId: string }) {
   const state = useEnquiryDetail(enqId);
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [onClose]);
-
   return (
-    <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div role="dialog" aria-label={`Deal ticket ${enqId}`} className="relative bg-white rounded-xl shadow-xl w-full max-w-[680px] max-h-[88vh] flex flex-col">
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-100">
-          <span className="font-mono text-[14px] font-medium text-gray-900">{enqId}</span>
-          <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
-        </div>
-        <div className="px-5 py-4 overflow-y-auto">
-          {state.status === 'loading' ? <Spinner label="Reading the deal ticket…" />
-            : state.status === 'failed' ? <p className="text-[12.5px] text-amber-700">The deal ticket could not be read ({state.error}). Nothing here means it is empty.</p>
-              : state.status === 'missing' ? <p className="text-[12.5px] text-gray-500">Django has no ticket with this id any more.</p>
-                : <Body row={state.row} />}
-        </div>
-      </div>
+    <div className="bg-gray-50 border border-gray-100 rounded-md px-3 py-3 cursor-default" onClick={(e) => e.stopPropagation()}>
+      {state.status === 'loading' ? <Spinner label="Reading the deal ticket…" />
+        : state.status === 'failed' ? <p className="text-[12.5px] text-amber-700">The deal ticket could not be read ({state.error}). Nothing here means it is empty.</p>
+          : state.status === 'missing' ? <p className="text-[12.5px] text-gray-500">Django has no ticket with this id any more.</p>
+            : <Body row={state.row} />}
     </div>
   );
 }

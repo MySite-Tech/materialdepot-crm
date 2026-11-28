@@ -11,7 +11,7 @@ field live?" for an inbound lead. Three systems hold pieces of the same lead:
 | Presales' capture (§3.1) | Kylas pipeline 31627 | `lib/api/` `kylasFetch` |
 | Everything the Inbound team types (§3.2–3.5), its calls and its notes | `b2b_inbound_lead` (+ `extra` jsonb) on the FastAPI b2b-backend | `lib/b2b/data/` |
 | Cart / PI / order **value** | Django deal tickets, `/crm/leads/` | `fetchCRMLeads` |
-| Which board leads have an open cart or PI | Django `/crm/leads/?status=…&created_from=…`, paged server-side | `POST /api/b2b/inbound/deals` (`useInboundDeals`), once on open and every 5 minutes |
+| Which board leads have an open cart or PI | Django `/crm/leads/?status=…&created_from=…`, paged server-side | `POST /api/b2b/inbound/deals` (`useOpenDeals`, shared with Outreach), once on open and every 5 minutes |
 
 Every field declares its `FieldOwner`, which is what the drawer's provenance
 chips render. **No rupee figure is ever typed where the deal tickets own it** —
@@ -294,7 +294,11 @@ posts the board's numbers (`inboundPhones` of every lead in the window) and gets
 the open tickets on them (`docs/api-layer/context.md`). It is one request on open,
 then again every 5 minutes while the tab is visible and on Sync from Kylas. It is
 cached per caller, so a rep whose Django login does not see another branch's carts
-will not see them here either. While it loads, the Carts & PIs tiles read "…" and a
+will not see them here either. **Since 2026-11-28 an expired copy (up to 30 minutes
+old) is served at once while a rebuild runs after the response (`after()`), and one
+caller's rebuilds are single-flight.** A cold read was 3.2–4.4 s (8 Django pages,
+about 7.3 MB) and every 5-minute poll paid it again. Sync from Kylas still waits for a
+fresh read. Outreach posts its own numbers to the same route and shares the cache. While it loads, the Carts & PIs tiles read "…" and a
 lead with a cart still sits under Calls. If it fails, the tiles read Unknown and an
 amber notice says so. A lead with status PI Shared is placed correctly either way.
 
@@ -354,7 +358,10 @@ header and five tabs. Nothing was removed from what is stored or shown:
   changes apply to every B2B drawer that uses `SectionCard` and `Field`.
 - **Every deal ticket opens in full (2026-11-28).** The user wanted complete clarity on a
   cart or PI. A click on a ticket in the Deal tab, or on the Cart / PI cell in the Carts &
-  PIs list, opens `DealDetail` (`ui/deal-detail.tsx`): status, value with and without
+  PIs list, shows `DealInline` (`ui/deal-detail.tsx`) **under that row, not in a pop-up**
+  (the user's ask, 2026-11-28; a second click closes it, and Outreach's list, Deal tab
+  and the "Cart still open" marker do the same; KAM's Firm page already expanded in
+  place): status, value with and without
   GST, the client and number on the ticket, store, store BM, opened, the store's follow-up,
   closure or placement, property and phase, every product line (qty, rate, amount, with a
   total), and the store's remarks and visits. It is one `/crm/leads/?enquiry_ids=<id>&include=boq`

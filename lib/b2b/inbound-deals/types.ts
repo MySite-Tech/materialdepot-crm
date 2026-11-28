@@ -21,3 +21,11 @@ export interface LeadDeals {
   carts: OpenDeal[];
   pis: OpenDeal[];
 }
+
+export type DealStage = 'cart' | 'pi' | null;
+
+export interface DealCtx extends LeadDeals {
+  stage: DealStage;
+  since: string;
+  updated: boolean;
+}

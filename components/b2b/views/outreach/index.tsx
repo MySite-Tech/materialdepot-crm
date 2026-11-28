@@ -12,7 +12,10 @@ import { useOutreachData } from './hooks/use-outreach-data';
 import { useOutreachLenses } from './hooks/use-outreach-lenses';
 import { useOutreachScope } from './hooks/use-outreach-scope';
 import { Assignments } from './intake';
-import { LensStrip } from './lenses';
+import { outreachPills, outreachTiles } from './lenses';
+import { LensPills, LensTiles } from '../../ui/lens-tiles';
+import { useOpenDeals } from '../../hooks/use-open-deals';
+import { outreachPhones } from '@/lib/b2b';
 import { OutreachBoard } from './lists/board';
 import { columnsFor } from './lists/columns';
 import { Toolbar } from './lists/filters';
@@ -42,7 +45,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   useEffect(() => { setNowMs(Date.now()); }, [data.leads]);
 
   const isKamView = scope.isKam && scope.mode === 'mine';
-  const defaultLens: WorkLens = isKamView ? 'signoff' : 'action';
+  const defaultLens: WorkLens = isKamView ? 'signoff' : 'work';
   const [lens, setLens] = useState<WorkLens>(defaultLens);
   const [view, setView] = useState<'list' | 'board'>('list');
   const [bm, setBm] = useState('all');
@@ -82,9 +85,12 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const filtered = useMemo(() => bmLeads.filter((l) => matchesFilters(l, f)), [bmLeads, f]);
   const pipelineLeads = useMemo(() => (allTime || f.search.trim() ? filtered : filtered.filter((l) => inPeriod(l.createdAt, period))), [filtered, allTime, f.search, period]);
   const pool = useMemo(() => (data.inbound ? inboundPool(data.inbound, data.leads) : null), [data.inbound, data.leads]);
-  const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
+  const phoneKey = useMemo(() => [...new Set(scoped.flatMap(outreachPhones))].sort().join(','), [scoped]);
+  const deals = useOpenDeals(phoneKey, !isKamView && !data.loading && !data.loadFailed);
+  const dealsByPhone = deals.status === 'ready' ? deals.byPhone : null;
+  const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, isKam: isKamView, today, nowMs, waitlist: waitIdx, dealsByPhone });
 
-  const validLens = lenses.groups.some((g) => g.head === lens || g.lenses.includes(lens));
+  const validLens = lens in lenses.lists;
   useEffect(() => { if (!validLens) setLens(defaultLens); }, [validLens, defaultLens]);
 
   const pickLens = (k: WorkLens) => {
@@ -137,16 +143,22 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const state = loading ? 'loading' : data.loadFailed ? 'failed' : 'ready';
   const customIncomplete = periodKey === 'custom' && !rangeFor('custom', today, custom);
   const periodName = allTime || f.search.trim() ? 'any time' : fmtRange(period);
-  const groups = useMemo(
-    () => lenses.groups.map((g) => (g.flow ? { ...g, title: `Pipeline · added ${periodName}` } : g.head === 'action' ? { ...g, title: 'Action needed today' } : g)),
-    [lenses.groups, periodName],
-  );
+  const tiles = useMemo(() => outreachTiles({
+    groups: lenses.groups, lists: lenses.lists, today, pool, unassigned: unassigned.length,
+    leadsState: loading ? 'pending' : data.loadFailed ? 'failed' : null,
+    dealsState: deals.status === 'ready' ? null : deals.status,
+  }), [lenses.groups, lenses.lists, today, pool, unassigned.length, loading, data.loadFailed, deals.status]);
+  const pills = useMemo(() => outreachPills(lenses.lists, state !== 'ready'), [lenses.lists, state]);
   const pickPeriod = (key: string) => {
     if (key === 'custom' && !rangeFor('custom', today, custom)) setCustom({ from: period.from, to: period.to > today ? today : period.to });
     setPeriodKey(key);
   };
   const notices: ReactNode[] = [
     scope.notice,
+    deals.status === 'failed' && !isKamView
+      ? <>Open carts and PIs did not load ({deals.error}), so Carts &amp; PIs read Unknown and leads with a cart still sit under Calls &amp; meetings. <button onClick={deals.refresh} className="underline font-semibold">Retry</button></>
+      : null,
+    deals.truncated && !isKamView ? 'More open carts than one read covers, so some carts may be missing here.' : null,
     data.waitlistError && !isKamView
       ? <>Studio Space waitlist is unreachable, so waitlist figures read Unknown. <button onClick={data.loadWaitlist} className="underline font-semibold">Retry</button></>
       : null,
@@ -194,13 +206,15 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         period={!isKamView && (
           <PeriodPicker value={periodKey} onChange={pickPeriod} custom={custom} setCustom={setCustom} today={today} />
         )}
-        periodNote={!isKamView ? (customIncomplete ? `Pick a start and an end date. Showing ${fmtRange(period)} until then.` : 'Period sets the pipeline (leads added in it). Action needed is always as of today.') : undefined}
+        periodNote={!isKamView ? (customIncomplete ? `Pick a start and an end date. Showing ${fmtRange(period)} until then.` : `Period picks the leads added in it for Converted, Lost and the status pills (${periodName}). Calls & meetings, Carts & PIs, sign-offs and handovers are always as of today.`) : undefined}
         periodWarn={customIncomplete}
         right={!isKamView && <Segmented value={view} onChange={setView} options={[['list', 'List'], ['board', 'Board']]} />}
       />
 
-      <LensStrip groups={groups} counts={lenses.counts} hints={lenses.hints} state={state}
-        active={view === 'list' ? lens : null} onPick={pickLens} />
+      <LensTiles groups={tiles} active={view === 'list' ? lens : null} onPick={pickLens} />
+      {!isKamView && (
+        <div className="mb-4"><LensPills pills={pills} active={view === 'list' ? lens : null} onPick={pickLens} /></div>
+      )}
 
       <div ref={tableRef}>
         {loading ? (
@@ -224,7 +238,7 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
             cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep, waitlist: waitIdx })}
             rows={rows}
             resetKey={`${lens}|${rows.length}|${f.search}`}
-            empty={f.search ? `Nothing matches “${f.search}”.` : lens === 'action' ? 'Nothing due — every lead is up to date.' : lens === 'meetings' ? 'No meetings scheduled for today.' : lens === 'signoff' ? 'No handover is waiting for your sign-off.' : 'No leads here.'}
+            empty={f.search ? `Nothing matches “${f.search}”.` : lens === 'action' || lens === 'work' ? 'Nothing due — every lead is up to date.' : lens === 'meetings' ? 'No meetings scheduled for today.' : lens === 'deals' ? 'No open cart or PI on these leads.' : lens === 'signoff' ? 'No handover is waiting for your sign-off.' : 'No leads here.'}
             onOpen={setSelectedId}
           />
         )}

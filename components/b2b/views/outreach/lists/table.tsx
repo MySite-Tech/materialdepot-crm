@@ -3,8 +3,9 @@
 import { Empty } from '../../../ui/inbound-chips';
 import { PAGE_SIZE } from '../constants';
 import { LensRow } from '../types';
-import { Col } from './columns';
-import { ReactNode, useEffect, useState } from 'react';
+import { DealInline } from '../../../ui/deal-detail';
+import { Col, ColUi } from './columns';
+import { Fragment, ReactNode, useEffect, useState } from 'react';
 
 const pager = 'px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md bg-white text-gray-600 disabled:opacity-40';
 
@@ -22,7 +23,8 @@ export function LensTable({ title, accent, rule, count, aside, note, cols, rows,
   onOpen: (id: string) => void;
 }) {
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [resetKey]);
+  const [shownDeal, setShownDeal] = useState<{ lead: string; enqId: string } | null>(null);
+  useEffect(() => { setPage(0); setShownDeal(null); }, [resetKey]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const at = Math.min(page, pages - 1);
   const shown = rows.slice(at * PAGE_SIZE, (at + 1) * PAGE_SIZE);
@@ -52,11 +54,24 @@ export function LensTable({ title, accent, rule, count, aside, note, cols, rows,
               </tr>
             </thead>
             <tbody>
-              {shown.map((r) => (
-                <tr key={r.lead.id} onClick={() => onOpen(r.lead.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer align-middle">
-                  {cols.map((c) => <td key={c.head} className="px-3 py-2">{c.cell(r)}</td>)}
-                </tr>
-              ))}
+              {shown.map((r) => {
+                const ui: ColUi = {
+                  viewDeal: (enqId) => setShownDeal((s) => (s?.lead === r.lead.id && s.enqId === enqId ? null : { lead: r.lead.id, enqId })),
+                };
+                const deal = shownDeal?.lead === r.lead.id ? shownDeal.enqId : '';
+                return (
+                  <Fragment key={r.lead.id}>
+                    <tr onClick={() => onOpen(r.lead.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer align-middle">
+                      {cols.map((c) => <td key={c.head} className="px-3 py-2">{c.cell(r, ui)}</td>)}
+                    </tr>
+                    {deal && (
+                      <tr className="border-b border-gray-100">
+                        <td colSpan={cols.length} className="px-3 pb-3 pt-0"><DealInline enqId={deal} /></td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

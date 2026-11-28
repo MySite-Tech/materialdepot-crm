@@ -6,7 +6,7 @@ import { DEALS_TTL_MS } from '@/lib/b2b/inbound-deals/constants';
 import type { OpenDeal } from '@/lib/b2b/inbound-deals/types';
 import { dealsByPhone } from '@/lib/b2b/inbound-deals/utils';
 
-export interface InboundDealsState {
+export interface OpenDealsState {
   status: 'pending' | 'ready' | 'failed';
   byPhone: Map<string, OpenDeal[]>;
   truncated: boolean;
@@ -15,8 +15,8 @@ export interface InboundDealsState {
 
 const EMPTY = new Map<string, OpenDeal[]>();
 
-export function useInboundDeals(phoneKey: string, enabled: boolean) {
-  const [state, setState] = useState<InboundDealsState>({ status: 'pending', byPhone: EMPTY, truncated: false });
+export function useOpenDeals(phoneKey: string, enabled: boolean) {
+  const [state, setState] = useState<OpenDealsState>({ status: 'pending', byPhone: EMPTY, truncated: false });
   const latest = useRef(0);
 
   const load = useCallback((fresh: boolean) => {

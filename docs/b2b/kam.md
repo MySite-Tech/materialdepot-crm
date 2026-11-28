@@ -141,6 +141,13 @@ and `orderLensMatches` in `models/kam/cadence.ts` give both its count and its
 list. On 2026-10-28 every tile matched its rows in a browser on real Supabase
 data, with Django stubbed.
 
+**The tab paints before the order read (2026-11-28).** It waited for `b2b-bulk` on
+every Client Database number before showing anything, measured at 1.0–14.6 s
+(typically 3–5 s). Now firms, follow-ups and sign-offs show once `/rows` lands. The
+five tiles that need order dates (Assigned, Active, Lapsing, Inactive, Never ordered)
+read "…" with "reading orders", and a line above the list says status reads Unknown
+until the history lands. Order lookups and auto-advance still run after it.
+
 - **Follow-ups:** Overdue · Due today · No follow-up · Called today.
   **Accounts:** Assigned · Active · Inactive 1 month · Inactive (see §Account
   status). **Orders:** Open orders · Pipeline. Upcoming and Order board are

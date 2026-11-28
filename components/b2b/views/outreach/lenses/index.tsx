@@ -1,82 +1,82 @@
 'use client';
 
-import { LENS } from '../constants';
-import { LensGroup, WorkLens } from '../types';
+import { fmtINR } from '../../../models/mock-data';
+import { orderVerified } from '../../../models/outreach/handover';
+import { PoolLead } from '../../../models/outreach/intake';
+import type { LensPill, LensTileGroup } from '../../../ui/lens-tiles';
+import { DEAL_LENSES, LENS, SIDE_LENSES, TILE_LABEL } from '../constants';
+import { LensGroup, LensRow, WorkLens } from '../types';
 
-export interface TileHint {
-  text: string;
-  warn?: boolean;
+type Unknown = 'pending' | 'failed' | null;
+
+interface Figure { value: string; sub?: string; warn?: boolean }
+
+const day = (d: string | undefined) => String(d || '').slice(0, 10);
+
+const newestValue = (rows: LensRow[] = []) =>
+  rows.reduce((a, r) => a + ((r.deal.pis[0] ?? r.deal.carts[0])?.value || 0), 0);
+
+function figures(lists: Partial<Record<WorkLens, LensRow[]>>, today: string, pool: PoolLead[] | null, unassigned: number): Partial<Record<WorkLens, Figure>> {
+  const n = (k: WorkLens) => lists[k]?.length ?? 0;
+  const v = (k: WorkLens) => String(n(k));
+  const firstAt = (lists.meetings ?? [])
+    .map((r) => (r.lead.meetings || []).find((m) => m.status === 'Scheduled' && day(m.date) === today)?.time)
+    .filter(Boolean).sort()[0];
+  const waiting = (k: WorkLens) => {
+    const val = newestValue(lists[k]);
+    return n(k) ? { value: v(k), sub: `${val ? `${fmtINR(val)} · ` : ''}no update yet`, warn: true } : { value: v(k), sub: 'none waiting' };
+  };
+  const following = (k: WorkLens) => {
+    const due = (lists[k] ?? []).filter((r) => day(r.lead.followUpDate) && day(r.lead.followUpDate) <= today).length;
+    return { value: v(k), sub: due ? `${due} due now` : n(k) ? 'booked ahead' : 'none yet', warn: due > 0 };
+  };
+  const unverified = (lists.won ?? []).filter((r) => !orderVerified(r.lead)).length;
+  const lostNoReason = (lists.lost ?? []).filter((r) => !r.lead.lostReason).length;
+  const pooled = pool === null ? null : pool.length + unassigned;
+  return {
+    meetings: { value: v('meetings'), sub: firstAt ? `first at ${firstAt}` : n('meetings') ? 'today' : 'none today' },
+    overdue: { value: v('overdue'), sub: 'date passed', warn: n('overdue') > 0 },
+    due: { value: v('due'), sub: 'booked for today' },
+    book: { value: v('book'), sub: n('book') ? 'call to book' : 'all booked' },
+    cartOpen: waiting('cartOpen'),
+    piOpen: waiting('piOpen'),
+    cartFollow: following('cartFollow'),
+    piFollow: following('piFollow'),
+    inbox: pooled === null
+      ? { value: v('inbox'), sub: unassigned ? `${unassigned} unassigned · Inbound pool unknown` : 'Inbound pool unknown', warn: true }
+      : { value: v('inbox'), sub: pooled ? `${pooled} unassigned` : 'to accept or reject' },
+    handoff: { value: v('handoff'), sub: n('handoff') ? 'to send or chase' : 'all handed over', warn: n('handoff') > 0 },
+    won: { value: v('won'), sub: unverified ? `${unverified} not verified` : 'in the period', warn: unverified > 0 },
+    lost: lostNoReason ? { value: v('lost'), sub: `${lostNoReason} without a reason`, warn: true } : { value: v('lost'), sub: 'in the period' },
+  };
 }
 
-const COLS: Record<number, string> = {
-  2: 'grid-cols-2',
-  4: 'grid-cols-2 sm:grid-cols-4',
-  6: 'grid-cols-3 sm:grid-cols-6',
-};
-
-export function LensStrip({ groups, counts, hints, state, active, onPick }: {
+export function outreachTiles({ groups, lists, today, pool, unassigned, leadsState, dealsState }: {
   groups: LensGroup[];
-  counts: Partial<Record<WorkLens, number>>;
-  hints: Partial<Record<WorkLens, TileHint>>;
-  state: 'ready' | 'loading' | 'failed';
-  active: WorkLens | null;
-  onPick: (lens: WorkLens) => void;
-}) {
-  const shown = (k: WorkLens) => (state === 'loading' ? '…' : state === 'failed' ? '?' : String(counts[k] ?? 0));
-  return (
-    <div className="flex flex-col min-[1400px]:flex-row gap-3 mb-4">
-      {groups.map((g) => {
-        const headOn = !!g.head && active === g.head;
-        return (
-          <section
-            key={g.title}
-            style={{ flex: g.weight }}
-            className={`bg-white rounded-lg border min-w-0 overflow-hidden ${headOn ? 'border-gray-800' : 'border-gray-200'}`}
-          >
-            <div className="px-2 pt-2 flex items-center">
-              {g.head ? (
-                <button
-                  onClick={() => onPick(g.head as WorkLens)}
-                  title={LENS[g.head].rule}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${headOn ? 'bg-[#1A1A1A] text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'}`}
-                >
-                  {g.title} · {shown(g.head)}
-                </button>
-              ) : (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{g.title}</span>
-              )}
-            </div>
-            <div className={`grid ${COLS[g.lenses.length] ?? 'grid-cols-2'}`}>
-              {g.lenses.map((k, i) => {
-                const on = active === k;
-                const n = counts[k] ?? 0;
-                const hint = state === 'ready' ? hints[k] : undefined;
-                return (
-                  <button
-                    key={k}
-                    onClick={() => onPick(k)}
-                    title={LENS[k].rule}
-                    className={`relative text-left px-3 pt-1 pb-3 min-w-0 border-l border-gray-100 first:border-l-0 transition-colors ${on ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
-                  >
-                    {g.flow && i > 0 && (
-                      <span aria-hidden className="hidden sm:block absolute -left-[5px] top-[22px] text-[11px] leading-none text-gray-300 bg-white">›</span>
-                    )}
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: LENS[k].accent }} />
-                      <span className={`text-[11.5px] font-semibold truncate ${on ? 'text-gray-900' : 'text-gray-500'}`}>{LENS[k].title}</span>
-                    </div>
-                    <div className={`text-[22px] font-bold leading-tight mt-0.5 tabular-nums truncate ${state !== 'ready' ? 'text-gray-300' : n ? 'text-gray-900' : 'text-gray-300'}`}>
-                      {shown(k)}
-                    </div>
-                    <div className={`text-[10.5px] truncate h-[15px] ${hint?.warn ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>{hint?.text}</div>
-                    {on && <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: LENS[k].accent }} />}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
-    </div>
-  );
+  lists: Partial<Record<WorkLens, LensRow[]>>;
+  today: string;
+  pool: PoolLead[] | null;
+  unassigned: number;
+  leadsState: Unknown;
+  dealsState: Unknown;
+}): LensTileGroup<WorkLens>[] {
+  const figs = figures(lists, today, pool, unassigned);
+  const count = (k: WorkLens) => lists[k]?.length ?? 0;
+  return groups.map((g) => {
+    const isDeals = !!g.head && DEAL_LENSES.includes(g.head);
+    const unknown = leadsState ?? (isDeals ? dealsState : null);
+    return {
+      title: g.title,
+      head: g.head ? { key: g.head, label: unknown ? g.title : `${g.title} · ${count(g.head)}`, rule: LENS[g.head].rule } : undefined,
+      tiles: g.lenses.map((k) => {
+        const fig = unknown === 'pending' ? { value: '…', sub: 'loading' }
+          : unknown === 'failed' ? { value: 'Unknown', sub: isDeals ? 'carts did not load' : 'leads did not load' }
+            : figs[k] ?? { value: String(count(k)), sub: '' };
+        return { key: k, title: TILE_LABEL[k] ?? LENS[k].title, rule: `${LENS[k].title}: ${LENS[k].rule}`, accent: LENS[k].accent, ...fig, muted: !unknown && count(k) === 0 };
+      }),
+    };
+  });
 }
+
+export const outreachPills = (lists: Partial<Record<WorkLens, LensRow[]>>, hideCounts: boolean): LensPill<WorkLens>[] =>
+  SIDE_LENSES.map((k) => ({ key: k, title: LENS[k].title, rule: LENS[k].rule, count: hideCounts ? undefined : lists[k]?.length ?? 0 }));

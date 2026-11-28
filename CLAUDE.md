@@ -684,7 +684,7 @@ ran on production the same day (92 rows, 84 bookings restored). Coverage at 0 is
 as a held meeting; today it does not. pratham's count stays 0 until he marks his
 checked-in visits held with notes. Not yet seen in a browser on production.
 
-**START HERE for B2B (2026-11-27, latest): CRM PR #104 (`a52ea7d`) with b2b-backend
+**START HERE for B2B (2026-11-27): CRM PR #104 (`a52ea7d`) with b2b-backend
 PR #45 (`8193264`, migrations 0034–0036), both merged and LIVE on Dhruv's ask.** Start
 new work from `origin/main`. **Checked on production the same evening:** the backend
 answered `joined_on`, `id` and `/b2b/referrals` 200 (17 team rows, unchanged); the live
@@ -734,7 +734,35 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
-**START HERE for Inbound, Outreach and KAM screens (2026-11-28, latest): CRM PR #108
+**START HERE for B2B (2026-11-28, third round, latest): CRM PRs #112 and #113, merged and
+deployed on Dhruv's ask; no backend PR.** Start new work from `origin/main`.
+- **Outreach is three groups like Inbound:** Calls & meetings (Meetings today, Overdue,
+  Due today, No meeting booked), Carts & PIs (open carts and PIs from the same Django read
+  as Inbound, `useOpenDeals`) and Sign-offs & outcomes (Waiting for sign-off, Handovers,
+  Converted, Lost). Lost and unaccepted leads stay out of Carts & PIs with a "Cart still
+  open" marker. Read `docs/b2b/outreach.md` §Three groups first.
+- **A cart or PI opens under its row**, never in a pop-up (`DealInline`, `ui/deal-detail.tsx`),
+  on Inbound, Outreach and the KAM Firm page. Don't bring the modal back.
+- **Month by month has a Studio Sales / All B2B switch.** One measure per bar; never stack
+  a faded second measure on top again (`overview.md`).
+- **Speed (the user: "do anything possible"):** KAM paints before `b2b-bulk`; open carts
+  are served stale (up to 30 min) while a rebuild runs after the response; `requireCaller`
+  is single-flight and cached **5 minutes** (was 30 s; a switched-off account keeps access
+  that long, Dhruv's choice); `/rows` is cached 60 s in the browser. Production already
+  gzips `/rows`. What is left: `/rows` takes 1–2.3 s to first byte (5.4 MB of every
+  pipeline), and Overview's revenue reads start on landing. **Overview stays the landing
+  tab** (the user said so); don't switch it to the last tab.
+- **#112:** a call or note saved from the Inbound drawer now stamps the stage date against
+  the saved lead. Older leads with no stage date are not backfilled, and whether a call may
+  save an unsaved stage without the status checks is undecided. Two leads flagged for the
+  user's call are in memory (`pending-checks-2026-11-28`), not here: this repo is public.
+- **`gh pr create` here defaults to `upstream`.** Always pass `--repo MySite-Tech/materialdepot-crm`.
+- **Never put real ₹ figures, customer names or lead ids in a doc or commit.** Pushes were
+  blocked twice on 28 Nov for that.
+- **Not yet seen signed in on production:** Outreach tiles and the inline cart, KAM's
+  early paint, and the Carts & PIs tiles for a rep's own login.
+
+**START HERE for Inbound, Outreach and KAM screens (2026-11-28): CRM PR #108
 (`7748cce`), merged and LIVE on Dhruv's ask; no backend PR.** Start new work from
 `origin/main`. Checked live after deploy: the deploy succeeded, `/api/b2b/inbound/deals`
 answers 401 without a session, and the live bundle carries the new screens. **Not yet
@@ -767,7 +795,7 @@ LIVE as `11e6e17` on Dhruv's ask):** Closed and sent-to-Outreach leads show in b
 their own tab. Lost and Invalid stay only in theirs, with a "Cart still open" marker on
 the row (`inbound.md` §Outcome leads with an open cart).
 
-**START HERE for B2B revenue (2026-11-28, latest): Studio Sales, Direct by who booked, and
+**START HERE for B2B revenue (2026-11-28): Studio Sales, Direct by who booked, and
 the Clients sub-tab (CRM PR #106, `02d91ec`, merged and LIVE on Dhruv's ask; no backend
 PR).** Start new work from `origin/main` and read `docs/b2b/overview.md` §Four revenue
 channels and §Clients sub-tab first. Three changes, all the user's decisions that day:
