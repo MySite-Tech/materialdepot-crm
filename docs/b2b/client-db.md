@@ -210,12 +210,17 @@ The user could not read a cart's detail: a firm's open cart showed "Items: Tiles
 category, and a grid of dashes. The old card fetched product lines only for `ENQ`
 ids. The expanded row now renders `DealInline` (`ui/deal-detail.tsx`), the view
 Inbound and Outreach use: one `/crm/leads/?enquiry_ids=<id>&include=boq` read per
-ticket opened, product lines with qty, rate and amount for carts as well as PIs,
-falling back to the list's own row (with a notice) when Django has no ticket. The
+ticket opened, a PI's product lines with qty, rate and amount, falling back to the list's own row (with a notice) when Django has no ticket. The
 SPoC and Send to EC lines sit above it. Revenue credit shows only on placed orders,
 with its rule behind the "i". Each sub-tab shows its total value, and an open cart or
 PI shows how many days it has been open (amber past 14). The Overview's order drawer
 uses the same card, so it changed too.
+
+**A cart has no product lines in Django (checked on production, 2026-11-28).** For an
+`In Cart` ticket `/crm/leads/?enquiry_ids=…&include=boq` answers `boqItems: []` and
+`cartItems` is only the category ("Tiles"), so a cart shows its category and no qty or
+rate. PIs answer full lines. That is Django's data, not the screen
+(`backends.md` §Owed by Django row 22).
 
 ### Studio Space: their view (2026-11-28)
 

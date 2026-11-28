@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-112 entries. They live in one file because they cross-reference each other —
+111 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -122,7 +122,6 @@ grep for a term, then read around the line you hit rather than opening all of it
 - One client held two Outreach leads, so the converted one sat beside a stale Follow up
 - An explanation in a native `title` shows only after the pointer rests, and never on a click
 - Logging a call saved the drawer's unsaved stage with no stage date
-- A cart's detail listed its category, not its products
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1760,12 +1759,3 @@ comparing against unsaved state. Both paths now stamp with `withStatusStamps`
 against the saved row (`saved.current`, `base()`). Rows already written stay
 unstamped (`docs/b2b/inbound.md` §The call log).
 
-### A cart's detail listed its category, not its products (2026-11-28)
-
-The user, on a firm's open cart on the KAM Firm page: "Items: Tiles" and a grid of
-dashes, while Inbound's view of a cart lists every product with qty and rate. The
-firm page's card fetched product lines (`include=boq`) only when the id started with
-`ENQ`, so every `CT…` cart fell back to the ticket's category list. Two views of one
-ticket had drifted. The firm page and the Overview's order drawer now render the same
-`DealInline` as Inbound and Outreach (`client-db.md` §A cart or PI on the Orders tab
-opens in full). **When two screens show the same ticket, render one component.**
