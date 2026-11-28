@@ -908,6 +908,9 @@ has worked through it yet.
   (`outreachPhones`, `gstNumber`), Lost and Invalid leads included. The user chose
   this on 2026-11-07 over listing them with a chip. It keeps an Inbound lead from
   being copied to Outreach, which the user ruled out (`outreach.md`).
+- **Each firm carries `months`** (orders and value per IST month, 2026-11-28), which the
+  Overview's Clients sub-tab reads for its Not registered yet row (`overview.md`
+  §Clients sub-tab). `recent` stays capped at five orders.
 - **Only Not a client is stored.** Every other choice creates a row on a board,
   which takes the firm off the list. A decision matches a firm by its key
   (`CLI-GST-<first GSTIN>`) or by any GSTIN or number it saved, so a firm that gains

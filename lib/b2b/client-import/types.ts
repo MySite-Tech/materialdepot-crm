@@ -10,6 +10,11 @@ export interface ReviewOrder {
   status: string;
 }
 
+export interface ReviewMonth {
+  orders: number;
+  value: number;
+}
+
 export interface ReviewFirm {
   key: string;
   name: string;
@@ -23,6 +28,7 @@ export interface ReviewFirm {
   lastOrder: string;
   stores: { name: string; orders: number }[];
   recent: ReviewOrder[];
+  months: Record<string, ReviewMonth>;
 }
 
 export interface ReviewDecision {

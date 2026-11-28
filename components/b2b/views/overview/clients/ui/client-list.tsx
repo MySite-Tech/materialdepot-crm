@@ -5,7 +5,12 @@ import { useEffect, useState } from 'react';
 import { PAGE_SIZE } from '../constants';
 import type { ListRow } from '../types';
 
-export function ClientList({ title, rows, onClose }: { title: string; rows: ListRow[]; onClose: () => void }) {
+export function ClientList({ title, rows, labels, onClose }: {
+  title: string;
+  rows: ListRow[];
+  labels?: { now?: string; before?: string; value?: string };
+  onClose: () => void;
+}) {
   const [page, setPage] = useState(0);
   useEffect(() => { setPage(0); }, [title]);
 
@@ -28,10 +33,10 @@ export function ClientList({ title, rows, onClose }: { title: string; rows: List
               <thead>
                 <tr className="text-left text-[11px] text-gray-400 border-b border-gray-100">
                   <th className="py-1.5 pr-3 font-semibold">Client</th>
-                  <th className="py-1.5 pr-3 font-semibold">This month</th>
-                  <th className="py-1.5 pr-3 font-semibold">Before</th>
+                  <th className="py-1.5 pr-3 font-semibold">{labels?.now ?? 'This month'}</th>
+                  <th className="py-1.5 pr-3 font-semibold">{labels?.before ?? 'Before'}</th>
                   <th className="py-1.5 pr-3 font-semibold text-right">Orders</th>
-                  <th className="py-1.5 font-semibold text-right">B2B revenue</th>
+                  <th className="py-1.5 font-semibold text-right">{labels?.value ?? 'B2B revenue'}</th>
                 </tr>
               </thead>
               <tbody>

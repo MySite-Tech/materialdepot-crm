@@ -103,15 +103,38 @@ definitions, 2026-11-28:
   that month" (`MonthDigest.buyers`, all placed orders, not only B2B ones) exists only
   from April. Earlier history comes from `client-order-history`'s lifetime
   `firstOrderDate`, which reaches 2024. A client not seen since April whose first
-  order is inside the 12-month lookback is Revived; one whose first order is older is
-  **Earlier client, gap unknown**: revived or new, Django cannot say. That row empties
-  by April 2027. Do not fold it into New or Revived.
+  order is inside the 12-month lookback is Revived. One whose first order is older (or
+  whose first-order date did not load) could be revived or new, and Django cannot say.
+  **Since 2026-11-28 it counts as Revived with `gapUnknown`** (the user's choice: a
+  returning customer with an unknown gap), shown as "incl. n gap unknown" under the
+  Revived figure and "gap unknown" in its list. It was its own row, "Earlier client,
+  gap unknown", until then (23 clients in July 2026, 3 in November). The flag empties by
+  April 2027. Making it exact needs Django (`backends.md` §Owed by Django row 23).
+- **Churned's amount is what those clients spent in their last month** (M-3), the
+  monthly spend lost, never revenue in M. The cell reads "₹x spent in Aug" and the list
+  column "Spent in their last month", because the bare figure read as November revenue
+  (2026-11-28).
+- **Not registered yet** (group "Outside the B2B book", 2026-11-28, the user's ask).
+  Firms billed with a GSTIN on an order that month that no B2B board holds and nobody
+  marked Not a client: Client Database → Review new firms, split by month. It reads
+  `fetchReviewQueue` (`/api/b2b/client-import`, B2B managers only, server cache 30
+  minutes, about 16 s cold) once, beside the flow read, so the tab costs two requests;
+  each `ReviewFirm` now carries `months` (orders and value per IST month). A firm with
+  any number among that month's B2B buyers (`FlowMonth.phones`) is left out, because
+  Review new firms checks only Client Database, Inbound and Outreach rows and revenue
+  also counts Studio Space, redirects and referrals: on production 3–19 firms a month
+  overlapped. It is outside Clients ordering and All B2B. Working the review list moves
+  a firm out of this row and brings its orders, past months included, into All B2B (as
+  EC Direct before its tie-up). On 2026-11-28 production showed this row larger than
+  All B2B from August to November; proprietors are individual GSTINs and include
+  store walk-ins asking for a GST bill, which is why it is split. The read failing
+  shows Unknown, never 0.
 - **Cost.** Each month's build now also returns a digest (every buyer's number, and
   each B2B order's phone, channel and value), cached beside the report under
   `b2b-digest:`, so a lookback month does not keep its full report in memory. The
-  report and the digest share one in-flight build. Opening the tab is one request;
+  report and the digest share one in-flight build. Opening the tab is two requests;
   the server reads the months it has not cached (about four Django pages each) and
-  `client-order-history` in batches of 280.
+  `client-order-history` in batches of 280. Not registered yet adds the second request.
 - **Checked on production data on 2026-11-28** in a signed-in tab, through the bundled
   module: each month's clients add up to the month's All B2B and Studio Sales totals
   exactly, and the rows add up to Clients ordering. November's EC → Studio is almost

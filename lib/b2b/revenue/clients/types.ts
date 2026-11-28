@@ -2,7 +2,7 @@ import type { RevenueChannel } from '../types';
 
 export type FlowSide = 'studio' | 'ec';
 
-export type FlowFrom = 'new' | 'revived' | 'earlier' | 'studio' | 'ec' | 'retail';
+export type FlowFrom = 'new' | 'revived' | 'studio' | 'ec' | 'retail';
 
 export interface DigestOrder {
   phone: string;
@@ -34,6 +34,7 @@ export interface FlowClient {
   orders: number;
   lastBefore: string | null;
   firstOrder: string | null;
+  gapUnknown: boolean;
 }
 
 export interface ChurnedClient {
@@ -51,6 +52,7 @@ export interface FlowMonth {
   truncated: boolean;
   clients: FlowClient[];
   churned: ChurnedClient[];
+  phones: string[];
 }
 
 export interface ClientFlowReport {

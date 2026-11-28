@@ -65,12 +65,11 @@ export function clientFlow(digests: MonthDigest[], groups: Groups, analysed: num
   const firstOf = firstOrders(groups, firsts);
   const sideIn = (i: number, key: string): FlowFrom => clients[i].get(key)?.side ?? 'retail';
 
-  const unseenFrom = (i: number, key: string): FlowFrom => {
-    if (i - FLOW_LOOKBACK >= 0) return 'new';
+  const unseenFrom = (i: number, key: string): { from: FlowFrom; gapUnknown: boolean } => {
+    if (i - FLOW_LOOKBACK >= 0) return { from: 'new', gapUnknown: false };
     const first = firstOf.get(key)?.slice(0, 7);
-    if (!first) return 'earlier';
-    if (first >= digests[i].key) return 'new';
-    return first >= monthsBefore(digests[i].key, FLOW_LOOKBACK) ? 'revived' : 'earlier';
+    if (first && first >= digests[i].key) return { from: 'new', gapUnknown: false };
+    return { from: 'revived', gapUnknown: !first || first < monthsBefore(digests[i].key, FLOW_LOOKBACK) };
   };
 
   const out: Omit<FlowMonth, 'label' | 'partial'>[] = [];
@@ -79,14 +78,17 @@ export function clientFlow(digests: MonthDigest[], groups: Groups, analysed: num
       let gap = 1;
       while (gap <= FLOW_LOOKBACK && i - gap >= 0 && !bought[i - gap].has(key)) gap++;
       const found = gap <= FLOW_LOOKBACK && i - gap >= 0;
-      const from: FlowFrom = !found ? unseenFrom(i, key) : gap > CHURN_GAP ? 'revived' : sideIn(i - gap, key);
-      return { key, ...seen, from, lastBefore: found ? digests[i - gap].key : null, firstOrder: firstOf.get(key) ?? null };
+      const { from, gapUnknown } = !found
+        ? unseenFrom(i, key)
+        : { from: gap > CHURN_GAP ? 'revived' as const : sideIn(i - gap, key), gapUnknown: false };
+      return { key, ...seen, from, gapUnknown, lastBefore: found ? digests[i - gap].key : null, firstOrder: firstOf.get(key) ?? null };
     });
     const lapsed = i - CHURN_GAP;
     const churned: ChurnedClient[] = lapsed < 0 ? [] : [...clients[lapsed]]
       .filter(([key]) => Array.from({ length: CHURN_GAP }, (_, j) => i - j).every((m) => !bought[m].has(key)))
       .map(([key, seen]) => ({ key, name: seen.name, side: seen.side, lastMonth: digests[lapsed].key, value: seen.value }));
-    out.push({ key: digests[i].key, truncated: digests[i].truncated, clients: flow, churned });
+    const phones = [...new Set(digests[i].orders.map((o) => o.phone).filter(Boolean))];
+    out.push({ key: digests[i].key, truncated: digests[i].truncated, clients: flow, churned, phones });
   }
   return out;
 }
