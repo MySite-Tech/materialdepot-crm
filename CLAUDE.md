@@ -762,8 +762,8 @@ signed in on production:**
 - A cart's detail lists its products.
 - A rep's Inbound shows only their leads since 10 Nov.
 
-**Outcome leads with an open cart (the user's decision, 28 Nov, CRM PR from
-`inbound-outcome-carts`):** Closed and sent-to-Outreach leads show in both Carts & PIs and
+**Outcome leads with an open cart (the user's decision, 28 Nov, CRM PR #110, merged and
+LIVE as `11e6e17` on Dhruv's ask):** Closed and sent-to-Outreach leads show in both Carts & PIs and
 their own tab. Lost and Invalid stay only in theirs, with a "Cart still open" marker on
 the row (`inbound.md` §Outcome leads with an open cart).
 
